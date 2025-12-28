@@ -1,0 +1,426 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model audit_logs {
+  id              String         @id @db.Uuid
+  organization_id String?        @db.Uuid
+  user_id         String?        @db.VarChar(255)
+  entity_type     String         @db.VarChar(100)
+  entity_id       String         @db.Uuid
+  action          String         @db.VarChar(50)
+  old_values      Json?
+  new_values      Json?
+  ip_address      String?        @db.VarChar(45)
+  user_agent      String?
+  created_at      DateTime       @default(now()) @db.Timestamptz(6)
+  organizations   organizations? @relation(fields: [organization_id], references: [id])
+
+  @@index([created_at(sort: Desc)])
+  @@index([entity_type, entity_id])
+  @@index([organization_id])
+  @@index([user_id])
+}
+
+model fx_snapshots {
+  id              String         @id @db.Uuid
+  payment_link_id String         @db.Uuid
+  snapshot_type   FxSnapshotType
+  token_type      PaymentToken?
+  base_currency   String         @db.Char(3)
+  quote_currency  String         @db.Char(3)
+  rate            Decimal        @db.Decimal(18, 8)
+  provider        String         @db.VarChar(100)
+  captured_at     DateTime       @default(now()) @db.Timestamptz(6)
+  payment_links   payment_links  @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+}
+
+model ledger_accounts {
+  id              String            @id @db.Uuid
+  organization_id String            @db.Uuid
+  code            String            @db.VarChar(50)
+  name            String            @db.VarChar(255)
+  account_type    LedgerAccountType
+  xero_account_id String?           @db.VarChar(255)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  organizations   organizations     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  ledger_entries  ledger_entries[]
+
+  @@unique([organization_id, code])
+}
+
+model ledger_entries {
+  id                String          @id @db.Uuid
+  payment_link_id   String          @db.Uuid
+  ledger_account_id String          @db.Uuid
+  entry_type        LedgerEntryType
+  amount            Decimal         @db.Decimal(18, 8)
+  currency          String          @db.Char(3)
+  description       String
+  idempotency_key   String          @unique @db.VarChar(255)
+  created_at        DateTime        @default(now()) @db.Timestamptz(6)
+  ledger_accounts   ledger_accounts @relation(fields: [ledger_account_id], references: [id])
+  payment_links     payment_links   @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+}
+
+model merchant_settings {
+  id                            String        @id @db.Uuid
+  organization_id               String        @db.Uuid
+  display_name                  String        @db.VarChar(255)
+  default_currency              String        @db.Char(3)
+  stripe_account_id             String?       @db.VarChar(255)
+  hedera_account_id             String?       @db.VarChar(50)
+  
+  // Xero Account Mappings
+  xero_revenue_account_id       String?       @db.VarChar(255)
+  xero_receivable_account_id    String?       @db.VarChar(255)
+  xero_stripe_clearing_account_id String?     @db.VarChar(255)
+  xero_hbar_clearing_account_id String?       @db.VarChar(255)
+  xero_usdc_clearing_account_id String?       @db.VarChar(255)
+  xero_usdt_clearing_account_id String?       @db.VarChar(255)
+  xero_audd_clearing_account_id String?       @db.VarChar(255)
+  xero_fee_expense_account_id   String?       @db.VarChar(255)
+  
+  // Sprint 25: Multi-Currency Enhancement
+  enabled_currencies                String[]      @default(["USD", "AUD"])
+  show_symbols_in_ui                Boolean       @default(true)
+  show_codes_in_ui                  Boolean       @default(false)
+  auto_refresh_rates                Boolean       @default(true)
+  rate_refresh_interval_minutes     Int           @default(5)
+  
+  created_at                    DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at                    DateTime      @updatedAt @db.Timestamptz(6)
+  organizations                 organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+}
+
+model organizations {
+  id                        String                          @id @db.Uuid
+  clerk_org_id              String                          @unique @db.VarChar(255)
+  name                      String                          @db.VarChar(255)
+  created_at                DateTime                        @default(now()) @db.Timestamptz(6)
+  audit_logs                audit_logs[]
+  ledger_accounts           ledger_accounts[]
+  merchant_settings         merchant_settings[]
+  payment_links             payment_links[]
+  xero_connections          xero_connections?
+  notifications             notifications[]
+  notification_preferences  notification_preferences[]
+  // Sprint 25: Multi-Currency Enhancement
+  currency_configs          currency_configs[]
+  fx_rate_overrides         fx_rate_overrides[]
+  currency_display_preferences currency_display_preferences[]
+}
+
+model payment_events {
+  id                       String           @id @db.Uuid
+  payment_link_id          String           @db.Uuid
+  event_type               PaymentEventType
+  payment_method           PaymentMethod?
+  stripe_payment_intent_id String?          @db.VarChar(255)
+  hedera_transaction_id    String?          @db.VarChar(255)
+  amount_received          Decimal?         @db.Decimal(18, 8)
+  currency_received        String?          @db.Char(3)
+  metadata                 Json?
+  created_at               DateTime         @default(now()) @db.Timestamptz(6)
+  payment_links            payment_links    @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+
+  @@index([payment_link_id, created_at])
+}
+
+model payment_links {
+  id                String            @id @db.Uuid
+  organization_id   String            @db.Uuid
+  short_code        String            @unique @db.VarChar(8)
+  status            PaymentLinkStatus @default(DRAFT)
+  amount            Decimal           @db.Decimal(18, 2)
+  currency          String            @db.Char(3)
+  description       String
+  invoice_reference String?           @db.VarChar(255)
+  customer_email    String?           @db.VarChar(255)
+  customer_phone    String?           @db.VarChar(50)
+  expires_at        DateTime?         @db.Timestamptz(6)
+  
+  // Sprint 25: Multi-Currency Enhancement
+  customer_selected_currency    String?           @db.Char(3)
+  conversion_rate_at_creation   Decimal?          @db.Decimal(18, 8)
+  base_amount                   Decimal?          @db.Decimal(18, 2)
+  base_currency                 String?           @db.Char(3)
+  
+  created_at        DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime          @db.Timestamptz(6)
+  fx_snapshots      fx_snapshots[]
+  ledger_entries    ledger_entries[]
+  payment_events    payment_events[]
+  organizations     organizations     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  xero_syncs        xero_syncs[]
+  multi_currency_invoices multi_currency_invoices[]
+
+  @@index([organization_id, status])
+}
+
+model xero_connections {
+  id              String        @id @db.Uuid
+  organization_id String        @unique @db.Uuid
+  tenant_id       String        @db.VarChar(255)
+  access_token    String
+  refresh_token   String
+  expires_at      DateTime      @db.Timestamptz(6)
+  connected_at    DateTime      @default(now()) @db.Timestamptz(6)
+  organizations   organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+}
+
+model xero_syncs {
+  id               String         @id @db.Uuid
+  payment_link_id  String         @db.Uuid
+  sync_type        XeroSyncType
+  status           XeroSyncStatus
+  xero_invoice_id  String?        @db.VarChar(255)
+  xero_payment_id  String?        @db.VarChar(255)
+  request_payload  Json
+  response_payload Json?
+  error_message    String?
+  retry_count      Int            @default(0)
+  next_retry_at    DateTime?      @db.Timestamptz(6)
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime       @db.Timestamptz(6)
+  payment_links    payment_links  @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+
+  @@index([status, next_retry_at])
+}
+
+model notifications {
+  id              String           @id @db.Uuid
+  organization_id String           @db.Uuid
+  user_email      String?          @db.VarChar(255)
+  type            NotificationType
+  title           String           @db.VarChar(255)
+  message         String
+  data            Json?
+  read            Boolean          @default(false)
+  email_sent      Boolean          @default(false)
+  email_sent_at   DateTime?        @db.Timestamptz(6)
+  created_at      DateTime         @default(now()) @db.Timestamptz(6)
+  organizations   organizations    @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  email_logs      email_logs[]
+
+  @@index([organization_id, created_at(sort: Desc)])
+  @@index([user_email, created_at(sort: Desc)])
+  @@index([read])
+  @@index([type])
+}
+
+model email_logs {
+  id                String        @id @db.Uuid
+  notification_id   String?       @db.Uuid
+  to_email          String        @db.VarChar(255)
+  from_email        String        @db.VarChar(255)
+  subject           String        @db.VarChar(500)
+  template_name     String        @db.VarChar(100)
+  template_data     Json?
+  status            EmailStatus   @default(PENDING)
+  provider_id       String?       @db.VarChar(255)
+  provider_response Json?
+  error_message     String?
+  opened_at         DateTime?     @db.Timestamptz(6)
+  clicked_at        DateTime?     @db.Timestamptz(6)
+  bounced_at        DateTime?     @db.Timestamptz(6)
+  created_at        DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime      @updatedAt @db.Timestamptz(6)
+  notifications     notifications? @relation(fields: [notification_id], references: [id], onDelete: SetNull)
+
+  @@index([status, created_at(sort: Desc)])
+  @@index([to_email])
+  @@index([notification_id])
+}
+
+model notification_preferences {
+  id                         String        @id @db.Uuid
+  organization_id            String        @db.Uuid
+  user_email                 String        @db.VarChar(255)
+  payment_confirmed_email    Boolean       @default(true)
+  payment_failed_email       Boolean       @default(true)
+  xero_sync_failed_email     Boolean       @default(true)
+  reconciliation_issue_email Boolean       @default(true)
+  weekly_summary_email       Boolean       @default(true)
+  security_alert_email       Boolean       @default(true)
+  payment_confirmed_inapp    Boolean       @default(true)
+  payment_failed_inapp       Boolean       @default(true)
+  xero_sync_failed_inapp     Boolean       @default(true)
+  created_at                 DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime      @updatedAt @db.Timestamptz(6)
+  organizations              organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@unique([organization_id, user_email])
+  @@index([organization_id, user_email])
+}
+
+enum FxSnapshotType {
+  CREATION
+  SETTLEMENT
+}
+
+enum LedgerAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum LedgerEntryType {
+  DEBIT
+  CREDIT
+}
+
+enum PaymentEventType {
+  CREATED
+  OPENED
+  PAYMENT_INITIATED
+  PAYMENT_CONFIRMED
+  PAYMENT_FAILED
+  EXPIRED
+  CANCELED
+}
+
+enum PaymentLinkStatus {
+  DRAFT
+  OPEN
+  PAID
+  EXPIRED
+  CANCELED
+}
+
+enum PaymentMethod {
+  STRIPE
+  HEDERA
+}
+
+enum PaymentToken {
+  HBAR
+  USDC
+  USDT
+  AUDD
+}
+
+enum XeroSyncStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  RETRYING
+}
+
+enum XeroSyncType {
+  INVOICE
+  PAYMENT
+}
+
+enum NotificationType {
+  PAYMENT_CONFIRMED
+  PAYMENT_FAILED
+  PAYMENT_EXPIRED
+  XERO_SYNC_FAILED
+  RECONCILIATION_ISSUE
+  SECURITY_ALERT
+  WEEKLY_SUMMARY
+  SYSTEM_ALERT
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  FAILED
+}
+
+// ============================================================================
+// Sprint 25: Multi-Currency Enhancement - New Models
+// ============================================================================
+
+model currency_configs {
+  id                        String        @id @db.Uuid
+  organization_id           String        @db.Uuid
+  currency_code             String        @db.Char(3)
+  is_enabled                Boolean       @default(true)
+  is_default                Boolean       @default(false)
+  display_priority          Int           @default(0)
+  custom_symbol             String?       @db.VarChar(10)
+  custom_decimal_places     Int?
+  xero_clearing_account_id  String?       @db.VarChar(255)
+  created_at                DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime      @updatedAt @db.Timestamptz(6)
+  organizations             organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@unique([organization_id, currency_code])
+  @@index([organization_id, is_enabled])
+}
+
+model fx_rate_history {
+  id              String    @id @db.Uuid
+  base_currency   String    @db.Char(3)
+  quote_currency  String    @db.Char(3)
+  rate            Decimal   @db.Decimal(18, 8)
+  provider        String    @db.VarChar(100)
+  recorded_at     DateTime  @default(now()) @db.Timestamptz(6)
+  metadata        Json?
+
+  @@index([base_currency, quote_currency, recorded_at(sort: Desc)])
+  @@index([recorded_at(sort: Desc)])
+}
+
+model fx_rate_overrides {
+  id                String        @id @db.Uuid
+  organization_id   String        @db.Uuid
+  base_currency     String        @db.Char(3)
+  quote_currency    String        @db.Char(3)
+  override_rate     Decimal       @db.Decimal(18, 8)
+  effective_from    DateTime      @db.Timestamptz(6)
+  effective_until   DateTime?     @db.Timestamptz(6)
+  reason            String?
+  created_by        String?       @db.VarChar(255)
+  created_at        DateTime      @default(now()) @db.Timestamptz(6)
+  organizations     organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@unique([organization_id, base_currency, quote_currency, effective_from])
+  @@index([organization_id])
+}
+
+model currency_display_preferences {
+  id                  String        @id @db.Uuid
+  organization_id     String        @db.Uuid
+  currency_code       String        @db.Char(3)
+  display_format      String        @default("symbol_amount_code") @db.VarChar(50)
+  thousand_separator  String        @default(",") @db.VarChar(5)
+  decimal_separator   String        @default(".") @db.VarChar(5)
+  symbol_position     String        @default("before") @db.VarChar(10)
+  space_after_symbol  Boolean       @default(false)
+  created_at          DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime      @updatedAt @db.Timestamptz(6)
+  organizations       organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@unique([organization_id, currency_code])
+  @@index([organization_id])
+}
+
+model multi_currency_invoices {
+  id                String        @id @db.Uuid
+  payment_link_id   String        @db.Uuid
+  invoice_currency  String        @db.Char(3)
+  line_items        Json
+  subtotal          Decimal       @db.Decimal(18, 2)
+  tax_amount        Decimal       @default(0) @db.Decimal(18, 2)
+  total_amount      Decimal       @db.Decimal(18, 2)
+  conversion_rates  Json?
+  created_at        DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime      @updatedAt @db.Timestamptz(6)
+  payment_links     payment_links @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+
+  @@index([payment_link_id])
+}

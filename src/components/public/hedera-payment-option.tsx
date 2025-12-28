@@ -1,0 +1,372 @@
+/**
+ * Hedera Payment Option Component
+ * Multi-token payment with HBAR, USDC, and USDT support
+ */
+
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Wallet, Check, Zap, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { WalletConnectButton } from '@/components/public/wallet-connect-button';
+import { TokenSelector } from '@/components/public/token-selector';
+import { TokenComparison } from '@/components/public/token-comparison';
+import { PaymentInstructions } from '@/components/public/payment-instructions';
+import { getWalletState } from '@/lib/hedera/wallet-service';
+import type { TokenType } from '@/lib/hedera/constants';
+import type { TokenPaymentAmount } from '@/lib/hedera/types';
+
+interface HederaPaymentOptionProps {
+  isAvailable: boolean;
+  isSelected: boolean;
+  isHovered: boolean;
+  onSelect: () => void;
+  onHoverStart: () => void;
+  onHoverEnd: () => void;
+  paymentLinkId: string;
+  shortCode: string;
+  amount: string;
+  currency: string;
+}
+
+type PaymentStep = 'select_method' | 'connect_wallet' | 'select_token' | 'confirm_payment' | 'monitoring' | 'complete';
+
+export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
+  isAvailable,
+  isSelected,
+  isHovered,
+  onSelect,
+  onHoverStart,
+  onHoverEnd,
+  paymentLinkId,
+  shortCode,
+  amount,
+  currency,
+}) => {
+  const [paymentStep, setPaymentStep] = useState<PaymentStep>('select_method');
+  const [paymentAmounts, setPaymentAmounts] = useState<TokenPaymentAmount[]>([]);
+  const [selectedToken, setSelectedToken] = useState<TokenType>('USDC');
+  const [isLoadingAmounts, setIsLoadingAmounts] = useState(false);
+  const [merchantAccountId, setMerchantAccountId] = useState<string | null>(null);
+  const [isLoadingMerchant, setIsLoadingMerchant] = useState(false);
+
+  // Fetch merchant settings when component mounts or short code changes
+  useEffect(() => {
+    if (isAvailable && !merchantAccountId) {
+      fetchMerchantSettings();
+    }
+  }, [isAvailable, shortCode]);
+
+  // Fetch payment amounts when selected and merchant account is loaded
+  useEffect(() => {
+    if (isSelected && isAvailable && merchantAccountId && paymentAmounts.length === 0) {
+      fetchPaymentAmounts();
+    }
+  }, [isSelected, isAvailable, merchantAccountId]);
+
+  const fetchMerchantSettings = async () => {
+    try {
+      setIsLoadingMerchant(true);
+
+      const response = await fetch(`/api/payment-links/${shortCode}/merchant`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch merchant settings');
+      }
+
+      const result = await response.json();
+      
+      if (!result.data.hederaAccountId) {
+        toast.error('Merchant has not configured Hedera payments');
+        return;
+      }
+
+      setMerchantAccountId(result.data.hederaAccountId);
+    } catch (error) {
+      console.error('Failed to fetch merchant settings:', error);
+      toast.error('Unable to load payment details');
+    } finally {
+      setIsLoadingMerchant(false);
+    }
+  };
+
+  const fetchPaymentAmounts = async () => {
+    try {
+      setIsLoadingAmounts(true);
+
+      const walletState = getWalletState();
+      
+      const response = await fetch('/api/hedera/payment-amounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fiatAmount: parseFloat(amount),
+          fiatCurrency: currency,
+          walletBalances: walletState.isConnected ? walletState.balances : undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch payment amounts');
+      }
+
+      const result = await response.json();
+      setPaymentAmounts(result.data.paymentAmounts);
+
+      // Select recommended token
+      const recommended = result.data.paymentAmounts.find((a: TokenPaymentAmount) => a.isRecommended);
+      if (recommended) {
+        setSelectedToken(recommended.tokenType);
+      }
+    } catch (error) {
+      console.error('Failed to fetch payment amounts:', error);
+      toast.error('Failed to calculate payment amounts');
+    } finally {
+      setIsLoadingAmounts(false);
+    }
+  };
+
+  const handleWalletConnected = () => {
+    setPaymentStep('select_token');
+    // Refresh payment amounts with wallet balances
+    fetchPaymentAmounts();
+  };
+
+  const handleTokenSelect = (token: TokenType) => {
+    setSelectedToken(token);
+  };
+
+  const handleConfirmPayment = () => {
+    setPaymentStep('confirm_payment');
+  };
+
+  const handleStartMonitoring = async () => {
+    setPaymentStep('monitoring');
+    
+    // Start monitoring for payment
+    try {
+      const selectedAmount = paymentAmounts.find(a => a.tokenType === selectedToken);
+      if (!selectedAmount) return;
+
+      const response = await fetch('/api/hedera/transactions/monitor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: merchantAccountId,
+          tokenType: selectedToken,
+          expectedAmount: parseFloat(selectedAmount.totalAmount),
+          timeoutMs: 300000, // 5 minutes
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Payment monitoring failed');
+      }
+
+      const result = await response.json();
+      
+      if (result.data.validation.isValid) {
+        setPaymentStep('complete');
+        toast.success('Payment confirmed!');
+      } else {
+        toast.error(result.data.validation.message || 'Payment validation failed');
+      }
+    } catch (error) {
+      console.error('Payment monitoring error:', error);
+      toast.error('Failed to monitor payment');
+    }
+  };
+
+  const getWalletState = () => {
+    return {
+      isConnected: false,
+      balances: {
+        HBAR: '0.00000000',
+        USDC: '0.000000',
+        USDT: '0.000000',
+        AUDD: '0.000000',
+      },
+    };
+  };
+
+  return (
+    <div className="space-y-3">
+      <button
+        type="button"
+        onClick={isAvailable ? onSelect : undefined}
+        onMouseEnter={onHoverStart}
+        onMouseLeave={onHoverEnd}
+        onFocus={onHoverStart}
+        onBlur={onHoverEnd}
+        disabled={!isAvailable}
+        className={cn(
+          'w-full text-left transition-all rounded-lg border-2 p-4',
+          'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2',
+          {
+            'border-purple-600 bg-purple-50 shadow-md': isSelected,
+            'border-slate-200 bg-white hover:border-purple-300 hover:shadow-sm': !isSelected && isAvailable,
+            'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed': !isAvailable,
+          }
+        )}
+        role="radio"
+        aria-checked={isSelected}
+        aria-disabled={!isAvailable}
+        aria-label="Pay with HBAR, USDC, USDT, or AUDD via Hedera"
+        tabIndex={isAvailable ? 0 : -1}
+      >
+        <div className="flex items-start gap-4">
+          {/* Icon */}
+          <div
+            className={cn(
+              'flex items-center justify-center w-12 h-12 rounded-full transition-colors',
+              {
+                'bg-purple-600': isSelected,
+                'bg-purple-100': !isSelected && isAvailable,
+                'bg-slate-200': !isAvailable,
+              }
+            )}
+          >
+            <Wallet
+              className={cn('w-6 h-6', {
+                'text-white': isSelected,
+                'text-purple-600': !isSelected && isAvailable,
+                'text-slate-400': !isAvailable,
+              })}
+            />
+          </div>
+
+          {/* Content */}
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-lg font-semibold text-slate-900">
+                Cryptocurrency
+              </h3>
+              {isSelected && (
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-600">
+                  <Check className="w-4 h-4 text-white" />
+                </div>
+              )}
+            </div>
+
+            <p className="text-sm text-slate-600 mb-3">
+              Pay with HBAR, USDC, USDT, or AUDD on the Hedera network
+            </p>
+
+            {/* Features */}
+            <div className="flex flex-wrap gap-3 text-xs">
+              <div className="flex items-center gap-1.5 text-slate-500">
+                <Zap className="w-3.5 h-3.5" />
+                <span>Low fees (~$0.0001)</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-500">
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                <span>3-5 second finality</span>
+              </div>
+            </div>
+
+            {!isAvailable && (
+              <p className="text-xs text-amber-600 mt-3 font-medium">
+                Crypto payments not available from this merchant
+              </p>
+            )}
+          </div>
+        </div>
+      </button>
+
+      {/* Payment Flow */}
+      {isSelected && isAvailable && (
+        <div className="space-y-4 mt-4">
+          {/* Loading Amounts */}
+          {isLoadingAmounts && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+            </div>
+          )}
+
+          {/* Step 1: Connect Wallet */}
+          {!isLoadingAmounts && paymentStep === 'select_method' && (
+            <WalletConnectButton />
+          )}
+
+          {/* Step 2: Token Comparison & Selection */}
+          {!isLoadingAmounts && paymentAmounts.length > 0 && paymentStep === 'select_token' && (
+            <>
+              <TokenComparison
+                paymentAmounts={paymentAmounts}
+                fiatAmount={amount}
+                fiatCurrency={currency}
+              />
+              
+              <TokenSelector
+                paymentAmounts={paymentAmounts}
+                selectedToken={selectedToken}
+                onTokenSelect={handleTokenSelect}
+                walletBalances={getWalletState().balances}
+              />
+
+              <Button
+                onClick={handleConfirmPayment}
+                className="w-full h-12 text-base font-semibold"
+                size="lg"
+              >
+                Continue with {selectedToken}
+              </Button>
+            </>
+          )}
+
+          {/* Step 3: Payment Instructions */}
+          {paymentStep === 'confirm_payment' && (
+            <>
+              {paymentAmounts
+                .filter(a => a.tokenType === selectedToken)
+                .map(amount => (
+                  <PaymentInstructions
+                    key={amount.tokenType}
+                    tokenType={amount.tokenType}
+                    amount={amount.requiredAmount}
+                    totalAmount={amount.totalAmount}
+                    merchantAccountId={merchantAccountId}
+                    paymentLinkId={paymentLinkId}
+                  />
+                ))}
+
+              <Button
+                onClick={handleStartMonitoring}
+                className="w-full h-12 text-base font-semibold"
+                size="lg"
+              >
+                I've Sent the Payment
+              </Button>
+            </>
+          )}
+
+          {/* Step 4: Monitoring */}
+          {paymentStep === 'monitoring' && (
+            <div className="text-center py-8">
+              <Loader2 className="h-12 w-12 animate-spin text-purple-600 mx-auto mb-4" />
+              <p className="text-lg font-semibold">Monitoring for payment...</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                This usually takes 5-30 seconds
+              </p>
+            </div>
+          )}
+
+          {/* Step 5: Complete */}
+          {paymentStep === 'complete' && (
+            <div className="text-center py-8">
+              <Check className="h-16 w-16 text-green-600 mx-auto mb-4" />
+              <p className="text-xl font-bold text-green-600">Payment Confirmed!</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Thank you for your payment
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};

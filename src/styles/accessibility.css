@@ -1,0 +1,93 @@
+/**
+ * Accessibility Utilities
+ * 
+ * CSS classes for accessibility features
+ */
+
+/* Screen Reader Only (Visually Hidden) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Not Screen Reader Only (Show on Focus) */
+.not-sr-only {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Focus Visible Styles */
+.focus-visible:focus-visible {
+  outline: 2px solid theme('colors.blue.500');
+  outline-offset: 2px;
+}
+
+/* Skip Link Styles */
+.skip-link {
+  @apply sr-only;
+  @apply focus:not-sr-only;
+  @apply focus:absolute focus:top-4 focus:left-4 focus:z-50;
+  @apply focus:px-4 focus:py-2;
+  @apply focus:bg-blue-600 focus:text-white;
+  @apply focus:rounded-lg focus:shadow-lg;
+  @apply focus:outline-none focus:ring-2 focus:ring-blue-400;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .focus-visible:focus-visible {
+    outline-width: 3px;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Touch Target Minimum Size (44x44px) */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Keyboard Focus Indicator */
+:focus-visible {
+  outline: 2px solid theme('colors.blue.500');
+  outline-offset: 2px;
+}
+
+/* Remove focus outline for mouse users (keep for keyboard) */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ARIA Live Region */
+#aria-live-region {
+  @apply sr-only;
+}
+
+
+
+
+
+
+
