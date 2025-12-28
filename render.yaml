@@ -96,5 +96,5 @@ databases:
     databaseName: provvypay_production
     user: provvypay
     region: oregon
-    plan: starter
+    plan: basic
 
