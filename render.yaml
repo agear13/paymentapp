@@ -25,7 +25,8 @@ services:
     plan: starter
     branch: main
     rootDir: src
-    buildCommand: npm ci && npx prisma generate && npm run build
+    buildCommand: npm ci --legacy-peer-deps && npx prisma generate && npm run build
+
     startCommand: npm run start
     healthCheckPath: /api/health
     autoDeploy: true
