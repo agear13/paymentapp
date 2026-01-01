@@ -1,32 +1,44 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth/session';
-import { auth } from '@clerk/nextjs/server';
-import prisma from '@/lib/prisma';
-import { v4 as uuidv4 } from 'uuid';
+import { NextRequest, NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth/session'
+import { prisma } from '@/lib/prisma'
+import { v4 as uuidv4 } from 'uuid'
+
+function getOrganizationId(req: NextRequest) {
+  // Prefer query param, fall back to header
+  const { searchParams } = new URL(req.url)
+  return (
+    searchParams.get('organizationId') ||
+    searchParams.get('orgId') ||
+    req.headers.get('x-organization-id')
+  )
+}
 
 /**
  * GET /api/notifications/preferences
- * 
- * Get notification preferences for the current user
+ * Get notification preferences for the current user within an organization
+ *
+ * Required:
+ * - organizationId (query param) OR x-organization-id header
  */
 export async function GET(req: NextRequest) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { orgId } = await auth();
-    if (!orgId) {
-      return NextResponse.json({ error: 'No organization' }, { status: 400 });
+    const organizationId = getOrganizationId(req)
+    if (!organizationId) {
+      return NextResponse.json({ error: 'organizationId is required' }, { status: 400 })
     }
 
     const organization = await prisma.organizations.findUnique({
-      where: { clerk_org_id: orgId },
-    });
+      where: { id: organizationId },
+      select: { id: true },
+    })
 
     if (!organization) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }
 
     // Get or create preferences
@@ -37,9 +49,8 @@ export async function GET(req: NextRequest) {
           user_email: user.email,
         },
       },
-    });
+    })
 
-    // Create default preferences if not exists
     if (!preferences) {
       preferences = await prisma.notification_preferences.create({
         data: {
@@ -56,47 +67,46 @@ export async function GET(req: NextRequest) {
           payment_failed_inapp: true,
           xero_sync_failed_inapp: true,
         },
-      });
+      })
     }
 
-    return NextResponse.json({ preferences });
+    return NextResponse.json({ preferences })
   } catch (error: any) {
-    console.error('[Preferences GET] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch preferences' },
-      { status: 500 }
-    );
+    console.error('[Preferences GET] Error:', error)
+    return NextResponse.json({ error: 'Failed to fetch preferences' }, { status: 500 })
   }
 }
 
 /**
  * PUT /api/notifications/preferences
- * 
- * Update notification preferences
+ * Update notification preferences for the current user within an organization
+ *
+ * Required:
+ * - organizationId (query param) OR x-organization-id header
  */
 export async function PUT(req: NextRequest) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { orgId } = await auth();
-    if (!orgId) {
-      return NextResponse.json({ error: 'No organization' }, { status: 400 });
+    const organizationId = getOrganizationId(req)
+    if (!organizationId) {
+      return NextResponse.json({ error: 'organizationId is required' }, { status: 400 })
     }
 
     const organization = await prisma.organizations.findUnique({
-      where: { clerk_org_id: orgId },
-    });
+      where: { id: organizationId },
+      select: { id: true },
+    })
 
     if (!organization) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }
 
-    const body = await req.json();
+    const body = await req.json()
 
-    // Update preferences
     const preferences = await prisma.notification_preferences.upsert({
       where: {
         organization_id_user_email: {
@@ -111,21 +121,11 @@ export async function PUT(req: NextRequest) {
         ...body,
       },
       update: body,
-    });
+    })
 
-    return NextResponse.json({ preferences });
+    return NextResponse.json({ preferences })
   } catch (error: any) {
-    console.error('[Preferences PUT] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to update preferences' },
-      { status: 500 }
-    );
+    console.error('[Preferences PUT] Error:', error)
+    return NextResponse.json({ error: 'Failed to update preferences' }, { status: 500 })
   }
 }
-
-
-
-
-
-
-

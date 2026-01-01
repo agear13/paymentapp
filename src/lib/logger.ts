@@ -5,73 +5,109 @@
 
 import pino from 'pino'
 
-// Determine log level from environment
-const logLevel = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug')
+// -----------------------------------------------------------------------------
+// Logger base
+// -----------------------------------------------------------------------------
 
-// Create base logger configuration
-// Note: pino-pretty transport doesn't work well with Next.js due to thread-stream issues
-// Using simple JSON logging for both dev and production
+const logLevel =
+  process.env.LOG_LEVEL ||
+  (process.env.NODE_ENV === 'production' ? 'info' : 'debug')
+
 const loggerConfig: pino.LoggerOptions = {
   level: logLevel,
-  // Always use JSON format for Next.js compatibility
   formatters: {
-    level: (label) => {
-      return { level: label }
-    },
+    level: (label) => ({ level: label }),
   },
 }
 
-// Create logger instance
+// Base pino instance
 export const logger = pino(loggerConfig)
 
-/**
- * Create child logger with context
- */
-export function createLogger(context: Record<string, any>) {
-  return logger.child(context)
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
+
+type LogData = Record<string, unknown> | undefined
+
+export type AppLogger = {
+  trace: (msg: string, data?: LogData) => void
+  debug: (msg: string, data?: LogData) => void
+  info: (msg: string, data?: LogData) => void
+  warn: (msg: string, data?: LogData) => void
+  error: (msg: string, error?: unknown, data?: LogData) => void
+  fatal: (msg: string, error?: unknown, data?: LogData) => void
+  child: (context: Record<string, unknown>) => AppLogger
 }
 
-/**
- * Log levels and convenience methods
- */
-export const log = {
-  trace: (msg: string, data?: any) => logger.trace(data, msg),
-  debug: (msg: string, data?: any) => logger.debug(data, msg),
-  info: (msg: string, data?: any) => logger.info(data, msg),
-  warn: (msg: string, data?: any) => logger.warn(data, msg),
-  error: (msg: string, error?: Error | any, data?: any) => {
-    if (error instanceof Error) {
-      logger.error({ ...data, err: error }, msg)
-    } else {
-      logger.error({ ...data, error }, msg)
-    }
-  },
-  fatal: (msg: string, error?: Error | any, data?: any) => {
-    if (error instanceof Error) {
-      logger.fatal({ ...data, err: error }, msg)
-    } else {
-      logger.fatal({ ...data, error }, msg)
-    }
-  },
+// -----------------------------------------------------------------------------
+// Factory to create safe loggers (WITH .child())
+// -----------------------------------------------------------------------------
+
+function makeLogger(base: pino.Logger): AppLogger {
+  return {
+    trace: (msg, data) => base.trace(data, msg),
+    debug: (msg, data) => base.debug(data, msg),
+    info: (msg, data) => base.info(data, msg),
+    warn: (msg, data) => base.warn(data, msg),
+
+    error: (msg, error, data) => {
+      if (error instanceof Error) {
+        base.error({ ...data, err: error }, msg)
+      } else if (error) {
+        base.error({ ...data, error }, msg)
+      } else {
+        base.error(data, msg)
+      }
+    },
+
+    fatal: (msg, error, data) => {
+      if (error instanceof Error) {
+        base.fatal({ ...data, err: error }, msg)
+      } else if (error) {
+        base.fatal({ ...data, error }, msg)
+      } else {
+        base.fatal(data, msg)
+      }
+    },
+
+    // 🔑 THIS FIXES YOUR BUILD
+    child: (context) => makeLogger(base.child(context)),
+  }
 }
+
+// -----------------------------------------------------------------------------
+// Public loggers
+// -----------------------------------------------------------------------------
+
+/**
+ * Default application logger
+ * Supports log.child(...)
+ */
+export const log = makeLogger(logger)
 
 /**
  * Domain-specific loggers
  */
 export const loggers = {
-  auth: createLogger({ domain: 'auth' }),
-  payment: createLogger({ domain: 'payment' }),
-  ledger: createLogger({ domain: 'ledger' }),
-  xero: createLogger({ domain: 'xero' }),
-  api: createLogger({ domain: 'api' }),
-  webhook: createLogger({ domain: 'webhook' }),
-  database: createLogger({ domain: 'database' }),
-  cache: createLogger({ domain: 'cache' }),
+  auth: log.child({ domain: 'auth' }),
+  payment: log.child({ domain: 'payment' }),
+  ledger: log.child({ domain: 'ledger' }),
+  xero: log.child({ domain: 'xero' }),
+  api: log.child({ domain: 'api' }),
+  webhook: log.child({ domain: 'webhook' }),
+  database: log.child({ domain: 'database' }),
+  cache: log.child({ domain: 'cache' }),
+  fx: log.child({ domain: 'fx' }),
 }
 
-/**
- * Request logging middleware
- */
+// -----------------------------------------------------------------------------
+// Utilities
+// -----------------------------------------------------------------------------
+
+export function createLogger(context: Record<string, unknown>) {
+  return log.child(context)
+}
+
 export function logRequest(
   method: string,
   url: string,
@@ -79,7 +115,7 @@ export function logRequest(
   duration?: number,
   status?: number
 ) {
-  logger.info({
+  log.info('request', {
     type: 'request',
     method,
     url,
@@ -89,9 +125,6 @@ export function logRequest(
   })
 }
 
-/**
- * Error logging with context
- */
 export function logError(
   error: Error,
   context: {
@@ -99,25 +132,18 @@ export function logError(
     userId?: string
     organizationId?: string
     paymentLinkId?: string
-    [key: string]: any
+    [key: string]: unknown
   }
 ) {
-  logger.error({
-    ...context,
-    err: error,
-    stack: error.stack,
-  })
+  log.error('error', error, context)
 }
 
-/**
- * Audit log for important actions
- */
 export function logAudit(
   action: string,
   userId: string,
-  details: Record<string, any>
+  details: Record<string, unknown>
 ) {
-  logger.info({
+  log.info('audit', {
     type: 'audit',
     action,
     userId,
@@ -126,15 +152,12 @@ export function logAudit(
   })
 }
 
-/**
- * Performance logging
- */
 export function logPerformance(
   operation: string,
   duration: number,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ) {
-  logger.info({
+  log.info('performance', {
     type: 'performance',
     operation,
     duration,
@@ -143,6 +166,3 @@ export function logPerformance(
 }
 
 export default logger
-
-
-

@@ -45,11 +45,11 @@ export const CRYPTO_CLEARING_ACCOUNTS: Record<TokenType, string> = {
  * 
  * @example
  * ```typescript
- * const accountCode = getCryptoClearing AccountCode('AUDD');
+ * const accountCode = getCryptoClearingAccountCode('AUDD');
  * // Returns: '1054'
  * ```
  */
-export function getCryptoClearing AccountCode(tokenType: TokenType): string {
+export function getCryptoClearingAccountCode(tokenType: TokenType): string {
   const accountCode = CRYPTO_CLEARING_ACCOUNTS[tokenType];
 
   if (!accountCode) {
@@ -63,10 +63,10 @@ export function getCryptoClearing AccountCode(tokenType: TokenType): string {
  * Get clearing account code from Prisma PaymentToken enum
  * Convenience function for use with database models
  */
-export function getCryptoClearing AccountCodeFromPaymentToken(
+export function getCryptoClearingAccountCodeFromPaymentToken(
   paymentToken: PaymentToken
 ): string {
-  return getCryptoClearing AccountCode(paymentToken as TokenType);
+  return getCryptoClearingAccountCode(paymentToken as TokenType);
 }
 
 /**
@@ -77,11 +77,11 @@ export function getCryptoClearing AccountCodeFromPaymentToken(
  * 
  * @example
  * ```typescript
- * const codes = getAllCryptoClearing Accounts();
+ * const codes = getAllCryptoClearingAccounts();
  * // Returns: ['1051', '1052', '1053', '1054']
  * ```
  */
-export function getAllCryptoClearing Accounts(): string[] {
+export function getAllCryptoClearingAccounts(): string[] {
   return Object.values(CRYPTO_CLEARING_ACCOUNTS);
 }
 
@@ -93,11 +93,11 @@ export function getAllCryptoClearing Accounts(): string[] {
  * 
  * @example
  * ```typescript
- * isCryptoClearing Account('1054'); // true (AUDD)
- * isCryptoClearing Account('1200'); // false (Accounts Receivable)
+ * isCryptoClearingAccount('1054'); // true (AUDD)
+ * isCryptoClearingAccount('1200'); // false (Accounts Receivable)
  * ```
  */
-export function isCryptoClearing Account(accountCode: string): boolean {
+export function isCryptoClearingAccount(accountCode: string): boolean {
   return Object.values(CRYPTO_CLEARING_ACCOUNTS).includes(accountCode);
 }
 
@@ -109,11 +109,11 @@ export function isCryptoClearing Account(accountCode: string): boolean {
  * 
  * @example
  * ```typescript
- * getTokenFromClearing Account('1054'); // 'AUDD'
- * getTokenFromClearing Account('1200'); // null
+ * getTokenFromClearingAccount('1054'); // 'AUDD'
+ * getTokenFromClearingAccount('1200'); // null
  * ```
  */
-export function getTokenFromClearing Account(accountCode: string): TokenType | null {
+export function getTokenFromClearingAccount(accountCode: string): TokenType | null {
   const entry = Object.entries(CRYPTO_CLEARING_ACCOUNTS).find(
     ([_, code]) => code === accountCode
   );
@@ -141,7 +141,7 @@ export function validateTokenAccountMapping(
   tokenType: TokenType,
   clearingAccountCode: string
 ): void {
-  const expectedAccount = getCryptoClearing AccountCode(tokenType);
+  const expectedAccount = getCryptoClearingAccountCode(tokenType);
 
   if (clearingAccountCode !== expectedAccount) {
     throw new Error(
@@ -158,8 +158,8 @@ export function validateTokenAccountMapping(
  * @param accountCode - The account code
  * @returns A descriptive name
  */
-export function getClearing AccountName(accountCode: string): string {
-  const tokenType = getTokenFromClearing Account(accountCode);
+export function getClearingAccountName(accountCode: string): string {
+  const tokenType = getTokenFromClearingAccount(accountCode);
 
   if (tokenType) {
     return `Crypto Clearing - ${tokenType}`;

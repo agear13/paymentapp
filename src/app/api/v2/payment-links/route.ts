@@ -14,8 +14,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { loggers } from '@/lib/logger';
-import { requireAuth } from '@/lib/supabase/middleware';
-import { checkUserPermission } from '@/lib/rbac/permissions';
+import { requireAuth } from '@/lib/auth/middleware';
+import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import {
   detectPaginationStrategy,

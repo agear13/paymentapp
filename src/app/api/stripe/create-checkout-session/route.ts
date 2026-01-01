@@ -49,12 +49,12 @@ export async function POST(request: NextRequest) {
     const paymentLink = await prisma.payment_links.findUnique({
       where: { id: paymentLinkId },
       include: {
-        organization: {
+        organizations: {
           include: {
-            merchantSettings: {
+            merchant_settings: {
               select: {
-                stripeAccountId: true,
-                displayName: true,
+                stripe_account_id: true,
+                display_name: true,
               },
             },
           },
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if expired
-    if (paymentLink.expiresAt && new Date(paymentLink.expiresAt) < new Date()) {
+    if (paymentLink.expires_at && new Date(paymentLink.expires_at) < new Date()) {
       return NextResponse.json(
         { error: 'Payment link has expired' },
         { status: 400 }
@@ -86,8 +86,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify Stripe is configured for merchant
-    const merchantSettings = paymentLink.organization.merchantSettings[0];
-    if (!merchantSettings?.stripeAccountId) {
+    const merchantSettings = paymentLink.organizations.merchant_settings[0];
+    if (!merchantSettings?.stripe_account_id) {
       return NextResponse.json(
         { error: 'Stripe not configured for this merchant' },
         { status: 400 }
@@ -104,8 +104,8 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     
     // Construct return URLs
-    const defaultSuccessUrl = `${baseUrl}/pay/${paymentLink.shortCode}/success?session_id={CHECKOUT_SESSION_ID}`;
-    const defaultCancelUrl = `${baseUrl}/pay/${paymentLink.shortCode}`;
+    const defaultSuccessUrl = `${baseUrl}/pay/${paymentLink.short_code}/success?session_id={CHECKOUT_SESSION_ID}`;
+    const defaultCancelUrl = `${baseUrl}/pay/${paymentLink.short_code}`;
 
     // Create Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -115,9 +115,9 @@ export async function POST(request: NextRequest) {
           price_data: {
             currency: paymentLink.currency.toLowerCase(),
             product_data: {
-              name: paymentLink.description || `Payment for ${paymentLink.shortCode}`,
-              description: paymentLink.invoiceReference
-                ? `Invoice: ${paymentLink.invoiceReference}`
+              name: paymentLink.description || `Payment for ${paymentLink.short_code}`,
+              description: paymentLink.invoice_reference
+                ? `Invoice: ${paymentLink.invoice_reference}`
                 : undefined,
             },
             unit_amount: amountInSmallestUnit,
@@ -127,21 +127,21 @@ export async function POST(request: NextRequest) {
       ],
       metadata: {
         payment_link_id: paymentLinkId,
-        organization_id: paymentLink.organizationId,
-        short_code: paymentLink.shortCode,
-        invoice_reference: paymentLink.invoiceReference || '',
+        organization_id: paymentLink.organization_id,
+        short_code: paymentLink.short_code,
+        invoice_reference: paymentLink.invoice_reference || '',
       },
-      customer_email: paymentLink.customerEmail || undefined,
+      customer_email: paymentLink.customer_email || undefined,
       success_url: successUrl || defaultSuccessUrl,
       cancel_url: cancelUrl || defaultCancelUrl,
-      expires_at: paymentLink.expiresAt
-        ? Math.floor(new Date(paymentLink.expiresAt).getTime() / 1000)
+      expires_at: paymentLink.expires_at
+        ? Math.floor(new Date(paymentLink.expires_at).getTime() / 1000)
         : Math.floor(Date.now() / 1000) + 86400, // 24 hours default
       payment_intent_data: {
         metadata: {
           payment_link_id: paymentLinkId,
-          organization_id: paymentLink.organizationId,
-          short_code: paymentLink.shortCode,
+          organization_id: paymentLink.organization_id,
+          short_code: paymentLink.short_code,
         },
       },
     });
@@ -162,13 +162,13 @@ export async function POST(request: NextRequest) {
     });
 
     log.info(
+      'Checkout session created successfully',
       {
         paymentLinkId,
         sessionId: session.id,
         amount: amountInSmallestUnit,
         currency: paymentLink.currency,
-      },
-      'Checkout session created successfully'
+      }
     );
 
     return NextResponse.json({
@@ -179,8 +179,9 @@ export async function POST(request: NextRequest) {
     const stripeError = handleStripeError(error);
     
     log.error(
-      { error: stripeError.message },
-      'Failed to create Checkout session'
+      'Failed to create Checkout session',
+      error,
+      { stripeError: stripeError.message }
     );
 
     return NextResponse.json(

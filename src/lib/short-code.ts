@@ -6,6 +6,19 @@
 import { prisma } from '@/lib/prisma';
 
 /**
+ * Short code validation regex
+ * Accepts: A-Z, a-z, 0-9, dash (-), underscore (_)
+ * Length: exactly 8 characters
+ * Compatible with base64url encoding
+ */
+export const SHORT_CODE_REGEX = /^[a-zA-Z0-9_-]{8}$/;
+
+/**
+ * Valid length for short codes
+ */
+export const SHORT_CODE_LENGTH = 8;
+
+/**
  * Generates a URL-safe short code (8 characters)
  * Uses: A-Z, a-z, 0-9, dash, underscore
  */
@@ -13,7 +26,7 @@ const generateRandomShortCode = (): string => {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
   let code = '';
   
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < SHORT_CODE_LENGTH; i++) {
     const randomIndex = Math.floor(Math.random() * characters.length);
     code += characters[randomIndex];
   }
@@ -55,12 +68,22 @@ export const generateUniqueShortCode = async (maxAttempts = 10): Promise<string>
  * @returns boolean True if valid format
  */
 export const isValidShortCode = (code: string): boolean => {
-  if (!code || code.length !== 8) {
+  if (!code || code.length !== SHORT_CODE_LENGTH) {
     return false;
   }
   
-  const validPattern = /^[a-zA-Z0-9_-]{8}$/;
-  return validPattern.test(code);
+  return SHORT_CODE_REGEX.test(code);
+};
+
+/**
+ * Asserts that a short code is valid, throwing an error if not
+ * @param code Short code to validate
+ * @throws Error if short code is invalid
+ */
+export const assertValidShortCode = (code: string): void => {
+  if (!isValidShortCode(code)) {
+    throw new Error(`Invalid short code format: "${code}". Expected 8 characters matching [a-zA-Z0-9_-]`);
+  }
 };
 
 /**

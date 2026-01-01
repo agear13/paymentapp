@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { loggers } from '@/lib/logger';
 import { requireAuth } from '@/lib/supabase/middleware';
-import { checkUserPermission } from '@/lib/rbac/permissions';
+import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { PaymentLinkSelectors } from '@/lib/database/query-optimization';
 

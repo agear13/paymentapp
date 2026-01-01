@@ -26,7 +26,7 @@ export async function GET(
 
     const { id } = await params;
 
-    const settings = await prisma.merchant_settingss.findUnique({
+    const settings = await prisma.merchant_settings.findUnique({
       where: { id },
       include: {
         organization: {
@@ -72,7 +72,7 @@ export async function PATCH(
 
     // TODO: Check if user has permission to update these settings
 
-    const settings = await prisma.merchant_settingss.update({
+    const settings = await prisma.merchant_settings.update({
       where: { id },
       data: body,
     });
@@ -102,7 +102,7 @@ export async function DELETE(
 
     // TODO: Check if user has permission to delete these settings
 
-    await prisma.merchant_settingss.delete({
+    await prisma.merchant_settings.delete({
       where: { id },
     });
 

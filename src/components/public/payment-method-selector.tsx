@@ -6,10 +6,25 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { StripePaymentOption } from '@/components/public/stripe-payment-option';
-import { HederaPaymentOption } from '@/components/public/hedera-payment-option';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
+
+// CRITICAL: Dynamic import with ssr: false to keep hashconnect out of server/shared bundles
+// This is the isolation boundary - Hedera UI never SSR'd, never in server chunks
+const HederaPaymentOption = dynamic(
+  () => import('@/components/public/hedera-payment-option').then(mod => ({ default: mod.HederaPaymentOption })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-8 border-2 border-slate-200 rounded-lg flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+        <span className="ml-2 text-sm text-slate-600">Loading crypto payment option...</span>
+      </div>
+    ),
+  }
+);
 
 interface PaymentMethodSelectorProps {
   availablePaymentMethods: {
@@ -64,19 +79,21 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
         currency={currency}
       />
 
-      {/* Hedera Payment Option */}
-      <HederaPaymentOption
-        isAvailable={availablePaymentMethods.hedera}
-        isSelected={selectedMethod === 'hedera'}
-        isHovered={hoveredMethod === 'hedera'}
-        onSelect={() => onSelectMethod('hedera')}
-        onHoverStart={() => setHoveredMethod('hedera')}
-        onHoverEnd={() => setHoveredMethod(null)}
-        paymentLinkId={paymentLinkId}
-        shortCode={shortCode}
-        amount={amount}
-        currency={currency}
-      />
+      {/* Hedera Payment Option - Re-enabled with SSR disabled */}
+      {availablePaymentMethods.hedera && (
+        <HederaPaymentOption
+          isAvailable={availablePaymentMethods.hedera}
+          isSelected={selectedMethod === 'hedera'}
+          isHovered={hoveredMethod === 'hedera'}
+          onSelect={() => onSelectMethod('hedera')}
+          onHoverStart={() => setHoveredMethod('hedera')}
+          onHoverEnd={() => setHoveredMethod(null)}
+          paymentLinkId={paymentLinkId}
+          shortCode={shortCode}
+          amount={amount}
+          currency={currency}
+        />
+      )}
 
       {/* Payment Method Info */}
       {selectedMethod && (

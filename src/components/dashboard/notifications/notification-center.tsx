@@ -11,6 +11,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
+import { useOrganization } from '@/hooks/use-organization';
 
 interface Notification {
   id: string;
@@ -27,23 +28,44 @@ export function NotificationCenter() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const { organizationId, isLoading: isOrgLoading } = useOrganization();
 
   useEffect(() => {
+    // Guard: Only fetch if organizationId exists and org is not loading
+    if (!organizationId || isOrgLoading) {
+      setLoading(false);
+      return;
+    }
+
     fetchNotifications();
     // Poll for new notifications every 30 seconds
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [organizationId, isOrgLoading]);
 
   const fetchNotifications = async () => {
+    // Extra guard: Don't fetch without organizationId
+    if (!organizationId) {
+      setLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch('/api/notifications?limit=20');
+      const response = await fetch(`/api/notifications?limit=20&organizationId=${organizationId}`);
+      
       if (response.ok) {
         const data = await response.json();
         setNotifications(data.notifications || []);
         setUnreadCount(
           data.notifications?.filter((n: Notification) => !n.read).length || 0
         );
+      } else if (response.status === 400) {
+        // Handle 400 gracefully - likely missing organizationId
+        const errorData = await response.json().catch(() => ({ error: 'Bad request' }));
+        console.warn('Notifications fetch failed:', errorData.error);
+        // Don't throw - just stop and set empty state
+        setNotifications([]);
+        setUnreadCount(0);
       }
     } catch (error) {
       console.error('Failed to fetch notifications:', error);

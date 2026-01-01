@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { loggers } from '@/lib/logger';
 import { applyRateLimit } from '@/lib/rate-limit';
+import { isValidShortCode } from '@/lib/short-code';
 
 /**
  * GET /api/public/pay/[shortCode]
@@ -30,10 +31,22 @@ export async function GET(
 
     const { shortCode } = await params;
 
-    // Validate short code format (8 characters, alphanumeric)
-    if (!shortCode || shortCode.length !== 8 || !/^[A-Za-z0-9]+$/.test(shortCode)) {
+    // Validate short code format (8 characters, base64url-safe: A-Za-z0-9_-)
+    if (!isValidShortCode(shortCode)) {
+      // Dev-only logging for rejected short codes
+      if (process.env.NODE_ENV !== 'production') {
+        loggers.api.warn(
+          { 
+            pid: process.pid,
+            shortCode: shortCode || '(empty)',
+            length: shortCode?.length || 0,
+            reason: 'Invalid format - expected 8 chars matching [a-zA-Z0-9_-]'
+          },
+          'Short code validation failed'
+        );
+      }
       return NextResponse.json(
-        { error: 'Invalid short code format' },
+        { error: 'Invalid short code format', code: 'INVALID_FORMAT' },
         { status: 400 }
       );
     }

@@ -11,12 +11,16 @@ import { log } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { shortCode: string } }
+  { params }: { params: Promise<{ shortCode: string }> }
 ) {
   try {
-    const { shortCode } = params;
+    // Next.js 15: await params
+    const { shortCode } = await params;
+
+    log.info({ shortCode }, '[Merchant API] Request received');
 
     if (!shortCode) {
+      log.warn('[Merchant API] Missing shortCode in request');
       return NextResponse.json(
         { error: 'Short code is required' },
         { status: 400 }
@@ -24,6 +28,7 @@ export async function GET(
     }
 
     // Find payment link with merchant settings
+    log.info({ shortCode }, '[Merchant API] Looking up payment link');
     const paymentLink = await prisma.payment_links.findUnique({
       where: { short_code: shortCode },
       select: {
@@ -34,11 +39,17 @@ export async function GET(
     });
 
     if (!paymentLink) {
+      log.warn({ shortCode }, '[Merchant API] Payment link not found');
       return NextResponse.json(
         { error: 'Payment link not found' },
         { status: 404 }
       );
     }
+
+    log.info(
+      { shortCode, paymentLinkId: paymentLink.id, organizationId: paymentLink.organization_id },
+      '[Merchant API] Payment link found, fetching merchant settings'
+    );
 
     // Fetch merchant settings for the organization
     const merchantSettings = await prisma.merchant_settings.findFirst({
@@ -52,11 +63,24 @@ export async function GET(
     });
 
     if (!merchantSettings) {
+      log.warn(
+        { shortCode, organizationId: paymentLink.organization_id },
+        '[Merchant API] Merchant settings not found for organization'
+      );
       return NextResponse.json(
         { error: 'Merchant settings not found' },
         { status: 404 }
       );
     }
+
+    log.info(
+      {
+        shortCode,
+        hasHederaAccount: !!merchantSettings.hedera_account_id,
+        hasStripeAccount: !!merchantSettings.stripe_account_id,
+      },
+      '[Merchant API] Merchant settings found, returning data'
+    );
 
     return NextResponse.json({
       data: {
@@ -67,7 +91,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    log.error({ error, shortCode: params.shortCode }, 'Failed to fetch merchant settings');
+    log.error({ error }, '[Merchant API] Failed to fetch merchant settings');
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

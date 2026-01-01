@@ -21,7 +21,8 @@ export type {
 } from './types';
 
 // Rate Providers
-export { IRateProvider, RateProviderError } from './rate-provider.interface';
+export type { IRateProvider } from './rate-provider.interface';
+export { RateProviderError } from './rate-provider.interface';
 export { CoinGeckoProvider } from './providers/coingecko';
 export { HederaMirrorProvider } from './providers/hedera-mirror';
 

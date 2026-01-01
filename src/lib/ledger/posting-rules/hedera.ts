@@ -223,7 +223,7 @@ export function validateHederaPosting(tokenType: TokenType): string {
  * @param tokenType - The token type
  * @returns The clearing account code
  */
-export function getHederaClearing Account(tokenType: TokenType): string {
+export function getHederaClearingAccount(tokenType: TokenType): string {
   return getCryptoClearing AccountCode(tokenType);
 }
 
@@ -233,7 +233,7 @@ export function getHederaClearing Account(tokenType: TokenType): string {
  * 
  * @returns Array of all crypto clearing account codes
  */
-export function getAllHederaClearing Accounts(): string[] {
+export function getAllHederaClearingAccounts(): string[] {
   return [
     getCryptoClearing AccountCode('HBAR'),
     getCryptoClearing AccountCode('USDC'),

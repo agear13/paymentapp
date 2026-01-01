@@ -4,9 +4,8 @@
  * Includes 4 separate crypto clearing accounts for HBAR, USDC, USDT, AUDD
  */
 
-import { PrismaClient, LedgerAccountType } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { LedgerAccountType } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 
 export interface LedgerAccountDefinition {
   code: string;

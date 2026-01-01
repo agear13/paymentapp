@@ -4,7 +4,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { checkRateLimit, getClientIdentifier, getRateLimitHeaders, rateLimiters } from '@/lib/rate-limit'
+import {
+  checkRateLimit,
+  getClientIdentifier,
+  getRateLimitHeaders,
+  rateLimiters,
+} from '@/lib/rate-limit'
 import { ZodSchema } from 'zod'
 
 /**
@@ -38,6 +43,24 @@ export function apiError(
 }
 
 /**
+ * Back-compat helper: some routes import handleApiError
+ * Accepts either an Error-like object or a string and returns NextResponse JSON.
+ */
+export function handleApiError(error: unknown, fallbackStatus: number = 500) {
+  if (typeof error === 'string') {
+    return apiError(error, fallbackStatus)
+  }
+
+  const anyErr = error as any
+  return apiError(
+    anyErr?.message || 'Internal server error',
+    anyErr?.statusCode || anyErr?.status || fallbackStatus,
+    anyErr?.code,
+    anyErr?.details
+  )
+}
+
+/**
  * Validate request body with Zod schema
  */
 export async function validateBody<T>(
@@ -55,7 +78,7 @@ export async function validateBody<T>(
         'Validation error',
         400,
         'VALIDATION_ERROR',
-        error.errors || error.message
+        error?.errors || error?.message
       ),
     }
   }
@@ -117,7 +140,7 @@ export function handleOptions(request: NextRequest) {
   const origin = request.headers.get('origin')
   return new NextResponse(null, {
     status: 204,
-    headers: getCorsHeaders(origin),
+    headers: getCorsHeaders(origin || undefined),
   })
 }
 
@@ -152,7 +175,7 @@ export function withApiMiddleware(
       // Add CORS headers if enabled
       if (options.cors) {
         const origin = request.headers.get('origin')
-        const corsHeaders = getCorsHeaders(origin)
+        const corsHeaders = getCorsHeaders(origin || undefined)
         Object.entries(corsHeaders).forEach(([key, value]) => {
           response.headers.set(key, value)
         })
@@ -161,24 +184,7 @@ export function withApiMiddleware(
       return response
     } catch (error: any) {
       console.error('API Error:', error)
-      return apiError(
-        error.message || 'Internal server error',
-        error.statusCode || 500,
-        error.code
-      )
+      return handleApiError(error)
     }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

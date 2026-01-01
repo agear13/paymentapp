@@ -17,14 +17,15 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Wallet, LogOut, RefreshCw, AlertCircle, Info } from 'lucide-react';
 import type { WalletState } from '@/lib/hedera/types';
+// CRITICAL: Import from .client.ts ONLY (never from barrel export)
 import {
   initializeHashConnect,
-  connectWallet,
-  disconnectWallet,
-  refreshBalances,
+  connectAndFetchBalances,
+  disconnectAndClear,
+  refreshWalletBalances,
   subscribeToWalletState,
   getWalletState,
-} from '@/lib/hedera/wallet-service';
+} from '@/lib/hedera/wallet-service.client';
 import { getTokenIcon } from '@/lib/hedera/token-service';
 import { HederaWalletInfoModal } from './HederaWalletInfoModal';
 
@@ -62,7 +63,7 @@ export function WalletConnectButton() {
 
   const handleConnect = async () => {
     try {
-      await connectWallet();
+      await connectAndFetchBalances();
     } catch (error) {
       console.error('Connection failed:', error);
     }
@@ -70,7 +71,7 @@ export function WalletConnectButton() {
 
   const handleDisconnect = async () => {
     try {
-      await disconnectWallet();
+      await disconnectAndClear();
     } catch (error) {
       console.error('Disconnection failed:', error);
     }
@@ -78,7 +79,7 @@ export function WalletConnectButton() {
 
   const handleRefresh = async () => {
     try {
-      await refreshBalances();
+      await refreshWalletBalances();
     } catch (error) {
       console.error('Failed to refresh balances:', error);
     }

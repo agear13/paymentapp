@@ -8,12 +8,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { loggers } from '@/lib/logger';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
-import { validateBody } from '@/lib/api/middleware';
 import { applyRateLimit } from '@/lib/rate-limit';
-import { 
-  CreatePaymentLinkSchema, 
+import {
+  CreatePaymentLinkSchema,
   PaginationSchema,
   PaymentLinkFiltersSchema,
 } from '@/lib/validations/schemas';
@@ -40,6 +39,30 @@ function transformPaymentLink(link: any) {
 }
 
 /**
+ * Clerk Org ID (org_...) -> DB Org UUID mapping
+ * Ensures organizations row exists and returns organizations.id (UUID)
+ */
+async function getOrCreateDbOrgId(params: {
+  clerkOrgId: string;
+  orgName?: string | null;
+}) {
+  const { clerkOrgId, orgName } = params;
+
+  const org = await prisma.organizations.upsert({
+    where: { clerk_org_id: clerkOrgId },
+    update: orgName ? { name: orgName } : {},
+    create: {
+      id: randomUUID(),
+      clerk_org_id: clerkOrgId,
+      name: orgName ?? 'Unnamed organization',
+    },
+    select: { id: true },
+  });
+
+  return org.id;
+}
+
+/**
  * GET /api/payment-links
  * List payment links with pagination and filters
  */
@@ -48,40 +71,34 @@ export async function GET(request: NextRequest) {
     // Rate limiting
     const rateLimitResult = await applyRateLimit(request, 'api');
     if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { status: 429 }
-      );
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
-    // Authentication
-    const user = await requireAuth();
+    // Authentication (Supabase)
+    const user = await requireAuth(request);
     if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get query params
     const searchParams = request.nextUrl.searchParams;
-    const organizationId = searchParams.get('organizationId');
+    const clerkOrgId = searchParams.get('organizationId');
 
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'organizationId is required' },
-        { status: 400 }
-      );
+    if (!clerkOrgId) {
+      return NextResponse.json({ error: 'organizationId is required' }, { status: 400 });
     }
 
-    // Check permission
-    const canView = await checkUserPermission(user.id, organizationId, 'view_payment_links');
+    // Check permission (assumes permission system is keyed on Clerk org id)
+    const canView = await checkUserPermission(user.id, clerkOrgId, 'view_payment_links');
     if (!canView) {
       return NextResponse.json(
         { error: 'Forbidden - Insufficient permissions' },
         { status: 403 }
       );
     }
+
+    // Map Clerk org id -> DB UUID (and ensure org exists)
+    const dbOrgId = await getOrCreateDbOrgId({ clerkOrgId });
 
     // Parse pagination
     const pagination = PaginationSchema.parse({
@@ -101,7 +118,7 @@ export async function GET(request: NextRequest) {
 
     // Build where clause (using snake_case for database fields)
     const where: any = {
-      organization_id: organizationId,
+      organization_id: dbOrgId,
     };
 
     if (filters.status) {
@@ -147,8 +164,9 @@ export async function GET(request: NextRequest) {
     });
 
     loggers.api.info(
-      { 
-        organizationId, 
+      {
+        clerkOrgId,
+        dbOrgId,
         count: paymentLinks.length,
         total,
         filters,
@@ -186,29 +204,25 @@ export async function POST(request: NextRequest) {
     // Rate limiting
     const rateLimitResult = await applyRateLimit(request, 'api');
     if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { status: 429 }
-      );
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
-    // Authentication
-    const user = await requireAuth();
+    // Authentication (Supabase)
+    const user = await requireAuth(request);
     if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Parse and validate body
     const body = await request.json();
     const validatedData = CreatePaymentLinkSchema.parse(body);
 
-    // Check permission
+    const clerkOrgId = validatedData.organizationId;
+
+    // Check permission (assumes permission system is keyed on Clerk org id)
     const canCreate = await checkUserPermission(
       user.id,
-      validatedData.organizationId,
+      clerkOrgId,
       'create_payment_links'
     );
     if (!canCreate) {
@@ -218,6 +232,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Map Clerk org id -> DB UUID (and ensure org exists)
+    const dbOrgId = await getOrCreateDbOrgId({ clerkOrgId });
+
     // Generate unique short code
     const shortCode = await generateUniqueShortCode();
 
@@ -225,10 +242,11 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const paymentLink = await prisma.$transaction(async (tx) => {
       const linkId = randomUUID();
+
       const link = await tx.payment_links.create({
         data: {
           id: linkId,
-          organization_id: validatedData.organizationId,
+          organization_id: dbOrgId,
           short_code: shortCode,
           status: 'OPEN',
           amount: validatedData.amount,
@@ -237,9 +255,7 @@ export async function POST(request: NextRequest) {
           invoice_reference: validatedData.invoiceReference || null,
           customer_email: validatedData.customerEmail || null,
           customer_phone: validatedData.customerPhone || null,
-          expires_at: validatedData.expiresAt 
-            ? new Date(validatedData.expiresAt as any)
-            : null,
+          expires_at: validatedData.expiresAt ? new Date(validatedData.expiresAt as any) : null,
           created_at: now,
           updated_at: now,
         },
@@ -262,7 +278,7 @@ export async function POST(request: NextRequest) {
       await tx.audit_logs.create({
         data: {
           id: randomUUID(),
-          organization_id: validatedData.organizationId,
+          organization_id: dbOrgId,
           user_id: user.id,
           entity_type: 'PaymentLink',
           entity_id: link.id,
@@ -283,7 +299,8 @@ export async function POST(request: NextRequest) {
       {
         paymentLinkId: paymentLink.id,
         shortCode: paymentLink.short_code,
-        organizationId: validatedData.organizationId,
+        clerkOrgId,
+        dbOrgId,
         amount: validatedData.amount,
         currency: validatedData.currency,
       },
@@ -299,7 +316,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { 
+      {
         data: paymentLink,
         message: 'Payment link created successfully',
       },
@@ -307,7 +324,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     loggers.api.error({ error: error.message }, 'Failed to create payment link');
-    
+
     if (error.name === 'ZodError') {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -321,7 +338,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-
-
-

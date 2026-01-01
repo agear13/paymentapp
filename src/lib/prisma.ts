@@ -3,19 +3,34 @@ import { PrismaClient } from '@prisma/client';
 // Verify DATABASE_URL is set (without logging the actual value for security)
 if (!process.env.DATABASE_URL) {
   console.error('ERROR: DATABASE_URL environment variable is not set');
-} else if (process.env.NODE_ENV !== 'production') {
-  // Only log connection status in development (not the actual URL)
-  const dbUrl = process.env.DATABASE_URL;
-  const maskedUrl = dbUrl.replace(/:[^:@]+@/, ':****@'); // Mask password
-  console.log('Prisma connected to:', maskedUrl);
 }
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+// Global singleton with logging flag
+const globalForPrisma = globalThis as unknown as {
+  prisma?: PrismaClient;
+  __prismaLogged?: boolean;
+};
 
+// Create PrismaClient singleton
+// In dev mode, globalForPrisma.prisma persists across hot reloads to prevent re-instantiation
 export const prisma =
   globalForPrisma.prisma ??
-  new PrismaClient({
-    log: ['error', 'warn'],
-  });
+  (() => {
+    // Only log once per process when actually creating a new instance
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      process.env.DATABASE_URL &&
+      !globalForPrisma.__prismaLogged
+    ) {
+      const dbUrl = process.env.DATABASE_URL;
+      const maskedUrl = dbUrl.replace(/:[^:@]+@/, ':****@'); // Mask password
+      console.log(`🔌 Prisma client instantiated (pid=${process.pid}), connected to: ${maskedUrl}`);
+      globalForPrisma.__prismaLogged = true;
+    }
+
+    return new PrismaClient({
+      log: ['error', 'warn'],
+    });
+  })();
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;

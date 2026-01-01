@@ -8,7 +8,7 @@
  * Respects user notification preferences
  */
 
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/lib/email/client';
 import {
   renderPaymentConfirmedEmail,

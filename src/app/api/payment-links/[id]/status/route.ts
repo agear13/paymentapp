@@ -27,8 +27,9 @@ const StatusTransitionSchema = z.object({
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  let id: string | undefined;
   try {
     // Rate limiting
     const rateLimitResult = await applyRateLimit(request, 'api');
@@ -48,7 +49,9 @@ export async function POST(
       );
     }
 
-    const { id } = params;
+    // Next.js 15: await params
+    const p = await params;
+    id = p.id;
 
     // Get current payment link
     const currentLink = await prisma.payment_links.findUnique({
@@ -119,7 +122,7 @@ export async function POST(
     });
   } catch (error: any) {
     loggers.api.error(
-      { error: error.message, paymentLinkId: params.id },
+      { error: error.message, paymentLinkId: id },
       'Failed to transition payment link status'
     );
 
@@ -144,11 +147,16 @@ export async function POST(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const startTime = Date.now();
+  let id: string | undefined;
   try {
     // More lenient rate limiting for polling (higher limit)
     const rateLimitResult = await applyRateLimit(request, 'polling');
+    const afterRateLimit = Date.now();
+    loggers.api.info({ duration: afterRateLimit - startTime }, '[Status GET] After rate limit');
+
     if (!rateLimitResult.success) {
       return NextResponse.json(
         { error: 'Rate limit exceeded' },
@@ -156,9 +164,14 @@ export async function GET(
       );
     }
 
-    const { id } = params;
+    // Next.js 15: await params
+    const p = await params;
+    id = p.id;
+    const afterParams = Date.now();
+    loggers.api.info({ paymentLinkId: id, duration: afterParams - afterRateLimit }, '[Status GET] After await params');
 
     // Get payment link with comprehensive data for status polling
+    const beforeFindUnique = Date.now();
     const paymentLink = await prisma.payment_links.findUnique({
       where: { id },
       select: {
@@ -183,6 +196,12 @@ export async function GET(
         },
       },
     });
+    const afterFindUnique = Date.now();
+    loggers.api.info({ 
+      paymentLinkId: id, 
+      duration: afterFindUnique - beforeFindUnique,
+      found: !!paymentLink 
+    }, '[Status GET] After payment_links.findUnique');
 
     if (!paymentLink) {
       return NextResponse.json(
@@ -197,6 +216,7 @@ export async function GET(
 
     // Auto-transition to EXPIRED if needed
     if (isExpired && currentStatus === 'OPEN') {
+      const beforeTransaction = Date.now();
       await prisma.$transaction([
         prisma.payment_links.update({
           where: { id },
@@ -213,6 +233,11 @@ export async function GET(
           },
         }),
       ]);
+      const afterTransaction = Date.now();
+      loggers.api.info({ 
+        paymentLinkId: id, 
+        duration: afterTransaction - beforeTransaction 
+      }, '[Status GET] After auto-expire transaction');
       currentStatus = 'EXPIRED';
     }
 
@@ -220,6 +245,7 @@ export async function GET(
     const validTransitions = getValidNextStates(currentStatus);
 
     // Build transaction information if available
+    const beforeResponseBuild = Date.now();
     let transactionInfo = null;
     if (lastEvent?.metadata) {
       const metadata = lastEvent.metadata as any;
@@ -236,6 +262,14 @@ export async function GET(
 
     // Generate human-readable status message
     const statusMessage = generateStatusMessage(currentStatus, lastEvent);
+
+    const beforeReturn = Date.now();
+    const totalDuration = beforeReturn - startTime;
+    loggers.api.info({ 
+      paymentLinkId: id,
+      responseBuildDuration: beforeReturn - beforeResponseBuild,
+      totalDuration 
+    }, '[Status GET] Before return - TOTAL TIME');
 
     return NextResponse.json({
       data: {
@@ -255,7 +289,7 @@ export async function GET(
     });
   } catch (error: any) {
     loggers.api.error(
-      { error: error.message, paymentLinkId: params.id },
+      { error: error.message, paymentLinkId: id },
       'Failed to get payment link status'
     );
     return NextResponse.json(

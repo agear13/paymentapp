@@ -9,10 +9,8 @@ import { resolve } from 'path';
 // Load environment variables from .env.local
 config({ path: resolve(__dirname, '../../.env.local') });
 
-import { PrismaClient } from '@prisma/client';
 import { logger } from '@/lib/logger';
-
-const prisma = new PrismaClient();
+import { prisma } from '../prisma';
 
 // ============================================================================
 // SEED DATA

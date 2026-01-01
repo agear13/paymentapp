@@ -1,8 +1,8 @@
 /**
  * Performance Metrics Endpoint
- * 
+ *
  * GET /api/metrics - Detailed performance metrics
- * 
+ *
  * Returns:
  * - Request performance statistics
  * - Database query performance
@@ -25,12 +25,9 @@ import {
 export async function GET(request: NextRequest) {
   try {
     // Require authentication
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // TODO: Add admin permission check
@@ -82,10 +79,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -96,12 +90,9 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     // Require authentication
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Clear all metrics
@@ -113,16 +104,6 @@ export async function DELETE(request: NextRequest) {
       message: 'Metrics cleared successfully',
     });
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-
-
-
-
-
-
-

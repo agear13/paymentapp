@@ -84,6 +84,8 @@ export const PaymentStatusMonitor: React.FC<PaymentStatusMonitorProps> = ({
       onStatusChange?.(newStatus.currentStatus);
 
       // Redirect on final states
+      // NOTE: Alternative UX could show expired state inline on /pay/[shortCode]
+      // instead of navigating away. Current pattern follows same flow as success/canceled.
       if (newStatus.currentStatus === 'PAID' && !hasShownSuccess) {
         setHasShownSuccess(true);
         setTimeout(() => {

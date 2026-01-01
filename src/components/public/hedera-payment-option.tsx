@@ -14,7 +14,8 @@ import { WalletConnectButton } from '@/components/public/wallet-connect-button';
 import { TokenSelector } from '@/components/public/token-selector';
 import { TokenComparison } from '@/components/public/token-comparison';
 import { PaymentInstructions } from '@/components/public/payment-instructions';
-import { getWalletState } from '@/lib/hedera/wallet-service';
+// CRITICAL: Import from .client.ts ONLY (never from barrel export)
+import { getWalletState } from '@/lib/hedera/wallet-service.client';
 import type { TokenType } from '@/lib/hedera/constants';
 import type { TokenPaymentAmount } from '@/lib/hedera/types';
 
@@ -51,42 +52,69 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
   const [isLoadingAmounts, setIsLoadingAmounts] = useState(false);
   const [merchantAccountId, setMerchantAccountId] = useState<string | null>(null);
   const [isLoadingMerchant, setIsLoadingMerchant] = useState(false);
+  const [merchantError, setMerchantError] = useState<string | null>(null);
 
   // Fetch merchant settings when component mounts or short code changes
   useEffect(() => {
-    if (isAvailable && !merchantAccountId) {
+    // Guard: Validate shortCode exists
+    if (!shortCode) {
+      console.error('[HederaPaymentOption] shortCode is missing!');
+      setMerchantError('Payment link configuration error');
+      return;
+    }
+
+    if (isAvailable && !merchantAccountId && !isLoadingMerchant) {
+      console.log('[HederaPaymentOption] Fetching merchant settings for shortCode:', shortCode);
       fetchMerchantSettings();
     }
-  }, [isAvailable, shortCode]);
+  }, [isAvailable, shortCode, merchantAccountId, isLoadingMerchant]);
 
   // Fetch payment amounts when selected and merchant account is loaded
   useEffect(() => {
     if (isSelected && isAvailable && merchantAccountId && paymentAmounts.length === 0) {
       fetchPaymentAmounts();
     }
-  }, [isSelected, isAvailable, merchantAccountId]);
+  }, [isSelected, isAvailable, merchantAccountId, paymentAmounts.length]);
 
   const fetchMerchantSettings = async () => {
     try {
       setIsLoadingMerchant(true);
+      setMerchantError(null);
 
-      const response = await fetch(`/api/payment-links/${shortCode}/merchant`);
+      console.log('[HederaPaymentOption] Fetching merchant from:', `/api/public/merchant/${shortCode}`);
+      const response = await fetch(`/api/public/merchant/${shortCode}`);
       
+      console.log('[HederaPaymentOption] Response status:', response.status);
+
       if (!response.ok) {
-        throw new Error('Failed to fetch merchant settings');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[HederaPaymentOption] API error:', response.status, errorData);
+        throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
       const result = await response.json();
+      console.log('[HederaPaymentOption] Merchant data received:', result);
       
+      if (!result.data) {
+        console.error('[HederaPaymentOption] Missing data field in response:', result);
+        throw new Error('Invalid response format');
+      }
+
       if (!result.data.hederaAccountId) {
-        toast.error('Merchant has not configured Hedera payments');
+        const errorMsg = 'Merchant has not configured Hedera payments';
+        console.warn('[HederaPaymentOption]', errorMsg);
+        setMerchantError(errorMsg);
+        toast.error(errorMsg);
         return;
       }
 
+      console.log('[HederaPaymentOption] Merchant account ID set:', result.data.hederaAccountId);
       setMerchantAccountId(result.data.hederaAccountId);
     } catch (error) {
-      console.error('Failed to fetch merchant settings:', error);
-      toast.error('Unable to load payment details');
+      const errorMsg = error instanceof Error ? error.message : 'Unable to load payment details';
+      console.error('[HederaPaymentOption] Failed to fetch merchant settings:', error);
+      setMerchantError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setIsLoadingMerchant(false);
     }
@@ -280,17 +308,42 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
       {/* Payment Flow */}
       {isSelected && isAvailable && (
         <div className="space-y-4 mt-4">
-          {/* Loading Amounts */}
-          {isLoadingAmounts && (
-            <div className="flex items-center justify-center py-8">
+          {/* Loading Merchant Settings */}
+          {isLoadingMerchant && (
+            <div className="flex flex-col items-center justify-center py-8 space-y-3">
               <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+              <p className="text-sm text-slate-600">Loading merchant details...</p>
             </div>
           )}
 
-          {/* Step 1: Connect Wallet */}
-          {!isLoadingAmounts && paymentStep === 'select_method' && (
-            <WalletConnectButton />
+          {/* Merchant Error State */}
+          {!isLoadingMerchant && merchantError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-800 font-medium">Unable to load merchant settings</p>
+              <p className="text-xs text-red-600 mt-1">{merchantError}</p>
+              <button
+                onClick={fetchMerchantSettings}
+                className="mt-3 text-xs text-red-700 underline hover:text-red-900"
+              >
+                Retry
+              </button>
+            </div>
           )}
+
+          {/* Only show payment flow if merchant loaded successfully */}
+          {!isLoadingMerchant && !merchantError && merchantAccountId && (
+            <>
+              {/* Loading Amounts */}
+              {isLoadingAmounts && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+                </div>
+              )}
+
+              {/* Step 1: Connect Wallet */}
+              {!isLoadingAmounts && paymentStep === 'select_method' && (
+                <WalletConnectButton />
+              )}
 
           {/* Step 2: Token Comparison & Selection */}
           {!isLoadingAmounts && paymentAmounts.length > 0 && paymentStep === 'select_token' && (
@@ -355,15 +408,17 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
             </div>
           )}
 
-          {/* Step 5: Complete */}
-          {paymentStep === 'complete' && (
-            <div className="text-center py-8">
-              <Check className="h-16 w-16 text-green-600 mx-auto mb-4" />
-              <p className="text-xl font-bold text-green-600">Payment Confirmed!</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Thank you for your payment
-              </p>
-            </div>
+              {/* Step 5: Complete */}
+              {paymentStep === 'complete' && (
+                <div className="text-center py-8">
+                  <Check className="h-16 w-16 text-green-600 mx-auto mb-4" />
+                  <p className="text-xl font-bold text-green-600">Payment Confirmed!</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Thank you for your payment
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
