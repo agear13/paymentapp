@@ -50,8 +50,8 @@ CREATE TABLE IF NOT EXISTS fx_rate_overrides (
 );
 
 CREATE INDEX idx_fx_rate_overrides_org ON fx_rate_overrides(organization_id);
-CREATE INDEX idx_fx_rate_overrides_active ON fx_rate_overrides(organization_id, effective_from, effective_until) 
-    WHERE effective_until IS NULL OR effective_until > NOW();
+CREATE INDEX idx_fx_rate_overrides_active ON fx_rate_overrides(organization_id, effective_from) 
+    WHERE effective_until IS NULL;
 
 -- 4. Add multi-currency fields to merchant_settings
 ALTER TABLE merchant_settings
