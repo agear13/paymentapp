@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { stripe, handleStripeError, toSmallestUnit } from '@/lib/stripe/client';
 import { prisma } from '@/lib/prisma';
 import { log } from '@/lib/logger';
@@ -149,6 +150,7 @@ export async function POST(request: NextRequest) {
     // Create payment event for checkout session created
     await prisma.payment_events.create({
       data: {
+        id: randomUUID(),
         payment_link_id: paymentLinkId,
         event_type: 'PAYMENT_INITIATED',
         payment_method: 'STRIPE',
