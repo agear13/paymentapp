@@ -6,17 +6,13 @@
 -- FX SNAPSHOTS INDEXES (CRITICAL for 4-token queries)
 -- ============================================================================
 
--- Index for querying all 4 token snapshots by link and type
--- Used by: captureAllCreationSnapshots, getSnapshots
--- Impact: 75% faster queries when fetching all 4 tokens
-CREATE INDEX IF NOT EXISTS idx_fx_snapshots_link_type_token 
-ON fx_snapshots(payment_link_id, snapshot_type, token_type);
+-- Index for fetching snapshots for a link + type + currency pair
+CREATE INDEX IF NOT EXISTS idx_fx_snapshots_link_type_pair
+ON fx_snapshots(payment_link_id, snapshot_type, base_currency, quote_currency);
 
--- Index for querying snapshots by token type and time
--- Used by: Analytics, reporting, rate variance analysis
--- Impact: 50% faster token-specific queries
-CREATE INDEX IF NOT EXISTS idx_fx_snapshots_token_captured 
-ON fx_snapshots(token_type, captured_at DESC);
+-- Index for time-series queries by currency pair
+CREATE INDEX IF NOT EXISTS idx_fx_snapshots_pair_captured
+ON fx_snapshots(base_currency, quote_currency, captured_at DESC);
 
 -- Index for querying by snapshot type (CREATION vs SETTLEMENT)
 -- Used by: getSnapshotByType, rate variance calculations
