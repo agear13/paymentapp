@@ -13,7 +13,7 @@ import type { TokenType } from '@/lib/hedera/constants';
 
 const requestSchema = z.object({
   accountId: z.string().regex(/^0\.0\.\d+$/),
-  tokenType: z.enum(['HBAR', 'USDC', 'USDT']),
+  tokenType: z.enum(['HBAR', 'USDC', 'USDT', 'AUDD']),
   expectedAmount: z.number().positive(),
   timeoutMs: z.number().positive().optional().default(300000), // 5 minutes default
 });

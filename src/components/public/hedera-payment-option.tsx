@@ -1,6 +1,6 @@
 /**
  * Hedera Payment Option Component
- * Multi-token payment with HBAR, USDC, and USDT support
+ * Multi-token payment with HBAR, USDC, USDT, and AUDD support
  */
 
 'use client';

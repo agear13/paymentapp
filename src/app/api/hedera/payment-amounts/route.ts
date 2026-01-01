@@ -1,6 +1,6 @@
 /**
  * POST /api/hedera/payment-amounts
- * Calculate required payment amounts for all three tokens
+ * Calculate required payment amounts for all supported tokens (HBAR, USDC, USDT, AUDD)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,6 +24,7 @@ const requestSchema = z.object({
       HBAR: z.string(),
       USDC: z.string(),
       USDT: z.string(),
+      AUDD: z.string(),
     })
     .optional(),
 });
@@ -37,9 +38,9 @@ export async function POST(request: NextRequest) {
     log.info({ fiatAmount, fiatCurrency }, 'Calculating payment amounts');
 
     const fxService = getFxService();
-    const tokens: TokenType[] = ['HBAR', 'USDC', 'USDT'];
+    const tokens: TokenType[] = ['HBAR', 'USDC', 'USDT', 'AUDD'];
 
-    // Calculate amounts for all three tokens in parallel
+    // Calculate amounts for all four tokens in parallel
     const calculations = await Promise.all(
       tokens.map(async (tokenType) => {
         const calc = await fxService.calculateCryptoAmount(
