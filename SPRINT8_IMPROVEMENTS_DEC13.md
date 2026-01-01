@@ -68,7 +68,7 @@ MAINNET: {
 
 ### 2. API Endpoint for Merchant Settings ✅
 
-**File Created:** `src/app/api/payment-links/[shortCode]/merchant/route.ts`
+**File Created:** `src/app/api/public/merchant/[shortCode]/route.ts` (moved from payment-links to avoid routing conflict)
 
 **Functionality:**
 - Public endpoint accessible without authentication
@@ -145,7 +145,7 @@ const [isLoadingMerchant, setIsLoadingMerchant] = useState(false);
 const fetchMerchantSettings = async () => {
   try {
     setIsLoadingMerchant(true);
-    const response = await fetch(`/api/payment-links/${shortCode}/merchant`);
+    const response = await fetch(`/api/public/merchant/${shortCode}`);
     const result = await response.json();
     
     if (!result.data.hederaAccountId) {
@@ -321,7 +321,7 @@ interface PaymentMethodSelectorProps {
 
 ### Created Files (3)
 
-1. **`src/app/api/payment-links/[shortCode]/merchant/route.ts`**
+1. **`src/app/api/public/merchant/[shortCode]/route.ts`** (moved from payment-links to public)
    - New public API endpoint
    - 72 lines of code
    - Full error handling

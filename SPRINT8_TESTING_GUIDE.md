@@ -90,8 +90,8 @@ INSERT INTO merchant_settings (
 #### Test 1: Fetch Merchant Settings
 
 ```bash
-# Test merchant settings API
-curl http://localhost:3000/api/payment-links/TEST_SHORT_CODE/merchant
+# Test merchant settings API (moved to public endpoint)
+curl http://localhost:3000/api/public/merchant/TEST_SHORT_CODE
 
 # Expected Response:
 {

@@ -47,12 +47,12 @@ export async function POST(request: NextRequest) {
     const paymentLink = await prisma.payment_links.findUnique({
       where: { id: paymentLinkId },
       include: {
-        organization: {
+        organizations: {
           include: {
-            merchantSettings: {
+            merchant_settings: {
               select: {
-                stripeAccountId: true,
-                displayName: true,
+                stripe_account_id: true,
+                display_name: true,
               },
             },
           },
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if expired
-    if (paymentLink.expiresAt && new Date(paymentLink.expiresAt) < new Date()) {
+    if (paymentLink.expires_at && new Date(paymentLink.expires_at) < new Date()) {
       return NextResponse.json(
         { error: 'Payment link has expired' },
         { status: 400 }
@@ -84,8 +84,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify Stripe is configured for merchant
-    const merchantSettings = paymentLink.organization.merchantSettings[0];
-    if (!merchantSettings?.stripeAccountId) {
+    const merchantSettings = paymentLink.organizations?.merchant_settings?.[0];
+    if (!merchantSettings?.stripe_account_id) {
+      if (process.env.NODE_ENV !== 'production') {
+        log.warn(
+          'Stripe not configured for merchant',
+          {
+            paymentLinkId,
+            organizationId: paymentLink.organization_id,
+          }
+        );
+      }
       return NextResponse.json(
         { error: 'Stripe not configured for this merchant' },
         { status: 400 }
@@ -152,12 +161,12 @@ export async function POST(request: NextRequest) {
             currency: paymentLink.currency.toLowerCase(),
             metadata: {
               payment_link_id: paymentLinkId,
-              organization_id: paymentLink.organizationId,
-              short_code: paymentLink.shortCode,
-              invoice_reference: paymentLink.invoiceReference || '',
+              organization_id: paymentLink.organization_id,
+              short_code: paymentLink.short_code,
+              invoice_reference: paymentLink.invoice_reference || '',
             },
-            description: paymentLink.description || `Payment for ${paymentLink.shortCode}`,
-            receipt_email: paymentLink.customerEmail || undefined,
+            description: paymentLink.description || `Payment for ${paymentLink.short_code}`,
+            receipt_email: paymentLink.customer_email || undefined,
             automatic_payment_methods: {
               enabled: true,
             },
@@ -222,8 +231,9 @@ export async function POST(request: NextRequest) {
     const stripeError = handleStripeError(error);
     
     log.error(
-      { error: stripeError.message },
-      'Failed to create PaymentIntent'
+      'Failed to create PaymentIntent',
+      error,
+      { stripeError: stripeError.message }
     );
 
     return NextResponse.json(

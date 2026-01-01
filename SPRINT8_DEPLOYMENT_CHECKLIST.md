@@ -45,7 +45,7 @@
 ### 2. Database Setup
 
 - [x] **Merchant settings API endpoint created** ✅ NEW
-  - API endpoint: `GET /api/payment-links/[shortCode]/merchant`
+  - API endpoint: `GET /api/public/merchant/[shortCode]` (moved from payment-links to avoid routing conflict)
   - Returns merchant Hedera account ID for payment links
   - Properly handles missing settings
 
@@ -56,7 +56,7 @@
   
 - [ ] **Test merchant settings retrieval**
   ```bash
-  curl http://localhost:3000/api/payment-links/TEST_CODE/merchant
+  curl http://localhost:3000/api/public/merchant/TEST_CODE
   # Should return merchant's Hedera account ID
   ```
 
@@ -79,7 +79,7 @@
 - [ ] **Connect HashPack wallet on testnet**
 - [ ] **Verify merchant settings API works**
   ```bash
-  curl http://localhost:3000/api/payment-links/YOUR_TEST_CODE/merchant
+  curl http://localhost:3000/api/public/merchant/YOUR_TEST_CODE
   ```
 - [ ] **Test HBAR payment flow**
   - Wallet connection
@@ -311,7 +311,7 @@ curl -X POST https://your-domain.com/api/hedera/payment-amounts \
 - ✅ AUDD support added for both networks
 
 ### 2. Merchant Account Retrieval Fixed
-- ✅ Created API endpoint: `/api/payment-links/[shortCode]/merchant`
+- ✅ Created API endpoint: `/api/public/merchant/[shortCode]` (moved from payment-links)
 - ✅ Updated `hedera-payment-option.tsx` to fetch dynamically
 - ✅ Updated `payment-method-selector.tsx` to pass shortCode
 - ✅ Updated `payment-page-content.tsx` with proper props
