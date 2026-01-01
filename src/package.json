@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "build:clean": "rimraf .next && npm run build",
-    "start": "next start",
+    "start": "next start -p $PORT",
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch",

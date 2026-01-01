@@ -25,10 +25,9 @@ import {
 export async function GET(request: NextRequest) {
   try {
     // Require authentication
-    const user = await requireAuth(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(request);
+    if (!auth.user) return auth.response!;
+    const { user } = auth;
 
     // TODO: Add admin permission check
     // For now, allow any authenticated user
@@ -90,10 +89,9 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     // Require authentication
-    const user = await requireAuth(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(request);
+    if (!auth.user) return auth.response!;
+    const { user } = auth;
 
     // Clear all metrics
     performanceMonitor.clear();

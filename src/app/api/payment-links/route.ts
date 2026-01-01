@@ -75,10 +75,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Authentication (Supabase)
-    const user = await requireAuth(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(request);
+    if (!auth.user) return auth.response!;
+    const { user } = auth;
 
     // Get query params
     const searchParams = request.nextUrl.searchParams;
@@ -208,10 +207,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Authentication (Supabase)
-    const user = await requireAuth(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(request);
+    if (!auth.user) return auth.response!;
+    const { user } = auth;
 
     // Parse and validate body
     const body = await request.json();

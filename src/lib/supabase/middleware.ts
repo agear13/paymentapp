@@ -107,8 +107,12 @@ export async function updateSession(request: NextRequest) {
 }
 
 /**
- * API helper: returns the authenticated Supabase user (or null).
+ * API helper: returns authenticated user + session (or 401 response).
  * Use inside app/api/** route handlers.
+ * 
+ * Returns:
+ * - { user, session, response: undefined } if authenticated
+ * - { user: null, session: null, response: 401 } if not authenticated
  */
 export async function requireAuth(request: NextRequest) {
   const { url, anonKey } = getSupabaseEnv()
@@ -127,8 +131,52 @@ export async function requireAuth(request: NextRequest) {
     },
   })
 
-  // IMPORTANT: safe wrapper (don't throw if session missing)
-  const user = await safeGetUser(supabase)
+  // Call updateSession-like logic to get user/session
+  // Try to get both user and session
+  let user = null
+  let session = null
 
-  return user ?? null
+  try {
+    const { data, error } = await supabase.auth.getUser()
+    
+    // Defensively extract user
+    if (!error && data) {
+      // Handle shapes: {user,session}, {data:{user,session}}, {session:{user}}
+      if (data.user) {
+        user = data.user
+      } else if ((data as any).data?.user) {
+        user = (data as any).data.user
+      } else if ((data as any).session?.user) {
+        user = (data as any).session.user
+      }
+    }
+
+    // Try to get session as well
+    const sessionResult = await supabase.auth.getSession()
+    if (sessionResult.data?.session) {
+      session = sessionResult.data.session
+    } else if ((sessionResult as any).session) {
+      session = (sessionResult as any).session
+    }
+  } catch (err: any) {
+    // Supabase sometimes throws errors; treat as unauthenticated
+    user = null
+    session = null
+  }
+
+  // If no user, return 401 response
+  if (!user) {
+    return {
+      user: null,
+      session: null,
+      response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+    }
+  }
+
+  // User is authenticated
+  return {
+    user,
+    session,
+    response: undefined,
+  }
 }
