@@ -67,8 +67,14 @@ async function loadHashConnectWithReload(): Promise<typeof import('hashconnect')
         log.info('🔄 Performing ONE-TIME page reload to fetch fresh chunks');
         console.warn('Chunk mismatch detected - reloading page to fetch correct manifest...');
         
-        // Full page reload to get fresh HTML + manifest
-        window.location.reload();
+        // Short delay to ensure logs are written, then hard reload with cache bust
+        setTimeout(() => {
+          // Hard reload with cache-busting to force fresh chunks
+          // Using href assignment with timestamp to bypass cache
+          const url = new URL(window.location.href);
+          url.searchParams.set('_t', Date.now().toString());
+          window.location.href = url.toString();
+        }, 100);
         
         // Never reaches here, but return promise for TypeScript
         return new Promise(() => {});
@@ -98,8 +104,6 @@ async function loadHashConnectWithReload(): Promise<typeof import('hashconnect')
 let HashConnect: any = null;
 let HashConnectConnectionState: any = null;
 let hashconnectLoaded = false;
-let loadAttempts = 0;
-const MAX_LOAD_ATTEMPTS = 3;
 
 // HashConnect instance (singleton)
 let hashconnect: any = null;
@@ -146,20 +150,8 @@ async function loadHashConnect(): Promise<void> {
     throw error;
   }
 
-  loadAttempts++;
-  
-  if (loadAttempts > MAX_LOAD_ATTEMPTS) {
-    const error = new Error(`HashConnect load failed after ${MAX_LOAD_ATTEMPTS} attempts`);
-    log.error('❌ HashConnect load attempts exhausted', { 
-      attempts: loadAttempts,
-      maxAttempts: MAX_LOAD_ATTEMPTS,
-    });
-    throw error;
-  }
-
   try {
     log.info('📦 Loading HashConnect module via dynamic import...', {
-      attempt: loadAttempts,
       windowExists: typeof window !== 'undefined',
       navigatorExists: typeof navigator !== 'undefined',
     });
@@ -182,7 +174,6 @@ async function loadHashConnect(): Promise<void> {
     log.info('✅ HashConnect module loaded successfully', {
       hasHashConnect: !!HashConnect,
       hasConnectionState: !!HashConnectConnectionState,
-      attempt: loadAttempts,
     });
 
   } catch (error: any) {
@@ -190,17 +181,11 @@ async function loadHashConnect(): Promise<void> {
       message: error?.message || 'Unknown error',
       name: error?.name || 'Error',
       stack: error?.stack?.substring(0, 200), // First 200 chars of stack
-      attempt: loadAttempts,
       windowExists: typeof window !== 'undefined',
       moduleType: typeof error?.message === 'string' && error.message.includes('Cannot find module') ? 'MODULE_NOT_FOUND' : 'IMPORT_ERROR',
     };
     
     log.error('❌ Failed to load HashConnect module', errorDetails);
-    
-    // Don't retry if it's a module not found error
-    if (errorDetails.moduleType === 'MODULE_NOT_FOUND') {
-      loadAttempts = MAX_LOAD_ATTEMPTS; // Exhaust attempts
-    }
     
     throw new Error(`Failed to load HashConnect library: ${error?.message || 'Unknown error'}`);
   }
