@@ -27,13 +27,30 @@ const nextConfig: NextConfig = {
         tls: false,
         crypto: false,
       };
+
+      // 🔒 Force hashconnect to be bundled as a single chunk to prevent
+      // "Identifier 'n' has already been declared" errors from code splitting
+      config.optimization = config.optimization || {};
+      config.optimization.splitChunks = config.optimization.splitChunks || {};
+      config.optimization.splitChunks.cacheGroups = config.optimization.splitChunks.cacheGroups || {};
+      
+      // Create a dedicated chunk for hashconnect
+      config.optimization.splitChunks.cacheGroups.hashconnect = {
+        test: /[\\/]node_modules[\\/]hashconnect[\\/]/,
+        name: 'hashconnect',
+        chunks: 'async',
+        priority: 30,
+        reuseExistingChunk: true,
+        enforce: true,
+      };
     }
 
     // Ignore warnings from dynamic imports
     config.ignoreWarnings = config.ignoreWarnings || [];
     config.ignoreWarnings.push(
       /Critical dependency: the request of a dependency is an expression/,
-      /Critical dependency: require function is used in a way in which dependencies cannot be statically extracted/
+      /Critical dependency: require function is used in a way in which dependencies cannot be statically extracted/,
+      /Module not found: Can't resolve 'hashconnect'/  // Ignore if not found on server
     );
     
     return config;

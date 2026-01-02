@@ -21,6 +21,8 @@ import type { WalletState, HashConnectPairingData } from './types';
 let HashConnect: any = null;
 let HashConnectConnectionState: any = null;
 let hashconnectLoaded = false;
+let loadAttempts = 0;
+const MAX_LOAD_ATTEMPTS = 3;
 
 // HashConnect instance (singleton)
 let hashconnect: any = null;
@@ -49,23 +51,80 @@ const listeners: Set<StateChangeListener> = new Set();
 
 /**
  * Dynamically load HashConnect library (called on first use)
+ * Uses npm package via dynamic import (no CDN/script injection)
  */
 async function loadHashConnect(): Promise<void> {
-  if (hashconnectLoaded) return;
+  if (hashconnectLoaded && HashConnect !== null) {
+    log.info('✅ HashConnect module already loaded - reusing');
+    return;
+  }
   
   if (typeof window === 'undefined') {
-    throw new Error('HashConnect can only be loaded in the browser');
+    const error = new Error('HashConnect can only be loaded in the browser (window is undefined)');
+    log.error('❌ Server-side HashConnect load attempt blocked', { 
+      windowExists: false,
+      isServer: true,
+    });
+    throw error;
+  }
+
+  loadAttempts++;
+  
+  if (loadAttempts > MAX_LOAD_ATTEMPTS) {
+    const error = new Error(`HashConnect load failed after ${MAX_LOAD_ATTEMPTS} attempts`);
+    log.error('❌ HashConnect load attempts exhausted', { 
+      attempts: loadAttempts,
+      maxAttempts: MAX_LOAD_ATTEMPTS,
+    });
+    throw error;
   }
 
   try {
+    log.info('📦 Loading HashConnect module via dynamic import...', {
+      attempt: loadAttempts,
+      windowExists: typeof window !== 'undefined',
+      navigatorExists: typeof navigator !== 'undefined',
+    });
+
+    // Dynamic import from npm package (NOT CDN)
     const hashconnectModule = await import('hashconnect');
+    
+    if (!hashconnectModule.HashConnect) {
+      throw new Error('HashConnect export not found in module');
+    }
+
+    if (!hashconnectModule.HashConnectConnectionState) {
+      throw new Error('HashConnectConnectionState export not found in module');
+    }
+
     HashConnect = hashconnectModule.HashConnect;
     HashConnectConnectionState = hashconnectModule.HashConnectConnectionState;
     hashconnectLoaded = true;
-    log.info('HashConnect library loaded successfully');
-  } catch (error) {
-    log.error('Failed to load HashConnect library', { error });
-    throw new Error('Failed to load HashConnect library');
+    
+    log.info('✅ HashConnect module loaded successfully', {
+      hasHashConnect: !!HashConnect,
+      hasConnectionState: !!HashConnectConnectionState,
+      attempt: loadAttempts,
+    });
+
+  } catch (error: any) {
+    const errorDetails = {
+      message: error?.message || 'Unknown error',
+      name: error?.name || 'Error',
+      stack: error?.stack?.substring(0, 200), // First 200 chars of stack
+      attempt: loadAttempts,
+      windowExists: typeof window !== 'undefined',
+      moduleType: typeof error?.message === 'string' && error.message.includes('Cannot find module') ? 'MODULE_NOT_FOUND' : 'IMPORT_ERROR',
+    };
+    
+    log.error('❌ Failed to load HashConnect module', errorDetails);
+    
+    // Don't retry if it's a module not found error
+    if (errorDetails.moduleType === 'MODULE_NOT_FOUND') {
+      loadAttempts = MAX_LOAD_ATTEMPTS; // Exhaust attempts
+    }
+    
+    throw new Error(`Failed to load HashConnect library: ${error?.message || 'Unknown error'}`);
   }
 }
 
