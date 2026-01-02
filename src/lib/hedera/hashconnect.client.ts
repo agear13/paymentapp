@@ -19,31 +19,71 @@ import type { WalletState, HashConnectPairingData } from './types';
 
 /**
  * Loads HashConnect with automatic retry on failure
- * Handles transient 502 errors during Render deploys
+ * Handles transient 502 errors and chunk loading failures during Render deploys
+ * 
+ * Render Basic plan has no minInstances support, so the app may be cold-starting.
+ * This can take 30-60 seconds during deployments. We use exponential backoff
+ * with up to 8 retries to wait out the deployment window.
  */
 async function loadHashConnectWithRetry(
-  maxRetries = 3,
-  delayMs = 1000
+  maxRetries = 8
 ): Promise<typeof import('hashconnect')> {
   let lastError: Error | null = null;
 
+  // Exponential backoff delays (in milliseconds)
+  const delays = [500, 1000, 2000, 4000, 8000, 16000, 32000, 64000];
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`Loading HashConnect library (attempt ${attempt}/${maxRetries})...`);
-      const module = await import('hashconnect');
-      console.log('HashConnect library loaded successfully');
-      return module;
+      // User-friendly message (only show on first attempt or every few attempts)
+      if (attempt === 1) {
+        console.log('Connecting to Hedera network...');
+      } else if (attempt % 2 === 0) {
+        console.log('Still connecting to Hedera network...');
+      }
+      
+      const hashconnectModule = await import('hashconnect');
+      
+      if (attempt > 1) {
+        console.log('✓ Connected to Hedera network');
+      }
+      
+      return hashconnectModule;
     } catch (error) {
       lastError = error as Error;
-      console.warn(
-        `HashConnect load attempt ${attempt}/${maxRetries} failed:`,
-        error instanceof Error ? error.message : 'Unknown error'
-      );
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Detect chunk loading errors (indicate deploy in progress)
+      const isChunkError = errorMessage.includes('Loading chunk') || 
+                          errorMessage.includes('missing:') ||
+                          errorMessage.includes('ChunkLoadError');
+
+      // Log technical details to console for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(
+          `HashConnect load attempt ${attempt}/${maxRetries} failed:`,
+          errorMessage,
+          isChunkError ? '(chunk loading error - deploy may be in progress)' : ''
+        );
+      }
 
       // Don't delay after last attempt
       if (attempt < maxRetries) {
-        console.log(`Retrying in ${delayMs}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+        // Use exponential backoff delay for this attempt
+        const baseDelay = delays[attempt - 1] || delays[delays.length - 1];
+        
+        // Add jitter (±20%) to prevent thundering herd
+        const jitter = baseDelay * 0.2 * (Math.random() - 0.5);
+        const delayMs = Math.round(baseDelay + jitter);
+        
+        // For chunk errors, use longer delays (multiply by 1.5)
+        const finalDelay = isChunkError ? Math.round(delayMs * 1.5) : delayMs;
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Retrying in ${(finalDelay / 1000).toFixed(1)}s...`);
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, finalDelay));
       }
     }
   }
