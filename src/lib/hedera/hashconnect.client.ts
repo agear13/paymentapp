@@ -104,6 +104,7 @@ const MAX_LOAD_ATTEMPTS = 3;
 // HashConnect instance (singleton)
 let hashconnect: any = null;
 let pairingData: HashConnectPairingData | null = null;
+let pairingString: string | null = null;
 let initPromise: Promise<void> | null = null;
 let isInitialized = false;
 
@@ -266,9 +267,21 @@ export async function initHashConnect(): Promise<void> {
       const alreadyPaired = hashconnect.hcData?.pairingData && hashconnect.hcData.pairingData.length > 0;
       
       if (alreadyPaired) {
-        log.info('HashConnect already has pairing data - skipping init/connect');
+        // Rehydrate wallet state from existing pairing
+        const existing = hashconnect.hcData.pairingData[0];
+        pairingData = existing;
+        const accountId = existing?.accountIds?.[0] ?? null;
+        
         isInitialized = true;
-        updateWalletState({ isLoading: false });
+        updateWalletState({
+          isConnected: !!accountId,
+          accountId,
+          isLoading: false,
+          error: null,
+        });
+        
+        pairingString = null; // already paired; no need to open modal unless re-pairing
+        log.info('✅ Rehydrated existing HashConnect pairing', { accountId });
         return;
       }
 
@@ -277,7 +290,7 @@ export async function initHashConnect(): Promise<void> {
       await hashconnect.init(HASHCONNECT_CONFIG.APP_METADATA, HASHCONNECT_CONFIG.NETWORK, false);
       
       log.info('Calling hashconnect.connect()');
-      await hashconnect.connect();
+      pairingString = await hashconnect.connect();
 
       // Set up event listeners (only once)
       hashconnect.pairingEvent.on((data: any) => {
@@ -373,6 +386,11 @@ export async function connectWallet(): Promise<{
     throw new Error('HashConnect not initialized. Call initHashConnect() first.');
   }
 
+  // Safety: ensure we're in browser context
+  if (typeof window === 'undefined') {
+    throw new Error('connectWallet() can only be called in browser context (window undefined)');
+  }
+
   if (walletState.isConnected && walletState.accountId) {
     return {
       accountId: walletState.accountId,
@@ -384,8 +402,19 @@ export async function connectWallet(): Promise<{
   try {
     updateWalletState({ isLoading: true, error: null });
 
-    // Open pairing modal
-    await hashconnect.openPairingModal();
+    // Ensure we have a pairing URI before opening modal
+    if (!pairingString) {
+      log.info('No pairingString available - calling hashconnect.connect()');
+      pairingString = await hashconnect.connect();
+    }
+
+    // Hard requirement: pairingString must exist
+    if (!pairingString) {
+      throw new Error('HashConnect pairing URI missing (pairingString). Cannot open pairing modal.');
+    }
+
+    // Open pairing modal WITH the pairing URI
+    await hashconnect.openPairingModal(pairingString);
 
     // Wait for pairing (with timeout)
     const result = await new Promise<{ accountId: string; network: string; pairingData?: any }>(
