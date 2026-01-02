@@ -25,6 +25,8 @@ let hashconnectLoaded = false;
 // HashConnect instance (singleton)
 let hashconnect: any = null;
 let pairingData: HashConnectPairingData | null = null;
+let initPromise: Promise<void> | null = null;
+let isInitialized = false;
 
 // Wallet state
 let walletState: WalletState = {
@@ -34,6 +36,7 @@ let walletState: WalletState = {
     HBAR: '0.00000000',
     USDC: '0.000000',
     USDT: '0.000000',
+    AUDD: '0.000000',
   },
   network: HASHCONNECT_CONFIG.NETWORK,
   isLoading: false,
@@ -83,90 +86,143 @@ function updateWalletState(updates: Partial<WalletState>) {
 
 /**
  * Initialize HashConnect (must be called before other operations)
+ * Uses promise-based singleton pattern to prevent double initialization
  */
 export async function initHashConnect(): Promise<void> {
+  // Guard: Server-side check
   if (typeof window === 'undefined') {
-    log.warn('Cannot initialize HashConnect on server');
+    log.warn('Cannot initialize HashConnect on server (window undefined)');
     return;
   }
 
-  if (hashconnect) {
-    log.info('HashConnect already initialized');
+  // Guard: Already initialized
+  if (isInitialized && hashconnect) {
+    log.info('HashConnect already initialized - reusing singleton instance');
     return;
   }
 
-  try {
-    updateWalletState({ isLoading: true, error: null });
+  // Guard: Initialization in progress
+  if (initPromise) {
+    log.info('HashConnect initialization in progress - waiting for existing promise');
+    return initPromise;
+  }
 
-    // Load the library
-    await loadHashConnect();
+  // Start initialization (store promise to prevent concurrent init)
+  log.info('Starting HashConnect initialization', {
+    network: HASHCONNECT_CONFIG.NETWORK,
+    windowExists: typeof window !== 'undefined',
+  });
 
-    // Create instance
-    hashconnect = new HashConnect();
+  initPromise = (async () => {
+    try {
+      updateWalletState({ isLoading: true, error: null });
 
-    // Initialize with app metadata
-    await hashconnect.init(HASHCONNECT_CONFIG.APP_METADATA, HASHCONNECT_CONFIG.NETWORK, false);
+      // Load the library
+      await loadHashConnect();
 
-    // Set up event listeners
-    hashconnect.pairingEvent.on((data: any) => {
-      log.info('Pairing event', { accountId: data.accountIds?.[0] });
-      pairingData = data;
-      
-      const accountId = data.accountIds?.[0];
-      if (accountId) {
-        updateWalletState({
-          isConnected: true,
-          accountId,
-          isLoading: false,
-          error: null,
-        });
+      // Create instance (singleton)
+      if (!hashconnect) {
+        hashconnect = new HashConnect();
+        log.info('HashConnect instance created');
       }
-    });
 
-    hashconnect.disconnectionEvent.on(() => {
-      log.info('Wallet disconnected');
-      pairingData = null;
-      updateWalletState({
-        isConnected: false,
-        accountId: null,
-        isLoading: false,
-        balances: {
-          HBAR: '0.00000000',
-          USDC: '0.000000',
-          USDT: '0.000000',
-        },
-      });
-    });
-
-    hashconnect.connectionStatusChangeEvent.on((state: any) => {
-      log.info('Connection status changed', { state });
+      // Check if already paired/initialized
+      const alreadyPaired = hashconnect.hcData?.pairingData && hashconnect.hcData.pairingData.length > 0;
       
-      if (state === HashConnectConnectionState.Connected && pairingData?.accountIds?.[0]) {
-        updateWalletState({
-          isConnected: true,
-          accountId: pairingData.accountIds[0],
-          isLoading: false,
+      if (alreadyPaired) {
+        log.info('HashConnect already has pairing data - skipping init/connect');
+        isInitialized = true;
+        updateWalletState({ isLoading: false });
+        return;
+      }
+
+      // Initialize with app metadata
+      log.info('Calling hashconnect.init()');
+      await hashconnect.init(HASHCONNECT_CONFIG.APP_METADATA, HASHCONNECT_CONFIG.NETWORK, false);
+      
+      log.info('Calling hashconnect.connect()');
+      await hashconnect.connect();
+
+      // Set up event listeners (only once)
+      hashconnect.pairingEvent.on((data: any) => {
+        log.info('Pairing event received', { 
+          accountId: data.accountIds?.[0],
+          topic: data.topic,
         });
-      } else if (state === HashConnectConnectionState.Disconnected) {
+        pairingData = data;
+        
+        const accountId = data.accountIds?.[0];
+        if (accountId) {
+          updateWalletState({
+            isConnected: true,
+            accountId,
+            isLoading: false,
+            error: null,
+          });
+        }
+      });
+
+      hashconnect.disconnectionEvent.on(() => {
+        log.info('Wallet disconnected');
+        pairingData = null;
         updateWalletState({
           isConnected: false,
           accountId: null,
           isLoading: false,
+          balances: {
+            HBAR: '0.00000000',
+            USDC: '0.000000',
+            USDT: '0.000000',
+            AUDD: '0.000000',
+          },
         });
-      }
-    });
+      });
 
-    updateWalletState({ isLoading: false });
-    log.info('HashConnect initialized successfully');
+      hashconnect.connectionStatusChangeEvent.on((state: any) => {
+        log.info('Connection status changed', { state });
+        
+        if (state === HashConnectConnectionState.Connected && pairingData?.accountIds?.[0]) {
+          updateWalletState({
+            isConnected: true,
+            accountId: pairingData.accountIds[0],
+            isLoading: false,
+          });
+        } else if (state === HashConnectConnectionState.Disconnected) {
+          updateWalletState({
+            isConnected: false,
+            accountId: null,
+            isLoading: false,
+          });
+        }
+      });
 
-  } catch (error: any) {
-    log.error('Failed to initialize HashConnect', { error: error.message });
-    updateWalletState({
-      isLoading: false,
-      error: error.message || 'Failed to initialize wallet',
-    });
-    throw error;
-  }
+      isInitialized = true;
+      updateWalletState({ isLoading: false });
+      log.info('✅ HashConnect initialized successfully (singleton pattern)');
+
+    } catch (error: any) {
+      const errorDetails = {
+        message: error.message,
+        stack: error.stack,
+        windowExists: typeof window !== 'undefined',
+        alreadyPaired: hashconnect?.hcData?.pairingData?.length > 0,
+      };
+      
+      log.error('❌ Failed to initialize HashConnect', errorDetails);
+      
+      updateWalletState({
+        isLoading: false,
+        error: error.message || 'Failed to initialize wallet',
+      });
+      
+      // Reset promise so retry is possible
+      initPromise = null;
+      
+      throw new Error(`HashConnect initialization failed: ${error.message}`);
+    }
+  })();
+
+  return initPromise;
 }
 
 /**

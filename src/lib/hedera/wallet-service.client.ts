@@ -57,6 +57,7 @@ export async function connectAndFetchBalances(): Promise<{
     HBAR: string;
     USDC: string;
     USDT: string;
+    AUDD: string;
   };
 }> {
   // Connect wallet
