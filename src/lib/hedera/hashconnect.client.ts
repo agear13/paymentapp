@@ -17,6 +17,44 @@ import { log } from '@/lib/logger';
 import { HASHCONNECT_CONFIG } from './constants';
 import type { WalletState, HashConnectPairingData } from './types';
 
+/**
+ * Loads HashConnect with automatic retry on failure
+ * Handles transient 502 errors during Render deploys
+ */
+async function loadHashConnectWithRetry(
+  maxRetries = 3,
+  delayMs = 1000
+): Promise<typeof import('hashconnect')> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Loading HashConnect library (attempt ${attempt}/${maxRetries})...`);
+      const module = await import('hashconnect');
+      console.log('HashConnect library loaded successfully');
+      return module;
+    } catch (error) {
+      lastError = error as Error;
+      console.warn(
+        `HashConnect load attempt ${attempt}/${maxRetries} failed:`,
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+
+      // Don't delay after last attempt
+      if (attempt < maxRetries) {
+        console.log(`Retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  throw new Error(
+    `Failed to load HashConnect library after ${maxRetries} attempts. ${
+      lastError ? `Last error: ${lastError.message}` : ''
+    }`
+  );
+}
+
 // Lazy-loaded HashConnect modules (loaded on first use)
 let HashConnect: any = null;
 let HashConnectConnectionState: any = null;
@@ -86,8 +124,8 @@ async function loadHashConnect(): Promise<void> {
       navigatorExists: typeof navigator !== 'undefined',
     });
 
-    // Dynamic import from npm package (NOT CDN)
-    const hashconnectModule = await import('hashconnect');
+    // Dynamic import from npm package (NOT CDN) with retry logic
+    const hashconnectModule = await loadHashConnectWithRetry();
     
     if (!hashconnectModule.HashConnect) {
       throw new Error('HashConnect export not found in module');
