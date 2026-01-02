@@ -148,6 +148,27 @@ export function usePaymentStatusPolling(
   const startTimeRef = useRef<number>(Date.now());
   const consecutiveErrorsRef = useRef<number>(0);
   const previousStatusRef = useRef<string | null>(null);
+  
+  // Refs to avoid stale closures in setTimeout callbacks
+  const isPollingRef = useRef(isPolling);
+  const enabledRef = useRef(enabled);
+  const intervalRef = useRef(currentInterval);
+  const hadErrorRef = useRef(false);
+  
+  // Loop ID to prevent double-loop on remount/strict mode
+  const loopIdRef = useRef(0);
+
+  /**
+   * Add random jitter to prevent synchronized polling (thundering herd)
+   * @param ms - Base delay in milliseconds
+   * @param pct - Jitter percentage (default 0.15 = 15%)
+   * @returns Jittered delay as integer ms
+   */
+  const withJitter = useCallback((ms: number, pct: number = 0.15): number => {
+    const variance = ms * pct;
+    const jitter = (Math.random() * 2 - 1) * variance; // Random value between -variance and +variance
+    return Math.round(ms + jitter);
+  }, []);
 
   /**
    * Fetch current payment status with single-flight guarantee
@@ -161,7 +182,11 @@ export function usePaymentStatusPolling(
     inFlightRef.current = true;
 
     try {
-      setIsLoading(true);
+      // Only set loading on first load (status is null) or after previous error
+      // This prevents UI spinner flicker on every poll
+      if (status === null || hadErrorRef.current) {
+        setIsLoading(true);
+      }
       setError(null);
 
       // Abort any previous request
@@ -179,6 +204,12 @@ export function usePaymentStatusPolling(
       
       if (!response.ok) {
         let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        
+        // Better handling of server errors (502/503/504)
+        if (response.status === 502 || response.status === 503 || response.status === 504) {
+          errorMessage = `Server temporarily unavailable (${response.status}). Retrying with backoff...`;
+        }
+        
         try {
           const errorData = await response.json();
           errorMessage = errorData.error || errorMessage;
@@ -194,8 +225,9 @@ export function usePaymentStatusPolling(
       setStatus(newStatus);
       setIsLoading(false);
 
-      // Reset error counter on success
+      // Reset error counter and flag on success
       consecutiveErrorsRef.current = 0;
+      hadErrorRef.current = false;
       setCurrentInterval(initialInterval);
 
       // Check if status changed
@@ -213,13 +245,14 @@ export function usePaymentStatusPolling(
           timerRef.current = null;
         }
         setIsPolling(false);
+        isPollingRef.current = false;
         return true; // Signal terminal state reached
       }
 
       return false; // Not terminal, continue polling
 
     } catch (err) {
-      // Ignore AbortError (expected on cleanup)
+      // Ignore AbortError (expected on cleanup) - don't trigger backoff
       if (err instanceof Error && err.name === 'AbortError') {
         return false;
       }
@@ -227,9 +260,10 @@ export function usePaymentStatusPolling(
       const error = err instanceof Error ? err : new Error('Unknown error');
       setError(error);
       setIsLoading(false);
+      hadErrorRef.current = true;
       onError?.(error);
 
-      // Exponential backoff on error
+      // Exponential backoff on error (not on abort)
       consecutiveErrorsRef.current += 1;
       const backoffMultiplier = Math.pow(2, Math.min(consecutiveErrorsRef.current - 1, 4));
       const newInterval = Math.min(initialInterval * backoffMultiplier, maxInterval);
@@ -241,7 +275,7 @@ export function usePaymentStatusPolling(
     } finally {
       inFlightRef.current = false;
     }
-  }, [paymentLinkId, initialInterval, maxInterval, onStatusChange, onError]);
+  }, [paymentLinkId, initialInterval, maxInterval, status, onStatusChange, onError]);
 
   /**
    * Manual refetch
@@ -271,6 +305,8 @@ export function usePaymentStatusPolling(
 
   /**
    * Resume polling
+   * NOTE: This resets the 15-minute timeout timer to the current time.
+   * If you want "15 min total since first load", modify this to not reset startTimeRef.
    */
   const resumePolling = useCallback(() => {
     if (!hasTimedOut) {
@@ -281,13 +317,30 @@ export function usePaymentStatusPolling(
       }
       
       setIsPolling(true);
-      // Reset start time only when resuming
+      // Reset start time when resuming (resets the 15-min timeout)
+      // Current behavior: timeout is "15 min since last resume", not "15 min total"
       startTimeRef.current = Date.now();
     }
   }, [hasTimedOut]);
 
   /**
+   * Sync refs to avoid stale closures in setTimeout callbacks
+   */
+  useEffect(() => {
+    isPollingRef.current = isPolling;
+  }, [isPolling]);
+
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+
+  useEffect(() => {
+    intervalRef.current = currentInterval;
+  }, [currentInterval]);
+
+  /**
    * Recursive polling loop with single-flight guarantee
+   * Hardened against stale closures, double-loop on remount, and thundering herd
    */
   useEffect(() => {
     if (!isPolling || !enabled) {
@@ -299,21 +352,36 @@ export function usePaymentStatusPolling(
       return;
     }
 
+    // Increment loop ID to prevent double-loop on remount/strict mode
+    loopIdRef.current += 1;
+    const currentLoopId = loopIdRef.current;
+
     /**
      * Single polling loop iteration
      */
     const pollOnce = async () => {
+      // Prevent stale loop from scheduling work (critical for strict mode / remount)
+      if (currentLoopId !== loopIdRef.current) {
+        return;
+      }
+
       // Check timeout before polling
       const elapsed = Date.now() - startTimeRef.current;
       if (elapsed >= timeout) {
         setHasTimedOut(true);
         setIsPolling(false);
+        isPollingRef.current = false;
         onTimeout?.();
         return;
       }
 
       // Fetch status (returns true if terminal state reached)
       const isTerminal = await fetchStatus();
+      
+      // Check again if this loop is still current (may have changed during async fetch)
+      if (currentLoopId !== loopIdRef.current) {
+        return;
+      }
       
       // Stop if terminal state reached
       if (isTerminal) {
@@ -325,19 +393,28 @@ export function usePaymentStatusPolling(
       if (elapsedAfterFetch >= timeout) {
         setHasTimedOut(true);
         setIsPolling(false);
+        isPollingRef.current = false;
         onTimeout?.();
         return;
       }
 
-      // Schedule next poll only if still polling
-      if (isPolling && enabled) {
+      // Schedule next poll only if still polling (use refs to avoid stale closure)
+      if (isPollingRef.current && enabledRef.current) {
+        // Check one more time if this loop is still current before scheduling
+        if (currentLoopId !== loopIdRef.current) {
+          return;
+        }
+
         // Optional: Pause polling when tab is hidden
-        let nextDelay = currentInterval;
+        let nextDelay = intervalRef.current;
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
           nextDelay = Math.max(nextDelay, 5000); // At least 5s when hidden
         }
 
-        timerRef.current = setTimeout(pollOnce, nextDelay);
+        // Apply jitter to prevent thundering herd (thousands of clients hitting at same time)
+        const jitteredDelay = withJitter(nextDelay, 0.15);
+
+        timerRef.current = setTimeout(pollOnce, jitteredDelay);
       }
     };
 
@@ -355,7 +432,7 @@ export function usePaymentStatusPolling(
         abortRef.current = null;
       }
     };
-  }, [isPolling, enabled, currentInterval, timeout, fetchStatus, onTimeout]);
+  }, [isPolling, enabled, timeout, fetchStatus, onTimeout, withJitter]);
 
   return {
     status,
