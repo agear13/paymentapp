@@ -33,7 +33,7 @@ interface UsePaymentStatusPollingOptions {
   paymentLinkId: string;
   /**
    * Initial polling interval in milliseconds
-   * @default 3000
+   * @default 5000
    */
   initialInterval?: number;
   /**
@@ -104,11 +104,12 @@ interface UsePaymentStatusPollingResult {
  * Hook to poll payment link status with smart backoff and timeout
  * 
  * Features:
- * - 3-second default polling interval
+ * - 5-second default polling interval (single-flight, no overlap)
  * - Exponential backoff on errors (doubles up to max)
  * - Automatic termination on final states (PAID, EXPIRED, CANCELED)
  * - 15-minute timeout
  * - Status change callbacks
+ * - Request cancellation on unmount/cleanup
  * 
  * @example
  * ```tsx
@@ -124,7 +125,7 @@ export function usePaymentStatusPolling(
 ): UsePaymentStatusPollingResult {
   const {
     paymentLinkId,
-    initialInterval = 3000,
+    initialInterval = 5000,
     maxInterval = 30000,
     timeout = 900000, // 15 minutes
     enabled = true,
@@ -140,24 +141,51 @@ export function usePaymentStatusPolling(
   const [isPolling, setIsPolling] = useState(enabled);
   const [currentInterval, setCurrentInterval] = useState(initialInterval);
 
-  const intervalRef = useRef<NodeJS.Timeout>();
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  // Refs for polling control
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const inFlightRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
   const startTimeRef = useRef<number>(Date.now());
   const consecutiveErrorsRef = useRef<number>(0);
   const previousStatusRef = useRef<string | null>(null);
 
   /**
-   * Fetch current payment status
+   * Fetch current payment status with single-flight guarantee
    */
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async (): Promise<boolean> => {
+    // Single-flight guard
+    if (inFlightRef.current) {
+      return false;
+    }
+
+    inFlightRef.current = true;
+
     try {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/payment-links/${paymentLinkId}/status`);
+      // Abort any previous request
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+
+      // Create new AbortController for this request
+      abortRef.current = new AbortController();
+
+      const response = await fetch(`/api/payment-links/${paymentLinkId}/status`, {
+        cache: 'no-store',
+        signal: abortRef.current.signal,
+      });
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch status: ${response.statusText}`);
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // Ignore JSON parse errors
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -176,13 +204,26 @@ export function usePaymentStatusPolling(
         onStatusChange?.(newStatus);
       }
 
-      // Check if we should stop polling (final states)
-      const finalStates: Array<PaymentStatusData['currentStatus']> = ['PAID', 'EXPIRED', 'CANCELED'];
-      if (finalStates.includes(newStatus.currentStatus)) {
+      // Check if we should stop polling (terminal states)
+      const terminalStates: Array<PaymentStatusData['currentStatus']> = ['PAID', 'EXPIRED', 'CANCELED'];
+      if (terminalStates.includes(newStatus.currentStatus)) {
+        // Clear any scheduled timer immediately
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
         setIsPolling(false);
+        return true; // Signal terminal state reached
       }
 
+      return false; // Not terminal, continue polling
+
     } catch (err) {
+      // Ignore AbortError (expected on cleanup)
+      if (err instanceof Error && err.name === 'AbortError') {
+        return false;
+      }
+
       const error = err instanceof Error ? err : new Error('Unknown error');
       setError(error);
       setIsLoading(false);
@@ -195,6 +236,10 @@ export function usePaymentStatusPolling(
       setCurrentInterval(newInterval);
 
       console.error('Payment status polling error:', error);
+
+      return false;
+    } finally {
+      inFlightRef.current = false;
     }
   }, [paymentLinkId, initialInterval, maxInterval, onStatusChange, onError]);
 
@@ -210,9 +255,17 @@ export function usePaymentStatusPolling(
    */
   const stopPolling = useCallback(() => {
     setIsPolling(false);
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = undefined;
+    
+    // Clear scheduled timer
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Abort any in-flight request
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
     }
   }, []);
 
@@ -221,86 +274,88 @@ export function usePaymentStatusPolling(
    */
   const resumePolling = useCallback(() => {
     if (!hasTimedOut) {
+      // Clear any existing timer to prevent double polling
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      
       setIsPolling(true);
+      // Reset start time only when resuming
       startTimeRef.current = Date.now();
     }
   }, [hasTimedOut]);
 
   /**
-   * Set up polling interval
+   * Recursive polling loop with single-flight guarantee
    */
   useEffect(() => {
     if (!isPolling || !enabled) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = undefined;
+      // Clear timer if polling is disabled
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
       }
       return;
     }
 
-    // Initial fetch
-    fetchStatus();
-
-    // Set up interval
-    intervalRef.current = setInterval(() => {
-      // Check timeout
+    /**
+     * Single polling loop iteration
+     */
+    const pollOnce = async () => {
+      // Check timeout before polling
       const elapsed = Date.now() - startTimeRef.current;
       if (elapsed >= timeout) {
         setHasTimedOut(true);
         setIsPolling(false);
         onTimeout?.();
-        
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = undefined;
-        }
         return;
       }
 
-      fetchStatus();
-    }, currentInterval);
+      // Fetch status (returns true if terminal state reached)
+      const isTerminal = await fetchStatus();
+      
+      // Stop if terminal state reached
+      if (isTerminal) {
+        return;
+      }
 
+      // Check timeout again after fetch completes
+      const elapsedAfterFetch = Date.now() - startTimeRef.current;
+      if (elapsedAfterFetch >= timeout) {
+        setHasTimedOut(true);
+        setIsPolling(false);
+        onTimeout?.();
+        return;
+      }
+
+      // Schedule next poll only if still polling
+      if (isPolling && enabled) {
+        // Optional: Pause polling when tab is hidden
+        let nextDelay = currentInterval;
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+          nextDelay = Math.max(nextDelay, 5000); // At least 5s when hidden
+        }
+
+        timerRef.current = setTimeout(pollOnce, nextDelay);
+      }
+    };
+
+    // Start the polling loop
+    pollOnce();
+
+    // Cleanup on unmount or when dependencies change
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
       }
     };
   }, [isPolling, enabled, currentInterval, timeout, fetchStatus, onTimeout]);
-
-  /**
-   * Set up timeout
-   */
-  useEffect(() => {
-    if (!enabled || !isPolling) {
-      return;
-    }
-
-    timeoutRef.current = setTimeout(() => {
-      setHasTimedOut(true);
-      setIsPolling(false);
-      onTimeout?.();
-    }, timeout);
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, [enabled, isPolling, timeout, onTimeout]);
-
-  /**
-   * Cleanup on unmount
-   */
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
 
   return {
     status,
