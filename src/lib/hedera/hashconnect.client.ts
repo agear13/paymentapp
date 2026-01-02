@@ -18,81 +18,80 @@ import { HASHCONNECT_CONFIG } from './constants';
 import type { WalletState, HashConnectPairingData } from './types';
 
 /**
- * Loads HashConnect with automatic retry on failure
- * Handles transient 502 errors and chunk loading failures during Render deploys
- * 
- * Render Basic plan has no minInstances support, so the app may be cold-starting.
- * This can take 30-60 seconds during deployments. We use exponential backoff
- * with up to 8 retries to wait out the deployment window.
+ * Session storage key to track if we've already reloaded due to chunk error
+ * Prevents infinite reload loops
  */
-async function loadHashConnectWithRetry(
-  maxRetries = 8
-): Promise<typeof import('hashconnect')> {
-  let lastError: Error | null = null;
+const CHUNK_RELOAD_KEY = 'hashconnect_chunk_reload_attempted';
 
-  // Exponential backoff delays (in milliseconds)
-  const delays = [500, 1000, 2000, 4000, 8000, 16000, 32000, 64000];
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      // User-friendly message (only show on first attempt or every few attempts)
-      if (attempt === 1) {
-        console.log('Connecting to Hedera network...');
-      } else if (attempt % 2 === 0) {
-        console.log('Still connecting to Hedera network...');
-      }
+/**
+ * Loads HashConnect with ONE attempt.
+ * On chunk load errors (manifest mismatch during deploy), performs ONE-TIME page reload.
+ * 
+ * Rationale: Retry loops make chunk mismatches worse by repeatedly fetching stale manifests.
+ * A single page reload gets fresh HTML with correct chunk references.
+ */
+async function loadHashConnectWithReload(): Promise<typeof import('hashconnect')> {
+  try {
+    log.info('📦 Attempting HashConnect dynamic import (single attempt)');
+    const hashconnectModule = await import('hashconnect');
+    
+    // Success - clear any reload flag
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+    }
+    
+    return hashconnectModule;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    // Detect chunk loading errors (manifest mismatch or corrupted chunk)
+    const isChunkError = 
+      errorMessage.includes('Loading chunk') || 
+      errorMessage.includes('ChunkLoadError') ||
+      errorMessage.includes('already been declared'); // SyntaxError from duplicate chunk loads
+    
+    if (isChunkError) {
+      log.error('❌ HashConnect chunk load error detected (manifest/chunk mismatch)', {
+        error: errorMessage,
+        errorType: 'CHUNK_MISMATCH',
+      });
       
-      const hashconnectModule = await import('hashconnect');
+      // Check if we've already tried reloading
+      const alreadyReloaded = typeof sessionStorage !== 'undefined' && 
+        sessionStorage.getItem(CHUNK_RELOAD_KEY) === 'true';
       
-      if (attempt > 1) {
-        console.log('✓ Connected to Hedera network');
-      }
-      
-      return hashconnectModule;
-    } catch (error) {
-      lastError = error as Error;
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      // Detect chunk loading errors (indicate deploy in progress)
-      const isChunkError = errorMessage.includes('Loading chunk') || 
-                          errorMessage.includes('missing:') ||
-                          errorMessage.includes('ChunkLoadError');
-
-      // Log technical details to console for debugging
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(
-          `HashConnect load attempt ${attempt}/${maxRetries} failed:`,
-          errorMessage,
-          isChunkError ? '(chunk loading error - deploy may be in progress)' : ''
+      if (!alreadyReloaded && typeof sessionStorage !== 'undefined') {
+        // Mark that we're about to reload (guard against loops)
+        sessionStorage.setItem(CHUNK_RELOAD_KEY, 'true');
+        
+        log.info('🔄 Performing ONE-TIME page reload to fetch fresh chunks');
+        console.warn('Chunk mismatch detected - reloading page to fetch correct manifest...');
+        
+        // Full page reload to get fresh HTML + manifest
+        window.location.reload();
+        
+        // Never reaches here, but return promise for TypeScript
+        return new Promise(() => {});
+      } else {
+        // Already reloaded once - don't loop
+        log.error('❌ Chunk error persists after reload - deployment may still be in progress', {
+          error: errorMessage,
+          errorType: 'CHUNK_MISMATCH_PERSISTENT',
+        });
+        throw new Error(
+          'Failed to load HashConnect due to deployment in progress. Please refresh the page in a few moments.'
         );
       }
-
-      // Don't delay after last attempt
-      if (attempt < maxRetries) {
-        // Use exponential backoff delay for this attempt
-        const baseDelay = delays[attempt - 1] || delays[delays.length - 1];
-        
-        // Add jitter (±20%) to prevent thundering herd
-        const jitter = baseDelay * 0.2 * (Math.random() - 0.5);
-        const delayMs = Math.round(baseDelay + jitter);
-        
-        // For chunk errors, use longer delays (multiply by 1.5)
-        const finalDelay = isChunkError ? Math.round(delayMs * 1.5) : delayMs;
-
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`Retrying in ${(finalDelay / 1000).toFixed(1)}s...`);
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, finalDelay));
-      }
+    } else {
+      // Not a chunk error - genuine initialization failure
+      log.error('❌ HashConnect import failed (non-chunk error)', {
+        error: errorMessage,
+        errorType: 'IMPORT_ERROR',
+        stack: error instanceof Error ? error.stack?.substring(0, 200) : undefined,
+      });
+      throw error;
     }
   }
-
-  throw new Error(
-    `Failed to load HashConnect library after ${maxRetries} attempts. ${
-      lastError ? `Last error: ${lastError.message}` : ''
-    }`
-  );
 }
 
 // Lazy-loaded HashConnect modules (loaded on first use)
@@ -164,8 +163,8 @@ async function loadHashConnect(): Promise<void> {
       navigatorExists: typeof navigator !== 'undefined',
     });
 
-    // Dynamic import from npm package (NOT CDN) with retry logic
-    const hashconnectModule = await loadHashConnectWithRetry();
+    // Dynamic import from npm package (NOT CDN) - single attempt with reload on chunk error
+    const hashconnectModule = await loadHashConnectWithReload();
     
     if (!hashconnectModule.HashConnect) {
       throw new Error('HashConnect export not found in module');

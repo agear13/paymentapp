@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Wallet, Check, Zap, Loader2 } from 'lucide-react';
+import { Wallet, Check, Zap, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -15,7 +15,7 @@ import { TokenSelector } from '@/components/public/token-selector';
 import { TokenComparison } from '@/components/public/token-comparison';
 import { PaymentInstructions } from '@/components/public/payment-instructions';
 // CRITICAL: Import from .client.ts ONLY (never from barrel export)
-import { getWalletState } from '@/lib/hedera/wallet-service.client';
+import { getWalletState, initHashConnect } from '@/lib/hedera/wallet-service.client';
 import type { TokenType } from '@/lib/hedera/constants';
 import type { TokenPaymentAmount } from '@/lib/hedera/types';
 
@@ -53,6 +53,39 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
   const [merchantAccountId, setMerchantAccountId] = useState<string | null>(null);
   const [isLoadingMerchant, setIsLoadingMerchant] = useState(false);
   const [merchantError, setMerchantError] = useState<string | null>(null);
+  
+  // HashConnect initialization state
+  const [isInitializingHashConnect, setIsInitializingHashConnect] = useState(false);
+  const [hashConnectInitialized, setHashConnectInitialized] = useState(false);
+  const [hashConnectError, setHashConnectError] = useState<string | null>(null);
+
+  // Pre-initialize HashConnect when component mounts (if available)
+  useEffect(() => {
+    if (!isAvailable) return;
+    
+    // Only initialize once
+    if (isInitializingHashConnect || hashConnectInitialized) return;
+    
+    console.log('[HederaPaymentOption] Pre-initializing HashConnect...');
+    setIsInitializingHashConnect(true);
+    setHashConnectError(null);
+    
+    initHashConnect()
+      .then(() => {
+        console.log('[HederaPaymentOption] ✅ HashConnect pre-initialized successfully');
+        setHashConnectInitialized(true);
+        setHashConnectError(null);
+      })
+      .catch((error) => {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to initialize wallet';
+        console.error('[HederaPaymentOption] ❌ HashConnect initialization failed:', error);
+        setHashConnectError(errorMsg);
+        toast.error('Failed to initialize crypto wallet: ' + errorMsg);
+      })
+      .finally(() => {
+        setIsInitializingHashConnect(false);
+      });
+  }, [isAvailable, isInitializingHashConnect, hashConnectInitialized]);
 
   // Fetch merchant settings when component mounts or short code changes
   useEffect(() => {
@@ -219,30 +252,35 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
     };
   };
 
+  // Determine if the payment option can be selected
+  const canSelect = isAvailable && hashConnectInitialized && !hashConnectError;
+  const isInitializing = isInitializingHashConnect || isLoadingMerchant;
+
   return (
     <div className="space-y-3">
       <button
         type="button"
-        onClick={isAvailable ? onSelect : undefined}
+        onClick={canSelect ? onSelect : undefined}
         onMouseEnter={onHoverStart}
         onMouseLeave={onHoverEnd}
         onFocus={onHoverStart}
         onBlur={onHoverEnd}
-        disabled={!isAvailable}
+        disabled={!canSelect}
         className={cn(
           'w-full text-left transition-all rounded-lg border-2 p-4',
           'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2',
           {
             'border-purple-600 bg-purple-50 shadow-md': isSelected,
-            'border-slate-200 bg-white hover:border-purple-300 hover:shadow-sm': !isSelected && isAvailable,
-            'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed': !isAvailable,
+            'border-slate-200 bg-white hover:border-purple-300 hover:shadow-sm': !isSelected && canSelect,
+            'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed': !canSelect,
           }
         )}
         role="radio"
         aria-checked={isSelected}
-        aria-disabled={!isAvailable}
+        aria-disabled={!canSelect}
         aria-label="Pay with HBAR, USDC, USDT, or AUDD via Hedera"
-        tabIndex={isAvailable ? 0 : -1}
+        aria-busy={isInitializing}
+        tabIndex={canSelect ? 0 : -1}
       >
         <div className="flex items-start gap-4">
           {/* Icon */}
@@ -282,19 +320,36 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
               Pay with HBAR, USDC, USDT, or AUDD on the Hedera network
             </p>
 
-            {/* Features */}
-            <div className="flex flex-wrap gap-3 text-xs">
-              <div className="flex items-center gap-1.5 text-slate-500">
-                <Zap className="w-3.5 h-3.5" />
-                <span>Low fees (~$0.0001)</span>
+            {/* Initialization Status */}
+            {isInitializingHashConnect && (
+              <div className="flex items-center gap-2 text-sm text-purple-600 mb-3">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Loading wallet...</span>
               </div>
-              <div className="flex items-center gap-1.5 text-slate-500">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-                <span>3-5 second finality</span>
+            )}
+
+            {hashConnectError && (
+              <div className="flex items-start gap-2 text-sm text-red-600 mb-3">
+                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>Wallet initialization failed: {hashConnectError}</span>
               </div>
-            </div>
+            )}
+
+            {/* Features - only show when ready */}
+            {!isInitializingHashConnect && !hashConnectError && (
+              <div className="flex flex-wrap gap-3 text-xs">
+                <div className="flex items-center gap-1.5 text-slate-500">
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Low fees (~$0.0001)</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-500">
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                  <span>3-5 second finality</span>
+                </div>
+              </div>
+            )}
 
             {!isAvailable && (
               <p className="text-xs text-amber-600 mt-3 font-medium">
