@@ -59,23 +59,23 @@ const nextConfig: NextConfig = {
   // 🔐 Security headers + Cache Control (prevent chunk mismatch on deploy)
   async headers() {
     return [
-      // ✅ Next.js static assets: immutable caching (hashed filenames safe to cache)
+      // ✅ Next.js static assets: aggressive no-cache to prevent chunk mismatches
       {
         source: "/_next/static/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
+            value: "no-store, no-cache, must-revalidate, proxy-revalidate",
           },
         ],
       },
-      // ✅ Next.js data files: no caching (prevent stale manifests/chunks)
+      // ✅ Next.js general: no caching to prevent stale manifests
       {
-        source: "/_next/data/:path*",
+        source: "/_next/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "no-store, must-revalidate",
+            value: "no-store",
           },
         ],
       },
