@@ -99,11 +99,11 @@ async function loadHashConnectWithReload(): Promise<typeof import('hashconnect')
         
         // Short delay to ensure logs are written, then hard reload with cache bust
         setTimeout(() => {
-          // Hard reload with cache-busting to force fresh chunks
-          // Using href assignment with timestamp to bypass cache
+          // Cache-busting reload using replace() to prevent back-button issues
+          // __r param forces browser to bypass cache entirely
           const url = new URL(window.location.href);
-          url.searchParams.set('_t', Date.now().toString());
-          window.location.href = url.toString();
+          url.searchParams.set('__r', Date.now().toString());
+          window.location.replace(url.toString());
         }, 100);
         
         // Never reaches here, but return promise for TypeScript
