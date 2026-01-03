@@ -4,7 +4,7 @@
  */
 
 import { User } from '@supabase/supabase-js'
-import { prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/server/prisma'
 
 // Define user roles
 export enum UserRole {

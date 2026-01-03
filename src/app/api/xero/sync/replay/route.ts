@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { processSyncById } from '@/lib/xero/queue-processor';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
 
 /**

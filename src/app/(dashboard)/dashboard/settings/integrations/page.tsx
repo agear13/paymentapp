@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { XeroConnection } from '@/components/dashboard/settings/xero-connection';
 import { createClient } from '@/lib/supabase/server';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 
 export default async function IntegrationsPage() {
   // Get current organization

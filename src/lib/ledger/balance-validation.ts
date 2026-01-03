@@ -3,7 +3,7 @@
  * Automated checks to ensure ledger integrity (DR = CR)
  */
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { Prisma } from '@prisma/client';
 import { loggers } from '@/lib/logger';
 

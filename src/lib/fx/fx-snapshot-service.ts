@@ -5,7 +5,7 @@
  * creation and settlement times.
  */
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import type { FxSnapshot, FxSnapshotType } from '@prisma/client';
 import type { Currency, FxSnapshotData } from './types';

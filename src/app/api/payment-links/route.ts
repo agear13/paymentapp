@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
@@ -16,7 +16,7 @@ import {
   PaginationSchema,
   PaymentLinkFiltersSchema,
 } from '@/lib/validations/schemas';
-import { generateUniqueShortCode } from '@/lib/short-code';
+import { generateUniqueShortCode } from '@/lib/server/short-code';
 import { generateQRCodeDataUrl } from '@/lib/qr-code';
 
 // Helper to transform snake_case DB fields to camelCase for frontend

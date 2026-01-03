@@ -3,7 +3,7 @@
  * Checks for expired payment links and transitions them to EXPIRED status
  */
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 
 export interface ExpiredLinksJobResult {

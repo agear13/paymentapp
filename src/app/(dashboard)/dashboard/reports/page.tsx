@@ -1,6 +1,6 @@
 import { getCurrentUser } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/server/prisma'
 import { ReportsPageClient } from '@/components/dashboard/reports/reports-page-client'
 
 type PageProps = {

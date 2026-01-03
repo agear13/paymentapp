@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { apiResponse, apiError } from '@/lib/api/middleware';
 import { logAudit } from '@/lib/logger';
 

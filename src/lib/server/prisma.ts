@@ -1,8 +1,25 @@
+/**
+ * SERVER-ONLY Prisma Client
+ * 
+ * CRITICAL: This module must NEVER be imported by client-side code.
+ * Only import from:
+ * - API routes (src/app/api/.../route.ts)
+ * - Server Components (without 'use client')
+ * - Server Actions
+ * - Scripts (src/scripts/...)
+ */
+
+import 'server-only';
 import { PrismaClient } from '@prisma/client';
 
-// Verify DATABASE_URL is set (without logging the actual value for security)
+// Runtime guard: Throw if accidentally imported in browser
+if (typeof window !== 'undefined') {
+  throw new Error('❌ FATAL: Server-only prisma module imported in the browser! Check your import chain.');
+}
+
+// Server-side guard: Throw if DATABASE_URL not set
 if (!process.env.DATABASE_URL) {
-  console.error('ERROR: DATABASE_URL environment variable is not set');
+  throw new Error('❌ FATAL: DATABASE_URL environment variable is not set');
 }
 
 // Global singleton with logging flag
@@ -34,3 +51,4 @@ export const prisma =
   })();
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+

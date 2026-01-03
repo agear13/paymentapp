@@ -10,7 +10,7 @@ import { resolve } from 'path';
 config({ path: resolve(__dirname, '../../.env.local') });
 
 import { logger } from '@/lib/logger';
-import { prisma } from '../prisma';
+import { prisma } from '../server/prisma';
 
 // ============================================================================
 // SEED DATA

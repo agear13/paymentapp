@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe, handleStripeError, toSmallestUnit, generateIdempotencyKey } from '@/lib/stripe/client';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';

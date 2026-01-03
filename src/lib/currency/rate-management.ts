@@ -11,7 +11,7 @@
  * Sprint 25: Multi-Currency Enhancement
  */
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { convertCurrency, clearExchangeRateCache } from './currency-converter';
 import { v4 as uuidv4 } from 'uuid';

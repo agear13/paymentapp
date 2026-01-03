@@ -5,7 +5,7 @@
  * Sprint 13: Queue & Retry Logic
  */
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
 import { randomUUID } from 'crypto';
 import type { XeroSyncStatus } from '@prisma/client';

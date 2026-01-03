@@ -9,7 +9,7 @@
  */
 
 import { PaymentLinkStatus } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 
 /**

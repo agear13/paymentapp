@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { verifyWebhookSignature, isEventProcessed, extractPaymentLinkId } from '@/lib/stripe/webhook';
 import { fromSmallestUnit } from '@/lib/stripe/client';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { postStripeSettlement, calculateStripeFee } from '@/lib/ledger/posting-rules/stripe';
 import { validatePostingBalance } from '@/lib/ledger/balance-validation';

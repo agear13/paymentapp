@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { prisma } from '../lib/prisma';
+import { prisma } from '../lib/server/prisma';
 
 async function setupMerchant() {
   try {

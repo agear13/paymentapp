@@ -5,7 +5,7 @@
  * Compliance with SOC 2, ISO 27001, and GDPR audit requirements
  */
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 
 /**

@@ -5,7 +5,7 @@
  * Sprint 24: Enhanced with comprehensive edge case handling
  */
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import type { TokenType } from './constants';
 import type { PaymentToken } from '@prisma/client';

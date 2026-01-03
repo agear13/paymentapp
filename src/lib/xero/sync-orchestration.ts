@@ -6,7 +6,7 @@
 
 import { createXeroInvoice } from './invoice-service';
 import { recordXeroPayment } from './payment-service';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { randomUUID } from 'crypto';
 import type { TokenType } from '@/lib/hedera/types';
 

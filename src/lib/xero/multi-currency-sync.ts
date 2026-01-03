@@ -11,7 +11,7 @@
  * Sprint 26: Final Testing & Quality Assurance
  */
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { XeroClient } from 'xero-node';
 import { convertCurrency } from '@/lib/currency/currency-converter';

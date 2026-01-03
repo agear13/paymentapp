@@ -6,7 +6,7 @@
 
 import { getXeroClient } from './client';
 import { getActiveConnection } from './connection-service';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import type { Payment } from 'xero-node';
 import type { TokenType } from '@/lib/hedera/types';
 

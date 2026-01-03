@@ -5,7 +5,7 @@
  * Sprint 15: Alerting & Monitoring
  */
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
 
 export interface AlertRule {

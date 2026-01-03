@@ -5,7 +5,7 @@
  */
 
 import { LedgerAccountType } from '@prisma/client';
-import { prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/server/prisma';
 
 export interface LedgerAccountDefinition {
   code: string;

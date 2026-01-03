@@ -15,7 +15,7 @@ import {
   isValidTransition,
   getValidNextStates,
 } from '@/lib/payment-link-state-machine';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 
 const StatusTransitionSchema = z.object({
   status: PaymentLinkStatusSchema,

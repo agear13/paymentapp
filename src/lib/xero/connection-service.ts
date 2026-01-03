@@ -3,7 +3,7 @@
  * Manages Xero OAuth connections, token storage, and refresh
  */
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/server/prisma';
 import { encryptToken, decryptToken } from './encryption';
 import { refreshAccessToken, getXeroTenants, revokeConnection } from './client';
 import { randomUUID } from 'crypto';

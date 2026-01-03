@@ -3,7 +3,7 @@
  * Usage: npx tsx scripts/test-merchant-endpoint.ts [shortCode]
  */
 
-import { prisma } from '../lib/prisma';
+import { prisma } from '../lib/server/prisma';
 
 async function testMerchantEndpoint() {
   try {
