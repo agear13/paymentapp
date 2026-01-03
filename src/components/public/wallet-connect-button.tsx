@@ -15,42 +15,44 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Wallet, LogOut, RefreshCw, AlertCircle, Info } from 'lucide-react';
-import type { WalletState } from '@/lib/hedera/types';
-// CRITICAL: Import from .client.ts ONLY (never from barrel export)
+import { Wallet, LogOut, AlertCircle, Info, RotateCw } from 'lucide-react';
 import {
-  initializeHashConnect,
-  connectAndFetchBalances,
-  disconnectAndClear,
-  refreshWalletBalances,
+  initHashConnect,
+  openHashpackPairingModal,
+  disconnectWallet,
   subscribeToWalletState,
   getWalletState,
-} from '@/lib/hedera/wallet-service.client';
-import { getTokenIcon } from '@/lib/hedera/token-service';
+} from '@/lib/hashconnectClient';
+import { isChunkMismatchError, isUriMissingError } from '@/lib/walletErrors';
 import { HederaWalletInfoModal } from './HederaWalletInfoModal';
+
+interface WalletState {
+  isConnected: boolean;
+  accountId: string | null;
+  network: string;
+  isLoading: boolean;
+  error: string | null;
+}
 
 export function WalletConnectButton() {
   const [walletState, setWalletState] = useState<WalletState>(getWalletState());
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showChunkMismatchError, setShowChunkMismatchError] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [hasMetaMask, setHasMetaMask] = useState(false);
 
   useEffect(() => {
-    // Initialize HashConnect on mount
-    initializeHashConnect()
-      .then(() => {
-        setIsInitializing(false);
-      })
-      .catch((error) => {
-        console.error('Failed to initialize HashConnect:', error);
-        setIsInitializing(false);
-      });
+    // Initialize HashConnect on mount (non-blocking)
+    initHashConnect().catch((error) => {
+      console.error('[WalletConnect] Failed to initialize HashConnect:', error);
+      // Error is already stored in wallet state
+    });
 
     // Subscribe to wallet state changes
     const unsubscribe = subscribeToWalletState(setWalletState);
 
-    // Detect MetaMask or other EVM wallets
-    // MetaMask and most EVM wallets inject window.ethereum
+    // Detect MetaMask or other EVM wallets (non-fatal detection only)
     // This helps warn users who may have funds on other networks
     if (typeof window !== 'undefined' && window.ethereum) {
       setHasMetaMask(true);
@@ -62,39 +64,58 @@ export function WalletConnectButton() {
   }, []);
 
   const handleConnect = async () => {
+    setIsConnecting(true);
+    setErrorMessage(null);
+    setShowChunkMismatchError(false);
+
     try {
-      await connectAndFetchBalances();
+      await openHashpackPairingModal();
+      // Success - modal opened, user will complete pairing
+      console.log('[WalletConnect] Pairing modal opened successfully');
     } catch (error) {
-      console.error('Connection failed:', error);
+      console.error('[WalletConnect] Connection failed:', error);
+
+      // Handle chunk mismatch errors
+      if (isChunkMismatchError(error)) {
+        setShowChunkMismatchError(true);
+        setErrorMessage(
+          'Deployment in progress. Please hard refresh (Ctrl+Shift+R or Cmd+Shift+R) to load the latest version.'
+        );
+        return;
+      }
+
+      // Handle URI missing errors
+      if (isUriMissingError(error)) {
+        setErrorMessage(
+          'HashPack is still initializing. Please wait a moment and try again.'
+        );
+        return;
+      }
+
+      // Generic error
+      const errorMsg = error instanceof Error ? error.message : 'Failed to connect wallet';
+      setErrorMessage(errorMsg);
+    } finally {
+      setIsConnecting(false);
     }
   };
 
   const handleDisconnect = async () => {
     try {
-      await disconnectAndClear();
+      await disconnectWallet();
+      setErrorMessage(null);
     } catch (error) {
-      console.error('Disconnection failed:', error);
+      console.error('[WalletConnect] Failed to disconnect:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to disconnect';
+      setErrorMessage(errorMsg);
     }
   };
 
-  const handleRefresh = async () => {
-    try {
-      await refreshWalletBalances();
-    } catch (error) {
-      console.error('Failed to refresh balances:', error);
-    }
+  const handleReload = () => {
+    window.location.reload();
   };
 
-  if (isInitializing) {
-    return (
-      <Button disabled>
-        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-        Initializing...
-      </Button>
-    );
-  }
-
-  // Not connected - show connect button
+  // Show connect screen when not connected
   if (!walletState.isConnected) {
     return (
       <>
@@ -123,14 +144,14 @@ export function WalletConnectButton() {
             <CardContent className="space-y-4">
               <Button
                 onClick={handleConnect}
-                disabled={walletState.isLoading}
+                disabled={isConnecting || walletState.isLoading}
                 className="w-full"
                 size="lg"
               >
-                {walletState.isLoading ? (
+                {(isConnecting || walletState.isLoading) ? (
                   <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Connecting...
+                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    {walletState.isLoading ? 'Initializing...' : 'Connecting...'}
                   </>
                 ) : (
                   <>
@@ -140,11 +161,34 @@ export function WalletConnectButton() {
                 )}
               </Button>
 
+              {/* Error Messages */}
+              {(errorMessage || walletState.error) && (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span>{errorMessage || walletState.error}</span>
+                  </div>
+                  
+                  {/* Reload button for chunk mismatch errors */}
+                  {showChunkMismatchError && (
+                    <Button
+                      onClick={handleReload}
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                    >
+                      <RotateCw className="mr-2 h-4 w-4" />
+                      Reload Page
+                    </Button>
+                  )}
+                </div>
+              )}
+
               {/* Helper Note */}
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   <span className="font-medium">Note:</span> Only Hedera-native wallets and tokens are supported. 
-                  If your funds are in another wallet (e.g. MetaMask), you'll need to create a Hedera 
+                  If your funds are in another wallet (e.g. MetaMask), you&apos;ll need to create a Hedera 
                   wallet and transfer or exchange your tokens to the Hedera network before paying.
                 </p>
                 
@@ -157,19 +201,12 @@ export function WalletConnectButton() {
                   Why do I need a Hedera wallet?
                 </button>
               </div>
-
-              {walletState.error && (
-                <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                  <AlertCircle className="h-4 w-4 mt-0.5" />
-                  <span>{walletState.error}</span>
-                </div>
-              )}
             </CardContent>
           </Card>
 
           <div className="text-center text-sm text-muted-foreground">
             <p>
-              Don't have HashPack?{' '}
+              Don&apos;t have HashPack?{' '}
               <a
                 href="https://www.hashpack.app"
                 target="_blank"
@@ -193,122 +230,59 @@ export function WalletConnectButton() {
 
   // Connected - show wallet info
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5 text-green-600" />
-            Wallet Connected
-          </CardTitle>
-          <Badge variant="outline" className="text-green-600 border-green-600">
-            {walletState.network}
-          </Badge>
-        </div>
-        <CardDescription className="font-mono text-xs">
-          {walletState.accountId}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Balances */}
-        <div className="space-y-2">
-          <div className="text-sm font-medium text-muted-foreground">
-            Available Balances
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-green-600" />
+              Wallet Connected
+            </CardTitle>
+            <Badge variant="outline" className="text-green-600 border-green-600">
+              {walletState.network}
+            </Badge>
           </div>
-          <div className="space-y-2">
-            {/* HBAR Balance */}
-            <div className="flex items-center justify-between rounded-md bg-muted/50 p-3">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{getTokenIcon('HBAR')}</span>
-                <span className="font-medium">HBAR</span>
-              </div>
-              <span className="font-mono text-sm">
-                {parseFloat(walletState.balances.HBAR).toFixed(4)}
-              </span>
-            </div>
-
-            {/* USDC Balance */}
-            <div className="flex items-center justify-between rounded-md bg-muted/50 p-3">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{getTokenIcon('USDC')}</span>
-                <span className="font-medium">USDC</span>
-                <Badge variant="secondary" className="text-xs">
-                  Stable
-                </Badge>
-              </div>
-              <span className="font-mono text-sm">
-                {parseFloat(walletState.balances.USDC).toFixed(2)}
-              </span>
-            </div>
-
-            {/* USDT Balance */}
-            <div className="flex items-center justify-between rounded-md bg-muted/50 p-3">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{getTokenIcon('USDT')}</span>
-                <span className="font-medium">USDT</span>
-                <Badge variant="secondary" className="text-xs">
-                  Stable
-                </Badge>
-              </div>
-              <span className="font-mono text-sm">
-                {parseFloat(walletState.balances.USDT).toFixed(2)}
-              </span>
-            </div>
-
-            {/* AUDD Balance */}
-            <div className="flex items-center justify-between rounded-md bg-muted/50 p-3">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{getTokenIcon('AUDD')}</span>
-                <span className="font-medium">AUDD</span>
-                <Badge variant="secondary" className="text-xs">
-                  Stable
-                </Badge>
-              </div>
-              <span className="font-mono text-sm">
-                {parseFloat(walletState.balances.AUDD).toFixed(2)}
-              </span>
-            </div>
+          <CardDescription className="font-mono text-xs">
+            {walletState.accountId}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Connected Message */}
+          <div className="rounded-md bg-green-50 border border-green-200 p-3">
+            <p className="text-sm text-green-900">
+              Your wallet is connected. You can now proceed with your payment.
+            </p>
           </div>
-        </div>
 
-        {/* Actions */}
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={walletState.isLoading}
-            className="flex-1"
-          >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${walletState.isLoading ? 'animate-spin' : ''}`}
-            />
-            Refresh
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDisconnect}
-            disabled={walletState.isLoading}
-            className="flex-1"
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Disconnect
-          </Button>
-        </div>
-
-        {walletState.error && (
-          <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            <AlertCircle className="h-4 w-4 mt-0.5" />
-            <span>{walletState.error}</span>
+          {/* Actions */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDisconnect}
+              disabled={walletState.isLoading}
+              className="flex-1"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Disconnect
+            </Button>
           </div>
-        )}
-      </CardContent>
-    </Card>
+
+          {/* Error Display */}
+          {(errorMessage || walletState.error) && (
+            <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 mt-0.5" />
+              <span>{errorMessage || walletState.error}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Info Modal */}
+      <HederaWalletInfoModal 
+        isOpen={showInfoModal} 
+        onClose={() => setShowInfoModal(false)} 
+      />
+    </>
   );
 }
-
-
-
-
-
-

@@ -94,12 +94,13 @@ export const CURRENT_MIRROR_URL =
 // HashConnect Configuration
 export const HASHCONNECT_CONFIG = {
   APP_METADATA: {
-    name: process.env.NEXT_PUBLIC_APP_NAME || 'Payment Link',
-    description: 'Secure payment link system with Hedera integration',
+    name: process.env.NEXT_PUBLIC_APP_NAME || 'Provvypay',
+    description: 'Provvypay Payment Link',
     url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
     icon: process.env.NEXT_PUBLIC_APP_ICON || 'https://provvypay.com/icon.png',
   },
   NETWORK: CURRENT_NETWORK,
+  WALLETCONNECT_PROJECT_ID: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
 } as const;
 
 // Transaction Polling Configuration
