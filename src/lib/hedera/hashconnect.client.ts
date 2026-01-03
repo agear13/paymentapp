@@ -22,6 +22,34 @@ import type { WalletState, HashConnectPairingData } from './types';
  * Prevents infinite reload loops
  */
 const CHUNK_RELOAD_KEY = 'hashconnect_chunk_reload_attempted';
+const RELOAD_FLAG_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Check if we've recently reloaded due to chunk error (within expiry window)
+ */
+function hasRecentlyReloaded(): boolean {
+  if (typeof sessionStorage === 'undefined') return false;
+  
+  const reloadData = sessionStorage.getItem(CHUNK_RELOAD_KEY);
+  if (!reloadData) return false;
+  
+  try {
+    const { timestamp } = JSON.parse(reloadData);
+    const age = Date.now() - timestamp;
+    
+    // If flag is older than 5 minutes, consider it expired
+    if (age > RELOAD_FLAG_EXPIRY_MS) {
+      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+      return false;
+    }
+    
+    return true;
+  } catch {
+    // Invalid data - clear it
+    sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+    return false;
+  }
+}
 
 /**
  * Loads HashConnect with ONE attempt.
@@ -56,13 +84,15 @@ async function loadHashConnectWithReload(): Promise<typeof import('hashconnect')
         errorType: 'CHUNK_MISMATCH',
       });
       
-      // Check if we've already tried reloading
-      const alreadyReloaded = typeof sessionStorage !== 'undefined' && 
-        sessionStorage.getItem(CHUNK_RELOAD_KEY) === 'true';
+      // Check if we've recently reloaded (within expiry window)
+      const alreadyReloaded = hasRecentlyReloaded();
       
       if (!alreadyReloaded && typeof sessionStorage !== 'undefined') {
-        // Mark that we're about to reload (guard against loops)
-        sessionStorage.setItem(CHUNK_RELOAD_KEY, 'true');
+        // Mark that we're about to reload with timestamp (expires in 5 minutes)
+        sessionStorage.setItem(CHUNK_RELOAD_KEY, JSON.stringify({
+          timestamp: Date.now(),
+          error: errorMessage.substring(0, 100), // Store first 100 chars of error
+        }));
         
         log.info('🔄 Performing ONE-TIME page reload to fetch fresh chunks');
         console.warn('Chunk mismatch detected - reloading page to fetch correct manifest...');
@@ -79,13 +109,19 @@ async function loadHashConnectWithReload(): Promise<typeof import('hashconnect')
         // Never reaches here, but return promise for TypeScript
         return new Promise(() => {});
       } else {
-        // Already reloaded once - don't loop
-        log.error('❌ Chunk error persists after reload - deployment may still be in progress', {
+        // Already reloaded recently - don't loop
+        log.error('❌ Chunk error persists after reload - clearing stale cache and retrying', {
           error: errorMessage,
           errorType: 'CHUNK_MISMATCH_PERSISTENT',
         });
+        
+        // Clear the flag so user's next manual refresh will work
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+        }
+        
         throw new Error(
-          'Failed to load HashConnect due to deployment in progress. Please refresh the page in a few moments.'
+          'Failed to load HashConnect - please hard refresh the page (Ctrl+Shift+R or Cmd+Shift+R) to clear cached chunks.'
         );
       }
     } else {
