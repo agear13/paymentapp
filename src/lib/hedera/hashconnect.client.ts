@@ -19,36 +19,21 @@ import type { WalletState, HashConnectPairingData } from './types';
 
 /**
  * Session storage key to track if we've already reloaded due to chunk error
- * Prevents infinite reload loops
+ * CRITICAL: This flag is permanent for the browser session (no expiry)
+ * Once set, it prevents ALL further reload attempts to stop infinite loops
  */
-const CHUNK_RELOAD_KEY = 'hashconnect_chunk_reload_attempted';
-const RELOAD_FLAG_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+const CHUNK_RELOAD_KEY = 'hc_chunk_retry';
 
 /**
- * Check if we've recently reloaded due to chunk error (within expiry window)
+ * Check if we've already attempted a reload in this session
+ * Returns true if ANY reload was attempted (no expiry, permanent for session)
  */
-function hasRecentlyReloaded(): boolean {
+function hasAttemptedReload(): boolean {
   if (typeof sessionStorage === 'undefined') return false;
   
-  const reloadData = sessionStorage.getItem(CHUNK_RELOAD_KEY);
-  if (!reloadData) return false;
-  
-  try {
-    const { timestamp } = JSON.parse(reloadData);
-    const age = Date.now() - timestamp;
-    
-    // If flag is older than 5 minutes, consider it expired
-    if (age > RELOAD_FLAG_EXPIRY_MS) {
-      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
-      return false;
-    }
-    
-    return true;
-  } catch {
-    // Invalid data - clear it
-    sessionStorage.removeItem(CHUNK_RELOAD_KEY);
-    return false;
-  }
+  // Simple check: if key exists, we've already reloaded
+  // No expiry, no clearing - permanent for session to prevent loops
+  return sessionStorage.getItem(CHUNK_RELOAD_KEY) !== null;
 }
 
 /**
@@ -63,10 +48,9 @@ async function loadHashConnectWithReload(): Promise<typeof import('hashconnect')
     log.info('📦 Attempting HashConnect dynamic import (single attempt)');
     const hashconnectModule = await import('hashconnect');
     
-    // Success - clear any reload flag
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
-    }
+    // Success - log but DO NOT clear reload flag
+    // Keep flag permanent for session to maintain reload guard
+    log.info('✅ HashConnect module loaded successfully');
     
     return hashconnectModule;
   } catch (error) {
@@ -84,23 +68,20 @@ async function loadHashConnectWithReload(): Promise<typeof import('hashconnect')
         errorType: 'CHUNK_MISMATCH',
       });
       
-      // Check if we've recently reloaded (within expiry window)
-      const alreadyReloaded = hasRecentlyReloaded();
+      // CRITICAL: Check if we've EVER attempted a reload in this session
+      // This flag is permanent (no expiry) to prevent infinite loops
+      const alreadyAttemptedReload = hasAttemptedReload();
       
-      if (!alreadyReloaded && typeof sessionStorage !== 'undefined') {
-        // Mark that we're about to reload with timestamp (expires in 5 minutes)
-        sessionStorage.setItem(CHUNK_RELOAD_KEY, JSON.stringify({
-          timestamp: Date.now(),
-          error: errorMessage.substring(0, 100), // Store first 100 chars of error
-        }));
+      if (!alreadyAttemptedReload && typeof sessionStorage !== 'undefined') {
+        // FIRST AND ONLY reload attempt for this session
+        // Set flag BEFORE reload to prevent race conditions
+        sessionStorage.setItem(CHUNK_RELOAD_KEY, 'true');
         
-        log.info('🔄 Performing ONE-TIME page reload to fetch fresh chunks');
-        console.warn('Chunk mismatch detected - reloading page to fetch correct manifest...');
+        log.info('🔄 Performing ONE-TIME page reload (will not retry again)');
+        console.warn('Chunk mismatch detected - reloading page once. If error persists, manual hard refresh required.');
         
-        // Short delay to ensure logs are written, then hard reload with cache bust
+        // Short delay to ensure flag is written, then hard reload with cache bust
         setTimeout(() => {
-          // Cache-busting reload using replace() to prevent back-button issues
-          // __r param forces browser to bypass cache entirely
           const url = new URL(window.location.href);
           url.searchParams.set('__r', Date.now().toString());
           window.location.replace(url.toString());
@@ -109,20 +90,24 @@ async function loadHashConnectWithReload(): Promise<typeof import('hashconnect')
         // Never reaches here, but return promise for TypeScript
         return new Promise(() => {});
       } else {
-        // Already reloaded recently - don't loop
-        log.error('❌ Chunk error persists after reload - clearing stale cache and retrying', {
+        // Already attempted reload in this session - STOP HERE, no more reloads
+        // DO NOT clear the flag - it must remain set to prevent loops
+        // DO NOT throw - just log and return a rejected promise
+        log.error('❌ Chunk error persists after reload - stopping to prevent infinite loop', {
           error: errorMessage,
           errorType: 'CHUNK_MISMATCH_PERSISTENT',
+          action: 'STOPPED',
         });
         
-        // Clear the flag so user's next manual refresh will work
-        if (typeof sessionStorage !== 'undefined') {
-          sessionStorage.removeItem(CHUNK_RELOAD_KEY);
-        }
-        
-        throw new Error(
-          'Failed to load HashConnect - please hard refresh the page (Ctrl+Shift+R or Cmd+Shift+R) to clear cached chunks.'
+        console.error(
+          'HashConnect failed to load due to deployment/cache issues. ' +
+          'Please hard refresh (Ctrl+Shift+R / Cmd+Shift+R) to clear cache.'
         );
+        
+        // Return a permanently rejected promise (do not throw to avoid triggering retries)
+        return Promise.reject(new Error(
+          'HashConnect chunk mismatch - deployment in progress. Hard refresh required.'
+        ));
       }
     } else {
       // Not a chunk error - genuine initialization failure
@@ -385,8 +370,12 @@ export async function initHashConnect(): Promise<void> {
         error: error.message || 'Failed to initialize wallet',
       });
       
-      // Reset promise so retry is possible
-      initPromise = null;
+      // DO NOT reset initPromise to null
+      // Keep it rejected to prevent retry loops
+      // Once initialization fails, it stays failed (single-flight, non-reentrant)
+      // User must manually refresh to retry
+      
+      log.info('HashConnect initialization failed permanently - manual refresh required');
       
       throw new Error(`HashConnect initialization failed: ${error.message}`);
     }
