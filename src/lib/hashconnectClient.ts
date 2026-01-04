@@ -136,6 +136,13 @@ export async function initHashConnect(): Promise<void> {
         true // multiAccount
       );
 
+      // 🔍 DEBUG: Log available methods on HashConnect instance
+      console.log('[HashConnect] instance keys:', Object.keys(hashconnect));
+      console.log('[HashConnect] connect type:', typeof (hashconnect as any).connect);
+      console.log('[HashConnect] generatePairingString type:', typeof (hashconnect as any).generatePairingString);
+      console.log('[HashConnect] openPairingModal type:', typeof (hashconnect as any).openPairingModal);
+      console.log('[HashConnect] hcData exists:', !!(hashconnect as any).hcData);
+
       // Check if already paired from previous session
       const alreadyPaired = (hashconnect as any).hcData?.pairingData && (hashconnect as any).hcData.pairingData.length > 0;
       
@@ -184,9 +191,33 @@ export async function initHashConnect(): Promise<void> {
           }
         }
         
-        // Generate pairing string for new connection
-        pairingString = await (hashconnect as any).connect();
-        console.log('[HashConnect] Generated pairing string');
+        // Generate pairing string for new connection using compatibility layer
+        let pairing: string | null = null;
+
+        // v2-style: connect() method
+        if (typeof (hashconnect as any).connect === 'function') {
+          console.log('[HashConnect] Using connect() method (v2-style)');
+          pairing = await (hashconnect as any).connect();
+        }
+        // v3-style: generatePairingString() method (some builds)
+        else if (typeof (hashconnect as any).generatePairingString === 'function') {
+          console.log('[HashConnect] Using generatePairingString() method (v3-style)');
+          pairing = await (hashconnect as any).generatePairingString();
+        }
+        // Fallback: some builds store it on hcData after init
+        else if ((hashconnect as any).hcData?.pairingString) {
+          console.log('[HashConnect] Using hcData.pairingString (stored after init)');
+          pairing = (hashconnect as any).hcData.pairingString;
+        }
+
+        pairingString = pairing;
+
+        if (!pairingString) {
+          console.warn('[HashConnect] ⚠️  No pairingString generated; will attempt openPairingModal without it if supported');
+        } else {
+          console.log('[HashConnect] ✅ Generated pairing string');
+        }
+        
         updateWalletState({ isLoading: false });
       }
 
@@ -262,14 +293,38 @@ export async function openHashpackPairingModal(): Promise<void> {
     throw new Error('HashConnect initialization failed - cannot open pairing modal');
   }
 
-  // Ensure we have a pairing string
+  // Try to generate pairing string if we don't have one
   if (!pairingString) {
-    console.log('[HashConnect] No pairing string - generating new one');
-    pairingString = await (hc as any).connect();
+    console.log('[HashConnect] No pairing string - attempting to generate one');
+    
+    let pairing: string | null = null;
+    
+    // Try v2-style connect()
+    if (typeof (hc as any).connect === 'function') {
+      console.log('[HashConnect] Using connect() to generate pairing string');
+      pairing = await (hc as any).connect();
+    }
+    // Try v3-style generatePairingString()
+    else if (typeof (hc as any).generatePairingString === 'function') {
+      console.log('[HashConnect] Using generatePairingString()');
+      pairing = await (hc as any).generatePairingString();
+    }
+    // Check hcData
+    else if ((hc as any).hcData?.pairingString) {
+      console.log('[HashConnect] Found pairing string in hcData');
+      pairing = (hc as any).hcData.pairingString;
+    }
+    
+    pairingString = pairing;
   }
 
-  if (!pairingString) {
-    throw new Error('Failed to generate pairing string');
+  // Validate openPairingModal exists
+  const openModalFn = (hc as any).openPairingModal;
+  if (typeof openModalFn !== 'function') {
+    throw new Error(
+      'openPairingModal not available on HashConnect instance. Available methods: ' + 
+      Object.keys(hc).filter(k => typeof (hc as any)[k] === 'function').join(', ')
+    );
   }
 
   // Brief delay to allow HashPack extension to fully initialize
@@ -277,14 +332,37 @@ export async function openHashpackPairingModal(): Promise<void> {
 
   try {
     console.log('[HashConnect] Opening pairing modal...');
-    await (hc as any).openPairingModal(pairingString);
+    
+    // Call with or without pairingString based on what the function expects
+    if (pairingString) {
+      console.log('[HashConnect] Calling openPairingModal(pairingString)');
+      await openModalFn.call(hc, pairingString);
+    } else if (openModalFn.length === 0) {
+      // Function takes no arguments - call without pairingString
+      console.log('[HashConnect] Calling openPairingModal() with no arguments');
+      await openModalFn.call(hc);
+    } else {
+      throw new Error(
+        'No pairingString available and openPairingModal expects arguments. ' +
+        'Available methods: ' + Object.keys(hc).filter(k => typeof (hc as any)[k] === 'function').join(', ')
+      );
+    }
     console.log('[HashConnect] Pairing modal opened successfully');
   } catch (err) {
     // Retry once if URI missing (HashPack still initializing)
     if (isUriMissingError(err)) {
       console.warn('[HashConnect] URI missing - retrying after delay...');
       await new Promise(resolve => setTimeout(resolve, 500));
-      await (hc as any).openPairingModal(pairingString);
+      
+      // Retry with same logic: use pairingString if available, else call with no args
+      if (pairingString) {
+        await openModalFn.call(hc, pairingString);
+      } else if (openModalFn.length === 0) {
+        await openModalFn.call(hc);
+      } else {
+        throw new Error('Retry failed: No pairingString and openPairingModal requires arguments');
+      }
+      
       console.log('[HashConnect] Pairing modal opened successfully (retry)');
     } else {
       throw err;
