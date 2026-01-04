@@ -56,7 +56,7 @@ const nextConfig: NextConfig = {
     return config;
   },
 
-  // 🔐 Security headers + Cache Control (prevent chunk mismatch on deploy)
+  // 🔐 Cache Control for static assets (HTML no-store is handled in middleware.ts)
   async headers() {
     return [
       // ✅ CRITICAL: Cache hashed Next.js static assets forever
@@ -71,52 +71,13 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // ✅ Cache Next.js optimized images
+      // ✅ Cache Next.js optimized images forever
       {
         source: "/_next/image/:path*",
         headers: [
           {
             key: "Cache-Control",
             value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
-      // ✅ HTML pages & app routes: NEVER cache (prevents stale HTML pointing to new chunks)
-      // IMPORTANT: Uses negative lookahead to exclude _next paths from no-store
-      {
-        source: "/((?!_next/static|_next/image).*)",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "no-store",
-          },
-          {
-            key: "X-DNS-Prefetch-Control",
-            value: "on",
-          },
-          {
-            key: "Strict-Transport-Security",
-            value: "max-age=63072000; includeSubDomains; preload",
-          },
-          {
-            key: "X-Frame-Options",
-            value: "SAMEORIGIN",
-          },
-          {
-            key: "X-Content-Type-Options",
-            value: "nosniff",
-          },
-          {
-            key: "X-XSS-Protection",
-            value: "1; mode=block",
-          },
-          {
-            key: "Referrer-Policy",
-            value: "strict-origin-when-cross-origin",
-          },
-          {
-            key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
           },
         ],
       },

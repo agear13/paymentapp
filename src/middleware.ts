@@ -19,6 +19,10 @@ export async function middleware(request: NextRequest) {
     'camera=(), microphone=(), geolocation=()'
   )
   
+  // Prevent HTML/app routes from being cached (prevents stale HTML pointing to new chunks)
+  // Note: This does NOT affect /_next/static/* or /_next/image/* (excluded by matcher)
+  response.headers.set('Cache-Control', 'no-store')
+  
   return response
 }
 
