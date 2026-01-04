@@ -14,8 +14,8 @@ import { WalletConnectButton } from '@/components/public/wallet-connect-button';
 import { TokenSelector } from '@/components/public/token-selector';
 import { TokenComparison } from '@/components/public/token-comparison';
 import { PaymentInstructions } from '@/components/public/payment-instructions';
-// CRITICAL: Import from .client.ts ONLY (never from barrel export)
-import { getWalletState, initHashConnect } from '@/lib/hedera/wallet-service.client';
+// CRITICAL: Import from canonical HashConnect client ONLY
+import { getWalletState, initHashConnect } from '@/lib/hashconnectClient';
 import type { TokenType } from '@/lib/hedera/constants';
 import type { TokenPaymentAmount } from '@/lib/hedera/types';
 
@@ -240,18 +240,6 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
     }
   };
 
-  const getWalletState = () => {
-    return {
-      isConnected: false,
-      balances: {
-        HBAR: '0.00000000',
-        USDC: '0.000000',
-        USDT: '0.000000',
-        AUDD: '0.000000',
-      },
-    };
-  };
-
   // Determine if the payment option can be selected
   const canSelect = isAvailable && hashConnectInitialized && !hashConnectError;
   const isInitializing = isInitializingHashConnect || isLoadingMerchant;
@@ -447,7 +435,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
                 className="w-full h-12 text-base font-semibold"
                 size="lg"
               >
-                I've Sent the Payment
+                I&apos;ve Sent the Payment
               </Button>
             </>
           )}

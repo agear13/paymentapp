@@ -1,54 +1,80 @@
 /**
  * HashConnect Wallet Service (Client)
  * 
- * CRITICAL: Client-side only wallet service.
- * Uses hashconnect.client.ts island - never imports hashconnect directly.
+ * CRITICAL: This is a compatibility layer that re-exports from the canonical module.
  * 
- * This file:
- * - Must be imported only by client components
- * - Re-exports client wallet API from the island
- * - Adds convenience helpers for UI components
+ * ⚠️  MIGRATION NOTE: Prefer importing directly from @/lib/hashconnectClient
+ * 
+ * This file exists for backward compatibility and will be removed in a future update.
+ * All new code should import from @/lib/hashconnectClient instead.
+ * 
+ * Canonical module: src/lib/hashconnectClient.ts (ONLY file that imports 'hashconnect')
  */
 
 'use client';
 
 import { log } from '@/lib/logger';
 import { getAccountBalances } from './token-service';
-import type { WalletState } from './types';
 
-// Import from the client island (the ONLY place hashconnect is imported)
+// Re-export from canonical HashConnect client
+// NO state, NO hashconnect imports - just forwarding
 import {
   initHashConnect,
-  connectWallet,
   disconnectWallet,
-  getConnectionState,
   subscribeToWalletState,
   getWalletState,
   updateWalletBalances,
-  signAndSubmitTransaction,
-} from './hashconnect.client';
+  openHashpackPairingModal,
+  getLatestPairingData,
+  isWalletConnected as isConnected,
+} from '@/lib/hashconnectClient';
 
-// Re-export the core API
+// Re-export core API
 export {
   initHashConnect,
-  connectWallet,
   disconnectWallet,
-  getConnectionState,
   subscribeToWalletState,
   getWalletState,
   updateWalletBalances,
-  signAndSubmitTransaction,
 };
 
 /**
  * Initialize wallet service (convenience wrapper)
+ * @deprecated Use initHashConnect() directly from @/lib/hashconnectClient
  */
 export async function initializeHashConnect(): Promise<void> {
   return initHashConnect();
 }
 
 /**
+ * Connect wallet (opens pairing modal)
+ * @deprecated Use openHashpackPairingModal() directly from @/lib/hashconnectClient
+ */
+export async function connectWallet(): Promise<{
+  accountId: string;
+  network: string;
+  pairingData?: any;
+}> {
+  await openHashpackPairingModal();
+  
+  // Wait for connection to complete
+  const state = getWalletState();
+  if (!state.isConnected || !state.accountId) {
+    throw new Error('Wallet connection failed or was cancelled');
+  }
+  
+  const pairingData = getLatestPairingData();
+  
+  return {
+    accountId: state.accountId,
+    network: state.network,
+    pairingData,
+  };
+}
+
+/**
  * Connect wallet and fetch balances
+ * @deprecated Use openHashpackPairingModal() + getAccountBalances() directly
  */
 export async function connectAndFetchBalances(): Promise<{
   accountId: string;
@@ -61,7 +87,7 @@ export async function connectAndFetchBalances(): Promise<{
   };
 }> {
   // Connect wallet
-  const { accountId, network } = await connectWallet();
+  const { accountId, network, pairingData } = await connectWallet();
 
   try {
     // Fetch balances from API
@@ -88,6 +114,7 @@ export async function connectAndFetchBalances(): Promise<{
 
 /**
  * Disconnect wallet (convenience wrapper)
+ * @deprecated Use disconnectWallet() directly from @/lib/hashconnectClient
  */
 export async function disconnectAndClear(): Promise<void> {
   return disconnectWallet();
@@ -95,18 +122,40 @@ export async function disconnectAndClear(): Promise<void> {
 
 /**
  * Check if wallet is ready and connected
+ * @deprecated Use isWalletConnected() directly from @/lib/hashconnectClient
  */
 export function isWalletConnected(): boolean {
-  const state = getConnectionState();
-  return state.ready && state.connected;
+  return isConnected();
 }
 
 /**
  * Get connected account ID
  */
 export function getConnectedAccountId(): string | undefined {
-  const state = getConnectionState();
-  return state.accountId;
+  const state = getWalletState();
+  return state.accountId || undefined;
+}
+
+/**
+ * Get connection state
+ */
+export function getConnectionState(): {
+  ready: boolean;
+  connected: boolean;
+  accountId?: string;
+  network?: string;
+  isLoading?: boolean;
+  error?: string | null;
+} {
+  const state = getWalletState();
+  return {
+    ready: state.isConnected, // Simplified - if connected, it's ready
+    connected: state.isConnected,
+    accountId: state.accountId || undefined,
+    network: state.network,
+    isLoading: state.isLoading,
+    error: state.error,
+  };
 }
 
 /**
@@ -116,8 +165,8 @@ export async function waitForWalletReady(timeoutMs: number = 10000): Promise<boo
   const startTime = Date.now();
   
   while (Date.now() - startTime < timeoutMs) {
-    const state = getConnectionState();
-    if (state.ready) {
+    const state = getWalletState();
+    if (state.isConnected) {
       return true;
     }
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -148,8 +197,22 @@ export async function refreshWalletBalances(): Promise<void> {
 
 /**
  * Get current wallet state with all data
+ * @deprecated Use getWalletState() directly from @/lib/hashconnectClient
  */
-export function getFullWalletState(): WalletState {
+export function getFullWalletState() {
   return getWalletState();
 }
 
+/**
+ * Sign and submit transaction (placeholder for future implementation)
+ * @deprecated This function is not yet implemented in the canonical client
+ */
+export async function signAndSubmitTransaction(
+  transactionBytes: Uint8Array,
+  accountId: string
+): Promise<{ transactionId: string; receipt?: any }> {
+  throw new Error(
+    'signAndSubmitTransaction is not yet implemented in the canonical HashConnect client. ' +
+    'This will be added in a future update.'
+  );
+}

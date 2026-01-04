@@ -1,11 +1,19 @@
 /**
  * HashConnect Singleton Client
  * 
- * CRITICAL: This module provides a singleton instance of HashConnect
+ * ⚠️  CRITICAL: THIS IS THE ONLY FILE ALLOWED TO IMPORT 'hashconnect' ⚠️
+ * 
+ * This module provides a singleton instance of HashConnect
  * that is initialized only once per browser session.
+ * 
+ * ALL other files MUST import from this module, never from 'hashconnect' directly.
  * 
  * Must only be used in client-side code (browser).
  * Dynamically imports HashConnect at runtime to avoid SSR issues.
+ * 
+ * To verify no duplicate imports exist, run:
+ * grep -r "from 'hashconnect'" src/ --exclude=hashconnectClient.ts
+ * grep -r "import('hashconnect')" src/ --exclude=hashconnectClient.ts
  */
 
 'use client';
@@ -27,6 +35,12 @@ interface WalletState {
   network: string;
   isLoading: boolean;
   error: string | null;
+  balances: {
+    HBAR: string;
+    USDC: string;
+    USDT: string;
+    AUDD: string;
+  };
 }
 
 let walletState: WalletState = {
@@ -35,6 +49,12 @@ let walletState: WalletState = {
   network: HASHCONNECT_CONFIG.NETWORK,
   isLoading: false,
   error: null,
+  balances: {
+    HBAR: '0.00000000',
+    USDC: '0.000000',
+    USDT: '0.000000',
+    AUDD: '0.000000',
+  },
 };
 
 // State change listeners
@@ -93,30 +113,42 @@ export async function initHashConnect(): Promise<void> {
       }
 
       // Dynamic import (client-only)
-      const { HashConnect, LedgerId } = await import('hashconnect');
-
-      // Determine network from env (default to testnet)
-      const networkEnv = HASHCONNECT_CONFIG.NETWORK.toLowerCase();
-      const ledgerId = networkEnv === 'mainnet' ? LedgerId.MAINNET : LedgerId.TESTNET;
-
-      // App metadata (use window.location.origin at runtime)
-      const appMetadata = {
-        name: HASHCONNECT_CONFIG.APP_METADATA.name,
-        description: HASHCONNECT_CONFIG.APP_METADATA.description,
-        url: window.location.origin,
-        icons: [`${window.location.origin}/icon.png`],
-      };
+      const hashconnectModule = await import('hashconnect');
+      const { HashConnect } = hashconnectModule;
 
       // Create HashConnect instance
-      const hashconnect = new HashConnect(
-        ledgerId,
-        projectId,
-        appMetadata,
-        true // debug mode
-      );
+      const hashconnect = new HashConnect();
+
+      // Check if already paired from previous session
+      const alreadyPaired = (hashconnect as any).hcData?.pairingData && (hashconnect as any).hcData.pairingData.length > 0;
+      
+      if (alreadyPaired) {
+        // Rehydrate wallet state from existing pairing
+        const existing = (hashconnect as any).hcData.pairingData[0];
+        latestPairingData = existing;
+        const accountId = existing?.accountIds?.[0] ?? null;
+        
+        updateWalletState({
+          isConnected: !!accountId,
+          accountId,
+          isLoading: false,
+          error: null,
+        });
+        
+        pairingString = null; // already paired
+        console.log('[HashConnect] Rehydrated existing pairing:', accountId);
+      } else {
+        // Initialize HashConnect with app metadata
+        await (hashconnect as any).init(HASHCONNECT_CONFIG.APP_METADATA, HASHCONNECT_CONFIG.NETWORK, false);
+        
+        // Generate pairing string for new connection
+        pairingString = await (hashconnect as any).connect();
+        console.log('[HashConnect] Generated pairing string');
+        updateWalletState({ isLoading: false });
+      }
 
       // Register event listeners (ONCE)
-      hashconnect.pairingEvent.on((pairingData: any) => {
+      (hashconnect as any).pairingEvent.on((pairingData: any) => {
         console.log('[HashConnect] Pairing event:', pairingData);
         latestPairingData = pairingData;
         
@@ -131,12 +163,12 @@ export async function initHashConnect(): Promise<void> {
         }
       });
 
-      hashconnect.connectionStatusChangeEvent.on((status: any) => {
+      (hashconnect as any).connectionStatusChangeEvent.on((status: any) => {
         console.log('[HashConnect] Connection status changed:', status);
         latestConnectionStatus = status;
       });
 
-      hashconnect.disconnectionEvent.on(() => {
+      (hashconnect as any).disconnectionEvent.on(() => {
         console.log('[HashConnect] Disconnected');
         latestPairingData = null;
         pairingString = null;
@@ -144,36 +176,14 @@ export async function initHashConnect(): Promise<void> {
           isConnected: false,
           accountId: null,
           isLoading: false,
+          balances: {
+            HBAR: '0.00000000',
+            USDC: '0.000000',
+            USDT: '0.000000',
+            AUDD: '0.000000',
+          },
         });
       });
-
-      // Initialize HashConnect
-      await hashconnect.init();
-
-      // Check if already paired from previous session
-      const alreadyPaired = hashconnect.hcData?.pairingData && hashconnect.hcData.pairingData.length > 0;
-      
-      if (alreadyPaired) {
-        // Rehydrate wallet state from existing pairing
-        const existing = hashconnect.hcData.pairingData[0];
-        latestPairingData = existing;
-        const accountId = existing?.accountIds?.[0] ?? null;
-        
-        updateWalletState({
-          isConnected: !!accountId,
-          accountId,
-          isLoading: false,
-          error: null,
-        });
-        
-        pairingString = null; // already paired
-        console.log('[HashConnect] Rehydrated existing pairing:', accountId);
-      } else {
-        // Generate pairing string for new connection
-        pairingString = await hashconnect.connect();
-        console.log('[HashConnect] Generated pairing string');
-        updateWalletState({ isLoading: false });
-      }
 
       // Store singleton instance
       hc = hashconnect;
@@ -212,7 +222,7 @@ export async function openHashpackPairingModal(): Promise<void> {
   // Ensure we have a pairing string
   if (!pairingString) {
     console.log('[HashConnect] No pairing string - generating new one');
-    pairingString = await hc.connect();
+    pairingString = await (hc as any).connect();
   }
 
   if (!pairingString) {
@@ -224,14 +234,14 @@ export async function openHashpackPairingModal(): Promise<void> {
 
   try {
     console.log('[HashConnect] Opening pairing modal...');
-    await hc.openPairingModal(pairingString);
+    await (hc as any).openPairingModal(pairingString);
     console.log('[HashConnect] Pairing modal opened successfully');
   } catch (err) {
     // Retry once if URI missing (HashPack still initializing)
     if (isUriMissingError(err)) {
       console.warn('[HashConnect] URI missing - retrying after delay...');
       await new Promise(resolve => setTimeout(resolve, 500));
-      await hc.openPairingModal(pairingString);
+      await (hc as any).openPairingModal(pairingString);
       console.log('[HashConnect] Pairing modal opened successfully (retry)');
     } else {
       throw err;
@@ -250,7 +260,7 @@ export async function disconnectWallet(): Promise<void> {
 
   try {
     if (latestPairingData?.topic) {
-      await hc.disconnect(latestPairingData.topic);
+      await (hc as any).disconnect(latestPairingData.topic);
     }
     
     latestPairingData = null;
@@ -261,6 +271,12 @@ export async function disconnectWallet(): Promise<void> {
       accountId: null,
       isLoading: false,
       error: null,
+      balances: {
+        HBAR: '0.00000000',
+        USDC: '0.000000',
+        USDT: '0.000000',
+        AUDD: '0.000000',
+      },
     });
 
     console.log('[HashConnect] Wallet disconnected successfully');
@@ -268,6 +284,23 @@ export async function disconnectWallet(): Promise<void> {
     console.error('[HashConnect] Failed to disconnect wallet:', error);
     throw error;
   }
+}
+
+/**
+ * Update wallet balances
+ */
+export function updateWalletBalances(balances: {
+  HBAR?: string;
+  USDC?: string;
+  USDT?: string;
+  AUDD?: string;
+}): void {
+  updateWalletState({
+    balances: {
+      ...walletState.balances,
+      ...balances,
+    },
+  });
 }
 
 /**
