@@ -71,10 +71,20 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // ✅ HTML pages: NEVER cache (prevents stale HTML pointing to new chunks)
-      // Must come AFTER static assets rule to avoid conflict
+      // ✅ Cache Next.js optimized images
       {
-        source: "/:path*",
+        source: "/_next/image/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      // ✅ HTML pages & app routes: NEVER cache (prevents stale HTML pointing to new chunks)
+      // IMPORTANT: Uses negative lookahead to exclude _next paths from no-store
+      {
+        source: "/((?!_next/static|_next/image).*)",
         headers: [
           {
             key: "Cache-Control",
