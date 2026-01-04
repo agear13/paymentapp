@@ -33,6 +33,9 @@ const nextConfig: NextConfig = {
       // This can occur when webpack merges modules into the same scope
       config.optimization = config.optimization || {};
       config.optimization.concatenateModules = false;
+
+      // TEMP HOTFIX: disable minification to prevent identifier collisions
+      config.optimization.minimize = false;
     }
 
     // Ignore warnings from dynamic imports
