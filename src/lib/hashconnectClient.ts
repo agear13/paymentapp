@@ -116,8 +116,25 @@ export async function initHashConnect(): Promise<void> {
       const hashconnectModule = await import('hashconnect');
       const { HashConnect } = hashconnectModule;
 
-      // Create HashConnect instance
-      const hashconnect = new HashConnect();
+      // Determine ledger ID based on network (use string literal for v3)
+      const ledgerId = HASHCONNECT_CONFIG.NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
+
+      // Create mutable copy of metadata to satisfy HashConnect typing
+      const metadata = {
+        name: HASHCONNECT_CONFIG.APP_METADATA.name,
+        description: HASHCONNECT_CONFIG.APP_METADATA.description,
+        url: HASHCONNECT_CONFIG.APP_METADATA.url,
+        icons: [...HASHCONNECT_CONFIG.APP_METADATA.icons],
+      };
+
+      // Create HashConnect instance with v3 constructor
+      // Cast ledgerId as any since TypeScript expects LedgerId enum but runtime accepts string
+      const hashconnect = new HashConnect(
+        ledgerId as any,
+        projectId,
+        metadata,
+        true // multiAccount
+      );
 
       // Check if already paired from previous session
       const alreadyPaired = (hashconnect as any).hcData?.pairingData && (hashconnect as any).hcData.pairingData.length > 0;
@@ -138,8 +155,34 @@ export async function initHashConnect(): Promise<void> {
         pairingString = null; // already paired
         console.log('[HashConnect] Rehydrated existing pairing:', accountId);
       } else {
-        // Initialize HashConnect with app metadata
-        await (hashconnect as any).init(HASHCONNECT_CONFIG.APP_METADATA, HASHCONNECT_CONFIG.NETWORK, false);
+        // Initialize HashConnect (metadata already passed to constructor)
+        console.log('[HashConnect] Initializing with metadata:', metadata);
+        console.log('[HashConnect] network:', HASHCONNECT_CONFIG.NETWORK);
+        console.log('[HashConnect] ledgerId:', ledgerId);
+        console.log('[HashConnect] projectId present:', !!projectId);
+
+        const initFn = (hashconnect as any).init;
+
+        // Try both common HashConnect v3 init signatures
+        try {
+          // Signature #1: init() - no args (metadata in constructor)
+          await initFn.call(hashconnect);
+          console.log('[HashConnect] init succeeded with signature A (no args)');
+        } catch (e1) {
+          console.warn('[HashConnect] init signature A failed, trying with metadata params', e1);
+          
+          try {
+            // Signature #2: init(metadata, network, multiAccount)
+            await initFn.call(hashconnect, metadata, ledgerId, false);
+            console.log('[HashConnect] init succeeded with signature B (metadata params)');
+          } catch (e2) {
+            console.warn('[HashConnect] init signature B failed, trying with projectId first', e2);
+            
+            // Signature #3: init(projectId, metadata, network, multiAccount)
+            await initFn.call(hashconnect, projectId, metadata, ledgerId, false);
+            console.log('[HashConnect] init succeeded with signature C (projectId first)');
+          }
+        }
         
         // Generate pairing string for new connection
         pairingString = await (hashconnect as any).connect();

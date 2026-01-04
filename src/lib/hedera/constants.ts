@@ -96,9 +96,10 @@ export const HASHCONNECT_CONFIG = {
   APP_METADATA: {
     name: process.env.NEXT_PUBLIC_APP_NAME || 'Provvypay',
     description: 'Provvypay Payment Link',
-    url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-    icons: [process.env.NEXT_PUBLIC_APP_ICON || 'https://provvypay.com/icon.png'],
-    icon: process.env.NEXT_PUBLIC_APP_ICON || 'https://provvypay.com/icon.png',
+    url: process.env.NEXT_PUBLIC_APP_URL || 'https://provvypay-api.onrender.com',
+    icons: [
+      process.env.NEXT_PUBLIC_APP_ICON || 'https://provvypay.com/icon.png',
+    ],
   },
   NETWORK: CURRENT_NETWORK,
   WALLETCONNECT_PROJECT_ID: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
