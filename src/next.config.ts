@@ -59,43 +59,26 @@ const nextConfig: NextConfig = {
   // 🔐 Security headers + Cache Control (prevent chunk mismatch on deploy)
   async headers() {
     return [
-      // ✅ Next.js static assets: aggressive no-cache to prevent chunk mismatches
+      // ✅ CRITICAL: Cache hashed Next.js static assets forever
+      // These have content hashes in filenames, so safe to cache indefinitely
+      // This prevents chunk mismatch by ensuring browsers use cached chunks consistently
       {
         source: "/_next/static/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "no-store, no-cache, must-revalidate, proxy-revalidate",
+            value: "public, max-age=31536000, immutable",
           },
         ],
       },
-      // ✅ Next.js general: no caching to prevent stale manifests
-      {
-        source: "/_next/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "no-store",
-          },
-        ],
-      },
-      // ✅ API routes: no caching
-      {
-        source: "/api/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "no-store, must-revalidate",
-          },
-        ],
-      },
-      // ✅ HTML pages: no caching (prevent stale HTML pointing to old chunks)
+      // ✅ HTML pages: NEVER cache (prevents stale HTML pointing to new chunks)
+      // Must come AFTER static assets rule to avoid conflict
       {
         source: "/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "no-store, must-revalidate",
+            value: "no-store",
           },
           {
             key: "X-DNS-Prefetch-Control",
