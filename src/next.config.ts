@@ -28,7 +28,11 @@ const nextConfig: NextConfig = {
         crypto: false,
       };
 
-
+      // 🔒 Disable module concatenation (scope hoisting) to prevent
+      // "Identifier 'n' has already been declared" errors in dynamic imports
+      // This can occur when webpack merges modules into the same scope
+      config.optimization = config.optimization || {};
+      config.optimization.concatenateModules = false;
     }
 
     // Ignore warnings from dynamic imports
