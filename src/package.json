@@ -31,6 +31,12 @@
     "test:merchant": "tsx scripts/test-merchant-endpoint.ts",
     "setup:merchant": "tsx scripts/setup-merchant.ts"
   },
+  "overrides": {
+    "@walletconnect/core": "2.17.1",
+    "@walletconnect/sign-client": "2.17.1",
+    "@walletconnect/web3wallet": "1.16.1",
+    "@walletconnect/auth-client": "2.1.2"
+  },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.1.0",
