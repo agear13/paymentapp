@@ -28,21 +28,7 @@ const nextConfig: NextConfig = {
         crypto: false,
       };
 
-      // 🔒 Force hashconnect to be bundled as a single chunk to prevent
-      // "Identifier 'n' has already been declared" errors from code splitting
-      config.optimization = config.optimization || {};
-      config.optimization.splitChunks = config.optimization.splitChunks || {};
-      config.optimization.splitChunks.cacheGroups = config.optimization.splitChunks.cacheGroups || {};
-      
-      // Create a dedicated chunk for hashconnect
-      config.optimization.splitChunks.cacheGroups.hashconnect = {
-        test: /[\\/]node_modules[\\/]hashconnect[\\/]/,
-        name: 'hashconnect',
-        chunks: 'async',
-        priority: 30,
-        reuseExistingChunk: true,
-        enforce: true,
-      };
+
     }
 
     // Ignore warnings from dynamic imports
