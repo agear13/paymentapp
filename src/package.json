@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "postinstall": "prisma generate",
+    "build": "prisma generate && next build",
     "build:clean": "rimraf .next && npm run build",
     "start": "next start -p $PORT",
     "lint": "eslint",
