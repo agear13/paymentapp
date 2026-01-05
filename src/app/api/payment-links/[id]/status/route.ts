@@ -106,7 +106,7 @@ export async function POST(
       user.id
     );
 
-    log.payment.info(
+    loggers.payment.info(
       {
         paymentLinkId: id,
         from: currentLink.status,
@@ -143,35 +143,40 @@ export async function POST(
 /**
  * GET /api/payment-links/[id]/status
  * Get current status and valid transitions
- * Enhanced for polling with comprehensive status information
+ * DB-only endpoint for fast polling (no mirror node queries)
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const startTime = Date.now();
+  const isDev = process.env.NODE_ENV !== 'production';
   let id: string | undefined;
+  
   try {
     // More lenient rate limiting for polling (higher limit)
     const rateLimitResult = await applyRateLimit(request, 'polling');
-    const afterRateLimit = Date.now();
-    loggers.api.info({ duration: afterRateLimit - startTime }, '[Status GET] After rate limit');
 
     if (!rateLimitResult.success) {
       return NextResponse.json(
         { error: 'Rate limit exceeded' },
-        { status: 429 }
+        { status: 429, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
     // Next.js 15: await params
     const p = await params;
     id = p.id;
-    const afterParams = Date.now();
-    loggers.api.info({ paymentLinkId: id, duration: afterParams - afterRateLimit }, '[Status GET] After await params');
+
+    // Validate UUID format (basic check)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return NextResponse.json(
+        { error: 'Invalid payment link id' },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
 
     // Get payment link with comprehensive data for status polling
-    const beforeFindUnique = Date.now();
     const paymentLink = await prisma.payment_links.findUnique({
       where: { id },
       select: {
@@ -196,17 +201,11 @@ export async function GET(
         },
       },
     });
-    const afterFindUnique = Date.now();
-    loggers.api.info({ 
-      paymentLinkId: id, 
-      duration: afterFindUnique - beforeFindUnique,
-      found: !!paymentLink 
-    }, '[Status GET] After payment_links.findUnique');
 
     if (!paymentLink) {
       return NextResponse.json(
         { error: 'Payment link not found' },
-        { status: 404 }
+        { status: 404, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
@@ -216,7 +215,6 @@ export async function GET(
 
     // Auto-transition to EXPIRED if needed
     if (isExpired && currentStatus === 'OPEN') {
-      const beforeTransaction = Date.now();
       await prisma.$transaction([
         prisma.payment_links.update({
           where: { id },
@@ -233,11 +231,9 @@ export async function GET(
           },
         }),
       ]);
-      const afterTransaction = Date.now();
-      loggers.api.info({ 
-        paymentLinkId: id, 
-        duration: afterTransaction - beforeTransaction 
-      }, '[Status GET] After auto-expire transaction');
+      if (isDev) {
+        loggers.api.info({ paymentLinkId: id }, 'Auto-expired payment link');
+      }
       currentStatus = 'EXPIRED';
     }
 
@@ -245,7 +241,6 @@ export async function GET(
     const validTransitions = getValidNextStates(currentStatus);
 
     // Build transaction information if available
-    const beforeResponseBuild = Date.now();
     let transactionInfo = null;
     if (lastEvent?.metadata) {
       const metadata = lastEvent.metadata as any;
@@ -263,38 +258,38 @@ export async function GET(
     // Generate human-readable status message
     const statusMessage = generateStatusMessage(currentStatus, lastEvent);
 
-    const beforeReturn = Date.now();
-    const totalDuration = beforeReturn - startTime;
-    loggers.api.info({ 
-      paymentLinkId: id,
-      responseBuildDuration: beforeReturn - beforeResponseBuild,
-      totalDuration 
-    }, '[Status GET] Before return - TOTAL TIME');
-
-    return NextResponse.json({
-      data: {
-        id: paymentLink.id,
-        shortCode: paymentLink.short_code,
-        currentStatus,
-        statusMessage,
-        lastEventType: lastEvent?.event_type || null,
-        lastEventTimestamp: lastEvent?.created_at || null,
-        paymentMethod: lastEvent?.payment_method || null,
-        validTransitions,
-        transactionInfo,
-        expiresAt: paymentLink.expires_at,
-        isExpired,
-        updatedAt: paymentLink.updated_at,
+    return NextResponse.json(
+      {
+        data: {
+          id: paymentLink.id,
+          shortCode: paymentLink.short_code,
+          currentStatus,
+          statusMessage,
+          lastEventType: lastEvent?.event_type || null,
+          lastEventTimestamp: lastEvent?.created_at || null,
+          paymentMethod: lastEvent?.payment_method || null,
+          validTransitions,
+          transactionInfo,
+          expiresAt: paymentLink.expires_at,
+          isExpired,
+          updatedAt: paymentLink.updated_at,
+        },
       },
-    });
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      }
+    );
   } catch (error: any) {
+    // Always log errors
     loggers.api.error(
       { error: error.message, paymentLinkId: id },
       'Failed to get payment link status'
     );
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
+      { error: 'Internal server error' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }

@@ -221,38 +221,87 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
   const handleStartMonitoring = async () => {
     setPaymentStep('monitoring');
     
-    // Start monitoring for payment
-    try {
-      const selectedAmount = paymentAmounts.find(a => a.tokenType === selectedToken);
-      if (!selectedAmount) return;
-
-      const response = await fetch('/api/hedera/transactions/monitor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accountId: merchantAccountId,
-          tokenType: selectedToken,
-          expectedAmount: parseFloat(selectedAmount.totalAmount),
-          timeoutMs: 300000, // 5 minutes
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Payment monitoring failed');
-      }
-
-      const result = await response.json();
-      
-      if (result.data.validation.isValid) {
-        setPaymentStep('complete');
-        toast.success('Payment confirmed!');
-      } else {
-        toast.error(result.data.validation.message || 'Payment validation failed');
-      }
-    } catch (error) {
-      console.error('Payment monitoring error:', error);
-      toast.error('Failed to monitor payment');
+    // Monitor for payment using retry strategy
+    const selectedAmount = paymentAmounts.find(a => a.tokenType === selectedToken);
+    if (!selectedAmount) {
+      toast.error('Payment amount not found');
+      return;
     }
+
+    const walletState = getWalletState();
+    const maxAttempts = 20; // ~60 seconds total (20 * 3s)
+    let attempts = 0;
+    let delay = 3000; // Start with 3 seconds
+
+    const checkPayment = async (): Promise<boolean> => {
+      attempts++;
+      
+      try {
+        console.log(`[Payment Monitor] Attempt ${attempts}/${maxAttempts}`);
+        
+        const response = await fetch('/api/hedera/transactions/monitor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentLinkId,
+            merchantAccountId,
+            payerAccountId: walletState.accountId,
+            network: 'testnet', // TODO: Get from environment or config
+            tokenType: selectedToken,
+            expectedAmount: parseFloat(selectedAmount.totalAmount),
+            timeWindowMinutes: 15,
+          }),
+        });
+
+        if (!response.ok) {
+          console.error('[Payment Monitor] API error:', response.status);
+          // Exponential backoff on error
+          delay = Math.min(delay * 1.5, 10000);
+          return false;
+        }
+
+        const result = await response.json();
+        
+        if (result.found) {
+          console.log('[Payment Monitor] Transaction found!', result);
+          setPaymentStep('complete');
+          toast.success('Payment confirmed!');
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        console.error('[Payment Monitor] Check failed:', error);
+        // Exponential backoff on error
+        delay = Math.min(delay * 1.5, 10000);
+        return false;
+      }
+    };
+
+    // Poll with retries
+    while (attempts < maxAttempts) {
+      const found = await checkPayment();
+      
+      if (found) {
+        return; // Success!
+      }
+
+      // Wait before next attempt
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    // Max attempts reached
+    console.log('[Payment Monitor] Max attempts reached');
+    toast.error(
+      'Payment not detected yet. Please check your transaction and try again.',
+      {
+        duration: 6000,
+        action: {
+          label: 'Retry',
+          onClick: () => handleStartMonitoring(),
+        },
+      }
+    );
   };
 
   // Determine if the payment option can be selected
