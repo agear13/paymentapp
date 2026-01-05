@@ -98,6 +98,7 @@ export const loggers = {
   database: log.child({ domain: 'database' }),
   cache: log.child({ domain: 'cache' }),
   fx: log.child({ domain: 'fx' }),
+  hedera: log.child({ domain: 'hedera' }),
 }
 
 // -----------------------------------------------------------------------------
