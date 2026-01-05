@@ -191,32 +191,9 @@ export async function initHashConnect(): Promise<void> {
           }
         }
         
-        // Generate pairing string for new connection using compatibility layer
-        let pairing: string | null = null;
-
-        // v2-style: connect() method
-        if (typeof (hashconnect as any).connect === 'function') {
-          console.log('[HashConnect] Using connect() method (v2-style)');
-          pairing = await (hashconnect as any).connect();
-        }
-        // v3-style: generatePairingString() method (some builds)
-        else if (typeof (hashconnect as any).generatePairingString === 'function') {
-          console.log('[HashConnect] Using generatePairingString() method (v3-style)');
-          pairing = await (hashconnect as any).generatePairingString();
-        }
-        // Fallback: some builds store it on hcData after init
-        else if ((hashconnect as any).hcData?.pairingString) {
-          console.log('[HashConnect] Using hcData.pairingString (stored after init)');
-          pairing = (hashconnect as any).hcData.pairingString;
-        }
-
-        pairingString = pairing;
-
-        if (!pairingString) {
-          console.warn('[HashConnect] ⚠️  No pairingString generated; will attempt openPairingModal without it if supported');
-        } else {
-          console.log('[HashConnect] ✅ Generated pairing string');
-        }
+        // Note: HashConnect v3+ generates pairing string internally in openPairingModal()
+        // No need to call connect() or generatePairingString() here
+        console.log('[HashConnect] Init complete - pairing string will be generated when modal opens');
         
         updateWalletState({ isLoading: false });
       }
@@ -281,41 +258,16 @@ export async function initHashConnect(): Promise<void> {
 }
 
 /**
- * Open HashPack pairing modal with retry logic for URI missing errors
+ * Open HashPack pairing modal with retry logic for transient errors
  * Automatically calls initHashConnect() first
- * Waits 500ms for HashPack extension to initialize, retries once if needed
+ * @param retryCount Internal counter to prevent infinite recursion (default 0)
  */
-export async function openHashpackPairingModal(): Promise<void> {
+export async function openHashpackPairingModal(retryCount: number = 0): Promise<void> {
   // Ensure HashConnect is initialized first
   await initHashConnect();
   
   if (!hc) {
     throw new Error('HashConnect initialization failed - cannot open pairing modal');
-  }
-
-  // Try to generate pairing string if we don't have one
-  if (!pairingString) {
-    console.log('[HashConnect] No pairing string - attempting to generate one');
-    
-    let pairing: string | null = null;
-    
-    // Try v2-style connect()
-    if (typeof (hc as any).connect === 'function') {
-      console.log('[HashConnect] Using connect() to generate pairing string');
-      pairing = await (hc as any).connect();
-    }
-    // Try v3-style generatePairingString()
-    else if (typeof (hc as any).generatePairingString === 'function') {
-      console.log('[HashConnect] Using generatePairingString()');
-      pairing = await (hc as any).generatePairingString();
-    }
-    // Check hcData
-    else if ((hc as any).hcData?.pairingString) {
-      console.log('[HashConnect] Found pairing string in hcData');
-      pairing = (hc as any).hcData.pairingString;
-    }
-    
-    pairingString = pairing;
   }
 
   // Validate openPairingModal exists
@@ -328,45 +280,40 @@ export async function openHashpackPairingModal(): Promise<void> {
   }
 
   // Brief delay to allow HashPack extension to fully initialize
-  await new Promise(resolve => setTimeout(resolve, 500));
+  await new Promise(resolve => setTimeout(resolve, 300));
 
   try {
     console.log('[HashConnect] Opening pairing modal...');
     
-    // Call with or without pairingString based on what the function expects
-    if (pairingString) {
+    // Prefer calling with no arguments (v3+ generates pairing string internally)
+    // If openPairingModal.length > 0 and we have a pairingString, pass it
+    if (openModalFn.length > 0 && pairingString) {
       console.log('[HashConnect] Calling openPairingModal(pairingString)');
       await openModalFn.call(hc, pairingString);
-    } else if (openModalFn.length === 0) {
-      // Function takes no arguments - call without pairingString
+    } else {
       console.log('[HashConnect] Calling openPairingModal() with no arguments');
       await openModalFn.call(hc);
-    } else {
-      throw new Error(
-        'No pairingString available and openPairingModal expects arguments. ' +
-        'Available methods: ' + Object.keys(hc).filter(k => typeof (hc as any)[k] === 'function').join(', ')
-      );
     }
+    
     console.log('[HashConnect] Pairing modal opened successfully');
   } catch (err) {
-    // Retry once if URI missing (HashPack still initializing)
-    if (isUriMissingError(err)) {
-      console.warn('[HashConnect] URI missing - retrying after delay...');
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Retry with same logic: use pairingString if available, else call with no args
-      if (pairingString) {
-        await openModalFn.call(hc, pairingString);
-      } else if (openModalFn.length === 0) {
-        await openModalFn.call(hc);
-      } else {
-        throw new Error('Retry failed: No pairingString and openPairingModal requires arguments');
-      }
-      
-      console.log('[HashConnect] Pairing modal opened successfully (retry)');
-    } else {
-      throw err;
+    // Check for transient errors that warrant a retry
+    const msg = String((err as any)?.message ?? err).toLowerCase();
+    const isTransient = 
+      msg.includes('proposal expired') || 
+      msg.includes('uri') || 
+      msg.includes('missing') ||
+      msg.includes('not ready') ||
+      isUriMissingError(err);
+
+    if (isTransient && retryCount === 0) {
+      console.warn('[HashConnect] Transient error detected, retrying once...', err);
+      await new Promise(resolve => setTimeout(resolve, 600));
+      return openHashpackPairingModal(1); // Retry with counter = 1
     }
+    
+    // No retry or already retried once - throw the error
+    throw err;
   }
 }
 
