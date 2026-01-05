@@ -119,7 +119,7 @@ model organizations {
 }
 
 model payment_events {
-  id                       String           @id @db.Uuid
+  id                       String           @id @default(uuid()) @db.Uuid
   payment_link_id          String           @db.Uuid
   event_type               PaymentEventType
   payment_method           PaymentMethod?

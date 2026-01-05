@@ -371,7 +371,7 @@ async function updatePaymentLinkWithTransaction(
         prisma.payment_events.create({
           data: {
             payment_link_id: paymentLinkId,
-            event_type: 'PAID',
+            event_type: 'PAYMENT_CONFIRMED',
             payment_method: 'HEDERA',
             hedera_transaction_id: transaction.transactionId,
             amount_received: transaction.amount,
