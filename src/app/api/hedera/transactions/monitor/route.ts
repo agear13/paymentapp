@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
           paymentLinkId: validated.paymentLinkId,
           transactionId: result.transactionId,
           persisted: result.updated,
+          persistError: result.persistError,
           duration,
         }
       );
@@ -150,6 +151,7 @@ export async function POST(request: NextRequest) {
             status: result.updated ? 'PAID' : paymentLink.status,
           },
           duration,
+          ...(result.persistError && { persistError: result.persistError }),
         },
         {
           headers: {
