@@ -268,6 +268,7 @@ function parseAndMatchTransaction(
       amount: amount.toString(),
       timestamp: tx.consensus_timestamp,
       sender,
+      merchantAccount: merchantAccountId,
       memo: tx.memo_base64
         ? Buffer.from(tx.memo_base64, 'base64').toString('utf-8')
         : undefined,
@@ -288,21 +289,76 @@ async function updatePaymentLinkWithTransaction(
   tokenType: TokenType
 ): Promise<boolean> {
   try {
+    // Check if this transaction was already recorded (idempotency)
+    const existingEvent = await prisma.payment_events.findFirst({
+      where: {
+        payment_link_id: paymentLinkId,
+        hedera_transaction_id: transaction.transactionId,
+      },
+    });
+
+    if (existingEvent) {
+      loggers.hedera.info(
+        'Transaction already recorded - idempotent duplicate',
+        { 
+          paymentLinkId, 
+          transactionId: transaction.transactionId,
+          eventId: existingEvent.id 
+        }
+      );
+      return true; // Already recorded, return success
+    }
+
+    // Get payment link details for ledger entries
+    const paymentLink = await prisma.payment_links.findUnique({
+      where: { id: paymentLinkId },
+      select: {
+        id: true,
+        organization_id: true,
+        amount: true,
+        currency: true,
+        status: true,
+      },
+    });
+
+    if (!paymentLink) {
+      throw new Error('Payment link not found');
+    }
+
+    // If already PAID, log warning but don't fail
+    if (paymentLink.status === 'PAID') {
+      loggers.hedera.warn(
+        'Payment link already marked as PAID',
+        { paymentLinkId, existingStatus: paymentLink.status }
+      );
+      return true;
+    }
+
+    // Get or create ledger accounts for this organization
+    const ledgerAccounts = await ensureLedgerAccounts(paymentLink.organization_id, tokenType);
+
+    const now = new Date();
+    const idempotencyKey = `hedera-${paymentLinkId}-${transaction.transactionId}`;
+
     await prisma.$transaction([
-      // Update payment link status
+      // 1. Update payment link status
       prisma.payment_links.update({
         where: { id: paymentLinkId },
         data: {
           status: 'PAID',
-          updated_at: new Date(),
+          updated_at: now,
         },
       }),
-      // Create PAID event
+      
+      // 2. Create PAID event with full details
       prisma.payment_events.create({
         data: {
           payment_link_id: paymentLinkId,
           event_type: 'PAID',
           payment_method: 'HEDERA',
+          hedera_transaction_id: transaction.transactionId,
+          amount_received: transaction.amount,
+          currency_received: tokenType, // Token type as currency
           metadata: {
             transactionId: transaction.transactionId,
             amount: transaction.amount,
@@ -310,18 +366,127 @@ async function updatePaymentLinkWithTransaction(
             sender: transaction.sender,
             timestamp: transaction.timestamp,
             memo: transaction.memo,
+            merchantAccount: transaction.merchantAccount,
           },
         },
       }),
+      
+      // 3. Create ledger entry: DEBIT Crypto Clearing Account
+      prisma.ledger_entries.create({
+        data: {
+          payment_link_id: paymentLinkId,
+          ledger_account_id: ledgerAccounts.cryptoClearing,
+          entry_type: 'DEBIT',
+          amount: paymentLink.amount,
+          currency: paymentLink.currency,
+          description: `${tokenType} payment received - ${transaction.transactionId}`,
+          idempotency_key: `${idempotencyKey}-debit`,
+          created_at: now,
+        },
+      }),
+      
+      // 4. Create ledger entry: CREDIT Accounts Receivable
+      prisma.ledger_entries.create({
+        data: {
+          payment_link_id: paymentLinkId,
+          ledger_account_id: ledgerAccounts.accountsReceivable,
+          entry_type: 'CREDIT',
+          amount: paymentLink.amount,
+          currency: paymentLink.currency,
+          description: `${tokenType} payment received - ${transaction.transactionId}`,
+          idempotency_key: `${idempotencyKey}-credit`,
+          created_at: now,
+        },
+      }),
     ]);
+
+    loggers.hedera.info(
+      'Payment persisted successfully',
+      {
+        paymentLinkId,
+        transactionId: transaction.transactionId,
+        amount: transaction.amount,
+        tokenType,
+        sender: transaction.sender,
+        ledgerEntries: {
+          debit: ledgerAccounts.cryptoClearing,
+          credit: ledgerAccounts.accountsReceivable,
+        },
+      }
+    );
 
     return true;
   } catch (error) {
     loggers.hedera.error(
       'Failed to update payment link with transaction',
-      { error, paymentLinkId, transactionId: transaction.transactionId }
+      error instanceof Error ? error : new Error(String(error)),
+      { paymentLinkId, transactionId: transaction.transactionId }
     );
     return false;
   }
+}
+
+/**
+ * Ensure ledger accounts exist for the organization
+ * Returns account IDs for crypto clearing and accounts receivable
+ */
+async function ensureLedgerAccounts(
+  organizationId: string,
+  tokenType: TokenType
+): Promise<{ cryptoClearing: string; accountsReceivable: string }> {
+  // Get or create Crypto Clearing account for this token
+  const cryptoCode = `1051-${tokenType}`;
+  let cryptoAccount = await prisma.ledger_accounts.findFirst({
+    where: {
+      organization_id: organizationId,
+      code: cryptoCode,
+    },
+  });
+
+  if (!cryptoAccount) {
+    cryptoAccount = await prisma.ledger_accounts.create({
+      data: {
+        organization_id: organizationId,
+        code: cryptoCode,
+        name: `Crypto Clearing - ${tokenType}`,
+        account_type: 'ASSET',
+      },
+    });
+    loggers.hedera.info('Created crypto clearing account', {
+      organizationId,
+      accountId: cryptoAccount.id,
+      code: cryptoCode,
+    });
+  }
+
+  // Get or create Accounts Receivable account
+  const arCode = '1200';
+  let arAccount = await prisma.ledger_accounts.findFirst({
+    where: {
+      organization_id: organizationId,
+      code: arCode,
+    },
+  });
+
+  if (!arAccount) {
+    arAccount = await prisma.ledger_accounts.create({
+      data: {
+        organization_id: organizationId,
+        code: arCode,
+        name: 'Accounts Receivable',
+        account_type: 'ASSET',
+      },
+    });
+    loggers.hedera.info('Created accounts receivable account', {
+      organizationId,
+      accountId: arAccount.id,
+      code: arCode,
+    });
+  }
+
+  return {
+    cryptoClearing: cryptoAccount.id,
+    accountsReceivable: arAccount.id,
+  };
 }
 

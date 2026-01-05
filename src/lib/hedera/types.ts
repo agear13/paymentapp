@@ -52,6 +52,7 @@ export interface TransactionResult {
   amount: string;
   timestamp: string;
   sender: string;
+  merchantAccount?: string;
   memo?: string;
   isValid: boolean;
   validationError?: string;

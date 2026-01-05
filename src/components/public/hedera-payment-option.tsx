@@ -254,7 +254,18 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
         });
 
         if (!response.ok) {
-          console.error('[Payment Monitor] API error:', response.status);
+          console.error('[Payment Monitor] API error:', response.status, response.statusText);
+          const errorData = await response.json().catch(() => null);
+          console.error('[Payment Monitor] Error details:', errorData);
+          
+          // Show error to user for 4xx/5xx errors
+          if (response.status >= 400) {
+            const errorMessage = errorData?.message || `API error: ${response.status}`;
+            toast.error(errorMessage, { duration: 6000 });
+            setPaymentStep('confirm_payment'); // Reset to allow retry
+            return true; // Stop polling on explicit errors
+          }
+          
           // Exponential backoff on error
           delay = Math.min(delay * 1.5, 10000);
           return false;
@@ -264,14 +275,42 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
         
         if (result.found) {
           console.log('[Payment Monitor] Transaction found!', result);
-          setPaymentStep('complete');
-          toast.success('Payment confirmed!');
-          return true;
+          
+          // Transition through processing state
+          setPaymentStep('monitoring'); // Ensure we're in monitoring
+          
+          // Check if payment was persisted
+          if (result.persisted || result.alreadyPaid) {
+            console.log('[Payment Monitor] Payment persisted successfully', {
+              transactionId: result.transactionId,
+              paymentLink: result.paymentLink,
+            });
+            
+            // Show processing state briefly
+            setTimeout(() => {
+              setPaymentStep('complete');
+              toast.success('Payment confirmed!');
+              
+              // Optionally navigate to success page after a short delay
+              setTimeout(() => {
+                window.location.href = `/pay/${shortCode}/success`;
+              }, 2000);
+            }, 500);
+          } else {
+            // Transaction found but not persisted (error during persistence)
+            console.warn('[Payment Monitor] Transaction found but not persisted');
+            toast.warning('Payment detected but not yet confirmed. Please wait...');
+            // Continue polling
+            return false;
+          }
+          
+          return true; // Stop polling
         }
 
         return false;
       } catch (error) {
         console.error('[Payment Monitor] Check failed:', error);
+        toast.error('Failed to check payment status. Retrying...');
         // Exponential backoff on error
         delay = Math.min(delay * 1.5, 10000);
         return false;

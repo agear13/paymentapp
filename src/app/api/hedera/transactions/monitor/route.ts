@@ -93,11 +93,23 @@ export async function POST(request: NextRequest) {
         { paymentLinkId: validated.paymentLinkId, duration }
       );
       
-      return NextResponse.json({
-        found: true,
-        alreadyPaid: true,
-        duration,
-      });
+      return NextResponse.json(
+        {
+          found: true,
+          alreadyPaid: true,
+          persisted: true,
+          paymentLink: {
+            id: paymentLink.id,
+            status: paymentLink.status,
+          },
+          duration,
+        },
+        {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+          },
+        }
+      );
     }
 
     // Check for transaction (fast, non-blocking, max 8 seconds)
@@ -116,23 +128,35 @@ export async function POST(request: NextRequest) {
     
     if (result.found) {
       loggers.hedera.info(
-        'Transaction found',
+        'Transaction found and persisted',
         {
           paymentLinkId: validated.paymentLinkId,
           transactionId: result.transactionId,
+          persisted: result.updated,
           duration,
         }
       );
 
-      return NextResponse.json({
-        found: true,
-        transactionId: result.transactionId,
-        amount: result.amount,
-        sender: result.sender,
-        timestamp: result.timestamp,
-        updated: result.updated,
-        duration,
-      });
+      return NextResponse.json(
+        {
+          found: true,
+          persisted: result.updated,
+          transactionId: result.transactionId,
+          amount: result.amount,
+          sender: result.sender,
+          timestamp: result.timestamp,
+          paymentLink: {
+            id: validated.paymentLinkId,
+            status: result.updated ? 'PAID' : paymentLink.status,
+          },
+          duration,
+        },
+        {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+          },
+        }
+      );
     }
 
     loggers.hedera.info(
@@ -140,10 +164,17 @@ export async function POST(request: NextRequest) {
       { paymentLinkId: validated.paymentLinkId, duration }
     );
 
-    return NextResponse.json({
-      found: false,
-      duration,
-    });
+    return NextResponse.json(
+      {
+        found: false,
+        duration,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      }
+    );
   } catch (error: unknown) {
     const duration = Date.now() - startTime;
     
