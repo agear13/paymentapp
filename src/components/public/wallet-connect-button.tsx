@@ -69,9 +69,9 @@ export function WalletConnectButton() {
     setShowChunkMismatchError(false);
 
     try {
+      console.log('[WalletConnect] Opening HashPack pairing modal...');
       await openHashpackPairingModal();
-      // Success - modal opened, user will complete pairing
-      console.log('[WalletConnect] Pairing modal opened successfully');
+      console.log('[WalletConnect] Pairing modal call finished (waiting for pairingEvent)...');
     } catch (error) {
       console.error('[WalletConnect] Connection failed:', error);
 

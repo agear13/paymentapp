@@ -15,7 +15,11 @@ import { TokenSelector } from '@/components/public/token-selector';
 import { TokenComparison } from '@/components/public/token-comparison';
 import { PaymentInstructions } from '@/components/public/payment-instructions';
 // CRITICAL: Import from canonical HashConnect client ONLY
-import { getWalletState, initHashConnect } from '@/lib/hashconnectClient';
+import { 
+  getWalletState, 
+  initHashConnect,
+  subscribeToWalletState,
+} from '@/lib/hashconnectClient';
 import type { TokenType } from '@/lib/hedera/constants';
 import type { TokenPaymentAmount } from '@/lib/hedera/types';
 
@@ -58,6 +62,23 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
   const [isInitializingHashConnect, setIsInitializingHashConnect] = useState(false);
   const [hashConnectInitialized, setHashConnectInitialized] = useState(false);
   const [hashConnectError, setHashConnectError] = useState<string | null>(null);
+
+  // Wallet state subscription
+  const [wallet, setWallet] = useState(getWalletState());
+  const [canPay, setCanPay] = useState(false);
+
+  // Subscribe to wallet state changes
+  useEffect(() => {
+    return subscribeToWalletState((s) => {
+      console.log('[HederaPaymentOption] wallet state update:', s);
+      setWallet(s);
+      const ok = !!s.isConnected && !!s.accountId && !s.isLoading && !s.error;
+      setCanPay(ok);
+      if (ok && paymentStep === 'select_method') {
+        setPaymentStep('select_token');
+      }
+    });
+  }, [paymentStep]);
 
   // Pre-initialize HashConnect when component mounts (if available)
   useEffect(() => {
@@ -187,12 +208,6 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
     } finally {
       setIsLoadingAmounts(false);
     }
-  };
-
-  const handleWalletConnected = () => {
-    setPaymentStep('select_token');
-    // Refresh payment amounts with wallet balances
-    fetchPaymentAmounts();
   };
 
   const handleTokenSelect = (token: TokenType) => {
@@ -385,7 +400,41 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
 
               {/* Step 1: Connect Wallet */}
               {!isLoadingAmounts && paymentStep === 'select_method' && (
-                <WalletConnectButton />
+                <>
+                  <WalletConnectButton />
+                  
+                  {/* Wallet Status */}
+                  <div className="text-sm text-slate-600 mt-3">
+                    {wallet.isLoading && 'Connecting wallet...'}
+                    {wallet.error && <span className="text-red-600">Wallet error: {wallet.error}</span>}
+                    {!wallet.isConnected && !wallet.isLoading && !wallet.error && 'Connect HashPack to continue.'}
+                    {wallet.isConnected && wallet.accountId && (
+                      <span className="text-green-600 font-medium">Connected: {wallet.accountId}</span>
+                    )}
+                  </div>
+
+                  {/* Pay Now Button - visible after connection */}
+                  {wallet.isConnected && (
+                    <div className="mt-4 rounded-lg border border-purple-200 bg-purple-50 p-4">
+                      <div className="font-medium text-purple-900 mb-2">Wallet Connected</div>
+                      <div className="text-sm text-purple-700 mb-3">
+                        Ready to proceed with payment.
+                      </div>
+                      <Button
+                        type="button"
+                        disabled={!canPay}
+                        onClick={() => {
+                          console.log('[HederaPaymentOption] Pay now clicked. Proceeding to token selection...', wallet);
+                          setPaymentStep('select_token');
+                          fetchPaymentAmounts();
+                        }}
+                        className="w-full"
+                      >
+                        Pay now
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
 
           {/* Step 2: Token Comparison & Selection */}

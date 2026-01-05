@@ -73,6 +73,7 @@ function notifyListeners() {
  */
 function updateWalletState(updates: Partial<WalletState>) {
   walletState = { ...walletState, ...updates };
+  console.log('[HashConnect] walletState updated:', walletState);
   notifyListeners();
 }
 
@@ -200,7 +201,10 @@ export async function initHashConnect(): Promise<void> {
 
       // Register event listeners (ONCE)
       (hashconnect as any).pairingEvent.on((pairingData: any) => {
-        console.log('[HashConnect] Pairing event:', pairingData);
+        console.log('[HashConnect] pairingEvent raw:', pairingData);
+        console.log('[HashConnect] pairingEvent accountIds:', pairingData?.accountIds);
+        console.log('[HashConnect] pairingEvent topic:', pairingData?.topic);
+        
         latestPairingData = pairingData;
         
         const accountId = pairingData?.accountIds?.[0];
