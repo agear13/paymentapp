@@ -102,6 +102,13 @@ export function OnboardingForm() {
     }
   }
 
+  function handleSkip() {
+    // Skip onboarding and go straight to dashboard
+    // The dashboard will handle the case where no organization exists
+    toast.info('You can set up your organization later from Settings');
+    router.push('/dashboard');
+  }
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -168,7 +175,7 @@ export function OnboardingForm() {
         />
 
         <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" disabled={isLoading}>
+          <Button type="button" variant="outline" disabled={isLoading} onClick={handleSkip}>
             Skip for now
           </Button>
           <Button type="submit" disabled={isLoading}>

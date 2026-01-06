@@ -15,29 +15,38 @@ function first(param?: string | string[]) {
 export default async function ReportsPage({ searchParams }: PageProps) {
   const user = await getCurrentUser()
   if (!user) {
-    // match your app’s login route (you can change this to /auth/login if that’s what you use)
     redirect('/auth/login')
   }
 
-  const organizationId =
+  // Try to get organizationId from query params first
+  let organizationId =
     first(searchParams?.organizationId) ||
     first(searchParams?.orgId) ||
     undefined
 
+  // If no organizationId in query params, get the user's first organization
   if (!organizationId) {
-    // If you have an org picker/onboarding flow, send them there
-    redirect('/onboarding')
+    const organization = await prisma.organizations.findFirst({
+      select: { id: true },
+    })
+
+    if (!organization) {
+      // Only redirect to onboarding if truly no organization exists
+      redirect('/onboarding')
+    }
+
+    organizationId = organization.id
+  } else {
+    // Validate the provided org exists
+    const organization = await prisma.organizations.findUnique({
+      where: { id: organizationId },
+      select: { id: true },
+    })
+
+    if (!organization) {
+      redirect('/onboarding')
+    }
   }
 
-  // Validate org exists (optional but good)
-  const organization = await prisma.organizations.findUnique({
-    where: { id: organizationId },
-    select: { id: true },
-  })
-
-  if (!organization) {
-    redirect('/onboarding')
-  }
-
-  return <ReportsPageClient organizationId={organization.id} />
+  return <ReportsPageClient organizationId={organizationId!} />
 }

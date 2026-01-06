@@ -53,7 +53,9 @@ const merchantSettingsSchema = z.object({
 type MerchantSettingsFormValues = z.infer<typeof merchantSettingsSchema>;
 
 export function MerchantSettingsForm() {
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [settingsId, setSettingsId] = React.useState<string | null>(null);
+  const [organizationId, setOrganizationId] = React.useState<string | null>(null);
 
   const form = useForm<MerchantSettingsFormValues>({
     resolver: zodResolver(merchantSettingsSchema),
@@ -65,18 +67,113 @@ export function MerchantSettingsForm() {
     },
   });
 
+  // Fetch organization and existing settings on mount
+  React.useEffect(() => {
+    async function fetchData() {
+      try {
+        // Get organization
+        const orgResponse = await fetch('/api/organizations');
+        if (orgResponse.ok) {
+          const orgs = await orgResponse.json();
+          if (orgs && orgs.length > 0) {
+            const org = orgs[0];
+            setOrganizationId(org.id);
+
+            // Get existing merchant settings
+            const settingsResponse = await fetch(`/api/merchant-settings?organizationId=${org.id}`);
+            if (settingsResponse.ok) {
+              const settingsData = await settingsResponse.json();
+              if (settingsData && settingsData.length > 0) {
+                const settings = settingsData[0];
+                setSettingsId(settings.id);
+                form.reset({
+                  displayName: settings.display_name || '',
+                  defaultCurrency: settings.default_currency || 'USD',
+                  stripeAccountId: settings.stripe_account_id || '',
+                  hederaAccountId: settings.hedera_account_id || '',
+                });
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch settings:', error);
+        toast.error('Failed to load settings');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchData();
+  }, [form]);
+
   async function onSubmit(data: MerchantSettingsFormValues) {
+    if (!organizationId) {
+      toast.error('No organization found. Please complete onboarding first.');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // TODO: Implement API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      toast.success('Merchant settings updated successfully');
+      if (settingsId) {
+        // Update existing settings
+        const response = await fetch(`/api/merchant-settings/${settingsId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            displayName: data.displayName,
+            defaultCurrency: data.defaultCurrency,
+            stripeAccountId: data.stripeAccountId || undefined,
+            hederaAccountId: data.hederaAccountId || undefined,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update settings');
+        }
+
+        toast.success('Merchant settings updated successfully');
+      } else {
+        // Create new settings
+        const response = await fetch('/api/merchant-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            organizationId,
+            displayName: data.displayName,
+            defaultCurrency: data.defaultCurrency,
+            stripeAccountId: data.stripeAccountId || undefined,
+            hederaAccountId: data.hederaAccountId || undefined,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create settings');
+        }
+
+        const result = await response.json();
+        setSettingsId(result.data.id);
+        toast.success('Merchant settings created successfully');
+      }
     } catch (error) {
-      toast.error('Failed to update merchant settings');
+      toast.error('Failed to save merchant settings');
       console.error(error);
     } finally {
       setIsLoading(false);
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-10 bg-gray-200 rounded"></div>
+          <div className="h-10 bg-gray-200 rounded"></div>
+          <div className="h-10 bg-gray-200 rounded"></div>
+          <div className="h-10 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -162,9 +259,9 @@ export function MerchantSettingsForm() {
         />
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={isLoading}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Changes
+          <Button type="submit" disabled={form.formState.isSubmitting || isLoading}>
+            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {settingsId ? 'Update Settings' : 'Create Settings'}
           </Button>
         </div>
       </form>

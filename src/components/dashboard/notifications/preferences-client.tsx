@@ -21,19 +21,52 @@ interface NotificationPreferences {
   xero_sync_failed_inapp: boolean;
 }
 
-export function NotificationPreferencesClient() {
+interface NotificationPreferencesClientProps {
+  organizationId?: string;
+}
+
+export function NotificationPreferencesClient({ organizationId }: NotificationPreferencesClientProps = {}) {
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [orgId, setOrgId] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Fetch organization ID if not provided
   useEffect(() => {
-    fetchPreferences();
-  }, []);
+    async function fetchOrgId() {
+      if (organizationId) {
+        setOrgId(organizationId);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/organizations');
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0) {
+            setOrgId(data[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch organization:', error);
+      }
+    }
+
+    fetchOrgId();
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (orgId) {
+      fetchPreferences();
+    }
+  }, [orgId]);
 
   const fetchPreferences = async () => {
+    if (!orgId) return;
+
     try {
-      const response = await fetch('/api/notifications/preferences');
+      const response = await fetch(`/api/notifications/preferences?organizationId=${orgId}`);
       if (response.ok) {
         const data = await response.json();
         setPreferences(data.preferences);
@@ -51,11 +84,11 @@ export function NotificationPreferencesClient() {
   };
 
   const savePreferences = async () => {
-    if (!preferences) return;
+    if (!preferences || !orgId) return;
 
     setSaving(true);
     try {
-      const response = await fetch('/api/notifications/preferences', {
+      const response = await fetch(`/api/notifications/preferences?organizationId=${orgId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
