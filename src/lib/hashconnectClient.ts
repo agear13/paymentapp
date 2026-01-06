@@ -205,26 +205,30 @@ export async function initHashConnect(): Promise<void> {
         console.log('[HashConnect] pairingEvent raw:', pairingData);
         console.log('[HashConnect] pairingEvent accountIds:', pairingData?.accountIds);
         console.log('[HashConnect] pairingEvent topic:', pairingData?.topic);
-        console.log('[HashConnect] pairingEvent has topic?', !!pairingData?.topic);
         
-        // Store pairing data
-        latestPairingData = pairingData;
-        console.log('[HashConnect] latestPairingData updated:', latestPairingData);
+        // Extract topic from various possible locations
+        let topic = pairingData?.topic;
         
-        // Debug: Check all possible locations for topic
-        console.log('[HashConnect] === SEARCHING FOR TOPIC ===');
-        if ((hashconnect as any).hcData) {
-          console.log('[HashConnect] hcData keys:', Object.keys((hashconnect as any).hcData));
-          console.log('[HashConnect] hcData.pairingData:', (hashconnect as any).hcData.pairingData);
+        // If topic not in event, try to get it from core.pairing
+        if (!topic && (hashconnect as any).core?.pairing) {
+          try {
+            const pairings = (hashconnect as any).core.pairing.pairings?.getAll?.();
+            console.log('[HashConnect] Checking core.pairing.pairings.getAll():', pairings);
+            if (pairings && pairings.length > 0) {
+              topic = pairings[pairings.length - 1].topic; // Get most recent pairing
+              console.log('[HashConnect] ✅ Found topic in core.pairing.pairings:', topic);
+            }
+          } catch (e) {
+            console.warn('[HashConnect] Failed to get pairings from core:', e);
+          }
         }
-        if ((hashconnect as any).signingClient) {
-          console.log('[HashConnect] signingClient exists');
-          const sessions = (hashconnect as any).signingClient.session?.getAll?.();
-          console.log('[HashConnect] signingClient sessions:', sessions);
-        }
-        console.log('[HashConnect] HashConnect instance keys (filtered):', 
-          Object.keys(hashconnect).filter(k => !k.startsWith('_') && typeof (hashconnect as any)[k] !== 'function')
-        );
+        
+        // Store pairing data with topic
+        latestPairingData = {
+          ...pairingData,
+          topic: topic || null,
+        };
+        console.log('[HashConnect] latestPairingData updated with topic:', latestPairingData);
         
         const accountId = pairingData?.accountIds?.[0];
         if (accountId) {
@@ -242,6 +246,29 @@ export async function initHashConnect(): Promise<void> {
       (hashconnect as any).connectionStatusChangeEvent.on((status: any) => {
         console.log('[HashConnect] Connection status changed:', status);
         latestConnectionStatus = status;
+        
+        // When status becomes "Paired", try to capture the topic
+        if (status === 'Paired' && latestPairingData && !latestPairingData.topic) {
+          console.log('[HashConnect] Status is Paired, attempting to capture topic...');
+          
+          // Try to get topic from core.pairing
+          if ((hashconnect as any).core?.pairing?.pairings) {
+            try {
+              const pairings = (hashconnect as any).core.pairing.pairings.getAll();
+              console.log('[HashConnect] Pairings from core:', pairings);
+              if (pairings && pairings.length > 0) {
+                const topic = pairings[pairings.length - 1].topic;
+                console.log('[HashConnect] ✅ Captured topic on Paired status:', topic);
+                latestPairingData.topic = topic;
+                
+                // Update wallet state to trigger re-render
+                updateWalletState({ ...walletState });
+              }
+            } catch (e) {
+              console.warn('[HashConnect] Failed to capture topic on Paired status:', e);
+            }
+          }
+        }
       });
 
       (hashconnect as any).disconnectionEvent.on(() => {
@@ -442,106 +469,60 @@ export function getLatestPairingData(): any {
     console.log('[HashConnect] Pairing data exists but no topic, searching...');
     
     // Try to get topic from HashConnect instance
-    // In HashConnect v3, the topic might be in different places:
+    // In HashConnect v3, the topic is in the WalletConnect core
     
-    // Option 1: Check hcData.pairingData
+    // Option 1: Check core.pairing.pairings (WalletConnect v2+ standard location)
+    if (hc && (hc as any).core?.pairing?.pairings) {
+      try {
+        const pairings = (hc as any).core.pairing.pairings.getAll();
+        console.log('[HashConnect] core.pairing.pairings.getAll():', pairings);
+        if (pairings && pairings.length > 0) {
+          // Get the most recent pairing
+          const pairing = pairings[pairings.length - 1];
+          if (pairing.topic) {
+            console.log('[HashConnect] ✅ Found topic in core.pairing.pairings:', pairing.topic);
+            latestPairingData.topic = pairing.topic;
+            return latestPairingData;
+          }
+        }
+      } catch (e) {
+        console.warn('[HashConnect] Failed to get pairings from core.pairing:', e);
+      }
+    }
+    
+    // Option 2: Check hcData.pairingData
     if (hc && (hc as any).hcData?.pairingData) {
       const pairings = (hc as any).hcData.pairingData;
       if (Array.isArray(pairings) && pairings.length > 0) {
-        const pairing = pairings[0];
+        const pairing = pairings[pairings.length - 1];
         if (pairing.topic) {
-          console.log('[HashConnect] Found topic in hcData.pairingData[0]:', pairing.topic);
+          console.log('[HashConnect] ✅ Found topic in hcData.pairingData:', pairing.topic);
           latestPairingData.topic = pairing.topic;
           return latestPairingData;
         }
       }
     }
     
-    // Option 2: Check signingClient sessions
-    if (hc && (hc as any).signingClient) {
-      const sessions = (hc as any).signingClient.session?.getAll?.();
-      console.log('[HashConnect] Checking signingClient sessions:', sessions);
-      if (sessions && sessions.length > 0) {
-        const session = sessions[0];
-        if (session.topic) {
-          console.log('[HashConnect] Found topic in session:', session.topic);
-          latestPairingData.topic = session.topic;
-          return latestPairingData;
-        }
-      }
-    }
-    
-    // Option 3: Check if topic is a direct property of hc
-    if (hc && (hc as any).topic) {
-      console.log('[HashConnect] Found topic on hc instance:', (hc as any).topic);
-      latestPairingData.topic = (hc as any).topic;
-      return latestPairingData;
-    }
-    
-    console.warn('[HashConnect] Could not find topic in any known location');
-    const hcKeys = hc ? Object.keys(hc).filter(k => !k.startsWith('_')) : [];
-    console.warn('[HashConnect] HashConnect instance structure:', {
-      hcDataKeys: hc ? Object.keys((hc as any).hcData || {}) : [],
-      hcKeys,
-      signingClient: hc ? !!(hc as any).signingClient : false,
-    });
-    
-    // Log the actual values of those keys to find where sessions are
-    console.warn('[HashConnect] Detailed hc properties:');
-    hcKeys.forEach(key => {
-      const value = (hc as any)[key];
-      const valueType = typeof value;
-      const isArray = Array.isArray(value);
-      const hasGetAll = value && typeof value.getAll === 'function';
-      console.warn(`  ${key}: type=${valueType}, isArray=${isArray}, hasGetAll=${hasGetAll}`);
-      
-      // If it looks like it might have sessions, log it
-      if (key.toLowerCase().includes('session') || key.toLowerCase().includes('pairing') || key.toLowerCase().includes('connect')) {
-        console.warn(`    ${key} value:`, value);
-      }
-      if (hasGetAll) {
-        try {
-          const items = value.getAll();
-          console.warn(`    ${key}.getAll():`, items);
-        } catch (e) {
-          console.warn(`    ${key}.getAll() failed:`, e);
-        }
-      }
-      
-      // Check inside 'core' object - likely where WalletConnect client is
-      if (key === 'core' && valueType === 'object') {
-        console.warn('[HashConnect] Inspecting core object:');
-        const coreKeys = Object.keys(value);
-        console.warn('  core keys:', coreKeys);
-        coreKeys.forEach(coreKey => {
-          const coreValue = value[coreKey];
-          const coreType = typeof coreValue;
-          console.warn(`    core.${coreKey}: type=${coreType}`);
-          
-          // Check for pairing or session stores
-          if (coreKey.toLowerCase().includes('pairing') || coreKey.toLowerCase().includes('session')) {
-            console.warn(`      core.${coreKey} value:`, coreValue);
-            
-            // Try to get sessions
-            if (coreValue && typeof coreValue.getAll === 'function') {
-              try {
-                const items = coreValue.getAll();
-                console.warn(`      core.${coreKey}.getAll():`, items);
-                if (items && items.length > 0) {
-                  console.warn(`      ✅ FOUND ${items.length} items in core.${coreKey}`);
-                  // Check first item for topic
-                  if (items[0].topic) {
-                    console.warn(`      ✅✅ FOUND TOPIC in core.${coreKey}[0].topic:`, items[0].topic);
-                  }
-                }
-              } catch (e) {
-                console.warn(`      core.${coreKey}.getAll() failed:`, e);
-              }
-            }
+    // Option 3: Check core.session (for active sessions)
+    if (hc && (hc as any).core?.session) {
+      try {
+        const sessions = (hc as any).core.session.getAll?.();
+        console.log('[HashConnect] core.session.getAll():', sessions);
+        if (sessions && sessions.length > 0) {
+          const session = sessions[sessions.length - 1];
+          if (session.topic) {
+            console.log('[HashConnect] ✅ Found topic in core.session:', session.topic);
+            latestPairingData.topic = session.topic;
+            return latestPairingData;
           }
-        });
+        }
+      } catch (e) {
+        console.warn('[HashConnect] Failed to get sessions from core.session:', e);
       }
-    });
+    }
+    
+    console.warn('[HashConnect] ⚠️ Could not find topic in any known location');
+    console.warn('[HashConnect] This may prevent transaction signing. Please reconnect your wallet.');
   }
   
   if (latestPairingData && latestPairingData.topic) {
