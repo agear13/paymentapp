@@ -479,10 +479,34 @@ export function getLatestPairingData(): any {
     }
     
     console.warn('[HashConnect] Could not find topic in any known location');
+    const hcKeys = hc ? Object.keys(hc).filter(k => !k.startsWith('_')) : [];
     console.warn('[HashConnect] HashConnect instance structure:', {
       hcDataKeys: hc ? Object.keys((hc as any).hcData || {}) : [],
-      hcKeys: hc ? Object.keys(hc).filter(k => !k.startsWith('_')) : [],
+      hcKeys,
       signingClient: hc ? !!(hc as any).signingClient : false,
+    });
+    
+    // Log the actual values of those keys to find where sessions are
+    console.warn('[HashConnect] Detailed hc properties:');
+    hcKeys.forEach(key => {
+      const value = (hc as any)[key];
+      const valueType = typeof value;
+      const isArray = Array.isArray(value);
+      const hasGetAll = value && typeof value.getAll === 'function';
+      console.warn(`  ${key}: type=${valueType}, isArray=${isArray}, hasGetAll=${hasGetAll}`);
+      
+      // If it looks like it might have sessions, log it
+      if (key.toLowerCase().includes('session') || key.toLowerCase().includes('pairing') || key.toLowerCase().includes('connect')) {
+        console.warn(`    ${key} value:`, value);
+      }
+      if (hasGetAll) {
+        try {
+          const items = value.getAll();
+          console.warn(`    ${key}.getAll():`, items);
+        } catch (e) {
+          console.warn(`    ${key}.getAll() failed:`, e);
+        }
+      }
     });
   }
   
