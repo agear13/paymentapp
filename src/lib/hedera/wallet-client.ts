@@ -21,6 +21,8 @@ import { CURRENT_NETWORK, CURRENT_NODE_ACCOUNT_ID, type TokenType } from './cons
 let TransferTransaction: any = null;
 let Hbar: any = null;
 let AccountId: any = null;
+let TransactionId: any = null;
+let Timestamp: any = null;
 
 // Dynamically import Hedera SDK (client-side only)
 async function loadHederaSDK() {
@@ -33,9 +35,11 @@ async function loadHederaSDK() {
     TransferTransaction = sdk.TransferTransaction;
     Hbar = sdk.Hbar;
     AccountId = sdk.AccountId;
+    TransactionId = sdk.TransactionId;
+    Timestamp = sdk.Timestamp;
   }
   
-  return { TransferTransaction, Hbar, AccountId };
+  return { TransferTransaction, Hbar, AccountId, TransactionId, Timestamp };
 }
 
 export interface SendHbarPaymentParams {
@@ -129,7 +133,7 @@ export async function sendHbarPayment(
     });
     
     // Load Hedera SDK
-    const { TransferTransaction: Transfer, Hbar: HbarClass } = await loadHederaSDK();
+    const { TransferTransaction: Transfer, Hbar: HbarClass, TransactionId: TxId, AccountId: AcctId } = await loadHederaSDK();
     
     // Convert amount to tinybars
     const tinybars = hbarToTinybars(amountHbar);
@@ -143,14 +147,19 @@ export async function sendHbarPayment(
       network: CURRENT_NETWORK,
     });
     
+    // Generate transaction ID (required when not using a client)
+    // Transaction ID = AccountId + ValidStart timestamp
+    const txId = TxId.generate(AcctId.fromString(walletState.accountId));
+    
     // Build Hedera transaction using SDK
     // Use Hbar.fromTinybars() to properly handle bigint values
     const hbarAmount = HbarClass.fromTinybars(tinybars);
     const transaction = new Transfer()
+      .setTransactionId(txId)
+      .setNodeAccountIds([CURRENT_NODE_ACCOUNT_ID])
       .addHbarTransfer(walletState.accountId, hbarAmount.negated())
       .addHbarTransfer(merchantAccountId, hbarAmount)
-      .setTransactionMemo(memo)
-      .setNodeAccountIds([CURRENT_NODE_ACCOUNT_ID]); // Required for freezing
+      .setTransactionMemo(memo);
     
     // Freeze transaction for signing
     const frozenTx = transaction.freeze();
@@ -317,7 +326,10 @@ export async function sendTokenPayment(
     });
     
     // Load Hedera SDK
-    const { TransferTransaction: Transfer } = await loadHederaSDK();
+    const { TransferTransaction: Transfer, TransactionId: TxId, AccountId: AcctId } = await loadHederaSDK();
+    
+    // Generate transaction ID (required when not using a client)
+    const txId = TxId.generate(AcctId.fromString(walletState.accountId));
     
     // Build Hedera token transfer transaction using SDK
     // For token transfers, amounts must be Long (int64), so we convert bigint to number
@@ -328,10 +340,11 @@ export async function sendTokenPayment(
     }
     
     const transaction = new Transfer()
+      .setTransactionId(txId)
+      .setNodeAccountIds([CURRENT_NODE_ACCOUNT_ID])
       .addTokenTransfer(tokenId, walletState.accountId, -amountNumber)
       .addTokenTransfer(tokenId, merchantAccountId, amountNumber)
-      .setTransactionMemo(memo)
-      .setNodeAccountIds([CURRENT_NODE_ACCOUNT_ID]); // Required for freezing
+      .setTransactionMemo(memo);
     
     // Freeze transaction for signing
     const frozenTx = transaction.freeze();
