@@ -177,9 +177,13 @@ export async function sendHbarPayment(
       // HashConnect v3 sendTransaction method
       if (typeof hc.sendTransaction === 'function') {
         console.log('[HederaWalletClient] Using sendTransaction API');
+        console.log('[HederaWalletClient] Topic:', pairingData.topic);
+        console.log('[HederaWalletClient] Account:', walletState.accountId);
+        
+        // HashConnect v3 API: sendTransaction(topic, transactionRequest)
+        // Don't pass topic in the request object, only as first parameter
         result = await hc.sendTransaction(pairingData.topic, {
-          topic: pairingData.topic,
-          byteArray: Array.from(transactionBytes),
+          byteArray: transactionBytes, // Keep as Uint8Array
           metadata: {
             accountToSign: walletState.accountId,
             returnTransaction: false,
@@ -362,9 +366,13 @@ export async function sendTokenPayment(
       // HashConnect v3 sendTransaction method
       if (typeof hc.sendTransaction === 'function') {
         console.log('[HederaWalletClient] Using sendTransaction API for token transfer');
+        console.log('[HederaWalletClient] Topic:', pairingData.topic);
+        console.log('[HederaWalletClient] Account:', walletState.accountId);
+        
+        // HashConnect v3 API: sendTransaction(topic, transactionRequest)
+        // Don't pass topic in the request object, only as first parameter
         result = await hc.sendTransaction(pairingData.topic, {
-          topic: pairingData.topic,
-          byteArray: Array.from(transactionBytes),
+          byteArray: transactionBytes, // Keep as Uint8Array
           metadata: {
             accountToSign: walletState.accountId,
             returnTransaction: false,
