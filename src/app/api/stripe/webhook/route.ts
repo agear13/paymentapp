@@ -6,6 +6,9 @@
  * Sprint 24: Enhanced with edge case handling
  */
 
+// Force Node.js runtime (required for raw body access)
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { verifyWebhookSignature, isEventProcessed, extractPaymentLinkId } from '@/lib/stripe/webhook';
