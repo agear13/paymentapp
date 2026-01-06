@@ -24,12 +24,12 @@ export async function GET(request: NextRequest) {
     const organizations = await prisma.organizations.findMany({
       select: {
         id: true,
-        clerkOrgId: true,
+        clerk_org_id: true,
         name: true,
-        createdAt: true,
+        created_at: true,
       },
       orderBy: {
-        createdAt: 'desc',
+        created_at: 'desc',
       },
     });
 
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     // Check if organization with this Clerk ID already exists
     const existing = await prisma.organizations.findUnique({
-      where: { clerkOrgId: body.clerkOrgId },
+      where: { clerk_org_id: body.clerkOrgId },
     });
 
     if (existing) {
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     const organization = await prisma.organizations.create({
       data: {
         name: body.name,
-        clerkOrgId: body.clerkOrgId,
+        clerk_org_id: body.clerkOrgId,
       },
     });
 

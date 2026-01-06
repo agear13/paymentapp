@@ -72,7 +72,9 @@ export function OnboardingForm() {
       });
 
       if (!orgResponse.ok) {
-        throw new Error('Failed to create organization');
+        const errorData = await orgResponse.json().catch(() => ({}));
+        console.error('Organization creation failed:', errorData);
+        throw new Error(errorData.error || 'Failed to create organization');
       }
 
       const organization = await orgResponse.json();
@@ -89,14 +91,17 @@ export function OnboardingForm() {
       });
 
       if (!settingsResponse.ok) {
-        throw new Error('Failed to create merchant settings');
+        const errorData = await settingsResponse.json().catch(() => ({}));
+        console.error('Merchant settings creation failed:', errorData);
+        throw new Error(errorData.error || 'Failed to create merchant settings');
       }
 
       toast.success('Organization created successfully!');
       router.push('/dashboard');
-    } catch (error) {
-      toast.error('Failed to complete onboarding');
-      console.error(error);
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to complete onboarding';
+      toast.error(errorMessage);
+      console.error('Onboarding error:', error);
     } finally {
       setIsLoading(false);
     }
