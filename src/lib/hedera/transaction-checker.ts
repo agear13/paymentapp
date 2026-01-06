@@ -158,26 +158,27 @@ export async function checkForTransaction(
       );
 
       return { found: false };
-    } catch (error: any) {
+    } catch (error: unknown) {
       clearTimeout(timeoutId);
 
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         loggers.hedera.warn('Transaction check timed out', { paymentLinkId });
         return { found: false, error: 'Timeout' };
       }
 
       throw error;
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     const totalDuration = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
     loggers.hedera.error(
       'Failed to check for transaction',
-      { error: error.message, paymentLinkId, duration: totalDuration }
+      { error: errorMessage, paymentLinkId, duration: totalDuration }
     );
 
     return {
       found: false,
-      error: error.message || 'Unknown error',
+      error: errorMessage || 'Unknown error',
     };
   }
 }
@@ -357,64 +358,96 @@ async function updatePaymentLinkWithTransaction(
 
     // === WRAP DB PERSISTENCE IN TRY/CATCH ===
     try {
+      // INSTRUMENTATION: Log exact payloads being passed to Prisma
+      const updatePayload = {
+        where: { id: paymentLinkId },
+        data: {
+          status: 'PAID' as const,
+          updated_at: now,
+        },
+      };
+      
+      const eventPayload = {
+        data: {
+          payment_link_id: paymentLinkId,
+          event_type: 'PAYMENT_CONFIRMED' as const,
+          payment_method: 'HEDERA' as const,
+          hedera_transaction_id: transaction.transactionId,
+          amount_received: transaction.amount,
+          currency_received: tokenType,
+          metadata: {
+            transactionId: transaction.transactionId,
+            amount: transaction.amount,
+            tokenType,
+            sender: transaction.sender,
+            timestamp: transaction.timestamp,
+            memo: transaction.memo,
+            merchantAccount: transaction.merchantAccount,
+          },
+        },
+      };
+      
+      const debitPayload = {
+        data: {
+          payment_link_id: paymentLinkId,
+          ledger_account_id: ledgerAccounts.cryptoClearing,
+          entry_type: 'DEBIT' as const,
+          amount: paymentLink.amount,
+          currency: paymentLink.currency,
+          description: `${tokenType} payment received - ${transaction.transactionId}`,
+          idempotency_key: `${idempotencyKey}-debit`,
+          created_at: now,
+        },
+      };
+      
+      const creditPayload = {
+        data: {
+          payment_link_id: paymentLinkId,
+          ledger_account_id: ledgerAccounts.accountsReceivable,
+          entry_type: 'CREDIT' as const,
+          amount: paymentLink.amount,
+          currency: paymentLink.currency,
+          description: `${tokenType} payment received - ${transaction.transactionId}`,
+          idempotency_key: `${idempotencyKey}-credit`,
+          created_at: now,
+        },
+      };
+      
+      loggers.hedera.info(
+        'INSTRUMENTATION: Prisma payloads before transaction',
+        {
+          updatePayload: {
+            where: updatePayload.where,
+            dataKeys: Object.keys(updatePayload.data),
+            hasId: 'id' in updatePayload.data,
+          },
+          eventPayload: {
+            dataKeys: Object.keys(eventPayload.data),
+            hasId: 'id' in eventPayload.data,
+          },
+          debitPayload: {
+            dataKeys: Object.keys(debitPayload.data),
+            hasId: 'id' in debitPayload.data,
+          },
+          creditPayload: {
+            dataKeys: Object.keys(creditPayload.data),
+            hasId: 'id' in creditPayload.data,
+          },
+        }
+      );
+      
       await prisma.$transaction([
         // 1. Update payment link status
-        prisma.payment_links.update({
-          where: { id: paymentLinkId },
-          data: {
-            status: 'PAID',
-            updated_at: now,
-          },
-        }),
+        prisma.payment_links.update(updatePayload),
         
-        // 2. Create PAID event with full details
-        prisma.payment_events.create({
-          data: {
-            payment_link_id: paymentLinkId,
-            event_type: 'PAYMENT_CONFIRMED',
-            payment_method: 'HEDERA',
-            hedera_transaction_id: transaction.transactionId,
-            amount_received: transaction.amount,
-            currency_received: tokenType, // Token type as currency
-            metadata: {
-              transactionId: transaction.transactionId,
-              amount: transaction.amount,
-              tokenType,
-              sender: transaction.sender,
-              timestamp: transaction.timestamp,
-              memo: transaction.memo,
-              merchantAccount: transaction.merchantAccount,
-            },
-          },
-        }),
+        // 2. Create payment event with full details
+        prisma.payment_events.create(eventPayload),
         
         // 3. Create ledger entry: DEBIT Crypto Clearing Account
-        prisma.ledger_entries.create({
-          data: {
-            payment_link_id: paymentLinkId,
-            ledger_account_id: ledgerAccounts.cryptoClearing,
-            entry_type: 'DEBIT',
-            amount: paymentLink.amount,
-            currency: paymentLink.currency,
-            description: `${tokenType} payment received - ${transaction.transactionId}`,
-            idempotency_key: `${idempotencyKey}-debit`,
-            created_at: now,
-          },
-        }),
+        prisma.ledger_entries.create(debitPayload),
         
         // 4. Create ledger entry: CREDIT Accounts Receivable
-        prisma.ledger_entries.create({
-          data: {
-            payment_link_id: paymentLinkId,
-            ledger_account_id: ledgerAccounts.accountsReceivable,
-            entry_type: 'CREDIT',
-            amount: paymentLink.amount,
-            currency: paymentLink.currency,
-            description: `${tokenType} payment received - ${transaction.transactionId}`,
-            idempotency_key: `${idempotencyKey}-credit`,
-            created_at: now,
-          },
-        }),
+        prisma.ledger_entries.create(creditPayload),
       ]);
 
       loggers.hedera.info(
