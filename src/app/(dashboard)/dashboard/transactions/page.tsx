@@ -1,11 +1,67 @@
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { createClient } from '@/lib/supabase/server';
+import { prisma } from '@/lib/server/prisma';
+import { TransactionsTable } from '@/components/dashboard/transactions-table';
 
-export default function TransactionsPage() {
+export default async function TransactionsPage() {
+  // Get current user's organization
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-[400px]">
+        <p className="text-muted-foreground">Please log in to view transactions.</p>
+      </div>
+    );
+  }
+
+  // Get user's organization (simplified - get first org for now)
+  const org = await prisma.organizations.findFirst({
+    select: { id: true },
+  });
+
+  if (!org) {
+    return (
+      <div className="flex items-center justify-center h-[400px]">
+        <p className="text-muted-foreground">No organization found.</p>
+      </div>
+    );
+  }
+
+  // Fetch all payment events for this organization
+  const allEvents = await prisma.payment_events.findMany({
+    where: {
+      payment_links: {
+        organization_id: org.id,
+      },
+      event_type: 'PAYMENT_CONFIRMED', // Only show confirmed payments
+    },
+    include: {
+      payment_links: {
+        select: {
+          id: true,
+          short_code: true,
+          description: true,
+          invoice_reference: true,
+          amount: true,
+          currency: true,
+        },
+      },
+    },
+    orderBy: {
+      created_at: 'desc',
+    },
+  });
+
+  // Filter by payment method
+  const stripeEvents = allEvents.filter(e => e.payment_method === 'STRIPE');
+  const hederaEvents = allEvents.filter(e => e.payment_method === 'HEDERA');
+
   return (
     <div className="space-y-6">
       <div>
@@ -17,9 +73,9 @@ export default function TransactionsPage() {
 
       <Tabs defaultValue="all" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="stripe">Stripe</TabsTrigger>
-          <TabsTrigger value="hedera">Hedera</TabsTrigger>
+          <TabsTrigger value="all">All ({allEvents.length})</TabsTrigger>
+          <TabsTrigger value="stripe">Stripe ({stripeEvents.length})</TabsTrigger>
+          <TabsTrigger value="hedera">Hedera ({hederaEvents.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="space-y-4">
@@ -31,9 +87,13 @@ export default function TransactionsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
-                No transactions yet.
-              </div>
+              {allEvents.length > 0 ? (
+                <TransactionsTable events={allEvents} />
+              ) : (
+                <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
+                  No transactions yet.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -47,9 +107,13 @@ export default function TransactionsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
-                No Stripe transactions yet.
-              </div>
+              {stripeEvents.length > 0 ? (
+                <TransactionsTable events={stripeEvents} />
+              ) : (
+                <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
+                  No Stripe transactions yet.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -63,9 +127,13 @@ export default function TransactionsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
-                No Hedera transactions yet.
-              </div>
+              {hederaEvents.length > 0 ? (
+                <TransactionsTable events={hederaEvents} />
+              ) : (
+                <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
+                  No Hedera transactions yet.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -73,16 +141,3 @@ export default function TransactionsPage() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

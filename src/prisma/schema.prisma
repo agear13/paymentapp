@@ -126,7 +126,7 @@ model payment_events {
   stripe_payment_intent_id String?          @db.VarChar(255)
   hedera_transaction_id    String?          @db.VarChar(255)
   amount_received          Decimal?         @db.Decimal(18, 8)
-  currency_received        String?          @db.Char(3)
+  currency_received        String?          @db.VarChar(10)
   metadata                 Json?
   created_at               DateTime         @default(now()) @db.Timestamptz(6)
   payment_links            payment_links    @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
