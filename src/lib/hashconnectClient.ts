@@ -211,10 +211,20 @@ export async function initHashConnect(): Promise<void> {
         latestPairingData = pairingData;
         console.log('[HashConnect] latestPairingData updated:', latestPairingData);
         
-        // Also check hcData for completeness
-        if ((hashconnect as any).hcData?.pairingData) {
+        // Debug: Check all possible locations for topic
+        console.log('[HashConnect] === SEARCHING FOR TOPIC ===');
+        if ((hashconnect as any).hcData) {
+          console.log('[HashConnect] hcData keys:', Object.keys((hashconnect as any).hcData));
           console.log('[HashConnect] hcData.pairingData:', (hashconnect as any).hcData.pairingData);
         }
+        if ((hashconnect as any).signingClient) {
+          console.log('[HashConnect] signingClient exists');
+          const sessions = (hashconnect as any).signingClient.session?.getAll?.();
+          console.log('[HashConnect] signingClient sessions:', sessions);
+        }
+        console.log('[HashConnect] HashConnect instance keys (filtered):', 
+          Object.keys(hashconnect).filter(k => !k.startsWith('_') && typeof (hashconnect as any)[k] !== 'function')
+        );
         
         const accountId = pairingData?.accountIds?.[0];
         if (accountId) {
@@ -411,26 +421,76 @@ export function getWalletState(): WalletState {
 /**
  * Get the latest pairing data (if connected)
  * Falls back to checking HashConnect instance directly if event data not available
+ * 
+ * HashConnect v3 stores the topic separately from the pairing event data
  */
 export function getLatestPairingData(): any {
-  // First check the event-captured data
+  // Check if we have pairing data from event
+  if (!latestPairingData || !latestPairingData.accountIds) {
+    // No pairing data at all
+    if (hc && (hc as any).hcData?.pairingData) {
+      const pairings = (hc as any).hcData.pairingData;
+      if (Array.isArray(pairings) && pairings.length > 0) {
+        latestPairingData = pairings[0];
+        console.log('[HashConnect] getLatestPairingData - loaded from hcData:', latestPairingData);
+      }
+    }
+  }
+  
+  // If we have pairing data but no topic, try to find it
+  if (latestPairingData && !latestPairingData.topic) {
+    console.log('[HashConnect] Pairing data exists but no topic, searching...');
+    
+    // Try to get topic from HashConnect instance
+    // In HashConnect v3, the topic might be in different places:
+    
+    // Option 1: Check hcData.pairingData
+    if (hc && (hc as any).hcData?.pairingData) {
+      const pairings = (hc as any).hcData.pairingData;
+      if (Array.isArray(pairings) && pairings.length > 0) {
+        const pairing = pairings[0];
+        if (pairing.topic) {
+          console.log('[HashConnect] Found topic in hcData.pairingData[0]:', pairing.topic);
+          latestPairingData.topic = pairing.topic;
+          return latestPairingData;
+        }
+      }
+    }
+    
+    // Option 2: Check signingClient sessions
+    if (hc && (hc as any).signingClient) {
+      const sessions = (hc as any).signingClient.session?.getAll?.();
+      console.log('[HashConnect] Checking signingClient sessions:', sessions);
+      if (sessions && sessions.length > 0) {
+        const session = sessions[0];
+        if (session.topic) {
+          console.log('[HashConnect] Found topic in session:', session.topic);
+          latestPairingData.topic = session.topic;
+          return latestPairingData;
+        }
+      }
+    }
+    
+    // Option 3: Check if topic is a direct property of hc
+    if (hc && (hc as any).topic) {
+      console.log('[HashConnect] Found topic on hc instance:', (hc as any).topic);
+      latestPairingData.topic = (hc as any).topic;
+      return latestPairingData;
+    }
+    
+    console.warn('[HashConnect] Could not find topic in any known location');
+    console.warn('[HashConnect] HashConnect instance structure:', {
+      hcDataKeys: hc ? Object.keys((hc as any).hcData || {}) : [],
+      hcKeys: hc ? Object.keys(hc).filter(k => !k.startsWith('_')) : [],
+      signingClient: hc ? !!(hc as any).signingClient : false,
+    });
+  }
+  
   if (latestPairingData && latestPairingData.topic) {
     return latestPairingData;
   }
   
-  // Fallback: Check HashConnect instance directly
-  if (hc && (hc as any).hcData?.pairingData) {
-    const pairings = (hc as any).hcData.pairingData;
-    if (Array.isArray(pairings) && pairings.length > 0) {
-      const pairing = pairings[0];
-      console.log('[HashConnect] getLatestPairingData fallback - found pairing in hcData:', pairing);
-      // Update latestPairingData for next time
-      latestPairingData = pairing;
-      return pairing;
-    }
-  }
-  
-  console.warn('[HashConnect] getLatestPairingData - no pairing data available');
+  console.warn('[HashConnect] getLatestPairingData - no valid pairing data with topic available');
   return latestPairingData;
 }
 
