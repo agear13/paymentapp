@@ -201,14 +201,24 @@ export async function initHashConnect(): Promise<void> {
 
       // Register event listeners (ONCE)
       (hashconnect as any).pairingEvent.on((pairingData: any) => {
+        console.log('[HashConnect] ========== PAIRING EVENT FIRED ==========');
         console.log('[HashConnect] pairingEvent raw:', pairingData);
         console.log('[HashConnect] pairingEvent accountIds:', pairingData?.accountIds);
         console.log('[HashConnect] pairingEvent topic:', pairingData?.topic);
+        console.log('[HashConnect] pairingEvent has topic?', !!pairingData?.topic);
         
+        // Store pairing data
         latestPairingData = pairingData;
+        console.log('[HashConnect] latestPairingData updated:', latestPairingData);
+        
+        // Also check hcData for completeness
+        if ((hashconnect as any).hcData?.pairingData) {
+          console.log('[HashConnect] hcData.pairingData:', (hashconnect as any).hcData.pairingData);
+        }
         
         const accountId = pairingData?.accountIds?.[0];
         if (accountId) {
+          console.log('[HashConnect] Updating wallet state with accountId:', accountId);
           updateWalletState({
             isConnected: true,
             accountId,
@@ -216,6 +226,7 @@ export async function initHashConnect(): Promise<void> {
             error: null,
           });
         }
+        console.log('[HashConnect] ========== PAIRING EVENT COMPLETE ==========');
       });
 
       (hashconnect as any).connectionStatusChangeEvent.on((status: any) => {
@@ -399,8 +410,27 @@ export function getWalletState(): WalletState {
 
 /**
  * Get the latest pairing data (if connected)
+ * Falls back to checking HashConnect instance directly if event data not available
  */
 export function getLatestPairingData(): any {
+  // First check the event-captured data
+  if (latestPairingData && latestPairingData.topic) {
+    return latestPairingData;
+  }
+  
+  // Fallback: Check HashConnect instance directly
+  if (hc && (hc as any).hcData?.pairingData) {
+    const pairings = (hc as any).hcData.pairingData;
+    if (Array.isArray(pairings) && pairings.length > 0) {
+      const pairing = pairings[0];
+      console.log('[HashConnect] getLatestPairingData fallback - found pairing in hcData:', pairing);
+      // Update latestPairingData for next time
+      latestPairingData = pairing;
+      return pairing;
+    }
+  }
+  
+  console.warn('[HashConnect] getLatestPairingData - no pairing data available');
   return latestPairingData;
 }
 

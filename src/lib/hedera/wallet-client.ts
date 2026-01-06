@@ -105,20 +105,25 @@ export async function sendHbarPayment(
     }
     
     // Get pairing data with retry (sometimes there's a brief delay after pairing)
+    console.log('[HederaWalletClient] [HBAR] Attempting to get pairing data...');
     let pairingData = getLatestPairingData();
+    console.log('[HederaWalletClient] [HBAR] Initial pairing data:', pairingData);
+    
     let retries = 0;
     while ((!pairingData || !pairingData.topic) && retries < 5) {
-      console.log('[HederaWalletClient] Waiting for pairing data... attempt', retries + 1);
+      console.log('[HederaWalletClient] [HBAR] Waiting for pairing data... attempt', retries + 1);
+      console.log('[HederaWalletClient] [HBAR] Current pairing data has topic?', !!pairingData?.topic);
       await new Promise(resolve => setTimeout(resolve, 500));
       pairingData = getLatestPairingData();
       retries++;
     }
     
     if (!pairingData || !pairingData.topic) {
+      console.error('[HederaWalletClient] [HBAR] Pairing data after all retries:', pairingData);
       throw new Error('Pairing not ready. Please wait a moment and try again, or disconnect and reconnect your wallet.');
     }
     
-    console.log('[HederaWalletClient] Pairing data confirmed:', {
+    console.log('[HederaWalletClient] [HBAR] ✅ Pairing data confirmed:', {
       topic: pairingData.topic,
       accountIds: pairingData.accountIds,
     });
@@ -272,20 +277,25 @@ export async function sendTokenPayment(
     }
     
     // Get pairing data with retry (sometimes there's a brief delay after pairing)
+    console.log('[HederaWalletClient] [TOKEN] Attempting to get pairing data...');
     let pairingData = getLatestPairingData();
+    console.log('[HederaWalletClient] [TOKEN] Initial pairing data:', pairingData);
+    
     let retries = 0;
     while ((!pairingData || !pairingData.topic) && retries < 5) {
-      console.log('[HederaWalletClient] Waiting for pairing data... attempt', retries + 1);
+      console.log('[HederaWalletClient] [TOKEN] Waiting for pairing data... attempt', retries + 1);
+      console.log('[HederaWalletClient] [TOKEN] Current pairing data has topic?', !!pairingData?.topic);
       await new Promise(resolve => setTimeout(resolve, 500));
       pairingData = getLatestPairingData();
       retries++;
     }
     
     if (!pairingData || !pairingData.topic) {
+      console.error('[HederaWalletClient] [TOKEN] Pairing data after all retries:', pairingData);
       throw new Error('Pairing not ready. Please wait a moment and try again, or disconnect and reconnect your wallet.');
     }
     
-    console.log('[HederaWalletClient] Pairing data confirmed:', {
+    console.log('[HederaWalletClient] [TOKEN] ✅ Pairing data confirmed:', {
       topic: pairingData.topic,
       accountIds: pairingData.accountIds,
     });
