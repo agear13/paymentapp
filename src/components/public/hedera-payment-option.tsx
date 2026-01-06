@@ -20,8 +20,10 @@ import {
   initHashConnect,
   subscribeToWalletState,
 } from '@/lib/hashconnectClient';
+import { sendHbarPayment } from '@/lib/hedera/wallet-client';
 import type { TokenType } from '@/lib/hedera/constants';
 import type { TokenPaymentAmount } from '@/lib/hedera/types';
+import { CURRENT_NETWORK } from '@/lib/hedera/constants';
 
 interface HederaPaymentOptionProps {
   isAvailable: boolean;
@@ -36,7 +38,16 @@ interface HederaPaymentOptionProps {
   currency: string;
 }
 
-type PaymentStep = 'select_method' | 'connect_wallet' | 'select_token' | 'confirm_payment' | 'monitoring' | 'complete';
+type PaymentStep = 
+  | 'select_method' 
+  | 'connect_wallet' 
+  | 'select_token' 
+  | 'confirm_payment' 
+  | 'requesting_signature' 
+  | 'awaiting_approval' 
+  | 'monitoring' 
+  | 'complete' 
+  | 'rejected';
 
 export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
   isAvailable,
@@ -214,8 +225,77 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
     setSelectedToken(token);
   };
 
-  const handleConfirmPayment = () => {
-    setPaymentStep('confirm_payment');
+  const handleConfirmPayment = async () => {
+    // Phase 1: HBAR payments use pre-filled transaction flow
+    if (selectedToken === 'HBAR') {
+      await handleHbarPayment();
+    } else {
+      // Other tokens: show manual payment instructions (existing flow)
+      setPaymentStep('confirm_payment');
+    }
+  };
+  
+  const handleHbarPayment = async () => {
+    try {
+      setPaymentStep('requesting_signature');
+      
+      const selectedAmount = paymentAmounts.find(a => a.tokenType === 'HBAR');
+      if (!selectedAmount) {
+        toast.error('HBAR payment amount not found');
+        setPaymentStep('select_token');
+        return;
+      }
+      
+      if (!merchantAccountId) {
+        toast.error('Merchant account not configured');
+        setPaymentStep('select_token');
+        return;
+      }
+      
+      // Build memo: Provvypay:{paymentLinkId}
+      const memo = `Provvypay:${paymentLinkId}`;
+      
+      console.log('[HederaPaymentOption] Sending HBAR payment request:', {
+        merchantAccountId,
+        amount: selectedAmount.requiredAmount,
+        memo,
+      });
+      
+      toast.info('Please approve the transaction in HashPack');
+      
+      setPaymentStep('awaiting_approval');
+      
+      // Send pre-filled transaction to HashPack
+      const result = await sendHbarPayment({
+        merchantAccountId,
+        amountHbar: selectedAmount.requiredAmount,
+        memo,
+      });
+      
+      if (result.rejected) {
+        console.log('[HederaPaymentOption] Transaction rejected by user');
+        setPaymentStep('rejected');
+        toast.error('Transaction rejected. You can try again when ready.');
+        return;
+      }
+      
+      if (!result.success) {
+        console.error('[HederaPaymentOption] Transaction failed:', result.error);
+        setPaymentStep('select_token');
+        toast.error(result.error || 'Failed to send transaction');
+        return;
+      }
+      
+      console.log('[HederaPaymentOption] Transaction approved!', result.transactionId);
+      toast.success('Transaction approved! Monitoring for confirmation...');
+      
+      // Start monitoring for the transaction
+      await handleStartMonitoring();
+    } catch (error: any) {
+      console.error('[HederaPaymentOption] HBAR payment error:', error);
+      setPaymentStep('select_token');
+      toast.error(error?.message || 'Failed to process payment');
+    }
   };
 
   const handleStartMonitoring = async () => {
@@ -233,6 +313,9 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
     let attempts = 0;
     let delay = 3000; // Start with 3 seconds
 
+    // Build memo for monitoring (same format as transaction)
+    const memo = `Provvypay:${paymentLinkId}`;
+
     const checkPayment = async (): Promise<boolean> => {
       attempts++;
       
@@ -246,9 +329,10 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
             paymentLinkId,
             merchantAccountId,
             payerAccountId: walletState.accountId,
-            network: 'testnet', // TODO: Get from environment or config
+            network: CURRENT_NETWORK,
             tokenType: selectedToken,
             expectedAmount: parseFloat(selectedAmount.totalAmount),
+            memo, // Include memo for matching
             timeWindowMinutes: 15,
           }),
         });
@@ -546,12 +630,59 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
                 className="w-full h-12 text-base font-semibold"
                 size="lg"
               >
-                Continue with {selectedToken}
+                {selectedToken === 'HBAR' ? 'Pay with HBAR' : `Continue with ${selectedToken}`}
               </Button>
             </>
           )}
 
-          {/* Step 3: Payment Instructions */}
+          {/* Step 3a: Requesting Signature (HBAR only) */}
+          {paymentStep === 'requesting_signature' && (
+            <div className="text-center py-8">
+              <Loader2 className="h-12 w-12 animate-spin text-purple-600 mx-auto mb-4" />
+              <p className="text-lg font-semibold">Preparing transaction...</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Please wait while we prepare your payment request
+              </p>
+            </div>
+          )}
+
+          {/* Step 3b: Awaiting Approval (HBAR only) */}
+          {paymentStep === 'awaiting_approval' && (
+            <div className="text-center py-8">
+              <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+                <Wallet className="h-6 w-6 text-purple-600" />
+              </div>
+              <p className="text-lg font-semibold">Waiting for approval</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Please approve the transaction in HashPack
+              </p>
+              <p className="text-xs text-slate-400 mt-4">
+                Check your HashPack wallet to approve or reject the payment
+              </p>
+            </div>
+          )}
+
+          {/* Step 3c: Rejected */}
+          {paymentStep === 'rejected' && (
+            <div className="text-center py-8">
+              <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="h-6 w-6 text-red-600" />
+              </div>
+              <p className="text-lg font-semibold text-red-600">Transaction Rejected</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                You can try again when you&apos;re ready
+              </p>
+              <Button
+                onClick={() => setPaymentStep('select_token')}
+                className="mt-4"
+                variant="outline"
+              >
+                Try Again
+              </Button>
+            </div>
+          )}
+
+          {/* Step 3d: Payment Instructions (for non-HBAR tokens) */}
           {paymentStep === 'confirm_payment' && (
             <>
               {paymentAmounts
