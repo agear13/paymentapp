@@ -120,3 +120,29 @@ export const ESTIMATED_FEES = {
   AUDD: 0.01, // Typically higher fee for token transfers
 } as const;
 
+/**
+ * Get token configuration for a specific token type and network
+ * 
+ * @param tokenType - Token type (HBAR, USDC, USDT, AUDD)
+ * @param network - Network (testnet or mainnet), defaults to CURRENT_NETWORK
+ * @returns Token configuration with id, decimals, and metadata
+ */
+export function getTokenConfig(tokenType: TokenType, network?: HederaNetwork) {
+  const config = TOKEN_CONFIG[tokenType];
+  const actualNetwork = network || CURRENT_NETWORK;
+  
+  // For HBAR, return as-is (no token ID)
+  if (tokenType === 'HBAR') {
+    return config;
+  }
+  
+  // For HTS tokens, get the correct token ID for the network
+  const networkKey = actualNetwork === 'mainnet' ? 'MAINNET' : 'TESTNET';
+  const tokenId = TOKEN_IDS[networkKey][tokenType as 'USDC' | 'USDT' | 'AUDD'];
+  
+  return {
+    ...config,
+    id: tokenId,
+  };
+}
+

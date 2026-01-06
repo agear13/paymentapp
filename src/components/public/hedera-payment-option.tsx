@@ -20,10 +20,10 @@ import {
   initHashConnect,
   subscribeToWalletState,
 } from '@/lib/hashconnectClient';
-import { sendHbarPayment } from '@/lib/hedera/wallet-client';
+import { sendHbarPayment, sendTokenPayment } from '@/lib/hedera/wallet-client';
 import type { TokenType } from '@/lib/hedera/constants';
 import type { TokenPaymentAmount } from '@/lib/hedera/types';
-import { CURRENT_NETWORK } from '@/lib/hedera/constants';
+import { CURRENT_NETWORK, getTokenConfig } from '@/lib/hedera/constants';
 
 interface HederaPaymentOptionProps {
   isAvailable: boolean;
@@ -226,12 +226,12 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
   };
 
   const handleConfirmPayment = async () => {
-    // Phase 1: HBAR payments use pre-filled transaction flow
+    // Phase 1 & 2: All tokens now use pre-filled transaction flow
     if (selectedToken === 'HBAR') {
       await handleHbarPayment();
     } else {
-      // Other tokens: show manual payment instructions (existing flow)
-      setPaymentStep('confirm_payment');
+      // Phase 2: Stablecoins (USDC, USDT, AUDD) use pre-filled token transfer
+      await handleTokenPayment();
     }
   };
   
@@ -297,8 +297,102 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
       toast.error(error?.message || 'Failed to process payment');
     }
   };
+  
+  const handleTokenPayment = async () => {
+    try {
+      setPaymentStep('requesting_signature');
+      
+      const selectedAmount = paymentAmounts.find(a => a.tokenType === selectedToken);
+      if (!selectedAmount) {
+        toast.error(`${selectedToken} payment amount not found`);
+        setPaymentStep('select_token');
+        return;
+      }
+      
+      if (!merchantAccountId) {
+        toast.error('Merchant account not configured');
+        setPaymentStep('select_token');
+        return;
+      }
+      
+      // Get token configuration (ID and decimals)
+      const tokenConfig = getTokenConfig(selectedToken, CURRENT_NETWORK);
+      if (!tokenConfig.id) {
+        toast.error(`${selectedToken} token ID not configured for ${CURRENT_NETWORK}`);
+        setPaymentStep('select_token');
+        return;
+      }
+      
+      // Build memo: Provvypay:{paymentLinkId}
+      const memo = `Provvypay:${paymentLinkId}`;
+      
+      console.log('[HederaPaymentOption] Sending token payment request:', {
+        tokenType: selectedToken,
+        tokenId: tokenConfig.id,
+        decimals: tokenConfig.decimals,
+        merchantAccountId,
+        amount: selectedAmount.requiredAmount,
+        memo,
+      });
+      
+      toast.info(`Please approve the ${selectedToken} transaction in HashPack`);
+      
+      setPaymentStep('awaiting_approval');
+      
+      // Send pre-filled token transaction to HashPack
+      const result = await sendTokenPayment({
+        tokenId: tokenConfig.id,
+        tokenType: selectedToken,
+        decimals: tokenConfig.decimals,
+        merchantAccountId,
+        amount: selectedAmount.requiredAmount,
+        memo,
+      });
+      
+      if (result.rejected) {
+        console.log('[HederaPaymentOption] Token transaction rejected by user');
+        setPaymentStep('rejected');
+        toast.error('Transaction rejected. You can try again when ready.');
+        return;
+      }
+      
+      if (!result.success) {
+        console.error('[HederaPaymentOption] Token transaction failed:', result.error);
+        setPaymentStep('select_token');
+        
+        // Show user-friendly error messages
+        if (result.error?.includes('not associated')) {
+          toast.error(
+            `Your wallet needs to be associated with ${selectedToken}. ` +
+            `Please open HashPack, go to Tokens, and associate ${selectedToken} first.`,
+            { duration: 8000 }
+          );
+        } else if (result.error?.includes('insufficient')) {
+          toast.error(
+            `Insufficient balance. Make sure you have enough ${selectedToken} ` +
+            `and a small amount of HBAR for network fees.`,
+            { duration: 6000 }
+          );
+        } else {
+          toast.error(result.error || 'Failed to send transaction');
+        }
+        return;
+      }
+      
+      console.log('[HederaPaymentOption] Token transaction approved!', result.transactionId);
+      toast.success('Transaction approved! Monitoring for confirmation...');
+      
+      // Start monitoring for the transaction
+      // Use longer window for tokens (60 min) as they may take longer to appear
+      await handleStartMonitoring(60);
+    } catch (error: any) {
+      console.error('[HederaPaymentOption] Token payment error:', error);
+      setPaymentStep('select_token');
+      toast.error(error?.message || 'Failed to process payment');
+    }
+  };
 
-  const handleStartMonitoring = async () => {
+  const handleStartMonitoring = async (timeWindowMinutes: number = 15) => {
     setPaymentStep('monitoring');
     
     // Monitor for payment using retry strategy
@@ -320,7 +414,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
       attempts++;
       
       try {
-        console.log(`[Payment Monitor] Attempt ${attempts}/${maxAttempts}`);
+        console.log(`[Payment Monitor] Attempt ${attempts}/${maxAttempts} (window: ${timeWindowMinutes}min)`);
         
         const response = await fetch('/api/hedera/transactions/monitor', {
           method: 'POST',
@@ -333,7 +427,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
             tokenType: selectedToken,
             expectedAmount: parseFloat(selectedAmount.totalAmount),
             memo, // Include memo for matching
-            timeWindowMinutes: 15,
+            timeWindowMinutes, // Use parameter (15 for HBAR, 60 for tokens)
           }),
         });
 
@@ -630,7 +724,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
                 className="w-full h-12 text-base font-semibold"
                 size="lg"
               >
-                {selectedToken === 'HBAR' ? 'Pay with HBAR' : `Continue with ${selectedToken}`}
+                Pay with {selectedToken}
               </Button>
             </>
           )}

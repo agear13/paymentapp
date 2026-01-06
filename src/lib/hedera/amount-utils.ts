@@ -1,7 +1,69 @@
 /**
  * Hedera Amount Conversion Utilities
- * Safe conversion between HBAR and tinybars (8 decimals)
+ * Safe conversion between token amounts and smallest units
+ * Supports HBAR (8 decimals) and HTS tokens (typically 6 decimals)
  */
+
+/**
+ * Generic: Convert token amount to smallest unit
+ * 
+ * @param amount - Amount in token units (e.g., 15.046618 USDC)
+ * @param decimals - Number of decimals (e.g., 6 for USDC, 8 for HBAR)
+ * @returns Amount in smallest unit (bigint)
+ */
+export function toSmallestUnit(amount: number | string, decimals: number): bigint {
+  const amountValue = typeof amount === 'string' ? parseFloat(amount) : amount;
+  
+  if (isNaN(amountValue) || !isFinite(amountValue)) {
+    throw new Error('Invalid amount');
+  }
+  
+  if (amountValue < 0) {
+    throw new Error('Amount cannot be negative');
+  }
+  
+  if (decimals < 0 || decimals > 18) {
+    throw new Error('Decimals must be between 0 and 18');
+  }
+  
+  // Use string manipulation to avoid floating point precision issues
+  const amountStr = amountValue.toFixed(decimals);
+  const [whole, decimal = ''] = amountStr.split('.');
+  
+  // Pad decimal to specified digits
+  const paddedDecimal = decimal.padEnd(decimals, '0').slice(0, decimals);
+  
+  // Combine and convert to bigint
+  const smallestUnitStr = whole + paddedDecimal;
+  return BigInt(smallestUnitStr);
+}
+
+/**
+ * Generic: Convert smallest unit to token amount
+ * 
+ * @param smallestUnit - Amount in smallest unit (e.g., 15046618 for USDC)
+ * @param decimals - Number of decimals (e.g., 6 for USDC, 8 for HBAR)
+ * @returns Amount in token units (string with proper decimals)
+ */
+export function fromSmallestUnit(smallestUnit: bigint | number | string, decimals: number): string {
+  const value = typeof smallestUnit === 'bigint' 
+    ? smallestUnit 
+    : BigInt(smallestUnit);
+  
+  if (value < 0n) {
+    throw new Error('Smallest unit amount cannot be negative');
+  }
+  
+  if (decimals < 0 || decimals > 18) {
+    throw new Error('Decimals must be between 0 and 18');
+  }
+  
+  const valueStr = value.toString().padStart(decimals + 1, '0');
+  const whole = valueStr.slice(0, -decimals) || '0';
+  const decimal = valueStr.slice(-decimals);
+  
+  return `${whole}.${decimal}`;
+}
 
 /**
  * Convert HBAR amount to tinybars
@@ -11,26 +73,7 @@
  * @returns Amount in tinybars (integer)
  */
 export function hbarToTinybars(hbarAmount: number | string): bigint {
-  const amount = typeof hbarAmount === 'string' ? parseFloat(hbarAmount) : hbarAmount;
-  
-  if (isNaN(amount) || !isFinite(amount)) {
-    throw new Error('Invalid HBAR amount');
-  }
-  
-  if (amount < 0) {
-    throw new Error('HBAR amount cannot be negative');
-  }
-  
-  // Use string manipulation to avoid floating point precision issues
-  const amountStr = amount.toFixed(8); // Ensure 8 decimal places
-  const [whole, decimal = ''] = amountStr.split('.');
-  
-  // Pad decimal to 8 digits
-  const paddedDecimal = decimal.padEnd(8, '0').slice(0, 8);
-  
-  // Combine and convert to bigint
-  const tinybarsStr = whole + paddedDecimal;
-  return BigInt(tinybarsStr);
+  return toSmallestUnit(hbarAmount, 8);
 }
 
 /**
@@ -40,19 +83,24 @@ export function hbarToTinybars(hbarAmount: number | string): bigint {
  * @returns Amount in HBAR (string with 8 decimals)
  */
 export function tinybarsToHbar(tinybars: bigint | number | string): string {
-  const tinybarsValue = typeof tinybars === 'bigint' 
-    ? tinybars 
-    : BigInt(tinybars);
+  return fromSmallestUnit(tinybars, 8);
+}
+
+/**
+ * Format token amount for display
+ * 
+ * @param amount - Amount in token units
+ * @param decimals - Number of decimal places to show
+ * @returns Formatted token string
+ */
+export function formatTokenAmount(amount: number | string, decimals: number): string {
+  const amountValue = typeof amount === 'string' ? parseFloat(amount) : amount;
   
-  if (tinybarsValue < 0n) {
-    throw new Error('Tinybars amount cannot be negative');
+  if (isNaN(amountValue) || !isFinite(amountValue)) {
+    return '0.' + '0'.repeat(decimals);
   }
   
-  const tinybarsStr = tinybarsValue.toString().padStart(9, '0'); // At least 1.00000000
-  const whole = tinybarsStr.slice(0, -8) || '0';
-  const decimal = tinybarsStr.slice(-8);
-  
-  return `${whole}.${decimal}`;
+  return amountValue.toFixed(decimals);
 }
 
 /**
@@ -63,13 +111,32 @@ export function tinybarsToHbar(tinybars: bigint | number | string): string {
  * @returns Formatted HBAR string
  */
 export function formatHbar(hbarAmount: number | string, decimals: number = 8): string {
-  const amount = typeof hbarAmount === 'string' ? parseFloat(hbarAmount) : hbarAmount;
+  return formatTokenAmount(hbarAmount, decimals);
+}
+
+/**
+ * Validate token amount is within reasonable bounds
+ * 
+ * @param amount - Amount in token units
+ * @param maxAmount - Maximum allowed amount (default: 1 billion)
+ * @returns true if valid
+ */
+export function isValidTokenAmount(amount: number | string, maxAmount: number = 1_000_000_000): boolean {
+  const amountValue = typeof amount === 'string' ? parseFloat(amount) : amount;
   
-  if (isNaN(amount) || !isFinite(amount)) {
-    return '0.00000000';
+  if (isNaN(amountValue) || !isFinite(amountValue)) {
+    return false;
   }
   
-  return amount.toFixed(decimals);
+  if (amountValue < 0) {
+    return false;
+  }
+  
+  if (amountValue > maxAmount) {
+    return false;
+  }
+  
+  return true;
 }
 
 /**
@@ -79,21 +146,6 @@ export function formatHbar(hbarAmount: number | string, decimals: number = 8): s
  * @returns true if valid
  */
 export function isValidHbarAmount(hbarAmount: number | string): boolean {
-  const amount = typeof hbarAmount === 'string' ? parseFloat(hbarAmount) : hbarAmount;
-  
-  if (isNaN(amount) || !isFinite(amount)) {
-    return false;
-  }
-  
-  if (amount < 0) {
-    return false;
-  }
-  
-  // Reasonable upper bound: 100 million HBAR
-  if (amount > 100_000_000) {
-    return false;
-  }
-  
-  return true;
+  return isValidTokenAmount(hbarAmount, 100_000_000);
 }
 
