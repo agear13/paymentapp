@@ -507,6 +507,40 @@ export function getLatestPairingData(): any {
           console.warn(`    ${key}.getAll() failed:`, e);
         }
       }
+      
+      // Check inside 'core' object - likely where WalletConnect client is
+      if (key === 'core' && valueType === 'object') {
+        console.warn('[HashConnect] Inspecting core object:');
+        const coreKeys = Object.keys(value);
+        console.warn('  core keys:', coreKeys);
+        coreKeys.forEach(coreKey => {
+          const coreValue = value[coreKey];
+          const coreType = typeof coreValue;
+          console.warn(`    core.${coreKey}: type=${coreType}`);
+          
+          // Check for pairing or session stores
+          if (coreKey.toLowerCase().includes('pairing') || coreKey.toLowerCase().includes('session')) {
+            console.warn(`      core.${coreKey} value:`, coreValue);
+            
+            // Try to get sessions
+            if (coreValue && typeof coreValue.getAll === 'function') {
+              try {
+                const items = coreValue.getAll();
+                console.warn(`      core.${coreKey}.getAll():`, items);
+                if (items && items.length > 0) {
+                  console.warn(`      ✅ FOUND ${items.length} items in core.${coreKey}`);
+                  // Check first item for topic
+                  if (items[0].topic) {
+                    console.warn(`      ✅✅ FOUND TOPIC in core.${coreKey}[0].topic:`, items[0].topic);
+                  }
+                }
+              } catch (e) {
+                console.warn(`      core.${coreKey}.getAll() failed:`, e);
+              }
+            }
+          }
+        });
+      }
     });
   }
   
