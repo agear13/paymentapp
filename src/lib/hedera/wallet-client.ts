@@ -174,18 +174,41 @@ export async function sendHbarPayment(
     let result: any;
     
     try {
+      // Debug: Check available methods and state
+      console.log('[HederaWalletClient] HashConnect methods:', Object.keys(hc).filter(k => typeof (hc as any)[k] === 'function'));
+      console.log('[HederaWalletClient] Signer available?', !!(hc as any).signer);
+      
+      // Check if we have an active signer
+      if ((hc as any).signer) {
+        try {
+          console.log('[HederaWalletClient] Signer type:', typeof (hc as any).signer);
+          const signerMethods = Object.keys((hc as any).signer).filter((k: string) => typeof ((hc as any).signer as any)[k] === 'function');
+          console.log('[HederaWalletClient] Signer methods:', signerMethods);
+        } catch (e) {
+          console.warn('[HederaWalletClient] Could not inspect signer:', e);
+        }
+      }
+      
       // HashConnect v3 sendTransaction method
       if (typeof hc.sendTransaction === 'function') {
         console.log('[HederaWalletClient] Using sendTransaction API');
         console.log('[HederaWalletClient] Topic:', pairingData.topic);
-        console.log('[HederaWalletClient] Account:', walletState.accountId);
+        console.log('[HederaWalletClient] Wallet account:', walletState.accountId);
+        console.log('[HederaWalletClient] Pairing accounts:', pairingData.accountIds);
+        console.log('[HederaWalletClient] Transaction bytes length:', transactionBytes.length);
+        
+        // Use the first account from pairing data (most reliable)
+        const accountToSign = pairingData.accountIds && pairingData.accountIds.length > 0 
+          ? pairingData.accountIds[0] 
+          : walletState.accountId;
+        
+        console.log('[HederaWalletClient] Using account for signing:', accountToSign);
         
         // HashConnect v3 API: sendTransaction(topic, transactionRequest)
-        // Don't pass topic in the request object, only as first parameter
         result = await hc.sendTransaction(pairingData.topic, {
-          byteArray: transactionBytes, // Keep as Uint8Array
+          byteArray: transactionBytes,
           metadata: {
-            accountToSign: walletState.accountId,
+            accountToSign: accountToSign,
             returnTransaction: false,
           },
         });
@@ -367,14 +390,21 @@ export async function sendTokenPayment(
       if (typeof hc.sendTransaction === 'function') {
         console.log('[HederaWalletClient] Using sendTransaction API for token transfer');
         console.log('[HederaWalletClient] Topic:', pairingData.topic);
-        console.log('[HederaWalletClient] Account:', walletState.accountId);
+        console.log('[HederaWalletClient] Wallet account:', walletState.accountId);
+        console.log('[HederaWalletClient] Pairing accounts:', pairingData.accountIds);
+        
+        // Use the first account from pairing data (most reliable)
+        const accountToSign = pairingData.accountIds && pairingData.accountIds.length > 0 
+          ? pairingData.accountIds[0] 
+          : walletState.accountId;
+        
+        console.log('[HederaWalletClient] Using account for signing:', accountToSign);
         
         // HashConnect v3 API: sendTransaction(topic, transactionRequest)
-        // Don't pass topic in the request object, only as first parameter
         result = await hc.sendTransaction(pairingData.topic, {
-          byteArray: transactionBytes, // Keep as Uint8Array
+          byteArray: transactionBytes,
           metadata: {
-            accountToSign: walletState.accountId,
+            accountToSign: accountToSign,
             returnTransaction: false,
           },
         });
