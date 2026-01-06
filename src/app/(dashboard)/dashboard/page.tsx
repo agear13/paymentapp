@@ -129,8 +129,8 @@ export default async function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">
               ${stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </CardContent>
-          <p className="text-xs text-muted-foreground">All time payments</p>
+            </div>
+            <p className="text-xs text-muted-foreground">All time payments</p>
           </CardContent>
         </Card>
 
