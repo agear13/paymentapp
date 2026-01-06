@@ -156,7 +156,7 @@ export async function sendHbarPayment(
     const hbarAmount = HbarClass.fromTinybars(tinybars);
     const transaction = new Transfer()
       .setTransactionId(txId)
-      .setNodeAccountIds([CURRENT_NODE_ACCOUNT_ID])
+      .setNodeAccountIds([AcctId.fromString(CURRENT_NODE_ACCOUNT_ID)]) // Convert string to AccountId
       .addHbarTransfer(walletState.accountId, hbarAmount.negated())
       .addHbarTransfer(merchantAccountId, hbarAmount)
       .setTransactionMemo(memo);
@@ -341,7 +341,7 @@ export async function sendTokenPayment(
     
     const transaction = new Transfer()
       .setTransactionId(txId)
-      .setNodeAccountIds([CURRENT_NODE_ACCOUNT_ID])
+      .setNodeAccountIds([AcctId.fromString(CURRENT_NODE_ACCOUNT_ID)]) // Convert string to AccountId
       .addTokenTransfer(tokenId, walletState.accountId, -amountNumber)
       .addTokenTransfer(tokenId, merchantAccountId, amountNumber)
       .setTransactionMemo(memo);
