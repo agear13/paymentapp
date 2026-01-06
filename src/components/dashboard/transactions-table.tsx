@@ -1,6 +1,5 @@
 'use client';
 
-import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -10,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatCurrency } from '@/lib/utils';
+import { formatAmount } from '@/lib/utils/format-amount';
 import { ExternalLink } from 'lucide-react';
 
 type PaymentEvent = {
@@ -20,16 +19,16 @@ type PaymentEvent = {
   payment_method: string | null;
   stripe_payment_intent_id: string | null;
   hedera_transaction_id: string | null;
-  amount_received: any;
+  amount_received: number | string | null;
   currency_received: string | null;
   created_at: Date;
-  metadata: any;
+  metadata: Record<string, unknown> | null;
   payment_links: {
     id: string;
     short_code: string;
     description: string | null;
     invoice_reference: string | null;
-    amount: any;
+    amount: number | string;
     currency: string;
   };
 };
@@ -39,24 +38,36 @@ interface TransactionsTableProps {
 }
 
 export function TransactionsTable({ events }: TransactionsTableProps) {
+  // Helper to format date consistently (avoid hydration issues)
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date);
+  };
+
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Payment Link</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead>Method</TableHead>
-            <TableHead>Transaction ID</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
+            <TableHead className="min-w-[150px]">Date</TableHead>
+            <TableHead className="min-w-[120px]">Payment Link</TableHead>
+            <TableHead className="min-w-[180px]">Description</TableHead>
+            <TableHead className="min-w-[100px]">Method</TableHead>
+            <TableHead className="min-w-[180px]">Transaction ID</TableHead>
+            <TableHead className="text-right min-w-[120px]">Amount</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {events.map((event) => (
             <TableRow key={event.id}>
               <TableCell className="font-mono text-sm">
-                {format(new Date(event.created_at), 'MMM d, yyyy HH:mm')}
+                {formatDate(new Date(event.created_at))}
               </TableCell>
               <TableCell>
                 <div className="flex flex-col">
@@ -110,7 +121,7 @@ export function TransactionsTable({ events }: TransactionsTableProps) {
                 {!event.stripe_payment_intent_id && !event.hedera_transaction_id && '-'}
               </TableCell>
               <TableCell className="text-right font-medium">
-                {formatCurrency(
+                {formatAmount(
                   Number(event.amount_received || event.payment_links.amount),
                   event.currency_received || event.payment_links.currency
                 )}
