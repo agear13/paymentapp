@@ -174,23 +174,40 @@ export async function sendHbarPayment(
     let result: any;
     
     try {
-      // Debug: Check available methods and state
+      // Debug: Check available methods and properties  
       console.log('[HederaWalletClient] HashConnect methods:', Object.keys(hc).filter(k => typeof (hc as any)[k] === 'function'));
-      console.log('[HederaWalletClient] Signer available?', !!(hc as any).signer);
+      console.log('[HederaWalletClient] HashConnect properties:', Object.keys(hc).filter(k => typeof (hc as any)[k] !== 'function'));
+      console.log('[HederaWalletClient] sendTransaction exists?', 'sendTransaction' in hc);
+      console.log('[HederaWalletClient] sendTransaction type:', typeof (hc as any).sendTransaction);
       
-      // Check if we have an active signer
-      if ((hc as any).signer) {
-        try {
-          console.log('[HederaWalletClient] Signer type:', typeof (hc as any).signer);
-          const signerMethods = Object.keys((hc as any).signer).filter((k: string) => typeof ((hc as any).signer as any)[k] === 'function');
-          console.log('[HederaWalletClient] Signer methods:', signerMethods);
-        } catch (e) {
-          console.warn('[HederaWalletClient] Could not inspect signer:', e);
-        }
-      }
+      // Check for request method (alternative API)
+      console.log('[HederaWalletClient] request method exists?', 'request' in hc);
+      console.log('[HederaWalletClient] request type:', typeof (hc as any).request);
       
-      // HashConnect v3 sendTransaction method
-      if (typeof hc.sendTransaction === 'function') {
+      // Try using the request method instead of sendTransaction
+      if (typeof (hc as any).request === 'function') {
+        console.log('[HederaWalletClient] Using request() API for transaction');
+        console.log('[HederaWalletClient] Topic:', pairingData.topic);
+        console.log('[HederaWalletClient] Wallet account:', walletState.accountId);
+        console.log('[HederaWalletClient] Pairing accounts:', pairingData.accountIds);
+        console.log('[HederaWalletClient] Transaction bytes length:', transactionBytes.length);
+        
+        // Use the first account from pairing data
+        const accountToSign = pairingData.accountIds && pairingData.accountIds.length > 0 
+          ? pairingData.accountIds[0] 
+          : walletState.accountId;
+        
+        console.log('[HederaWalletClient] Using account for signing:', accountToSign);
+        
+        // HashConnect v3 request API
+        result = await (hc as any).request(pairingData.topic, {
+          method: 'hedera_signAndExecuteTransaction',
+          params: {
+            signerAccountId: accountToSign,
+            transactionList: transactionBytes,
+          },
+        });
+      } else if (typeof hc.sendTransaction === 'function') {
         console.log('[HederaWalletClient] Using sendTransaction API');
         console.log('[HederaWalletClient] Topic:', pairingData.topic);
         console.log('[HederaWalletClient] Wallet account:', walletState.accountId);

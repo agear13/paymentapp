@@ -200,7 +200,7 @@ export async function initHashConnect(): Promise<void> {
       }
 
       // Register event listeners (ONCE)
-      (hashconnect as any).pairingEvent.on((pairingData: any) => {
+      (hashconnect as any).pairingEvent.on(async (pairingData: any) => {
         console.log('[HashConnect] ========== PAIRING EVENT FIRED ==========');
         console.log('[HashConnect] pairingEvent raw:', pairingData);
         console.log('[HashConnect] pairingEvent accountIds:', pairingData?.accountIds);
@@ -209,17 +209,22 @@ export async function initHashConnect(): Promise<void> {
         // Extract topic from various possible locations
         let topic = pairingData?.topic;
         
-        // If topic not in event, try to get it from the active session (not pairings)
-        // The session contains the actual WalletConnect session after approval
+        // If topic not in event, wait a moment then try to get it from the active session
+        // The session needs a moment to be created after approval
         if (!topic && (hashconnect as any).core?.session) {
+          console.log('[HashConnect] Topic not in event, waiting for session to be created...');
+          await new Promise(resolve => setTimeout(resolve, 500)); // Wait for session creation
+          
           try {
             const sessions = (hashconnect as any).core.session.getAll?.();
-            console.log('[HashConnect] Checking core.session.getAll():', sessions);
+            console.log('[HashConnect] Checking core.session.getAll() after delay:', sessions);
             if (sessions && sessions.length > 0) {
               // Get the most recently created session (highest expiry time)
               const sortedSessions = sessions.sort((a: any, b: any) => b.expiry - a.expiry);
               topic = sortedSessions[0].topic;
               console.log('[HashConnect] ✅ Found topic in core.session (most recent):', topic);
+            } else {
+              console.warn('[HashConnect] No sessions found after waiting');
             }
           } catch (e) {
             console.warn('[HashConnect] Failed to get sessions from core:', e);
@@ -235,7 +240,7 @@ export async function initHashConnect(): Promise<void> {
               // Get most recently created pairing
               const sortedPairings = pairings.sort((a: any, b: any) => b.expiry - a.expiry);
               topic = sortedPairings[0].topic;
-              console.log('[HashConnect] ✅ Found topic in core.pairing.pairings (fallback):', topic);
+              console.log('[HashConnect] ⚠️  Using fallback topic from core.pairing.pairings:', topic);
             }
           } catch (e) {
             console.warn('[HashConnect] Failed to get pairings from core:', e);
@@ -262,19 +267,22 @@ export async function initHashConnect(): Promise<void> {
         console.log('[HashConnect] ========== PAIRING EVENT COMPLETE ==========');
       });
 
-      (hashconnect as any).connectionStatusChangeEvent.on((status: any) => {
+      (hashconnect as any).connectionStatusChangeEvent.on(async (status: any) => {
         console.log('[HashConnect] Connection status changed:', status);
         latestConnectionStatus = status;
         
         // When status becomes "Paired", try to capture the topic from active session
         if (status === 'Paired' && latestPairingData && !latestPairingData.topic) {
-          console.log('[HashConnect] Status is Paired, attempting to capture topic from session...');
+          console.log('[HashConnect] Status is Paired, waiting for session to be fully created...');
+          
+          // Wait a bit for the session to be properly registered in core.session
+          await new Promise(resolve => setTimeout(resolve, 300));
           
           // Try to get topic from active session first (this is the correct source)
           if ((hashconnect as any).core?.session) {
             try {
               const sessions = (hashconnect as any).core.session.getAll();
-              console.log('[HashConnect] Sessions from core.session:', sessions);
+              console.log('[HashConnect] Sessions from core.session after delay:', sessions);
               if (sessions && sessions.length > 0) {
                 // Get the most recently created session
                 const sortedSessions = sessions.sort((a: any, b: any) => b.expiry - a.expiry);
@@ -284,6 +292,8 @@ export async function initHashConnect(): Promise<void> {
                 
                 // Update wallet state to trigger re-render
                 updateWalletState({ ...walletState });
+              } else {
+                console.warn('[HashConnect] No sessions found in core.session after delay');
               }
             } catch (e) {
               console.warn('[HashConnect] Failed to capture topic on Paired status:', e);
