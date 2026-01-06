@@ -15,7 +15,7 @@ import {
   openHashpackPairingModal,
 } from '@/lib/hashconnectClient';
 import { hbarToTinybars, toSmallestUnit } from './amount-utils';
-import { CURRENT_NETWORK, type TokenType } from './constants';
+import { CURRENT_NETWORK, CURRENT_NODE_ACCOUNT_ID, type TokenType } from './constants';
 
 // Hedera SDK imports (client-side only)
 let TransferTransaction: any = null;
@@ -144,13 +144,15 @@ export async function sendHbarPayment(
     });
     
     // Build Hedera transaction using SDK
+    // Use Hbar.fromTinybars() to properly handle bigint values
+    const hbarAmount = HbarClass.fromTinybars(tinybars);
     const transaction = new Transfer()
-      .addHbarTransfer(walletState.accountId, new HbarClass(Number(tinybars) * -1, 'tinybar'))
-      .addHbarTransfer(merchantAccountId, new HbarClass(Number(tinybars), 'tinybar'))
-      .setTransactionMemo(memo);
+      .addHbarTransfer(walletState.accountId, hbarAmount.negated())
+      .addHbarTransfer(merchantAccountId, hbarAmount)
+      .setTransactionMemo(memo)
+      .setNodeAccountIds([CURRENT_NODE_ACCOUNT_ID]); // Required for freezing
     
     // Freeze transaction for signing
-    // Note: We don't set a node account or transaction ID as HashConnect handles this
     const frozenTx = transaction.freeze();
     
     // Convert to bytes for HashConnect
@@ -318,10 +320,18 @@ export async function sendTokenPayment(
     const { TransferTransaction: Transfer } = await loadHederaSDK();
     
     // Build Hedera token transfer transaction using SDK
+    // For token transfers, amounts must be Long (int64), so we convert bigint to number
+    // This is safe for HTS tokens as they typically have 6-8 decimals (max ~9 quadrillion units)
+    const amountNumber = Number(smallestUnit);
+    if (!Number.isSafeInteger(amountNumber)) {
+      throw new Error('Token amount exceeds safe integer range');
+    }
+    
     const transaction = new Transfer()
-      .addTokenTransfer(tokenId, walletState.accountId, Number(smallestUnit) * -1)
-      .addTokenTransfer(tokenId, merchantAccountId, Number(smallestUnit))
-      .setTransactionMemo(memo);
+      .addTokenTransfer(tokenId, walletState.accountId, -amountNumber)
+      .addTokenTransfer(tokenId, merchantAccountId, amountNumber)
+      .setTransactionMemo(memo)
+      .setNodeAccountIds([CURRENT_NODE_ACCOUNT_ID]); // Required for freezing
     
     // Freeze transaction for signing
     const frozenTx = transaction.freeze();

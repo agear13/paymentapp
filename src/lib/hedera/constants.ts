@@ -91,6 +91,17 @@ export const CURRENT_MIRROR_URL =
   MIRROR_NODE_URLS[CURRENT_NETWORK.toUpperCase() as keyof typeof MIRROR_NODE_URLS] ||
   MIRROR_NODE_URLS.TESTNET;
 
+// Default Node Account IDs (used for transaction submission)
+export const DEFAULT_NODE_ACCOUNT_IDS = {
+  MAINNET: '0.0.3', // Hedera mainnet node 0
+  TESTNET: '0.0.3', // Hedera testnet node 0
+  PREVIEWNET: '0.0.3', // Hedera previewnet node 0
+} as const;
+
+export const CURRENT_NODE_ACCOUNT_ID =
+  DEFAULT_NODE_ACCOUNT_IDS[CURRENT_NETWORK.toUpperCase() as keyof typeof DEFAULT_NODE_ACCOUNT_IDS] ||
+  DEFAULT_NODE_ACCOUNT_IDS.TESTNET;
+
 // HashConnect Configuration
 export const HASHCONNECT_CONFIG = {
   APP_METADATA: {
