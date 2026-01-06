@@ -104,14 +104,27 @@ export async function sendHbarPayment(
       throw new Error('Wallet not connected');
     }
     
-    // Get pairing data
-    const pairingData = getLatestPairingData();
-    if (!pairingData || !pairingData.topic) {
-      throw new Error('No active pairing');
+    // Get pairing data with retry (sometimes there's a brief delay after pairing)
+    let pairingData = getLatestPairingData();
+    let retries = 0;
+    while ((!pairingData || !pairingData.topic) && retries < 5) {
+      console.log('[HederaWalletClient] Waiting for pairing data... attempt', retries + 1);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      pairingData = getLatestPairingData();
+      retries++;
     }
     
+    if (!pairingData || !pairingData.topic) {
+      throw new Error('Pairing not ready. Please wait a moment and try again, or disconnect and reconnect your wallet.');
+    }
+    
+    console.log('[HederaWalletClient] Pairing data confirmed:', {
+      topic: pairingData.topic,
+      accountIds: pairingData.accountIds,
+    });
+    
     // Load Hedera SDK
-    const { TransferTransaction: Transfer, Hbar: HbarClass, AccountId: AccId } = await loadHederaSDK();
+    const { TransferTransaction: Transfer, Hbar: HbarClass } = await loadHederaSDK();
     
     // Convert amount to tinybars
     const tinybars = hbarToTinybars(amountHbar);
@@ -258,11 +271,24 @@ export async function sendTokenPayment(
       throw new Error('Wallet not connected');
     }
     
-    // Get pairing data
-    const pairingData = getLatestPairingData();
-    if (!pairingData || !pairingData.topic) {
-      throw new Error('No active pairing');
+    // Get pairing data with retry (sometimes there's a brief delay after pairing)
+    let pairingData = getLatestPairingData();
+    let retries = 0;
+    while ((!pairingData || !pairingData.topic) && retries < 5) {
+      console.log('[HederaWalletClient] Waiting for pairing data... attempt', retries + 1);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      pairingData = getLatestPairingData();
+      retries++;
     }
+    
+    if (!pairingData || !pairingData.topic) {
+      throw new Error('Pairing not ready. Please wait a moment and try again, or disconnect and reconnect your wallet.');
+    }
+    
+    console.log('[HederaWalletClient] Pairing data confirmed:', {
+      topic: pairingData.topic,
+      accountIds: pairingData.accountIds,
+    });
     
     // Convert amount to smallest unit
     const smallestUnit = toSmallestUnit(amount, decimals);
@@ -279,7 +305,7 @@ export async function sendTokenPayment(
     });
     
     // Load Hedera SDK
-    const { TransferTransaction: Transfer, AccountId: AccId, TokenId } = await loadHederaSDK();
+    const { TransferTransaction: Transfer } = await loadHederaSDK();
     
     // Build Hedera token transfer transaction using SDK
     const transaction = new Transfer()

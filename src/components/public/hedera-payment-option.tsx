@@ -261,7 +261,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
         memo,
       });
       
-      toast.info('Please approve the transaction in HashPack');
+      toast.info('Preparing transaction...');
       
       setPaymentStep('awaiting_approval');
       
@@ -335,7 +335,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
         memo,
       });
       
-      toast.info(`Please approve the ${selectedToken} transaction in HashPack`);
+      toast.info(`Preparing ${selectedToken} transaction...`);
       
       setPaymentStep('awaiting_approval');
       
@@ -793,7 +793,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
                 ))}
 
               <Button
-                onClick={handleStartMonitoring}
+                onClick={() => handleStartMonitoring(15)}
                 className="w-full h-12 text-base font-semibold"
                 size="lg"
               >
