@@ -222,15 +222,37 @@ export async function sendHbarPayment(
         // HashConnect v3 API: sendTransaction(topic, transactionRequest)
         // IMPORTANT: Must use session topic, not pairing topic!
         console.log('[HederaWalletClient] About to call sendTransaction with SESSION topic...');
+        console.log('[HederaWalletClient] Transaction request:', {
+          topic: sessionTopic,
+          byteArrayLength: transactionBytes.length,
+          accountToSign: accountToSign,
+          returnTransaction: false,
+        });
+        
         try {
-          result = await hc.sendTransaction(sessionTopic, {
+          // Add a timeout to prevent infinite hanging
+          const sendTransactionPromise = hc.sendTransaction(sessionTopic, {
             byteArray: transactionBytes,
             metadata: {
               accountToSign: accountToSign,
               returnTransaction: false,
             },
           });
-          console.log('[HederaWalletClient] sendTransaction call completed');
+          
+          console.log('[HederaWalletClient] sendTransaction promise created, waiting for response...');
+          console.log('[HederaWalletClient] ⏳ Check your HashPack wallet for approval prompt...');
+          
+          // Wait for the result with a generous timeout (2 minutes)
+          result = await Promise.race([
+            sendTransactionPromise,
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Transaction request timeout after 120 seconds')), 120000)
+            )
+          ]);
+          
+          console.log('[HederaWalletClient] ✅ sendTransaction call completed successfully');
+          console.log('[HederaWalletClient] Result type:', typeof result);
+          console.log('[HederaWalletClient] Result:', result);
         } catch (sendError: any) {
           console.error('[HederaWalletClient] ❌ sendTransaction threw error:', sendError);
           console.error('[HederaWalletClient] Error type:', typeof sendError);
@@ -430,15 +452,37 @@ export async function sendTokenPayment(
         // HashConnect v3 API: sendTransaction(topic, transactionRequest)
         // IMPORTANT: Must use session topic, not pairing topic!
         console.log('[HederaWalletClient] About to call sendTransaction for token with SESSION topic...');
+        console.log('[HederaWalletClient] Token transaction request:', {
+          topic: sessionTopic,
+          byteArrayLength: transactionBytes.length,
+          accountToSign: accountToSign,
+          returnTransaction: false,
+        });
+        
         try {
-          result = await hc.sendTransaction(sessionTopic, {
+          // Add a timeout to prevent infinite hanging
+          const sendTransactionPromise = hc.sendTransaction(sessionTopic, {
             byteArray: transactionBytes,
             metadata: {
               accountToSign: accountToSign,
               returnTransaction: false,
             },
           });
-          console.log('[HederaWalletClient] sendTransaction call completed for token');
+          
+          console.log('[HederaWalletClient] sendTransaction promise created, waiting for response...');
+          console.log('[HederaWalletClient] ⏳ Check your HashPack wallet for approval prompt...');
+          
+          // Wait for the result with a generous timeout (2 minutes)
+          result = await Promise.race([
+            sendTransactionPromise,
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Transaction request timeout after 120 seconds')), 120000)
+            )
+          ]);
+          
+          console.log('[HederaWalletClient] ✅ sendTransaction call completed for token successfully');
+          console.log('[HederaWalletClient] Result type:', typeof result);
+          console.log('[HederaWalletClient] Result:', result);
         } catch (sendError: any) {
           console.error('[HederaWalletClient] ❌ sendTransaction threw error (token):', sendError);
           console.error('[HederaWalletClient] Error type:', typeof sendError);
