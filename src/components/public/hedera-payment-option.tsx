@@ -42,12 +42,16 @@ type PaymentStep =
   | 'select_method' 
   | 'connect_wallet' 
   | 'select_token' 
+  | 'choose_payment_method'
+  | 'manual_payment'
   | 'confirm_payment' 
   | 'requesting_signature' 
   | 'awaiting_approval' 
   | 'monitoring' 
   | 'complete' 
   | 'rejected';
+
+type PaymentMethod = 'quick_pay' | 'manual';
 
 export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
   isAvailable,
@@ -64,6 +68,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('select_method');
   const [paymentAmounts, setPaymentAmounts] = useState<TokenPaymentAmount[]>([]);
   const [selectedToken, setSelectedToken] = useState<TokenType>('USDC');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('quick_pay');
   const [isLoadingAmounts, setIsLoadingAmounts] = useState(false);
   const [merchantAccountId, setMerchantAccountId] = useState<string | null>(null);
   const [isLoadingMerchant, setIsLoadingMerchant] = useState(false);
@@ -720,16 +725,123 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
               />
 
               <Button
-                onClick={handleConfirmPayment}
+                onClick={() => setPaymentStep('choose_payment_method')}
                 className="w-full h-12 text-base font-semibold"
                 size="lg"
               >
-                Pay with {selectedToken}
+                Continue with {selectedToken}
               </Button>
             </>
           )}
 
-          {/* Step 3a: Requesting Signature (HBAR only) */}
+          {/* Step 3a: Choose Payment Method */}
+          {paymentStep === 'choose_payment_method' && (
+            <div className="space-y-4">
+              <div className="text-center mb-4">
+                <h3 className="text-lg font-semibold mb-2">Choose Payment Method</h3>
+                <p className="text-sm text-muted-foreground">
+                  Select how you'd like to complete your payment
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                {/* Quick Pay Option */}
+                <button
+                  onClick={() => {
+                    setPaymentMethod('quick_pay');
+                    handleConfirmPayment();
+                  }}
+                  className="group relative overflow-hidden rounded-lg border-2 border-primary/20 hover:border-primary bg-card p-6 text-left transition-all hover:shadow-lg"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Zap className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-base font-semibold mb-1">Quick Pay (Automated)</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Pre-filled transaction with one-click approval in HashPack
+                      </p>
+                      <div className="mt-2 flex items-center gap-2 text-xs text-primary">
+                        <Check className="h-3 w-3" />
+                        <span>Fastest option</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Manual Payment Option */}
+                <button
+                  onClick={() => {
+                    setPaymentMethod('manual');
+                    setPaymentStep('manual_payment');
+                  }}
+                  className="group relative overflow-hidden rounded-lg border-2 border-muted hover:border-primary bg-card p-6 text-left transition-all hover:shadow-lg"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                      <Wallet className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-base font-semibold mb-1">Manual Payment</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Copy payment details and send from your wallet manually
+                      </p>
+                      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                        <Check className="h-3 w-3" />
+                        <span>Works with any wallet</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              <Button
+                onClick={() => setPaymentStep('select_token')}
+                variant="outline"
+                className="w-full"
+              >
+                Back to Token Selection
+              </Button>
+            </div>
+          )}
+
+          {/* Step 3b: Manual Payment Instructions */}
+          {paymentStep === 'manual_payment' && merchantAccountId && (() => {
+            const selectedAmount = paymentAmounts.find(a => a.tokenType === selectedToken);
+            if (!selectedAmount) return null;
+
+            return (
+              <div className="space-y-4">
+                <PaymentInstructions
+                  tokenType={selectedToken}
+                  amount={selectedAmount.requiredAmount}
+                  totalAmount={selectedAmount.totalAmount}
+                  merchantAccountId={merchantAccountId}
+                  memo={`Provvypay:${paymentLinkId}`}
+                  paymentLinkId={paymentLinkId}
+                />
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => setPaymentStep('choose_payment_method')}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    onClick={() => handleStartMonitoring()}
+                    className="w-full"
+                  >
+                    I&apos;ve Sent the Payment
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Step 3c: Requesting Signature (HBAR only) */}
           {paymentStep === 'requesting_signature' && (
             <div className="text-center py-8">
               <Loader2 className="h-12 w-12 animate-spin text-purple-600 mx-auto mb-4" />
@@ -740,7 +852,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
             </div>
           )}
 
-          {/* Step 3b: Awaiting Approval (HBAR only) */}
+          {/* Step 3d: Awaiting Approval (HBAR only) */}
           {paymentStep === 'awaiting_approval' && (
             <div className="text-center py-8">
               <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
@@ -756,7 +868,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
             </div>
           )}
 
-          {/* Step 3c: Rejected */}
+          {/* Step 3e: Rejected */}
           {paymentStep === 'rejected' && (
             <div className="text-center py-8">
               <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
@@ -776,8 +888,8 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
             </div>
           )}
 
-          {/* Step 3d: Payment Instructions (for non-HBAR tokens) */}
-          {paymentStep === 'confirm_payment' && (
+          {/* Step 3f: OLD Payment Instructions - NOT USED ANYMORE (kept for backwards compatibility) */}
+          {paymentStep === 'confirm_payment' && false && (
             <>
               {paymentAmounts
                 .filter(a => a.tokenType === selectedToken)
