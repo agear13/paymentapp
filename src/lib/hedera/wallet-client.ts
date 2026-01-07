@@ -222,19 +222,32 @@ export async function sendHbarPayment(
         console.log('[HederaWalletClient] Using account for signing:', accountToSign);
         
         // HashConnect v3 API: sendTransaction(topic, transactionRequest)
-        result = await hc.sendTransaction(pairingData.topic, {
-          byteArray: transactionBytes,
-          metadata: {
-            accountToSign: accountToSign,
-            returnTransaction: false,
-          },
-        });
+        console.log('[HederaWalletClient] About to call sendTransaction...');
+        try {
+          result = await hc.sendTransaction(pairingData.topic, {
+            byteArray: transactionBytes,
+            metadata: {
+              accountToSign: accountToSign,
+              returnTransaction: false,
+            },
+          });
+          console.log('[HederaWalletClient] sendTransaction call completed');
+        } catch (sendError: any) {
+          console.error('[HederaWalletClient] ❌ sendTransaction threw error:', sendError);
+          console.error('[HederaWalletClient] Error type:', typeof sendError);
+          console.error('[HederaWalletClient] Error message:', sendError?.message);
+          console.error('[HederaWalletClient] Error stack:', sendError?.stack);
+          throw sendError;
+        }
       } else {
         throw new Error('sendTransaction method not available on HashConnect instance');
       }
     } catch (error: any) {
       // Check if user rejected
       const errorMsg = error?.message?.toLowerCase() || String(error).toLowerCase();
+      console.error('[HederaWalletClient] Caught error in sendHbarPayment:', error);
+      console.error('[HederaWalletClient] Error message:', errorMsg);
+      
       if (
         errorMsg.includes('reject') ||
         errorMsg.includes('cancel') ||
@@ -250,6 +263,7 @@ export async function sendHbarPayment(
       }
       
       // Re-throw other errors
+      console.error('[HederaWalletClient] Re-throwing error');
       throw error;
     }
     
@@ -418,19 +432,32 @@ export async function sendTokenPayment(
         console.log('[HederaWalletClient] Using account for signing:', accountToSign);
         
         // HashConnect v3 API: sendTransaction(topic, transactionRequest)
-        result = await hc.sendTransaction(pairingData.topic, {
-          byteArray: transactionBytes,
-          metadata: {
-            accountToSign: accountToSign,
-            returnTransaction: false,
-          },
-        });
+        console.log('[HederaWalletClient] About to call sendTransaction for token...');
+        try {
+          result = await hc.sendTransaction(pairingData.topic, {
+            byteArray: transactionBytes,
+            metadata: {
+              accountToSign: accountToSign,
+              returnTransaction: false,
+            },
+          });
+          console.log('[HederaWalletClient] sendTransaction call completed for token');
+        } catch (sendError: any) {
+          console.error('[HederaWalletClient] ❌ sendTransaction threw error (token):', sendError);
+          console.error('[HederaWalletClient] Error type:', typeof sendError);
+          console.error('[HederaWalletClient] Error message:', sendError?.message);
+          console.error('[HederaWalletClient] Error stack:', sendError?.stack);
+          throw sendError;
+        }
       } else {
         throw new Error('sendTransaction method not available on HashConnect instance');
       }
     } catch (error: any) {
       // Check if user rejected
       const errorMsg = error?.message?.toLowerCase() || String(error).toLowerCase();
+      console.error('[HederaWalletClient] Caught error in sendTokenPayment:', error);
+      console.error('[HederaWalletClient] Error message:', errorMsg);
+      
       if (
         errorMsg.includes('reject') ||
         errorMsg.includes('cancel') ||
@@ -472,6 +499,7 @@ export async function sendTokenPayment(
       }
       
       // Re-throw other errors
+      console.error('[HederaWalletClient] Re-throwing error');
       throw error;
     }
     
