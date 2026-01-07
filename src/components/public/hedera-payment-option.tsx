@@ -398,22 +398,35 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
   };
 
   const handleStartMonitoring = async (timeWindowMinutes: number = 15) => {
+    console.log('[HederaPaymentOption] 🔍 handleStartMonitoring called');
+    console.log('[HederaPaymentOption] Selected token:', selectedToken);
+    console.log('[HederaPaymentOption] Merchant account:', merchantAccountId);
+    console.log('[HederaPaymentOption] Payment link ID:', paymentLinkId);
+    console.log('[HederaPaymentOption] Time window (minutes):', timeWindowMinutes);
+    
     setPaymentStep('monitoring');
+    console.log('[HederaPaymentOption] Payment step set to: monitoring');
     
     // Monitor for payment using retry strategy
     const selectedAmount = paymentAmounts.find(a => a.tokenType === selectedToken);
+    console.log('[HederaPaymentOption] Selected amount found:', !!selectedAmount, selectedAmount);
+    
     if (!selectedAmount) {
+      console.error('[HederaPaymentOption] ❌ Payment amount not found');
       toast.error('Payment amount not found');
       return;
     }
 
     const walletState = getWalletState();
+    console.log('[HederaPaymentOption] Wallet state:', walletState);
+    
     const maxAttempts = 20; // ~60 seconds total (20 * 3s)
     let attempts = 0;
     let delay = 3000; // Start with 3 seconds
 
     // Build memo for monitoring (same format as transaction)
     const memo = `Provvypay:${paymentLinkId}`;
+    console.log('[HederaPaymentOption] Memo for monitoring:', memo);
 
     const checkPayment = async (): Promise<boolean> => {
       attempts++;
@@ -421,19 +434,23 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
       try {
         console.log(`[Payment Monitor] Attempt ${attempts}/${maxAttempts} (window: ${timeWindowMinutes}min)`);
         
+        const monitorRequest = {
+          paymentLinkId,
+          merchantAccountId,
+          payerAccountId: walletState.accountId,
+          network: CURRENT_NETWORK,
+          tokenType: selectedToken,
+          expectedAmount: parseFloat(selectedAmount.totalAmount),
+          memo, // Include memo for matching
+          timeWindowMinutes, // Use parameter (15 for HBAR, 60 for tokens)
+        };
+        
+        console.log('[Payment Monitor] Sending request:', monitorRequest);
+        
         const response = await fetch('/api/hedera/transactions/monitor', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            paymentLinkId,
-            merchantAccountId,
-            payerAccountId: walletState.accountId,
-            network: CURRENT_NETWORK,
-            tokenType: selectedToken,
-            expectedAmount: parseFloat(selectedAmount.totalAmount),
-            memo, // Include memo for matching
-            timeWindowMinutes, // Use parameter (15 for HBAR, 60 for tokens)
-          }),
+          body: JSON.stringify(monitorRequest),
         });
 
         if (!response.ok) {
