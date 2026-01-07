@@ -839,19 +839,22 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
                   paymentLinkId={paymentLinkId}
                 />
 
-                <div className="flex gap-2">
+                <div className="space-y-3 pt-2">
+                  <Button
+                    onClick={() => handleStartMonitoring()}
+                    className="w-full h-12 text-base font-semibold bg-green-600 hover:bg-green-700"
+                    size="lg"
+                  >
+                    <Check className="mr-2 h-5 w-5" />
+                    I&apos;ve Sent the Payment
+                  </Button>
+                  
                   <Button
                     onClick={() => setPaymentStep('choose_payment_method')}
                     variant="outline"
                     className="w-full"
                   >
                     Back
-                  </Button>
-                  <Button
-                    onClick={() => handleStartMonitoring()}
-                    className="w-full"
-                  >
-                    I&apos;ve Sent the Payment
                   </Button>
                 </div>
               </div>
