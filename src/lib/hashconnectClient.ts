@@ -673,18 +673,35 @@ export async function getSessionTopic(maxRetries: number = 3, delayMs: number = 
       // Log all sessions
       console.log(`[HashConnect] Attempt ${attempt}: All sessions found:`, sessions);
       
-      // Get the most recently created session (highest expiry)
-      const sortedSessions = sessions.sort((a: any, b: any) => b.expiry - a.expiry);
-      const sessionTopic = sortedSessions[0].topic;
+      // Filter sessions to only those with Hedera namespace (required for signing)
+      const hederaSessions = sessions.filter((s: any) => {
+        const hasHederaNamespace = s?.namespaces?.hedera;
+        console.log(`[HashConnect] Session ${s.topic?.substring(0, 8)}... has hedera namespace:`, !!hasHederaNamespace);
+        if (hasHederaNamespace) {
+          console.log(`[HashConnect] Session ${s.topic?.substring(0, 8)}... hedera chains:`, s.namespaces.hedera.chains);
+        }
+        return hasHederaNamespace;
+      });
       
-      if (sessionTopic) {
-        console.log('[HashConnect] ✅ Found valid SESSION topic:', sessionTopic);
-        console.log('[HashConnect] Session details:', {
-          topic: sessionTopic,
-          expiry: sortedSessions[0].expiry,
-          pairingTopic: sortedSessions[0].pairingTopic,
-        });
-        return sessionTopic;
+      console.log(`[HashConnect] Attempt ${attempt}: Filtered to ${hederaSessions.length} Hedera-enabled sessions`);
+      
+      if (hederaSessions.length === 0) {
+        console.warn(`[HashConnect] Attempt ${attempt}: No sessions with Hedera namespace found`);
+      } else {
+        // Get the most recently created Hedera session (highest expiry)
+        const sortedSessions = hederaSessions.sort((a: any, b: any) => b.expiry - a.expiry);
+        const sessionTopic = sortedSessions[0].topic;
+        
+        if (sessionTopic) {
+          console.log('[HashConnect] ✅ Found valid HEDERA SESSION topic:', sessionTopic);
+          console.log('[HashConnect] Session details:', {
+            topic: sessionTopic,
+            expiry: sortedSessions[0].expiry,
+            pairingTopic: sortedSessions[0].pairingTopic,
+            hederaChains: sortedSessions[0].namespaces.hedera.chains,
+          });
+          return sessionTopic;
+        }
       }
     } else {
       console.warn(`[HashConnect] Attempt ${attempt}: No sessions found in any location`);
