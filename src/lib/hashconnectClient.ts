@@ -506,15 +506,29 @@ export function getLatestPairingData(): any {
     if (hc && (hc as any).core?.session) {
       try {
         const sessions = (hc as any).core.session.getAll?.();
-        console.log('[HashConnect] core.session.getAll():', sessions);
+        console.log('[HashConnect] 🔍 Checking core.session.getAll():', sessions);
+        console.log('[HashConnect] 🔍 Number of sessions found:', sessions?.length || 0);
+        
         if (sessions && sessions.length > 0) {
+          // Log details of all sessions
+          sessions.forEach((session: any, index: number) => {
+            console.log(`[HashConnect] Session ${index}:`, {
+              topic: session.topic,
+              expiry: session.expiry,
+              pairingTopic: session.pairingTopic,
+              acknowledged: session.acknowledged,
+            });
+          });
+          
           // Get the most recently created session (highest expiry)
           const sortedSessions = sessions.sort((a: any, b: any) => b.expiry - a.expiry);
           if (sortedSessions[0].topic) {
-            console.log('[HashConnect] ✅ Found topic in core.session (most recent):', sortedSessions[0].topic);
+            console.log('[HashConnect] ✅ Found SESSION topic in core.session (most recent):', sortedSessions[0].topic);
             latestPairingData.topic = sortedSessions[0].topic;
             return latestPairingData;
           }
+        } else {
+          console.warn('[HashConnect] ⚠️  No sessions found in core.session - session may not be fully established yet');
         }
       } catch (e) {
         console.warn('[HashConnect] Failed to get sessions from core.session:', e);
@@ -563,6 +577,61 @@ export function getLatestPairingData(): any {
   
   console.warn('[HashConnect] getLatestPairingData - no valid pairing data with topic available');
   return latestPairingData;
+}
+
+/**
+ * Get the active session topic (needed for signing transactions)
+ * This is different from the pairing topic!
+ * Retries with delays to allow session to be fully established
+ * 
+ * @param maxRetries Maximum number of retry attempts (default 3)
+ * @param delayMs Delay between retries in milliseconds (default 300)
+ * @returns Session topic string or null if not found
+ */
+export async function getSessionTopic(maxRetries: number = 3, delayMs: number = 300): Promise<string | null> {
+  console.log('[HashConnect] getSessionTopic - starting search...');
+  
+  if (!hc) {
+    console.warn('[HashConnect] HashConnect not initialized');
+    return null;
+  }
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      console.log(`[HashConnect] getSessionTopic - retry attempt ${attempt}/${maxRetries}`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+    
+    // Check core.session for active sessions
+    if ((hc as any).core?.session) {
+      try {
+        const sessions = (hc as any).core.session.getAll?.();
+        console.log(`[HashConnect] Attempt ${attempt}: core.session.getAll() returned:`, sessions?.length || 0, 'sessions');
+        
+        if (sessions && sessions.length > 0) {
+          // Get the most recently created session (highest expiry)
+          const sortedSessions = sessions.sort((a: any, b: any) => b.expiry - a.expiry);
+          const sessionTopic = sortedSessions[0].topic;
+          
+          if (sessionTopic) {
+            console.log('[HashConnect] ✅ Found valid SESSION topic:', sessionTopic);
+            console.log('[HashConnect] Session details:', {
+              topic: sessionTopic,
+              expiry: sortedSessions[0].expiry,
+              pairingTopic: sortedSessions[0].pairingTopic,
+            });
+            return sessionTopic;
+          }
+        }
+      } catch (e) {
+        console.warn(`[HashConnect] Attempt ${attempt}: Failed to get sessions:`, e);
+      }
+    }
+  }
+  
+  console.error('[HashConnect] ❌ Could not find session topic after', maxRetries, 'retries');
+  console.error('[HashConnect] This means the WalletConnect session is not properly established');
+  return null;
 }
 
 /**

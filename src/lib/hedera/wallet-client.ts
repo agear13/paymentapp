@@ -13,6 +13,7 @@ import {
   getWalletState,
   initHashConnect,
   openHashpackPairingModal,
+  getSessionTopic,
 } from '@/lib/hashconnectClient';
 import { hbarToTinybars, toSmallestUnit } from './amount-utils';
 import { CURRENT_NETWORK, CURRENT_NODE_ACCOUNT_ID, type TokenType } from './constants';
@@ -110,27 +111,24 @@ export async function sendHbarPayment(
     
     // Get pairing data with retry (sometimes there's a brief delay after pairing)
     console.log('[HederaWalletClient] [HBAR] Attempting to get pairing data...');
-    let pairingData = getLatestPairingData();
+    const pairingData = getLatestPairingData();
     console.log('[HederaWalletClient] [HBAR] Initial pairing data:', pairingData);
     
-    let retries = 0;
-    while ((!pairingData || !pairingData.topic) && retries < 5) {
-      console.log('[HederaWalletClient] [HBAR] Waiting for pairing data... attempt', retries + 1);
-      console.log('[HederaWalletClient] [HBAR] Current pairing data has topic?', !!pairingData?.topic);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      pairingData = getLatestPairingData();
-      retries++;
+    if (!pairingData || !pairingData.accountIds || pairingData.accountIds.length === 0) {
+      throw new Error('No wallet connection found. Please connect your wallet first.');
     }
     
-    if (!pairingData || !pairingData.topic) {
-      console.error('[HederaWalletClient] [HBAR] Pairing data after all retries:', pairingData);
-      throw new Error('Pairing not ready. Please wait a moment and try again, or disconnect and reconnect your wallet.');
+    // Get the session topic (needed for signing transactions - different from pairing topic!)
+    console.log('[HederaWalletClient] [HBAR] 🔑 Getting session topic for transaction signing...');
+    const sessionTopic = await getSessionTopic(5, 400); // Try up to 5 times with 400ms delay
+    
+    if (!sessionTopic) {
+      console.error('[HederaWalletClient] [HBAR] ❌ Could not get session topic');
+      throw new Error('Could not establish signing session. Please disconnect and reconnect your wallet.');
     }
     
-    console.log('[HederaWalletClient] [HBAR] ✅ Pairing data confirmed:', {
-      topic: pairingData.topic,
-      accountIds: pairingData.accountIds,
-    });
+    console.log('[HederaWalletClient] [HBAR] ✅ Session topic confirmed:', sessionTopic);
+    console.log('[HederaWalletClient] [HBAR] ✅ Account IDs:', pairingData.accountIds);
     
     // Load Hedera SDK
     const { TransferTransaction: Transfer, Hbar: HbarClass, TransactionId: TxId, AccountId: AcctId } = await loadHederaSDK();
@@ -209,7 +207,7 @@ export async function sendHbarPayment(
         });
       } else if (typeof hc.sendTransaction === 'function') {
         console.log('[HederaWalletClient] Using sendTransaction API');
-        console.log('[HederaWalletClient] Topic:', pairingData.topic);
+        console.log('[HederaWalletClient] Session Topic (for signing):', sessionTopic);
         console.log('[HederaWalletClient] Wallet account:', walletState.accountId);
         console.log('[HederaWalletClient] Pairing accounts:', pairingData.accountIds);
         console.log('[HederaWalletClient] Transaction bytes length:', transactionBytes.length);
@@ -222,9 +220,10 @@ export async function sendHbarPayment(
         console.log('[HederaWalletClient] Using account for signing:', accountToSign);
         
         // HashConnect v3 API: sendTransaction(topic, transactionRequest)
-        console.log('[HederaWalletClient] About to call sendTransaction...');
+        // IMPORTANT: Must use session topic, not pairing topic!
+        console.log('[HederaWalletClient] About to call sendTransaction with SESSION topic...');
         try {
-          result = await hc.sendTransaction(pairingData.topic, {
+          result = await hc.sendTransaction(sessionTopic, {
             byteArray: transactionBytes,
             metadata: {
               accountToSign: accountToSign,
@@ -345,29 +344,26 @@ export async function sendTokenPayment(
       throw new Error('Wallet not connected');
     }
     
-    // Get pairing data with retry (sometimes there's a brief delay after pairing)
+    // Get pairing data
     console.log('[HederaWalletClient] [TOKEN] Attempting to get pairing data...');
-    let pairingData = getLatestPairingData();
+    const pairingData = getLatestPairingData();
     console.log('[HederaWalletClient] [TOKEN] Initial pairing data:', pairingData);
     
-    let retries = 0;
-    while ((!pairingData || !pairingData.topic) && retries < 5) {
-      console.log('[HederaWalletClient] [TOKEN] Waiting for pairing data... attempt', retries + 1);
-      console.log('[HederaWalletClient] [TOKEN] Current pairing data has topic?', !!pairingData?.topic);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      pairingData = getLatestPairingData();
-      retries++;
+    if (!pairingData || !pairingData.accountIds || pairingData.accountIds.length === 0) {
+      throw new Error('No wallet connection found. Please connect your wallet first.');
     }
     
-    if (!pairingData || !pairingData.topic) {
-      console.error('[HederaWalletClient] [TOKEN] Pairing data after all retries:', pairingData);
-      throw new Error('Pairing not ready. Please wait a moment and try again, or disconnect and reconnect your wallet.');
+    // Get the session topic (needed for signing transactions - different from pairing topic!)
+    console.log('[HederaWalletClient] [TOKEN] 🔑 Getting session topic for transaction signing...');
+    const sessionTopic = await getSessionTopic(5, 400); // Try up to 5 times with 400ms delay
+    
+    if (!sessionTopic) {
+      console.error('[HederaWalletClient] [TOKEN] ❌ Could not get session topic');
+      throw new Error('Could not establish signing session. Please disconnect and reconnect your wallet.');
     }
     
-    console.log('[HederaWalletClient] [TOKEN] ✅ Pairing data confirmed:', {
-      topic: pairingData.topic,
-      accountIds: pairingData.accountIds,
-    });
+    console.log('[HederaWalletClient] [TOKEN] ✅ Session topic confirmed:', sessionTopic);
+    console.log('[HederaWalletClient] [TOKEN] ✅ Account IDs:', pairingData.accountIds);
     
     // Convert amount to smallest unit
     const smallestUnit = toSmallestUnit(amount, decimals);
@@ -420,7 +416,7 @@ export async function sendTokenPayment(
       // HashConnect v3 sendTransaction method
       if (typeof hc.sendTransaction === 'function') {
         console.log('[HederaWalletClient] Using sendTransaction API for token transfer');
-        console.log('[HederaWalletClient] Topic:', pairingData.topic);
+        console.log('[HederaWalletClient] Session Topic (for signing):', sessionTopic);
         console.log('[HederaWalletClient] Wallet account:', walletState.accountId);
         console.log('[HederaWalletClient] Pairing accounts:', pairingData.accountIds);
         
@@ -432,9 +428,10 @@ export async function sendTokenPayment(
         console.log('[HederaWalletClient] Using account for signing:', accountToSign);
         
         // HashConnect v3 API: sendTransaction(topic, transactionRequest)
-        console.log('[HederaWalletClient] About to call sendTransaction for token...');
+        // IMPORTANT: Must use session topic, not pairing topic!
+        console.log('[HederaWalletClient] About to call sendTransaction for token with SESSION topic...');
         try {
-          result = await hc.sendTransaction(pairingData.topic, {
+          result = await hc.sendTransaction(sessionTopic, {
             byteArray: transactionBytes,
             metadata: {
               accountToSign: accountToSign,
