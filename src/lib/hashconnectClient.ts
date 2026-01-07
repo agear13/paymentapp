@@ -209,6 +209,15 @@ export async function initHashConnect(): Promise<void> {
         // Extract topic from various possible locations
         let topic = pairingData?.topic;
         
+        // Debug: Check if core.session exists
+        console.log('[HashConnect] Checking for core.session...');
+        console.log('[HashConnect] (hashconnect as any).core exists?', !!(hashconnect as any).core);
+        console.log('[HashConnect] (hashconnect as any).core.session exists?', !!(hashconnect as any).core?.session);
+        
+        if ((hashconnect as any).core) {
+          console.log('[HashConnect] core properties:', Object.keys((hashconnect as any).core));
+        }
+        
         // If topic not in event, wait a moment then try to get it from the active session
         // The session needs a moment to be created after approval
         if (!topic && (hashconnect as any).core?.session) {
@@ -229,6 +238,8 @@ export async function initHashConnect(): Promise<void> {
           } catch (e) {
             console.warn('[HashConnect] Failed to get sessions from core:', e);
           }
+        } else if (!topic) {
+          console.warn('[HashConnect] ⚠️ core.session does not exist - cannot get session topic from there');
         }
         
         // Fallback: try core.pairing if session lookup failed
@@ -596,36 +607,87 @@ export async function getSessionTopic(maxRetries: number = 3, delayMs: number = 
     return null;
   }
   
+  console.log('[HashConnect] Checking HashConnect structure...');
+  console.log('[HashConnect] hc exists:', !!hc);
+  console.log('[HashConnect] hc.core exists:', !!(hc as any).core);
+  console.log('[HashConnect] hc.core.session exists:', !!(hc as any).core?.session);
+  console.log('[HashConnect] hc.core.session.getAll exists:', typeof (hc as any).core?.session?.getAll);
+  console.log('[HashConnect] hc._signClient exists:', !!(hc as any)._signClient);
+  console.log('[HashConnect] hc._signClient.session exists:', !!(hc as any)._signClient?.session);
+  
+  // Log available methods on core
+  if ((hc as any).core) {
+    console.log('[HashConnect] core properties:', Object.keys((hc as any).core));
+  }
+  
+  // Log available methods on _signClient
+  if ((hc as any)._signClient) {
+    console.log('[HashConnect] _signClient properties:', Object.keys((hc as any)._signClient));
+    if ((hc as any)._signClient.session) {
+      console.log('[HashConnect] _signClient.session properties:', Object.keys((hc as any)._signClient.session));
+    }
+  }
+  
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
       console.log(`[HashConnect] getSessionTopic - retry attempt ${attempt}/${maxRetries}`);
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
     
-    // Check core.session for active sessions
+    // Try to get sessions from multiple possible locations
+    let sessions: any[] | null = null;
+    
+    // Method 1: Try core.session (WalletConnect v2 standard location)
     if ((hc as any).core?.session) {
       try {
-        const sessions = (hc as any).core.session.getAll?.();
-        console.log(`[HashConnect] Attempt ${attempt}: core.session.getAll() returned:`, sessions?.length || 0, 'sessions');
+        const sessionObj = (hc as any).core.session;
+        console.log(`[HashConnect] Attempt ${attempt}: Trying core.session...`);
+        console.log(`[HashConnect] Attempt ${attempt}: sessionObj type:`, typeof sessionObj);
+        console.log(`[HashConnect] Attempt ${attempt}: sessionObj keys:`, Object.keys(sessionObj));
         
-        if (sessions && sessions.length > 0) {
-          // Get the most recently created session (highest expiry)
-          const sortedSessions = sessions.sort((a: any, b: any) => b.expiry - a.expiry);
-          const sessionTopic = sortedSessions[0].topic;
-          
-          if (sessionTopic) {
-            console.log('[HashConnect] ✅ Found valid SESSION topic:', sessionTopic);
-            console.log('[HashConnect] Session details:', {
-              topic: sessionTopic,
-              expiry: sortedSessions[0].expiry,
-              pairingTopic: sortedSessions[0].pairingTopic,
-            });
-            return sessionTopic;
-          }
-        }
+        sessions = sessionObj.getAll?.();
+        console.log(`[HashConnect] Attempt ${attempt}: core.session.getAll() returned:`, sessions?.length || 0, 'sessions');
       } catch (e) {
-        console.warn(`[HashConnect] Attempt ${attempt}: Failed to get sessions:`, e);
+        console.error(`[HashConnect] Attempt ${attempt}: Error accessing core.session:`, e);
       }
+    } else {
+      console.warn(`[HashConnect] Attempt ${attempt}: core.session does not exist, trying alternative...`);
+    }
+    
+    // Method 2: Try _signClient.session (alternative location)
+    if (!sessions && (hc as any)._signClient?.session) {
+      try {
+        const sessionObj = (hc as any)._signClient.session;
+        console.log(`[HashConnect] Attempt ${attempt}: Trying _signClient.session...`);
+        console.log(`[HashConnect] Attempt ${attempt}: _signClient.session keys:`, Object.keys(sessionObj));
+        
+        sessions = sessionObj.getAll?.();
+        console.log(`[HashConnect] Attempt ${attempt}: _signClient.session.getAll() returned:`, sessions?.length || 0, 'sessions');
+      } catch (e) {
+        console.error(`[HashConnect] Attempt ${attempt}: Error accessing _signClient.session:`, e);
+      }
+    }
+    
+    // Process sessions if found
+    if (sessions && sessions.length > 0) {
+      // Log all sessions
+      console.log(`[HashConnect] Attempt ${attempt}: All sessions found:`, sessions);
+      
+      // Get the most recently created session (highest expiry)
+      const sortedSessions = sessions.sort((a: any, b: any) => b.expiry - a.expiry);
+      const sessionTopic = sortedSessions[0].topic;
+      
+      if (sessionTopic) {
+        console.log('[HashConnect] ✅ Found valid SESSION topic:', sessionTopic);
+        console.log('[HashConnect] Session details:', {
+          topic: sessionTopic,
+          expiry: sortedSessions[0].expiry,
+          pairingTopic: sortedSessions[0].pairingTopic,
+        });
+        return sessionTopic;
+      }
+    } else {
+      console.warn(`[HashConnect] Attempt ${attempt}: No sessions found in any location`);
     }
   }
   
