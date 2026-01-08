@@ -278,6 +278,23 @@ export async function initHashConnect(): Promise<void> {
         console.log('[HashConnect] ========== PAIRING EVENT COMPLETE ==========');
       });
 
+      // Listen to approval event (fires when wallet approves the pairing with session topic)
+      (hashconnect as any).approveEvent.on((approvalData: any) => {
+        console.log('[HashConnect] ========== APPROVAL EVENT FIRED ==========');
+        console.log('[HashConnect] Approval data:', approvalData);
+        console.log('[HashConnect] Approval topic:', approvalData?.topic);
+        
+        // Store the session topic from the approval event
+        if (approvalData?.topic && latestPairingData) {
+          console.log('[HashConnect] ✅ Storing session topic from approval event:', approvalData.topic);
+          latestPairingData.topic = approvalData.topic;
+          
+          // Update wallet state to trigger re-render
+          updateWalletState({ ...walletState });
+        }
+        console.log('[HashConnect] ========== APPROVAL EVENT COMPLETE ==========');
+      });
+
       (hashconnect as any).connectionStatusChangeEvent.on(async (status: any) => {
         console.log('[HashConnect] Connection status changed:', status);
         latestConnectionStatus = status;
@@ -634,11 +651,11 @@ export async function getSessionTopic(maxRetries: number = 3, delayMs: number = 
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
     
-    // Try to get sessions from both locations to ensure they're in sync
+    // Try to get sessions from both locations
     let coreSessions: any[] | null = null;
     let signClientSessions: any[] | null = null;
     
-    // Method 1: Try core.session (WalletConnect v2 standard location)
+    // Method 1: Try core.session (WalletConnect v2 standard location - may not exist in all versions)
     if ((hc as any).core?.session) {
       try {
         const sessionObj = (hc as any).core.session;
@@ -652,10 +669,10 @@ export async function getSessionTopic(maxRetries: number = 3, delayMs: number = 
         console.error(`[HashConnect] Attempt ${attempt}: Error accessing core.session:`, e);
       }
     } else {
-      console.warn(`[HashConnect] Attempt ${attempt}: core.session does not exist`);
+      console.log(`[HashConnect] Attempt ${attempt}: core.session does not exist (not used in this HashConnect version)`);
     }
     
-    // Method 2: Check _signClient.session to verify session is acknowledged
+    // Method 2: Check _signClient.session (REQUIRED - this is where the signer looks for sessions)
     if ((hc as any)._signClient?.session) {
       try {
         const sessionObj = (hc as any)._signClient.session;
@@ -669,14 +686,16 @@ export async function getSessionTopic(maxRetries: number = 3, delayMs: number = 
       }
     }
     
-    // CRITICAL: We need the session to exist in BOTH locations for signing to work
-    // The session must be in _signClient.session for the signer to find it
+    // Use _signClient.session as primary (required for signing)
+    // core.session may not exist in some HashConnect versions
     const sessionsToUse = signClientSessions || coreSessions;
-    const sessionInBothLocations = coreSessions && signClientSessions && coreSessions.length > 0 && signClientSessions.length > 0;
     
-    if (!sessionInBothLocations && attempt < maxRetries) {
-      console.warn(`[HashConnect] Attempt ${attempt}: Session not fully synced yet (core:${coreSessions?.length || 0}, signClient:${signClientSessions?.length || 0}), will retry...`);
-      continue;
+    // If no sessions found at all, retry
+    if (!sessionsToUse || sessionsToUse.length === 0) {
+      if (attempt < maxRetries) {
+        console.warn(`[HashConnect] Attempt ${attempt}: No sessions found yet, will retry...`);
+        continue;
+      }
     }
     
     // Process sessions if found
@@ -720,14 +739,8 @@ export async function getSessionTopic(maxRetries: number = 3, delayMs: number = 
             hederaAccounts: sortedSessions[0].namespaces.hedera.accounts,
           });
           
-          // Verify this session exists in _signClient for signing
-          if (signClientSessions && signClientSessions.some((s: any) => s.topic === sessionTopic)) {
-            console.log('[HashConnect] ✅ Session verified in _signClient - ready for signing!');
-            return sessionTopic;
-          } else {
-            console.warn('[HashConnect] ⚠️  Session found in core but not in _signClient, will retry...');
-            if (attempt < maxRetries) continue;
-          }
+          console.log('[HashConnect] ✅ Session ready for signing!');
+          return sessionTopic;
         }
       }
     } else {
