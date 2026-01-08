@@ -746,20 +746,33 @@ export async function getSessionTopic(maxRetries: number = 3, delayMs: number = 
           continue;
         }
       } else {
-        // First, check if we have a session topic stored from the approval event
+        // Get the stored topic from pairing data
         const storedTopic = latestPairingData?.topic;
-        console.log(`[HashConnect] Stored topic from pairing/approval: ${storedTopic}`);
+        console.log(`[HashConnect] Stored topic from pairing/approval: ${storedTopic?.substring(0, 8)}...`);
+        console.log(`[HashConnect] Available sessions:`, hederaSessions.map((s: any) => ({
+          session: s.topic.substring(0, 8) + '...',
+          pairing: s.pairingTopic?.substring(0, 8) + '...',
+        })));
         
-        // Try to find the stored topic in the available sessions
-        let session = hederaSessions.find((s: any) => s.topic === storedTopic);
+        // IMPORTANT: latestPairingData.topic could be either a SESSION topic (from approval event)
+        // or a PAIRING topic (from pairing event). We need to check both!
+        let session = hederaSessions.find((s: any) => 
+          s.topic === storedTopic || s.pairingTopic === storedTopic
+        );
         
         if (!session) {
-          console.warn(`[HashConnect] Stored topic not found in sessions, using most recent by expiry`);
-          // Fallback: Get the most recently created Hedera session (highest expiry)
+          console.error(`[HashConnect] ❌ CRITICAL: Stored topic does NOT match any of the ${hederaSessions.length} available sessions!`);
+          console.error(`[HashConnect] This means you likely have OLD sessions from previous pairings`);
+          console.error(`[HashConnect] SOLUTION: Disconnect wallet and clear old sessions, then reconnect`);
+          
+          // Use the most recently created session as fallback
+          console.warn(`[HashConnect] Using fallback: most recent session by expiry (may not work)`);
           const sortedSessions = hederaSessions.sort((a: any, b: any) => b.expiry - a.expiry);
           session = sortedSessions[0];
+          console.log(`[HashConnect] Selected session: ${session.topic.substring(0, 8)}... (pairing: ${session.pairingTopic?.substring(0, 8)}...)`);
         } else {
-          console.log(`[HashConnect] ✅ Found stored session topic in available sessions`);
+          console.log(`[HashConnect] ✅ Found matching session! (by session topic or pairing topic)`);
+          console.log(`[HashConnect] Using session: ${session.topic.substring(0, 8)}... (pairing: ${session.pairingTopic?.substring(0, 8)}...)`);
         }
         
         const sessionTopic = session.topic;
