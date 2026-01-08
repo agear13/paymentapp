@@ -259,11 +259,17 @@ export async function initHashConnect(): Promise<void> {
         }
         
         // Store pairing data with topic
+        // IMPORTANT: Preserve existing topic from approval event if it was already set
+        const existingTopic = latestPairingData?.topic;
         latestPairingData = {
           ...pairingData,
-          topic: topic || null,
+          topic: existingTopic || topic || null, // Prefer existing topic from approval event
         };
-        console.log('[HashConnect] latestPairingData updated with topic:', latestPairingData);
+        console.log('[HashConnect] latestPairingData updated:', {
+          hasExistingTopic: !!existingTopic,
+          newTopic: topic,
+          finalTopic: latestPairingData.topic,
+        });
         
         const accountId = pairingData?.accountIds?.[0];
         if (accountId) {
@@ -283,14 +289,30 @@ export async function initHashConnect(): Promise<void> {
         console.log('[HashConnect] ========== APPROVAL EVENT FIRED ==========');
         console.log('[HashConnect] Approval data:', approvalData);
         console.log('[HashConnect] Approval topic:', approvalData?.topic);
+        console.log('[HashConnect] latestPairingData before update:', latestPairingData);
         
         // Store the session topic from the approval event
-        if (approvalData?.topic && latestPairingData) {
+        if (approvalData?.topic) {
           console.log('[HashConnect] ✅ Storing session topic from approval event:', approvalData.topic);
-          latestPairingData.topic = approvalData.topic;
+          
+          // Initialize latestPairingData if it doesn't exist yet
+          if (!latestPairingData) {
+            console.log('[HashConnect] Initializing latestPairingData from approval event');
+            latestPairingData = {
+              topic: approvalData.topic,
+              accountIds: [],
+              network: 'testnet',
+            };
+          } else {
+            latestPairingData.topic = approvalData.topic;
+          }
+          
+          console.log('[HashConnect] latestPairingData after update:', latestPairingData);
           
           // Update wallet state to trigger re-render
           updateWalletState({ ...walletState });
+        } else {
+          console.warn('[HashConnect] Approval event fired but no topic provided');
         }
         console.log('[HashConnect] ========== APPROVAL EVENT COMPLETE ==========');
       });
@@ -724,19 +746,34 @@ export async function getSessionTopic(maxRetries: number = 3, delayMs: number = 
           continue;
         }
       } else {
-        // Get the most recently created Hedera session (highest expiry)
-        const sortedSessions = hederaSessions.sort((a: any, b: any) => b.expiry - a.expiry);
-        const sessionTopic = sortedSessions[0].topic;
+        // First, check if we have a session topic stored from the approval event
+        const storedTopic = latestPairingData?.topic;
+        console.log(`[HashConnect] Stored topic from pairing/approval: ${storedTopic}`);
+        
+        // Try to find the stored topic in the available sessions
+        let session = hederaSessions.find((s: any) => s.topic === storedTopic);
+        
+        if (!session) {
+          console.warn(`[HashConnect] Stored topic not found in sessions, using most recent by expiry`);
+          // Fallback: Get the most recently created Hedera session (highest expiry)
+          const sortedSessions = hederaSessions.sort((a: any, b: any) => b.expiry - a.expiry);
+          session = sortedSessions[0];
+        } else {
+          console.log(`[HashConnect] ✅ Found stored session topic in available sessions`);
+        }
+        
+        const sessionTopic = session.topic;
         
         if (sessionTopic) {
           console.log('[HashConnect] ✅ Found valid HEDERA SESSION topic:', sessionTopic);
           console.log('[HashConnect] Session details:', {
             topic: sessionTopic,
-            expiry: sortedSessions[0].expiry,
-            pairingTopic: sortedSessions[0].pairingTopic,
-            acknowledged: sortedSessions[0].acknowledged,
-            hederaChains: sortedSessions[0].namespaces.hedera.chains,
-            hederaAccounts: sortedSessions[0].namespaces.hedera.accounts,
+            expiry: session.expiry,
+            pairingTopic: session.pairingTopic,
+            acknowledged: session.acknowledged,
+            hederaChains: session.namespaces.hedera.chains,
+            hederaAccounts: session.namespaces.hedera.accounts,
+            matchesStoredTopic: sessionTopic === storedTopic,
           });
           
           console.log('[HashConnect] ✅ Session ready for signing!');
