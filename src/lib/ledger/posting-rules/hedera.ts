@@ -86,7 +86,7 @@ export async function postHederaSettlement(
   const ledgerService = new LedgerEntryService();
 
   // Get the correct clearing account for this token
-  const clearingAccountCode = getCryptoClearing AccountCode(tokenType);
+  const clearingAccountCode = getCryptoClearingAccountCode(tokenType);
 
   // Validate that we're using the right account for this token
   validateTokenAccountMapping(tokenType, clearingAccountCode);
@@ -211,7 +211,7 @@ export async function postHederaSettlementFromPaymentToken(
  * @throws Error if token is invalid
  */
 export function validateHederaPosting(tokenType: TokenType): string {
-  const clearingAccountCode = getCryptoClearing AccountCode(tokenType);
+  const clearingAccountCode = getCryptoClearingAccountCode(tokenType);
   validateTokenAccountMapping(tokenType, clearingAccountCode);
   return clearingAccountCode;
 }
@@ -224,7 +224,7 @@ export function validateHederaPosting(tokenType: TokenType): string {
  * @returns The clearing account code
  */
 export function getHederaClearingAccount(tokenType: TokenType): string {
-  return getCryptoClearing AccountCode(tokenType);
+  return getCryptoClearingAccountCode(tokenType);
 }
 
 /**
@@ -235,10 +235,10 @@ export function getHederaClearingAccount(tokenType: TokenType): string {
  */
 export function getAllHederaClearingAccounts(): string[] {
   return [
-    getCryptoClearing AccountCode('HBAR'),
-    getCryptoClearing AccountCode('USDC'),
-    getCryptoClearing AccountCode('USDT'),
-    getCryptoClearing AccountCode('AUDD'),
+    getCryptoClearingAccountCode('HBAR'),
+    getCryptoClearingAccountCode('USDC'),
+    getCryptoClearingAccountCode('USDT'),
+    getCryptoClearingAccountCode('AUDD'),
   ];
 }
 
