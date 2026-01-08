@@ -15,7 +15,7 @@
 
 import { LedgerEntryService, JournalEntry } from '../ledger-entry-service';
 import {
-  getCryptoClearing AccountCode,
+  getCryptoClearingAccountCode,
   validateTokenAccountMapping,
   LEDGER_ACCOUNTS,
 } from '../account-mapping';
