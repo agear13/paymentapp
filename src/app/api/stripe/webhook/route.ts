@@ -4,6 +4,7 @@
  * No authentication required (verified by signature)
  * 
  * Sprint 24: Enhanced with edge case handling
+ * Beta: Enhanced with correlation IDs and unified payment confirmation
  */
 
 // Force Node.js runtime (required for raw body access)
@@ -23,6 +24,8 @@ import {
   acquirePaymentLock,
   releasePaymentLock,
 } from '@/lib/payment/edge-case-handler';
+import { generateCorrelationId } from '@/lib/services/correlation';
+import { confirmPayment } from '@/lib/services/payment-confirmation';
 import Stripe from 'stripe';
 
 /**
@@ -30,12 +33,15 @@ import Stripe from 'stripe';
  * Process Stripe webhook events
  */
 export async function POST(request: NextRequest) {
+  // Generate correlation ID for distributed tracing
+  const correlationId = generateCorrelationId('stripe', `webhook_${Date.now()}`);
+  
   try {
     // Early guard: Check if webhook processing is disabled
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
     
     if (!secret || secret.toLowerCase() === 'disabled') {
-      log.warn('Stripe webhook disabled - skipping verification and processing');
+      log.warn({ correlationId }, 'Stripe webhook disabled - skipping verification and processing');
       return NextResponse.json({
         received: true,
         processed: false,
@@ -49,7 +55,7 @@ export async function POST(request: NextRequest) {
     const signature = headersList.get('stripe-signature');
 
     if (!signature) {
-      log.warn('Missing Stripe signature header');
+      log.warn({ correlationId }, 'Missing Stripe signature header');
       return NextResponse.json(
         { error: 'Missing signature' },
         { status: 400 }
@@ -60,61 +66,93 @@ export async function POST(request: NextRequest) {
     const event = await verifyWebhookSignature(body, signature);
     
     if (!event) {
+      log.error({ correlationId }, 'Invalid webhook signature');
       return NextResponse.json(
         { error: 'Invalid signature' },
         { status: 401 }
       );
     }
 
-    // Check idempotency - prevent duplicate processing
-    const alreadyProcessed = await isEventProcessed(event.id, prisma);
+    // Update correlation ID with actual event ID
+    const eventCorrelationId = generateCorrelationId('stripe', event.id);
+
+    // Check idempotency using new stripe_event_id column
+    const existingEvent = await prisma.payment_events.findFirst({
+      where: { stripe_event_id: event.id },
+    });
     
-    if (alreadyProcessed) {
+    if (existingEvent) {
       log.info(
-        { eventId: event.id, eventType: event.type },
-        'Webhook event already processed'
+        { 
+          correlationId: eventCorrelationId,
+          eventId: event.id, 
+          eventType: event.type,
+          existingPaymentEventId: existingEvent.id,
+        },
+        'Webhook event already processed (idempotent)'
       );
-      return NextResponse.json({ received: true, processed: false });
+      return NextResponse.json({ 
+        received: true, 
+        processed: false,
+        duplicate: true,
+      });
     }
+
+    log.info({
+      correlationId: eventCorrelationId,
+      eventId: event.id,
+      eventType: event.type,
+    }, 'Processing Stripe webhook event');
 
     // Process different event types
     switch (event.type) {
       case 'payment_intent.succeeded':
-        await handlePaymentIntentSucceeded(event);
+        await handlePaymentIntentSucceeded(event, eventCorrelationId);
         break;
 
       case 'payment_intent.payment_failed':
-        await handlePaymentIntentFailed(event);
+        await handlePaymentIntentFailed(event, eventCorrelationId);
         break;
 
       case 'payment_intent.canceled':
-        await handlePaymentIntentCanceled(event);
+        await handlePaymentIntentCanceled(event, eventCorrelationId);
         break;
 
       case 'checkout.session.completed':
-        await handleCheckoutSessionCompleted(event);
+        await handleCheckoutSessionCompleted(event, eventCorrelationId);
         break;
 
       case 'checkout.session.expired':
-        await handleCheckoutSessionExpired(event);
+        await handleCheckoutSessionExpired(event, eventCorrelationId);
         break;
 
       default:
         log.info(
-          { eventType: event.type },
+          { 
+            correlationId: eventCorrelationId,
+            eventType: event.type 
+          },
           'Unhandled webhook event type'
         );
     }
 
     log.info(
-      { eventId: event.id, eventType: event.type },
+      { 
+        correlationId: eventCorrelationId,
+        eventId: event.id, 
+        eventType: event.type 
+      },
       'Webhook event processed successfully'
     );
 
     return NextResponse.json({ received: true, processed: true });
   } catch (error: any) {
     log.error(
-      { error: error.message },
+      { 
+        correlationId,
+        error: error.message,
+        stack: error.stack,
+      },
       'Failed to process webhook'
     );
     return NextResponse.json(
@@ -127,20 +165,64 @@ export async function POST(request: NextRequest) {
 /**
  * Handle payment_intent.succeeded event
  * Sprint 24: Enhanced with duplicate detection and locking
+ * Beta: Enhanced with correlation IDs and unified payment confirmation
  */
-async function handlePaymentIntentSucceeded(event: Stripe.Event) {
+async function handlePaymentIntentSucceeded(event: Stripe.Event, correlationId: string) {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;
   const paymentLinkId = extractPaymentLinkId(paymentIntent.metadata);
 
   if (!paymentLinkId) {
     log.error(
-      { paymentIntentId: paymentIntent.id },
+      { 
+        correlationId,
+        eventId: event.id,
+        paymentIntentId: paymentIntent.id 
+      },
       'Payment link ID missing from PaymentIntent metadata'
     );
     return;
   }
 
-  // Sprint 24: Check for duplicate payment
+  log.info({
+    correlationId,
+    eventId: event.id,
+    paymentIntentId: paymentIntent.id,
+    paymentLinkId,
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+  }, 'Processing payment_intent.succeeded');
+
+  // Use unified payment confirmation service
+  const result = await confirmPayment({
+    paymentLinkId,
+    provider: 'stripe',
+    providerRef: event.id,
+    paymentIntentId: paymentIntent.id,
+    amountReceived: fromSmallestUnit(paymentIntent.amount, paymentIntent.currency),
+    currencyReceived: paymentIntent.currency.toUpperCase(),
+    correlationId,
+    metadata: {
+      payment_method_types: paymentIntent.payment_method_types,
+      receipt_email: paymentIntent.receipt_email,
+      customer: paymentIntent.customer,
+    },
+  });
+
+  if (!result.success) {
+    log.error({
+      correlationId,
+      error: result.error,
+    }, 'Payment confirmation failed');
+    throw new Error(result.error || 'Payment confirmation failed');
+  }
+
+  log.info({
+    correlationId,
+    paymentEventId: result.paymentEventId,
+    alreadyProcessed: result.alreadyProcessed,
+  }, 'Payment confirmed successfully');
+
+  // Legacy duplicate check (keeping for backward compatibility)
   const duplicateCheck = await checkDuplicatePayment(
     paymentLinkId,
     paymentIntent.id,
@@ -313,26 +395,40 @@ async function handlePaymentIntentSucceeded(event: Stripe.Event) {
 
 /**
  * Handle payment_intent.payment_failed event
+ * Beta: Enhanced with correlation IDs
  */
-async function handlePaymentIntentFailed(event: Stripe.Event) {
+async function handlePaymentIntentFailed(event: Stripe.Event, correlationId: string) {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;
   const paymentLinkId = extractPaymentLinkId(paymentIntent.metadata);
 
   if (!paymentLinkId) {
     log.error(
-      { paymentIntentId: paymentIntent.id },
+      { 
+        correlationId,
+        eventId: event.id,
+        paymentIntentId: paymentIntent.id 
+      },
       'Payment link ID missing from PaymentIntent metadata'
     );
     return;
   }
 
-  // Create payment failed event
+  log.info({
+    correlationId,
+    eventId: event.id,
+    paymentIntentId: paymentIntent.id,
+    paymentLinkId,
+  }, 'Processing payment_intent.payment_failed');
+
+  // Create payment failed event with correlation ID
   await prisma.payment_events.create({
     data: {
       payment_link_id: paymentLinkId,
       event_type: 'PAYMENT_FAILED',
       payment_method: 'STRIPE',
+      stripe_event_id: event.id,
       stripe_payment_intent_id: paymentIntent.id,
+      correlation_id: correlationId,
       metadata: {
         stripeEventId: event.id,
         stripeStatus: paymentIntent.status,
@@ -343,6 +439,7 @@ async function handlePaymentIntentFailed(event: Stripe.Event) {
 
   log.warn(
     {
+      correlationId,
       paymentLinkId,
       paymentIntentId: paymentIntent.id,
       error: paymentIntent.last_payment_error?.message,

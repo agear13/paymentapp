@@ -1,0 +1,43 @@
+# ============================================================================
+# PROVVYPAY BETA TESTING ENVIRONMENT CONFIGURATION
+# ============================================================================
+# Copy these variables to Render Environment Variables for Beta web service
+# Go to: Render Dashboard → Your Service → Environment → Add Environment Variable
+# ============================================================================
+
+# DATABASE (Use separate beta database)
+DATABASE_URL=postgresql://user:password@host:5432/provvypay_beta?schema=public
+
+# SUPABASE AUTH
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# STRIPE (TEST MODE - MUST start with sk_test_)
+STRIPE_SECRET_KEY=sk_test_xxxxx
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_xxxxx
+STRIPE_WEBHOOK_SECRET=whsec_xxxxx
+
+# HEDERA (TESTNET - MUST be testnet)
+NEXT_PUBLIC_HEDERA_NETWORK=testnet
+NEXT_PUBLIC_HEDERA_MIRROR_NODE_URL=https://testnet.mirrornode.hedera.com
+NEXT_PUBLIC_HEDERA_USDC_TOKEN_ID=0.0.429274
+NEXT_PUBLIC_HEDERA_USDT_TOKEN_ID=0.0.429275
+
+# XERO (DEVELOPER APP)
+XERO_CLIENT_ID=your-beta-client-id
+XERO_CLIENT_SECRET=your-beta-client-secret
+XERO_REDIRECT_URI=https://your-service-name.onrender.com/api/xero/callback
+
+# ENCRYPTION (Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
+ENCRYPTION_KEY=your-base64-key
+SESSION_SECRET=your-session-secret
+
+# APPLICATION
+NEXT_PUBLIC_APP_URL=https://your-service-name.onrender.com
+NODE_ENV=production
+
+# OPTIONAL: Email, monitoring, etc.
+RESEND_API_KEY=your-resend-key (optional)
+SENTRY_DSN=your-sentry-dsn (optional)
+

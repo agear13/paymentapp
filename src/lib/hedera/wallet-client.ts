@@ -120,11 +120,12 @@ export async function sendHbarPayment(
     
     // Get the session topic (needed for signing transactions - different from pairing topic!)
     console.log('[HederaWalletClient] [HBAR] 🔑 Getting session topic for transaction signing...');
-    const sessionTopic = await getSessionTopic(5, 400); // Try up to 5 times with 400ms delay
+    // Increased retries and delay to ensure session is fully established in both core and _signClient
+    const sessionTopic = await getSessionTopic(8, 600); // Try up to 8 times with 600ms delay (4.8s total)
     
     if (!sessionTopic) {
       console.error('[HederaWalletClient] [HBAR] ❌ Could not get session topic');
-      throw new Error('Could not establish signing session. Please disconnect and reconnect your wallet.');
+      throw new Error('Could not establish signing session. Please wait a moment and try again, or disconnect and reconnect your wallet.');
     }
     
     console.log('[HederaWalletClient] [HBAR] ✅ Session topic confirmed:', sessionTopic);
@@ -377,11 +378,12 @@ export async function sendTokenPayment(
     
     // Get the session topic (needed for signing transactions - different from pairing topic!)
     console.log('[HederaWalletClient] [TOKEN] 🔑 Getting session topic for transaction signing...');
-    const sessionTopic = await getSessionTopic(5, 400); // Try up to 5 times with 400ms delay
+    // Increased retries and delay to ensure session is fully established in both core and _signClient
+    const sessionTopic = await getSessionTopic(8, 600); // Try up to 8 times with 600ms delay (4.8s total)
     
     if (!sessionTopic) {
       console.error('[HederaWalletClient] [TOKEN] ❌ Could not get session topic');
-      throw new Error('Could not establish signing session. Please disconnect and reconnect your wallet.');
+      throw new Error('Could not establish signing session. Please wait a moment and try again, or disconnect and reconnect your wallet.');
     }
     
     console.log('[HederaWalletClient] [TOKEN] ✅ Session topic confirmed:', sessionTopic);
