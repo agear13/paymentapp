@@ -65,14 +65,58 @@ const envSchema = z.object({
 
 // Parse and validate environment variables
 function validateEnv() {
+  // Skip validation during build time (Next.js build process)
+  // Environment variables are only available at runtime on Render
+  const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build' || 
+                      process.env.NEXT_PHASE === 'phase-development-build' ||
+                      process.env.npm_lifecycle_event === 'build';
+  
+  if (isBuildTime) {
+    console.log('⏭️  Skipping environment validation during build time');
+    // Return safe defaults for build time
+    return {
+      NODE_ENV: process.env.NODE_ENV || 'production',
+      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'https://example.com',
+      DATABASE_URL: process.env.DATABASE_URL || 'postgresql://placeholder',
+      DIRECT_URL: process.env.DIRECT_URL,
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key',
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key',
+      STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder',
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder',
+      STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || 'whsec_placeholder',
+      NEXT_PUBLIC_HEDERA_NETWORK: (process.env.NEXT_PUBLIC_HEDERA_NETWORK as any) || 'mainnet',
+      NEXT_PUBLIC_HEDERA_MIRROR_NODE_URL: process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE_URL || 'https://mainnet.mirrornode.hedera.com',
+      NEXT_PUBLIC_HEDERA_USDC_TOKEN_ID: process.env.NEXT_PUBLIC_HEDERA_USDC_TOKEN_ID,
+      NEXT_PUBLIC_HEDERA_USDT_TOKEN_ID: process.env.NEXT_PUBLIC_HEDERA_USDT_TOKEN_ID,
+      NEXT_PUBLIC_HEDERA_AUDD_TOKEN_ID: process.env.NEXT_PUBLIC_HEDERA_AUDD_TOKEN_ID,
+      XERO_CLIENT_ID: process.env.XERO_CLIENT_ID,
+      XERO_CLIENT_SECRET: process.env.XERO_CLIENT_SECRET,
+      XERO_REDIRECT_URI: process.env.XERO_REDIRECT_URI,
+      ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || 'placeholder-encryption-key-32chars',
+      SESSION_SECRET: process.env.SESSION_SECRET,
+      UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+      UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
+      RESEND_API_KEY: process.env.RESEND_API_KEY,
+      ENABLE_HEDERA_PAYMENTS: process.env.ENABLE_HEDERA_PAYMENTS || 'true',
+      ENABLE_HEDERA_STABLECOINS: process.env.ENABLE_HEDERA_STABLECOINS || 'false',
+      ENABLE_XERO_SYNC: process.env.ENABLE_XERO_SYNC || 'true',
+      ENABLE_BETA_OPS: process.env.ENABLE_BETA_OPS || 'false',
+      ADMIN_EMAIL_ALLOWLIST: process.env.ADMIN_EMAIL_ALLOWLIST,
+      SENTRY_DSN: process.env.SENTRY_DSN,
+    };
+  }
+  
   try {
     return envSchema.parse(process.env);
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('❌ Invalid environment variables:');
-      error.errors.forEach((err) => {
-        console.error(`  - ${err.path.join('.')}: ${err.message}`);
-      });
+      if (error.errors && Array.isArray(error.errors)) {
+        error.errors.forEach((err) => {
+          console.error(`  - ${err.path.join('.')}: ${err.message}`);
+        });
+      }
       throw new Error('Environment validation failed');
     }
     throw error;
@@ -90,7 +134,7 @@ export const config = {
   isTest: env.NODE_ENV === 'test',
   
   // Beta detection
-  isBeta: env.STRIPE_SECRET_KEY.startsWith('sk_test_') || 
+  isBeta: env.STRIPE_SECRET_KEY?.startsWith('sk_test_') || 
           env.NEXT_PUBLIC_HEDERA_NETWORK === 'testnet',
   
   // Application
@@ -112,7 +156,7 @@ export const config = {
     secretKey: env.STRIPE_SECRET_KEY,
     publishableKey: env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
-    isTestMode: env.STRIPE_SECRET_KEY.startsWith('sk_test_'),
+    isTestMode: env.STRIPE_SECRET_KEY?.startsWith('sk_test_') || false,
   },
   
   // Hedera
