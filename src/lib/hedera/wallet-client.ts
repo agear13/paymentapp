@@ -309,9 +309,23 @@ export async function sendHbarPayment(
             // Try with a micro-timeout to see if it helps
             await new Promise(resolve => setTimeout(resolve, 50));
             console.log('[HederaWalletClient] Step 3.1b: After micro-delay, calling now...');
+            console.log('[HederaWalletClient] Step 3.1c: THE NEXT LINE CALLS sendTransaction...');
             
             sendTransactionPromise = hc.sendTransaction(sessionTopic, transactionRequest);
-            console.log('[HederaWalletClient] Step 3.2: sendTransaction() returned!');
+            
+            console.log('[HederaWalletClient] Step 3.2: sendTransaction() RETURNED!');
+            console.log('[HederaWalletClient] Return value:', sendTransactionPromise);
+            console.log('[HederaWalletClient] Type:', typeof sendTransactionPromise);
+            console.log('[HederaWalletClient] Is null?:', sendTransactionPromise === null);
+            console.log('[HederaWalletClient] Is undefined?:', sendTransactionPromise === undefined);
+            console.log('[HederaWalletClient] Is Promise?:', sendTransactionPromise instanceof Promise);
+            
+            // If it returned something, log its properties
+            if (sendTransactionPromise) {
+              console.log('[HederaWalletClient] Has .then?:', typeof sendTransactionPromise.then);
+              console.log('[HederaWalletClient] Has .catch?:', typeof sendTransactionPromise.catch);
+              console.log('[HederaWalletClient] Object keys:', Object.keys(sendTransactionPromise || {}));
+            }
             
             // Restore original handlers
             window.onerror = originalErrorHandler;
