@@ -286,7 +286,12 @@ export async function sendHbarPayment(
             
             console.log('[HederaWalletClient] 🚀 Calling _signClient.request()...');
             const directResult = await signClient.request(wcRequest);
-            console.log('[HederaWalletClient] ✅ Direct WalletConnect call succeeded!', directResult);
+            console.log('[HederaWalletClient] ✅ Direct WalletConnect call succeeded!');
+            console.log('[HederaWalletClient] Result type:', typeof directResult);
+            console.log('[HederaWalletClient] Result keys:', Object.keys(directResult || {}));
+            console.log('[HederaWalletClient] Full result:', JSON.stringify(directResult, null, 2));
+            
+            // Check what we got back - HashPack might return different formats
             result = directResult;
           } else {
             console.log('[HederaWalletClient] ❌ _signClient.request not available, falling back to HashConnect wrapper');
