@@ -131,6 +131,41 @@ export async function sendHbarPayment(
     console.log('[HederaWalletClient] [HBAR] ✅ Session topic confirmed:', sessionTopic);
     console.log('[HederaWalletClient] [HBAR] ✅ Account IDs:', pairingData.accountIds);
     
+    // DEBUG: Check all available sessions in sign client
+    try {
+      const signClient = (hc as any)._signClient;
+      if (signClient && signClient.session) {
+        const allSessions = signClient.session.getAll();
+        console.log('[HederaWalletClient] 🔍 ALL SESSIONS in _signClient:', {
+          count: allSessions?.length || 0,
+          sessions: allSessions?.map((s: any) => ({
+            topic: s.topic,
+            pairingTopic: s.pairingTopic,
+            expiry: s.expiry,
+            acknowledged: s.acknowledged,
+            namespaces: Object.keys(s.namespaces || {}),
+          })) || []
+        });
+        console.log('[HederaWalletClient] 🎯 Looking for session with topic:', sessionTopic);
+        const matchingSession = allSessions?.find((s: any) => s.topic === sessionTopic || s.pairingTopic === sessionTopic);
+        console.log('[HederaWalletClient] 🔍 Matching session found?', !!matchingSession);
+        if (matchingSession) {
+          console.log('[HederaWalletClient] ✅ Match details:', {
+            topic: matchingSession.topic,
+            pairingTopic: matchingSession.pairingTopic,
+            acknowledged: matchingSession.acknowledged,
+            expiry: matchingSession.expiry,
+          });
+        } else {
+          console.warn('[HederaWalletClient] ⚠️ NO MATCHING SESSION - This will cause "Signer could not find session" error!');
+        }
+      } else {
+        console.warn('[HederaWalletClient] ⚠️ _signClient or _signClient.session not available');
+      }
+    } catch (debugError) {
+      console.error('[HederaWalletClient] ❌ Error checking sessions:', debugError);
+    }
+    
     // Load Hedera SDK
     const { TransferTransaction: Transfer, Hbar: HbarClass, TransactionId: TxId, AccountId: AcctId } = await loadHederaSDK();
     

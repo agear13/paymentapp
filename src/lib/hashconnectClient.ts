@@ -756,6 +756,22 @@ export async function getSessionTopic(maxRetries: number = 3, delayMs: number = 
         
         // IMPORTANT: latestPairingData.topic could be either a SESSION topic (from approval event)
         // or a PAIRING topic (from pairing event). We need to check both!
+        
+        // DEBUG: Check exact matching logic
+        console.log(`[HashConnect] 🔍 TOPIC MATCHING DEBUG:`);
+        console.log(`[HashConnect]   Stored topic: ${storedTopic}`);
+        hederaSessions.forEach((s: any, idx: number) => {
+          const matchesTopic = s.topic === storedTopic;
+          const matchesPairing = s.pairingTopic === storedTopic;
+          console.log(`[HashConnect]   Session ${idx + 1}:`, {
+            topic: s.topic,
+            pairingTopic: s.pairingTopic,
+            matchesTopic,
+            matchesPairing,
+            willSelect: matchesTopic || matchesPairing,
+          });
+        });
+        
         let session = hederaSessions.find((s: any) => 
           s.topic === storedTopic || s.pairingTopic === storedTopic
         );
