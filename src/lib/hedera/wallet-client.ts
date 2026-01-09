@@ -234,22 +234,69 @@ export async function sendHbarPayment(
           console.log('[HederaWalletClient] 🚀 CALLING hc.sendTransaction() NOW...');
           console.log('[HederaWalletClient] hc object type:', typeof hc);
           console.log('[HederaWalletClient] sendTransaction function type:', typeof hc.sendTransaction);
+          console.log('[HederaWalletClient] sendTransaction function:', hc.sendTransaction.toString().substring(0, 200));
+          console.log('[HederaWalletClient] sendTransaction.length (param count):', hc.sendTransaction.length);
           
           let sendTransactionPromise;
+          
+          console.log('[HederaWalletClient] Step 1: About to create transaction request object...');
+          const transactionRequest = {
+            byteArray: transactionBytes,
+            metadata: {
+              accountToSign: accountToSign,
+              returnTransaction: false,
+            },
+          };
+          console.log('[HederaWalletClient] Step 2: Transaction request object created:', {
+            hasByteArray: !!transactionRequest.byteArray,
+            byteArrayLength: transactionRequest.byteArray?.length,
+            metadata: transactionRequest.metadata,
+          });
+          
           try {
-            // Add a timeout to prevent infinite hanging
-            sendTransactionPromise = hc.sendTransaction(sessionTopic, {
-              byteArray: transactionBytes,
-              metadata: {
-                accountToSign: accountToSign,
-                returnTransaction: false,
-              },
-            });
+            console.log('[HederaWalletClient] Step 3: Calling hc.sendTransaction with topic:', sessionTopic.substring(0, 16) + '...');
+            
+            // Prove JavaScript continues executing
+            setTimeout(() => {
+              console.log('[HederaWalletClient] ⏰ setTimeout callback fired - JS thread is still alive');
+            }, 100);
+            
+            // Add a global error handler temporarily to catch any unhandled errors
+            const originalErrorHandler = window.onerror;
+            const originalUnhandledRejection = window.onunhandledrejection;
+            
+            window.onerror = function(msg, url, lineNo, columnNo, error) {
+              console.error('[HederaWalletClient] ⚠️ WINDOW ERROR during sendTransaction:', {
+                message: msg,
+                url,
+                lineNo,
+                columnNo,
+                error,
+              });
+              if (originalErrorHandler) originalErrorHandler(msg, url, lineNo, columnNo, error);
+              return false;
+            };
+            
+            window.onunhandledrejection = function(event) {
+              console.error('[HederaWalletClient] ⚠️ UNHANDLED PROMISE REJECTION:', event.reason);
+              if (originalUnhandledRejection) originalUnhandledRejection(event);
+            };
+            
+            console.log('[HederaWalletClient] Step 3.1: About to call sendTransaction...');
+            sendTransactionPromise = hc.sendTransaction(sessionTopic, transactionRequest);
+            console.log('[HederaWalletClient] Step 3.2: sendTransaction() returned!');
+            
+            // Restore original handlers
+            window.onerror = originalErrorHandler;
+            window.onunhandledrejection = originalUnhandledRejection;
+            
+            console.log('[HederaWalletClient] Step 4: sendTransaction() call completed (returned)');
           } catch (syncError: any) {
-            console.error('[HederaWalletClient] ❌ sendTransaction threw SYNCHRONOUS error:', syncError);
+            console.error('[HederaWalletClient] ❌ Step 3.5: sendTransaction threw SYNCHRONOUS error:', syncError);
             console.error('[HederaWalletClient] Error details:', {
               message: syncError?.message,
               name: syncError?.name,
+              type: typeof syncError,
               stack: syncError?.stack,
             });
             throw syncError;
