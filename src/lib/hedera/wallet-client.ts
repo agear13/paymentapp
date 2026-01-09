@@ -253,13 +253,7 @@ export async function sendHbarPayment(
           ? pairingData.accountIds[0] 
           : walletState.accountId;
         
-        // CRITICAL: Convert account to CAIP format (Chain Agnostic Improvement Proposal)
-        // HashConnect's getSessionForAccount() expects: "hedera:testnet:0.0.XXXXX"
-        // But we have: "0.0.XXXXX"
-        const accountInCaipFormat = `hedera:${CURRENT_NETWORK}:${accountToSign}`;
-        
         console.log('[HederaWalletClient] Using account for signing:', accountToSign);
-        console.log('[HederaWalletClient] Account in CAIP format:', accountInCaipFormat);
         
         // HashConnect v3 API: sendTransaction(topic, transactionRequest)
         // IMPORTANT: Must use session topic, not pairing topic!
@@ -267,7 +261,7 @@ export async function sendHbarPayment(
         console.log('[HederaWalletClient] Transaction request:', {
           topic: sessionTopic,
           byteArrayLength: transactionBytes.length,
-          accountToSign: accountInCaipFormat,  // Use CAIP format!
+          accountToSign: accountToSign,  // Try plain format in metadata
           returnTransaction: false,
         });
         
@@ -281,12 +275,10 @@ export async function sendHbarPayment(
           let sendTransactionPromise;
           
           console.log('[HederaWalletClient] Step 1: About to create transaction request object...');
+          // TRY: Simple format - just byteArray and signerAccountId (based on HashConnect examples)
           const transactionRequest = {
             byteArray: transactionBytes,
-            metadata: {
-              accountToSign: accountInCaipFormat,  // Use CAIP format!
-              returnTransaction: false,
-            },
+            signerAccountId: accountToSign,  // Plain format: "0.0.XXXXX"
           };
           console.log('[HederaWalletClient] Step 2: Transaction request object created:', {
             hasByteArray: !!transactionRequest.byteArray,
@@ -351,8 +343,21 @@ export async function sendHbarPayment(
             await new Promise(resolve => setTimeout(resolve, 50));
             console.log('[HederaWalletClient] Step 3.1b: After micro-delay, calling now...');
             console.log('[HederaWalletClient] Step 3.1c: THE NEXT LINE CALLS sendTransaction...');
+            console.log('[HederaWalletClient] Params:', { sessionTopic: sessionTopic.substring(0,16) + '...', hasTransactionRequest: !!transactionRequest });
+            console.log('[HederaWalletClient] transactionRequest keys:', Object.keys(transactionRequest));
+            console.log('[HederaWalletClient] transactionRequest:', transactionRequest);
+            
+            // Set a flag to detect if this hangs
+            let callReturned = false;
+            setTimeout(() => {
+              if (!callReturned) {
+                console.error('[HederaWalletClient] ⚠️⚠️⚠️ HANG DETECTED: sendTransaction() has NOT returned after 500ms!');
+                console.error('[HederaWalletClient] This is a synchronous hang inside the HashConnect SDK');
+              }
+            }, 500);
             
             sendTransactionPromise = hc.sendTransaction(sessionTopic, transactionRequest);
+            callReturned = true;
             
             console.log('[HederaWalletClient] Step 3.2: sendTransaction() RETURNED!');
             console.log('[HederaWalletClient] Return value:', sendTransactionPromise);
