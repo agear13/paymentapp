@@ -253,6 +253,21 @@ export async function sendHbarPayment(
             metadata: transactionRequest.metadata,
           });
           
+          // First, try to ping HashPack to verify connection is active
+          console.log('[HederaWalletClient] Step 2.5: Testing if HashConnect is responsive...');
+          try {
+            if (typeof hc.ping === 'function') {
+              console.log('[HederaWalletClient] Pinging session to verify it\'s alive...');
+              const pingResult = await hc.ping(sessionTopic);
+              console.log('[HederaWalletClient] ✅ Ping successful:', pingResult);
+            } else {
+              console.log('[HederaWalletClient] No ping method available, proceeding...');
+            }
+          } catch (pingError: any) {
+            console.error('[HederaWalletClient] ⚠️ Ping failed:', pingError?.message);
+            // Continue anyway
+          }
+          
           try {
             console.log('[HederaWalletClient] Step 3: Calling hc.sendTransaction with topic:', sessionTopic.substring(0, 16) + '...');
             
@@ -283,6 +298,18 @@ export async function sendHbarPayment(
             };
             
             console.log('[HederaWalletClient] Step 3.1: About to call sendTransaction...');
+            console.log('[HederaWalletClient] Parameters being passed:', {
+              topicLength: sessionTopic.length,
+              topicStart: sessionTopic.substring(0, 16),
+              requestKeys: Object.keys(transactionRequest),
+              byteArrayType: typeof transactionRequest.byteArray,
+              byteArrayIsUint8Array: transactionRequest.byteArray instanceof Uint8Array,
+            });
+            
+            // Try with a micro-timeout to see if it helps
+            await new Promise(resolve => setTimeout(resolve, 50));
+            console.log('[HederaWalletClient] Step 3.1b: After micro-delay, calling now...');
+            
             sendTransactionPromise = hc.sendTransaction(sessionTopic, transactionRequest);
             console.log('[HederaWalletClient] Step 3.2: sendTransaction() returned!');
             
