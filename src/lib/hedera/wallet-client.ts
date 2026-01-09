@@ -255,17 +255,57 @@ export async function sendHbarPayment(
         
         console.log('[HederaWalletClient] Using account for signing:', accountToSign);
         
-        // HashConnect v3 API: sendTransaction(topic, transactionRequest)
-        // IMPORTANT: Must use session topic, not pairing topic!
-        console.log('[HederaWalletClient] About to call sendTransaction with SESSION topic...');
-        console.log('[HederaWalletClient] Transaction request:', {
-          topic: sessionTopic,
-          byteArrayLength: transactionBytes.length,
-          accountToSign: accountToSign,  // Try plain format in metadata
-          returnTransaction: false,
-        });
-        
+        // TRY: Call WalletConnect sign client directly instead of HashConnect wrapper
+        console.log('[HederaWalletClient] 🔧 ATTEMPTING DIRECT WALLETCONNECT CALL...');
         try {
+          const signClient = (hc as any)._signClient;
+          if (signClient && typeof signClient.request === 'function') {
+            console.log('[HederaWalletClient] ✅ Found _signClient.request() - using direct WalletConnect API');
+            console.log('[HederaWalletClient] Building WalletConnect request...');
+            
+            // WalletConnect request format for Hedera
+            const wcRequest = {
+              topic: sessionTopic,
+              chainId: `hedera:${CURRENT_NETWORK}`,
+              request: {
+                method: 'hedera_signTransaction',
+                params: {
+                  signerAccountId: `hedera:${CURRENT_NETWORK}:${accountToSign}`,
+                  transactionBytes: Array.from(transactionBytes), // Convert Uint8Array to regular array
+                },
+              },
+            };
+            
+            console.log('[HederaWalletClient] WalletConnect request:', {
+              topic: wcRequest.topic.substring(0, 16) + '...',
+              chainId: wcRequest.chainId,
+              method: wcRequest.request.method,
+              signerAccountId: wcRequest.request.params.signerAccountId,
+              transactionBytesLength: wcRequest.request.params.transactionBytes.length,
+            });
+            
+            console.log('[HederaWalletClient] 🚀 Calling _signClient.request()...');
+            const directResult = await signClient.request(wcRequest);
+            console.log('[HederaWalletClient] ✅ Direct WalletConnect call succeeded!', directResult);
+            result = directResult;
+          } else {
+            console.log('[HederaWalletClient] ❌ _signClient.request not available, falling back to HashConnect wrapper');
+            throw new Error('Direct WalletConnect not available');
+          }
+        } catch (directError: any) {
+          console.warn('[HederaWalletClient] ⚠️ Direct WalletConnect call failed:', directError?.message);
+          console.warn('[HederaWalletClient] Falling back to HashConnect sendTransaction...');
+          
+          // Fall back to original HashConnect method
+          console.log('[HederaWalletClient] About to call sendTransaction with SESSION topic...');
+          console.log('[HederaWalletClient] Transaction request:', {
+            topic: sessionTopic,
+            byteArrayLength: transactionBytes.length,
+            accountToSign: accountToSign,
+            returnTransaction: false,
+          });
+          
+          try {
           console.log('[HederaWalletClient] 🚀 CALLING hc.sendTransaction() NOW...');
           console.log('[HederaWalletClient] hc object type:', typeof hc);
           console.log('[HederaWalletClient] sendTransaction function type:', typeof hc.sendTransaction);
@@ -283,7 +323,7 @@ export async function sendHbarPayment(
           console.log('[HederaWalletClient] Step 2: Transaction request object created:', {
             hasByteArray: !!transactionRequest.byteArray,
             byteArrayLength: transactionRequest.byteArray?.length,
-            metadata: transactionRequest.metadata,
+            signerAccountId: transactionRequest.signerAccountId,
           });
           
           // First, try to ping HashPack to verify connection is active
@@ -313,7 +353,7 @@ export async function sendHbarPayment(
             const originalErrorHandler = window.onerror;
             const originalUnhandledRejection = window.onunhandledrejection;
             
-            window.onerror = function(msg, url, lineNo, columnNo, error) {
+            window.onerror = function(this: Window, msg: any, url: any, lineNo: any, columnNo: any, error: any) {
               console.error('[HederaWalletClient] ⚠️ WINDOW ERROR during sendTransaction:', {
                 message: msg,
                 url,
@@ -321,13 +361,14 @@ export async function sendHbarPayment(
                 columnNo,
                 error,
               });
-              if (originalErrorHandler) originalErrorHandler(msg, url, lineNo, columnNo, error);
+              if (originalErrorHandler) originalErrorHandler.call(window, msg, url, lineNo, columnNo, error);
               return false;
             };
             
-            window.onunhandledrejection = function(event) {
+            window.onunhandledrejection = function(this: Window, event: PromiseRejectionEvent) {
               console.error('[HederaWalletClient] ⚠️ UNHANDLED PROMISE REJECTION:', event.reason);
-              if (originalUnhandledRejection) originalUnhandledRejection(event);
+              if (originalUnhandledRejection) originalUnhandledRejection.call(window, event);
+              return false;
             };
             
             console.log('[HederaWalletClient] Step 3.1: About to call sendTransaction...');
@@ -422,7 +463,8 @@ export async function sendHbarPayment(
           console.error('[HederaWalletClient] Error message:', sendError?.message);
           console.error('[HederaWalletClient] Error stack:', sendError?.stack);
           throw sendError;
-        }
+          }
+        } // End of catch(directError) - fallback to HashConnect
       } else {
         throw new Error('sendTransaction method not available on HashConnect instance');
       }
