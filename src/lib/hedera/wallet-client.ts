@@ -231,27 +231,55 @@ export async function sendHbarPayment(
         });
         
         try {
-          // Add a timeout to prevent infinite hanging
-          const sendTransactionPromise = hc.sendTransaction(sessionTopic, {
-            byteArray: transactionBytes,
-            metadata: {
-              accountToSign: accountToSign,
-              returnTransaction: false,
-            },
-          });
+          console.log('[HederaWalletClient] 🚀 CALLING hc.sendTransaction() NOW...');
+          console.log('[HederaWalletClient] hc object type:', typeof hc);
+          console.log('[HederaWalletClient] sendTransaction function type:', typeof hc.sendTransaction);
           
-          console.log('[HederaWalletClient] sendTransaction promise created, waiting for response...');
-          console.log('[HederaWalletClient] ⏳ Check your HashPack wallet for approval prompt...');
+          let sendTransactionPromise;
+          try {
+            // Add a timeout to prevent infinite hanging
+            sendTransactionPromise = hc.sendTransaction(sessionTopic, {
+              byteArray: transactionBytes,
+              metadata: {
+                accountToSign: accountToSign,
+                returnTransaction: false,
+              },
+            });
+          } catch (syncError: any) {
+            console.error('[HederaWalletClient] ❌ sendTransaction threw SYNCHRONOUS error:', syncError);
+            console.error('[HederaWalletClient] Error details:', {
+              message: syncError?.message,
+              name: syncError?.name,
+              stack: syncError?.stack,
+            });
+            throw syncError;
+          }
+          
+          console.log('[HederaWalletClient] ✅ sendTransaction() returned successfully');
+          console.log('[HederaWalletClient] Return value type:', typeof sendTransactionPromise);
+          console.log('[HederaWalletClient] Is Promise?:', sendTransactionPromise instanceof Promise);
+          console.log('[HederaWalletClient] ⏳ Starting Promise.race with 120s timeout...');
+          console.log('[HederaWalletClient] 💡 CHECK YOUR HASHPACK WALLET NOW FOR APPROVAL PROMPT!');
           
           // Wait for the result with a generous timeout (2 minutes)
-          result = await Promise.race([
-            sendTransactionPromise,
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Transaction request timeout after 120 seconds')), 120000)
-            )
-          ]);
+          const raceStartTime = Date.now();
+          try {
+            result = await Promise.race([
+              sendTransactionPromise,
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Transaction request timeout after 120 seconds')), 120000)
+              )
+            ]);
+            
+            const elapsed = ((Date.now() - raceStartTime) / 1000).toFixed(2);
+            console.log(`[HederaWalletClient] ✅ Promise resolved after ${elapsed}s`);
+          } catch (raceError: any) {
+            const elapsed = ((Date.now() - raceStartTime) / 1000).toFixed(2);
+            console.error(`[HederaWalletClient] ❌ Promise rejected after ${elapsed}s:`, raceError);
+            throw raceError;
+          }
           
-          console.log('[HederaWalletClient] ✅ sendTransaction call completed successfully');
+          console.log('[HederaWalletClient] ✅ sendTransaction completed successfully');
           console.log('[HederaWalletClient] Result type:', typeof result);
           console.log('[HederaWalletClient] Result:', result);
         } catch (sendError: any) {
