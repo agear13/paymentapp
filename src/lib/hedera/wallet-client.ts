@@ -253,7 +253,13 @@ export async function sendHbarPayment(
           ? pairingData.accountIds[0] 
           : walletState.accountId;
         
+        // CRITICAL: Convert account to CAIP format (Chain Agnostic Improvement Proposal)
+        // HashConnect's getSessionForAccount() expects: "hedera:testnet:0.0.XXXXX"
+        // But we have: "0.0.XXXXX"
+        const accountInCaipFormat = `hedera:${CURRENT_NETWORK}:${accountToSign}`;
+        
         console.log('[HederaWalletClient] Using account for signing:', accountToSign);
+        console.log('[HederaWalletClient] Account in CAIP format:', accountInCaipFormat);
         
         // HashConnect v3 API: sendTransaction(topic, transactionRequest)
         // IMPORTANT: Must use session topic, not pairing topic!
@@ -261,7 +267,7 @@ export async function sendHbarPayment(
         console.log('[HederaWalletClient] Transaction request:', {
           topic: sessionTopic,
           byteArrayLength: transactionBytes.length,
-          accountToSign: accountToSign,
+          accountToSign: accountInCaipFormat,  // Use CAIP format!
           returnTransaction: false,
         });
         
@@ -278,7 +284,7 @@ export async function sendHbarPayment(
           const transactionRequest = {
             byteArray: transactionBytes,
             metadata: {
-              accountToSign: accountToSign,
+              accountToSign: accountInCaipFormat,  // Use CAIP format!
               returnTransaction: false,
             },
           };
