@@ -312,15 +312,68 @@ export async function sendHbarPayment(
               transactionBytesLength: wcRequest.request.params.transactionBytes.length,
             });
             
-            console.log('[HederaWalletClient] 🚀 Calling _signClient.request()...');
-            const directResult = await signClient.request(wcRequest);
-            console.log('[HederaWalletClient] ✅ Direct WalletConnect call succeeded!');
-            console.log('[HederaWalletClient] Result type:', typeof directResult);
-            console.log('[HederaWalletClient] Result keys:', Object.keys(directResult || {}));
-            console.log('[HederaWalletClient] Full result:', JSON.stringify(directResult, null, 2));
+            // Add temporary event listeners to debug WalletConnect events
+            const debugEventHandler = (eventName: string) => (data: any) => {
+              console.log(`[HederaWalletClient] 🔔 WalletConnect event: ${eventName}`, data);
+            };
             
-            // Check what we got back - HashPack might return different formats
-            result = directResult;
+            const events = ['session_request', 'session_event', 'session_update', 'session_ping'];
+            events.forEach(eventName => {
+              if (signClient.events && typeof signClient.events.on === 'function') {
+                signClient.events.on(eventName, debugEventHandler(eventName));
+              }
+            });
+            
+            console.log('[HederaWalletClient] 🚀 Calling _signClient.request()...');
+            console.log('[HederaWalletClient] 💡 CHECK YOUR HASHPACK WALLET NOW FOR APPROVAL PROMPT!');
+            
+            // Add timeout to prevent infinite hang
+            const requestPromise = signClient.request(wcRequest);
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => {
+                console.log('[HederaWalletClient] ⏰ 120s timeout reached!');
+                reject(new Error('WalletConnect request timeout after 120s'));
+              }, 120000);
+            });
+            
+            // Also log progress every 5 seconds
+            const progressInterval = setInterval(() => {
+              console.log('[HederaWalletClient] ⏳ Still waiting for wallet response...');
+            }, 5000);
+            
+            console.log('[HederaWalletClient] ⏰ Waiting for response (120s timeout)...');
+            
+            try {
+              const directResult = await Promise.race([requestPromise, timeoutPromise]);
+              clearInterval(progressInterval);
+              
+              // Remove event listeners
+              events.forEach(eventName => {
+                if (signClient.events && typeof signClient.events.off === 'function') {
+                  signClient.events.off(eventName, debugEventHandler(eventName));
+                }
+              });
+              
+              console.log('[HederaWalletClient] ✅ Direct WalletConnect call succeeded!');
+              console.log('[HederaWalletClient] Result type:', typeof directResult);
+              console.log('[HederaWalletClient] Result keys:', Object.keys(directResult || {}));
+              console.log('[HederaWalletClient] Full result:', JSON.stringify(directResult, null, 2));
+              
+              // Check what we got back - HashPack might return different formats
+              result = directResult;
+            } catch (requestError: any) {
+              clearInterval(progressInterval);
+              
+              // Remove event listeners
+              events.forEach(eventName => {
+                if (signClient.events && typeof signClient.events.off === 'function') {
+                  signClient.events.off(eventName, debugEventHandler(eventName));
+                }
+              });
+              
+              console.error('[HederaWalletClient] ❌ Request failed or timed out:', requestError?.message);
+              throw requestError;
+            }
           } else {
             console.log('[HederaWalletClient] ❌ _signClient.request not available, falling back to HashConnect wrapper');
             throw new Error('Direct WalletConnect not available');
