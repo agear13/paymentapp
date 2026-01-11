@@ -416,17 +416,21 @@ export async function sendHbarPayment(
             }
           }
           
-          // TRY: Use PLAIN format to match what's stored in session accounts
-          console.log('[HederaWalletClient] Using PLAIN account format:', accountToSign);
+          // CRITICAL: Session stores accounts in CAIP format!
+          // Must match the format in session.namespaces.hedera.accounts
+          const accountInCaipFormat = `hedera:${CURRENT_NETWORK}:${accountToSign}`;
+          console.log('[HederaWalletClient] Converting account to CAIP format to match session:', accountInCaipFormat);
+          console.log('[HederaWalletClient] Session expects:', accountInCaipFormat);
           
           const transactionRequest = {
             byteArray: transactionBytes,
-            signerAccountId: accountToSign,  // Plain format: "0.0.XXXXX" (matches session.namespaces.hedera.accounts)
+            signerAccountId: accountInCaipFormat,  // CAIP format: "hedera:testnet:0.0.XXXXX" (matches session!)
           };
           console.log('[HederaWalletClient] Step 2: Transaction request object created:', {
             hasByteArray: !!transactionRequest.byteArray,
             byteArrayLength: transactionRequest.byteArray?.length,
             signerAccountId: transactionRequest.signerAccountId,
+            formatMatch: '✅ CAIP format matches session!',
           });
           
           // First, try to ping HashPack to verify connection is active
