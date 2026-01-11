@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       logger.error('Xero OAuth error', { error });
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/settings?xero_error=${encodeURIComponent(error)}`
+        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=${encodeURIComponent(error)}`
       );
     }
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     if (!code || !state) {
       logger.error('Missing code or state in Xero callback');
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/settings?xero_error=missing_parameters`
+        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=missing_parameters`
       );
     }
 
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     } catch {
       logger.error('Invalid state parameter in Xero callback');
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/settings?xero_error=invalid_state`
+        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=invalid_state`
       );
     }
 
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     if (tenants.length === 0) {
       logger.error('No Xero tenants available for user', { userId });
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/settings?xero_error=no_tenants`
+        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=no_tenants`
       );
     }
 
@@ -79,14 +79,14 @@ export async function GET(request: NextRequest) {
 
     // Redirect to settings page with success message
     const redirectUrl = tenants.length > 1
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/settings?xero_success=connected&select_tenant=true`
-      : `${process.env.NEXT_PUBLIC_APP_URL}/settings?xero_success=connected`;
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_success=connected&select_tenant=true`
+      : `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_success=connected`;
 
     return NextResponse.redirect(redirectUrl);
   } catch (error) {
     logger.error('Error processing Xero OAuth callback', { error });
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/settings?xero_error=connection_failed`
+      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=connection_failed`
     );
   }
 }
