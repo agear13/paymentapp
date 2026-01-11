@@ -34,6 +34,7 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
   console.log('XeroSyncQueue for organization:', organizationId);
   const [loading, setLoading] = React.useState(true);
   const [processing, setProcessing] = React.useState(false);
+  const [backfilling, setBackfilling] = React.useState(false);
   const [queueStatus, setQueueStatus] = React.useState<QueueStatus | null>(null);
 
   // Fetch queue status
@@ -80,6 +81,38 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
       toast.error('Failed to process queue');
     } finally {
       setProcessing(false);
+    }
+  };
+
+  // Backfill missing syncs
+  const backfillSyncs = async () => {
+    setBackfilling(true);
+    try {
+      const response = await fetch('/api/xero/queue/backfill', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to backfill syncs');
+      }
+
+      const result = await response.json();
+      
+      if (result.results.queued > 0) {
+        toast.success(
+          `Queued ${result.results.queued} missed payments for syncing!`
+        );
+      } else {
+        toast.info('No payments need backfilling');
+      }
+
+      // Refresh status
+      await fetchStatus();
+    } catch (error) {
+      console.error('Error backfilling syncs:', error);
+      toast.error('Failed to backfill syncs');
+    } finally {
+      setBackfilling(false);
     }
   };
 
@@ -130,23 +163,43 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
               Monitor and manually trigger Xero payment syncs
             </CardDescription>
           </div>
-          <Button
-            onClick={processQueue}
-            disabled={processing || !queueStatus || queueStatus.pendingCount === 0}
-            size="sm"
-          >
-            {processing ? (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Process Queue ({queueStatus?.pendingCount || 0} pending)
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={backfillSyncs}
+              disabled={backfilling || loading}
+              size="sm"
+              variant="outline"
+            >
+              {backfilling ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Backfilling...
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-4 h-4 mr-2" />
+                  Queue Missed Payments
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={processQueue}
+              disabled={processing || !queueStatus || queueStatus.pendingCount === 0}
+              size="sm"
+            >
+              {processing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Process Queue ({queueStatus?.pendingCount || 0})
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
