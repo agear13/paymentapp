@@ -292,14 +292,16 @@ export async function sendHbarPayment(
             console.log('[HederaWalletClient] Building WalletConnect request...');
             
             // WalletConnect request format for Hedera
+            // CRITICAL: Use hedera_signAndExecuteTransaction so HashPack submits to Hedera
+            // This avoids the "proposal deleted" issue where responses can't be matched
             const wcRequest = {
               topic: confirmedSessionTopic, // Use the validated session topic
               chainId: `hedera:${CURRENT_NETWORK}`,
               request: {
-                method: 'hedera_signTransaction',
+                method: 'hedera_signAndExecuteTransaction',  // Let HashPack submit it!
                 params: {
                   signerAccountId: `hedera:${CURRENT_NETWORK}:${accountToSign}`,
-                  transactionBytes: Array.from(transactionBytes), // Convert Uint8Array to regular array
+                  transactionList: transactionBytes,  // Changed to transactionList for execute
                 },
               },
             };
@@ -309,7 +311,8 @@ export async function sendHbarPayment(
               chainId: wcRequest.chainId,
               method: wcRequest.request.method,
               signerAccountId: wcRequest.request.params.signerAccountId,
-              transactionBytesLength: wcRequest.request.params.transactionBytes.length,
+              transactionListLength: wcRequest.request.params.transactionList.length,
+              note: '⚡ Using signAndExecute - HashPack will submit to Hedera!',
             });
             
             // Add temporary event listeners to debug WalletConnect events
@@ -359,8 +362,28 @@ export async function sendHbarPayment(
               console.log('[HederaWalletClient] Result keys:', Object.keys(directResult || {}));
               console.log('[HederaWalletClient] Full result:', JSON.stringify(directResult, null, 2));
               
-              // Check what we got back - HashPack might return different formats
-              result = directResult;
+              // Extract transaction ID from response
+              // HashPack should return: { transactionId: "0.0.XXXXX@1234567890.123456789" }
+              let txId: string | undefined;
+              
+              if (typeof directResult === 'string') {
+                // Response is the transaction ID directly
+                txId = directResult;
+              } else if (directResult?.transactionId) {
+                // Response is an object with transactionId field
+                txId = directResult.transactionId;
+              } else if (directResult?.response?.transactionId) {
+                // Nested response object
+                txId = directResult.response.transactionId;
+              }
+              
+              console.log('[HederaWalletClient] ✅ Extracted transaction ID:', txId);
+              
+              result = {
+                transactionId: txId,
+                success: true,
+                ...directResult,
+              };
             } catch (requestError: any) {
               clearInterval(progressInterval);
               
