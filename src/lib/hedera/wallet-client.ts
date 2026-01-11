@@ -237,7 +237,7 @@ export async function sendHbarPayment(
         result = await (hc as any).request(pairingData.topic, {
           method: 'hedera_signAndExecuteTransaction',
           params: {
-            signerAccountId: accountToSign,
+            signerAccountId: `hedera:${CURRENT_NETWORK}:${accountToSign}`,  // CAIP format
             transactionList: transactionBytes,
           },
         });
@@ -401,10 +401,15 @@ export async function sendHbarPayment(
           let sendTransactionPromise;
           
           console.log('[HederaWalletClient] Step 1: About to create transaction request object...');
-          // TRY: Simple format - just byteArray and signerAccountId (based on HashConnect examples)
+          
+          // Convert account to CAIP format for HashConnect's internal session matching
+          const accountInCaipFormat = `hedera:${CURRENT_NETWORK}:${accountToSign}`;
+          console.log('[HederaWalletClient] Converted account to CAIP format:', accountInCaipFormat);
+          
+          // TRY: Pass signerAccountId in CAIP format (what HashConnect expects internally)
           const transactionRequest = {
             byteArray: transactionBytes,
-            signerAccountId: accountToSign,  // Plain format: "0.0.XXXXX"
+            signerAccountId: accountInCaipFormat,  // CAIP format: "hedera:testnet:0.0.XXXXX"
           };
           console.log('[HederaWalletClient] Step 2: Transaction request object created:', {
             hasByteArray: !!transactionRequest.byteArray,
