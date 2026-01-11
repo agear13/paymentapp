@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { XeroConnection } from '@/components/dashboard/settings/xero-connection';
 import { XeroSyncQueue } from '@/components/dashboard/settings/xero-sync-queue';
+import { XeroAccountMapping } from '@/components/dashboard/settings/xero-account-mapping';
 import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/server/prisma';
 
@@ -103,6 +104,9 @@ export default async function IntegrationsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Xero Account Mapping */}
+      <XeroAccountMapping organizationId={organizationId} />
 
       {/* Xero Sync Queue */}
       <XeroSyncQueue organizationId={organizationId} />
