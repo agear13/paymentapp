@@ -737,6 +737,7 @@ export async function getSessionTopic(maxRetries: number = 3, delayMs: number = 
         if (hasHederaNamespace) {
           console.log(`[HashConnect] Session ${s.topic?.substring(0, 8)}... hedera chains:`, s.namespaces.hedera.chains);
           console.log(`[HashConnect] Session ${s.topic?.substring(0, 8)}... hedera accounts:`, s.namespaces.hedera.accounts);
+          console.log(`[HashConnect] 🔍 FIRST ACCOUNT FORMAT IN SESSION:`, s.namespaces.hedera.accounts?.[0]);
         }
         return hasHederaNamespace && isAcknowledged;
       });
