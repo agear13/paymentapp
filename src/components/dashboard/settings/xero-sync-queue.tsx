@@ -30,6 +30,8 @@ interface XeroSyncQueueProps {
 }
 
 export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
+  // organizationId is passed but not currently used - may be needed for filtering in future
+  console.log('XeroSyncQueue for organization:', organizationId);
   const [loading, setLoading] = React.useState(true);
   const [processing, setProcessing] = React.useState(false);
   const [queueStatus, setQueueStatus] = React.useState<QueueStatus | null>(null);
@@ -153,16 +155,29 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-yellow-800">
               <strong>{queueStatus.pendingCount} payment(s)</strong> waiting to sync to Xero. 
-              Click "Process Queue" to sync them now.
+              Click &quot;Process Queue&quot; to sync them now.
             </div>
           </div>
         )}
 
-        {queueStatus && queueStatus.pendingCount === 0 && (
+        {queueStatus && queueStatus.pendingCount === 0 && queueStatus.recentSyncs.length === 0 && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-blue-800">
+              <strong>No sync queue records found.</strong>
+              <p className="mt-1">
+                If you&apos;ve made payments, they should appear here after clicking
+                {' '}&quot;Process Queue&quot;.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {queueStatus && queueStatus.pendingCount === 0 && queueStatus.recentSyncs.length > 0 && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-green-600" />
             <div className="text-sm text-green-800">
-              All payments are synced to Xero!
+              No pending syncs - recent syncs shown below
             </div>
           </div>
         )}
@@ -207,7 +222,16 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
             <strong>Note:</strong> For automatic syncing, you need to set up a cron job or background worker.
-            See the <a href="#" className="underline">setup guide</a> for instructions.
+            See the setup guide (XERO_SYNC_SETUP.md) for instructions.
+          </p>
+          <p className="text-xs text-blue-600 mt-2">
+            <a 
+              href="/api/xero/debug" 
+              target="_blank" 
+              className="underline hover:text-blue-800"
+            >
+              View detailed sync diagnostics →
+            </a>
           </p>
         </div>
       </CardContent>
