@@ -90,6 +90,10 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
     try {
       const response = await fetch('/api/xero/queue/backfill', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ organizationId }),
       });
 
       if (!response.ok) {
@@ -98,9 +102,12 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
 
       const result = await response.json();
       
-      if (result.results.queued > 0) {
+      // Handle both response formats: top-level 'queued' or nested in 'results'
+      const queuedCount = result.results?.queued ?? result.queued ?? 0;
+      
+      if (queuedCount > 0) {
         toast.success(
-          `Queued ${result.results.queued} missed payments for syncing!`
+          `Queued ${queuedCount} missed payments for syncing!`
         );
       } else {
         toast.info('No payments need backfilling');
