@@ -294,6 +294,13 @@ export async function sendHbarPayment(
             // WalletConnect request format for Hedera
             // CRITICAL: Use hedera_signAndExecuteTransaction so HashPack submits to Hedera
             // This avoids the "proposal deleted" issue where responses can't be matched
+            
+            // Convert transaction bytes to base64 string (required format for transactionList)
+            // Use browser's btoa with binary string conversion
+            const binaryString = Array.from(transactionBytes).map(byte => String.fromCharCode(byte)).join('');
+            const transactionBase64 = btoa(binaryString);
+            console.log('[HederaWalletClient] Converted transaction to base64, length:', transactionBase64.length);
+            
             const wcRequest = {
               topic: confirmedSessionTopic, // Use the validated session topic
               chainId: `hedera:${CURRENT_NETWORK}`,
@@ -301,7 +308,7 @@ export async function sendHbarPayment(
                 method: 'hedera_signAndExecuteTransaction',  // Let HashPack submit it!
                 params: {
                   signerAccountId: `hedera:${CURRENT_NETWORK}:${accountToSign}`,
-                  transactionList: transactionBytes,  // Changed to transactionList for execute
+                  transactionList: transactionBase64,  // BASE64 string!
                 },
               },
             };
@@ -311,7 +318,8 @@ export async function sendHbarPayment(
               chainId: wcRequest.chainId,
               method: wcRequest.request.method,
               signerAccountId: wcRequest.request.params.signerAccountId,
-              transactionListLength: wcRequest.request.params.transactionList.length,
+              transactionListBase64Length: wcRequest.request.params.transactionList.length,
+              transactionListFormat: 'base64 string',
               note: '⚡ Using signAndExecute - HashPack will submit to Hedera!',
             });
             
