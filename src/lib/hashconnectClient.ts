@@ -196,6 +196,10 @@ export async function initHashConnect(): Promise<void> {
         // No need to call connect() or generatePairingString() here
         console.log('[HashConnect] Init complete - pairing string will be generated when modal opens');
         
+        // Clean up any old/stale sessions after initialization
+        console.log('[HashConnect] Checking for old sessions to clean up...');
+        await cleanupOldSessions();
+        
         updateWalletState({ isLoading: false });
       }
 
@@ -839,4 +843,73 @@ export function isWalletConnected(): boolean {
  */
 export function getHashConnectInstance(): any {
   return hc;
+}
+
+/**
+ * Clean up old/stale WalletConnect sessions
+ * This helps prevent "proposal deleted" errors
+ */
+export async function cleanupOldSessions(): Promise<void> {
+  try {
+    console.log('[HashConnect] 🧹 Cleaning up old/stale sessions...');
+    
+    if (!hc) {
+      console.log('[HashConnect] No HashConnect instance to clean up');
+      return;
+    }
+    
+    const signClient = (hc as any)._signClient;
+    if (!signClient) {
+      console.log('[HashConnect] No sign client available');
+      return;
+    }
+    
+    // Get all active sessions
+    const allSessions = signClient.session?.getAll?.() || [];
+    console.log('[HashConnect] Found', allSessions.length, 'total sessions');
+    
+    if (allSessions.length === 0) {
+      console.log('[HashConnect] No sessions to clean up');
+      return;
+    }
+    
+    // Find Hedera sessions
+    const hederaSessions = allSessions.filter((s: any) => 
+      s.namespaces?.hedera || 
+      s.requiredNamespaces?.hedera ||
+      s.optionalNamespaces?.hedera
+    );
+    
+    console.log('[HashConnect] Found', hederaSessions.length, 'Hedera sessions');
+    
+    // Keep only the most recent session, disconnect the rest
+    if (hederaSessions.length > 1) {
+      const sortedSessions = hederaSessions.sort((a: any, b: any) => b.expiry - a.expiry);
+      const mostRecent = sortedSessions[0];
+      const oldSessions = sortedSessions.slice(1);
+      
+      console.log('[HashConnect] Keeping most recent session:', mostRecent.topic.substring(0, 16) + '...');
+      console.log('[HashConnect] Disconnecting', oldSessions.length, 'old sessions');
+      
+      for (const oldSession of oldSessions) {
+        try {
+          console.log('[HashConnect] Disconnecting old session:', oldSession.topic.substring(0, 16) + '...');
+          await signClient.disconnect({
+            topic: oldSession.topic,
+            reason: { code: 6000, message: 'Cleaning up old session' },
+          });
+          console.log('[HashConnect] ✅ Disconnected old session');
+        } catch (error) {
+          console.warn('[HashConnect] Failed to disconnect old session:', error);
+        }
+      }
+      
+      console.log('[HashConnect] ✅ Cleanup complete - kept 1 session, removed', oldSessions.length);
+    } else {
+      console.log('[HashConnect] Only 1 Hedera session found, no cleanup needed');
+    }
+    
+  } catch (error) {
+    console.error('[HashConnect] Error during session cleanup:', error);
+  }
 }

@@ -261,11 +261,39 @@ export async function sendHbarPayment(
           const signClient = (hc as any)._signClient;
           if (signClient && typeof signClient.request === 'function') {
             console.log('[HederaWalletClient] ✅ Found _signClient.request() - using direct WalletConnect API');
+            
+            // VALIDATE: Check that sessionTopic is a valid active session, not a proposal
+            console.log('[HederaWalletClient] 🔍 Validating session before signing...');
+            const activeSessions = signClient.session?.getAll?.() || [];
+            console.log('[HederaWalletClient] Active sessions:', activeSessions.length);
+            console.log('[HederaWalletClient] Looking for topic:', sessionTopic);
+            
+            const matchingSession = activeSessions.find((s: any) => 
+              s.topic === sessionTopic || s.pairingTopic === sessionTopic
+            );
+            
+            if (!matchingSession) {
+              console.error('[HederaWalletClient] ❌ Session topic not found in active sessions!');
+              console.error('[HederaWalletClient] Available session topics:', activeSessions.map((s: any) => s.topic));
+              throw new Error('Session not found. Please disconnect and reconnect your wallet.');
+            }
+            
+            console.log('[HederaWalletClient] ✅ Found matching session:', {
+              topic: matchingSession.topic,
+              pairingTopic: matchingSession.pairingTopic,
+              expiry: matchingSession.expiry,
+              acknowledged: matchingSession.acknowledged,
+            });
+            
+            // Use the confirmed session topic (not the pairing topic)
+            const confirmedSessionTopic = matchingSession.topic;
+            console.log('[HederaWalletClient] Using confirmed session topic:', confirmedSessionTopic);
+            
             console.log('[HederaWalletClient] Building WalletConnect request...');
             
             // WalletConnect request format for Hedera
             const wcRequest = {
-              topic: sessionTopic,
+              topic: confirmedSessionTopic, // Use the validated session topic
               chainId: `hedera:${CURRENT_NETWORK}`,
               request: {
                 method: 'hedera_signTransaction',
