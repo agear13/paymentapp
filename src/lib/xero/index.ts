@@ -5,6 +5,7 @@
 
 export {
   getXeroClient,
+  isXeroConfigured,
   generateAuthUrl,
   exchangeCodeForTokens,
   refreshAccessToken,
