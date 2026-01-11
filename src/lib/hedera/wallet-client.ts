@@ -402,14 +402,26 @@ export async function sendHbarPayment(
           
           console.log('[HederaWalletClient] Step 1: About to create transaction request object...');
           
-          // Convert account to CAIP format for HashConnect's internal session matching
-          const accountInCaipFormat = `hedera:${CURRENT_NETWORK}:${accountToSign}`;
-          console.log('[HederaWalletClient] Converted account to CAIP format:', accountInCaipFormat);
+          // DEBUG: Check what accounts are actually in the session
+          const signClient = (hc as any)._signClient;
+          if (signClient?.session) {
+            const allSessions = signClient.session.getAll?.() || [];
+            const hederaSession = allSessions.find((s: any) => s.topic === sessionTopic);
+            if (hederaSession) {
+              console.log('[HederaWalletClient] 🔍 SESSION ACCOUNTS DEBUG:');
+              console.log('[HederaWalletClient] Session topic:', hederaSession.topic);
+              console.log('[HederaWalletClient] Session namespaces:', hederaSession.namespaces);
+              console.log('[HederaWalletClient] Hedera accounts in session:', hederaSession.namespaces?.hedera?.accounts);
+              console.log('[HederaWalletClient] Account we\'re trying to use:', accountToSign);
+            }
+          }
           
-          // TRY: Pass signerAccountId in CAIP format (what HashConnect expects internally)
+          // TRY: Use PLAIN format to match what's stored in session accounts
+          console.log('[HederaWalletClient] Using PLAIN account format:', accountToSign);
+          
           const transactionRequest = {
             byteArray: transactionBytes,
-            signerAccountId: accountInCaipFormat,  // CAIP format: "hedera:testnet:0.0.XXXXX"
+            signerAccountId: accountToSign,  // Plain format: "0.0.XXXXX" (matches session.namespaces.hedera.accounts)
           };
           console.log('[HederaWalletClient] Step 2: Transaction request object created:', {
             hasByteArray: !!transactionRequest.byteArray,
