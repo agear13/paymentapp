@@ -504,7 +504,10 @@ export async function sendHbarPayment(
               }
             }, 500);
             
-            sendTransactionPromise = hc.sendTransaction(sessionTopic, transactionRequest);
+            // TRY: Call WITHOUT topic - let HashConnect find the session by account
+            console.log('[HederaWalletClient] 🔧 TRYING: Calling sendTransaction WITHOUT topic parameter');
+            console.log('[HederaWalletClient] Letting HashConnect auto-find session by signerAccountId:', transactionRequest.signerAccountId);
+            sendTransactionPromise = hc.sendTransaction(transactionRequest);
             callReturned = true;
             
             console.log('[HederaWalletClient] Step 3.2: sendTransaction() RETURNED!');
