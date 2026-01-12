@@ -29,23 +29,26 @@ export async function POST(request: NextRequest) {
 
     logger.info({ organizationId, userId: user.id }, 'Resetting Xero sync queue');
 
-    // Delete all failed syncs for this organization
+    // Delete ALL syncs for this organization (FAILED, PENDING, RETRYING)
+    // SUCCESS syncs are kept for audit purposes
     const result = await prisma.xero_syncs.deleteMany({
       where: {
         organization_id: organizationId,
-        status: 'FAILED',
+        status: {
+          in: ['FAILED', 'PENDING', 'RETRYING'],
+        },
       },
     });
 
     logger.info(
       { organizationId, deletedCount: result.count },
-      'Deleted failed Xero syncs'
+      'Deleted non-successful Xero syncs'
     );
 
     return NextResponse.json({
       success: true,
       deletedCount: result.count,
-      message: `Deleted ${result.count} failed sync records`,
+      message: `Deleted ${result.count} sync records (FAILED, PENDING, RETRYING)`,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
