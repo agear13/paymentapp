@@ -42,14 +42,8 @@ export async function fetchXeroAccounts(
     expires_at: connection.expiresAt.getTime(),
   });
   
-  // Set active tenant
-  xeroClient.tenants = [{
-    tenantId: connection.tenantId,
-    tenantType: 'ORGANISATION',
-    tenantName: '',
-    createdDateUtc: new Date(),
-    updatedDateUtc: new Date(),
-  }];
+  // Update tenants (read-only property, must use updateTenants method)
+  await xeroClient.updateTenants();
   
   // Fetch accounts
   try {
