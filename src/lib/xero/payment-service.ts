@@ -7,8 +7,8 @@
 import { getXeroClient } from './client';
 import { getActiveConnection } from './connection-service';
 import { prisma } from '@/lib/server/prisma';
-import type { Payment } from 'xero-node';
-import type { TokenType } from '@/lib/hedera/types';
+import { Payment } from 'xero-node';
+import type { TokenType } from '@/lib/hedera/constants';
 
 export interface PaymentRecordingParams {
   paymentLinkId: string;
@@ -130,7 +130,7 @@ export async function recordXeroPayment(
 
   return {
     paymentId: createdPayment.paymentID!,
-    status: createdPayment.status!,
+    status: String(createdPayment.status!),
     amount: createdPayment.amount!,
     narration,
   };
@@ -141,6 +141,7 @@ export async function recordXeroPayment(
  * ⭐ CRITICAL: Each crypto token must map to its own Xero clearing account
  */
 function getClearingAccountId(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   settings: any,
   paymentMethod: 'STRIPE' | 'HEDERA',
   paymentToken?: TokenType

@@ -6,7 +6,7 @@
 import { getXeroClient } from './client';
 import { getActiveConnection } from './connection-service';
 import { prisma } from '@/lib/server/prisma';
-import type { Invoice, Contact, LineItem } from 'xero-node';
+import { Invoice, Contact, LineItem } from 'xero-node';
 
 export interface InvoiceCreationParams {
   paymentLinkId: string;
@@ -95,8 +95,10 @@ export async function createXeroInvoice(
     dueDate: new Date().toISOString().split('T')[0], // Due immediately
     lineItems,
     reference: invoiceReference || undefined,
-    currencyCode: currency,
-    status: Invoice.StatusEnum.AUTHORISED,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    currencyCode: currency as any, // Cast to match Xero SDK type
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    status: Invoice.StatusEnum.AUTHORISED as any, // Cast to match Xero SDK type
   };
 
   // Create invoice in Xero
@@ -114,7 +116,7 @@ export async function createXeroInvoice(
   return {
     invoiceId: createdInvoice.invoiceID!,
     invoiceNumber: createdInvoice.invoiceNumber!,
-    status: createdInvoice.status!,
+    status: String(createdInvoice.status!),
     total: createdInvoice.total!,
   };
 }
@@ -123,6 +125,7 @@ export async function createXeroInvoice(
  * Get existing contact or create new one
  */
 async function getOrCreateContact(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   xeroClient: any,
   tenantId: string,
   emailOrName: string

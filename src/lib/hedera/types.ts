@@ -4,6 +4,9 @@
 
 import type { TokenType } from './constants';
 
+// Re-export TokenType for external use
+export type { TokenType };
+
 // Wallet Connection State
 export interface WalletState {
   isConnected: boolean;
