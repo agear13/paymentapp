@@ -66,9 +66,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: result.accounts });
   } catch (error) {
-    logger.error('Error fetching Xero accounts', { error });
-    
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    logger.error({ 
+      error: errorMessage,
+      stack: errorStack,
+      organizationId,
+    }, 'Error fetching Xero accounts');
     
     // Handle specific Xero errors
     if (errorMessage.includes('No active Xero connection')) {
@@ -79,7 +84,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: 'Failed to fetch accounts from Xero' },
+      { error: 'Failed to fetch accounts from Xero', details: errorMessage },
       { status: 500 }
     );
   }

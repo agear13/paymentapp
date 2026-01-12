@@ -225,8 +225,15 @@ export async function getActiveConnection(
       refreshed.refreshToken,
       refreshed.expiresAt
     );
-  } catch (error) {
-    console.error('Failed to refresh Xero token:', error);
+  } catch (error: any) {
+    console.error('Failed to refresh Xero token:', {
+      error: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      body: error.response?.body,
+      organizationId,
+      tenantId: connection.tenantId,
+    });
     return null;
   }
 }

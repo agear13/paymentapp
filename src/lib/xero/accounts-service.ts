@@ -52,30 +52,43 @@ export async function fetchXeroAccounts(
   }];
   
   // Fetch accounts
-  const response = await xeroClient.accountingApi.getAccounts(
-    connection.tenantId,
-    undefined, // ifModifiedSince
-    undefined, // where
-    'Code'     // order by code
-  );
-  
-  // Filter to only active accounts
-  const activeAccounts = response.body.accounts?.filter(
-    account => account.status === 'ACTIVE'
-  ) || [];
-  
-  return {
-    accounts: activeAccounts.map(account => ({
-      accountID: account.accountID!,
-      code: account.code!,
-      name: account.name!,
-      type: account.type!,
-      taxType: account.taxType,
-      status: account.status!,
-      class: account.class,
-    })),
-    total: activeAccounts.length,
-  };
+  try {
+    const response = await xeroClient.accountingApi.getAccounts(
+      connection.tenantId,
+      undefined, // ifModifiedSince
+      undefined, // where
+      'Code'     // order by code
+    );
+    
+    // Filter to only active accounts
+    const activeAccounts = response.body.accounts?.filter(
+      account => account.status === 'ACTIVE'
+    ) || [];
+    
+    return {
+      accounts: activeAccounts.map(account => ({
+        accountID: account.accountID!,
+        code: account.code!,
+        name: account.name!,
+        type: account.type!,
+        taxType: account.taxType,
+        status: account.status!,
+        class: account.class,
+      })),
+      total: activeAccounts.length,
+    };
+  } catch (error: any) {
+    // Log detailed error information
+    console.error('Xero API Error:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      body: error.response?.body,
+      tenantId: connection.tenantId,
+    });
+    
+    throw new Error(`Xero API error: ${error.message} (Status: ${error.response?.status || 'unknown'})`);
+  }
 }
 
 /**
