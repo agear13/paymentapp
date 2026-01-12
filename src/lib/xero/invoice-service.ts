@@ -84,7 +84,7 @@ export async function createXeroInvoice(
     quantity: 1,
     unitAmount: parseFloat(amount),
     accountCode: settings.xero_revenue_account_id,
-    taxType: 'NONE', // Adjust based on requirements
+    taxType: 'EXEMPTOUTPUT', // GST-exempt output (sales) - valid for AU
   }];
 
   // Build invoice
