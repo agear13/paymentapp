@@ -7,6 +7,7 @@
 
 import * as React from 'react';
 import { Plus, RefreshCw, Download } from 'lucide-react';
+import { useOrganization } from '@/hooks/use-organization';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -68,11 +69,15 @@ export default function PaymentLinksPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
   const [isCanceling, setIsCanceling] = React.useState(false);
 
-  // Mock organization ID - in real app, get from auth context
-  // Using Acme Corporation from seed data
-  const organizationId = '791bd0c8-029f-4988-836d-ced2bebc9e39';
+  // Get organization ID from context/hook
+  const { organizationId, isLoading: isOrgLoading } = useOrganization();
 
   const fetchPaymentLinks = React.useCallback(async () => {
+    // Don't fetch if we don't have an organization ID yet
+    if (!organizationId) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
@@ -100,8 +105,10 @@ export default function PaymentLinksPage() {
   }, [organizationId, filters, toast]);
 
   React.useEffect(() => {
-    fetchPaymentLinks();
-  }, [fetchPaymentLinks]);
+    if (!isOrgLoading && organizationId) {
+      fetchPaymentLinks();
+    }
+  }, [fetchPaymentLinks, isOrgLoading, organizationId]);
 
   // Enable real-time polling when there are OPEN or DRAFT payment links
   const hasActiveLinks = React.useMemo(() => {

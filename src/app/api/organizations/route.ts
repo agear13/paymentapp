@@ -66,16 +66,28 @@ export async function POST(request: NextRequest) {
       return apiError('Organization already exists', 409);
     }
 
-    const organization = await prisma.organizations.create({
-      data: {
-        name: body.name,
-        clerk_org_id: body.clerkOrgId,
-      },
+    // Create organization and link to user in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Create the organization
+      const organization = await tx.organizations.create({
+        data: {
+          name: body.name,
+          clerk_org_id: body.clerkOrgId,
+        },
+      });
+
+      // Link the user to the organization as OWNER
+      await tx.$executeRaw`
+        INSERT INTO user_organizations (user_id, organization_id, role, created_at, updated_at)
+        VALUES (${user.id}, ${organization.id}, 'OWNER', NOW(), NOW())
+      `;
+
+      return organization;
     });
 
-    log.info({ organizationId: organization.id, userId: user.id }, 'Created organization');
+    log.info({ organizationId: result.id, userId: user.id }, 'Created organization and linked user');
 
-    return apiResponse(organization, 201);
+    return apiResponse(result, 201);
   } catch (error) {
     log.error({ error }, 'Failed to create organization');
     return apiError('Failed to create organization', 500);

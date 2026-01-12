@@ -15,20 +15,28 @@ export async function getUserOrganization() {
       return null;
     }
 
-    // Get the first organization (simplified approach)
-    // In production, you'd want to:
-    // 1. Get the user's selected organization from session/cookie
-    // 2. Or get it from a user_organizations table
-    // 3. Or prompt them to select if they have multiple
-    const organization = await prisma.organizations.findFirst({
-      select: {
-        id: true,
-        name: true,
-        clerk_org_id: true,
-      },
-    });
+    // Get the user's organization via user_organizations junction table
+    // This ensures proper data isolation between different users/orgs
+    const userOrg = await prisma.$queryRaw<Array<{
+      id: string;
+      name: string;
+      clerk_org_id: string;
+      role: string;
+    }>>`
+      SELECT o.id, o.name, o.clerk_org_id, uo.role
+      FROM organizations o
+      INNER JOIN user_organizations uo ON uo.organization_id = o.id
+      WHERE uo.user_id = ${user.id}
+      ORDER BY uo.created_at ASC
+      LIMIT 1
+    `;
 
-    return organization;
+    if (!userOrg || userOrg.length === 0) {
+      console.warn(`No organization found for user ${user.id}`);
+      return null;
+    }
+
+    return userOrg[0];
   } catch (error) {
     console.error('Error fetching user organization:', error);
     return null;
