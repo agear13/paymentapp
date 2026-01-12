@@ -162,7 +162,9 @@ function getClearingAccountId(
     case 'AUDD':
       return settings.xero_audd_clearing_account_id; // Typically account 1054 ⭐
     default:
-      return null;
+      // ⚠️ FALLBACK: If token is undefined, default to HBAR (most common)
+      // This handles legacy payments where token type wasn't captured
+      return settings.xero_hbar_clearing_account_id;
   }
 }
 
