@@ -13,6 +13,10 @@ import {
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
+  // Get organization from query params (before try block for error logging)
+  const { searchParams } = new URL(request.url);
+  const organizationId = searchParams.get('organization_id');
+  
   try {
     // Get authenticated user
     const supabase = await createClient();
@@ -24,10 +28,6 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
-
-    // Get organization from query params
-    const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organization_id');
 
     if (!organizationId) {
       return NextResponse.json(
