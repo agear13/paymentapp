@@ -79,9 +79,9 @@ export function OnboardingForm() {
 
       const organization = await orgResponse.json();
 
-      // Store organization ID in localStorage for the app
-      if (organization.data?.id) {
-        window.localStorage.setItem('provvypay.organizationId', organization.data.id);
+      // Store clerk_org_id in localStorage (used for API calls)
+      if (organization.data?.clerkOrgId) {
+        window.localStorage.setItem('provvypay.organizationId', organization.data.clerkOrgId);
       }
 
       // Step 2: Create merchant settings

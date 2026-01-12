@@ -43,10 +43,11 @@ export function useOrganization(): UseOrganizationResult {
 
         const data = await response.json()
         
-        if (data.organizationId) {
-          setOrganizationId(data.organizationId)
+        // Use clerk_org_id (not database UUID) for API calls
+        if (data.clerkOrgId) {
+          setOrganizationId(data.clerkOrgId)
           // Cache it
-          window.localStorage.setItem('provvypay.organizationId', data.organizationId)
+          window.localStorage.setItem('provvypay.organizationId', data.clerkOrgId)
         } else {
           setError('No organization found')
         }
