@@ -15,11 +15,8 @@ type UseOrganizationResult = {
 }
 
 /**
- * Minimal hook to satisfy dashboard components.
- * Reads org from querystring first (?organizationId=),
- * then from localStorage (provvypay.organizationId).
- *
- * You can later replace with a real org context/provider.
+ * Hook to fetch and cache the current user's organization.
+ * Fetches from API and caches in localStorage.
  */
 export function useOrganization(): UseOrganizationResult {
   const [organizationId, setOrganizationId] = React.useState<string | null>(null)
@@ -27,20 +24,42 @@ export function useOrganization(): UseOrganizationResult {
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const fromQuery = params.get('organizationId') || params.get('orgId')
-      const fromStorage =
-        window.localStorage.getItem('provvypay.organizationId') ||
-        window.localStorage.getItem('organizationId')
+    async function fetchOrganization() {
+      try {
+        // Check localStorage first
+        const cached = window.localStorage.getItem('provvypay.organizationId')
+        if (cached) {
+          setOrganizationId(cached)
+          setIsLoading(false)
+          // Still fetch in background to ensure it's correct
+        }
 
-      const id = fromQuery || fromStorage || null
-      setOrganizationId(id)
-      setIsLoading(false)
-    } catch (e: any) {
-      setError(e?.message || 'Failed to resolve organization')
-      setIsLoading(false)
+        // Fetch from API
+        const response = await fetch('/api/user/organization')
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch organization')
+        }
+
+        const data = await response.json()
+        
+        if (data.organizationId) {
+          setOrganizationId(data.organizationId)
+          // Cache it
+          window.localStorage.setItem('provvypay.organizationId', data.organizationId)
+        } else {
+          setError('No organization found')
+        }
+        
+        setIsLoading(false)
+      } catch (e: any) {
+        console.error('Error fetching organization:', e)
+        setError(e?.message || 'Failed to resolve organization')
+        setIsLoading(false)
+      }
     }
+
+    fetchOrganization()
   }, [])
 
   return {
