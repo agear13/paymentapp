@@ -85,14 +85,8 @@ export async function recordXeroPayment(
     expires_at: connection.expiresAt.getTime(),
   });
 
-  // Set active tenant
-  xeroClient.tenants = [{
-    tenantId: connection.tenantId,
-    tenantType: 'ORGANISATION',
-    tenantName: '',
-    createdDateUtc: new Date(),
-    updatedDateUtc: new Date(),
-  }];
+  // Update tenants (read-only property, must use updateTenants method)
+  await xeroClient.updateTenants();
 
   // Build payment narration
   const narration = buildPaymentNarration(
