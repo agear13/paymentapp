@@ -38,7 +38,7 @@ export function getXeroClient(): XeroClient {
       scopes: [
         'offline_access', // For refresh tokens
         'accounting.transactions', // For invoices and payments
-        'accounting.contacts.read', // For customer/contact management
+        'accounting.contacts', // For customer/contact management (read + write)
         'accounting.settings.read', // For chart of accounts
       ],
     });
