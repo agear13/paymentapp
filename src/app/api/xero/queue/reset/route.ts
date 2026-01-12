@@ -29,11 +29,19 @@ export async function POST(request: NextRequest) {
 
     logger.info({ organizationId, userId: user.id }, 'Resetting Xero sync queue');
 
-    // Delete ALL syncs for this organization (FAILED, PENDING, RETRYING)
+    // Get all payment links for this organization
+    const paymentLinks = await prisma.payment_links.findMany({
+      where: { organization_id: organizationId },
+      select: { id: true },
+    });
+
+    const paymentLinkIds = paymentLinks.map(link => link.id);
+
+    // Delete ALL syncs for these payment links (FAILED, PENDING, RETRYING)
     // SUCCESS syncs are kept for audit purposes
     const result = await prisma.xero_syncs.deleteMany({
       where: {
-        organization_id: organizationId,
+        payment_link_id: { in: paymentLinkIds },
         status: {
           in: ['FAILED', 'PENDING', 'RETRYING'],
         },
