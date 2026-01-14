@@ -5,9 +5,6 @@
 
 import { XeroClient } from 'xero-node';
 
-// Singleton instance
-let xeroClient: XeroClient | null = null;
-
 /**
  * Check if Xero is properly configured
  */
@@ -20,7 +17,10 @@ export function isXeroConfigured(): boolean {
 }
 
 /**
- * Get or create Xero client instance
+ * Create a new Xero client instance
+ * IMPORTANT: We create a new instance for each request to avoid token conflicts
+ * in a multi-tenant environment. Each organization has different tokens,
+ * so sharing a singleton would cause race conditions.
  * @throws Error if Xero credentials are not configured
  */
 export function getXeroClient(): XeroClient {
@@ -30,20 +30,18 @@ export function getXeroClient(): XeroClient {
     );
   }
 
-  if (!xeroClient) {
-    xeroClient = new XeroClient({
-      clientId: process.env.XERO_CLIENT_ID!,
-      clientSecret: process.env.XERO_CLIENT_SECRET!,
-      redirectUris: [process.env.XERO_REDIRECT_URI!],
-      scopes: [
-        'offline_access', // For refresh tokens
-        'accounting.transactions', // For invoices and payments
-        'accounting.contacts', // For customer/contact management (read + write)
-        'accounting.settings.read', // For chart of accounts
-      ],
-    });
-  }
-  return xeroClient;
+  // Create a NEW instance for each request (not a singleton)
+  return new XeroClient({
+    clientId: process.env.XERO_CLIENT_ID!,
+    clientSecret: process.env.XERO_CLIENT_SECRET!,
+    redirectUris: [process.env.XERO_REDIRECT_URI!],
+    scopes: [
+      'offline_access', // For refresh tokens
+      'accounting.transactions', // For invoices and payments
+      'accounting.contacts', // For customer/contact management (read + write)
+      'accounting.settings.read', // For chart of accounts
+    ],
+  });
 }
 
 /**
@@ -87,25 +85,48 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
   refreshToken: string;
   expiresAt: Date;
 }> {
-  const client = getXeroClient();
-  
-  await client.setTokenSet({
-    refresh_token: refreshToken,
-  });
-
-  const tokenSet = await client.refreshToken();
-
-  if (!tokenSet.access_token || !tokenSet.refresh_token || !tokenSet.expires_in) {
-    throw new Error('Invalid token response from Xero refresh');
+  if (!refreshToken) {
+    throw new Error('Refresh token is required but was not provided');
   }
 
-  const expiresAt = new Date(Date.now() + tokenSet.expires_in * 1000);
+  const client = getXeroClient();
+  
+  try {
+    // Set the refresh token on the client
+    await client.setTokenSet({
+      refresh_token: refreshToken,
+    });
 
-  return {
-    accessToken: tokenSet.access_token,
-    refreshToken: tokenSet.refresh_token,
-    expiresAt,
-  };
+    // Request a new access token
+    const tokenSet = await client.refreshToken();
+
+    if (!tokenSet.access_token || !tokenSet.refresh_token || !tokenSet.expires_in) {
+      throw new Error('Invalid token response from Xero refresh: missing required fields');
+    }
+
+    const expiresAt = new Date(Date.now() + tokenSet.expires_in * 1000);
+
+    return {
+      accessToken: tokenSet.access_token,
+      refreshToken: tokenSet.refresh_token,
+      expiresAt,
+    };
+  } catch (error: any) {
+    // Provide detailed error information for debugging
+    const errorDetails = {
+      message: error.message || 'Unknown error',
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      body: error.response?.body,
+    };
+    
+    console.error('Token refresh failed with details:', errorDetails);
+    
+    throw new Error(
+      `Failed to refresh Xero token: ${errorDetails.message}. ` +
+      `This usually means the connection has expired and needs to be re-authorized.`
+    );
+  }
 }
 
 /**
