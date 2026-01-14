@@ -38,29 +38,33 @@ export async function POST(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const batchSize = parseInt(searchParams.get('batchSize') || '20', 10);
 
-    // Process the queue
-    const stats = await processQueue(batchSize);
+    // 🚀 Process queue in background to avoid Render's 30-second HTTP timeout
+    // This prevents 502 errors and allows long-running sync operations to complete
+    processQueue(batchSize)
+      .then((stats) => {
+        logger.info(
+          {
+            userId: user.id,
+            processed: stats.processed,
+            succeeded: stats.succeeded,
+            failed: stats.failed,
+            skipped: stats.skipped,
+          },
+          'Background queue processing complete'
+        );
+      })
+      .catch((error) => {
+        logger.error(
+          { userId: user.id, error: error.message },
+          'Background queue processing failed'
+        );
+      });
 
-    logger.info(
-      {
-        userId: user.id,
-        processed: stats.processed,
-        succeeded: stats.succeeded,
-        failed: stats.failed,
-        skipped: stats.skipped,
-      },
-      'Manual queue processing complete'
-    );
-
+    // Return immediately to avoid timeout
     return NextResponse.json({
       success: true,
-      message: 'Queue processing completed',
-      stats: {
-        processed: stats.processed,
-        succeeded: stats.succeeded,
-        failed: stats.failed,
-        skipped: stats.skipped,
-      },
+      message: 'Queue processing started in background',
+      note: 'Use GET /api/xero/queue/process-now to check progress',
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
