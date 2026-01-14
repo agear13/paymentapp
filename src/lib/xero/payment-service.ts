@@ -102,7 +102,7 @@ export async function recordXeroPayment(
   // Create payment
   const payment: Payment = {
     invoice: { invoiceID: invoiceId },
-    account: { accountID: clearingAccountId },
+    account: { code: clearingAccountId }, // Use 'code' not 'accountID' for account codes
     date: paymentDate.toISOString().split('T')[0],
     amount: parseFloat(amount),
     reference: buildPaymentReference(paymentMethod, paymentToken, transactionId),
