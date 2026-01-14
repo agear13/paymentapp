@@ -70,12 +70,13 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
 
       const result = await response.json();
       
-      toast.success(
-        `Processed ${result.stats.processed} syncs: ${result.stats.succeeded} succeeded, ${result.stats.failed} failed`
-      );
-
-      // Refresh status
-      await fetchStatus();
+      // Background processing - just notify that it started
+      toast.success(result.message || 'Queue processing started in background');
+      
+      // Refresh status after a short delay to show updated counts
+      setTimeout(async () => {
+        await fetchStatus();
+      }, 2000);
     } catch (error) {
       console.error('Error processing queue:', error);
       toast.error('Failed to process queue');
