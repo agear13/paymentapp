@@ -4,3 +4,7 @@ src/node_modules/
 .env.*
 env.local
 src/env.local
+
+# Uploaded files
+public/uploads/logos/*
+!public/uploads/logos/.gitkeep

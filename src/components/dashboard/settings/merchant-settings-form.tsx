@@ -23,7 +23,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Upload, X } from 'lucide-react';
+import Image from 'next/image';
 
 // ISO 4217 Currency codes - common ones
 const currencies = [
@@ -57,6 +58,9 @@ export function MerchantSettingsForm() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [settingsId, setSettingsId] = React.useState<string | null>(null);
   const [organizationId, setOrganizationId] = React.useState<string | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = React.useState(false);
+  const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const form = useForm<MerchantSettingsFormValues>({
     resolver: zodResolver(merchantSettingsSchema),
@@ -95,6 +99,11 @@ export function MerchantSettingsForm() {
                   stripeAccountId: settings.stripe_account_id || '',
                   hederaAccountId: settings.hedera_account_id || '',
                 });
+                
+                // Set logo preview if URL exists
+                if (settings.organization_logo_url) {
+                  setLogoPreview(settings.organization_logo_url);
+                }
               }
             }
           }
@@ -109,6 +118,69 @@ export function MerchantSettingsForm() {
 
     fetchData();
   }, [form]);
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !organizationId) return;
+
+    // Validate file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Invalid file type. Please upload PNG, JPG, or WEBP');
+      return;
+    }
+
+    // Validate file size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('File too large. Maximum size is 2MB');
+      return;
+    }
+
+    setIsUploadingLogo(true);
+
+    try {
+      // Create form data
+      const formData = new FormData();
+      formData.append('logo', file);
+      formData.append('organizationId', organizationId);
+
+      // Upload file
+      const response = await fetch('/api/merchant-settings/upload-logo', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to upload logo');
+      }
+
+      const result = await response.json();
+
+      // Update form with new URL
+      form.setValue('organizationLogoUrl', result.url);
+      setLogoPreview(result.url);
+
+      toast.success('Logo uploaded successfully');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to upload logo');
+      console.error(error);
+    } finally {
+      setIsUploadingLogo(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    form.setValue('organizationLogoUrl', '');
+    setLogoPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   async function onSubmit(data: MerchantSettingsFormValues) {
     if (!organizationId) {
@@ -206,17 +278,74 @@ export function MerchantSettingsForm() {
           name="organizationLogoUrl"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Organization Logo URL (Optional)</FormLabel>
+              <FormLabel>Organization Logo (Optional)</FormLabel>
               <FormControl>
-                <Input 
-                  placeholder="https://example.com/logo.png" 
-                  type="url"
-                  {...field} 
-                  value={field.value || ''}
-                />
+                <div className="space-y-4">
+                  {/* Logo Preview */}
+                  {logoPreview && (
+                    <div className="relative inline-block">
+                      <div className="border rounded-lg p-4 bg-gray-50">
+                        <Image
+                          src={logoPreview}
+                          alt="Organization logo"
+                          width={200}
+                          height={100}
+                          className="max-h-24 w-auto object-contain"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                        onClick={handleRemoveLogo}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* File Upload */}
+                  <div className="flex items-center gap-4">
+                    <Input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg,image/webp"
+                      onChange={handleFileSelect}
+                      disabled={isUploadingLogo}
+                      className="hidden"
+                      id="logo-upload"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingLogo}
+                    >
+                      {isUploadingLogo ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="mr-2 h-4 w-4" />
+                          Upload Logo
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Hidden input to maintain form state */}
+                  <Input
+                    type="hidden"
+                    {...field}
+                    value={field.value || ''}
+                  />
+                </div>
               </FormControl>
               <FormDescription>
-                Enter a publicly accessible URL to your logo image (PNG, JPG, or WEBP). This will appear on invoices and payment pages.
+                Upload your organization logo (PNG, JPG, or WEBP, max 2MB). This will appear on invoices and payment pages.
               </FormDescription>
               <FormMessage />
             </FormItem>

@@ -95,13 +95,18 @@ Sprint 26 delivers comprehensive UX improvements to transform the Payment Link A
 ### F) Merchant Settings ✅
 
 **Logo Upload:**
-- Simple URL input field in Merchant Settings
-- Accepts publicly accessible image URL
+- **File upload component** with drag-and-drop ready UI
+- Image preview with remove button
+- Accepts: PNG, JPG, JPEG, WEBP
+- Max size: 2MB
+- Automatic validation and error handling
+- Files stored in `public/uploads/logos/` directory
 - Displays on:
   - Customer invoice/payment page
   - Email templates (if logo included)
-- Validation: Must be valid URL format
-- Storage: organization_logo_url in merchant_settings table
+- Validation: File type, size, and format checks
+- Storage: File saved locally, URL stored in `organization_logo_url` field
+- Security: Requires authentication, validated file types only
 
 ---
 
@@ -125,10 +130,13 @@ Sprint 26 delivers comprehensive UX improvements to transform the Payment Link A
 - Table shows current effective status
 
 ### 4. Organization Branding
-- Logo URL stored in merchant settings
+- **Logo Upload**: File upload with image preview
+- Accepts PNG, JPG, WEBP (max 2MB)
+- Files stored in `public/uploads/logos/`
 - Displayed with fallback to building icon
 - Professional invoice appearance
 - Brand consistency across platform
+- Remove logo functionality
 
 ### 5. Backwards Compatibility
 - Existing invoices without new fields render correctly
@@ -151,6 +159,7 @@ Sprint 26 delivers comprehensive UX improvements to transform the Payment Link A
 4. `src/app/api/payment-links/route.ts` - Handle new fields in create/list
 5. `src/app/api/public/pay/[shortCode]/route.ts` - Return logo and new fields
 6. `src/app/api/merchant-settings/[id]/route.ts` - Handle logo URL updates
+7. `src/app/api/merchant-settings/upload-logo/route.ts` - **NEW** Handle image file uploads
 
 ### UI Components - Dashboard
 7. `src/components/dashboard/app-sidebar.tsx` - "Invoices" navigation
@@ -168,6 +177,10 @@ Sprint 26 delivers comprehensive UX improvements to transform the Payment Link A
 ### Email Templates
 16. `src/lib/email/templates/payment-confirmed.tsx` - "Invoice" terminology
 17. `src/lib/email/templates/xero-sync-failed.tsx` - "Invoice" terminology
+
+### Infrastructure
+18. `public/uploads/logos/.gitkeep` - Upload directory structure
+19. `.gitignore` - Ignore uploaded files but keep directory
 
 ---
 
@@ -266,13 +279,15 @@ The following were marked as optional or future work:
    - Requires Xero contacts API integration
    - Can be added in future sprint if needed
 
-2. **S3 Logo Upload** - Deferred
-   - Current implementation uses URL input
-   - Full S3 upload would require:
-     - File upload endpoint
-     - S3 bucket configuration
-     - Image validation/resizing
-     - Security considerations
+2. **S3 Logo Upload** - ✅ Implemented with Local Storage
+   - **UPDATE**: File upload now implemented!
+   - Files stored in `public/uploads/logos/` directory
+   - Full validation: file type, size, format
+   - Image preview and remove functionality
+   - For production S3 storage, can migrate files using:
+     - AWS S3 bucket
+     - CDN integration
+     - Same URL pattern maintained
 
 3. **Printable Invoice View** - Not implemented
    - Would require separate print-optimized template
