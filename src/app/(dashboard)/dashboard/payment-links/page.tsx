@@ -96,7 +96,7 @@ export default function PaymentLinksPage() {
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to load payment links',
+        description: error.message || 'Failed to load invoices',
         variant: 'destructive',
       });
     } finally {
@@ -134,7 +134,7 @@ export default function PaymentLinksPage() {
   const handleCreateSuccess = (newPaymentLink: any) => {
     toast({
       title: 'Success',
-      description: 'Payment link created successfully',
+      description: 'Invoice created successfully',
     });
     fetchPaymentLinks();
   };
@@ -210,7 +210,7 @@ export default function PaymentLinksPage() {
   const handleDuplicateSuccess = (newPaymentLink: any) => {
     toast({
       title: 'Success',
-      description: 'Payment link duplicated successfully',
+      description: 'Invoice duplicated successfully',
     });
     fetchPaymentLinks();
     setDuplicateDialogOpen(false);
@@ -310,12 +310,12 @@ export default function PaymentLinksPage() {
       },
     ];
 
-    const filename = `payment-links-${format(new Date(), 'yyyy-MM-dd-HHmmss')}.csv`;
+    const filename = `invoices-${format(new Date(), 'yyyy-MM-dd-HHmmss')}.csv`;
     exportToCSV(linksToExport, columns, filename);
 
     toast({
       title: 'Export Complete',
-      description: `Exported ${linksToExport.length} payment link(s)`,
+      description: `Exported ${linksToExport.length} invoice(s)`,
     });
 
     // Clear selection after export
@@ -382,9 +382,9 @@ export default function PaymentLinksPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Payment Links</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Invoices</h1>
           <p className="text-muted-foreground">
-            Create and manage payment links for your customers.
+            Create and manage invoices for your customers.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -411,7 +411,7 @@ export default function PaymentLinksPage() {
             trigger={
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
-                Create Link
+                Create Invoice
               </Button>
             }
           />
@@ -425,11 +425,11 @@ export default function PaymentLinksPage() {
         onReset={handleResetFilters}
       />
 
-      {/* Payment Links Table */}
+      {/* Invoices Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            All Payment Links
+            All Invoices
             {isLoading && paymentLinks.length > 0 && (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <RefreshCw className="h-3 w-3 animate-spin" />
@@ -438,7 +438,7 @@ export default function PaymentLinksPage() {
             )}
           </CardTitle>
           <CardDescription>
-            View and manage all your payment links.
+            View and manage all your invoices.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -21,9 +21,12 @@ interface PaymentPageContentProps {
     currency: string;
     description: string;
     invoiceReference: string | null;
+    customerName: string | null;
+    dueDate: string | null;
     expiresAt: string | null;
     merchant: {
       name: string;
+      logoUrl: string | null;
     };
     availablePaymentMethods: {
       stripe: boolean;
@@ -59,7 +62,10 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
         {/* Main Payment Card */}
         <Card className="border-0 shadow-xl">
           <CardHeader className="border-b bg-slate-50/50 pb-6">
-            <MerchantBranding merchantName={paymentLink.merchant.name} />
+            <MerchantBranding 
+              merchantName={paymentLink.merchant.name} 
+              logoUrl={paymentLink.merchant.logoUrl}
+            />
           </CardHeader>
 
           <CardContent className="pt-8 pb-8">
@@ -70,6 +76,7 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
                 currency={paymentLink.currency}
                 description={paymentLink.description}
                 invoiceReference={paymentLink.invoiceReference}
+                dueDate={paymentLink.dueDate}
               />
             </div>
 

@@ -66,12 +66,18 @@ const createPaymentLinkFormSchema = z.object({
     .max(255, 'Email must not exceed 255 characters')
     .optional()
     .or(z.literal('')),
+  customerName: z
+    .string()
+    .max(255, 'Customer name must not exceed 255 characters')
+    .optional()
+    .or(z.literal('')),
   customerPhone: z
     .string()
     .max(50, 'Phone number must not exceed 50 characters')
     .regex(/^\+?[1-9]\d{1,14}$/, 'Phone number must be in valid international format')
     .optional()
     .or(z.literal('')),
+  dueDate: z.date().optional(),
   expiresAt: z.date().optional(),
 });
 
@@ -112,7 +118,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       description: '',
       invoiceReference: '',
       customerEmail: '',
+      customerName: '',
       customerPhone: '',
+      dueDate: undefined,
       expiresAt: undefined,
       ...defaultValues,
     },
@@ -127,7 +135,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         description: '',
         invoiceReference: '',
         customerEmail: '',
+        customerName: '',
         customerPhone: '',
+        dueDate: undefined,
         expiresAt: undefined,
         ...defaultValues,
       });
@@ -148,8 +158,10 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           organizationId,
           ...data,
           customerEmail: data.customerEmail || undefined,
+          customerName: data.customerName || undefined,
           customerPhone: data.customerPhone || undefined,
           invoiceReference: data.invoiceReference || undefined,
+          dueDate: data.dueDate?.toISOString(),
           expiresAt: data.expiresAt?.toISOString(),
         }),
       });
@@ -186,9 +198,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Payment Link</DialogTitle>
+          <DialogTitle>Create Invoice</DialogTitle>
           <DialogDescription>
-            Create a new payment link to send to your customers. Fill in the required
+            Create a new invoice to send to your customers. Fill in the required
             information below.
           </DialogDescription>
         </DialogHeader>
@@ -243,10 +255,10 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description *</FormLabel>
+                  <FormLabel>Description for customer *</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Enter payment description..."
+                      placeholder="Enter description that customer will see..."
                       className="resize-none"
                       rows={3}
                       maxLength={200}
@@ -258,7 +270,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                     />
                   </FormControl>
                   <FormDescription>
-                    {descriptionLength}/200 characters
+                    This appears on the invoice and payment page. {descriptionLength}/200 characters
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -271,7 +283,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               name="invoiceReference"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Invoice Reference</FormLabel>
+                  <FormLabel>Invoice reference (internal, optional)</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="INV-001"
@@ -280,8 +292,28 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                     />
                   </FormControl>
                   <FormDescription>
-                    Optional invoice or order number for tracking
+                    For your internal tracking. Not shown to customers.
                   </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Customer Name */}
+            <FormField
+              control={form.control}
+              name="customerName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Customer Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Customer name"
+                      {...field}
+                      value={field.value || ''}
+                    />
+                  </FormControl>
+                  <FormDescription>Optional</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -330,49 +362,102 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               />
             </div>
 
-            {/* Expiry Date */}
-            <FormField
-              control={form.control}
-              name="expiresAt"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Expiry Date</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            'w-full pl-3 text-left font-normal',
-                            !field.value && 'text-muted-foreground'
-                          )}
-                        >
-                          {field.value ? (
-                            format(field.value, 'PPP')
-                          ) : (
-                            <span>Pick an expiry date</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) => date < new Date()}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormDescription>
-                    Optional expiration date for the payment link
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Due Date and Expiry Date */}
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="dueDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Due Date</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              'w-full pl-3 text-left font-normal',
+                              !field.value && 'text-muted-foreground'
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, 'PPP')
+                            ) : (
+                              <span>Pick a due date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) => date < new Date()}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormDescription>
+                      Customer-facing due date
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="expiresAt"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Expiry Date</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              'w-full pl-3 text-left font-normal',
+                              !field.value && 'text-muted-foreground'
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, 'PPP')
+                            ) : (
+                              <span>Pick an expiry date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) => date < new Date()}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormDescription>
+                      Link expiration (system)
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Expiry Warning */}
+            {form.watch('expiresAt') && (
+              <div className="rounded-md bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
+                ⚠️ Please note this invoice will expire on {format(form.watch('expiresAt')!, 'PPP')}. 
+                To extend the life of this invoice, please edit this invoice & resend to customer.
+              </div>
+            )}
 
             {/* Error Message */}
             {form.formState.errors.root && (
@@ -392,7 +477,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Payment Link
+                Create Invoice
               </Button>
             </DialogFooter>
           </form>

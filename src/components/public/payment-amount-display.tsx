@@ -5,13 +5,15 @@
 
 'use client';
 
-import { Receipt } from 'lucide-react';
+import { Receipt, Calendar } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface PaymentAmountDisplayProps {
   amount: string;
   currency: string;
   description: string;
   invoiceReference: string | null;
+  dueDate?: string | null;
 }
 
 export const PaymentAmountDisplay: React.FC<PaymentAmountDisplayProps> = ({
@@ -19,9 +21,13 @@ export const PaymentAmountDisplay: React.FC<PaymentAmountDisplayProps> = ({
   currency,
   description,
   invoiceReference,
+  dueDate,
 }) => {
   // Format amount with proper decimals
   const formattedAmount = parseFloat(amount).toFixed(2);
+  
+  // Format due date
+  const formattedDueDate = dueDate ? format(new Date(dueDate), 'PPP') : null;
 
   return (
     <div className="text-center">
@@ -39,6 +45,15 @@ export const PaymentAmountDisplay: React.FC<PaymentAmountDisplayProps> = ({
             <p className="text-xs text-slate-500 mb-1">Description</p>
             <p className="text-sm text-slate-900 leading-relaxed">{description}</p>
           </div>
+          {dueDate && (
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+              <Calendar className="w-4 h-4 text-slate-400" />
+              <div>
+                <p className="text-xs text-slate-500">Due Date</p>
+                <p className="text-sm text-slate-900">{formattedDueDate}</p>
+              </div>
+            </div>
+          )}
           {invoiceReference && (
             <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
               <Receipt className="w-4 h-4 text-slate-400" />

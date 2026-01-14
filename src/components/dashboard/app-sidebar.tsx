@@ -45,7 +45,7 @@ const navigationItems = [
     icon: LayoutDashboard,
   },
   {
-    title: 'Payment Links',
+    title: 'Invoices',
     href: '/dashboard/payment-links',
     icon: LinkIcon,
   },

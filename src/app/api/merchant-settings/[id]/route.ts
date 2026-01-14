@@ -7,6 +7,7 @@ import { log } from '@/lib/logger';
 
 const updateMerchantSettingsSchema = z.object({
   displayName: z.string().min(2).max(255).optional(),
+  organizationLogoUrl: z.string().url().optional(),
   defaultCurrency: z.string().length(3).optional(),
   stripeAccountId: z.string().optional(),
   hederaAccountId: z.string().regex(/^0\.0\.\d+$/).optional(),
@@ -74,7 +75,13 @@ export async function PATCH(
 
     const settings = await prisma.merchant_settings.update({
       where: { id },
-      data: body,
+      data: {
+        display_name: body.displayName,
+        organization_logo_url: body.organizationLogoUrl,
+        default_currency: body.defaultCurrency,
+        stripe_account_id: body.stripeAccountId,
+        hedera_account_id: body.hederaAccountId,
+      },
     });
 
     log.info({ settingsId: id, userId: user.id }, 'Updated merchant settings');

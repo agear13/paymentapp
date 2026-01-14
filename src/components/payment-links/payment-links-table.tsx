@@ -62,8 +62,11 @@ export interface PaymentLink {
   description: string;
   invoiceReference: string | null;
   customerEmail: string | null;
+  customerName: string | null;
   customerPhone: string | null;
+  dueDate: Date | string | null;
   expiresAt: Date | string | null;
+  xeroInvoiceNumber: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
   paymentEvents?: any[];
@@ -86,6 +89,28 @@ export interface PaymentLinksTableProps {
   onSelectionChange?: (selectedIds: Set<string>) => void;
 }
 
+// Helper to calculate effective status (considering overdue/expired)
+const getEffectiveStatus = (link: PaymentLink): string => {
+  const now = new Date();
+  
+  // If already PAID, EXPIRED, or CANCELED, return as-is
+  if (link.status === 'PAID' || link.status === 'EXPIRED' || link.status === 'CANCELED') {
+    return link.status;
+  }
+  
+  // Check if expired (system expiry date)
+  if (link.expiresAt && new Date(link.expiresAt) < now) {
+    return 'EXPIRED';
+  }
+  
+  // Check if overdue (customer due date)
+  if (link.dueDate && new Date(link.dueDate) < now && link.status !== 'PAID' && link.status !== 'CANCELED') {
+    return 'OVERDUE';
+  }
+  
+  return link.status;
+};
+
 const getStatusBadgeVariant = (status: string) => {
   switch (status) {
     case 'DRAFT':
@@ -94,6 +119,8 @@ const getStatusBadgeVariant = (status: string) => {
       return 'default';
     case 'PAID':
       return 'success';
+    case 'OVERDUE':
+      return 'warning';
     case 'EXPIRED':
       return 'outline';
     case 'CANCELED':
@@ -200,7 +227,7 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
       <div className="flex h-[400px] items-center justify-center rounded-md border border-dashed">
         <div className="text-center">
           <p className="text-sm text-muted-foreground">
-            No payment links found. Create your first payment link to get started.
+            No invoices found. Create your first invoice to get started.
           </p>
         </div>
       </div>
@@ -226,13 +253,15 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
             <TableHead>Description</TableHead>
             <TableHead>Invoice Ref</TableHead>
             <TableHead>Customer</TableHead>
+            <TableHead>Due Date</TableHead>
             <TableHead>Created</TableHead>
-            <TableHead>Expires</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {paymentLinks.map((paymentLink) => (
+          {paymentLinks.map((paymentLink) => {
+            const effectiveStatus = getEffectiveStatus(paymentLink);
+            return (
             <TableRow key={paymentLink.id}>
               {onSelectionChange && (
                 <TableCell>
@@ -246,8 +275,8 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
                 </TableCell>
               )}
               <TableCell>
-                <Badge variant={getStatusBadgeVariant(paymentLink.status) as any}>
-                  {paymentLink.status}
+                <Badge variant={getStatusBadgeVariant(effectiveStatus) as any}>
+                  {effectiveStatus}
                 </Badge>
               </TableCell>
               <TableCell className="font-medium">
@@ -265,17 +294,17 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
                 )}
               </TableCell>
               <TableCell>
-                {paymentLink.customerEmail || (
+                {paymentLink.customerEmail || paymentLink.customerName || (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell>
+                {formatDate(paymentLink.dueDate) || (
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
               <TableCell>
                 {formatDate(paymentLink.createdAt) || (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell>
-                {formatDate(paymentLink.expiresAt) || (
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
@@ -342,7 +371,8 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
                 </DropdownMenu>
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
     </div>

@@ -106,7 +106,7 @@ export function renderXeroSyncFailedEmail(props: XeroSyncFailedEmailProps): stri
 
         <div class="details">
           <div class="detail-row">
-            <strong>Payment Link:</strong> ${props.shortCode}
+            <strong>Invoice:</strong> ${props.shortCode}
           </div>
           <div class="detail-row">
             <strong>Amount:</strong> ${props.currency} ${props.amount}

@@ -151,7 +151,7 @@ export function PaymentConfirmedEmail({
             )}
 
             <div className="detail-row">
-              <span className="detail-label">Payment Link</span>
+              <span className="detail-label">Invoice</span>
               <span className="detail-value">{shortCode}</span>
             </div>
 
@@ -320,7 +320,7 @@ export function renderPaymentConfirmedEmail(props: PaymentConfirmedEmailProps): 
           ` : ''}
 
           <div class="detail-row">
-            <span class="detail-label">Payment Link</span>
+            <span class="detail-label">Invoice</span>
             <span class="detail-value">${props.shortCode}</span>
           </div>
 

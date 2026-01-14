@@ -78,6 +78,9 @@ model merchant_settings {
   stripe_account_id             String?       @db.VarChar(255)
   hedera_account_id             String?       @db.VarChar(50)
   
+  // Sprint 26: Invoice UX Improvements
+  organization_logo_url         String?       @db.VarChar(1024)
+  
   // Xero Account Mappings
   xero_revenue_account_id       String?       @db.VarChar(255)
   xero_receivable_account_id    String?       @db.VarChar(255)
@@ -145,7 +148,12 @@ model payment_links {
   invoice_reference String?           @db.VarChar(255)
   customer_email    String?           @db.VarChar(255)
   customer_phone    String?           @db.VarChar(50)
+  customer_name     String?           @db.VarChar(255)
   expires_at        DateTime?         @db.Timestamptz(6)
+  
+  // Sprint 26: Invoice UX Improvements
+  due_date          DateTime?         @db.Timestamptz(6)
+  xero_invoice_number String?         @db.VarChar(255)
   
   // Sprint 25: Multi-Currency Enhancement
   customer_selected_currency    String?           @db.Char(3)
@@ -163,6 +171,8 @@ model payment_links {
   multi_currency_invoices multi_currency_invoices[]
 
   @@index([organization_id, status])
+  @@index([due_date])
+  @@index([expires_at])
 }
 
 model xero_connections {

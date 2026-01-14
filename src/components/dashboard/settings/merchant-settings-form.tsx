@@ -39,6 +39,7 @@ const currencies = [
 
 const merchantSettingsSchema = z.object({
   displayName: z.string().min(2, 'Display name must be at least 2 characters').max(255),
+  organizationLogoUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
   defaultCurrency: z.string().length(3, 'Currency must be a 3-letter ISO code'),
   stripeAccountId: z.string().optional().refine(
     (val) => !val || val.startsWith('acct_'),
@@ -61,6 +62,7 @@ export function MerchantSettingsForm() {
     resolver: zodResolver(merchantSettingsSchema),
     defaultValues: {
       displayName: '',
+      organizationLogoUrl: '',
       defaultCurrency: 'USD',
       stripeAccountId: '',
       hederaAccountId: '',
@@ -88,6 +90,7 @@ export function MerchantSettingsForm() {
                 setSettingsId(settings.id);
                 form.reset({
                   displayName: settings.display_name || '',
+                  organizationLogoUrl: settings.organization_logo_url || '',
                   defaultCurrency: settings.default_currency || 'USD',
                   stripeAccountId: settings.stripe_account_id || '',
                   hederaAccountId: settings.hedera_account_id || '',
@@ -122,6 +125,7 @@ export function MerchantSettingsForm() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             displayName: data.displayName,
+            organizationLogoUrl: data.organizationLogoUrl || undefined,
             defaultCurrency: data.defaultCurrency,
             stripeAccountId: data.stripeAccountId || undefined,
             hederaAccountId: data.hederaAccountId || undefined,
@@ -141,6 +145,7 @@ export function MerchantSettingsForm() {
           body: JSON.stringify({
             organizationId,
             displayName: data.displayName,
+            organizationLogoUrl: data.organizationLogoUrl || undefined,
             defaultCurrency: data.defaultCurrency,
             stripeAccountId: data.stripeAccountId || undefined,
             hederaAccountId: data.hederaAccountId || undefined,
@@ -190,6 +195,28 @@ export function MerchantSettingsForm() {
               </FormControl>
               <FormDescription>
                 This name will appear on payment pages and receipts.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="organizationLogoUrl"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Organization Logo URL (Optional)</FormLabel>
+              <FormControl>
+                <Input 
+                  placeholder="https://example.com/logo.png" 
+                  type="url"
+                  {...field} 
+                  value={field.value || ''}
+                />
+              </FormControl>
+              <FormDescription>
+                Enter a publicly accessible URL to your logo image (PNG, JPG, or WEBP). This will appear on invoices and payment pages.
               </FormDescription>
               <FormMessage />
             </FormItem>

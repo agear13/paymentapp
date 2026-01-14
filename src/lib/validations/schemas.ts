@@ -203,7 +203,13 @@ export const CreatePaymentLinkSchema = z.object({
     .max(200, 'Description must not exceed 200 characters'),
   invoiceReference: invoiceReferenceSchema.optional(),
   customerEmail: emailSchema.optional(),
+  customerName: z.string().max(255).optional(),
   customerPhone: phoneSchema.optional(),
+  dueDate: z
+    .string()
+    .datetime('Invalid datetime format')
+    .optional()
+    .or(z.date().optional()),
   expiresAt: z
     .string()
     .datetime('Invalid datetime format')
@@ -215,7 +221,13 @@ export const UpdatePaymentLinkSchema = z.object({
   status: PaymentLinkStatusSchema.optional(),
   description: z.string().max(200).optional(),
   customerEmail: emailSchema.nullable().optional(),
+  customerName: z.string().max(255).nullable().optional(),
   customerPhone: phoneSchema.nullable().optional(),
+  dueDate: z
+    .string()
+    .datetime()
+    .optional()
+    .or(z.date().nullable().optional()),
   expiresAt: z
     .string()
     .datetime()

@@ -110,11 +110,12 @@ export async function GET(
       currentStatus = 'EXPIRED';
     }
 
-    // Get merchant settings for payment methods
+    // Get merchant settings for payment methods and logo
     const merchantSettings = await prisma.merchant_settings.findFirst({
       where: { organization_id: paymentLink.organization_id },
       select: {
         display_name: true,
+        organization_logo_url: true,
         stripe_account_id: true,
         hedera_account_id: true,
       },
@@ -145,10 +146,13 @@ export async function GET(
         currency: paymentLink.currency,
         description: paymentLink.description,
         invoiceReference: paymentLink.invoice_reference,
+        customerName: paymentLink.customer_name,
+        dueDate: paymentLink.due_date,
         expiresAt: paymentLink.expires_at,
         createdAt: paymentLink.created_at,
         merchant: {
           name: merchantSettings?.display_name || paymentLink.organizations.name,
+          logoUrl: merchantSettings?.organization_logo_url || null,
         },
         availablePaymentMethods,
         fxSnapshot: paymentLink.fx_snapshots?.[0] || null,

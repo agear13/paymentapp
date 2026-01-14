@@ -25,10 +25,13 @@ interface PaymentLinkData {
   currency: string;
   description: string;
   invoiceReference: string | null;
+  customerName: string | null;
+  dueDate: string | null;
   expiresAt: string | null;
   createdAt: string;
   merchant: {
     name: string;
+    logoUrl: string | null;
   };
   availablePaymentMethods: {
     stripe: boolean;
@@ -150,8 +153,11 @@ export default function PayPage() {
     );
   }
 
+  // Check if expired based on expiry date
+  const isExpired = paymentLink.expiresAt && new Date(paymentLink.expiresAt) < new Date();
+  
   // Expired state
-  if (paymentLink.status === 'EXPIRED') {
+  if (paymentLink.status === 'EXPIRED' || isExpired) {
     return <PaymentLinkExpired paymentLink={paymentLink} />;
   }
 
