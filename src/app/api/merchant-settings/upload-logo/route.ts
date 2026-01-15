@@ -29,11 +29,19 @@ export async function POST(request: NextRequest) {
     const file = formData.get('logo') as File;
     const organizationId = formData.get('organizationId') as string;
 
+    // Log for debugging
+    log.info({ 
+      hasFile: !!file, 
+      organizationId,
+      userId: user.id 
+    }, 'Logo upload request received');
+
     if (!file) {
       return apiError('No file provided', 400);
     }
 
     if (!organizationId) {
+      log.error({ userId: user.id }, 'Organization ID missing in upload request');
       return apiError('Organization ID is required', 400);
     }
 

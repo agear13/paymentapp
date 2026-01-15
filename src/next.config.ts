@@ -16,6 +16,18 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
 
+  // 🖼️ Image configuration for uploaded logos
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**', // Allow any HTTPS domain for external logo URLs
+      },
+    ],
+    // Allow local uploads directory
+    unoptimized: false,
+  },
+
   // 🔧 Webpack configuration (simplified - client island handles isolation)
   webpack: (config, { isServer }) => {
     if (!isServer) {

@@ -24,7 +24,6 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Loader2, Upload, X } from 'lucide-react';
-import Image from 'next/image';
 
 // ISO 4217 Currency codes - common ones
 const currencies = [
@@ -121,7 +120,16 @@ export function MerchantSettingsForm() {
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !organizationId) return;
+    
+    if (!file) {
+      return;
+    }
+
+    if (!organizationId) {
+      toast.error('Organization not found. Please refresh the page and try again.');
+      console.error('Organization ID is missing');
+      return;
+    }
 
     // Validate file type
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
@@ -144,6 +152,13 @@ export function MerchantSettingsForm() {
       formData.append('logo', file);
       formData.append('organizationId', organizationId);
 
+      console.log('Uploading logo...', { 
+        fileName: file.name, 
+        fileSize: file.size, 
+        fileType: file.type,
+        organizationId 
+      });
+
       // Upload file
       const response = await fetch('/api/merchant-settings/upload-logo', {
         method: 'POST',
@@ -152,10 +167,12 @@ export function MerchantSettingsForm() {
 
       if (!response.ok) {
         const error = await response.json();
+        console.error('Upload failed:', error);
         throw new Error(error.error || 'Failed to upload logo');
       }
 
       const result = await response.json();
+      console.log('Upload successful:', result);
 
       // Update form with new URL
       form.setValue('organizationLogoUrl', result.url);
@@ -164,7 +181,7 @@ export function MerchantSettingsForm() {
       toast.success('Logo uploaded successfully');
     } catch (error: any) {
       toast.error(error.message || 'Failed to upload logo');
-      console.error(error);
+      console.error('Logo upload error:', error);
     } finally {
       setIsUploadingLogo(false);
       // Reset file input
@@ -285,11 +302,10 @@ export function MerchantSettingsForm() {
                   {logoPreview && (
                     <div className="relative inline-block">
                       <div className="border rounded-lg p-4 bg-gray-50">
-                        <Image
+                        {/* Use regular img tag for uploaded files to avoid Next.js Image optimization issues */}
+                        <img
                           src={logoPreview}
                           alt="Organization logo"
-                          width={200}
-                          height={100}
                           className="max-h-24 w-auto object-contain"
                         />
                       </div>

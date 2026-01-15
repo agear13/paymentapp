@@ -1,4 +1,4 @@
-# Logo Upload Feature Guide
+ Logo Upload Feature Guide
 
 ## Overview
 

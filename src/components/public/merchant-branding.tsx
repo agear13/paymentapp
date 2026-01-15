@@ -6,7 +6,6 @@
 'use client';
 
 import { Building2 } from 'lucide-react';
-import Image from 'next/image';
 
 interface MerchantBrandingProps {
   merchantName: string;
@@ -21,11 +20,10 @@ export const MerchantBranding: React.FC<MerchantBrandingProps> = ({
     <div className="text-center">
       {logoUrl ? (
         <div className="inline-flex items-center justify-center mb-3">
-          <Image
+          {/* Use regular img tag for uploaded logos to avoid Next.js optimization issues */}
+          <img
             src={logoUrl}
             alt={`${merchantName} logo`}
-            width={96}
-            height={96}
             className="max-h-24 w-auto object-contain"
           />
         </div>
