@@ -11,8 +11,9 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { WalletConnectButton } from '@/components/public/wallet-connect-button';
-import { TokenSelector } from '@/components/public/token-selector';
-import { TokenComparison } from '@/components/public/token-comparison';
+import { TokenCardSelector } from '@/components/public/token-card-selector';
+import { SelectedTokenDetails } from '@/components/public/selected-token-details';
+import { SelectedTokenWallet } from '@/components/public/selected-token-wallet';
 import { PaymentInstructions } from '@/components/public/payment-instructions';
 // CRITICAL: Import from canonical HashConnect client ONLY
 import { 
@@ -725,22 +726,37 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
                 </>
               )}
 
-          {/* Step 2: Token Comparison & Selection */}
+          {/* Step 2: Token Selection with Progressive Disclosure */}
           {!isLoadingAmounts && paymentAmounts.length > 0 && paymentStep === 'select_token' && (
             <>
-              <TokenComparison
-                paymentAmounts={paymentAmounts}
-                fiatAmount={amount}
-                fiatCurrency={currency}
-              />
-              
-              <TokenSelector
+              {/* Section 2: Compact Token Cards */}
+              <TokenCardSelector
                 paymentAmounts={paymentAmounts}
                 selectedToken={selectedToken}
                 onTokenSelect={handleTokenSelect}
-                walletBalances={getWalletState().balances}
               />
+              
+              {/* Section 3: Payment Details (only for selected token) */}
+              {selectedToken && (
+                <SelectedTokenDetails
+                  selectedToken={selectedToken}
+                  paymentAmounts={paymentAmounts}
+                  fiatAmount={amount}
+                  fiatCurrency={currency}
+                />
+              )}
 
+              {/* Section 4: Wallet Balance (only for selected token) */}
+              {selectedToken && (
+                <SelectedTokenWallet
+                  selectedToken={selectedToken}
+                  paymentAmounts={paymentAmounts}
+                  isWalletConnected={wallet.isConnected}
+                  walletBalances={wallet.balances}
+                />
+              )}
+
+              {/* Section 5: Continue Button (unchanged) */}
               <Button
                 onClick={() => setPaymentStep('choose_payment_method')}
                 className="w-full h-12 text-base font-semibold"
@@ -906,32 +922,6 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
                 Try Again
               </Button>
             </div>
-          )}
-
-          {/* Step 3f: OLD Payment Instructions - NOT USED ANYMORE (kept for backwards compatibility) */}
-          {paymentStep === 'confirm_payment' && false && (
-            <>
-              {paymentAmounts
-                .filter(a => a.tokenType === selectedToken)
-                .map(amount => (
-                  <PaymentInstructions
-                    key={amount.tokenType}
-                    tokenType={amount.tokenType}
-                    amount={amount.requiredAmount}
-                    totalAmount={amount.totalAmount}
-                    merchantAccountId={merchantAccountId}
-                    paymentLinkId={paymentLinkId}
-                  />
-                ))}
-
-              <Button
-                onClick={() => handleStartMonitoring(15)}
-                className="w-full h-12 text-base font-semibold"
-                size="lg"
-              >
-                I&apos;ve Sent the Payment
-              </Button>
-            </>
           )}
 
           {/* Step 4: Monitoring */}

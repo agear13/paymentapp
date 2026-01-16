@@ -7,7 +7,8 @@ import { log } from '@/lib/logger';
 
 const updateMerchantSettingsSchema = z.object({
   displayName: z.string().min(2).max(255).optional(),
-  organizationLogoUrl: z.string().url().optional(),
+  // Accept both full URLs (http/https) and relative paths (/uploads/...)
+  organizationLogoUrl: z.string().min(1).optional(),
   defaultCurrency: z.string().length(3).optional(),
   stripeAccountId: z.string().optional(),
   hederaAccountId: z.string().regex(/^0\.0\.\d+$/).optional(),

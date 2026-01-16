@@ -224,13 +224,14 @@ export function CustomWalletButton() {
 
 ```typescript
 // Pass custom props or wrap in your UI
-import { TokenSelector } from '@/components/public/token-selector';
+import { TokenCardSelector } from '@/components/public/token-card-selector';
 
-<TokenSelector
+// The new TokenCardSelector uses progressive disclosure
+// It shows compact cards and details appear only for selected token
+<TokenCardSelector
   paymentAmounts={amounts}
   selectedToken={token}
   onTokenSelect={handleSelect}
-  walletBalances={balances}
 />
 ```
 
