@@ -421,7 +421,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
     const walletState = getWalletState();
     console.log('[HederaPaymentOption] Wallet state:', walletState);
     
-    const maxAttempts = 20; // ~60 seconds total (20 * 3s)
+    const maxAttempts = 40; // ~2 minutes total (40 * 3s)
     let attempts = 0;
     let delay = 3000; // Start with 3 seconds
 
@@ -433,7 +433,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
       attempts++;
       
       try {
-        console.log(`[Payment Monitor] Attempt ${attempts}/${maxAttempts} (window: ${timeWindowMinutes}min)`);
+        console.log(`[Payment Monitor] Attempt ${attempts}/${maxAttempts} (window: ${timeWindowMinutes}min, ~${Math.floor(attempts * 3 / 60)}m${(attempts * 3) % 60}s elapsed)`);
         
         const monitorRequest = {
           paymentLinkId,
