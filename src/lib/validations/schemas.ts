@@ -85,14 +85,14 @@ export const hederaTransactionIdSchema = z
     'Invalid Hedera transaction ID format'
   );
 
-// Invoice reference (alphanumeric with dashes and underscores)
+// Invoice reference - flexible format for real-world use
 export const invoiceReferenceSchema = z
   .string()
   .min(1, 'Invoice reference is required')
   .max(255, 'Invoice reference must not exceed 255 characters')
-  .regex(
-    /^[a-zA-Z0-9_-]+$/,
-    'Invoice reference must contain only alphanumeric characters, dashes, and underscores'
+  .refine(
+    (val) => val.trim().length > 0,
+    'Invoice reference cannot be only whitespace'
   );
 
 // Short code (URL-safe, 8 characters)
@@ -110,13 +110,13 @@ export const emailSchema = z
   .email('Invalid email address')
   .max(255, 'Email must not exceed 255 characters');
 
-// Phone validation (international format)
+// Phone validation (international format) - only validates if value provided
 export const phoneSchema = z
   .string()
   .max(50, 'Phone number must not exceed 50 characters')
-  .regex(
-    /^\+?[1-9]\d{1,14}$/,
-    'Phone number must be in valid international format'
+  .refine(
+    (val) => !val || val === '' || /^\+?[1-9]\d{1,14}$/.test(val),
+    'Phone number must be in valid international format (e.g., +61412345678)'
   )
   .optional();
 
@@ -201,10 +201,27 @@ export const CreatePaymentLinkSchema = z.object({
     .string()
     .min(1, 'Description is required')
     .max(200, 'Description must not exceed 200 characters'),
-  invoiceReference: invoiceReferenceSchema.optional(),
-  customerEmail: emailSchema.optional(),
-  customerName: z.string().max(255).optional(),
-  customerPhone: phoneSchema.optional(),
+  invoiceReference: z
+    .string()
+    .max(255, 'Invoice reference must not exceed 255 characters')
+    .optional()
+    .transform((val) => val && val.trim() ? val : undefined),
+  customerEmail: z
+    .string()
+    .email('Invalid email address')
+    .max(255)
+    .optional()
+    .or(z.literal(''))
+    .transform((val) => val && val.trim() ? val : undefined),
+  customerName: z
+    .string()
+    .max(255)
+    .optional()
+    .or(z.literal(''))
+    .transform((val) => val && val.trim() ? val : undefined),
+  customerPhone: phoneSchema
+    .or(z.literal(''))
+    .transform((val) => val && val.trim() ? val : undefined),
   dueDate: z
     .string()
     .datetime('Invalid datetime format')

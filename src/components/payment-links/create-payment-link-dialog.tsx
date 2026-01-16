@@ -42,41 +42,45 @@ import {
 import { CurrencySelect } from './currency-select';
 import { cn } from '@/lib/utils';
 
-// Form validation schema
+// Form validation schema - SMB-friendly (customer contact details optional)
 const createPaymentLinkFormSchema = z.object({
   amount: z.coerce
     .number({
-      required_error: 'Amount is required',
-      invalid_type_error: 'Amount must be a number',
+      invalid_type_error: 'Enter an amount to invoice.',
     })
-    .positive('Amount must be positive')
-    .multipleOf(0.01, 'Amount must have at most 2 decimal places'),
-  currency: z.string().length(3, 'Currency code must be 3 characters'),
+    .positive('Amount must be greater than zero.')
+    .multipleOf(0.01, 'Amount must have at most 2 decimal places.'),
+  currency: z.string().min(1, 'Select a currency.').length(3, 'Select a currency.'),
   description: z
     .string()
-    .min(1, 'Description is required')
-    .max(200, 'Description must not exceed 200 characters'),
+    .min(1, 'Add a short description so your customer knows what this invoice is for.')
+    .max(200, 'Description must not exceed 200 characters.'),
   invoiceReference: z
     .string()
-    .max(255, 'Invoice reference must not exceed 255 characters')
+    .max(255, 'Invoice reference must not exceed 255 characters.')
+    .transform((val) => val?.trim() || '')
     .optional(),
   customerEmail: z
     .string()
-    .email('Invalid email address')
-    .max(255, 'Email must not exceed 255 characters')
-    .optional()
-    .or(z.literal('')),
+    .transform((val) => val?.trim() || '')
+    .refine(
+      (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val),
+      'Enter a valid email address.'
+    )
+    .optional(),
   customerName: z
     .string()
-    .max(255, 'Customer name must not exceed 255 characters')
-    .optional()
-    .or(z.literal('')),
+    .max(255, 'Customer name must not exceed 255 characters.')
+    .transform((val) => val?.trim() || '')
+    .optional(),
   customerPhone: z
     .string()
-    .max(50, 'Phone number must not exceed 50 characters')
-    .regex(/^\+?[1-9]\d{1,14}$/, 'Phone number must be in valid international format')
-    .optional()
-    .or(z.literal('')),
+    .transform((val) => val?.trim() || '')
+    .refine(
+      (val) => !val || /^\+?[1-9]\d{1,14}$/.test(val),
+      'Enter a valid phone number in international format (e.g., +61412345678).'
+    )
+    .optional(),
   dueDate: z.date().optional(),
   expiresAt: z.date().optional(),
 });
@@ -168,7 +172,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to create payment link');
+        throw new Error(error.error || 'Failed to create invoice. Please try again.');
       }
 
       const result = await response.json();
@@ -184,10 +188,18 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     } catch (error: any) {
       form.setError('root', {
         type: 'manual',
-        message: error.message || 'Failed to create payment link',
+        message: error.message || 'Failed to create invoice. Please try again.',
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Handle validation errors - focus first invalid field
+  const onInvalidSubmit = (errors: any) => {
+    const firstError = Object.keys(errors)[0];
+    if (firstError && firstError !== 'root') {
+      form.setFocus(firstError as any);
     }
   };
 
@@ -206,7 +218,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(handleSubmit, onInvalidSubmit)} className="space-y-6">
             {/* Amount and Currency */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -459,10 +471,19 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               </div>
             )}
 
-            {/* Error Message */}
+            {/* Form-level Error Message */}
             {form.formState.errors.root && (
-              <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-                {form.formState.errors.root.message}
+              <div className="rounded-md bg-destructive/15 border border-destructive/20 p-4 text-sm">
+                <p className="font-medium text-destructive mb-1">Unable to create invoice</p>
+                <p className="text-destructive/90">{form.formState.errors.root.message}</p>
+              </div>
+            )}
+            
+            {/* Validation Error Summary */}
+            {Object.keys(form.formState.errors).length > 0 && !form.formState.errors.root && (
+              <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-sm">
+                <p className="font-medium text-amber-900 mb-1">Please fix the highlighted fields</p>
+                <p className="text-amber-700">Review the fields above and correct any errors to create this invoice.</p>
               </div>
             )}
 

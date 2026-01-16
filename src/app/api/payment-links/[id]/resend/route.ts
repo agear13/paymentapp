@@ -42,7 +42,7 @@ export async function POST(
 
     // Check if customer email exists
     if (!paymentLink.customer_email) {
-      return apiError('No customer email available for this payment link', 400);
+      return apiError('Customer email required to send invoice. Add an email address or copy the invoice link to share it manually.', 400);
     }
 
     // In a real implementation, you would:
