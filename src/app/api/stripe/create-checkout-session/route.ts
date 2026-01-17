@@ -108,6 +108,26 @@ export async function POST(request: NextRequest) {
     const defaultSuccessUrl = `${baseUrl}/pay/${paymentLink.short_code}/success?session_id={CHECKOUT_SESSION_ID}`;
     const defaultCancelUrl = `${baseUrl}/pay/${paymentLink.short_code}`;
 
+    // Calculate Stripe session expiry (max 24 hours per Stripe API limits)
+    const now = Math.floor(Date.now() / 1000);
+    const stripeMaxExpiry = now + 86400; // 24 hours from now
+    let sessionExpiresAt = stripeMaxExpiry;
+    
+    if (paymentLink.expires_at) {
+      const linkExpiry = Math.floor(new Date(paymentLink.expires_at).getTime() / 1000);
+      sessionExpiresAt = Math.min(linkExpiry, stripeMaxExpiry);
+      
+      // Log if we're capping the expiry due to Stripe's 24-hour limit
+      if (linkExpiry > stripeMaxExpiry) {
+        log.info('Stripe session expiry capped at 24 hours', {
+          paymentLinkId,
+          linkExpiresAt: new Date(linkExpiry * 1000).toISOString(),
+          sessionExpiresAt: new Date(sessionExpiresAt * 1000).toISOString(),
+          capped: true,
+        });
+      }
+    }
+
     // Create Checkout Session
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -135,9 +155,9 @@ export async function POST(request: NextRequest) {
       customer_email: paymentLink.customer_email || undefined,
       success_url: successUrl || defaultSuccessUrl,
       cancel_url: cancelUrl || defaultCancelUrl,
-      expires_at: paymentLink.expires_at
-        ? Math.floor(new Date(paymentLink.expires_at).getTime() / 1000)
-        : Math.floor(Date.now() / 1000) + 86400, // 24 hours default
+      // Stripe checkout sessions must expire within 24 hours (Stripe API limit)
+      // Uses minimum of payment link expiry and 24 hours from now
+      expires_at: sessionExpiresAt,
       payment_intent_data: {
         metadata: {
           payment_link_id: paymentLinkId,
