@@ -452,6 +452,8 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(monitorRequest),
+          // Add timeout and retry-friendly settings
+          signal: AbortSignal.timeout(15000), // 15 second timeout
         });
 
         if (!response.ok) {
@@ -509,9 +511,29 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
         }
 
         return false;
-      } catch (error) {
-        console.error('[Payment Monitor] Check failed:', error);
-        toast.error('Failed to check payment status. Retrying...');
+      } catch (error: any) {
+        // Distinguish between network errors and other errors
+        const isNetworkError = error.name === 'TypeError' && 
+          (error.message.includes('Failed to fetch') || 
+           error.message.includes('NetworkError') ||
+           error.message.includes('network') ||
+           error.name === 'AbortError');
+        
+        if (isNetworkError) {
+          console.error('[Payment Monitor] Network error:', error.message);
+          
+          // Only show toast every 5 attempts to avoid spam
+          if (attempts % 5 === 0) {
+            toast.error(
+              `Network connectivity issue. Please check your connection. (Attempt ${attempts}/${maxAttempts})`,
+              { duration: 4000 }
+            );
+          }
+        } else {
+          console.error('[Payment Monitor] Check failed:', error);
+          toast.error('Failed to check payment status. Retrying...');
+        }
+        
         // Exponential backoff on error
         delay = Math.min(delay * 1.5, 10000);
         return false;

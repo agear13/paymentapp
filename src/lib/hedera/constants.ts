@@ -107,7 +107,7 @@ export const HASHCONNECT_CONFIG = {
   APP_METADATA: {
     name: process.env.NEXT_PUBLIC_APP_NAME || 'Provvypay',
     description: 'Provvypay Payment Link',
-    url: process.env.NEXT_PUBLIC_APP_URL || 'https://provvypay-api.onrender.com',
+    url: process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'),
     icons: [
       process.env.NEXT_PUBLIC_APP_ICON || 'https://provvypay.com/icon.png',
     ],

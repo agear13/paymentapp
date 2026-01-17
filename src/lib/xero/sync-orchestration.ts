@@ -10,6 +10,40 @@ import { prisma } from '@/lib/server/prisma';
 import { randomUUID } from 'crypto';
 import type { TokenType } from '@/lib/hedera/types';
 
+/**
+ * Parse Xero API error and provide user-friendly message
+ */
+function parseXeroError(error: any): string {
+  // Check if it's a Xero API error with validation details
+  if (error?.response?.body?.Elements) {
+    const elements = error.response.body.Elements;
+    const validationErrors = elements[0]?.ValidationErrors || [];
+    
+    if (validationErrors.length > 0) {
+      const messages = validationErrors.map((e: any) => e.Message).join('; ');
+      
+      // Provide specific fixes for common errors
+      if (messages.includes('not subscribed to currency')) {
+        return `Currency not supported: ${messages}. Please ensure your Xero organization supports the payment currency, or change your default currency in Settings.`;
+      }
+      
+      if (messages.includes('not a valid code')) {
+        return `Invalid account code: ${messages}. Please configure correct Xero account codes in Settings → Integrations → Xero Account Mapping. Account codes should be values like "200", "400", not IDs.`;
+      }
+      
+      return `Xero validation error: ${messages}`;
+    }
+  }
+  
+  // Check for Xero API response errors
+  if (error?.response?.body?.Message) {
+    return `Xero API error: ${error.response.body.Message}`;
+  }
+  
+  // Generic error
+  return error?.message || 'Unknown error occurred during Xero sync';
+}
+
 export interface SyncPaymentParams {
   paymentLinkId: string;
   organizationId: string;
@@ -89,20 +123,27 @@ export async function syncPaymentToXero(
 
     // Step 1: Create invoice in Xero
     console.log('Creating Xero invoice...');
-    const invoiceResult = await createXeroInvoice({
-      paymentLinkId,
-      organizationId,
-      amount: paymentLink.amount.toString(),
-      currency: paymentLink.currency,
-      description: paymentLink.description,
-      customerEmail: paymentLink.customer_email || undefined,
-      invoiceReference: paymentLink.invoice_reference || undefined,
-    });
+    let invoiceResult;
+    try {
+      invoiceResult = await createXeroInvoice({
+        paymentLinkId,
+        organizationId,
+        amount: paymentLink.amount.toString(),
+        currency: paymentLink.currency,
+        description: paymentLink.description,
+        customerEmail: paymentLink.customer_email || undefined,
+        invoiceReference: paymentLink.invoice_reference || undefined,
+      });
 
-    console.log('Invoice created:', {
-      invoiceId: invoiceResult.invoiceId,
-      invoiceNumber: invoiceResult.invoiceNumber,
-    });
+      console.log('Invoice created:', {
+        invoiceId: invoiceResult.invoiceId,
+        invoiceNumber: invoiceResult.invoiceNumber,
+      });
+    } catch (error) {
+      const userFriendlyError = parseXeroError(error);
+      console.error('Xero invoice creation failed:', userFriendlyError, error);
+      throw new Error(userFriendlyError);
+    }
 
     // Step 2: Record payment in Xero
     console.log('Recording payment in Xero...');
@@ -125,25 +166,32 @@ export async function syncPaymentToXero(
       }
     }
 
-    const paymentResult = await recordXeroPayment({
-      paymentLinkId,
-      organizationId,
-      invoiceId: invoiceResult.invoiceId,
-      amount: paymentLink.amount.toString(),
-      currency: paymentLink.currency,
-      paymentDate: paymentEvent.created_at,
-      paymentMethod,
-      paymentToken,
-      transactionId,
-      fxRate,
-      cryptoAmount,
-    });
+    let paymentResult;
+    try {
+      paymentResult = await recordXeroPayment({
+        paymentLinkId,
+        organizationId,
+        invoiceId: invoiceResult.invoiceId,
+        amount: paymentLink.amount.toString(),
+        currency: paymentLink.currency,
+        paymentDate: paymentEvent.created_at,
+        paymentMethod,
+        paymentToken,
+        transactionId,
+        fxRate,
+        cryptoAmount,
+      });
 
-    console.log('Payment recorded:', {
-      paymentId: paymentResult.paymentId,
-      paymentMethod,
-      paymentToken,
-    });
+      console.log('Payment recorded:', {
+        paymentId: paymentResult.paymentId,
+        paymentMethod,
+        paymentToken,
+      });
+    } catch (error) {
+      const userFriendlyError = parseXeroError(error);
+      console.error('Xero payment recording failed:', userFriendlyError, error);
+      throw new Error(userFriendlyError);
+    }
 
     // Step 3: Create sync record in database
     const syncRecord = await prisma.xero_syncs.create({
@@ -186,7 +234,7 @@ export async function syncPaymentToXero(
   } catch (error) {
     console.error('Xero sync failed:', error);
 
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = error instanceof Error ? error.message : parseXeroError(error);
 
     // Log failure in database
     try {

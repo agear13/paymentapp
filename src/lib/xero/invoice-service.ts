@@ -53,11 +53,32 @@ export async function createXeroInvoice(
     select: {
       xero_revenue_account_id: true,
       xero_receivable_account_id: true,
+      default_currency: true,
     },
   });
 
   if (!settings?.xero_revenue_account_id) {
-    throw new Error('Revenue account not mapped. Please configure Xero account mappings.');
+    throw new Error('Revenue account not mapped. Please configure Xero account mappings in Settings → Integrations.');
+  }
+
+  // Validate account code is not a UUID (common misconfiguration)
+  const revenueAccountCode = settings.xero_revenue_account_id;
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  
+  if (uuidRegex.test(revenueAccountCode)) {
+    throw new Error(
+      `Invalid Xero account code: "${revenueAccountCode}". ` +
+      `This appears to be an internal ID. Please set a valid Xero account code (e.g., "200", "400") in Settings → Integrations → Xero Account Mapping.`
+    );
+  }
+
+  // Validate account code format (Xero codes are typically alphanumeric, max 10 chars)
+  if (revenueAccountCode.length > 10) {
+    throw new Error(
+      `Invalid Xero account code: "${revenueAccountCode}". ` +
+      `Xero account codes should be short alphanumeric values (e.g., "200", "400"). ` +
+      `Please configure correct account codes in Settings → Integrations.`
+    );
   }
 
   // Initialize Xero client
@@ -71,6 +92,21 @@ export async function createXeroInvoice(
   // Update tenants (read-only property, must use updateTenants method)
   await xeroClient.updateTenants();
 
+  // Check if currency is supported by merchant's base currency
+  // If trying to use a different currency, warn but allow it
+  const baseCurrency = settings.default_currency || 'USD';
+  if (currency !== baseCurrency) {
+    loggers.xero.warn(
+      'Creating invoice in different currency than base',
+      {
+        invoiceCurrency: currency,
+        baseCurrency,
+        paymentLinkId,
+        organizationId,
+      }
+    );
+  }
+
   // Get or create contact
   const contact = await getOrCreateContact(
     xeroClient,
@@ -83,7 +119,7 @@ export async function createXeroInvoice(
     description,
     quantity: 1,
     unitAmount: parseFloat(amount),
-    accountCode: settings.xero_revenue_account_id,
+    accountCode: revenueAccountCode,
     taxType: 'EXEMPTOUTPUT', // GST-exempt output (sales) - valid for AU
   }];
 
