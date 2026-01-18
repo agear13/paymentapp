@@ -6,6 +6,7 @@
 import { getXeroClient } from './client';
 import { getActiveConnection } from './connection-service';
 import { prisma } from '@/lib/server/prisma';
+import { loggers } from '@/lib/logger';
 import { Invoice, Contact, LineItem } from 'xero-node';
 
 export interface InvoiceCreationParams {

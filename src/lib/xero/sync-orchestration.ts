@@ -13,35 +13,54 @@ import type { TokenType } from '@/lib/hedera/types';
 /**
  * Parse Xero API error and provide user-friendly message
  */
-function parseXeroError(error: any): string {
+function parseXeroError(error: unknown): string {
+  // Type guard for error objects
+  if (!error || typeof error !== 'object') {
+    return 'Unknown error occurred during Xero sync';
+  }
+
+  const errorObj = error as Record<string, unknown>;
+  
   // Check if it's a Xero API error with validation details
-  if (error?.response?.body?.Elements) {
-    const elements = error.response.body.Elements;
-    const validationErrors = elements[0]?.ValidationErrors || [];
-    
-    if (validationErrors.length > 0) {
-      const messages = validationErrors.map((e: any) => e.Message).join('; ');
-      
-      // Provide specific fixes for common errors
-      if (messages.includes('not subscribed to currency')) {
-        return `Currency not supported: ${messages}. Please ensure your Xero organization supports the payment currency, or change your default currency in Settings.`;
+  if (errorObj.response && typeof errorObj.response === 'object') {
+    const response = errorObj.response as Record<string, unknown>;
+    if (response.body && typeof response.body === 'object') {
+      const body = response.body as Record<string, unknown>;
+      if (Array.isArray(body.Elements)) {
+        const elements = body.Elements;
+        const validationErrors = (elements[0] as Record<string, unknown>)?.ValidationErrors;
+        
+        if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+          const messages = validationErrors
+            .map((e: unknown) => (e as Record<string, unknown>).Message)
+            .join('; ');
+          
+          // Provide specific fixes for common errors
+          if (messages.includes('not subscribed to currency')) {
+            return `Currency not supported: ${messages}. Please ensure your Xero organization supports the payment currency, or change your default currency in Settings.`;
+          }
+          
+          if (messages.includes('not a valid code')) {
+            return `Invalid account code: ${messages}. Please configure correct Xero account codes in Settings → Integrations → Xero Account Mapping. Account codes should be values like "200", "400", not IDs.`;
+          }
+          
+          return `Xero validation error: ${messages}`;
+        }
       }
       
-      if (messages.includes('not a valid code')) {
-        return `Invalid account code: ${messages}. Please configure correct Xero account codes in Settings → Integrations → Xero Account Mapping. Account codes should be values like "200", "400", not IDs.`;
+      // Check for Xero API response errors
+      if (body.Message && typeof body.Message === 'string') {
+        return `Xero API error: ${body.Message}`;
       }
-      
-      return `Xero validation error: ${messages}`;
     }
   }
   
-  // Check for Xero API response errors
-  if (error?.response?.body?.Message) {
-    return `Xero API error: ${error.response.body.Message}`;
+  // Generic error
+  if ('message' in errorObj && typeof errorObj.message === 'string') {
+    return errorObj.message;
   }
   
-  // Generic error
-  return error?.message || 'Unknown error occurred during Xero sync';
+  return 'Unknown error occurred during Xero sync';
 }
 
 export interface SyncPaymentParams {
@@ -210,8 +229,8 @@ export async function syncPaymentToXero(
           transactionId,
         },
         response_payload: {
-          invoice: invoiceResult,
-          payment: paymentResult,
+          invoice: invoiceResult as unknown as Record<string, unknown>,
+          payment: paymentResult as unknown as Record<string, unknown>,
         },
         retry_count: 0,
         updated_at: new Date(),
