@@ -127,14 +127,17 @@ model payment_events {
   event_type               PaymentEventType
   payment_method           PaymentMethod?
   stripe_payment_intent_id String?          @db.VarChar(255)
+  stripe_event_id          String?          @db.VarChar(255)
   hedera_transaction_id    String?          @db.VarChar(255)
   amount_received          Decimal?         @db.Decimal(18, 8)
   currency_received        String?          @db.VarChar(10)
+  correlation_id           String?          @db.VarChar(255)
   metadata                 Json?
   created_at               DateTime         @default(now()) @db.Timestamptz(6)
   payment_links            payment_links    @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
 
   @@index([payment_link_id, created_at])
+  @@index([stripe_event_id])
 }
 
 model payment_links {
