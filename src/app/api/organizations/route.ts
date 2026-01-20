@@ -7,7 +7,7 @@ import { log } from '@/lib/logger';
 
 const createOrganizationSchema = z.object({
   name: z.string().min(2).max(255),
-  clerkOrgId: z.string(),
+  clerkOrgId: z.string().optional(),
 });
 
 // GET /api/organizations - List user's organizations
@@ -57,9 +57,12 @@ export async function POST(request: NextRequest) {
       return body;
     }
 
+    // Generate clerk_org_id if not provided
+    const clerkOrgId = body.clerkOrgId || `org_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
     // Check if organization with this Clerk ID already exists
     const existing = await prisma.organizations.findUnique({
-      where: { clerk_org_id: body.clerkOrgId },
+      where: { clerk_org_id: clerkOrgId },
     });
 
     if (existing) {
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest) {
       const organization = await tx.organizations.create({
         data: {
           name: body.name,
-          clerk_org_id: body.clerkOrgId,
+          clerk_org_id: clerkOrgId,
         },
       });
 
