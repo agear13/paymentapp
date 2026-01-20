@@ -288,12 +288,54 @@ LIMIT 1;
 
 ---
 
-**Status:** 🚀 **DEPLOYED - READY FOR FINAL TESTING**
+## **BONUS BUG FOUND & FIXED** ✅
 
-This should be the final fix! The combination of:
-1. Proper Prisma model for `user_organizations`
-2. Type-safe Prisma client instead of raw SQL
-3. Comprehensive logging for debugging
+### Issue
+After fixing the UUID casting, organization creation succeeded (HTTP 201), but merchant settings failed with:
+```
+TypeError: Cannot read properties of undefined (reading 'id')
+```
 
-...ensures the onboarding flow will work correctly.
+### Root Cause
+The onboarding form expected the API to return `{ data: { id, clerk_org_id, ... } }`, but `apiResponse()` returns the data directly without wrapping.
+
+**Before (BROKEN):**
+```typescript
+const organization = await orgResponse.json();
+const settingsPayload = {
+  organizationId: organization.data.id, // ❌ organization.data is undefined!
+  ...
+};
+```
+
+**After (FIXED):**
+```typescript
+const organization = await orgResponse.json();
+console.log('📦 Organization created:', organization);
+const settingsPayload = {
+  organizationId: organization.id, // ✅ Access directly
+  ...
+};
+```
+
+Also fixed localStorage storage:
+```typescript
+// Before: organization.data?.clerkOrgId
+// After: organization.clerk_org_id (matches Prisma schema)
+if (organization.clerk_org_id) {
+  window.localStorage.setItem('provvypay.organizationId', organization.clerk_org_id);
+}
+```
+
+---
+
+**Status:** 🚀 **DEPLOYED - READY FOR FINAL TESTING (v2)**
+
+This should be the **FINAL** fix! The combination of:
+1. ✅ Proper Prisma model for `user_organizations`
+2. ✅ Type-safe Prisma client instead of raw SQL
+3. ✅ Fixed response format handling (no `.data` wrapper)
+4. ✅ Comprehensive logging for debugging
+
+...ensures the onboarding flow will work correctly from start to finish.
 

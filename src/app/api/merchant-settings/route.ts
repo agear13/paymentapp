@@ -52,10 +52,10 @@ export async function POST(request: NextRequest) {
       return apiError('Unauthorized', 401);
     }
 
-    const body = await validateBody(request, createMerchantSettingsSchema);
+    const { data: body, error } = await validateBody(request, createMerchantSettingsSchema);
     
-    if (body instanceof NextResponse) {
-      return body;
+    if (error) {
+      return error;
     }
 
     // TODO: Check if user has permission to create settings for this organization

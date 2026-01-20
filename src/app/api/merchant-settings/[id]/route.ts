@@ -66,10 +66,10 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const body = await validateBody(request, updateMerchantSettingsSchema);
+    const { data: body, error } = await validateBody(request, updateMerchantSettingsSchema);
     
-    if (body instanceof NextResponse) {
-      return body;
+    if (error) {
+      return error;
     }
 
     // TODO: Check if user has permission to update these settings
