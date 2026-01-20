@@ -8,3 +8,6 @@ src/env.local
 # Uploaded files
 public/uploads/logos/*
 !public/uploads/logos/.gitkeep
+
+# Secrets and configuration values
+XERO_CRON_SETUP_VALUES.txt

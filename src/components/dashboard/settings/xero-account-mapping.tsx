@@ -424,7 +424,7 @@ function AccountMappingField({
             </SelectItem>
           ) : (
             accounts.map((account) => (
-              <SelectItem key={account.accountID} value={account.accountID}>
+              <SelectItem key={account.accountID} value={account.code}>
                 {account.code} - {account.name}
               </SelectItem>
             ))
@@ -445,7 +445,7 @@ function MappingSummaryItem({
   accountId?: string;
   accounts: XeroAccount[];
 }) {
-  const account = accounts.find(a => a.accountID === accountId);
+  const account = accounts.find(a => a.code === accountId);
   const display = account ? `${account.code} - ${account.name}` : 'Not mapped';
   const isMapped = !!account;
 
@@ -507,14 +507,14 @@ function validateMappings(mappings: Partial<AccountMappings>): {
 // Get default mappings by searching for matching account codes
 function getDefaultMappings(accounts: XeroAccount[]): Partial<AccountMappings> {
   return {
-    xero_revenue_account_id: findAccount(accounts, ['4000', '4100', 'revenue'])?.accountID,
-    xero_receivable_account_id: findAccount(accounts, ['1200', '1100', 'receivable'])?.accountID,
-    xero_stripe_clearing_account_id: findAccount(accounts, ['1050', 'stripe'])?.accountID,
-    xero_hbar_clearing_account_id: findAccount(accounts, ['1051', 'hbar', 'crypto'])?.accountID,
-    xero_usdc_clearing_account_id: findAccount(accounts, ['1052', 'usdc'])?.accountID,
-    xero_usdt_clearing_account_id: findAccount(accounts, ['1053', 'usdt'])?.accountID,
-    xero_audd_clearing_account_id: findAccount(accounts, ['1054', 'audd'])?.accountID,
-    xero_fee_expense_account_id: findAccount(accounts, ['6100', '6200', 'fee', 'bank charges'])?.accountID,
+    xero_revenue_account_id: findAccount(accounts, ['4000', '4100', 'revenue'])?.code,
+    xero_receivable_account_id: findAccount(accounts, ['1200', '1100', 'receivable'])?.code,
+    xero_stripe_clearing_account_id: findAccount(accounts, ['1050', 'stripe'])?.code,
+    xero_hbar_clearing_account_id: findAccount(accounts, ['1051', 'hbar', 'crypto'])?.code,
+    xero_usdc_clearing_account_id: findAccount(accounts, ['1052', 'usdc'])?.code,
+    xero_usdt_clearing_account_id: findAccount(accounts, ['1053', 'usdt'])?.code,
+    xero_audd_clearing_account_id: findAccount(accounts, ['1054', 'audd'])?.code,
+    xero_fee_expense_account_id: findAccount(accounts, ['6100', '6200', 'fee', 'bank charges'])?.code,
   };
 }
 
