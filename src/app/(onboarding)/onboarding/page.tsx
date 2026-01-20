@@ -1,7 +1,14 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { OnboardingForm } from '@/components/onboarding/onboarding-form';
+import { getUserOrganization } from '@/lib/auth/get-org';
+import { redirect } from 'next/navigation';
 
-export default function OnboardingPage() {
+export default async function OnboardingPage() {
+  // If user already has an organization, redirect to dashboard
+  const organization = await getUserOrganization();
+  if (organization) {
+    redirect('/dashboard');
+  }
   return (
     <div className="space-y-6">
       <div className="text-center">
