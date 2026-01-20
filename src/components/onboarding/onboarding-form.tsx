@@ -85,16 +85,17 @@ export function OnboardingForm() {
       }
 
       const organization = await orgResponse.json();
+      console.log('📦 Organization created:', organization);
 
       // Store clerk_org_id in localStorage (used for API calls)
-      if (organization.data?.clerkOrgId) {
-        window.localStorage.setItem('provvypay.organizationId', organization.data.clerkOrgId);
+      if (organization.clerk_org_id) {
+        window.localStorage.setItem('provvypay.organizationId', organization.clerk_org_id);
       }
 
       // Step 2: Create merchant settings
       console.log('⚙️ Creating merchant settings...');
       const settingsPayload = {
-        organizationId: organization.data.id,
+        organizationId: organization.id,
         displayName: data.displayName,
         defaultCurrency: data.defaultCurrency,
       };
