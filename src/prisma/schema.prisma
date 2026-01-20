@@ -119,6 +119,22 @@ model organizations {
   currency_configs          currency_configs[]
   fx_rate_overrides         fx_rate_overrides[]
   currency_display_preferences currency_display_preferences[]
+  user_organizations        user_organizations[]
+}
+
+model user_organizations {
+  id              String        @id @default(uuid()) @db.Uuid
+  user_id         String        @db.VarChar(255)
+  organization_id String        @db.Uuid
+  role            String        @default("MEMBER") @db.VarChar(50)
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime      @default(now()) @db.Timestamptz(6)
+  organizations   organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, organization_id])
+  @@index([user_id])
+  @@index([organization_id])
+  @@index([role])
 }
 
 model payment_events {

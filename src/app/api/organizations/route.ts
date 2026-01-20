@@ -80,10 +80,13 @@ export async function POST(request: NextRequest) {
       });
 
       // Link the user to the organization as OWNER
-      await tx.$executeRaw`
-        INSERT INTO user_organizations (user_id, organization_id, role, created_at, updated_at)
-        VALUES (${user.id}, ${organization.id}, 'OWNER', NOW(), NOW())
-      `;
+      await tx.user_organizations.create({
+        data: {
+          user_id: user.id,
+          organization_id: organization.id,
+          role: 'OWNER',
+        },
+      });
 
       return organization;
     });
