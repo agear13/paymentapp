@@ -299,6 +299,7 @@ async function handlePaymentIntentSucceeded(event: Stripe.Event, correlationId: 
           payment_link_id: paymentLinkId,
           event_type: 'PAYMENT_CONFIRMED',
           payment_method: 'STRIPE',
+          stripe_event_id: event.id, // ✅ Store for idempotency
           stripe_payment_intent_id: paymentIntent.id,
           amount_received: fromSmallestUnit(
             paymentIntent.amount_received,
@@ -522,7 +523,9 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
         payment_link_id: paymentLinkId,
         event_type: 'PAYMENT_CONFIRMED',
         payment_method: 'STRIPE',
+        stripe_event_id: event.id, // ✅ Store for idempotency
         stripe_payment_intent_id: session.payment_intent as string,
+        stripe_checkout_session_id: session.id, // ✅ Store session ID
         amount_received: session.amount_total ? session.amount_total / 100 : 0,
         currency_received: session.currency?.toUpperCase() || 'USD',
         metadata: {
