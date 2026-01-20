@@ -59,17 +59,24 @@ export function OnboardingForm() {
   });
 
   async function onSubmit(data: OnboardingFormValues) {
+    console.log('🚀 Onboarding form submitted with data:', data);
     setIsLoading(true);
     try {
       // Step 1: Create organization
+      console.log('📝 Creating organization...');
+      const orgPayload = {
+        name: data.organizationName,
+        clerkOrgId: `temp_${Date.now()}`,
+      };
+      console.log('📦 Organization payload:', orgPayload);
+      
       const orgResponse = await fetch('/api/organizations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: data.organizationName,
-          clerkOrgId: `temp_${Date.now()}`, // TODO: Get from Clerk
-        }),
+        body: JSON.stringify(orgPayload),
       });
+      
+      console.log('📡 Organization response status:', orgResponse.status);
 
       if (!orgResponse.ok) {
         const errorData = await orgResponse.json().catch(() => ({}));
@@ -85,15 +92,21 @@ export function OnboardingForm() {
       }
 
       // Step 2: Create merchant settings
+      console.log('⚙️ Creating merchant settings...');
+      const settingsPayload = {
+        organizationId: organization.data.id,
+        displayName: data.displayName,
+        defaultCurrency: data.defaultCurrency,
+      };
+      console.log('📦 Merchant settings payload:', settingsPayload);
+      
       const settingsResponse = await fetch('/api/merchant-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          organizationId: organization.data.id,
-          displayName: data.displayName,
-          defaultCurrency: data.defaultCurrency,
-        }),
+        body: JSON.stringify(settingsPayload),
       });
+      
+      console.log('📡 Merchant settings response status:', settingsResponse.status);
 
       if (!settingsResponse.ok) {
         const errorData = await settingsResponse.json().catch(() => ({}));
@@ -101,12 +114,18 @@ export function OnboardingForm() {
         throw new Error(errorData.error || 'Failed to create merchant settings');
       }
 
+      console.log('✅ Onboarding completed successfully!');
       toast.success('Organization created successfully!');
       router.push('/dashboard');
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to complete onboarding';
+      console.error('❌ Onboarding error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        raw: error,
+      });
       toast.error(errorMessage);
-      console.error('Onboarding error:', error);
     } finally {
       setIsLoading(false);
     }
