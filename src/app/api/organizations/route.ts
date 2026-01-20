@@ -51,10 +51,10 @@ export async function POST(request: NextRequest) {
       return apiError('Unauthorized', 401);
     }
 
-    const body = await validateBody(request, createOrganizationSchema);
+    const { data: body, error } = await validateBody(request, createOrganizationSchema);
     
-    if (body instanceof NextResponse) {
-      return body;
+    if (error) {
+      return error;
     }
 
     // Generate clerk_org_id if not provided
