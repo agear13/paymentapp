@@ -48,12 +48,12 @@ async function getDashboardStats(organizationId: string) {
       },
     });
 
-    // Calculate success rate (PAID / (PAID + EXPIRED + CANCELLED + OPEN))
+    // Calculate success rate (PAID / (PAID + EXPIRED + CANCELED + OPEN))
     const totalCompletedCount = await prisma.payment_links.count({
       where: {
         organization_id: organizationId,
         status: {
-          in: ['OPEN', 'PAID', 'EXPIRED', 'CANCELLED'],
+          in: ['OPEN', 'PAID', 'EXPIRED', 'CANCELED'],
         },
       },
     });
