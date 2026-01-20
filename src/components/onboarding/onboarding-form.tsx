@@ -116,6 +116,10 @@ export function OnboardingForm() {
       }
 
       console.log('✅ Onboarding completed successfully!');
+      
+      // Set cookie to indicate user has completed onboarding
+      document.cookie = 'provvypay_has_org=true; path=/; max-age=31536000'; // 1 year
+      
       toast.success('Organization created successfully!');
       router.push('/dashboard');
     } catch (error: any) {
