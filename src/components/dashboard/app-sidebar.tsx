@@ -11,13 +11,13 @@ import {
   Building2,
   BookOpen,
   CreditCard,
-  Users,
   LogOut,
   ChevronRight,
   Activity,
   BarChart3,
   Handshake,
   Target,
+  Layers,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -33,12 +33,9 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  useSidebar,
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
 
 const navigationItems = [
   {
@@ -69,14 +66,6 @@ const navigationItems = [
   {
     title: 'Admin Operations',
     href: '/dashboard/admin',
-    icon: Activity,
-  },
-];
-
-const monitoringItems = [
-  {
-    title: 'Monitoring',
-    href: '/dashboard/monitoring',
     icon: Activity,
   },
 ];
@@ -119,6 +108,31 @@ const programsItems = [
   },
 ];
 
+const platformPreviewItems = [
+  {
+    title: 'Platform Preview',
+    icon: Layers,
+    items: [
+      {
+        title: 'Overview',
+        href: '/dashboard/platform-preview/overview',
+      },
+      {
+        title: 'Connections',
+        href: '/dashboard/platform-preview/connections',
+      },
+      {
+        title: 'Inventory',
+        href: '/dashboard/platform-preview/inventory',
+      },
+      {
+        title: 'Unified Ledger',
+        href: '/dashboard/platform-preview/ledger',
+      },
+    ],
+  },
+];
+
 const settingsItems = [
   {
     title: 'Settings',
@@ -151,9 +165,8 @@ const settingsItems = [
 export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { state } = useSidebar();
   const supabase = createClient();
-  const [user, setUser] = React.useState<any>(null);
+  const [user, setUser] = React.useState<{ user_metadata?: { full_name?: string }; email?: string } | null>(null);
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
@@ -272,6 +285,44 @@ export function AppSidebar() {
               ))}
               {programsItems.map((item) => (
                 <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/programs')}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton>
+                        <item.icon className="size-4" />
+                        <span>{item.title}</span>
+                        <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {item.items?.map((subItem) => {
+                          const isActive = pathname === subItem.href;
+                          return (
+                            <SidebarMenuSubItem key={subItem.href}>
+                              <SidebarMenuSubButton asChild isActive={isActive}>
+                                <Link href={subItem.href}>
+                                  <span>{subItem.title}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Platform Preview */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Platform Preview</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {platformPreviewItems.map((item) => (
+                <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/platform-preview')}>
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton>
