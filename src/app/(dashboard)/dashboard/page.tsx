@@ -245,6 +245,15 @@ export default async function DashboardPage() {
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
               </div>
             </Link>
+            <Link href="/dashboard/partners/onboarding?source=merchant">
+              <div className="rounded-lg border p-3 hover:bg-accent cursor-pointer transition-colors flex items-center justify-between border-primary/50 bg-primary/5">
+                <div>
+                  <div className="font-medium">Earn by referring businesses</div>
+                  <div className="text-sm text-muted-foreground">Share your link, earnings accrue automatically, payouts run on schedule.</div>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </Link>
           </CardContent>
         </Card>
       </div>

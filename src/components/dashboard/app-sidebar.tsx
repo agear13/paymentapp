@@ -16,6 +16,8 @@ import {
   ChevronRight,
   Activity,
   BarChart3,
+  Handshake,
+  Target,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -76,6 +78,44 @@ const monitoringItems = [
     title: 'Monitoring',
     href: '/dashboard/monitoring',
     icon: Activity,
+  },
+];
+
+const partnersItems = [
+  {
+    title: 'Partners',
+    icon: Handshake,
+    items: [
+      {
+        title: 'Overview',
+        href: '/dashboard/partners/dashboard',
+      },
+      {
+        title: 'Ledger',
+        href: '/dashboard/partners/ledger',
+      },
+      {
+        title: 'Rules',
+        href: '/dashboard/partners/rules',
+      },
+      {
+        title: 'Payouts',
+        href: '/dashboard/partners/payouts',
+      },
+    ],
+  },
+];
+
+const programsItems = [
+  {
+    title: 'Programs',
+    icon: Target,
+    items: [
+      {
+        title: 'Overview',
+        href: '/dashboard/programs/overview',
+      },
+    ],
   },
 ];
 
@@ -192,6 +232,73 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Partners */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Revenue Share</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {partnersItems.map((item) => (
+                <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/partners')}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton>
+                        <item.icon className="size-4" />
+                        <span>{item.title}</span>
+                        <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {item.items?.map((subItem) => {
+                          const isActive = pathname === subItem.href;
+                          return (
+                            <SidebarMenuSubItem key={subItem.href}>
+                              <SidebarMenuSubButton asChild isActive={isActive}>
+                                <Link href={subItem.href}>
+                                  <span>{subItem.title}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ))}
+              {programsItems.map((item) => (
+                <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/programs')}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton>
+                        <item.icon className="size-4" />
+                        <span>{item.title}</span>
+                        <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {item.items?.map((subItem) => {
+                          const isActive = pathname === subItem.href;
+                          return (
+                            <SidebarMenuSubItem key={subItem.href}>
+                              <SidebarMenuSubButton asChild isActive={isActive}>
+                                <Link href={subItem.href}>
+                                  <span>{subItem.title}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
