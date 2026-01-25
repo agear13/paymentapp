@@ -166,7 +166,8 @@ export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
-  const [user, setUser] = React.useState<{ user_metadata?: { full_name?: string }; email?: string } | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [user, setUser] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
