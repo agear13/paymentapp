@@ -23,6 +23,7 @@ import { generateQRCodeDataUrl } from '@/lib/qr-code';
 function transformPaymentLink(link: any) {
   return {
     id: link.id,
+    organizationId: link.organization_id,
     shortCode: link.short_code,
     status: link.status,
     amount: Number(link.amount),
@@ -39,30 +40,6 @@ function transformPaymentLink(link: any) {
     updatedAt: link.updated_at,
     paymentEvents: link.payment_events,
   };
-}
-
-/**
- * Clerk Org ID (org_...) -> DB Org UUID mapping
- * Ensures organizations row exists and returns organizations.id (UUID)
- */
-async function getOrCreateDbOrgId(params: {
-  clerkOrgId: string;
-  orgName?: string | null;
-}) {
-  const { clerkOrgId, orgName } = params;
-
-  const org = await prisma.organizations.upsert({
-    where: { clerk_org_id: clerkOrgId },
-    update: orgName ? { name: orgName } : {},
-    create: {
-      id: randomUUID(),
-      clerk_org_id: clerkOrgId,
-      name: orgName ?? 'Unnamed organization',
-    },
-    select: { id: true },
-  });
-
-  return org.id;
 }
 
 /**
@@ -175,8 +152,7 @@ export async function GET(request: NextRequest) {
 
     loggers.api.info(
       {
-        clerkOrgId,
-        dbOrgId,
+        organizationId: dbOrgId,
         count: paymentLinks.length,
         total,
         filters,
@@ -318,8 +294,7 @@ export async function POST(request: NextRequest) {
       {
         paymentLinkId: paymentLink.id,
         shortCode: paymentLink.short_code,
-        clerkOrgId,
-        dbOrgId,
+        organizationId: dbOrgId,
         amount: validatedData.amount,
         currency: validatedData.currency,
       },
