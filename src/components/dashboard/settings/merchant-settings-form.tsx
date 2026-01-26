@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useOrganization } from '@/hooks/use-organization';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -54,9 +55,9 @@ const merchantSettingsSchema = z.object({
 type MerchantSettingsFormValues = z.infer<typeof merchantSettingsSchema>;
 
 export function MerchantSettingsForm() {
+  const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const [isLoading, setIsLoading] = React.useState(true);
   const [settingsId, setSettingsId] = React.useState<string | null>(null);
-  const [organizationId, setOrganizationId] = React.useState<string | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = React.useState(false);
   const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -72,38 +73,33 @@ export function MerchantSettingsForm() {
     },
   });
 
-  // Fetch organization and existing settings on mount
+  // Fetch existing settings when organizationId is available
   React.useEffect(() => {
-    async function fetchData() {
-      try {
-        // Get organization
-        const orgResponse = await fetch('/api/organizations');
-        if (orgResponse.ok) {
-          const orgs = await orgResponse.json();
-          if (orgs && orgs.length > 0) {
-            const org = orgs[0];
-            setOrganizationId(org.id);
+    async function fetchSettings() {
+      if (!organizationId) {
+        setIsLoading(false);
+        return;
+      }
 
-            // Get existing merchant settings
-            const settingsResponse = await fetch(`/api/merchant-settings?organizationId=${org.id}`);
-            if (settingsResponse.ok) {
-              const settingsData = await settingsResponse.json();
-              if (settingsData && settingsData.length > 0) {
-                const settings = settingsData[0];
-                setSettingsId(settings.id);
-                form.reset({
-                  displayName: settings.display_name || '',
-                  organizationLogoUrl: settings.organization_logo_url || '',
-                  defaultCurrency: settings.default_currency || 'USD',
-                  stripeAccountId: settings.stripe_account_id || '',
-                  hederaAccountId: settings.hedera_account_id || '',
-                });
-                
-                // Set logo preview if URL exists
-                if (settings.organization_logo_url) {
-                  setLogoPreview(settings.organization_logo_url);
-                }
-              }
+      try {
+        // Get existing merchant settings
+        const settingsResponse = await fetch(`/api/merchant-settings?organizationId=${organizationId}`);
+        if (settingsResponse.ok) {
+          const settingsData = await settingsResponse.json();
+          if (settingsData && settingsData.length > 0) {
+            const settings = settingsData[0];
+            setSettingsId(settings.id);
+            form.reset({
+              displayName: settings.display_name || '',
+              organizationLogoUrl: settings.organization_logo_url || '',
+              defaultCurrency: settings.default_currency || 'USD',
+              stripeAccountId: settings.stripe_account_id || '',
+              hederaAccountId: settings.hedera_account_id || '',
+            });
+            
+            // Set logo preview if URL exists
+            if (settings.organization_logo_url) {
+              setLogoPreview(settings.organization_logo_url);
             }
           }
         }
@@ -115,8 +111,10 @@ export function MerchantSettingsForm() {
       }
     }
 
-    fetchData();
-  }, [form]);
+    if (!isOrgLoading) {
+      fetchSettings();
+    }
+  }, [organizationId, isOrgLoading, form]);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -257,7 +255,7 @@ export function MerchantSettingsForm() {
     }
   }
 
-  if (isLoading) {
+  if (isLoading || isOrgLoading) {
     return (
       <div className="space-y-6">
         <div className="animate-pulse space-y-4">

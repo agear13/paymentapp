@@ -84,14 +84,23 @@ export async function GET(request: NextRequest) {
 
     // Get query params
     const searchParams = request.nextUrl.searchParams;
-    const clerkOrgId = searchParams.get('organizationId');
+    const organizationId = searchParams.get('organizationId');
 
-    if (!clerkOrgId) {
+    if (!organizationId) {
       return NextResponse.json({ error: 'organizationId is required' }, { status: 400 });
     }
 
-    // Check permission (assumes permission system is keyed on Clerk org id)
-    const canView = await checkUserPermission(user.id, clerkOrgId, 'view_payment_links');
+    // Verify the organization exists and user has access
+    const org = await prisma.organizations.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+
+    // Check permission
+    const canView = await checkUserPermission(user.id, organizationId, 'view_payment_links');
     if (!canView) {
       return NextResponse.json(
         { error: 'Forbidden - Insufficient permissions' },
@@ -99,8 +108,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Map Clerk org id -> DB UUID (and ensure org exists)
-    const dbOrgId = await getOrCreateDbOrgId({ clerkOrgId });
+    const dbOrgId = organizationId;
 
     // Parse pagination
     const pagination = PaginationSchema.parse({
@@ -218,12 +226,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = CreatePaymentLinkSchema.parse(body);
 
-    const clerkOrgId = validatedData.organizationId;
+    const organizationId = validatedData.organizationId;
 
-    // Check permission (assumes permission system is keyed on Clerk org id)
+    // Verify the organization exists
+    const org = await prisma.organizations.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+
+    // Check permission
     const canCreate = await checkUserPermission(
       user.id,
-      clerkOrgId,
+      organizationId,
       'create_payment_links'
     );
     if (!canCreate) {
@@ -233,8 +250,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Map Clerk org id -> DB UUID (and ensure org exists)
-    const dbOrgId = await getOrCreateDbOrgId({ clerkOrgId });
+    const dbOrgId = organizationId;
 
     // Generate unique short code
     const shortCode = await generateUniqueShortCode();
