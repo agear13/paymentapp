@@ -19,23 +19,24 @@ export async function GET(request: NextRequest) {
       return apiError('Unauthorized', 401);
     }
 
-    // TODO: Implement proper user-organization relationship
-    // For now, return all organizations (will be filtered by Clerk org membership)
-    const organizations = await prisma.organizations.findMany({
-      select: {
-        id: true,
-        clerk_org_id: true,
-        name: true,
-        created_at: true,
-      },
-      orderBy: {
-        created_at: 'desc',
-      },
-    });
+    // Get only organizations the user has access to via user_organizations table
+    const userOrgs = await prisma.$queryRaw<Array<{
+      id: string;
+      clerk_org_id: string;
+      name: string;
+      created_at: Date;
+      role: string;
+    }>>`
+      SELECT o.id, o.clerk_org_id, o.name, o.created_at, uo.role
+      FROM organizations o
+      INNER JOIN user_organizations uo ON uo.organization_id = o.id
+      WHERE uo.user_id = ${user.id}
+      ORDER BY uo.created_at ASC
+    `;
 
-    log.info({ userId: user.id, count: organizations.length }, 'Listed organizations');
+    log.info({ userId: user.id, count: userOrgs.length }, 'Listed user organizations');
 
-    return apiResponse(organizations);
+    return apiResponse(userOrgs);
   } catch (error) {
     log.error({ error }, 'Failed to list organizations');
     return apiError('Failed to fetch organizations', 500);
