@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Link as LinkIcon,
   Settings,
-  Building2,
   BookOpen,
   CreditCard,
   LogOut,
@@ -19,6 +18,7 @@ import {
   Target,
   Layers,
 } from 'lucide-react';
+import Image from 'next/image';
 import {
   Sidebar,
   SidebarContent,
@@ -245,8 +245,14 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Building2 className="size-4" />
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
+                  <Image 
+                    src="/provvypay-icon.svg" 
+                    alt="Provvypay" 
+                    width={32}
+                    height={32}
+                    className="size-8"
+                  />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Provvypay</span>

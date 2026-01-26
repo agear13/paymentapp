@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import Image from 'next/image';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -38,89 +39,213 @@ export default function LoginPage() {
     }
   };
 
-  const handleSignUp = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      alert('Check your email for the confirmation link!');
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign up');
-    } finally {
-      setLoading(false);
-    }
+  const handleSignUp = () => {
+    router.push('/auth/signup');
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-muted/30">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Provvypay</CardTitle>
-          <CardDescription>Sign in to your account</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-              />
+    <div className="flex min-h-screen">
+      {/* Left Side - Branding */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/10 via-primary/5 to-background relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('/provvypay-icon.svg')] bg-no-repeat bg-center opacity-[0.03] bg-[length:600px]" />
+        
+        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+          {/* Logo */}
+          <Link href="/" className="flex items-center">
+            <Image 
+              src="/provvypay-logo.svg" 
+              alt="Provvypay" 
+              width={180} 
+              height={54}
+              priority
+            />
+          </Link>
+
+          {/* Main Content */}
+          <div className="space-y-8 max-w-lg">
+            <div className="space-y-4">
+              <h1 className="text-4xl font-bold tracking-tight">
+                Welcome to Provvypay
+              </h1>
+              <p className="text-xl text-muted-foreground leading-relaxed">
+                The unified payment platform built for modern businesses
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={loading}
-              />
+            {/* Features */}
+            <div className="space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-1">Instant Payments</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Accept payments via Stripe and crypto wallets with real-time settlement
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-1">Automated Reconciliation</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Sync with Xero automatically. No more manual entry or spreadsheet headaches
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-1">Bank-Grade Security</h3>
+                  <p className="text-sm text-muted-foreground">
+                    PCI-compliant with encrypted data storage and multi-factor authentication
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center gap-6 text-sm text-muted-foreground">
+            <span>© 2026 Provvypay</span>
+            <Link href="/legal/privacy" className="hover:text-primary transition-colors">
+              Privacy
+            </Link>
+            <Link href="/legal/terms" className="hover:text-primary transition-colors">
+              Terms
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Side - Login Form */}
+      <div className="flex-1 flex items-center justify-center p-8 bg-background">
+        <div className="w-full max-w-md space-y-8">
+          {/* Mobile Logo */}
+          <div className="lg:hidden flex justify-center mb-8">
+            <Image 
+              src="/provvypay-logo.svg" 
+              alt="Provvypay" 
+              width={160} 
+              height={48}
+              priority
+            />
+          </div>
+
+          {/* Form Header */}
+          <div className="text-center lg:text-left">
+            <h2 className="text-3xl font-bold tracking-tight">Sign in</h2>
+            <p className="text-muted-foreground mt-2">
+              Enter your credentials to access your account
+            </p>
+          </div>
+
+          {/* Login Form */}
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email address</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={loading}
+                  className="h-11"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link 
+                    href="/auth/reset-password" 
+                    className="text-sm text-primary hover:text-[rgb(61,92,224)] transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                  className="h-11"
+                />
+              </div>
             </div>
 
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 p-3 rounded">
-                {error}
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start gap-3">
+                <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <strong className="font-semibold">Authentication failed</strong>
+                  <p>{error}</p>
+                </div>
               </div>
             )}
 
-            <div className="flex flex-col gap-2">
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Signing in...' : 'Sign In'}
-              </Button>
-              
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="w-full" 
-                onClick={handleSignUp}
-                disabled={loading}
-              >
-                Sign Up
-              </Button>
-            </div>
+            <Button 
+              type="submit" 
+              className="w-full h-11 text-base" 
+              disabled={loading}
+            >
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Signing in...
+                </span>
+              ) : (
+                'Sign in'
+              )}
+            </Button>
           </form>
 
-          <div className="mt-4 text-center text-sm text-muted-foreground">
-            <p>Development Mode: Create an account or sign in with Supabase</p>
+          {/* Sign Up Link */}
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground">
+              Don't have an account?{' '}
+              <button
+                onClick={handleSignUp}
+                className="text-primary hover:text-[rgb(61,92,224)] font-semibold transition-colors"
+                disabled={loading}
+              >
+                Sign up
+              </button>
+            </p>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Development Notice */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg text-xs text-center">
+              <strong className="font-semibold">Development Mode:</strong> Create an account or sign in with your credentials
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
