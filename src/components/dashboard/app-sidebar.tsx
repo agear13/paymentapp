@@ -168,44 +168,75 @@ export function AppSidebar() {
   const supabase = createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [user, setUser] = React.useState<any>(null);
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     // Get initial user
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-    });
+    async function loadUser() {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error('Error loading user:', error);
+        } else {
+          setUser(user);
+        }
+      } catch (error) {
+        console.error('Error in getUser:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadUser();
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, [supabase]);
 
   const handleSignOut = async () => {
+    if (!confirm('Are you sure you want to sign out?')) {
+      return;
+    }
+    
     setLoading(true);
     try {
+      // Clear localStorage
+      localStorage.clear();
+      
+      // Sign out from Supabase
       await supabase.auth.signOut();
+      
+      // Redirect to login
       router.push('/auth/login');
       router.refresh();
     } catch (error) {
       console.error('Error signing out:', error);
+      alert('Failed to sign out. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSignIn = () => {
+    router.push('/auth/login');
+  };
+
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
-  const initials = displayName
-    .split(' ')
-    .map((n: string) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+  const initials = user 
+    ? displayName
+        .split(' ')
+        .map((n: string) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    : '?';
 
   return (
     <Sidebar collapsible="icon">
@@ -397,16 +428,39 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleSignOut} disabled={loading}>
-              <Avatar className="size-6">
-                <AvatarFallback>{user ? initials : '?'}</AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{displayName}</span>
-                <span className="truncate text-xs text-muted-foreground">{user?.email || 'Not signed in'}</span>
-              </div>
-              <LogOut className="size-4 ml-auto" />
-            </SidebarMenuButton>
+            {loading ? (
+              <SidebarMenuButton disabled>
+                <Avatar className="size-6">
+                  <AvatarFallback>...</AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">Loading...</span>
+                  <span className="truncate text-xs text-muted-foreground">Please wait</span>
+                </div>
+              </SidebarMenuButton>
+            ) : user ? (
+              <SidebarMenuButton onClick={handleSignOut} disabled={loading}>
+                <Avatar className="size-6">
+                  <AvatarFallback>{initials}</AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">{displayName}</span>
+                  <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                </div>
+                <LogOut className="size-4 ml-auto" />
+              </SidebarMenuButton>
+            ) : (
+              <SidebarMenuButton onClick={handleSignIn}>
+                <Avatar className="size-6">
+                  <AvatarFallback>?</AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">Sign In</span>
+                  <span className="truncate text-xs text-muted-foreground">Click to login</span>
+                </div>
+                <ChevronRight className="size-4 ml-auto" />
+              </SidebarMenuButton>
+            )}
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
