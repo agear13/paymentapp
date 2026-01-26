@@ -3,70 +3,255 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --border: hsl(214.3 31.8% 91.4%);
-  --ring: hsl(222.2 84% 4.9%);
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  /* PROVVYPAY BRAND COLORS */
+  --primary: 81 112 255;           /* #5170ff - Vivid Blue */
+  --primary-foreground: 255 255 255;
+  --primary-hover: 61 92 224;       /* #3d5ce0 */
+  --primary-active: 41 72 204;      /* #2948cc */
+  
+  /* BACKGROUNDS */
+  --background: 255 255 255;        /* #ffffff */
+  --foreground: 0 0 0;             /* #000000 */
+  --card: 255 255 255;
+  --card-foreground: 0 0 0;
+  
+  /* NEUTRALS */
+  --muted: 168 168 168;            /* #a8a8a8 - Secondary text */
+  --muted-foreground: 115 115 115; /* #737373 */
+  --border: 229 229 229;           /* #e5e5e5 */
+  --input: 212 212 212;            /* #d4d4d4 */
+  --ring: 81 112 255;              /* #5170ff - Focus rings */
+  
+  /* SECONDARY COLORS */
+  --secondary: 245 245 245;        /* #f5f5f5 */
+  --secondary-foreground: 23 23 23;
+  --accent: 245 245 245;
+  --accent-foreground: 23 23 23;
+  
+  /* STATUS COLORS (Fintech) */
+  --success: 22 163 74;            /* #16a34a - PAID */
+  --warning: 245 158 11;           /* #f59e0b - PENDING */
+  --info: 81 112 255;              /* #5170ff - OPEN/INFO */
+  --destructive: 220 38 38;        /* #dc2626 - ERROR/EXPIRED */
+  
+  /* SIDEBAR */
+  --sidebar: 250 250 250;          /* #fafafa - Slightly off-white */
+  --sidebar-foreground: 38 38 38;  /* #262626 */
+  --sidebar-primary: 81 112 255;   /* #5170ff - Brand color for active */
+  --sidebar-primary-foreground: 255 255 255;
+  --sidebar-accent: 245 245 245;
+  --sidebar-accent-foreground: 23 23 23;
+  --sidebar-border: 229 229 229;
+  --sidebar-ring: 81 112 255;      /* #5170ff */
+  
+  /* CRYPTO TOKEN COLORS (preserve for reports) */
+  --token-stripe: 99 91 255;       /* #635BFF */
+  --token-hbar: 130 164 248;       /* #82A4F8 */
+  --token-usdc: 39 117 202;        /* #2775CA */
+  --token-usdt: 38 161 123;        /* #26A17B */
+  --token-audd: 0 132 61;          /* #00843D */
+  
+  /* SHADOWS */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  
+  /* BORDER RADIUS */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius: 8px; /* Default */
+  
+  /* SPACING SCALE (px values) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  
+  /* TYPOGRAPHY SCALE */
+  --font-h1-size: 2.25rem;         /* 36px */
+  --font-h1-line: 2.5rem;          /* 40px */
+  --font-h2-size: 1.875rem;        /* 30px */
+  --font-h2-line: 2.25rem;         /* 36px */
+  --font-h3-size: 1.5rem;          /* 24px */
+  --font-h3-line: 2rem;            /* 32px */
+  --font-h4-size: 1.25rem;         /* 20px */
+  --font-h4-line: 1.75rem;         /* 28px */
+  --font-body-size: 1rem;          /* 16px */
+  --font-body-line: 1.5rem;        /* 24px */
+  --font-body-sm-size: 0.875rem;   /* 14px */
+  --font-body-sm-line: 1.25rem;    /* 20px */
+  --font-caption-size: 0.75rem;    /* 12px */
+  --font-caption-line: 1rem;       /* 16px */
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-border: var(--border);
-  --color-ring: var(--ring);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
+  /* Map CSS variables to Tailwind colors */
+  --color-primary: rgb(var(--primary));
+  --color-primary-foreground: rgb(var(--primary-foreground));
+  --color-background: rgb(var(--background));
+  --color-foreground: rgb(var(--foreground));
+  --color-card: rgb(var(--card));
+  --color-card-foreground: rgb(var(--card-foreground));
+  --color-muted: rgb(var(--muted));
+  --color-muted-foreground: rgb(var(--muted-foreground));
+  --color-border: rgb(var(--border));
+  --color-input: rgb(var(--input));
+  --color-ring: rgb(var(--ring));
+  --color-secondary: rgb(var(--secondary));
+  --color-secondary-foreground: rgb(var(--secondary-foreground));
+  --color-accent: rgb(var(--accent));
+  --color-accent-foreground: rgb(var(--accent-foreground));
+  --color-destructive: rgb(var(--destructive));
+  --color-destructive-foreground: rgb(255 255 255);
+  --color-success: rgb(var(--success));
+  --color-warning: rgb(var(--warning));
+  --color-info: rgb(var(--info));
+  
+  /* Sidebar colors */
+  --color-sidebar: rgb(var(--sidebar));
+  --color-sidebar-foreground: rgb(var(--sidebar-foreground));
+  --color-sidebar-primary: rgb(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: rgb(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: rgb(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: rgb(var(--sidebar-accent-foreground));
+  --color-sidebar-border: rgb(var(--sidebar-border));
+  --color-sidebar-ring: rgb(var(--sidebar-ring));
+  
+  /* Font families */
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --border: hsl(217.2 32.6% 17.5%);
-    --ring: hsl(212.7 26.8% 83.9%);
+    --background: 10 10 10;         /* #0a0a0a */
+    --foreground: 237 237 237;      /* #ededed */
+    --card: 23 23 23;
+    --card-foreground: 237 237 237;
+    --border: 38 38 38;             /* #262626 */
+    --input: 64 64 64;
+    --muted: 115 115 115;
+    --muted-foreground: 168 168 168;
+    --accent: 38 38 38;
+    --accent-foreground: 250 250 250;
+    --sidebar: 23 23 23;
+    --sidebar-foreground: 250 250 250;
+    --sidebar-border: 38 38 38;
+    --sidebar-accent: 38 38 38;
+    --sidebar-accent-foreground: 250 250 250;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .dark {
-  --border: hsl(217.2 32.6% 17.5%);
-  --ring: hsl(212.7 26.8% 83.9%);
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --background: 10 10 10;
+  --foreground: 237 237 237;
+  --card: 23 23 23;
+  --card-foreground: 237 237 237;
+  --border: 38 38 38;
+  --input: 64 64 64;
+  --muted: 115 115 115;
+  --muted-foreground: 168 168 168;
+  --accent: 38 38 38;
+  --accent-foreground: 250 250 250;
+  --sidebar: 23 23 23;
+  --sidebar-foreground: 250 250 250;
+  --sidebar-primary: 81 112 255;      /* Keep brand color in dark mode */
+  --sidebar-primary-foreground: 255 255 255;
+  --sidebar-border: 38 38 38;
+  --sidebar-accent: 38 38 38;
+  --sidebar-accent-foreground: 250 250 250;
+  --sidebar-ring: 81 112 255;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
+  
   body {
     @apply bg-background text-foreground;
+  }
+  
+  /* Typography hierarchy */
+  h1 {
+    font-size: var(--font-h1-size);
+    line-height: var(--font-h1-line);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  
+  h2 {
+    font-size: var(--font-h2-size);
+    line-height: var(--font-h2-line);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  
+  h3 {
+    font-size: var(--font-h3-size);
+    line-height: var(--font-h3-line);
+    font-weight: 600;
+  }
+  
+  h4 {
+    font-size: var(--font-h4-size);
+    line-height: var(--font-h4-line);
+    font-weight: 600;
+  }
+}
+
+@layer utilities {
+  /* Focus ring utility using brand color */
+  .focus-ring {
+    @apply outline-none ring-3 ring-primary/20 border-primary transition-all;
+  }
+  
+  /* Status badge utilities */
+  .status-paid {
+    @apply bg-green-50 text-green-700 border-green-200;
+  }
+  
+  .status-open {
+    @apply bg-blue-50 text-primary border-primary/20;
+  }
+  
+  .status-pending {
+    @apply bg-amber-50 text-amber-700 border-amber-200;
+  }
+  
+  .status-expired,
+  .status-canceled {
+    @apply bg-red-50 text-red-700 border-red-200;
+  }
+  
+  .status-draft {
+    @apply bg-gray-50 text-gray-700 border-gray-200;
+  }
+  
+  /* Currency amount (right-aligned, tabular nums) */
+  .currency {
+    @apply text-right font-mono tabular-nums;
+  }
+  
+  /* Trust indicator (last updated, etc) */
+  .trust-indicator {
+    @apply text-xs text-muted-foreground flex items-center gap-1;
   }
 }
