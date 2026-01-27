@@ -106,6 +106,22 @@ export async function checkForTransaction(
       const data = await response.json();
       const transactions: MirrorTransaction[] = data.transactions || [];
 
+      // Enhanced logging for debugging
+      loggers.hedera.info('Mirror node response', {
+        transactionCount: transactions.length,
+        searchCriteria: {
+          merchantAccountId,
+          tokenType,
+          tokenId,
+          expectedAmount,
+          payerAccountId,
+          memo,
+          timeWindowMinutes,
+        },
+        firstTxId: transactions[0]?.transaction_id,
+        firstTxTimestamp: transactions[0]?.consensus_timestamp,
+      });
+
       // Parse and find matching transaction
       for (const tx of transactions) {
         const match = parseAndMatchTransaction(
@@ -246,6 +262,11 @@ function parseAndMatchTransaction(
 
     // Optional: Match payer account if provided
     if (payerAccountId && sender !== payerAccountId) {
+      loggers.hedera.debug('Transaction payer mismatch', {
+        transactionId: tx.transaction_id,
+        expected: payerAccountId,
+        actual: sender,
+      });
       return null;
     }
 
@@ -253,6 +274,11 @@ function parseAndMatchTransaction(
     if (memo && tx.memo_base64) {
       const txMemo = Buffer.from(tx.memo_base64, 'base64').toString('utf-8');
       if (!txMemo.includes(memo)) {
+        loggers.hedera.debug('Transaction memo mismatch', {
+          transactionId: tx.transaction_id,
+          expected: memo,
+          actual: txMemo,
+        });
         return null;
       }
     }
@@ -264,6 +290,14 @@ function parseAndMatchTransaction(
 
     if (amount < minAmount || amount > maxAmount) {
       // Amount mismatch
+      loggers.hedera.debug('Transaction amount mismatch', {
+        transactionId: tx.transaction_id,
+        expected: expectedAmount,
+        actual: amount,
+        minAccepted: minAmount,
+        maxAccepted: maxAmount,
+        tolerance: `${tolerance * 100}%`,
+      });
       return null;
     }
 

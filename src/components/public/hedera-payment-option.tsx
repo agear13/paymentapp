@@ -296,7 +296,12 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
       toast.success('Transaction approved! Monitoring for confirmation...');
       
       // Start monitoring for the transaction
-      await handleStartMonitoring();
+      // If we have a transaction ID, use direct verification; otherwise fall back to search
+      if (result.transactionId) {
+        await handleDirectVerification(result.transactionId);
+      } else {
+        await handleStartMonitoring();
+      }
     } catch (error: any) {
       console.error('[HederaPaymentOption] HBAR payment error:', error);
       setPaymentStep('select_token');
@@ -389,12 +394,119 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
       toast.success('Transaction approved! Monitoring for confirmation...');
       
       // Start monitoring for the transaction
-      // Use longer window for tokens (60 min) as they may take longer to appear
-      await handleStartMonitoring(60);
+      // If we have a transaction ID, use direct verification; otherwise fall back to search
+      if (result.transactionId) {
+        await handleDirectVerification(result.transactionId);
+      } else {
+        // Use longer window for tokens (60 min) as they may take longer to appear
+        await handleStartMonitoring(60);
+      }
     } catch (error: any) {
       console.error('[HederaPaymentOption] Token payment error:', error);
       setPaymentStep('select_token');
       toast.error(error?.message || 'Failed to process payment');
+    }
+  };
+
+  /**
+   * Direct verification using transaction ID
+   * More reliable than searching - directly queries the specific transaction
+   */
+  const handleDirectVerification = async (transactionId: string) => {
+    console.log('[HederaPaymentOption] 🎯 Direct verification for transaction:', transactionId);
+    
+    setPaymentStep('monitoring');
+    
+    const selectedAmount = paymentAmounts.find(a => a.tokenType === selectedToken);
+    if (!selectedAmount) {
+      console.error('[HederaPaymentOption] ❌ Payment amount not found');
+      toast.error('Payment amount not found');
+      return;
+    }
+
+    const maxAttempts = 20; // Try for ~1 minute (20 * 3s)
+    let attempts = 0;
+
+    const verifyTransaction = async (): Promise<boolean> => {
+      attempts++;
+      
+      try {
+        console.log(`[Payment Verification] Attempt ${attempts}/${maxAttempts} for transaction ${transactionId}`);
+        
+        const verifyRequest = {
+          transactionId,
+          paymentLinkId,
+          network: CURRENT_NETWORK,
+          expectedAmount: parseFloat(selectedAmount.totalAmount),
+          expectedToken: selectedToken,
+        };
+        
+        console.log('[Payment Verification] Sending request:', verifyRequest);
+        
+        const response = await fetch('/api/hedera/transactions/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(verifyRequest),
+          signal: AbortSignal.timeout(15000), // 15 second timeout
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          console.error('[Payment Verification] API error:', response.status, errorData);
+          
+          // If transaction not found on mirror node yet, keep retrying
+          if (response.status === 404 && attempts < maxAttempts) {
+            return false; // Keep trying
+          }
+          
+          // For other errors, stop and show error
+          toast.error(errorData?.message || `Verification failed: ${response.status}`);
+          setPaymentStep('select_token');
+          return true; // Stop polling
+        }
+
+        const result = await response.json();
+        
+        console.log('[Payment Verification] Success!', result);
+        toast.success('Payment confirmed!', { duration: 5000 });
+        setPaymentStep('complete');
+        
+        // Reload page after short delay to show success state
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+        
+        return true; // Stop polling
+      } catch (error: any) {
+        console.error('[Payment Verification] Error:', error);
+        
+        // On timeout or network error, retry if within attempts
+        if (attempts < maxAttempts) {
+          return false;
+        }
+        
+        // Max attempts reached
+        toast.error('Could not confirm payment. Please refresh the page.', { duration: 8000 });
+        setPaymentStep('select_token');
+        return true;
+      }
+    };
+
+    // Polling loop
+    while (attempts < maxAttempts) {
+      const shouldStop = await verifyTransaction();
+      if (shouldStop) {
+        break;
+      }
+      
+      // Wait before next attempt (3 seconds)
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+
+    if (attempts >= maxAttempts) {
+      console.log('[Payment Verification] Max attempts reached');
+      toast.error('Verification timed out. Please check your transaction in HashPack.', { duration: 10000 });
+      setPaymentStep('select_token');
     }
   };
 
