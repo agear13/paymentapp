@@ -504,9 +504,11 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
     }
 
     if (attempts >= maxAttempts) {
-      console.log('[Payment Verification] Max attempts reached');
-      toast.error('Verification timed out. Please check your transaction in HashPack.', { duration: 10000 });
-      setPaymentStep('select_token');
+      console.log('[Payment Verification] Max attempts reached, falling back to search-based monitoring');
+      toast.info('Direct verification timed out. Trying alternative detection method...', { duration: 6000 });
+      
+      // Fall back to search-based monitoring
+      await handleStartMonitoring(selectedToken === 'HBAR' ? 15 : 60);
     }
   };
 

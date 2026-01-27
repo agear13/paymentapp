@@ -120,13 +120,25 @@ export async function POST(request: NextRequest) {
       ? 'https://mainnet-public.mirrornode.hedera.com'
       : 'https://testnet.mirrornode.hedera.com';
 
-    const txUrl = `${mirrorUrl}/api/v1/transactions/${validated.transactionId}`;
+    // URL-encode the transaction ID (@ symbol becomes %40)
+    const encodedTxId = encodeURIComponent(validated.transactionId);
+    const txUrl = `${mirrorUrl}/api/v1/transactions/${encodedTxId}`;
+    
+    loggers.hedera.info('Querying mirror node for transaction', {
+      transactionId: validated.transactionId,
+      url: txUrl,
+      correlationId,
+    });
+    
     const response = await fetch(txUrl);
 
     if (!response.ok) {
       loggers.hedera.error('Failed to fetch transaction from mirror node', {
         transactionId: validated.transactionId,
+        url: txUrl,
         status: response.status,
+        statusText: response.statusText,
+        correlationId,
       });
       return NextResponse.json(
         { error: 'Transaction not found on Hedera network' },
@@ -135,9 +147,22 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
+    
+    loggers.hedera.info('Mirror node response received', {
+      transactionId: validated.transactionId,
+      hasTransactions: !!data.transactions,
+      transactionCount: data.transactions?.length || 0,
+      correlationId,
+    });
+    
     const tx: MirrorTransaction = data.transactions?.[0];
 
     if (!tx) {
+      loggers.hedera.warn('Transaction array empty in mirror node response', {
+        transactionId: validated.transactionId,
+        responseData: data,
+        correlationId,
+      });
       return NextResponse.json(
         { error: 'Transaction not found' },
         { status: 404 }
