@@ -171,25 +171,57 @@ export async function initHashConnect(): Promise<void> {
 
         const initFn = (hashconnect as any).init;
 
-        // Try both common HashConnect v3 init signatures
+        // Helper to wrap init call with timeout
+        const initWithTimeout = async (fn: () => Promise<any>, signature: string, timeoutMs: number = 10000) => {
+          return Promise.race([
+            fn(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error(`Init timeout after ${timeoutMs}ms`)), timeoutMs)
+            )
+          ]).then(() => {
+            console.log(`[HashConnect] init succeeded with ${signature}`);
+            return true;
+          }).catch((error: any) => {
+            console.warn(`[HashConnect] init ${signature} failed:`, error.message);
+            throw error;
+          });
+        };
+
+        // Try both common HashConnect v3 init signatures with timeout protection
+        let initSucceeded = false;
+        
         try {
           // Signature #1: init() - no args (metadata in constructor)
-          await initFn.call(hashconnect);
-          console.log('[HashConnect] init succeeded with signature A (no args)');
+          await initWithTimeout(
+            () => initFn.call(hashconnect),
+            'signature A (no args)'
+          );
+          initSucceeded = true;
         } catch (e1) {
-          console.warn('[HashConnect] init signature A failed, trying with metadata params', e1);
-          
           try {
             // Signature #2: init(metadata, network, multiAccount)
-            await initFn.call(hashconnect, metadata, ledgerId, false);
-            console.log('[HashConnect] init succeeded with signature B (metadata params)');
+            await initWithTimeout(
+              () => initFn.call(hashconnect, metadata, ledgerId, false),
+              'signature B (metadata params)'
+            );
+            initSucceeded = true;
           } catch (e2) {
-            console.warn('[HashConnect] init signature B failed, trying with projectId first', e2);
-            
-            // Signature #3: init(projectId, metadata, network, multiAccount)
-            await initFn.call(hashconnect, projectId, metadata, ledgerId, false);
-            console.log('[HashConnect] init succeeded with signature C (projectId first)');
+            try {
+              // Signature #3: init(projectId, metadata, network, multiAccount)
+              await initWithTimeout(
+                () => initFn.call(hashconnect, projectId, metadata, ledgerId, false),
+                'signature C (projectId first)'
+              );
+              initSucceeded = true;
+            } catch (e3) {
+              console.error('[HashConnect] All init signatures failed');
+              throw new Error(`Failed to initialize HashConnect: ${(e3 as Error).message}`);
+            }
           }
+        }
+        
+        if (!initSucceeded) {
+          throw new Error('HashConnect initialization did not succeed');
         }
         
         // Note: HashConnect v3+ generates pairing string internally in openPairingModal()
