@@ -242,11 +242,7 @@ export async function POST(request: NextRequest) {
     // Use correlation_id as base for idempotency keys
     const idempotencyKey = correlationId;
 
-    // Build Mirror Node URL for metadata
-    const mirrorUrl = validated.network === 'mainnet'
-      ? 'https://mainnet-public.mirrornode.hedera.com'
-      : 'https://testnet.mirrornode.hedera.com';
-
+    // mirrorUrl is already declared at line 119, reuse it for metadata
     // Update payment link and create records
     await prisma.$transaction([
       // 1. Update payment link status

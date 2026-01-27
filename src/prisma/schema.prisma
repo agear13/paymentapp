@@ -154,6 +154,7 @@ model payment_events {
 
   @@index([payment_link_id, created_at])
   @@index([stripe_event_id])
+  @@unique([payment_link_id, correlation_id], name: "payment_events_payment_link_correlation_unique")
 }
 
 model payment_links {
