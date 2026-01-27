@@ -145,7 +145,17 @@ export async function confirmPayment(
         amount_received: amountReceived,
         currency_received: currencyReceived,
         correlation_id: correlationId,
-        metadata,
+        metadata: {
+          ...metadata,
+          ...(provider === 'hedera' && tokenType && {
+            token_type: tokenType,
+            consensus_timestamp: metadata?.consensus_timestamp,
+            network: metadata?.network,
+            payer_account_id: metadata?.sender,
+            merchant_account_id: metadata?.recipient,
+            mirror_url: metadata?.mirror_url,
+          }),
+        },
         created_at: new Date(),
       };
 
@@ -169,7 +179,7 @@ export async function confirmPayment(
         paymentLinkId,
       }, 'Payment event created');
 
-      // 4. Post to ledger
+      // 4. Post to ledger with idempotency
       try {
         if (provider === 'stripe') {
           await postStripeSettlement({
@@ -181,6 +191,7 @@ export async function confirmPayment(
             paymentIntentId: paymentIntentId || providerRef,
             feeAmount: 0, // Calculate if needed
             correlationId,
+            idempotencyKey: correlationId, // Use correlation_id for idempotency
           });
         } else if (provider === 'hedera' && tokenType) {
           // Get FX snapshot for settlement
@@ -214,6 +225,7 @@ export async function confirmPayment(
             fxRate: rate,
             transactionId: transactionId || providerRef,
             correlationId,
+            idempotencyKey: correlationId, // Use correlation_id for idempotency
           });
         }
 

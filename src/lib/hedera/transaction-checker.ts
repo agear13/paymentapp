@@ -14,6 +14,7 @@ import type {
 } from './types';
 import { fromSmallestUnit } from './token-service';
 import { prisma } from '@/lib/server/prisma';
+import { generateCorrelationId } from '@/lib/services/correlation';
 
 export interface CheckTransactionOptions {
   paymentLinkId: string;
@@ -294,12 +295,24 @@ async function updatePaymentLinkWithTransaction(
   tokenType: TokenType,
   network: 'testnet' | 'mainnet'
 ): Promise<{ success: boolean; error?: string }> {
+  // Generate correlation ID for tracing (at function scope for error logging)
+  const correlationId = generateCorrelationId('hedera', transaction.transactionId);
+  
   try {
+    
     // Check if this transaction was already recorded (idempotency)
+    // Check both hedera_transaction_id AND correlation_id
     const existingEvent = await prisma.payment_events.findFirst({
       where: {
         payment_link_id: paymentLinkId,
-        hedera_transaction_id: transaction.transactionId,
+        OR: [
+          {
+            hedera_transaction_id: transaction.transactionId,
+          },
+          {
+            correlation_id: correlationId,
+          },
+        ],
       },
     });
 
@@ -309,6 +322,7 @@ async function updatePaymentLinkWithTransaction(
         { 
           paymentLinkId, 
           transactionId: transaction.transactionId,
+          correlationId,
           eventId: existingEvent.id 
         }
       );
@@ -354,7 +368,13 @@ async function updatePaymentLinkWithTransaction(
     const ledgerAccounts = await ensureLedgerAccounts(paymentLink.organization_id, tokenType);
 
     const now = new Date();
-    const idempotencyKey = `hedera-${paymentLinkId}-${transaction.transactionId}`;
+    // Use correlation_id as base for idempotency keys
+    const idempotencyKey = correlationId;
+    
+    // Build Mirror Node URL for metadata
+    const mirrorUrl = network === 'mainnet'
+      ? 'https://mainnet-public.mirrornode.hedera.com'
+      : 'https://testnet.mirrornode.hedera.com';
 
     // === WRAP DB PERSISTENCE IN TRY/CATCH ===
     try {
@@ -375,14 +395,19 @@ async function updatePaymentLinkWithTransaction(
           hedera_transaction_id: transaction.transactionId,
           amount_received: transaction.amount,
           currency_received: tokenType,
+          correlation_id: correlationId,
           metadata: {
             transactionId: transaction.transactionId,
             amount: transaction.amount,
             tokenType,
             sender: transaction.sender,
-            timestamp: transaction.timestamp,
+            // transaction.timestamp is set from tx.consensus_timestamp in parseAndMatchTransaction (line 275)
+            consensus_timestamp: transaction.timestamp,
             memo: transaction.memo,
             merchantAccount: transaction.merchantAccount,
+            network,
+            mirror_url: mirrorUrl,
+            payer_account_id: transaction.sender,
           },
         },
       };
@@ -455,6 +480,7 @@ async function updatePaymentLinkWithTransaction(
         {
           paymentLinkId,
           transactionId: transaction.transactionId,
+          correlationId,
           amount: transaction.amount,
           tokenType,
           sender: transaction.sender,
@@ -472,6 +498,7 @@ async function updatePaymentLinkWithTransaction(
       console.error('[monitor] persist failed', {
         paymentLinkId,
         transactionId: transaction.transactionId,
+        correlationId,
         sender: transaction.sender,
         amount: transaction.amount,
         token: tokenType,
@@ -484,6 +511,7 @@ async function updatePaymentLinkWithTransaction(
         { 
           paymentLinkId, 
           transactionId: transaction.transactionId,
+          correlationId,
           sender: transaction.sender,
           amount: transaction.amount,
           tokenType,
@@ -499,6 +527,7 @@ async function updatePaymentLinkWithTransaction(
     console.error('[monitor] persist failed', {
       paymentLinkId,
       transactionId: transaction.transactionId,
+      correlationId,
       sender: transaction.sender,
       amount: transaction.amount,
       token: tokenType,
@@ -511,6 +540,7 @@ async function updatePaymentLinkWithTransaction(
       { 
         paymentLinkId, 
         transactionId: transaction.transactionId,
+        correlationId,
         sender: transaction.sender,
         amount: transaction.amount,
         tokenType,

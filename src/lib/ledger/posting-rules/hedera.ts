@@ -44,6 +44,8 @@ export interface HederaSettlementParams {
   invoiceCurrency: string; // ISO 4217 currency code
   fxRate: number; // Exchange rate used
   transactionId: string; // Hedera transaction ID
+  correlationId?: string; // Optional correlation ID for tracing
+  idempotencyKey?: string; // Optional custom idempotency key
 }
 
 /**
@@ -68,6 +70,8 @@ export async function postHederaSettlement(
     invoiceCurrency,
     fxRate,
     transactionId,
+    correlationId,
+    idempotencyKey,
   } = params;
 
   loggers.ledger.info(
@@ -79,6 +83,7 @@ export async function postHederaSettlement(
       invoiceCurrency,
       fxRate,
       transactionId,
+      correlationId,
     },
     'Starting Hedera settlement posting'
   );
@@ -125,11 +130,12 @@ export async function postHederaSettlement(
   ];
 
   // Post entries atomically
+  // Use custom idempotencyKey if provided, otherwise fall back to transaction-based key
   await ledgerService.postJournalEntries({
     entries,
     paymentLinkId,
     organizationId,
-    idempotencyKey: `hedera-settlement-${transactionId}`,
+    idempotencyKey: idempotencyKey || `hedera-settlement-${transactionId}`,
   });
 
   // Log the posting for audit

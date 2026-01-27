@@ -11,6 +11,7 @@ import { prisma } from '@/lib/server/prisma';
 import type { TokenType } from '@/lib/hedera/constants';
 import { TOKEN_CONFIG } from '@/lib/hedera/constants';
 import { fromSmallestUnit } from '@/lib/hedera/token-service';
+import { generateCorrelationId } from '@/lib/services/correlation';
 
 const requestSchema = z.object({
   paymentLinkId: z.string().uuid(),
@@ -45,11 +46,46 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = requestSchema.parse(body);
 
+    // Generate correlation ID for tracing
+    const correlationId = generateCorrelationId('hedera', validated.transactionId);
+
     loggers.hedera.info('Manual transaction verification requested', {
       paymentLinkId: validated.paymentLinkId,
       transactionId: validated.transactionId,
       network: validated.network,
+      correlationId,
     });
+
+    // Check for existing event (idempotency)
+    const existingEvent = await prisma.payment_events.findFirst({
+      where: {
+        payment_link_id: validated.paymentLinkId,
+        OR: [
+          {
+            hedera_transaction_id: validated.transactionId,
+          },
+          {
+            correlation_id: correlationId,
+          },
+        ],
+      },
+    });
+
+    if (existingEvent) {
+      loggers.hedera.info('Transaction already processed - idempotent', {
+        paymentLinkId: validated.paymentLinkId,
+        transactionId: validated.transactionId,
+        correlationId,
+        existingEventId: existingEvent.id,
+      });
+      return NextResponse.json({
+        success: true,
+        alreadyProcessed: true,
+        message: 'Transaction already verified and processed',
+        paymentEventId: existingEvent.id,
+        correlationId,
+      });
+    }
 
     // Get payment link details
     const paymentLink = await prisma.payment_links.findUnique({
@@ -203,7 +239,13 @@ export async function POST(request: NextRequest) {
     );
 
     const now = new Date();
-    const idempotencyKey = `hedera-${validated.paymentLinkId}-${validated.transactionId}`;
+    // Use correlation_id as base for idempotency keys
+    const idempotencyKey = correlationId;
+
+    // Build Mirror Node URL for metadata
+    const mirrorUrl = validated.network === 'mainnet'
+      ? 'https://mainnet-public.mirrornode.hedera.com'
+      : 'https://testnet.mirrornode.hedera.com';
 
     // Update payment link and create records
     await prisma.$transaction([
@@ -225,14 +267,19 @@ export async function POST(request: NextRequest) {
           hedera_transaction_id: validated.transactionId,
           amount_received: amount.toString(),
           currency_received: tokenType,
+          correlation_id: correlationId,
           metadata: {
             transactionId: validated.transactionId,
             amount: amount.toString(),
             tokenType,
             sender,
             recipient,
-            timestamp: tx.consensus_timestamp,
+            consensus_timestamp: tx.consensus_timestamp,
             memo,
+            network: validated.network,
+            mirror_url: mirrorUrl,
+            payer_account_id: sender,
+            merchant_account_id: recipient,
             manuallyVerified: true,
           },
         },
@@ -272,6 +319,7 @@ export async function POST(request: NextRequest) {
     loggers.hedera.info('Payment manually verified and persisted', {
       paymentLinkId: validated.paymentLinkId,
       transactionId: validated.transactionId,
+      correlationId,
       amount,
       tokenType,
       sender,
@@ -281,6 +329,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Payment verified and processed successfully',
+      correlationId,
       transaction: {
         id: validated.transactionId,
         tokenType,

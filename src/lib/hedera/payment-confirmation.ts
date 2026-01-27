@@ -20,6 +20,7 @@ import {
   acquirePaymentLock,
   releasePaymentLock,
 } from '@/lib/payment/edge-case-handler';
+import { generateCorrelationId } from '@/lib/services/correlation';
 
 /**
  * Parameters for confirming a Hedera payment
@@ -64,12 +65,16 @@ export async function confirmHederaPayment(
     memo,
   } = params;
 
+  // Generate correlation ID for tracing
+  const correlationId = generateCorrelationId('hedera', transactionId);
+
   log.info(
     {
       paymentLinkId,
       transactionId,
       tokenType,
       amountReceived,
+      correlationId,
     },
     'Processing Hedera payment confirmation'
   );
@@ -86,6 +91,7 @@ export async function confirmHederaPayment(
       {
         paymentLinkId,
         transactionId,
+        correlationId,
         existingEventId: duplicateCheck.existingPaymentEventId,
       },
       'Duplicate payment detected - skipping'
@@ -139,6 +145,12 @@ export async function confirmHederaPayment(
       return; // Already processed
     }
 
+    // Determine network from environment
+    const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || 'testnet';
+    const mirrorUrl = network === 'mainnet'
+      ? 'https://mainnet-public.mirrornode.hedera.com'
+      : 'https://testnet.mirrornode.hedera.com';
+
     // Update payment link and create event in transaction
     await prisma.$transaction([
     // Update payment link status
@@ -155,24 +167,30 @@ export async function confirmHederaPayment(
         hedera_transaction_id: transactionId,
         amount_received: amountReceived,
         currency_received: paymentLink.currency, // Invoice currency
+        correlation_id: correlationId,
         metadata: {
           tokenType,
+          token_type: tokenType,
           sender,
+          payer_account_id: sender,
           memo,
           confirmedAt: new Date().toISOString(),
+          network,
+          mirror_url: mirrorUrl,
         },
       },
     }),
     ]);
 
-    log.info(
-      {
-        paymentLinkId,
-        transactionId,
-        tokenType,
-      },
-      'Payment link updated to PAID status'
-    );
+      log.info(
+        {
+          paymentLinkId,
+          transactionId,
+          correlationId,
+          tokenType,
+        },
+        'Payment link updated to PAID status'
+      );
 
     // Get FX snapshot for settlement
     const fxSnapshot = await prisma.fx_snapshots.findFirst({
@@ -205,6 +223,8 @@ export async function confirmHederaPayment(
         ? fxSnapshot.rate
         : parseFloat(fxSnapshot.rate.toString()),
       transactionId,
+      correlationId,
+      idempotencyKey: correlationId, // Use correlation_id for idempotency
       });
 
       // Validate balance
@@ -214,6 +234,7 @@ export async function confirmHederaPayment(
         {
           paymentLinkId,
           transactionId,
+          correlationId,
           tokenType,
           invoiceAmount: paymentLink.amount.toString(),
           currency: paymentLink.currency,
