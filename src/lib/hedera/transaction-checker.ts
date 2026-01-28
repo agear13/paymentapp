@@ -15,6 +15,7 @@ import type {
 import { fromSmallestUnit } from './token-service';
 import { prisma } from '@/lib/server/prisma';
 import { generateCorrelationId } from '@/lib/services/correlation';
+import { normalizeHederaTransactionId } from './txid';
 
 export interface CheckTransactionOptions {
   paymentLinkId: string;
@@ -329,23 +330,23 @@ async function updatePaymentLinkWithTransaction(
   tokenType: TokenType,
   network: 'testnet' | 'mainnet'
 ): Promise<{ success: boolean; error?: string }> {
-  // Generate correlation ID for tracing (at function scope for error logging)
-  const correlationId = generateCorrelationId('hedera', transaction.transactionId);
+  // Normalize transaction ID to canonical dash format for consistent storage
+  const normalizedTxId = normalizeHederaTransactionId(transaction.transactionId);
+  
+  // Generate correlation ID from normalized transaction ID
+  const correlationId = generateCorrelationId('hedera', normalizedTxId);
   
   try {
     
     // Check if this transaction was already recorded (idempotency)
-    // Check both hedera_transaction_id AND correlation_id
+    // Check both formats for backwards compatibility with mixed writes
     const existingEvent = await prisma.payment_events.findFirst({
       where: {
         payment_link_id: paymentLinkId,
         OR: [
-          {
-            hedera_transaction_id: transaction.transactionId,
-          },
-          {
-            correlation_id: correlationId,
-          },
+          { hedera_transaction_id: normalizedTxId },
+          { hedera_transaction_id: transaction.transactionId },
+          { correlation_id: correlationId },
         ],
       },
     });
@@ -426,12 +427,14 @@ async function updatePaymentLinkWithTransaction(
           payment_link_id: paymentLinkId,
           event_type: 'PAYMENT_CONFIRMED' as const,
           payment_method: 'HEDERA' as const,
-          hedera_transaction_id: transaction.transactionId,
+          hedera_transaction_id: normalizedTxId,
           amount_received: transaction.amount,
           currency_received: tokenType,
           correlation_id: correlationId,
           metadata: {
             transactionId: transaction.transactionId,
+            raw_transaction_id: transaction.transactionId,
+            normalized_transaction_id: normalizedTxId,
             amount: transaction.amount,
             tokenType,
             sender: transaction.sender,
@@ -453,7 +456,7 @@ async function updatePaymentLinkWithTransaction(
           entry_type: 'DEBIT' as const,
           amount: paymentLink.amount,
           currency: paymentLink.currency,
-          description: `${tokenType} payment received - ${transaction.transactionId}`,
+          description: `${tokenType} payment received - ${normalizedTxId}`,
           idempotency_key: `${idempotencyKey}-debit`,
           created_at: now,
         },
@@ -466,7 +469,7 @@ async function updatePaymentLinkWithTransaction(
           entry_type: 'CREDIT' as const,
           amount: paymentLink.amount,
           currency: paymentLink.currency,
-          description: `${tokenType} payment received - ${transaction.transactionId}`,
+          description: `${tokenType} payment received - ${normalizedTxId}`,
           idempotency_key: `${idempotencyKey}-credit`,
           created_at: now,
         },

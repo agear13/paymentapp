@@ -21,6 +21,7 @@ import {
   releasePaymentLock,
 } from '@/lib/payment/edge-case-handler';
 import { generateCorrelationId } from '@/lib/services/correlation';
+import { normalizeHederaTransactionId } from './txid';
 
 /**
  * Parameters for confirming a Hedera payment
@@ -65,13 +66,17 @@ export async function confirmHederaPayment(
     memo,
   } = params;
 
-  // Generate correlation ID for tracing
-  const correlationId = generateCorrelationId('hedera', transactionId);
+  // Normalize transaction ID to canonical dash format for consistent storage
+  const normalizedTxId = normalizeHederaTransactionId(transactionId);
+  
+  // Generate correlation ID from normalized transaction ID
+  const correlationId = generateCorrelationId('hedera', normalizedTxId);
 
   log.info(
     {
       paymentLinkId,
       transactionId,
+      normalizedTxId,
       tokenType,
       amountReceived,
       correlationId,
@@ -164,11 +169,13 @@ export async function confirmHederaPayment(
         payment_link_id: paymentLinkId,
         event_type: 'PAYMENT_CONFIRMED',
         payment_method: 'HEDERA',
-        hedera_transaction_id: transactionId,
+        hedera_transaction_id: normalizedTxId,
         amount_received: amountReceived,
         currency_received: paymentLink.currency, // Invoice currency
         correlation_id: correlationId,
         metadata: {
+          raw_transaction_id: transactionId,
+          normalized_transaction_id: normalizedTxId,
           tokenType,
           token_type: tokenType,
           sender,

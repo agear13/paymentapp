@@ -12,6 +12,7 @@ import type { TokenType } from '@/lib/hedera/constants';
 import { TOKEN_CONFIG } from '@/lib/hedera/constants';
 import { fromSmallestUnit } from '@/lib/hedera/token-service';
 import { generateCorrelationId } from '@/lib/services/correlation';
+import { normalizeHederaTransactionId } from '@/lib/hedera/txid';
 
 const requestSchema = z.object({
   paymentLinkId: z.string().uuid(),
@@ -46,27 +47,29 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = requestSchema.parse(body);
 
-    // Generate correlation ID for tracing
-    const correlationId = generateCorrelationId('hedera', validated.transactionId);
+    // Normalize transaction ID to canonical dash format for consistent storage
+    const normalizedTxId = normalizeHederaTransactionId(validated.transactionId);
+    
+    // Generate correlation ID from normalized transaction ID
+    const correlationId = generateCorrelationId('hedera', normalizedTxId);
 
     loggers.hedera.info('Manual transaction verification requested', {
       paymentLinkId: validated.paymentLinkId,
       transactionId: validated.transactionId,
+      normalizedTxId,
       network: validated.network,
       correlationId,
     });
 
     // Check for existing event (idempotency)
+    // Check both formats for backwards compatibility with mixed writes
     const existingEvent = await prisma.payment_events.findFirst({
       where: {
         payment_link_id: validated.paymentLinkId,
         OR: [
-          {
-            hedera_transaction_id: validated.transactionId,
-          },
-          {
-            correlation_id: correlationId,
-          },
+          { hedera_transaction_id: normalizedTxId },
+          { hedera_transaction_id: validated.transactionId },
+          { correlation_id: correlationId },
         ],
       },
     });
@@ -112,6 +115,7 @@ export async function POST(request: NextRequest) {
         success: true,
         alreadyPaid: true,
         message: 'Payment link already marked as paid',
+        correlationId,
       });
     }
 
@@ -120,17 +124,13 @@ export async function POST(request: NextRequest) {
       ? 'https://mainnet-public.mirrornode.hedera.com'
       : 'https://testnet.mirrornode.hedera.com';
 
-    // Convert transaction ID format from HashPack format to Mirror Node format
-    // HashPack format: 0.0.5363033@1769582713.055549545
-    // Mirror Node format: 0.0.5363033-1769582713-055549545
-    const [accountId, timestamp] = validated.transactionId.split('@');
-    const [seconds, nanos] = timestamp.split('.');
-    const mirrorTxId = `${accountId}-${seconds}-${nanos}`;
-    const txUrl = `${mirrorUrl}/api/v1/transactions/${mirrorTxId}`;
+    // Mirror Node API requires dash format (not @ format)
+    // Use normalized txId which is already in the correct format
+    const txUrl = `${mirrorUrl}/api/v1/transactions/${normalizedTxId}`;
     
     loggers.hedera.info('Querying mirror node for transaction', {
       transactionId: validated.transactionId,
-      mirrorTxId,
+      normalizedTxId,
       url: txUrl,
       correlationId,
     });
@@ -372,12 +372,14 @@ export async function POST(request: NextRequest) {
           payment_link_id: validated.paymentLinkId,
           event_type: 'PAYMENT_CONFIRMED',
           payment_method: 'HEDERA',
-          hedera_transaction_id: validated.transactionId,
+          hedera_transaction_id: normalizedTxId,
           amount_received: amount.toString(),
           currency_received: tokenType,
           correlation_id: correlationId,
           metadata: {
             transactionId: validated.transactionId,
+            raw_transaction_id: validated.transactionId,
+            normalized_transaction_id: normalizedTxId,
             amount: amount.toString(),
             tokenType,
             sender,
@@ -401,7 +403,7 @@ export async function POST(request: NextRequest) {
           entry_type: 'DEBIT',
           amount: paymentLink.amount,
           currency: paymentLink.currency,
-          description: `${tokenType} payment received - ${validated.transactionId} (manual verification)`,
+          description: `${tokenType} payment received - ${normalizedTxId} (manual verification)`,
           idempotency_key: `${idempotencyKey}-debit`,
           created_at: now,
         },
@@ -415,7 +417,7 @@ export async function POST(request: NextRequest) {
           entry_type: 'CREDIT',
           amount: paymentLink.amount,
           currency: paymentLink.currency,
-          description: `${tokenType} payment received - ${validated.transactionId} (manual verification)`,
+          description: `${tokenType} payment received - ${normalizedTxId} (manual verification)`,
           idempotency_key: `${idempotencyKey}-credit`,
           created_at: now,
         },
