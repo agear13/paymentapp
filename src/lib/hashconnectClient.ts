@@ -438,65 +438,13 @@ export async function openHashpackPairingModal(retryCount: number = 0): Promise<
   try {
     console.log('[HashConnect] Opening pairing modal...');
     
-    // HashConnect v3.0.14: Must initialize SignClient before generating pairing string
-    // Only initialize if not already initialized
-    if (!(hc as any).signClient) {
-      console.log('[HashConnect] SignClient not initialized - calling init() with 10s timeout...');
-      const initFn = (hc as any).init;
-      
-      if (typeof initFn === 'function') {
-        try {
-          // Call init() with 10-second timeout
-          await Promise.race([
-            initFn.call(hc),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('SignClient initialization timed out after 10 seconds')), 10000)
-            )
-          ]);
-          console.log('[HashConnect] ✅ SignClient initialized successfully');
-        } catch (initError: any) {
-          console.error('[HashConnect] Failed to initialize SignClient:', initError);
-          throw new Error(
-            'Failed to initialize wallet connection. This may be due to:\n' +
-            '1. Missing or invalid WalletConnect project ID\n' +
-            '2. Network connectivity issues\n' +
-            '3. Browser extensions blocking the connection\n\n' +
-            'Please refresh the page and try again. If the issue persists, try disabling browser extensions or using a different browser.'
-          );
-        }
-      } else {
-        console.error('[HashConnect] init() method not found on HashConnect instance');
-        throw new Error('HashConnect initialization method not available. Please refresh the page.');
-      }
-    } else {
-      console.log('[HashConnect] ✅ SignClient already initialized');
-    }
+    // HashConnect v3.0.14: init() has a critical bug and hangs forever
+    // Skip init() and generatePairingString() entirely - openPairingModal() handles initialization internally
+    console.log('[HashConnect] Calling openPairingModal() directly (will handle initialization internally)...');
     
-    // HashConnect v3: Generate pairing string first if we don't have one
-    if (!pairingString) {
-      const generatePairingStringFn = (hc as any).generatePairingString;
-      if (typeof generatePairingStringFn === 'function') {
-        console.log('[HashConnect] Generating pairing string...');
-        try {
-          pairingString = await generatePairingStringFn.call(hc);
-          console.log('[HashConnect] Pairing string generated:', pairingString ? 'success' : 'failed');
-        } catch (genError: any) {
-          console.error('[HashConnect] Failed to generate pairing string:', genError);
-          throw new Error(`Pairing string generation failed: ${genError.message}`);
-        }
-      } else {
-        console.warn('[HashConnect] generatePairingString not available, modal may not work properly');
-      }
-    }
-    
-    // Call openPairingModal - try with pairing string first, then without
-    if (pairingString) {
-      console.log('[HashConnect] Calling openPairingModal(pairingString)');
-      await openModalFn.call(hc, pairingString);
-    } else {
-      console.log('[HashConnect] Calling openPairingModal() with no arguments');
-      await openModalFn.call(hc);
-    }
+    // Call openPairingModal without any arguments
+    // The modal will initialize WalletConnect internally and display the QR code
+    await openModalFn.call(hc);
     
     console.log('[HashConnect] Pairing modal opened successfully');
   } catch (err) {
