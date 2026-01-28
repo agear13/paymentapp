@@ -131,8 +131,9 @@ export async function POST(request: NextRequest) {
     });
     
     // Retry logic: Mirror nodes take 3-10s to index transactions
-    const maxRetries = 5;
-    const retryDelays = [2000, 3000, 3000, 4000, 5000]; // Total: ~17 seconds
+    // Reduced retries to prevent 502 timeouts on Render (30s limit)
+    const maxRetries = 2;
+    const retryDelays = [3000, 5000]; // Total: ~8 seconds max
     let lastError: Error | null = null;
     let data: { transactions?: MirrorTransaction[] } | null = null;
 

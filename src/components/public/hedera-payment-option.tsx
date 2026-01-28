@@ -451,15 +451,16 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(verifyRequest),
-          signal: AbortSignal.timeout(15000), // 15 second timeout
+          signal: AbortSignal.timeout(25000), // 25 second timeout (increased for slow mirror node)
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
           console.error('[Payment Verification] API error:', response.status, errorData);
           
-          // If transaction not found on mirror node yet, keep retrying
-          if (response.status === 404 && attempts < maxAttempts) {
+          // If transaction not found on mirror node yet OR server error, keep retrying
+          if ((response.status === 404 || response.status === 502 || response.status === 503) && attempts < maxAttempts) {
+            console.log(`[Payment Verification] Retrying due to ${response.status} error...`);
             return false; // Keep trying
           }
           

@@ -207,45 +207,10 @@ export async function initHashConnect(): Promise<void> {
         console.log('[HashConnect] ledgerId:', ledgerId);
         console.log('[HashConnect] projectId present:', !!projectId);
 
-        // HashConnect v3.0.14: Initialize the internal WalletConnect client
-        // The constructor creates the instance, but we need to explicitly init the WalletConnect client
-        try {
-          // Check if init() method exists (it should be on the prototype or instance)
-          const initFn = (hashconnect as any).init;
-          
-          if (typeof initFn === 'function') {
-            console.log('[HashConnect] Calling init() to initialize WalletConnect client...');
-            
-            // Try calling init() - it should initialize the internal WalletConnect client
-            // HashConnect v3 may expect init() with no args (metadata already in constructor)
-            try {
-              await initFn.call(hashconnect);
-              console.log('[HashConnect] ✅ init() completed successfully');
-            } catch (initError: any) {
-              // If no-args fails, the constructor may have done everything
-              console.log('[HashConnect] init() call resulted in:', initError.message);
-              console.log('[HashConnect] This may be normal if init is not needed');
-            }
-          } else {
-            console.log('[HashConnect] No init() method found - WalletConnect client should be ready');
-          }
-          
-          // Brief wait to ensure WalletConnect client is fully ready
-          console.log('[HashConnect] Waiting for WalletConnect client to be ready...');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Verify WalletConnect client is initialized
-          if ((hashconnect as any).hcData) {
-            console.log('[HashConnect] ✅ WalletConnect client (hcData) is ready');
-          } else {
-            console.warn('[HashConnect] ⚠️ WalletConnect client (hcData) is still undefined');
-          }
-          
-          console.log('[HashConnect] ✅ Ready for pairing');
-        } catch (initError: any) {
-          console.error('[HashConnect] Failed to initialize WalletConnect client:', initError);
-          throw new Error(`Failed to initialize HashConnect: ${initError.message}`);
-        }
+        // ✅ HashConnect v3.0.14: NO init() call needed!
+        // The constructor (new HashConnect(...)) already initializes everything
+        console.log('[HashConnect] ✅ Initialized via constructor (HashConnect v3.0.14)');
+        console.log('[HashConnect] Ready for pairing - no async init required');
         
         // Clean up any old/stale sessions after initialization
         console.log('[HashConnect] Checking for old sessions to clean up...');
