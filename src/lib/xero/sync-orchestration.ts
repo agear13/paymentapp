@@ -237,6 +237,18 @@ export async function syncPaymentToXero(
       },
     });
 
+    // Step 4: Update payment_links with Xero invoice number (idempotent - only if null)
+    await prisma.payment_links.updateMany({
+      where: { 
+        id: paymentLinkId,
+        xero_invoice_number: null,
+      },
+      data: { 
+        xero_invoice_number: invoiceResult.invoiceNumber,
+        updated_at: new Date(),
+      },
+    });
+
     console.log('Xero sync complete:', {
       syncRecordId: syncRecord.id,
       invoiceNumber: invoiceResult.invoiceNumber,

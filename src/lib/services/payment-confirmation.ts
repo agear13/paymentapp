@@ -263,11 +263,19 @@ export async function confirmPayment(
             data: {
               id: crypto.randomUUID(),
               payment_link_id: paymentLinkId,
-              organization_id: paymentLink.organization_id,
               sync_type: 'INVOICE',
               status: 'PENDING',
-              correlation_id: correlationId,
+              request_payload: {
+                paymentLinkId,
+                organizationId: paymentLink.organization_id,
+                correlationId,
+                queuedBy: 'payment-confirmation',
+                queuedAt: new Date().toISOString(),
+              },
+              retry_count: 0,
+              next_retry_at: new Date(),
               created_at: new Date(),
+              updated_at: new Date(),
             },
           });
 
