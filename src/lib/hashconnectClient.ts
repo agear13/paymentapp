@@ -171,9 +171,8 @@ export async function initHashConnect(): Promise<void> {
 
         const initFn = (hashconnect as any).init;
 
-        // Check if init method exists as an OWN property (HashConnect v3+ doesn't have init method)
-        // We check hasOwnProperty to avoid calling methods from the prototype chain
-        const hasInitMethod = hashconnect.hasOwnProperty('init') && typeof initFn === 'function';
+        // Check if init method exists (on instance OR prototype chain)
+        const hasInitMethod = typeof initFn === 'function';
         
         if (hasInitMethod) {
           console.log('[HashConnect] init method found, attempting to call it...');
@@ -234,24 +233,14 @@ export async function initHashConnect(): Promise<void> {
           console.log('[HashConnect] Init method completed successfully');
         } else {
           // No init method - initialization happens in constructor
-          console.log('[HashConnect] ✅ No init method found - HashConnect v3 initialized via constructor');
-          console.log('[HashConnect] This is normal for HashConnect v3.0+');
+          console.log('[HashConnect] ⚠️ No init method found - this is unusual for HashConnect v3.0.14');
+          console.log('[HashConnect] WalletConnect client may not be properly initialized');
         }
         
-        // HashConnect v3: Call connect() to initialize the WalletConnect client
-        const connectFn = (hashconnect as any).connect;
-        if (typeof connectFn === 'function') {
-          console.log('[HashConnect] Initializing WalletConnect client...');
-          try {
-            await connectFn.call(hashconnect);
-            console.log('[HashConnect] WalletConnect client initialized');
-          } catch (error: any) {
-            console.warn('[HashConnect] connect() failed, but continuing:', error.message);
-            // Don't throw - some versions might not need this
-          }
-        }
+        // Brief wait to ensure WalletConnect client is ready
+        await new Promise(resolve => setTimeout(resolve, 500));
         
-        console.log('[HashConnect] Ready - pairing string will be generated when modal opens');
+        console.log('[HashConnect] ✅ Initialization complete - ready for pairing');
         
         // Clean up any old/stale sessions after initialization
         console.log('[HashConnect] Checking for old sessions to clean up...');
