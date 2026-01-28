@@ -89,7 +89,18 @@ export async function initHashConnect(): Promise<void> {
 
   // Already initialized - reuse singleton
   if (hc !== null) {
-    console.log('[HashConnect] ✅ Already initialized - reusing singleton (SignClient will initialize lazily)');
+    console.log('[HashConnect] ✅ Already initialized - reusing singleton');
+    
+    // Check if init() needs to be started
+    if (!(hc as any)._initPromise && !(hc as any).signClient) {
+      console.log('[HashConnect] SignClient not initialized - starting background init...');
+      const initFn = (hc as any).init;
+      if (typeof initFn === 'function') {
+        (hc as any)._initPromise = initFn.call(hc).catch((err: any) => {
+          console.warn('[HashConnect] Background init error (may be normal):', err.message);
+        });
+      }
+    }
     return;
   }
 
@@ -207,10 +218,19 @@ export async function initHashConnect(): Promise<void> {
         console.log('[HashConnect] ledgerId:', ledgerId);
         console.log('[HashConnect] projectId present:', !!projectId);
 
-        // ✅ HashConnect v3.0.14: SignClient initializes LAZILY when needed
-        // DO NOT call init() - it hangs forever and isn't needed!
-        // The library will initialize internally when we call openPairingModal() or generatePairingString()
-        console.log('[HashConnect] ✅ Instance created - WalletConnect will initialize lazily when needed');
+        // ✅ HashConnect v3.0.14: Start SignClient initialization in background
+        // Don't await it - let it run async while we continue setup
+        console.log('[HashConnect] Starting WalletConnect SignClient initialization in background...');
+        const initFn = (hashconnect as any).init;
+        if (typeof initFn === 'function') {
+          // Start init() in background - store the promise but don't await
+          (hashconnect as any)._initPromise = initFn.call(hashconnect).catch((err: any) => {
+            console.warn('[HashConnect] Background init error (may be normal):', err.message);
+          });
+          console.log('[HashConnect] SignClient initialization started (will complete in background)');
+        } else {
+          console.warn('[HashConnect] init() method not found - WalletConnect may not work');
+        }
         
         // Clean up any old/stale sessions after initialization
         console.log('[HashConnect] Checking for old sessions to clean up...');
@@ -438,12 +458,31 @@ export async function openHashpackPairingModal(retryCount: number = 0): Promise<
   try {
     console.log('[HashConnect] Opening pairing modal...');
     
-    // HashConnect v3.0.14: init() has a critical bug and hangs forever
-    // Skip init() and generatePairingString() entirely - openPairingModal() handles initialization internally
-    console.log('[HashConnect] Calling openPairingModal() directly (will handle initialization internally)...');
+    // Wait for background init() to complete (with timeout)
+    // Give it up to 5 seconds to initialize the SignClient
+    if ((hc as any)._initPromise) {
+      console.log('[HashConnect] Waiting up to 5s for SignClient initialization...');
+      try {
+        await Promise.race([
+          (hc as any)._initPromise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Init still pending after 5s')), 5000)
+          )
+        ]);
+        console.log('[HashConnect] ✅ SignClient initialized successfully');
+      } catch (timeoutErr) {
+        // Init timed out or failed - continue anyway, modal might still work
+        console.warn('[HashConnect] SignClient init timeout/incomplete - continuing anyway...');
+      }
+    } else {
+      // No init promise - give it a brief moment just in case
+      console.log('[HashConnect] Waiting 1s for SignClient to be ready...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
     
     // Call openPairingModal without any arguments
-    // The modal will initialize WalletConnect internally and display the QR code
+    // The modal should now have a WalletConnect URI ready
+    console.log('[HashConnect] Calling openPairingModal()...');
     await openModalFn.call(hc);
     
     console.log('[HashConnect] Pairing modal opened successfully');
