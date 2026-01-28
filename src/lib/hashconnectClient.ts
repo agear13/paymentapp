@@ -87,37 +87,9 @@ export async function initHashConnect(): Promise<void> {
     throw new Error('HashConnect must run on client (window is undefined)');
   }
 
-  // Already initialized - ensure SignClient is initialized too
+  // Already initialized - reuse singleton
   if (hc !== null) {
-    console.log('[HashConnect] Already initialized - reusing singleton');
-    
-    // Check if SignClient needs initialization
-    if (!(hc as any).signClient && !(hc as any)._initPromise) {
-      console.log('[HashConnect] SignClient not initialized - starting background init...');
-      
-      // Start init() in background with timeout protection
-      const initFn = (hc as any).init;
-      if (typeof initFn === 'function') {
-        // Wrap init() with a 3-second timeout
-        const initWithTimeout = Promise.race([
-          initFn.call(hc),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Init timeout after 3s')), 3000)
-          )
-        ]);
-        
-        (hc as any)._initPromise = initWithTimeout.then(() => {
-          console.log('[HashConnect] ✅ Background SignClient init completed');
-          delete (hc as any)._initPromise;
-        }).catch((err: any) => {
-          console.warn('[HashConnect] Background SignClient init failed/timeout (continuing anyway):', err.message);
-          delete (hc as any)._initPromise;
-        });
-      }
-    } else if ((hc as any).signClient) {
-      console.log('[HashConnect] SignClient already initialized ✅');
-    }
-    
+    console.log('[HashConnect] ✅ Already initialized - reusing singleton (SignClient will initialize lazily)');
     return;
   }
 
@@ -235,30 +207,10 @@ export async function initHashConnect(): Promise<void> {
         console.log('[HashConnect] ledgerId:', ledgerId);
         console.log('[HashConnect] projectId present:', !!projectId);
 
-        // ✅ HashConnect v3.0.14: Start SignClient initialization in background
-        // Don't await it here - let it initialize while we set up event listeners
-        // We'll wait for it when we actually need to generate a pairing string
-        console.log('[HashConnect] Starting WalletConnect SignClient initialization...');
-        const initFn = (hashconnect as any).init;
-        if (typeof initFn === 'function') {
-          // Start init in background with 3s timeout - don't await
-          const initWithTimeout = Promise.race([
-            initFn.call(hashconnect),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Init timeout after 3s')), 3000)
-            )
-          ]);
-          
-          initWithTimeout
-            .then(() => console.log('[HashConnect] ✅ Background init completed'))
-            .catch((err: any) => {
-              console.warn('[HashConnect] Background init failed/timeout (continuing anyway):', err.message);
-            });
-          
-          console.log('[HashConnect] SignClient initialization started in background');
-        } else {
-          console.log('[HashConnect] No init() method found - SignClient may initialize lazily');
-        }
+        // ✅ HashConnect v3.0.14: SignClient initializes LAZILY when needed
+        // DO NOT call init() - it hangs forever and isn't needed!
+        // The library will initialize internally when we call openPairingModal() or generatePairingString()
+        console.log('[HashConnect] ✅ Instance created - WalletConnect will initialize lazily when needed');
         
         // Clean up any old/stale sessions after initialization
         console.log('[HashConnect] Checking for old sessions to clean up...');
@@ -486,57 +438,9 @@ export async function openHashpackPairingModal(retryCount: number = 0): Promise<
   try {
     console.log('[HashConnect] Opening pairing modal...');
     
-    // HashConnect v3: Wait for WalletConnect SignClient to be ready
-    // First, wait for any in-progress init() to complete (with timeout)
-    if ((hc as any)._initPromise) {
-      console.log('[HashConnect] Waiting for background init() to complete...');
-      try {
-        await Promise.race([
-          (hc as any)._initPromise,
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Init wait timeout')), 3000)
-          )
-        ]);
-        console.log('[HashConnect] Background init() completed');
-      } catch (err: any) {
-        console.warn('[HashConnect] Background init() wait failed/timeout (continuing anyway):', err.message);
-      }
-    }
-    
-    // Then check if SignClient is ready, with fallback wait
-    const maxWaitTime = 2000; // 2 seconds max wait
-    const startTime = Date.now();
-    
-    while (!(hc as any).signClient && (Date.now() - startTime) < maxWaitTime) {
-      console.log('[HashConnect] Waiting for SignClient to be ready...');
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-    
-    // If SignClient still not ready, try to force initialization
-    if (!(hc as any).signClient) {
-      console.warn('[HashConnect] SignClient not ready after wait, trying to proceed anyway...');
-      console.log('[HashConnect] Available HashConnect keys:', Object.keys(hc));
-      
-      // Last resort: Try calling init() directly one more time with short timeout
-      const initFn = (hc as any).init;
-      if (typeof initFn === 'function') {
-        console.log('[HashConnect] Attempting emergency init()...');
-        try {
-          await Promise.race([
-            initFn.call(hc),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Emergency init timeout')), 2000))
-          ]);
-          console.log('[HashConnect] Emergency init() succeeded');
-        } catch {
-          console.error('[HashConnect] Emergency init() also failed');
-          throw new Error('Unable to initialize HashConnect wallet connection. Please refresh the page and try again.');
-        }
-      } else {
-        throw new Error('HashConnect SignClient unavailable. Please refresh the page and try again.');
-      }
-    }
-    
-    console.log('[HashConnect] ✅ SignClient is ready');
+    // HashConnect v3.0.14: SignClient initializes LAZILY when we call generatePairingString or openPairingModal
+    // Don't wait for init() - just proceed directly. The library handles initialization internally.
+    console.log('[HashConnect] Proceeding with pairing (SignClient will initialize lazily if needed)');
     
     // HashConnect v3: Generate pairing string first if we don't have one
     if (!pairingString) {
