@@ -169,78 +169,15 @@ export async function initHashConnect(): Promise<void> {
         console.log('[HashConnect] ledgerId:', ledgerId);
         console.log('[HashConnect] projectId present:', !!projectId);
 
-        const initFn = (hashconnect as any).init;
-
-        // Check if init method exists (on instance OR prototype chain)
-        const hasInitMethod = typeof initFn === 'function';
+        // HashConnect v3.0.14+ initializes via constructor - no init() call needed
+        // The library will initialize its internal WalletConnect client automatically
+        console.log('[HashConnect] ✅ Initialized via constructor (HashConnect v3.0.14)');
+        console.log('[HashConnect] No init() call needed - initialization is automatic');
         
-        if (hasInitMethod) {
-          console.log('[HashConnect] init method found, attempting to call it...');
-          
-          // Helper to wrap init call with timeout
-          const initWithTimeout = async (fn: () => Promise<any>, signature: string, timeoutMs: number = 10000) => {
-            return Promise.race([
-              fn(),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error(`Init timeout after ${timeoutMs}ms`)), timeoutMs)
-              )
-            ]).then(() => {
-              console.log(`[HashConnect] init succeeded with ${signature}`);
-              return true;
-            }).catch((error: any) => {
-              console.warn(`[HashConnect] init ${signature} failed:`, error.message);
-              throw error;
-            });
-          };
-
-          // Try both common HashConnect v3 init signatures with timeout protection
-          let initSucceeded = false;
-          
-          try {
-            // Signature #1: init() - no args (metadata in constructor)
-            await initWithTimeout(
-              () => initFn.call(hashconnect),
-              'signature A (no args)'
-            );
-            initSucceeded = true;
-          } catch (e1) {
-            try {
-              // Signature #2: init(metadata, network, multiAccount)
-              await initWithTimeout(
-                () => initFn.call(hashconnect, metadata, ledgerId, false),
-                'signature B (metadata params)'
-              );
-              initSucceeded = true;
-            } catch (e2) {
-              try {
-                // Signature #3: init(projectId, metadata, network, multiAccount)
-                await initWithTimeout(
-                  () => initFn.call(hashconnect, projectId, metadata, ledgerId, false),
-                  'signature C (projectId first)'
-                );
-                initSucceeded = true;
-              } catch (e3) {
-                console.error('[HashConnect] All init signatures failed');
-                throw new Error(`Failed to initialize HashConnect: ${(e3 as Error).message}`);
-              }
-            }
-          }
-          
-          if (!initSucceeded) {
-            throw new Error('HashConnect initialization did not succeed');
-          }
-          
-          console.log('[HashConnect] Init method completed successfully');
-        } else {
-          // No init method - initialization happens in constructor
-          console.log('[HashConnect] ⚠️ No init method found - this is unusual for HashConnect v3.0.14');
-          console.log('[HashConnect] WalletConnect client may not be properly initialized');
-        }
+        // Brief wait to ensure WalletConnect client is fully ready
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // Brief wait to ensure WalletConnect client is ready
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        console.log('[HashConnect] ✅ Initialization complete - ready for pairing');
+        console.log('[HashConnect] ✅ Ready for pairing');
         
         // Clean up any old/stale sessions after initialization
         console.log('[HashConnect] Checking for old sessions to clean up...');
