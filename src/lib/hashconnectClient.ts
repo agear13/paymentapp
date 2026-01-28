@@ -87,9 +87,29 @@ export async function initHashConnect(): Promise<void> {
     throw new Error('HashConnect must run on client (window is undefined)');
   }
 
-  // Already initialized - return immediately
+  // Already initialized - ensure SignClient is initialized too
   if (hc !== null) {
     console.log('[HashConnect] Already initialized - reusing singleton');
+    
+    // Check if SignClient needs initialization
+    if (!(hc as any).signClient && !(hc as any)._initPromise) {
+      console.log('[HashConnect] SignClient not initialized - starting background init...');
+      
+      // Start init() in background and store the promise
+      const initFn = (hc as any).init;
+      if (typeof initFn === 'function') {
+        (hc as any)._initPromise = initFn.call(hc).then(() => {
+          console.log('[HashConnect] Background SignClient init completed');
+          delete (hc as any)._initPromise;
+        }).catch((err: any) => {
+          console.warn('[HashConnect] Background SignClient init error:', err.message);
+          delete (hc as any)._initPromise;
+        });
+      }
+    } else if ((hc as any).signClient) {
+      console.log('[HashConnect] SignClient already initialized ✅');
+    }
+    
     return;
   }
 
@@ -449,18 +469,28 @@ export async function openHashpackPairingModal(retryCount: number = 0): Promise<
     console.log('[HashConnect] Opening pairing modal...');
     
     // HashConnect v3: Wait for WalletConnect SignClient to be ready
-    // The SignClient is initialized in the background during initHashConnect()
-    // We need to wait for it to be ready before generating a pairing string
-    const maxWaitTime = 5000; // 5 seconds max wait
+    // First, wait for any in-progress init() to complete
+    if ((hc as any)._initPromise) {
+      console.log('[HashConnect] Waiting for background init() to complete...');
+      try {
+        await (hc as any)._initPromise;
+        console.log('[HashConnect] Background init() completed');
+      } catch (err: any) {
+        console.error('[HashConnect] Background init() failed:', err);
+      }
+    }
+    
+    // Then check if SignClient is ready, with fallback wait
+    const maxWaitTime = 3000; // 3 seconds max wait
     const startTime = Date.now();
     
     while (!(hc as any).signClient && (Date.now() - startTime) < maxWaitTime) {
-      console.log('[HashConnect] Waiting for SignClient to initialize...');
+      console.log('[HashConnect] Waiting for SignClient to be ready...');
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     if (!(hc as any).signClient) {
-      console.error('[HashConnect] SignClient still not ready after 5s wait');
+      console.error('[HashConnect] SignClient still not ready after wait. Available keys:', Object.keys(hc));
       throw new Error('WalletConnect SignClient failed to initialize. Please refresh and try again.');
     }
     
