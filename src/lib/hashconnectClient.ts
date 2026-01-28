@@ -468,9 +468,20 @@ export async function openHashpackPairingModal(retryCount: number = 0): Promise<
   try {
     console.log('[HashConnect] Opening pairing modal...');
     
-    // Prefer calling with no arguments (v3+ generates pairing string internally)
-    // If openPairingModal.length > 0 and we have a pairingString, pass it
-    if (openModalFn.length > 0 && pairingString) {
+    // HashConnect v3: Generate pairing string first if we don't have one
+    if (!pairingString) {
+      const generatePairingStringFn = (hc as any).generatePairingString;
+      if (typeof generatePairingStringFn === 'function') {
+        console.log('[HashConnect] Generating pairing string...');
+        pairingString = await generatePairingStringFn.call(hc);
+        console.log('[HashConnect] Pairing string generated:', pairingString ? 'success' : 'failed');
+      } else {
+        console.warn('[HashConnect] generatePairingString not available, modal may not work properly');
+      }
+    }
+    
+    // Call openPairingModal - try with pairing string first, then without
+    if (pairingString) {
       console.log('[HashConnect] Calling openPairingModal(pairingString)');
       await openModalFn.call(hc, pairingString);
     } else {
