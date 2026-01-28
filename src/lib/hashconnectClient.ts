@@ -113,6 +113,44 @@ export async function initHashConnect(): Promise<void> {
         );
       }
 
+      // Pre-initialization cleanup: Clear any corrupted WalletConnect sessions
+      // This fixes the hang issue when there are stale sessions from previous browser sessions
+      try {
+        console.log('[HashConnect] 🧹 Pre-init cleanup: Clearing corrupted WalletConnect sessions...');
+        
+        // Check for corrupted WalletConnect data in localStorage
+        const storageKeys = Object.keys(localStorage);
+        const wcKeys = storageKeys.filter(key => 
+          key.startsWith('wc@2:') || 
+          key.startsWith('WALLETCONNECT_') ||
+          key.includes('wallet_connect')
+        );
+        
+        if (wcKeys.length > 0) {
+          console.log(`[HashConnect] Found ${wcKeys.length} WalletConnect keys in localStorage`);
+          
+          // Only clear if there are signs of corruption (excessive keys or old timestamps)
+          if (wcKeys.length > 10) {
+            console.log('[HashConnect] ⚠️  Excessive WalletConnect keys detected, clearing all...');
+            wcKeys.forEach(key => {
+              try {
+                localStorage.removeItem(key);
+              } catch {
+                // Ignore errors - some keys might be read-only
+              }
+            });
+            console.log('[HashConnect] ✅ Cleared all WalletConnect keys');
+          } else {
+            console.log('[HashConnect] WalletConnect key count is normal, keeping existing sessions');
+          }
+        } else {
+          console.log('[HashConnect] No WalletConnect keys found in localStorage');
+        }
+      } catch (cleanupError) {
+        // Don't fail initialization if cleanup fails
+        console.warn('[HashConnect] Pre-init cleanup failed (non-fatal):', cleanupError);
+      }
+
       // Dynamic import (client-only)
       const hashconnectModule = await import('hashconnect');
       const { HashConnect } = hashconnectModule;

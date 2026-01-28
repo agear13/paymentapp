@@ -424,6 +424,10 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
       return;
     }
 
+    // Give mirror node a head start (2 seconds) to index the transaction
+    console.log('[Payment Verification] Waiting 2s for mirror node to index transaction...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     const maxAttempts = 20; // Try for ~1 minute (20 * 3s)
     let attempts = 0;
 

@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Fetch transaction from mirror node
+    // Fetch transaction from mirror node with retry logic
     const mirrorUrl = validated.network === 'mainnet'
       ? 'https://mainnet-public.mirrornode.hedera.com'
       : 'https://testnet.mirrornode.hedera.com';
@@ -130,23 +130,104 @@ export async function POST(request: NextRequest) {
       correlationId,
     });
     
-    const response = await fetch(txUrl);
+    // Retry logic: Mirror nodes take 3-10s to index transactions
+    const maxRetries = 5;
+    const retryDelays = [2000, 3000, 3000, 4000, 5000]; // Total: ~17 seconds
+    let lastError: Error | null = null;
+    let data: { transactions?: MirrorTransaction[] } | null = null;
 
-    if (!response.ok) {
-      loggers.hedera.error('Failed to fetch transaction from mirror node', {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          // Wait before retry
+          const delay = retryDelays[attempt - 1];
+          loggers.hedera.info(`Waiting ${delay}ms before retry attempt ${attempt}/${maxRetries}`, {
+            transactionId: validated.transactionId,
+            correlationId,
+          });
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        loggers.hedera.info(`Fetching transaction (attempt ${attempt + 1}/${maxRetries + 1})`, {
+          transactionId: validated.transactionId,
+          url: txUrl,
+          correlationId,
+        });
+
+        const response = await fetch(txUrl, {
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const jsonData = await response.json();
+          data = jsonData as { transactions?: MirrorTransaction[] };
+          
+          // Check if transaction exists in response
+          if (data && data.transactions && data.transactions.length > 0) {
+            loggers.hedera.info('Transaction found on mirror node', {
+              transactionId: validated.transactionId,
+              attempt: attempt + 1,
+              correlationId,
+            });
+            break; // Success!
+          } else {
+            loggers.hedera.warn('Mirror node returned empty transactions array', {
+              transactionId: validated.transactionId,
+              attempt: attempt + 1,
+              correlationId,
+            });
+            lastError = new Error('Transaction not yet indexed');
+          }
+        } else if (response.status === 404) {
+          // 404 means not indexed yet - retry
+          loggers.hedera.info('Transaction not yet indexed (404)', {
+            transactionId: validated.transactionId,
+            attempt: attempt + 1,
+            correlationId,
+          });
+          lastError = new Error('Transaction not found (not yet indexed)');
+        } else {
+          // Other errors
+          loggers.hedera.error('Mirror node error', {
+            transactionId: validated.transactionId,
+            status: response.status,
+            statusText: response.statusText,
+            attempt: attempt + 1,
+            correlationId,
+          });
+          lastError = new Error(`Mirror node returned ${response.status}`);
+        }
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        loggers.hedera.error('Mirror node fetch error', {
+          transactionId: validated.transactionId,
+          error: errorMessage,
+          attempt: attempt + 1,
+          correlationId,
+        });
+        lastError = error instanceof Error ? error : new Error(errorMessage);
+      }
+    }
+
+    // If all retries failed
+    if (!data || !data.transactions || data.transactions.length === 0) {
+      loggers.hedera.error('Transaction not found after all retries', {
         transactionId: validated.transactionId,
-        url: txUrl,
-        status: response.status,
-        statusText: response.statusText,
+        maxRetries,
+        lastError: lastError?.message,
         correlationId,
       });
       return NextResponse.json(
-        { error: 'Transaction not found on Hedera network' },
+        { 
+          error: 'Transaction not found on Hedera network after retries',
+          details: lastError?.message || 'Unknown error',
+          hint: 'The transaction may not have been submitted or is still being indexed',
+        },
         { status: 404 }
       );
     }
-
-    const data = await response.json();
     
     loggers.hedera.info('Mirror node response received', {
       transactionId: validated.transactionId,
