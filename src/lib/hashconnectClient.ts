@@ -238,8 +238,19 @@ export async function initHashConnect(): Promise<void> {
           console.log('[HashConnect] This is normal for HashConnect v3.0+');
         }
         
-        // Note: HashConnect v3+ generates pairing string internally in openPairingModal()
-        // No need to call connect() or generatePairingString() here
+        // HashConnect v3: Call connect() to initialize the WalletConnect client
+        const connectFn = (hashconnect as any).connect;
+        if (typeof connectFn === 'function') {
+          console.log('[HashConnect] Initializing WalletConnect client...');
+          try {
+            await connectFn.call(hashconnect);
+            console.log('[HashConnect] WalletConnect client initialized');
+          } catch (error: any) {
+            console.warn('[HashConnect] connect() failed, but continuing:', error.message);
+            // Don't throw - some versions might not need this
+          }
+        }
+        
         console.log('[HashConnect] Ready - pairing string will be generated when modal opens');
         
         // Clean up any old/stale sessions after initialization
