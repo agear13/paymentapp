@@ -120,12 +120,17 @@ export async function POST(request: NextRequest) {
       ? 'https://mainnet-public.mirrornode.hedera.com'
       : 'https://testnet.mirrornode.hedera.com';
 
-    // URL-encode the transaction ID (@ symbol becomes %40)
-    const encodedTxId = encodeURIComponent(validated.transactionId);
-    const txUrl = `${mirrorUrl}/api/v1/transactions/${encodedTxId}`;
+    // Convert transaction ID format from HashPack format to Mirror Node format
+    // HashPack format: 0.0.5363033@1769582713.055549545
+    // Mirror Node format: 0.0.5363033-1769582713-055549545
+    const [accountId, timestamp] = validated.transactionId.split('@');
+    const [seconds, nanos] = timestamp.split('.');
+    const mirrorTxId = `${accountId}-${seconds}-${nanos}`;
+    const txUrl = `${mirrorUrl}/api/v1/transactions/${mirrorTxId}`;
     
     loggers.hedera.info('Querying mirror node for transaction', {
       transactionId: validated.transactionId,
+      mirrorTxId,
       url: txUrl,
       correlationId,
     });
