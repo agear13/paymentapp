@@ -171,8 +171,11 @@ export async function initHashConnect(): Promise<void> {
 
         const initFn = (hashconnect as any).init;
 
-        // Check if init method exists (it may not exist in some HashConnect v3 versions)
-        if (typeof initFn === 'function') {
+        // Check if init method exists as an OWN property (HashConnect v3+ doesn't have init method)
+        // We check hasOwnProperty to avoid calling methods from the prototype chain
+        const hasInitMethod = hashconnect.hasOwnProperty('init') && typeof initFn === 'function';
+        
+        if (hasInitMethod) {
           console.log('[HashConnect] init method found, attempting to call it...');
           
           // Helper to wrap init call with timeout
