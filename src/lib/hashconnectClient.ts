@@ -452,36 +452,37 @@ export async function openHashpackPairingModal(retryCount: number = 0): Promise<
     );
   }
 
-  // Brief delay to allow HashPack extension to fully initialize
-  await new Promise(resolve => setTimeout(resolve, 300));
-
   try {
     console.log('[HashConnect] Opening pairing modal...');
     
-    // Wait for background init() to complete (with timeout)
-    // Give it up to 5 seconds to initialize the SignClient
-    if ((hc as any)._initPromise) {
-      console.log('[HashConnect] Waiting up to 5s for SignClient initialization...');
+    // CRITICAL: Explicitly initialize WalletConnect SignClient if not already done
+    // HashConnect v3 requires explicit init() call to start SignClient
+    const initFn = (hc as any).init;
+    if (typeof initFn === 'function') {
+      console.log('[HashConnect] Explicitly calling init() to initialize SignClient...');
+      
       try {
+        // Call init() with 15-second timeout (WalletConnect can be slow)
         await Promise.race([
-          (hc as any)._initPromise,
+          initFn.call(hc),
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Init still pending after 5s')), 5000)
+            setTimeout(() => reject(new Error('SignClient init timeout after 15s')), 15000)
           )
         ]);
         console.log('[HashConnect] ✅ SignClient initialized successfully');
-      } catch (timeoutErr) {
-        // Init timed out or failed - continue anyway, modal might still work
-        console.warn('[HashConnect] SignClient init timeout/incomplete - continuing anyway...');
+        
+        // Give it an extra moment to fully settle
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (initError) {
+        console.error('[HashConnect] SignClient initialization failed:', initError);
+        throw new Error('Failed to initialize WalletConnect SignClient: ' + 
+          (initError instanceof Error ? initError.message : 'Unknown error'));
       }
     } else {
-      // No init promise - give it a brief moment just in case
-      console.log('[HashConnect] Waiting 1s for SignClient to be ready...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.warn('[HashConnect] init() method not found - may already be initialized');
     }
     
-    // Call openPairingModal without any arguments
-    // The modal should now have a WalletConnect URI ready
+    // Call openPairingModal - SignClient should now be ready
     console.log('[HashConnect] Calling openPairingModal()...');
     await openModalFn.call(hc);
     
