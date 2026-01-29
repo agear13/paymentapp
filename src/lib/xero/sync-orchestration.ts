@@ -212,9 +212,28 @@ export async function syncPaymentToXero(
       throw new Error(userFriendlyError);
     }
 
-    // Step 3: Create sync record in database
-    const syncRecord = await prisma.xero_syncs.create({
-      data: {
+    // Step 3: Update sync record in database (should already exist from queue)
+    const syncRecord = await prisma.xero_syncs.upsert({
+      where: {
+        xero_syncs_payment_link_sync_type_unique: {
+          payment_link_id: paymentLinkId,
+          sync_type: 'INVOICE',
+        },
+      },
+      update: {
+        status: 'SUCCESS',
+        xero_invoice_id: invoiceResult.invoiceId,
+        xero_payment_id: paymentResult.paymentId,
+        response_payload: {
+          invoice: invoiceResult as unknown as Record<string, unknown>,
+          payment: paymentResult as unknown as Record<string, unknown>,
+        },
+        error_message: null, // Clear any previous errors
+        next_retry_at: null, // Clear retry schedule
+        updated_at: new Date(),
+      },
+      create: {
+        // Fallback: create if somehow doesn't exist (shouldn't happen)
         id: randomUUID(),
         payment_link_id: paymentLinkId,
         sync_type: 'INVOICE',
@@ -233,6 +252,7 @@ export async function syncPaymentToXero(
           payment: paymentResult as unknown as Record<string, unknown>,
         },
         retry_count: 0,
+        created_at: new Date(),
         updated_at: new Date(),
       },
     });
@@ -267,10 +287,23 @@ export async function syncPaymentToXero(
 
     const errorMessage = error instanceof Error ? error.message : parseXeroError(error);
 
-    // Log failure in database
+    // Log failure in database (update existing sync record)
     try {
-      await prisma.xero_syncs.create({
-        data: {
+      await prisma.xero_syncs.upsert({
+        where: {
+          xero_syncs_payment_link_sync_type_unique: {
+            payment_link_id: paymentLinkId,
+            sync_type: 'INVOICE',
+          },
+        },
+        update: {
+          status: 'FAILED',
+          error_message: errorMessage,
+          updated_at: new Date(),
+          // retry_count is NOT incremented here - that's done by queue processor
+        },
+        create: {
+          // Fallback: create if somehow doesn't exist (shouldn't happen)
           id: randomUUID(),
           payment_link_id: paymentLinkId,
           sync_type: 'INVOICE',
@@ -281,6 +314,7 @@ export async function syncPaymentToXero(
           },
           error_message: errorMessage,
           retry_count: 0,
+          created_at: new Date(),
           updated_at: new Date(),
         },
       });

@@ -256,11 +256,30 @@ export async function confirmPayment(
         throw ledgerError;
       }
 
-      // 5. Queue Xero sync if enabled
+      // 5. Queue Xero sync if enabled (idempotent upsert)
       if (config.features.xeroSync) {
         try {
-          await tx.xero_syncs.create({
-            data: {
+          await tx.xero_syncs.upsert({
+            where: {
+              xero_syncs_payment_link_sync_type_unique: {
+                payment_link_id: paymentLinkId,
+                sync_type: 'INVOICE',
+              },
+            },
+            update: {
+              // If already exists, reset to PENDING for retry
+              status: 'PENDING',
+              request_payload: {
+                paymentLinkId,
+                organizationId: paymentLink.organization_id,
+                correlationId,
+                queuedBy: 'payment-confirmation',
+                requeuedAt: new Date().toISOString(),
+              },
+              next_retry_at: new Date(),
+              updated_at: new Date(),
+            },
+            create: {
               id: crypto.randomUUID(),
               payment_link_id: paymentLinkId,
               sync_type: 'INVOICE',
@@ -282,7 +301,7 @@ export async function confirmPayment(
           log.info({
             correlationId,
             paymentLinkId,
-          }, 'Xero sync queued');
+          }, 'Xero sync queued (idempotent)');
         } catch (xeroError: any) {
           // Don't fail payment if Xero sync fails
           log.error({

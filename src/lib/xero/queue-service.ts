@@ -63,37 +63,31 @@ export async function queueXeroSync(params: QueueSyncJobParams): Promise<string>
     'Queuing Xero sync for payment'
   );
 
-  // Check if already queued or succeeded
-  const existingSync = await prisma.xero_syncs.findFirst({
+  // Upsert: create if doesn't exist, or requeue if not SUCCESS
+  const syncRecord = await prisma.xero_syncs.upsert({
     where: {
-      payment_link_id: paymentLinkId,
-      status: { in: ['PENDING', 'SUCCESS', 'RETRYING'] },
+      xero_syncs_payment_link_sync_type_unique: {
+        payment_link_id: paymentLinkId,
+        sync_type: 'INVOICE',
+      },
     },
-    orderBy: { created_at: 'desc' },
-  });
-
-  if (existingSync) {
-    if (existingSync.status === 'SUCCESS') {
-      logger.info(
-        { paymentLinkId, syncId: existingSync.id },
-        'Sync already completed successfully'
-      );
-      return existingSync.id;
-    }
-
-    logger.info(
-      { paymentLinkId, syncId: existingSync.id, status: existingSync.status },
-      'Sync already queued'
-    );
-    return existingSync.id;
-  }
-
-  // Create new sync record with PENDING status
-  const syncRecord = await prisma.xero_syncs.create({
-    data: {
+    update: {
+      // Only requeue if not already successful
+      status: 'PENDING',
+      request_payload: {
+        paymentLinkId,
+        organizationId,
+        requeuedAt: new Date().toISOString(),
+        priority,
+      },
+      next_retry_at: new Date(), // Process immediately
+      updated_at: new Date(),
+      // Note: retry_count is NOT reset to preserve retry history
+    },
+    create: {
       id: randomUUID(),
       payment_link_id: paymentLinkId,
-      sync_type: 'INVOICE', // We create invoice + payment together
+      sync_type: 'INVOICE',
       status: 'PENDING',
       request_payload: {
         paymentLinkId,
@@ -102,14 +96,15 @@ export async function queueXeroSync(params: QueueSyncJobParams): Promise<string>
         priority,
       },
       retry_count: 0,
-      next_retry_at: new Date(), // Process immediately
+      next_retry_at: new Date(),
+      created_at: new Date(),
       updated_at: new Date(),
     },
   });
 
   logger.info(
-    { syncId: syncRecord.id, paymentLinkId },
-    'Xero sync queued successfully'
+    { syncId: syncRecord.id, paymentLinkId, wasExisting: !!syncRecord.created_at },
+    'Xero sync queued (idempotent)'
   );
 
   return syncRecord.id;

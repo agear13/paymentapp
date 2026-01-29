@@ -222,6 +222,7 @@ model xero_syncs {
   updated_at       DateTime       @db.Timestamptz(6)
   payment_links    payment_links  @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
 
+  @@unique([payment_link_id, sync_type], name: "xero_syncs_payment_link_sync_type_unique")
   @@index([status, next_retry_at])
 }
 

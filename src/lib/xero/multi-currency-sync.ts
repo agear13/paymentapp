@@ -267,9 +267,22 @@ async function syncMultiCurrencyInvoiceToXero(
   // For now, we'll simulate the response
   const xeroInvoiceId = `INV-${Date.now()}`;
 
-  // Record sync
-  await prisma.xero_syncs.create({
-    data: {
+  // Record sync (idempotent upsert)
+  await prisma.xero_syncs.upsert({
+    where: {
+      xero_syncs_payment_link_sync_type_unique: {
+        payment_link_id: paymentLinkId,
+        sync_type: 'INVOICE',
+      },
+    },
+    update: {
+      status: 'SUCCESS',
+      xero_invoice_id: xeroInvoiceId,
+      request_payload: xeroInvoice,
+      response_payload: { InvoiceID: xeroInvoiceId },
+      updated_at: new Date(),
+    },
+    create: {
       id: crypto.randomUUID(),
       payment_link_id: paymentLinkId,
       sync_type: 'INVOICE',
@@ -277,6 +290,8 @@ async function syncMultiCurrencyInvoiceToXero(
       xero_invoice_id: xeroInvoiceId,
       request_payload: xeroInvoice,
       response_payload: { InvoiceID: xeroInvoiceId },
+      retry_count: 0,
+      created_at: new Date(),
       updated_at: new Date(),
     },
   });
@@ -327,9 +342,22 @@ async function syncSimpleInvoiceToXero(
   // TODO: Make actual Xero API call
   const xeroInvoiceId = `INV-${Date.now()}`;
 
-  // Record sync
-  await prisma.xero_syncs.create({
-    data: {
+  // Record sync (idempotent upsert)
+  await prisma.xero_syncs.upsert({
+    where: {
+      xero_syncs_payment_link_sync_type_unique: {
+        payment_link_id: paymentLinkId,
+        sync_type: 'INVOICE',
+      },
+    },
+    update: {
+      status: 'SUCCESS',
+      xero_invoice_id: xeroInvoiceId,
+      request_payload: xeroInvoice,
+      response_payload: { InvoiceID: xeroInvoiceId },
+      updated_at: new Date(),
+    },
+    create: {
       id: crypto.randomUUID(),
       payment_link_id: paymentLinkId,
       sync_type: 'INVOICE',
@@ -337,6 +365,8 @@ async function syncSimpleInvoiceToXero(
       xero_invoice_id: xeroInvoiceId,
       request_payload: xeroInvoice,
       response_payload: { InvoiceID: xeroInvoiceId },
+      retry_count: 0,
+      created_at: new Date(),
       updated_at: new Date(),
     },
   });
@@ -404,9 +434,22 @@ async function syncPaymentToXero(
   // TODO: Make actual Xero API call
   const xeroPaymentId = `PAY-${Date.now()}`;
 
-  // Record sync
-  await prisma.xero_syncs.create({
-    data: {
+  // Record sync (idempotent upsert)
+  await prisma.xero_syncs.upsert({
+    where: {
+      xero_syncs_payment_link_sync_type_unique: {
+        payment_link_id: paymentEvent.payment_link_id,
+        sync_type: 'PAYMENT',
+      },
+    },
+    update: {
+      status: 'SUCCESS',
+      xero_payment_id: xeroPaymentId,
+      request_payload: xeroPayment,
+      response_payload: { PaymentID: xeroPaymentId },
+      updated_at: new Date(),
+    },
+    create: {
       id: crypto.randomUUID(),
       payment_link_id: paymentEvent.payment_link_id,
       sync_type: 'PAYMENT',
@@ -414,6 +457,8 @@ async function syncPaymentToXero(
       xero_payment_id: xeroPaymentId,
       request_payload: xeroPayment,
       response_payload: { PaymentID: xeroPaymentId },
+      retry_count: 0,
+      created_at: new Date(),
       updated_at: new Date(),
     },
   });
