@@ -175,10 +175,11 @@ export async function POST(request: NextRequest) {
         event_type: 'PAYMENT_INITIATED',
         payment_method: 'STRIPE',
         metadata: {
-          checkoutSessionId: session.id,
+          checkoutSessionId: session.id, // ✅ Store in metadata for lookup
           checkoutUrl: session.url,
           amount: amountInSmallestUnit,
           currency: paymentLink.currency,
+          expiresAt: new Date(sessionExpiresAt * 1000).toISOString(),
         },
       },
     });

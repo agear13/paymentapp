@@ -194,16 +194,20 @@ export async function confirmPayment(
       // 4. Post to ledger with idempotency
       try {
         if (provider === 'stripe') {
+          // Import calculateStripeFee for fee calculation
+          const { calculateStripeFee } = await import('@/lib/ledger/posting-rules/stripe');
+          
+          // Convert back to cents for fee calculation
+          const amountInCents = Math.round(amountReceived * 100);
+          const calculatedFee = calculateStripeFee(amountInCents, currencyReceived.toLowerCase());
+          
           await postStripeSettlement({
             paymentLinkId,
             organizationId: paymentLink.organization_id,
-            stripeAmount: amountReceived,
-            invoiceAmount: paymentLink.amount.toString(),
-            invoiceCurrency: paymentLink.currency,
-            paymentIntentId: paymentIntentId || providerRef,
-            feeAmount: 0, // Calculate if needed
-            correlationId,
-            idempotencyKey: correlationId, // Use correlation_id for idempotency
+            stripePaymentIntentId: paymentIntentId || providerRef,
+            grossAmount: amountReceived.toString(),
+            feeAmount: calculatedFee,
+            currency: currencyReceived,
           });
         } else if (provider === 'hedera' && tokenType) {
           // Get FX snapshot for settlement
