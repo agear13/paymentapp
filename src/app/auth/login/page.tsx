@@ -9,9 +9,13 @@ import { Label } from '@/components/ui/label';
 import Image from 'next/image';
 import Link from 'next/link';
 
+type AuthMode = 'signin' | 'signup';
+
 export default function LoginPage() {
+  const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -39,8 +43,62 @@ export default function LoginPage() {
     }
   };
 
-  const handleSignUp = () => {
-    router.push('/auth/signup');
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    // Validate password match
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) throw error;
+
+      // If email confirmation is disabled, redirect to onboarding
+      if (data.user && !data.user.identities?.length) {
+        setError('An account with this email already exists');
+        setLoading(false);
+        return;
+      }
+
+      // Refresh router to ensure session is loaded, then redirect to onboarding
+      router.refresh();
+      
+      // Use a small delay to ensure session cookies are set
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      router.push('/onboarding');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create account');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleMode = () => {
+    setMode(mode === 'signin' ? 'signup' : 'signin');
+    setError(null);
+    setPassword('');
+    setConfirmPassword('');
   };
 
   return (
@@ -147,14 +205,19 @@ export default function LoginPage() {
 
           {/* Form Header */}
           <div className="text-center lg:text-left">
-            <h2 className="text-3xl font-bold tracking-tight">Sign in</h2>
+            <h2 className="text-3xl font-bold tracking-tight">
+              {mode === 'signin' ? 'Sign in' : 'Create account'}
+            </h2>
             <p className="text-muted-foreground mt-2">
-              Enter your credentials to access your account
+              {mode === 'signin' 
+                ? 'Enter your credentials to access your account'
+                : 'Get started with Provvypay today'
+              }
             </p>
           </div>
 
-          {/* Login Form */}
-          <form onSubmit={handleLogin} className="space-y-6">
+          {/* Auth Form */}
+          <form onSubmit={mode === 'signin' ? handleLogin : handleSignUp} className="space-y-6">
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email address</Label>
@@ -173,12 +236,14 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <Link 
-                    href="/auth/reset-password" 
-                    className="text-sm text-primary hover:text-[rgb(61,92,224)] transition-colors"
-                  >
-                    Forgot password?
-                  </Link>
+                  {mode === 'signin' && (
+                    <Link 
+                      href="/auth/reset-password" 
+                      className="text-sm text-primary hover:text-[rgb(61,92,224)] transition-colors"
+                    >
+                      Forgot password?
+                    </Link>
+                  )}
                 </div>
                 <Input
                   id="password"
@@ -190,7 +255,28 @@ export default function LoginPage() {
                   disabled={loading}
                   className="h-11"
                 />
+                {mode === 'signup' && (
+                  <p className="text-xs text-muted-foreground">
+                    Must be at least 8 characters
+                  </p>
+                )}
               </div>
+
+              {mode === 'signup' && (
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    disabled={loading}
+                    className="h-11"
+                  />
+                </div>
+              )}
             </div>
 
             {error && (
@@ -216,24 +302,25 @@ export default function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Signing in...
+                  {mode === 'signin' ? 'Signing in...' : 'Creating account...'}
                 </span>
               ) : (
-                'Sign in'
+                mode === 'signin' ? 'Sign in' : 'Create account'
               )}
             </Button>
           </form>
 
-          {/* Sign Up Link */}
+          {/* Mode Toggle */}
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
-              Don't have an account?{' '}
+              {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
               <button
-                onClick={handleSignUp}
+                type="button"
+                onClick={toggleMode}
                 className="text-primary hover:text-[rgb(61,92,224)] font-semibold transition-colors"
                 disabled={loading}
               >
-                Sign up
+                {mode === 'signin' ? 'Create account' : 'Sign in'}
               </button>
             </p>
           </div>

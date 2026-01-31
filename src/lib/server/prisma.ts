@@ -9,7 +9,10 @@
  * - Scripts (src/scripts/...)
  */
 
-import 'server-only';
+// Next.js "server-only" is a compile-time hint; it doesn't exist in plain Node scripts.
+try {
+  require('server-only')
+} catch {}
 import { PrismaClient } from '@prisma/client';
 
 // Runtime guard: Throw if accidentally imported in browser
