@@ -244,7 +244,7 @@ export function MerchantSettingsForm() {
         }
 
         const result = await response.json();
-        setSettingsId(result.data.id);
+        setSettingsId(result.id);
         toast.success('Merchant settings created successfully');
       }
     } catch (error) {

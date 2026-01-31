@@ -142,7 +142,8 @@ export function OnboardingForm() {
       }
 
       const settingsData = await settingsResponse.json();
-      setSettingsId(settingsData.data.id);
+      console.log('Merchant settings response:', settingsData);
+      setSettingsId(settingsData.id);
       console.log('✅ Step 1 completed successfully!');
       
       toast.success('Organization created successfully!');
