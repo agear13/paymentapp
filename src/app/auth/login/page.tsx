@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Logo } from '@/components/ui/logo';
 import Link from 'next/link';
 
 type AuthMode = 'signin' | 'signup';
@@ -109,13 +108,11 @@ export default function LoginPage() {
         
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           {/* Logo */}
-          <Link href="/" className="flex items-center">
-            <Logo 
-              type="full"
-              width={180} 
-              height={54}
-              priority
-            />
+          <Link href="/" className="flex items-center gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
+              <span className="text-xl font-bold text-primary-foreground">P</span>
+            </div>
+            <span className="text-2xl font-bold">Provvypay</span>
           </Link>
 
           {/* Main Content */}
@@ -193,12 +190,12 @@ export default function LoginPage() {
         <div className="w-full max-w-md space-y-8">
           {/* Mobile Logo */}
           <div className="lg:hidden flex justify-center mb-8">
-            <Logo 
-              type="full"
-              width={160} 
-              height={48}
-              priority
-            />
+            <div className="flex items-center gap-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
+                <span className="text-xl font-bold text-primary-foreground">P</span>
+              </div>
+              <span className="text-2xl font-bold">Provvypay</span>
+            </div>
           </div>
 
           {/* Form Header */}

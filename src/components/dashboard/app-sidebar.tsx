@@ -18,7 +18,6 @@ import {
   Target,
   Layers,
 } from 'lucide-react';
-import { Logo } from '@/components/ui/logo';
 import {
   Sidebar,
   SidebarContent,
@@ -245,13 +244,8 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Logo 
-                    type="icon"
-                    width={32}
-                    height={32}
-                    className="size-8"
-                  />
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <span className="text-lg font-bold">P</span>
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Provvypay</span>

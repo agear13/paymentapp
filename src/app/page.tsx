@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getUserOrganization } from '@/lib/auth/get-org';
 import Link from 'next/link';
-import { Logo } from '@/components/ui/logo';
 
 export default async function Home() {
   const user = await getCurrentUser();
@@ -27,13 +26,11 @@ export default async function Home() {
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center">
-              <Logo 
-                type="full"
-                width={160} 
-                height={48}
-                priority
-              />
+            <Link href="/" className="flex items-center gap-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
+                <span className="text-xl font-bold text-primary-foreground">P</span>
+              </div>
+              <span className="text-2xl font-bold">Provvypay</span>
             </Link>
             <div className="flex items-center gap-4">
               <Link 
@@ -242,11 +239,12 @@ export default async function Home() {
         <div className="container mx-auto px-6">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div className="space-y-4">
-              <Logo 
-                type="full"
-                width={140} 
-                height={42}
-              />
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+                  <span className="text-lg font-bold text-primary-foreground">P</span>
+                </div>
+                <span className="text-xl font-bold">Provvypay</span>
+              </div>
               <p className="text-sm text-muted-foreground">
                 Unified payment infrastructure for modern businesses
               </p>
