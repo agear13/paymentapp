@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useOrganization } from '@/hooks/use-organization';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -25,27 +26,86 @@ const organizationSchema = z.object({
 type OrganizationFormValues = z.infer<typeof organizationSchema>;
 
 export function OrganizationSettingsForm() {
-  const [isLoading, setIsLoading] = React.useState(false);
+  const { organizationId, isLoading: isOrgLoading } = useOrganization();
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isSaving, setIsSaving] = React.useState(false);
 
   const form = useForm<OrganizationFormValues>({
     resolver: zodResolver(organizationSchema),
     defaultValues: {
-      name: 'Acme Corp', // TODO: Load from API
+      name: '',
     },
   });
 
+  // Fetch organization data
+  React.useEffect(() => {
+    async function fetchOrganization() {
+      if (!organizationId) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/organizations');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch organization');
+        }
+
+        const orgs = await response.json();
+        
+        if (orgs && orgs.length > 0) {
+          form.reset({
+            name: orgs[0].name || '',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch organization:', error);
+        toast.error('Failed to load organization details');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    if (!isOrgLoading) {
+      fetchOrganization();
+    }
+  }, [organizationId, isOrgLoading, form]);
+
   async function onSubmit(data: OrganizationFormValues) {
-    setIsLoading(true);
+    if (!organizationId) {
+      toast.error('No organization found');
+      return;
+    }
+
+    setIsSaving(true);
     try {
-      // TODO: Implement API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const response = await fetch(`/api/organizations/${organizationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: data.name }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update organization');
+      }
+
       toast.success('Organization settings updated successfully');
     } catch (error) {
       toast.error('Failed to update organization settings');
       console.error(error);
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
+  }
+
+  if (isLoading || isOrgLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="animate-pulse space-y-4">
+          <div className="h-10 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -69,8 +129,8 @@ export function OrganizationSettingsForm() {
         />
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={isLoading}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={isSaving}>
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Save Changes
           </Button>
         </div>

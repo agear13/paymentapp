@@ -6,8 +6,57 @@ import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
 
 const updateOrganizationSchema = z.object({
-  name: z.string().min(2).max(255),
+  name: z.string().min(2).max(255).optional(),
 });
+
+// PATCH /api/organizations/[id] - Update organization
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getCurrentUser();
+    
+    if (!user) {
+      return apiError('Unauthorized', 401);
+    }
+
+    const { id } = await params;
+
+    // Verify user has access to this organization
+    const userOrg = await prisma.user_organizations.findFirst({
+      where: {
+        user_id: user.id,
+        organization_id: id,
+      },
+    });
+
+    if (!userOrg) {
+      return apiError('Organization not found or access denied', 404);
+    }
+
+    const { data: body, error } = await validateBody(request, updateOrganizationSchema);
+    
+    if (error) {
+      return error;
+    }
+
+    // Update organization
+    const organization = await prisma.organizations.update({
+      where: { id },
+      data: {
+        ...(body.name && { name: body.name }),
+      },
+    });
+
+    log.info({ organizationId: id, userId: user.id }, 'Updated organization');
+
+    return apiResponse(organization);
+  } catch (error) {
+    log.error({ error }, 'Failed to update organization');
+    return apiError('Failed to update organization', 500);
+  }
+}
 
 // GET /api/organizations/[id] - Get organization details
 export async function GET(
@@ -23,99 +72,27 @@ export async function GET(
 
     const { id } = await params;
 
-    const organization = await prisma.organizations.findUnique({
-      where: { id },
+    // Verify user has access to this organization
+    const userOrg = await prisma.user_organizations.findFirst({
+      where: {
+        user_id: user.id,
+        organization_id: id,
+      },
       include: {
-        merchantSettings: true,
-        _count: {
-          select: {
-            paymentLinks: true,
-            ledgerAccounts: true,
-          },
-        },
+        organizations: true,
       },
     });
 
-    if (!organization) {
-      return apiError('Organization not found', 404);
+    if (!userOrg) {
+      return apiError('Organization not found or access denied', 404);
     }
 
-    // TODO: Check if user has access to this organization
-
-    return apiResponse(organization);
+    return apiResponse({
+      ...userOrg.organizations,
+      role: userOrg.role,
+    });
   } catch (error) {
     log.error({ error }, 'Failed to fetch organization');
     return apiError('Failed to fetch organization', 500);
   }
 }
-
-// PATCH /api/organizations/[id] - Update organization
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getCurrentUser();
-    
-    if (!user) {
-      return apiError('Unauthorized', 401);
-    }
-
-    const { id } = await params;
-    const body = await validateBody(request, updateOrganizationSchema);
-    
-    if (body instanceof NextResponse) {
-      return body;
-    }
-
-    // TODO: Check if user has permission to update this organization
-
-    const organization = await prisma.organizations.update({
-      where: { id },
-      data: {
-        name: body.name,
-      },
-    });
-
-    log.info({ organizationId: id, userId: user.id }, 'Updated organization');
-
-    return apiResponse(organization);
-  } catch (error) {
-    log.error({ error }, 'Failed to update organization');
-    return apiError('Failed to update organization', 500);
-  }
-}
-
-// DELETE /api/organizations/[id] - Delete organization
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getCurrentUser();
-    
-    if (!user) {
-      return apiError('Unauthorized', 401);
-    }
-
-    const { id } = await params;
-
-    // TODO: Check if user has permission to delete this organization
-    // TODO: Add safeguards - check for active payment links, etc.
-
-    await prisma.organizations.delete({
-      where: { id },
-    });
-
-    log.info({ organizationId: id, userId: user.id }, 'Deleted organization');
-
-    return apiResponse({ success: true });
-  } catch (error) {
-    log.error({ error }, 'Failed to delete organization');
-    return apiError('Failed to delete organization', 500);
-  }
-}
-
-
-
-
