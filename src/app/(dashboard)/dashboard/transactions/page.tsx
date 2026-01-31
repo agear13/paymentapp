@@ -3,34 +3,24 @@ export const revalidate = 0;
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/auth/session';
+import { getUserOrganization } from '@/lib/auth/get-org';
 import { prisma } from '@/lib/server/prisma';
+import { redirect } from 'next/navigation';
 import { TransactionsTable } from '@/components/dashboard/transactions-table';
 
 export default async function TransactionsPage() {
-  // Get current user's organization
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Get current user's organization with proper data isolation
+  const user = await getCurrentUser();
   
   if (!user) {
-    return (
-      <div className="flex items-center justify-center h-[400px]">
-        <p className="text-muted-foreground">Please log in to view transactions.</p>
-      </div>
-    );
+    redirect('/auth/login');
   }
 
-  // Get user's organization (simplified - get first org for now)
-  const org = await prisma.organizations.findFirst({
-    select: { id: true },
-  });
+  const org = await getUserOrganization();
 
   if (!org) {
-    return (
-      <div className="flex items-center justify-center h-[400px]">
-        <p className="text-muted-foreground">No organization found.</p>
-      </div>
-    );
+    redirect('/onboarding');
   }
 
   // Fetch all payment events for this organization

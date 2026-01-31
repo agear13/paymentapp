@@ -3,26 +3,25 @@ import { Badge } from '@/components/ui/badge';
 import { XeroConnection } from '@/components/dashboard/settings/xero-connection';
 import { XeroSyncQueue } from '@/components/dashboard/settings/xero-sync-queue';
 import { XeroAccountMapping } from '@/components/dashboard/settings/xero-account-mapping';
-import { createClient } from '@/lib/supabase/server';
-import { prisma } from '@/lib/server/prisma';
+import { getCurrentUser } from '@/lib/auth/session';
+import { getUserOrganization } from '@/lib/auth/get-org';
+import { redirect } from 'next/navigation';
 
 export default async function IntegrationsPage() {
-  // Get current organization
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Get current user's organization with proper data isolation
+  const user = await getCurrentUser();
   
   if (!user) {
-    return <div>Unauthorized</div>;
+    redirect('/auth/login');
   }
 
-  // Get user's organization (simplified - in production, use proper org selection)
-  const org = await prisma.organizations.findFirst({
-    where: {
-      // This is a simplified query - adjust based on your auth setup
-    },
-  });
+  const org = await getUserOrganization();
 
-  const organizationId = org?.id || '';
+  if (!org) {
+    redirect('/onboarding');
+  }
+
+  const organizationId = org.id;
 
   return (
     <div className="space-y-6">
