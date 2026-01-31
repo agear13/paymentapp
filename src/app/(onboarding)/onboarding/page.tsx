@@ -9,15 +9,15 @@ export default async function OnboardingPage() {
       <div className="text-center">
         <h1 className="text-3xl font-bold tracking-tight">Welcome to Provvypay</h1>
         <p className="mt-2 text-muted-foreground">
-          Let's get your organization set up so you can start accepting payments.
+          Let&apos;s get you set up in just 2 quick steps so you can start accepting payments.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Create Your Organization</CardTitle>
+          <CardTitle>Account Setup</CardTitle>
           <CardDescription>
-            This will be your workspace for managing payment links and transactions.
+            Configure your organization and payment methods to start processing payments.
           </CardDescription>
         </CardHeader>
         <CardContent>
