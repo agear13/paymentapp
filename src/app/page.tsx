@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getUserOrganization } from '@/lib/auth/get-org';
 import Link from 'next/link';
-import Image from 'next/image';
+import { Logo } from '@/components/ui/logo';
 
 export default async function Home() {
   const user = await getCurrentUser();
@@ -28,9 +28,8 @@ export default async function Home() {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center">
-              <Image 
-                src="/provvypay-logo.svg" 
-                alt="Provvypay" 
+              <Logo 
+                type="full"
                 width={160} 
                 height={48}
                 priority
@@ -243,9 +242,8 @@ export default async function Home() {
         <div className="container mx-auto px-6">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div className="space-y-4">
-              <Image 
-                src="/provvypay-logo.svg" 
-                alt="Provvypay" 
+              <Logo 
+                type="full"
                 width={140} 
                 height={42}
               />

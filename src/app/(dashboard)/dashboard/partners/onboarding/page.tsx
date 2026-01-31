@@ -254,8 +254,8 @@ export default function PartnerOnboardingPage() {
                 <div className="pt-4 border-t">
                   <p className="text-xs text-muted-foreground">
                     Need help? Contact our partner support team at{' '}
-                    <a href="mailto:partners@provvypay.com" className="text-primary hover:underline">
-                      partners@provvypay.com
+                    <a href="mailto:hello@provvypay.com" className="text-primary hover:underline">
+                      hello@provvypay.com
                     </a>
                   </p>
                 </div>

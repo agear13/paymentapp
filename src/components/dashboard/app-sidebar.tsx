@@ -18,7 +18,7 @@ import {
   Target,
   Layers,
 } from 'lucide-react';
-import Image from 'next/image';
+import { Logo } from '@/components/ui/logo';
 import {
   Sidebar,
   SidebarContent,
@@ -246,9 +246,8 @@ export function AppSidebar() {
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Image 
-                    src="/provvypay-icon.svg" 
-                    alt="Provvypay" 
+                  <Logo 
+                    type="icon"
                     width={32}
                     height={32}
                     className="size-8"

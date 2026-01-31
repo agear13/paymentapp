@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import Image from 'next/image';
+import { Logo } from '@/components/ui/logo';
 import Link from 'next/link';
 
 type AuthMode = 'signin' | 'signup';
@@ -110,9 +110,8 @@ export default function LoginPage() {
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           {/* Logo */}
           <Link href="/" className="flex items-center">
-            <Image 
-              src="/provvypay-logo.svg" 
-              alt="Provvypay" 
+            <Logo 
+              type="full"
               width={180} 
               height={54}
               priority
@@ -194,9 +193,8 @@ export default function LoginPage() {
         <div className="w-full max-w-md space-y-8">
           {/* Mobile Logo */}
           <div className="lg:hidden flex justify-center mb-8">
-            <Image 
-              src="/provvypay-logo.svg" 
-              alt="Provvypay" 
+            <Logo 
+              type="full"
               width={160} 
               height={48}
               priority

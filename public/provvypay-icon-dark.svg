@@ -1,0 +1,16 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fingerprint/Wave Icon Only -->
+  <g transform="translate(8, 8)">
+    <!-- Outer waves -->
+    <path d="M 2 12 Q 4 6 9 5" stroke="#5170ff" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <path d="M 1 14 Q 5 7 11 6" stroke="#5170ff" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <path d="M 1 16 Q 6 8 13 7" stroke="#5170ff" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <path d="M 1 18 Q 7 10 15 9" stroke="#5170ff" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <path d="M 2 20 Q 8 11 17 10" stroke="#5170ff" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    
+    <!-- Center circles -->
+    <circle cx="12" cy="12" r="2" stroke="#5170ff" stroke-width="1.5" fill="none"/>
+    <circle cx="12" cy="12" r="4" stroke="#5170ff" stroke-width="1.5" fill="none"/>
+    <circle cx="12" cy="12" r="6" stroke="#5170ff" stroke-width="1.5" fill="none"/>
+  </g>
+</svg>
