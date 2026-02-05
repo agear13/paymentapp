@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { approveConversion } from '@/lib/huntpay/core';
+import { rejectConversion } from '@/lib/huntpay/core';
 import { createClient } from '@/lib/supabase/server';
 
 export async function POST(
@@ -15,19 +15,13 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // TODO: Add admin role check
-    // const isAdmin = await checkAdminRole(user.email);
-    // if (!isAdmin) {
-    //   return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    // }
-
-    const result = await approveConversion(params.id, user.email!);
+    const result = await rejectConversion(params.id, user.email!);
 
     return NextResponse.json(result);
   } catch (error: any) {
-    console.error('Approve conversion error:', error);
+    console.error('Reject conversion error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to approve conversion' },
+      { error: error.message || 'Failed to reject conversion' },
       { status: 500 }
     );
   }
