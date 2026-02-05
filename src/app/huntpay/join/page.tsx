@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAccount, useConnect } from 'wagmi';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,15 +13,13 @@ export default function JoinHuntPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const huntSlug = searchParams.get('hunt') || 'web3-downtown-quest';
-  
-  const { address, isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
 
   const [step, setStep] = useState<'info' | 'wallet' | 'complete'>('info');
   const [formData, setFormData] = useState({
     teamName: '',
     captainEmail: '',
     teamSize: 4,
+    walletAddress: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -30,11 +27,6 @@ export default function JoinHuntPage() {
   const handleCreateTeam = async () => {
     if (!formData.teamName || !formData.captainEmail) {
       setError('Please fill in all fields');
-      return;
-    }
-
-    if (!isConnected || !address) {
-      setError('Please connect your wallet first');
       return;
     }
 
@@ -50,8 +42,8 @@ export default function JoinHuntPage() {
           teamName: formData.teamName,
           captainEmail: formData.captainEmail,
           teamSize: formData.teamSize,
-          walletAddress: address,
-          chainId: 11155111, // Sepolia
+          walletAddress: formData.walletAddress || null,
+          chainId: formData.walletAddress ? 11155111 : null, // Sepolia if wallet provided
         }),
       });
 
@@ -181,70 +173,62 @@ export default function JoinHuntPage() {
         {step === 'wallet' && (
           <Card>
             <CardHeader>
-              <CardTitle>Connect Team Wallet</CardTitle>
+              <CardTitle>Team Wallet (Optional)</CardTitle>
               <CardDescription>
-                Connect a wallet to receive NFT souvenirs and complete Web3 challenges
+                Provide a wallet address to receive NFT souvenirs and complete Web3 challenges
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!isConnected ? (
-                <div className="space-y-3">
-                  <div className="rounded-lg border border-dashed p-6 text-center space-y-3">
-                    <Wallet className="h-12 w-12 mx-auto text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">
-                      Connect MetaMask to continue
-                    </p>
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="walletAddress">
+                  Wallet Address
+                  <span className="text-xs text-muted-foreground ml-2">(optional)</span>
+                </Label>
+                <Input
+                  id="walletAddress"
+                  placeholder="0x... (EVM address)"
+                  value={formData.walletAddress}
+                  onChange={(e) => setFormData({ ...formData, walletAddress: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter an Ethereum wallet address (e.g., MetaMask). You can skip this and add it later.
+                </p>
+              </div>
 
-                  {connectors.map((connector) => (
-                    <Button
-                      key={connector.id}
-                      onClick={() => connect({ connector })}
-                      className="w-full"
-                      size="lg"
-                      variant="outline"
-                    >
-                      <Wallet className="mr-2 h-4 w-4" />
-                      Connect {connector.name}
-                    </Button>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <Alert>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <AlertDescription>
-                      <strong>Wallet Connected!</strong>
-                      <br />
-                      <code className="text-xs">{address}</code>
-                    </AlertDescription>
-                  </Alert>
-
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
-
-                  <Button 
-                    className="w-full" 
-                    size="lg" 
-                    onClick={handleCreateTeam}
-                    disabled={loading}
-                  >
-                    {loading ? 'Creating Team...' : 'Create Team & Start Hunt'}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-
-                  <Button 
-                    variant="ghost" 
-                    className="w-full" 
-                    onClick={() => setStep('info')}
-                  >
-                    Back
-                  </Button>
-                </div>
+              {formData.walletAddress && (
+                <Alert>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Wallet Address Set!</strong>
+                    <br />
+                    <code className="text-xs break-all">{formData.walletAddress}</code>
+                  </AlertDescription>
+                </Alert>
               )}
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <Button 
+                className="w-full" 
+                size="lg" 
+                onClick={handleCreateTeam}
+                disabled={loading}
+              >
+                {loading ? 'Creating Team...' : 'Create Team & Start Hunt'}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+
+              <Button 
+                variant="ghost" 
+                className="w-full" 
+                onClick={() => setStep('info')}
+              >
+                Back
+              </Button>
             </CardContent>
           </Card>
         )}
