@@ -217,10 +217,63 @@ You can deploy the Partners module immediately and add HuntPay back whenever you
 
 ---
 
+## Latest Addition: Consultant Referral System (Feb 2026)
+
+A complete referral and revenue-sharing system has been added for YouTube-led distribution:
+
+### New Features
+- **Referral Landing Pages**: `/r/[code]` with social proof and lead capture
+- **Review System**: `/review/[token]` for client testimonials
+- **Admin Dashboard**: Manage programs, participants, conversions, and reviews
+- **Ledger Integration**: Automatic earnings tracking in existing Partners UI
+- **Role-Based Payouts**: CONSULTANT and CLIENT_ADVOCATE roles with flexible rules
+
+### New Migration
+- `supabase/migrations/20260206_referral_programs.sql` - 8 new tables + seed data
+
+### Documentation
+- `CONSULTANT_REFERRAL_SYSTEM.md` - Complete user guide and YouTube funnel workflow
+- `REFERRAL_SYSTEM_IMPLEMENTATION.md` - Technical implementation details
+
+### Key Routes Added
+**Public:**
+- `/r/[code]` - Referral landing page
+- `/review/[token]` - Review submission
+
+**Dashboard:**
+- `/dashboard/programs/manage` - Program overview
+- `/dashboard/programs/participants` - Manage referral codes
+- `/dashboard/programs/conversions` - Approve/reject conversions
+- `/dashboard/programs/reviews` - Moderate testimonials
+
+### Environment Variables Required
+```bash
+# Required for admin operations (approve conversions, moderate reviews)
+ADMIN_EMAILS=admin@yourcompany.com,manager@yourcompany.com
+
+# Existing Supabase vars (already configured)
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
+
+See `ADMIN_CONFIGURATION.md` for complete admin setup guide.
+
+### Quick Start
+1. **Set `ADMIN_EMAILS`** in your environment (Render/Vercel/etc.)
+2. Migration runs automatically via Supabase
+3. Test with seed data: Visit `/r/DEMO-CONSULTANT`
+4. Submit enquiry → Creates ledger entry automatically
+5. Check `/dashboard/partners/ledger` to see earnings
+6. Login with admin email to approve conversions at `/dashboard/programs/conversions`
+
+See `CONSULTANT_REFERRAL_SYSTEM.md` for complete setup guide.
+
+---
+
 **Next command to deploy:**
 ```bash
 git add .
-git commit -m "Partners revenue share module - deployment ready"
+git commit -m "Add consultant referral & revenue share system"
 git push
 ```
 
