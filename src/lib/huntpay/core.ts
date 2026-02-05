@@ -4,7 +4,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { createPartnerLedgerEntry } from './partners-integration';
+import { createPartnerLedgerEntryForConversion } from './partners-integration';
 import crypto from 'crypto';
 
 export interface CreateTeamInput {
@@ -372,21 +372,11 @@ export async function approveConversion(conversionId: string, reviewedBy: string
 
   // Create partner ledger entry (THIS IS THE KEY INTEGRATION)
   try {
-    const ledgerEntry = await createPartnerLedgerEntry({
-      id: conversionId,
-      team_id: conversion.team_id,
-      sponsor_id: conversion.sponsor_id,
-      sponsor_name: conversion.sponsors.name,
-      conversion_type: conversion.conversion_type,
-      payout_amount: conversion.sponsors.payout_per_conversion,
-      payout_currency: conversion.sponsors.payout_currency,
-      created_at: conversion.created_at,
-    });
+    await createPartnerLedgerEntryForConversion(conversionId);
 
     return {
       success: true,
       conversion,
-      ledgerEntry,
       message: 'Conversion approved and added to partner ledger',
     };
   } catch (error) {

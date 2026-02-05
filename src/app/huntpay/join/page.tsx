@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Wallet, CheckCircle2, ArrowRight } from 'lucide-react';
 
-export default function JoinHuntPage() {
+function JoinHuntPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const huntSlug = searchParams.get('hunt') || 'web3-downtown-quest';
@@ -268,5 +268,13 @@ export default function JoinHuntPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function JoinHuntPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <JoinHuntPageContent />
+    </Suspense>
   );
 }
