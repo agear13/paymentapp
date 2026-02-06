@@ -21,6 +21,17 @@ interface Props {
   program: Program;
 }
 
+const getRatingMessage = (rating: number): string => {
+  const messages: Record<number, string> = {
+    5: 'Excellent! We are thrilled you had such a great experience.',
+    4: 'Great! We are glad you enjoyed it.',
+    3: 'Good. Thank you for your feedback.',
+    2: 'We are sorry to hear that. We will work on improving.',
+    1: 'We apologize for your experience. Your feedback helps us improve.',
+  };
+  return messages[rating] || '';
+};
+
 export function ReviewFormClient({ token, program }: Props) {
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
@@ -171,11 +182,7 @@ export function ReviewFormClient({ token, program }: Props) {
               </div>
               {rating > 0 && (
                 <p className="mt-2 text-sm text-gray-600">
-                  {rating === 5 && 'Excellent! We're thrilled you had such a great experience.'}
-                  {rating === 4 && 'Great! We're glad you enjoyed it.'}
-                  {rating === 3 && 'Good. Thank you for your feedback.'}
-                  {rating === 2 && 'We're sorry to hear that. We'll work on improving.'}
-                  {rating === 1 && 'We apologize for your experience. Your feedback helps us improve.'}
+                  {getRatingMessage(rating)}
                 </p>
               )}
             </div>
@@ -224,7 +231,7 @@ export function ReviewFormClient({ token, program }: Props) {
                 className="text-sm text-gray-700 leading-tight cursor-pointer"
               >
                 I consent to having my review published on the referral page and promotional materials.
-                {rating >= 4 && ' High ratings may unlock referral rewards!'}
+                {rating >= 4 ? ' High ratings may unlock referral rewards!' : ''}
               </label>
             </div>
 
