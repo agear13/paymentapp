@@ -13,6 +13,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export async function createPartnerLedgerEntryForReferralConversion(
   conversionId: string
 ): Promise<void> {
+  console.log('[REFERRAL_LEDGER_START] Creating ledger entry for conversion:', conversionId);
+  
   // Use admin client for all ledger operations (bypasses RLS)
   const adminClient = createAdminClient();
 
@@ -29,12 +31,22 @@ export async function createPartnerLedgerEntryForReferralConversion(
       .single();
 
     if (convError || !conversion) {
-      console.error('Conversion not found:', convError);
-      return;
+      const errorMsg = `[REFERRAL_LEDGER_FAIL] Conversion not found: ${conversionId}`;
+      console.error(errorMsg, convError);
+      throw new Error(errorMsg);
     }
 
+    console.log('[REFERRAL_LEDGER] Loaded conversion:', {
+      id: conversion.id,
+      type: conversion.conversion_type,
+      status: conversion.status,
+      participant: conversion.referral_participants.name,
+      role: conversion.referral_participants.role,
+      program: conversion.referral_programs.slug,
+    });
+
     // Get the program rules to calculate earnings from referral_program_rules
-    const { data: rule } = await adminClient
+    const { data: rule, error: ruleError } = await adminClient
       .from('referral_program_rules')
       .select('*')
       .eq('program_id', conversion.program_id)
@@ -44,10 +56,17 @@ export async function createPartnerLedgerEntryForReferralConversion(
       .limit(1)
       .single();
 
-    if (!rule) {
-      console.log('No matching rule found for conversion:', conversionId);
-      return;
+    if (ruleError || !rule) {
+      const errorMsg = `[REFERRAL_LEDGER_FAIL] No matching rule found for conversion ${conversionId}. Role: ${conversion.referral_participants.role}, Type: ${conversion.conversion_type}`;
+      console.error(errorMsg, ruleError);
+      throw new Error(errorMsg);
     }
+
+    console.log('[REFERRAL_LEDGER] Found rule:', {
+      payout_type: rule.payout_type,
+      value: rule.value,
+      currency: rule.currency,
+    });
 
     // Calculate earnings based on rule
     let earningsAmount = 0;
@@ -58,9 +77,12 @@ export async function createPartnerLedgerEntryForReferralConversion(
     }
 
     if (earningsAmount <= 0) {
-      console.log('Calculated earnings is 0 or negative, skipping ledger entry');
-      return;
+      const errorMsg = `[REFERRAL_LEDGER_FAIL] Calculated earnings is ${earningsAmount}, must be positive`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
+
+    console.log('[REFERRAL_LEDGER] Calculated earnings:', earningsAmount);
 
     const currency = rule.currency || conversion.currency || 'USD';
 
@@ -76,6 +98,7 @@ export async function createPartnerLedgerEntryForReferralConversion(
 
     if (existingProgram) {
       programId = existingProgram.id;
+      console.log('[REFERRAL_LEDGER] Using existing partner program:', programId);
     } else {
       // Create new partner program
       const { data: newProgram, error: programError } = await adminClient
@@ -88,40 +111,19 @@ export async function createPartnerLedgerEntryForReferralConversion(
         .single();
 
       if (programError || !newProgram) {
-        console.error('Failed to create partner program:', programError);
-        return;
+        const errorMsg = `[REFERRAL_LEDGER_FAIL] Failed to create partner program`;
+        console.error(errorMsg, programError);
+        throw new Error(errorMsg);
       }
       programId = newProgram.id;
+      console.log('[REFERRAL_LEDGER] Created new partner program:', programId);
     }
 
-    // Get or create partner entity (participant)
-    const { data: existingEntity } = await adminClient
-      .from('partner_entities')
-      .select('id')
-      .eq('program_id', programId)
-      .eq('entity_type', 'participant')
-      .eq('entity_ref_id', conversion.participant_id)
-      .single();
-
-    let entityId: string | null = null;
-
-    if (existingEntity) {
-      entityId = existingEntity.id;
-    } else {
-      // Create new entity
-      const { data: newEntity } = await adminClient
-        .from('partner_entities')
-        .insert({
-          program_id: programId,
-          entity_type: 'participant',
-          entity_ref_id: conversion.participant_id,
-          name: conversion.referral_participants.name,
-        })
-        .select('id')
-        .single();
-
-      entityId = newEntity?.id || null;
-    }
+    // Note: partner_entities has CHECK constraint limiting entity_type to ('sponsor', 'hunt', 'stop')
+    // For referral participants, we'll leave entity_id as NULL since it's nullable
+    // The participant info is already captured in the description field
+    const entityId: string | null = null;
+    console.log('[REFERRAL_LEDGER] Using NULL entity_id (participant info in description)');
 
     // Build description
     const participantName = conversion.referral_participants.name;
@@ -129,14 +131,19 @@ export async function createPartnerLedgerEntryForReferralConversion(
     const programName = conversion.referral_programs.name;
     const description = `${programName} conversion: ${participantName} • ${conversionType}${conversion.gross_amount ? ` • $${conversion.gross_amount}` : ''}`;
 
-    // Insert ledger entry (idempotent via unique constraint)
+    // IMPORTANT: Convert UUID to TEXT for source_ref column
+    const sourceRefText = conversionId.toString();
+    
+    console.log('[REFERRAL_LEDGER] Inserting ledger entry with source_ref:', sourceRefText);
+
+    // Insert ledger entry (idempotent via unique constraint on source, source_ref)
     const { error: insertError } = await adminClient
       .from('partner_ledger_entries')
       .insert({
         program_id: programId,
         entity_id: entityId,
         source: 'referral',
-        source_ref: conversionId,
+        source_ref: sourceRefText,
         status: 'pending',
         gross_amount: conversion.gross_amount || null,
         earnings_amount: earningsAmount,
@@ -147,15 +154,18 @@ export async function createPartnerLedgerEntryForReferralConversion(
     if (insertError) {
       // Check if it's a duplicate (unique constraint violation)
       if (insertError.code === '23505') {
-        console.log('Ledger entry already exists for conversion:', conversionId);
+        console.log('[REFERRAL_LEDGER_SUCCESS] Ledger entry already exists (idempotent):', conversionId);
         return;
       }
+      
+      const errorMsg = `[REFERRAL_LEDGER_FAIL] Failed to insert ledger entry`;
+      console.error(errorMsg, insertError);
       throw insertError;
     }
 
-    console.log('Partner ledger entry created for conversion:', conversionId);
+    console.log('[REFERRAL_LEDGER_SUCCESS] Partner ledger entry created for conversion:', conversionId);
   } catch (error) {
-    console.error('Failed to create partner ledger entry:', error);
+    console.error('[REFERRAL_LEDGER_FAIL] Error:', error);
     throw error;
   }
 }
