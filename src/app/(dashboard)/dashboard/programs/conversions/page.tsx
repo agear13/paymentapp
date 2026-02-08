@@ -5,13 +5,13 @@ import { ConversionsTable } from '@/components/referrals/conversions-table';
 export default async function ConversionsPage() {
   const supabase = await createClient();
 
-  // Fetch all conversions with related data
+  // Fetch all referral conversions with related data
   const { data: conversions, error } = await supabase
-    .from('conversions')
+    .from('referral_conversions')
     .select(`
       *,
-      programs (id, name, slug),
-      participants (id, name, role, referral_code)
+      referral_programs!referral_conversions_program_id_fkey (id, name, slug),
+      referral_participants!referral_conversions_participant_id_fkey (id, name, role, referral_code)
     `)
     .order('created_at', { ascending: false });
 

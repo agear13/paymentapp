@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createUserClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import { ReferralLandingClient } from '@/components/referrals/referral-landing-client';
 
@@ -7,15 +7,34 @@ export default async function ReferralLandingPage({
 }: {
   params: { code: string };
 }) {
-  const supabase = await createClient();
+  // Initialize Supabase client - fail early if env vars missing
+  let supabase;
+  try {
+    supabase = await createUserClient();
+  } catch (error) {
+    console.error('Supabase configuration error:', error);
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md">
+          <h1 className="text-2xl font-bold text-red-600 mb-2">
+            Configuration Error
+          </h1>
+          <p className="text-gray-600">
+            Referral system is not properly configured. Please contact support.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const referralCode = params.code.toUpperCase();
 
-  // Find participant and program
+  // Find participant and program (using referral_ namespaced tables)
   const { data: participant, error: participantError } = await supabase
-    .from('participants')
+    .from('referral_participants')
     .select(`
       *,
-      programs (
+      referral_programs!referral_participants_program_id_fkey (
         id,
         name,
         slug,
@@ -28,11 +47,15 @@ export default async function ReferralLandingPage({
     .eq('referral_code', referralCode)
     .single();
 
-  if (participantError || !participant || participant.status !== 'active') {
+  if (participantError) {
+    console.error('Participant lookup error:', participantError);
+  }
+
+  if (!participant || participant.status !== 'active') {
     notFound();
   }
 
-  if (participant.programs.status !== 'active') {
+  if (participant.referral_programs.status !== 'active') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -43,9 +66,9 @@ export default async function ReferralLandingPage({
     );
   }
 
-  // Fetch published reviews for this program
+  // Fetch published reviews for this program (using referral_reviews)
   const { data: reviews } = await supabase
-    .from('reviews')
+    .from('referral_reviews')
     .select('id, rating, testimonial, reviewer_name, photo_url, created_at')
     .eq('program_id', participant.program_id)
     .eq('status', 'published')
@@ -55,7 +78,7 @@ export default async function ReferralLandingPage({
 
   return (
     <ReferralLandingClient
-      program={participant.programs}
+      program={participant.referral_programs}
       participant={participant}
       referralCode={referralCode}
       reviews={reviews || []}

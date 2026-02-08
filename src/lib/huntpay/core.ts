@@ -3,7 +3,8 @@
  * Team management, check-ins, conversions, and attribution tracking
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createUserClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createPartnerLedgerEntryForConversion } from './partners-integration';
 import crypto from 'crypto';
 
@@ -45,7 +46,7 @@ export interface ConversionInput {
  * Create a new team and generate join token
  */
 export async function createTeam(input: CreateTeamInput) {
-  const supabase = await createClient();
+  const supabase = await createUserClient();
 
   // Generate unique join token
   const joinToken = `JOIN-${input.teamName.toUpperCase().replace(/\s+/g, '-')}-${crypto.randomBytes(4).toString('hex')}`;
@@ -74,7 +75,7 @@ export async function createTeam(input: CreateTeamInput) {
  * Connect wallet to team
  */
 export async function connectTeamWallet(teamId: string, address: string, chainId: number) {
-  const supabase = await createClient();
+  const supabase = await createUserClient();
 
   const { data, error } = await supabase
     .from('team_wallets')
@@ -101,7 +102,7 @@ export async function connectTeamWallet(teamId: string, address: string, chainId
  * Check in at a stop with code verification
  */
 export async function checkinAtStop(input: CheckinInput) {
-  const supabase = await createClient();
+  const supabase = await createUserClient();
 
   // Verify checkin code
   const { data: stop } = await supabase
@@ -150,7 +151,7 @@ export async function checkinAtStop(input: CheckinInput) {
  * Track attribution event (clicked sponsor link)
  */
 export async function trackAttribution(input: AttributionInput) {
-  const supabase = await createClient();
+  const supabase = await createUserClient();
 
   // Hash IP for privacy
   const ipHash = input.ipAddress 
@@ -184,7 +185,7 @@ export async function trackAttribution(input: AttributionInput) {
  * Submit conversion proof (idempotent)
  */
 export async function submitConversion(input: ConversionInput) {
-  const supabase = await createClient();
+  const supabase = await createUserClient();
 
   // Check for duplicate conversion
   const { data: existing } = await supabase
@@ -228,7 +229,7 @@ export async function submitConversion(input: ConversionInput) {
  * Mark stop as completed (all challenges done)
  */
 export async function completeStop(teamId: string, stopId: string) {
-  const supabase = await createClient();
+  const supabase = await createUserClient();
 
   // Check if already completed
   const { data: existing } = await supabase
@@ -291,7 +292,7 @@ export async function recordNFTMint(
   txHash: string,
   metadataUrl?: string
 ) {
-  const supabase = await createClient();
+  const supabase = await createUserClient();
 
   // Check for duplicate
   const { data: existing } = await supabase
@@ -330,12 +331,14 @@ export async function recordNFTMint(
 /**
  * Approve conversion (ADMIN ONLY)
  * This is the critical function that creates partner ledger entries
+ * Uses admin client to bypass RLS for deterministic writes
  */
 export async function approveConversion(conversionId: string, reviewedBy: string) {
-  const supabase = await createClient();
+  // Use admin client for all DB operations
+  const adminClient = createAdminClient();
 
   // Get conversion details
-  const { data: conversion, error: fetchError } = await supabase
+  const { data: conversion, error: fetchError } = await adminClient
     .from('conversions')
     .select(`
       *,
@@ -349,6 +352,7 @@ export async function approveConversion(conversionId: string, reviewedBy: string
     .single();
 
   if (fetchError || !conversion) {
+    console.error('Conversion fetch error:', fetchError);
     throw new Error('Conversion not found');
   }
 
@@ -356,8 +360,8 @@ export async function approveConversion(conversionId: string, reviewedBy: string
     return { success: true, alreadyApproved: true };
   }
 
-  // Update conversion status
-  const { error: updateError } = await supabase
+  // Update conversion status using admin client
+  const { error: updateError } = await adminClient
     .from('conversions')
     .update({
       status: 'approved',
@@ -367,10 +371,12 @@ export async function approveConversion(conversionId: string, reviewedBy: string
     .eq('id', conversionId);
 
   if (updateError) {
+    console.error('Failed to approve conversion:', updateError);
     throw new Error('Failed to approve conversion');
   }
 
   // Create partner ledger entry (THIS IS THE KEY INTEGRATION)
+  // Uses admin client internally
   try {
     await createPartnerLedgerEntryForConversion(conversionId);
 
@@ -381,10 +387,10 @@ export async function approveConversion(conversionId: string, reviewedBy: string
     };
   } catch (error) {
     console.error('Failed to create ledger entry:', error);
-    // Rollback approval
-    await supabase
+    // Rollback approval using admin client
+    await adminClient
       .from('conversions')
-      .update({ status: 'pending' })
+      .update({ status: 'pending', reviewed_at: null, reviewed_by: null })
       .eq('id', conversionId);
     
     throw new Error('Failed to create partner ledger entry');
@@ -393,11 +399,13 @@ export async function approveConversion(conversionId: string, reviewedBy: string
 
 /**
  * Reject conversion (ADMIN ONLY)
+ * Uses admin client to bypass RLS for deterministic writes
  */
 export async function rejectConversion(conversionId: string, reviewedBy: string) {
-  const supabase = await createClient();
+  // Use admin client for all DB operations
+  const adminClient = createAdminClient();
 
-  const { error } = await supabase
+  const { error } = await adminClient
     .from('conversions')
     .update({
       status: 'rejected',
@@ -407,6 +415,7 @@ export async function rejectConversion(conversionId: string, reviewedBy: string)
     .eq('id', conversionId);
 
   if (error) {
+    console.error('Failed to reject conversion:', error);
     throw new Error('Failed to reject conversion');
   }
 

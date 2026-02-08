@@ -15,9 +15,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find participant by referral code
+    // Find participant by referral code (using referral_participants)
     const { data: participant, error: participantError } = await supabase
-      .from('participants')
+      .from('referral_participants')
       .select('id, program_id, status')
       .eq('referral_code', referralCode.toUpperCase())
       .single();
@@ -42,9 +42,9 @@ export async function POST(request: NextRequest) {
     const ip = forwardedFor ? forwardedFor.split(',')[0] : request.ip || 'unknown';
     const ipHash = createHash('sha256').update(ip).digest('hex').substring(0, 16);
 
-    // Create attribution record
+    // Create attribution record (using referral_attributions)
     const { data: attribution, error: attrError } = await supabase
-      .from('attributions')
+      .from('referral_attributions')
       .insert({
         program_id: participant.program_id,
         participant_id: participant.id,

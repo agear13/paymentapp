@@ -1,9 +1,11 @@
 /**
  * HuntPay → Partners Module Integration
  * Creates partner ledger entries when conversions are approved
+ * Uses admin client to bypass RLS for deterministic ledger writes
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { createUserClient } from '@/lib/supabase/server';
 
 /**
  * Creates a partner ledger entry when a HuntPay conversion is approved
@@ -12,11 +14,12 @@ import { createClient } from '@/lib/supabase/server';
 export async function createPartnerLedgerEntryForConversion(
   conversionId: string
 ): Promise<void> {
-  const supabase = await createClient();
+  // Use admin client for all ledger operations (bypasses RLS)
+  const adminClient = createAdminClient();
 
   try {
     // Load conversion with all related data
-    const { data: conversion, error: convError } = await supabase
+    const { data: conversion, error: convError } = await adminClient
       .from('conversions')
       .select(`
         *,
@@ -34,7 +37,7 @@ export async function createPartnerLedgerEntryForConversion(
     }
 
     // Get or create HuntPay program
-    const { data: program } = await supabase
+    const { data: program } = await adminClient
       .from('partner_programs')
       .select('id')
       .eq('slug', 'huntpay')
@@ -51,7 +54,7 @@ export async function createPartnerLedgerEntryForConversion(
     let entityId: string | null = null;
     
     if (conversion.sponsor_id && conversion.sponsors) {
-      const { data: existingEntity } = await supabase
+      const { data: existingEntity } = await adminClient
         .from('partner_entities')
         .select('id')
         .eq('program_id', programId)
@@ -63,7 +66,7 @@ export async function createPartnerLedgerEntryForConversion(
         entityId = existingEntity.id;
       } else {
         // Create new entity
-        const { data: newEntity } = await supabase
+        const { data: newEntity } = await adminClient
           .from('partner_entities')
           .insert({
             program_id: programId,
@@ -89,7 +92,7 @@ export async function createPartnerLedgerEntryForConversion(
     const description = `HuntPay conversion approved: ${teamName} • ${sponsorName} • ${conversionType}`;
 
     // Insert ledger entry (idempotent via unique constraint)
-    const { error: insertError } = await supabase
+    const { error: insertError } = await adminClient
       .from('partner_ledger_entries')
       .insert({
         program_id: programId,
@@ -123,7 +126,8 @@ export async function createPartnerLedgerEntryForConversion(
  * Get partner ledger summary for a program
  */
 export async function getPartnerLedgerSummary(programSlug: string = 'huntpay') {
-  const supabase = await createClient();
+  // Use user client for read operations (respects RLS)
+  const supabase = await createUserClient();
 
   const { data: program } = await supabase
     .from('partner_programs')

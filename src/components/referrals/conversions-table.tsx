@@ -20,8 +20,8 @@ interface Conversion {
   created_at: string;
   approved_at: string | null;
   approved_by: string | null;
-  programs: { name: string };
-  participants: { name: string; role: string; referral_code: string };
+  referral_programs: { name: string };
+  referral_participants: { name: string; role: string; referral_code: string };
 }
 
 export function ConversionsTable({ conversions }: { conversions: Conversion[] }) {
@@ -106,12 +106,12 @@ export function ConversionsTable({ conversions }: { conversions: Conversion[] })
               <TableCell>
                 {new Date(conversion.created_at).toLocaleDateString()}
               </TableCell>
-              <TableCell>{conversion.programs.name}</TableCell>
+              <TableCell>{conversion.referral_programs.name}</TableCell>
               <TableCell>
                 <div>
-                  <div className="font-medium">{conversion.participants.name}</div>
+                  <div className="font-medium">{conversion.referral_participants.name}</div>
                   <div className="text-sm text-gray-500">
-                    {conversion.participants.role} • {conversion.participants.referral_code}
+                    {conversion.referral_participants.role} • {conversion.referral_participants.referral_code}
                   </div>
                 </div>
               </TableCell>

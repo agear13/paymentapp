@@ -15,9 +15,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find participant
+    // Find participant (using referral_participants)
     const { data: participant, error: participantError } = await supabase
-      .from('participants')
+      .from('referral_participants')
       .select('id, program_id, role')
       .eq('referral_code', referralCode.toUpperCase())
       .single();
@@ -29,9 +29,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create lead
+    // Create lead (using referral_leads)
     const { data: lead, error: leadError } = await supabase
-      .from('leads')
+      .from('referral_leads')
       .insert({
         program_id: participant.program_id,
         participant_id: participant.id,
@@ -52,9 +52,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Auto-create conversion for lead_submitted (auto-approved)
+    // Auto-create conversion for lead_submitted (auto-approved) (using referral_conversions)
     const { data: conversion, error: conversionError } = await supabase
-      .from('conversions')
+      .from('referral_conversions')
       .insert({
         program_id: participant.program_id,
         participant_id: participant.id,

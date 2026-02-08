@@ -8,12 +8,12 @@ import Link from 'next/link';
 export default async function ParticipantsPage() {
   const supabase = await createClient();
 
-  // Fetch all participants with program data
+  // Fetch all referral participants with program data
   const { data: participants, error } = await supabase
-    .from('participants')
+    .from('referral_participants')
     .select(`
       *,
-      programs (id, name, slug)
+      referral_programs!referral_participants_program_id_fkey (id, name, slug)
     `)
     .order('created_at', { ascending: false });
 

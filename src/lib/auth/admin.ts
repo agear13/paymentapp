@@ -3,7 +3,7 @@
  * Protects admin-only routes and operations
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createUserClient } from '@/lib/supabase/server';
 
 /**
  * Check if the current user is an admin based on ADMIN_EMAILS allowlist
@@ -14,7 +14,7 @@ export async function checkAdminAuth(): Promise<{
   user: any | null;
   error: string | null;
 }> {
-  const supabase = await createClient();
+  const supabase = await createUserClient();
 
   // Get current user
   const { data: { user }, error: authError } = await supabase.auth.getUser();

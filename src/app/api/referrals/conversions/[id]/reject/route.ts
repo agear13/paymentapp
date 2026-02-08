@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAdminAuth } from '@/lib/auth/admin';
 
@@ -7,12 +7,11 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = await createClient();
     const conversionId = params.id;
     const body = await request.json();
     const { reason } = body;
 
-    // Check admin authorization
+    // Check admin authorization using user client
     const { isAdmin, user, error: authError } = await checkAdminAuth();
     
     if (!isAdmin || !user) {
@@ -22,14 +21,18 @@ export async function POST(
       );
     }
 
-    // Get conversion
-    const { data: conversion, error: fetchError } = await supabase
-      .from('conversions')
+    // Use admin client for all DB operations (bypasses RLS)
+    const adminClient = createAdminClient();
+
+    // Get conversion from referral_conversions table
+    const { data: conversion, error: fetchError } = await adminClient
+      .from('referral_conversions')
       .select('*')
       .eq('id', conversionId)
       .single();
 
     if (fetchError || !conversion) {
+      console.error('Conversion fetch error:', fetchError);
       return NextResponse.json(
         { error: 'Conversion not found' },
         { status: 404 }
@@ -43,9 +46,9 @@ export async function POST(
       );
     }
 
-    // Update conversion status
-    const { error: updateError } = await supabase
-      .from('conversions')
+    // Update conversion status using admin client
+    const { error: updateError } = await adminClient
+      .from('referral_conversions')
       .update({
         status: 'rejected',
         proof_json: {
@@ -72,7 +75,7 @@ export async function POST(
   } catch (error) {
     console.error('Reject conversion error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }
     );
   }

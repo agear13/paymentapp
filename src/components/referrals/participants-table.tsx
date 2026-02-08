@@ -13,7 +13,7 @@ interface Participant {
   referral_code: string;
   status: string;
   created_at: string;
-  programs: { name: string };
+  referral_programs: { name: string };
 }
 
 export function ParticipantsTable({ participants }: { participants: Participant[] }) {
@@ -68,7 +68,7 @@ export function ParticipantsTable({ participants }: { participants: Participant[
           <TableRow key={participant.id}>
             <TableCell className="font-medium">{participant.name}</TableCell>
             <TableCell>{participant.email || '—'}</TableCell>
-            <TableCell>{participant.programs.name}</TableCell>
+            <TableCell>{participant.referral_programs.name}</TableCell>
             <TableCell>{getRoleBadge(participant.role)}</TableCell>
             <TableCell>
               <code className="text-sm bg-gray-100 px-2 py-1 rounded">

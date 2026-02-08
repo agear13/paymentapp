@@ -21,9 +21,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify token
+    // Verify token (using referral_review_tokens)
     const { data: reviewToken, error: tokenError } = await supabase
-      .from('review_tokens')
+      .from('referral_review_tokens')
       .select('*')
       .eq('token', token)
       .single();
@@ -57,9 +57,9 @@ export async function POST(request: NextRequest) {
     const status = rating >= 4 ? 'pending' : 'private';
     const isPublic = false; // Admin must approve first
 
-    // Create review
+    // Create review (using referral_reviews)
     const { data: review, error: reviewError } = await supabase
-      .from('reviews')
+      .from('referral_reviews')
       .insert({
         program_id: reviewToken.program_id,
         participant_id: reviewToken.participant_id,
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     // Mark token as used
     await supabase
-      .from('review_tokens')
+      .from('referral_review_tokens')
       .update({ used_at: new Date().toISOString() })
       .eq('id', reviewToken.id);
 
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     let shareData = null;
     if (rating >= 4 && reviewToken.participant_id) {
       const { data: participant } = await supabase
-        .from('participants')
+        .from('referral_participants')
         .select('referral_code')
         .eq('id', reviewToken.participant_id)
         .single();

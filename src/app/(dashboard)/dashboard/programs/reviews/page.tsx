@@ -5,13 +5,13 @@ import { ReviewsTable } from '@/components/referrals/reviews-table';
 export default async function ReviewsPage() {
   const supabase = await createClient();
 
-  // Fetch all reviews with program data
+  // Fetch all referral reviews with program data
   const { data: reviews, error } = await supabase
-    .from('reviews')
+    .from('referral_reviews')
     .select(`
       *,
-      programs (id, name),
-      participants (name, referral_code)
+      referral_programs!referral_reviews_program_id_fkey (id, name),
+      referral_participants!referral_reviews_participant_id_fkey (name, referral_code)
     `)
     .order('created_at', { ascending: false });
 

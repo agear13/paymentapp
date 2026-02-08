@@ -1,9 +1,10 @@
 /**
  * Referral Programs → Partners Module Integration
  * Creates partner ledger entries when conversions are approved
+ * Uses admin client to bypass RLS for deterministic ledger writes
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
  * Creates a partner ledger entry when a referral conversion is approved
@@ -12,16 +13,17 @@ import { createClient } from '@/lib/supabase/server';
 export async function createPartnerLedgerEntryForReferralConversion(
   conversionId: string
 ): Promise<void> {
-  const supabase = await createClient();
+  // Use admin client for all ledger operations (bypasses RLS)
+  const adminClient = createAdminClient();
 
   try {
-    // Load conversion with all related data
-    const { data: conversion, error: convError } = await supabase
-      .from('conversions')
+    // Load conversion with all related data from referral_ tables
+    const { data: conversion, error: convError } = await adminClient
+      .from('referral_conversions')
       .select(`
         *,
-        programs (id, name, slug),
-        participants (id, name, role, referral_code)
+        referral_programs!referral_conversions_program_id_fkey (id, name, slug),
+        referral_participants!referral_conversions_participant_id_fkey (id, name, role, referral_code)
       `)
       .eq('id', conversionId)
       .single();
@@ -31,12 +33,12 @@ export async function createPartnerLedgerEntryForReferralConversion(
       return;
     }
 
-    // Get the program rules to calculate earnings
-    const { data: rule } = await supabase
-      .from('program_rules')
+    // Get the program rules to calculate earnings from referral_program_rules
+    const { data: rule } = await adminClient
+      .from('referral_program_rules')
       .select('*')
       .eq('program_id', conversion.program_id)
-      .eq('role', conversion.participants.role)
+      .eq('role', conversion.referral_participants.role)
       .eq('conversion_type', conversion.conversion_type)
       .order('priority', { ascending: false })
       .limit(1)
@@ -63,8 +65,8 @@ export async function createPartnerLedgerEntryForReferralConversion(
     const currency = rule.currency || conversion.currency || 'USD';
 
     // Get or create partner program in ledger
-    const programSlug = conversion.programs.slug;
-    const { data: existingProgram } = await supabase
+    const programSlug = conversion.referral_programs.slug;
+    const { data: existingProgram } = await adminClient
       .from('partner_programs')
       .select('id')
       .eq('slug', programSlug)
@@ -76,11 +78,11 @@ export async function createPartnerLedgerEntryForReferralConversion(
       programId = existingProgram.id;
     } else {
       // Create new partner program
-      const { data: newProgram, error: programError } = await supabase
+      const { data: newProgram, error: programError } = await adminClient
         .from('partner_programs')
         .insert({
           slug: programSlug,
-          name: conversion.programs.name,
+          name: conversion.referral_programs.name,
         })
         .select('id')
         .single();
@@ -93,7 +95,7 @@ export async function createPartnerLedgerEntryForReferralConversion(
     }
 
     // Get or create partner entity (participant)
-    const { data: existingEntity } = await supabase
+    const { data: existingEntity } = await adminClient
       .from('partner_entities')
       .select('id')
       .eq('program_id', programId)
@@ -107,13 +109,13 @@ export async function createPartnerLedgerEntryForReferralConversion(
       entityId = existingEntity.id;
     } else {
       // Create new entity
-      const { data: newEntity } = await supabase
+      const { data: newEntity } = await adminClient
         .from('partner_entities')
         .insert({
           program_id: programId,
           entity_type: 'participant',
           entity_ref_id: conversion.participant_id,
-          name: conversion.participants.name,
+          name: conversion.referral_participants.name,
         })
         .select('id')
         .single();
@@ -122,13 +124,13 @@ export async function createPartnerLedgerEntryForReferralConversion(
     }
 
     // Build description
-    const participantName = conversion.participants.name;
+    const participantName = conversion.referral_participants.name;
     const conversionType = conversion.conversion_type;
-    const programName = conversion.programs.name;
+    const programName = conversion.referral_programs.name;
     const description = `${programName} conversion: ${participantName} • ${conversionType}${conversion.gross_amount ? ` • $${conversion.gross_amount}` : ''}`;
 
     // Insert ledger entry (idempotent via unique constraint)
-    const { error: insertError } = await supabase
+    const { error: insertError } = await adminClient
       .from('partner_ledger_entries')
       .insert({
         program_id: programId,

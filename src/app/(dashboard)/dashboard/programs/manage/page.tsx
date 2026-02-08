@@ -8,9 +8,9 @@ import Link from 'next/link';
 export default async function ProgramsManagePage() {
   const supabase = await createClient();
 
-  // Fetch programs with aggregated stats
+  // Fetch referral programs with aggregated stats
   const { data: programs } = await supabase
-    .from('programs')
+    .from('referral_programs')
     .select('*')
     .order('created_at', { ascending: false });
 
@@ -18,18 +18,18 @@ export default async function ProgramsManagePage() {
   const programsWithStats = await Promise.all(
     (programs || []).map(async (program) => {
       const { count: participantCount } = await supabase
-        .from('participants')
+        .from('referral_participants')
         .select('*', { count: 'exact', head: true })
         .eq('program_id', program.id);
 
       const { count: conversionCount } = await supabase
-        .from('conversions')
+        .from('referral_conversions')
         .select('*', { count: 'exact', head: true })
         .eq('program_id', program.id)
         .eq('status', 'approved');
 
       const { data: reviews } = await supabase
-        .from('reviews')
+        .from('referral_reviews')
         .select('rating')
         .eq('program_id', program.id)
         .eq('status', 'published');

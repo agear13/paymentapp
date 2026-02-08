@@ -17,8 +17,8 @@ interface Review {
   is_public: boolean;
   status: string;
   created_at: string;
-  programs: { name: string };
-  participants: { name: string; referral_code: string } | null;
+  referral_programs: { name: string };
+  referral_participants: { name: string; referral_code: string } | null;
 }
 
 export function ReviewsTable({ reviews }: { reviews: Review[] }) {
@@ -101,12 +101,12 @@ export function ReviewsTable({ reviews }: { reviews: Review[] }) {
                 {new Date(review.created_at).toLocaleDateString()}
               </TableCell>
               <TableCell className="font-medium">{review.reviewer_name}</TableCell>
-              <TableCell>{review.programs.name}</TableCell>
+              <TableCell>{review.referral_programs.name}</TableCell>
               <TableCell>{renderStars(review.rating)}</TableCell>
               <TableCell>
-                {review.participants ? (
+                {review.referral_participants ? (
                   <span className="text-sm text-gray-600">
-                    {review.participants.name}
+                    {review.referral_participants.name}
                   </span>
                 ) : (
                   '—'

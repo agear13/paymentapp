@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createUserClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import { ReviewFormClient } from '@/components/referrals/review-form-client';
 
@@ -7,15 +7,34 @@ export default async function ReviewPage({
 }: {
   params: { token: string };
 }) {
-  const supabase = await createClient();
+  // Initialize Supabase client - fail early if env vars missing
+  let supabase;
+  try {
+    supabase = await createUserClient();
+  } catch (error) {
+    console.error('Supabase configuration error:', error);
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md">
+          <h1 className="text-2xl font-bold text-red-600 mb-2">
+            Configuration Error
+          </h1>
+          <p className="text-gray-600">
+            Review system is not properly configured. Please contact support.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const token = params.token;
 
-  // Verify token exists and is valid
+  // Verify token exists and is valid (using referral_review_tokens)
   const { data: reviewToken, error: tokenError } = await supabase
-    .from('review_tokens')
+    .from('referral_review_tokens')
     .select(`
       *,
-      programs (
+      referral_programs!referral_review_tokens_program_id_fkey (
         id,
         name,
         description
@@ -24,7 +43,11 @@ export default async function ReviewPage({
     .eq('token', token)
     .single();
 
-  if (tokenError || !reviewToken) {
+  if (tokenError) {
+    console.error('Review token lookup error:', tokenError);
+  }
+
+  if (!reviewToken) {
     notFound();
   }
 
@@ -65,7 +88,7 @@ export default async function ReviewPage({
   return (
     <ReviewFormClient
       token={token}
-      program={reviewToken.programs}
+      program={reviewToken.referral_programs}
     />
   );
 }
