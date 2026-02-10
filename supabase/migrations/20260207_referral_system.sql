@@ -198,6 +198,13 @@ BEGIN
   END IF;
 END $$;
 
+-- Create matching partner_programs entry for referral → partner ledger integration
+-- CRITICAL: referral_programs and partner_programs are separate tables with different IDs
+-- Mapping is done by slug: referral_programs.slug = partner_programs.slug
+INSERT INTO partner_programs (slug, name)
+VALUES ('consultant-referral', 'Consultant Referral Program')
+ON CONFLICT (slug) DO NOTHING;
+
 -- Comments for documentation
 COMMENT ON TABLE referral_programs IS 'Referral programs separate from HuntPay system';
 COMMENT ON TABLE referral_conversions IS 'Referral conversions - NOT the same as HuntPay conversions table';
@@ -207,3 +214,4 @@ COMMENT ON TABLE referral_participants IS 'Program participants with unique refe
 -- SELECT slug FROM referral_programs;
 -- SELECT referral_code FROM referral_participants ORDER BY referral_code;
 -- SELECT token FROM referral_review_tokens;
+-- SELECT slug, name FROM partner_programs ORDER BY slug;

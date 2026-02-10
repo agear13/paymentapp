@@ -86,38 +86,34 @@ export async function createPartnerLedgerEntryForReferralConversion(
 
     const currency = rule.currency || conversion.currency || 'USD';
 
-    // Get or create partner program in ledger
-    const programSlug = conversion.referral_programs.slug;
-    const { data: existingProgram } = await adminClient
+    // CRITICAL: Map referral_programs.slug to partner_programs.id
+    // These are separate tables with separate IDs but matching slugs
+    const referralProgramSlug = conversion.referral_programs.slug;
+    
+    console.log('[REFERRAL_LEDGER_MAP] Looking up partner_programs by slug:', referralProgramSlug);
+
+    const { data: partnerProgram, error: partnerProgramError } = await adminClient
       .from('partner_programs')
-      .select('id')
-      .eq('slug', programSlug)
+      .select('id, slug, name')
+      .eq('slug', referralProgramSlug)
       .single();
 
-    let programId: string;
-
-    if (existingProgram) {
-      programId = existingProgram.id;
-      console.log('[REFERRAL_LEDGER] Using existing partner program:', programId);
-    } else {
-      // Create new partner program
-      const { data: newProgram, error: programError } = await adminClient
-        .from('partner_programs')
-        .insert({
-          slug: programSlug,
-          name: conversion.referral_programs.name,
-        })
-        .select('id')
-        .single();
-
-      if (programError || !newProgram) {
-        const errorMsg = `[REFERRAL_LEDGER_FAIL] Failed to create partner program`;
-        console.error(errorMsg, programError);
-        throw new Error(errorMsg);
-      }
-      programId = newProgram.id;
-      console.log('[REFERRAL_LEDGER] Created new partner program:', programId);
+    if (partnerProgramError || !partnerProgram) {
+      const errorMsg = `[REFERRAL_LEDGER_FAIL] No matching partner_programs entry found for slug="${referralProgramSlug}". ` +
+        `Partner programs must be created via migration before referrals can create ledger entries. ` +
+        `Error: ${partnerProgramError?.message || 'Not found'}`;
+      console.error(errorMsg, partnerProgramError);
+      throw new Error(errorMsg);
     }
+
+    const partnerProgramId = partnerProgram.id;
+    
+    console.log('[REFERRAL_LEDGER_MAP] Mapped successfully:', {
+      referral_program_slug: referralProgramSlug,
+      partner_program_id: partnerProgramId,
+      partner_program_slug: partnerProgram.slug,
+      partner_program_name: partnerProgram.name,
+    });
 
     // Note: partner_entities has CHECK constraint limiting entity_type to ('sponsor', 'hunt', 'stop')
     // For referral participants, we'll leave entity_id as NULL since it's nullable
@@ -134,13 +130,21 @@ export async function createPartnerLedgerEntryForReferralConversion(
     // IMPORTANT: Convert UUID to TEXT for source_ref column
     const sourceRefText = conversionId.toString();
     
-    console.log('[REFERRAL_LEDGER] Inserting ledger entry with source_ref:', sourceRefText);
+    console.log('[REFERRAL_LEDGER_INSERT] Preparing ledger entry:', {
+      source: 'referral',
+      source_ref: sourceRefText,
+      program_id: partnerProgramId,
+      earnings_amount: earningsAmount,
+      currency,
+      status: 'pending',
+      description,
+    });
 
     // Insert ledger entry (idempotent via unique constraint on source, source_ref)
     const { error: insertError } = await adminClient
       .from('partner_ledger_entries')
       .insert({
-        program_id: programId,
+        program_id: partnerProgramId, // CRITICAL: Use mapped partner_programs.id
         entity_id: entityId,
         source: 'referral',
         source_ref: sourceRefText,
