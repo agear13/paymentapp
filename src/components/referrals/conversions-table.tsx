@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 interface Conversion {
   id: string;
@@ -24,12 +25,46 @@ interface Conversion {
   referral_participants: { name: string; role: string; referral_code: string };
 }
 
-export function ConversionsTable({ conversions }: { conversions: Conversion[] }) {
+export function ConversionsTable({ conversions, isAdmin }: { conversions: Conversion[]; isAdmin?: boolean }) {
   const router = useRouter();
   const [selectedConversion, setSelectedConversion] = useState<Conversion | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [loading, setLoading] = useState(false);
+  const [replayingId, setReplayingId] = useState<string | null>(null);
+
+  const handleReplayLedger = async (conversionId: string) => {
+    setReplayingId(conversionId);
+    try {
+      const response = await fetch(`/api/referrals/conversions/${conversionId}/replay-ledger`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.error || 'Failed to replay ledger', {
+          description: data.details,
+        });
+        return;
+      }
+
+      if (data.created) {
+        toast.success('Ledger entry created');
+      } else {
+        toast.success('Ledger entry already exists', {
+          description: 'No duplicate was created (idempotent)',
+        });
+      }
+      router.refresh();
+    } catch (err) {
+      toast.error('Failed to replay ledger', {
+        description: err instanceof Error ? err.message : 'Unknown error',
+      });
+    } finally {
+      setReplayingId(null);
+    }
+  };
 
   const handleAction = async () => {
     if (!selectedConversion || !actionType) return;
@@ -125,24 +160,44 @@ export function ConversionsTable({ conversions }: { conversions: Conversion[] })
               </TableCell>
               <TableCell>{getStatusBadge(conversion.status)}</TableCell>
               <TableCell>
-                {conversion.status === 'pending' && (
-                  <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                  {conversion.status === 'pending' && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openDialog(conversion, 'approve')}
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openDialog(conversion, 'reject')}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                  {isAdmin && conversion.status === 'approved' && (
                     <Button
                       size="sm"
-                      variant="outline"
-                      onClick={() => openDialog(conversion, 'approve')}
+                      variant="ghost"
+                      onClick={() => handleReplayLedger(conversion.id)}
+                      disabled={replayingId === conversion.id}
+                      title="Replay Ledger: create partner ledger entry if missing"
                     >
-                      <CheckCircle2 className="h-4 w-4" />
+                      {replayingId === conversion.id ? (
+                        '...'
+                      ) : (
+                        <>
+                          <RotateCcw className="h-4 w-4" />
+                          <span className="ml-1">Replay Ledger</span>
+                        </>
+                      )}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openDialog(conversion, 'reject')}
-                    >
-                      <XCircle className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </TableCell>
             </TableRow>
           ))}
@@ -166,7 +221,7 @@ export function ConversionsTable({ conversions }: { conversions: Conversion[] })
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-medium">Participant</p>
-                <p className="text-sm text-gray-600">{selectedConversion.participants.name}</p>
+                <p className="text-sm text-gray-600">{selectedConversion.referral_participants.name}</p>
               </div>
               <div>
                 <p className="text-sm font-medium">Conversion Type</p>

@@ -6,14 +6,19 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 
+export type LedgerCreationResult = { created: boolean };
+
 /**
  * Creates a partner ledger entry when a referral conversion is approved
  * This makes the earnings visible in the Partners UI
+ * @returns { created: true } if new row inserted, { created: false } if already exists (idempotent)
  */
 export async function createPartnerLedgerEntryForReferralConversion(
-  conversionId: string
-): Promise<void> {
-  console.log('[REFERRAL_LEDGER_START] Creating ledger entry for conversion:', conversionId);
+  conversionId: string,
+  options?: { isReplay?: boolean }
+): Promise<LedgerCreationResult> {
+  const logStart = options?.isReplay ? '[REFERRAL_LEDGER_REPLAY_START]' : '[REFERRAL_LEDGER_START]';
+  console.log(logStart, 'Creating ledger entry for conversion:', conversionId);
   
   // Use admin client for all ledger operations (bypasses RLS)
   const adminClient = createAdminClient();
@@ -159,15 +164,16 @@ export async function createPartnerLedgerEntryForReferralConversion(
       // Check if it's a duplicate (unique constraint violation)
       if (insertError.code === '23505') {
         console.log('[REFERRAL_LEDGER_SUCCESS] Ledger entry already exists (idempotent):', conversionId);
-        return;
+        return { created: false };
       }
-      
+
       const errorMsg = `[REFERRAL_LEDGER_FAIL] Failed to insert ledger entry`;
       console.error(errorMsg, insertError);
       throw insertError;
     }
 
     console.log('[REFERRAL_LEDGER_SUCCESS] Partner ledger entry created for conversion:', conversionId);
+    return { created: true };
   } catch (error) {
     console.error('[REFERRAL_LEDGER_FAIL] Error:', error);
     throw error;

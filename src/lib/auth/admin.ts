@@ -7,10 +7,11 @@ import { createUserClient } from '@/lib/supabase/server';
 
 /**
  * Check if the current user is an admin based on ADMIN_EMAILS allowlist
- * @returns {Promise<{isAdmin: boolean, user: any | null, error: string | null}>}
+ * @returns {Promise<{isAdmin: boolean, userEmail: string | null, user: any | null, error: string | null}>}
  */
 export async function checkAdminAuth(): Promise<{
   isAdmin: boolean;
+  userEmail: string | null;
   user: any | null;
   error: string | null;
 }> {
@@ -22,29 +23,33 @@ export async function checkAdminAuth(): Promise<{
   if (authError || !user) {
     return {
       isAdmin: false,
+      userEmail: null,
       user: null,
       error: 'Authentication required',
     };
   }
 
+  const userEmail = user.email?.toLowerCase() ?? null;
+
   // Check if user email is in admin allowlist
   const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(e => e.trim().toLowerCase()) || [];
-  
+
   if (adminEmails.length === 0) {
     console.warn('ADMIN_EMAILS environment variable not configured');
     return {
       isAdmin: false,
+      userEmail,
       user,
       error: 'Admin access not configured',
     };
   }
 
-  const userEmail = user.email?.toLowerCase();
   const isAdmin = userEmail ? adminEmails.includes(userEmail) : false;
 
   if (!isAdmin) {
     return {
       isAdmin: false,
+      userEmail,
       user,
       error: 'Forbidden: Admin access required',
     };
@@ -52,6 +57,7 @@ export async function checkAdminAuth(): Promise<{
 
   return {
     isAdmin: true,
+    userEmail,
     user,
     error: null,
   };
