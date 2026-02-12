@@ -8,8 +8,8 @@ export async function POST(
 ) {
   try {
     const conversionId = params.id;
-    const body = await request.json();
-    const { reason } = body;
+    const body = await request.json().catch(() => ({}));
+    const { reason } = body ?? {};
 
     // Check admin authorization using user client
     const { isAdmin, user, error: authError } = await checkAdminAuth();
@@ -32,7 +32,7 @@ export async function POST(
       .single();
 
     if (fetchError || !conversion) {
-      console.error('Conversion fetch error:', fetchError);
+      console.error('[REFERRAL_REJECT] Conversion fetch error:', fetchError);
       return NextResponse.json(
         { error: 'Conversion not found' },
         { status: 404 }
@@ -61,7 +61,7 @@ export async function POST(
       .eq('id', conversionId);
 
     if (updateError) {
-      console.error('Failed to update conversion:', updateError);
+      console.error('[REFERRAL_REJECT] Update failed:', updateError);
       return NextResponse.json(
         { error: 'Failed to reject conversion' },
         { status: 500 }
@@ -73,7 +73,7 @@ export async function POST(
       message: 'Conversion rejected'
     });
   } catch (error) {
-    console.error('Reject conversion error:', error);
+    console.error('[REFERRAL_REJECT] Error:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }

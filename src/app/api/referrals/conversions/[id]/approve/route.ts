@@ -10,9 +10,8 @@ export async function POST(
   try {
     const conversionId = params.id;
 
-    // Check admin authorization using user client
     const { isAdmin, user, error: authError } = await checkAdminAuth();
-    
+
     if (!isAdmin || !user) {
       return NextResponse.json(
         { error: authError || 'Forbidden' },
@@ -20,10 +19,8 @@ export async function POST(
       );
     }
 
-    // Use admin client for all DB operations (bypasses RLS)
     const adminClient = createAdminClient();
 
-    // Get conversion from referral_conversions table
     const { data: conversion, error: fetchError } = await adminClient
       .from('referral_conversions')
       .select('*')
@@ -31,12 +28,18 @@ export async function POST(
       .single();
 
     if (fetchError || !conversion) {
-      console.error('Conversion fetch error:', fetchError);
+      console.error('[REFERRAL_APPROVE] Conversion fetch error:', fetchError);
       return NextResponse.json(
         { error: 'Conversion not found' },
         { status: 404 }
       );
     }
+
+    console.log('[REFERRAL_APPROVE]', {
+      conversionId,
+      conversion_type: conversion.conversion_type,
+      status_before: conversion.status,
+    });
 
     if (conversion.status === 'approved') {
       return NextResponse.json(
@@ -45,7 +48,6 @@ export async function POST(
       );
     }
 
-    // Update conversion status using admin client
     const { error: updateError } = await adminClient
       .from('referral_conversions')
       .update({
@@ -56,40 +58,52 @@ export async function POST(
       .eq('id', conversionId);
 
     if (updateError) {
-      console.error('Failed to update conversion:', updateError);
+      console.error('[REFERRAL_APPROVE] Update failed:', updateError);
       return NextResponse.json(
         { error: 'Failed to approve conversion' },
         { status: 500 }
       );
     }
 
-    // Create partner ledger entry (uses admin client internally)
+    // CRITICAL: Only create ledger entries for payment_completed.
+    // lead_submitted and booking_confirmed are tracking only; use Mark Paid to create ledger.
+    if (conversion.conversion_type !== 'payment_completed') {
+      console.log('[REFERRAL_APPROVE_SKIP_LEDGER]', {
+        reason: 'not payment_completed',
+        conversion_type: conversion.conversion_type,
+      });
+      return NextResponse.json({
+        success: true,
+        message: 'Conversion approved',
+      });
+    }
+
     try {
-      await createPartnerLedgerEntryForReferralConversion(conversionId);
+      const result = await createPartnerLedgerEntryForReferralConversion(conversionId);
+      return NextResponse.json({
+        success: true,
+        message: 'Conversion approved and added to partner ledger',
+        created: result.created,
+        skipped: result.skipped,
+      });
     } catch (ledgerError) {
-      console.error('Failed to create ledger entry:', ledgerError);
-      // Rollback approval completely using admin client
+      console.error('[REFERRAL_APPROVE] Ledger creation failed:', ledgerError);
       await adminClient
         .from('referral_conversions')
-        .update({ 
+        .update({
           status: 'pending',
           approved_at: null,
           approved_by: null,
         })
         .eq('id', conversionId);
-      
+
       return NextResponse.json(
         { error: 'Failed to create ledger entry. Conversion reverted to pending.' },
         { status: 500 }
       );
     }
-
-    return NextResponse.json({ 
-      success: true,
-      message: 'Conversion approved and added to partner ledger'
-    });
   } catch (error) {
-    console.error('Approve conversion error:', error);
+    console.error('[REFERRAL_APPROVE] Error:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }

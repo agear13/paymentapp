@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { createPartnerLedgerEntryForReferralConversion } from '@/lib/referrals/partners-integration';
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,30 +77,9 @@ export async function POST(request: NextRequest) {
     if (conversionError) {
       console.error('[REFERRAL_SUBMIT_LEAD] Conversion creation failed:', conversionError);
       // Lead is still created, just log the error
-    } else if (conversion) {
-      // Create partner ledger entry
-      console.log('[REFERRAL_SUBMIT_LEAD] Conversion created, creating ledger entry:', conversion.id);
-      try {
-        await createPartnerLedgerEntryForReferralConversion(conversion.id);
-      } catch (ledgerError) {
-        console.error('[REFERRAL_SUBMIT_LEAD] Failed to create ledger entry, rolling back conversion:', ledgerError);
-        // Rollback: revert conversion to pending status
-        try {
-          await supabase
-            .from('referral_conversions')
-            .update({
-              status: 'pending',
-              approved_at: null,
-              approved_by: null,
-            })
-            .eq('id', conversion.id);
-          console.log('[REFERRAL_SUBMIT_LEAD] Conversion rolled back to pending:', conversion.id);
-        } catch (rollbackError) {
-          console.error('[REFERRAL_SUBMIT_LEAD] Rollback failed:', rollbackError);
-        }
-        // Don't fail the lead submission, user still gets their lead recorded
-      }
     }
+    // NOTE: lead_submitted conversions do NOT create ledger entries (tracking only).
+    // Use "Mark Paid" for payment_completed + ledger.
 
     return NextResponse.json({ 
       success: true, 

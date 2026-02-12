@@ -44,9 +44,13 @@ export async function POST(
       return NextResponse.json({
         success: true,
         created: result.created,
-        message: result.created
-          ? 'Ledger entry created successfully'
-          : 'Ledger entry already exists (idempotent)',
+        skipped: result.skipped,
+        message:
+          result.created > 0
+            ? `Created ${result.created} ledger entries`
+            : result.skipped > 0
+              ? `All entries already exist (idempotent): ${result.skipped} skipped`
+              : 'No ledger entries created',
       });
     } catch (ledgerError) {
       const errorMessage = ledgerError instanceof Error ? ledgerError.message : 'Unknown error';

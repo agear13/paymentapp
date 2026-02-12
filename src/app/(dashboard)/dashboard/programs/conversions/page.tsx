@@ -30,6 +30,21 @@ export default async function ConversionsPage({
     console.error('Failed to fetch conversions:', error);
   }
 
+  const programIds = [...new Set(conversions?.map((c) => c.program_id).filter(Boolean) || [])];
+  const { data: participants } = await supabase
+    .from('referral_participants')
+    .select('id, name, role, referral_code, program_id')
+    .in('program_id', programIds);
+
+  const participantsByProgram = (participants || []).reduce<
+    Record<string, Array<{ id: string; name: string; role: string; referral_code: string; program_id: string }>>
+  >((acc, p) => {
+    const pid = p.program_id as string;
+    if (!acc[pid]) acc[pid] = [];
+    acc[pid].push(p);
+    return acc;
+  }, {});
+
   const pendingCount = conversions?.filter(c => c.status === 'pending').length || 0;
   const approvedCount = conversions?.filter(c => c.status === 'approved').length || 0;
   const rejectedCount = conversions?.filter(c => c.status === 'rejected').length || 0;
@@ -86,7 +101,11 @@ export default async function ConversionsPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ConversionsTable conversions={conversions || []} isAdmin={isAdmin} />
+          <ConversionsTable
+            conversions={conversions || []}
+            isAdmin={isAdmin}
+            participantsByProgram={participantsByProgram}
+          />
         </CardContent>
       </Card>
     </div>
