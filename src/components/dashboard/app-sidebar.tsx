@@ -103,6 +103,10 @@ const programsItems = [
         title: 'Overview',
         href: '/dashboard/programs/overview',
       },
+      {
+        title: 'Consultant',
+        href: '/dashboard/consultant',
+      },
     ],
   },
 ];

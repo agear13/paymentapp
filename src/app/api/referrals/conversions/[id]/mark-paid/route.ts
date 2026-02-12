@@ -1,18 +1,12 @@
 /**
  * POST /api/referrals/conversions/[id]/mark-paid
- * Admin-only: Mark a conversion as payment_completed with manual allocations and create ledger entries.
+ * Admin-only: Mark a conversion as payment_completed. Allocations computed from program + participant hierarchy.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createPartnerLedgerEntryForReferralConversion } from '@/lib/referrals/partners-integration';
 import { checkAdminAuth } from '@/lib/auth/admin';
-
-interface AllocationInput {
-  referral_participant_id: string;
-  amount: number;
-  description?: string;
-}
 
 export async function POST(
   request: NextRequest,
@@ -29,13 +23,8 @@ export async function POST(
       );
     }
 
-    const body = await request.json();
-    const {
-      gross_amount: grossAmount,
-      currency = 'USD',
-      allocations,
-      notes,
-    } = body;
+    const body = await request.json().catch(() => ({}));
+    const { gross_amount: grossAmount, currency = 'USD', notes } = body ?? {};
 
     if (
       grossAmount == null ||
@@ -48,34 +37,11 @@ export async function POST(
       );
     }
 
-    if (!Array.isArray(allocations) || allocations.length === 0) {
-      return NextResponse.json(
-        { error: 'allocations must be a non-empty array' },
-        { status: 400 }
-      );
-    }
-
-    const validAllocations: AllocationInput[] = allocations.filter(
-      (a: unknown) =>
-        a &&
-        typeof a === 'object' &&
-        typeof (a as AllocationInput).referral_participant_id === 'string' &&
-        typeof (a as AllocationInput).amount === 'number' &&
-        (a as AllocationInput).amount > 0
-    );
-
-    if (validAllocations.length === 0) {
-      return NextResponse.json(
-        { error: 'Each allocation must have referral_participant_id (uuid) and amount (positive number)' },
-        { status: 400 }
-      );
-    }
-
     console.log('[REFERRAL_MARK_PAID] Admin triggered:', {
       conversionId,
       adminEmail: user.email,
       grossAmount,
-      allocationsCount: validAllocations.length,
+      currency,
     });
 
     const adminClient = createAdminClient();
@@ -112,14 +78,11 @@ export async function POST(
     }
 
     const proofJson = {
-      allocations: validAllocations.map((a) => ({
-        referral_participant_id: a.referral_participant_id,
-        participantId: a.referral_participant_id,
-        amount: a.amount,
+      mark_paid: {
+        gross_amount: grossAmount,
         currency,
-        description: a.description || `Manual allocation`,
-      })),
-      notes: notes ?? null,
+        notes: notes ?? null,
+      },
     };
 
     const { error: updateError } = await adminClient

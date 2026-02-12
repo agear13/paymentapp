@@ -1,17 +1,21 @@
 /**
  * Referral Programs → Partners Module Integration
- * Creates partner ledger entries when conversions are approved
- * Supports: legacy single-beneficiary (lead_submitted) and multi-tier (payment_completed)
+ * Creates partner ledger entries for payment_completed conversions only.
+ * Supports: computed allocations (program + participant tree) or proof_json.allocations (manual).
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export type LedgerCreationResult = { created: number; skipped: number };
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 /**
  * Creates partner ledger entries for a referral conversion.
- * For payment_completed with proof_json.allocations: writes one per allocation (multi-beneficiary).
- * For legacy (lead_submitted etc): uses referral_program_rules, single entry.
+ * ONLY payment_completed creates ledger entries.
+ * Uses proof_json.allocations if present; otherwise computes from program owner_percent + participant tree.
  */
 export async function createPartnerLedgerEntryForReferralConversion(
   conversionId: string,
@@ -27,8 +31,8 @@ export async function createPartnerLedgerEntryForReferralConversion(
       .from('referral_conversions')
       .select(`
         *,
-        referral_programs!referral_conversions_program_id_fkey (id, name, slug),
-        referral_participants!referral_conversions_participant_id_fkey (id, name, role, referral_code)
+        referral_programs!referral_conversions_program_id_fkey (id, name, slug, owner_percent, owner_participant_id),
+        referral_participants!referral_conversions_participant_id_fkey (id, name, role, referral_code, parent_participant_id, custom_commission_percent)
       `)
       .eq('id', conversionId)
       .single();
@@ -39,13 +43,10 @@ export async function createPartnerLedgerEntryForReferralConversion(
       throw new Error(errorMsg);
     }
 
-    console.log('[REFERRAL_LEDGER] Loaded conversion:', {
-      id: conversion.id,
-      type: conversion.conversion_type,
-      status: conversion.status,
-      participant: conversion.referral_participants?.name,
-      program: conversion.referral_programs?.slug,
-    });
+    if (conversion.conversion_type !== 'payment_completed') {
+      console.log('[REFERRAL_LEDGER] Skipping non-payment_completed:', conversion.conversion_type);
+      return { created: 0, skipped: 0 };
+    }
 
     const proofJson = (conversion.proof_json as Record<string, unknown>) || {};
     const rawAllocations = proofJson.allocations as Array<{
@@ -57,28 +58,191 @@ export async function createPartnerLedgerEntryForReferralConversion(
       description?: string;
     }> | undefined;
 
-    const allocations = rawAllocations?.map((a) => ({
-      role: a.role ?? 'beneficiary',
-      participantId: a.participantId ?? a.referral_participant_id ?? '',
-      amount: a.amount,
-      currency: a.currency ?? 'USD',
-      description: a.description ?? 'Manual allocation',
-    })).filter((a) => a.participantId && a.amount > 0);
+    let allocations: Array<{ role: string; participantId: string; amount: number; currency: string; description: string }>;
 
-    if (conversion.conversion_type === 'payment_completed' && Array.isArray(allocations) && allocations.length > 0) {
-      return await writeMultiBeneficiaryLedger(
-        adminClient,
-        conversionId,
-        conversion,
-        allocations
-      );
+    if (Array.isArray(rawAllocations) && rawAllocations.length > 0) {
+      allocations = rawAllocations
+        .map((a) => ({
+          role: a.role ?? 'beneficiary',
+          participantId: a.participantId ?? a.referral_participant_id ?? '',
+          amount: a.amount,
+          currency: (a.currency as string) ?? 'USD',
+          description: a.description ?? 'Manual allocation',
+        }))
+        .filter((a) => a.participantId && a.amount > 0);
+    } else {
+      allocations = await computeAllocationsFromHierarchy(adminClient, conversion);
     }
 
-    return await writeLegacySingleLedger(adminClient, conversionId, conversion);
+    if (allocations.length === 0) {
+      console.log('[REFERRAL_LEDGER] No allocations to write');
+      return { created: 0, skipped: 0 };
+    }
+
+    return await writeMultiBeneficiaryLedger(
+      adminClient,
+      conversionId,
+      conversion,
+      allocations
+    );
   } catch (error) {
     console.error('[REFERRAL_LEDGER_FAIL] Error:', error);
     throw error;
   }
+}
+
+async function computeAllocationsFromHierarchy(
+  adminClient: ReturnType<typeof createAdminClient>,
+  conversion: Record<string, unknown>
+): Promise<Array<{ role: string; participantId: string; amount: number; currency: string; description: string }>> {
+  const program = conversion.referral_programs as {
+    slug: string;
+    owner_percent: number | null;
+    owner_participant_id: string | null;
+  };
+  const origin = conversion.referral_participants as {
+    id: string;
+    role: string;
+    referral_code: string;
+    parent_participant_id: string | null;
+    custom_commission_percent: number | null;
+  };
+
+  const gross = parseFloat(String(conversion.gross_amount ?? 0));
+  const currency = (conversion.currency as string) || 'USD';
+
+  if (!program?.owner_participant_id) {
+    throw new Error('[ALLOC_COMPUTE] referral_programs.owner_participant_id must be set');
+  }
+
+  const ownerParticipantId = program.owner_participant_id as string;
+  const ownerPercent = parseFloat(String(program.owner_percent ?? 0));
+
+  let consultantId: string;
+  let advocateId: string | null = null;
+  let advocatePercent = 0;
+
+  if (origin.role === 'CLIENT_ADVOCATE') {
+    advocateId = origin.id;
+    advocatePercent = parseFloat(String(origin.custom_commission_percent ?? 0));
+    if (!origin.parent_participant_id) {
+      throw new Error('[ALLOC_COMPUTE] Advocate must have parent_participant_id (consultant)');
+    }
+    consultantId = origin.parent_participant_id;
+  } else {
+    consultantId = origin.id;
+  }
+
+  const ownerAmount = round2(gross * (ownerPercent / 100));
+  const advocateAmount = advocateId ? round2(gross * (advocatePercent / 100)) : 0;
+  const consultantAmount = round2(gross - ownerAmount - advocateAmount);
+
+  if (consultantAmount < 0) {
+    throw new Error(
+      `[ALLOC_COMPUTE] Consultant remainder negative: gross=${gross}, owner=${ownerAmount}, advocate=${advocateAmount}`
+    );
+  }
+
+  const allocations: Array<{ role: string; participantId: string; amount: number; currency: string; description: string }> = [];
+
+  if (ownerAmount > 0) {
+    allocations.push({
+      role: 'BD_PARTNER',
+      participantId: ownerParticipantId,
+      amount: ownerAmount,
+      currency,
+      description: 'BD Partner commission',
+    });
+  }
+
+  if (advocateId && advocateAmount > 0) {
+    allocations.push({
+      role: 'CLIENT_ADVOCATE',
+      participantId: advocateId,
+      amount: advocateAmount,
+      currency,
+      description: 'Client advocate commission',
+    });
+  }
+
+  if (consultantAmount > 0) {
+    allocations.push({
+      role: 'CONSULTANT',
+      participantId: consultantId,
+      amount: consultantAmount,
+      currency,
+      description: 'Consultant revenue',
+    });
+  }
+
+  console.log('[ALLOC_COMPUTE]', {
+    gross,
+    ownerAmount,
+    advocateAmount,
+    consultantAmount,
+    allocations: allocations.length,
+  });
+
+  return allocations;
+}
+
+async function ensurePartnerEntityForParticipant(
+  adminClient: ReturnType<typeof createAdminClient>,
+  partnerProgramId: string,
+  referralParticipantId: string,
+  participantName: string
+): Promise<string | null> {
+  const { data: mapRow } = await adminClient
+    .from('referral_partner_entity_map')
+    .select('partner_entity_id')
+    .eq('referral_participant_id', referralParticipantId)
+    .single();
+
+  if (mapRow) return mapRow.partner_entity_id;
+
+  console.log('[ALLOC_ENTITY_MAP] Creating partner_entity for participant:', referralParticipantId);
+
+  const { data: inserted, error: insertErr } = await adminClient
+    .from('partner_entities')
+    .insert({
+      program_id: partnerProgramId,
+      entity_type: 'participant',
+      entity_ref_id: referralParticipantId,
+      name: participantName || 'Referral participant',
+    })
+    .select('id')
+    .single();
+
+  if (inserted) {
+    await adminClient
+      .from('referral_partner_entity_map')
+      .upsert(
+        { referral_participant_id: referralParticipantId, partner_entity_id: inserted.id },
+        { onConflict: 'referral_participant_id' }
+      );
+    return inserted.id;
+  }
+
+  if (insertErr?.code === '23505') {
+    const { data: existing } = await adminClient
+      .from('partner_entities')
+      .select('id')
+      .eq('program_id', partnerProgramId)
+      .eq('entity_type', 'participant')
+      .eq('entity_ref_id', referralParticipantId)
+      .single();
+    if (existing) {
+      await adminClient
+        .from('referral_partner_entity_map')
+        .upsert(
+          { referral_participant_id: referralParticipantId, partner_entity_id: existing.id },
+          { onConflict: 'referral_participant_id' }
+        );
+      return existing.id;
+    }
+  }
+
+  return null;
 }
 
 async function writeMultiBeneficiaryLedger(
@@ -100,7 +264,7 @@ async function writeMultiBeneficiaryLedger(
     throw new Error(`[REFERRAL_LEDGER_FAIL] Partner program not found: ${programSlug}`);
   }
 
-  console.log('[REFERRAL_LEDGER_MAP] partner_program_id:', partnerProgram.id, 'slug:', programSlug);
+  console.log('[ALLOC_MAP] partner_program_id:', partnerProgram.id, 'slug:', programSlug);
 
   const sourceRefText = conversionId.toString();
   const grossAmount = conversion.gross_amount != null ? parseFloat(String(conversion.gross_amount)) : null;
@@ -111,24 +275,25 @@ async function writeMultiBeneficiaryLedger(
   for (const alloc of allocations) {
     if (alloc.amount <= 0) continue;
 
-    const { data: mapRow } = await adminClient
-      .from('referral_partner_entity_map')
-      .select('partner_entity_id')
-      .eq('referral_participant_id', alloc.participantId)
-      .single();
+    const entityId = await ensurePartnerEntityForParticipant(
+      adminClient,
+      partnerProgram.id,
+      alloc.participantId,
+      alloc.role
+    );
 
-    if (!mapRow) {
-      console.warn(`[REFERRAL_LEDGER] No partner entity map for ${alloc.participantId}, skipping`);
+    if (!entityId) {
+      console.warn(`[ALLOC_WRITE] No partner entity for ${alloc.participantId}, skipping`);
       continue;
     }
 
     const description = `${alloc.role} • ${alloc.description} • ${consultantCode}`;
 
-    console.log('[REFERRAL_LEDGER_INSERT]', { source_ref: sourceRefText, role: alloc.role, earnings: alloc.amount });
+    console.log('[ALLOC_WRITE]', { source_ref: sourceRefText, role: alloc.role, earnings: alloc.amount });
 
     const { error } = await adminClient.from('partner_ledger_entries').insert({
       program_id: partnerProgram.id,
-      entity_id: mapRow.partner_entity_id,
+      entity_id: entityId,
       source: 'referral',
       source_ref: sourceRefText,
       status: 'pending',
@@ -141,7 +306,7 @@ async function writeMultiBeneficiaryLedger(
     if (error) {
       if (error.code === '23505') {
         skipped++;
-        console.log('[REFERRAL_LEDGER_SUCCESS] Already exists (idempotent):', alloc.role);
+        console.log('[ALLOC_WRITE] Already exists (idempotent):', alloc.role);
       } else {
         throw error;
       }
@@ -154,84 +319,3 @@ async function writeMultiBeneficiaryLedger(
   return { created, skipped };
 }
 
-async function writeLegacySingleLedger(
-  adminClient: ReturnType<typeof createAdminClient>,
-  conversionId: string,
-  conversion: Record<string, unknown>
-): Promise<LedgerCreationResult> {
-  const participant = conversion.referral_participants as { role: string; name: string } | null;
-  const program = conversion.referral_programs as { slug: string; name: string } | null;
-  if (!participant || !program) {
-    throw new Error('[REFERRAL_LEDGER_FAIL] Missing participant or program data');
-  }
-
-  const { data: rule } = await adminClient
-    .from('referral_program_rules')
-    .select('*')
-    .eq('program_id', conversion.program_id)
-    .eq('role', participant.role)
-    .eq('conversion_type', conversion.conversion_type)
-    .order('priority', { ascending: false })
-    .limit(1)
-    .single();
-
-  if (!rule) {
-    throw new Error(`[REFERRAL_LEDGER_FAIL] No rule for role=${participant.role} type=${conversion.conversion_type}`);
-  }
-
-  let earningsAmount = 0;
-  if (rule.payout_type === 'fixed') {
-    earningsAmount = parseFloat(String(rule.value));
-  } else if (rule.payout_type === 'percent' && conversion.gross_amount) {
-    earningsAmount = (parseFloat(String(conversion.gross_amount)) * parseFloat(String(rule.value))) / 100;
-  }
-
-  if (earningsAmount <= 0) {
-    throw new Error(`[REFERRAL_LEDGER_FAIL] Earnings <= 0`);
-  }
-
-  const { data: partnerProgram } = await adminClient
-    .from('partner_programs')
-    .select('id')
-    .eq('slug', program.slug)
-    .single();
-
-  if (!partnerProgram) {
-    throw new Error(`[REFERRAL_LEDGER_FAIL] Partner program not found: ${program.slug}`);
-  }
-
-  const { data: mapRow } = await adminClient
-    .from('referral_partner_entity_map')
-    .select('partner_entity_id')
-    .eq('referral_participant_id', conversion.participant_id)
-    .single();
-
-  const entityId = mapRow?.partner_entity_id ?? null;
-  const description = `${program.name} conversion: ${participant.name} • ${conversion.conversion_type}`;
-  const sourceRefText = conversionId.toString();
-
-  console.log('[REFERRAL_LEDGER_INSERT] Legacy:', { source_ref: sourceRefText, earnings: earningsAmount });
-
-  const { error } = await adminClient.from('partner_ledger_entries').insert({
-    program_id: partnerProgram.id,
-    entity_id: entityId,
-    source: 'referral',
-    source_ref: sourceRefText,
-    status: 'pending',
-    gross_amount: conversion.gross_amount ?? null,
-    earnings_amount: earningsAmount,
-    currency: (rule.currency as string) || 'USD',
-    description,
-  });
-
-  if (error) {
-    if (error.code === '23505') {
-      console.log('[REFERRAL_LEDGER_SUCCESS] Already exists (idempotent)');
-      return { created: 0, skipped: 1 };
-    }
-    throw error;
-  }
-
-  console.log('[REFERRAL_LEDGER_SUCCESS] Legacy entry created');
-  return { created: 1, skipped: 0 };
-}

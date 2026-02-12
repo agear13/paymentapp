@@ -15,17 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CheckCircle2, XCircle, RotateCcw, DollarSign, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, XCircle, RotateCcw, DollarSign } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-
-interface Participant {
-  id: string;
-  name: string;
-  role: string;
-  referral_code: string;
-  program_id: string;
-}
 
 interface Conversion {
   id: string;
@@ -45,10 +37,9 @@ interface Conversion {
 interface ConversionsTableProps {
   conversions: Conversion[];
   isAdmin?: boolean;
-  participantsByProgram?: Record<string, Participant[]>;
 }
 
-export function ConversionsTable({ conversions, isAdmin, participantsByProgram = {} }: ConversionsTableProps) {
+export function ConversionsTable({ conversions, isAdmin }: ConversionsTableProps) {
   const router = useRouter();
   const [selectedConversion, setSelectedConversion] = useState<Conversion | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject' | 'markPaid' | null>(null);
@@ -59,9 +50,6 @@ export function ConversionsTable({ conversions, isAdmin, participantsByProgram =
   const [markPaidConversion, setMarkPaidConversion] = useState<Conversion | null>(null);
   const [markPaidGross, setMarkPaidGross] = useState('');
   const [markPaidCurrency, setMarkPaidCurrency] = useState('USD');
-  const [markPaidAllocations, setMarkPaidAllocations] = useState<
-    Array<{ referral_participant_id: string; amount: string }>
-  >([{ referral_participant_id: '', amount: '' }]);
 
   const canMarkPaid = (c: Conversion) =>
     isAdmin &&
@@ -72,34 +60,12 @@ export function ConversionsTable({ conversions, isAdmin, participantsByProgram =
     setMarkPaidConversion(conversion);
     setMarkPaidGross('');
     setMarkPaidCurrency('USD');
-    const participants = participantsByProgram[conversion.program_id] || [];
-    setMarkPaidAllocations([
-      {
-        referral_participant_id: participants[0]?.id ?? '',
-        amount: '',
-      },
-    ]);
   };
 
   const closeMarkPaidModal = () => {
     setMarkPaidConversion(null);
     setMarkPaidGross('');
     setMarkPaidCurrency('USD');
-    setMarkPaidAllocations([{ referral_participant_id: '', amount: '' }]);
-  };
-
-  const addAllocationRow = () => {
-    setMarkPaidAllocations((prev) => [...prev, { referral_participant_id: '', amount: '' }]);
-  };
-
-  const removeAllocationRow = (index: number) => {
-    setMarkPaidAllocations((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const updateAllocation = (index: number, field: 'referral_participant_id' | 'amount', value: string) => {
-    setMarkPaidAllocations((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
-    );
   };
 
   const handleMarkPaidSubmit = async () => {
@@ -111,19 +77,6 @@ export function ConversionsTable({ conversions, isAdmin, participantsByProgram =
       return;
     }
 
-    const allocations = markPaidAllocations
-      .filter((a) => a.referral_participant_id && a.amount)
-      .map((a) => ({
-        referral_participant_id: a.referral_participant_id,
-        amount: parseFloat(a.amount),
-      }))
-      .filter((a) => !isNaN(a.amount) && a.amount > 0);
-
-    if (allocations.length === 0) {
-      toast.error('Add at least one allocation with participant and amount');
-      return;
-    }
-
     setLoading(true);
     try {
       const response = await fetch(`/api/referrals/conversions/${markPaidConversion.id}/mark-paid`, {
@@ -132,7 +85,6 @@ export function ConversionsTable({ conversions, isAdmin, participantsByProgram =
         body: JSON.stringify({
           gross_amount: gross,
           currency: markPaidCurrency,
-          allocations,
         }),
       });
 
@@ -412,12 +364,12 @@ export function ConversionsTable({ conversions, isAdmin, participantsByProgram =
       </Dialog>
 
       <Dialog open={markPaidConversion !== null} onOpenChange={(open) => !open && closeMarkPaidModal()}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Mark as Paid</DialogTitle>
             <DialogDescription>
-              Record payment completion and create ledger entries for each beneficiary. This will
-              update the conversion to payment_completed and write one ledger row per allocation.
+              Record payment completion. Allocations are computed automatically from the program
+              hierarchy (BD Partner, Advocate, Consultant).
             </DialogDescription>
           </DialogHeader>
 
@@ -448,57 +400,6 @@ export function ConversionsTable({ conversions, isAdmin, participantsByProgram =
                       <SelectItem value="GBP">GBP</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <Label>Allocations</Label>
-                  <Button type="button" variant="ghost" size="sm" onClick={addAllocationRow}>
-                    <Plus className="h-4 w-4" />
-                    <span className="ml-1">Add</span>
-                  </Button>
-                </div>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {markPaidAllocations.map((row, index) => (
-                    <div key={index} className="flex gap-2 items-center">
-                      <Select
-                        value={row.referral_participant_id}
-                        onValueChange={(v) => updateAllocation(index, 'referral_participant_id', v)}
-                      >
-                        <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Select participant" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(participantsByProgram[markPaidConversion.program_id] || []).map(
-                            (p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {p.name} ({p.role}) • {p.referral_code}
-                              </SelectItem>
-                            )
-                          )}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="Amount"
-                        className="w-24"
-                        value={row.amount}
-                        onChange={(e) => updateAllocation(index, 'amount', e.target.value)}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeAllocationRow(index)}
-                        disabled={markPaidAllocations.length === 1}
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    </div>
-                  ))}
                 </div>
               </div>
             </div>
