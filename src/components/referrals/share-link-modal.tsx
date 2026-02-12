@@ -9,8 +9,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Copy, Mail, MessageCircle, Smartphone, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { buildSmsUrl, isMobileUserAgent } from '@/lib/referrals/share-templates';
 
 export interface ShareTemplates {
   subject: string;
@@ -51,50 +58,75 @@ export function ShareLinkModal({
 
   const emailUrl = `mailto:?subject=${encodeURIComponent(templates.subject)}&body=${encodeURIComponent(templates.emailBody)}`;
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(templates.whatsapp)}`;
-  const smsUrl = `sms:?body=${encodeURIComponent(templates.sms)}`;
+  const smsUrl = buildSmsUrl(templates.sms, null, typeof navigator !== 'undefined' ? navigator.userAgent : '');
+  const isMobile = typeof navigator !== 'undefined' ? isMobileUserAgent(navigator.userAgent) : false;
+
+  const handleSmsClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      window.location.href = smsUrl;
+    } catch (err) {
+      console.warn('[SHARE_SMS_FAIL]', { smsUrl, err });
+    }
+  };
+
+  const smsButton = (
+    <Button variant="outline" size="sm" asChild>
+      <a href={smsUrl} onClick={handleSmsClick}>
+        <Smartphone className="h-4 w-4 mr-1" />
+        SMS
+      </a>
+    </Button>
+  );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="flex gap-2 items-center">
-            <code className="flex-1 text-sm bg-muted px-3 py-2 rounded truncate">
-              {link}
-            </code>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => copyToClipboard(link)}
-            >
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-            </Button>
+    <TooltipProvider>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2 items-center">
+              <code className="flex-1 text-sm bg-muted px-3 py-2 rounded truncate">
+                {link}
+              </code>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => copyToClipboard(link)}
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <div className="flex gap-2 flex-wrap items-center">
+              <Button variant="outline" size="sm" asChild>
+                <a href={emailUrl} target="_blank" rel="noopener noreferrer">
+                  <Mail className="h-4 w-4 mr-1" />
+                  Email
+                </a>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
+                  <MessageCircle className="h-4 w-4 mr-1" />
+                  WhatsApp
+                </a>
+              </Button>
+              {isMobile ? (
+                smsButton
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>{smsButton}</TooltipTrigger>
+                  <TooltipContent>
+                    <p>SMS sharing works on mobile devices.</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" size="sm" asChild>
-              <a href={emailUrl} target="_blank" rel="noopener noreferrer">
-                <Mail className="h-4 w-4 mr-1" />
-                Email
-              </a>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
-                <MessageCircle className="h-4 w-4 mr-1" />
-                WhatsApp
-              </a>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <a href={smsUrl}>
-                <Smartphone className="h-4 w-4 mr-1" />
-                SMS
-              </a>
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </TooltipProvider>
   );
 }

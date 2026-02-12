@@ -5,6 +5,34 @@
 export const MAX_ADVOCATE_PERCENT = 50;
 export const DEFAULT_ADVOCATE_PERCENT = 10;
 
+export function isIOSUserAgent(ua: string): boolean {
+  return /iPad|iPhone|iPod/.test(ua);
+}
+
+export function isMobileUserAgent(ua: string): boolean {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+}
+
+/**
+ * Build SMS URL for share. Uses ?body= for non-iOS, &body= for iOS when phone provided.
+ * Without phone: sms:?body=... (valid on mobile).
+ */
+export function buildSmsUrl(
+  body: string,
+  phoneNumber?: string | null,
+  userAgent?: string
+): string {
+  const encoded = encodeURIComponent(body);
+  const ua = userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '');
+  const isIOS = isIOSUserAgent(ua);
+
+  if (!phoneNumber || phoneNumber.trim() === '') {
+    return `sms:?body=${encoded}`;
+  }
+  const num = phoneNumber.replace(/\D/g, '');
+  return isIOS ? `sms:${num}&body=${encoded}` : `sms:${num}?body=${encoded}`;
+}
+
 export interface ShareTemplates {
   review: {
     subject: string;
