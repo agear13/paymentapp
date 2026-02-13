@@ -332,9 +332,17 @@ curl -X POST http://localhost:3000/api/hedera/transactions/monitor \
 **Database Validation:**
 ```sql
 -- Check payment link status
-SELECT id, status, paid_at, payment_method 
-FROM payment_links 
-WHERE short_code = 'TEST_CODE';
+SELECT pl.id, pl.status, pl.short_code
+FROM payment_links pl
+WHERE pl.short_code = 'TEST_CODE';
+
+-- paid_at is derived from the latest PAYMENT_CONFIRMED event (not a column on payment_links)
+SELECT pe.created_at AS paid_at
+FROM payment_events pe
+WHERE pe.payment_link_id = (SELECT id FROM payment_links WHERE short_code = 'TEST_CODE')
+  AND pe.event_type = 'PAYMENT_CONFIRMED'
+ORDER BY pe.created_at DESC
+LIMIT 1;
 
 -- Check payment event
 SELECT * FROM payment_events 

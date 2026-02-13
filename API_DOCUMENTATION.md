@@ -122,6 +122,8 @@ The API automatically scopes requests to the user's current organization based o
 }
 ```
 
+**Note:** `paid_at` is derived from the latest `PAYMENT_CONFIRMED` event in `payment_events` (not a column on `payment_links`). It is an ISO timestamp when a confirmed payment exists, or `null` otherwise.
+
 ### Get Payment Link Status
 
 **Endpoint:** `GET /api/payment-links/:id/status`

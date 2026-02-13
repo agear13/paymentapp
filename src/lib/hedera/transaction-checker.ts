@@ -498,7 +498,7 @@ async function updatePaymentLinkWithTransaction(
         }
       );
       
-      await prisma.$transaction([
+      const results = await prisma.$transaction([
         // 1. Update payment link status
         prisma.payment_links.update(updatePayload),
         
@@ -511,6 +511,45 @@ async function updatePaymentLinkWithTransaction(
         // 4. Create ledger entry: CREDIT Accounts Receivable
         prisma.ledger_entries.create(creditPayload),
       ]);
+
+      const paymentEvent = results[1] as { id: string };
+      const grossAmount = parseFloat(String(paymentLink.amount));
+      const currency = paymentLink.currency;
+
+      // 5. Auto-create referral conversion (non-blocking)
+      try {
+        const { createReferralConversionFromPaymentConfirmed } = await import('@/lib/referrals/payment-conversion');
+        const refResult = await createReferralConversionFromPaymentConfirmed({
+          paymentLinkId,
+          paymentEventId: paymentEvent.id,
+          grossAmount,
+          currency,
+          provider: 'hedera',
+          hederaTransactionId: normalizedTxId,
+        });
+        if (refResult.created) {
+          loggers.hedera.info('[REFERRAL_AUTO_CONVERSION] conversion created', {
+            paymentLinkId,
+            paymentEventId: paymentEvent.id,
+            hederaTransactionId: normalizedTxId,
+            conversionId: refResult.conversionId,
+          });
+        } else if (refResult.skipped) {
+          loggers.hedera.info('[REFERRAL_AUTO_CONVERSION] skipped (idempotent)', {
+            paymentLinkId,
+            paymentEventId: paymentEvent.id,
+            hederaTransactionId: normalizedTxId,
+            reason: refResult.reason,
+          });
+        }
+      } catch (refErr: unknown) {
+        loggers.hedera.warn('[REFERRAL_AUTO_CONVERSION] failed (non-blocking)', {
+          paymentLinkId,
+          paymentEventId: paymentEvent.id,
+          transactionId: transaction.transactionId,
+          err: refErr,
+        });
+      }
 
       loggers.hedera.info(
         'Payment persisted successfully',

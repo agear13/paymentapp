@@ -12,6 +12,8 @@ import { postHederaSettlement } from '@/lib/ledger/posting-rules/hedera';
 import { validatePostingBalance } from '@/lib/ledger/balance-validation';
 import config from '@/lib/config/env';
 import { normalizeHederaTransactionId } from '@/lib/hedera/txid';
+import { createReferralConversionFromPaymentConfirmed } from '@/lib/referrals/payment-conversion';
+import { assertPaymentLinksUpdateDataValid } from '@/lib/payments/payment-links-update-guard';
 
 export interface ConfirmPaymentParams {
   paymentLinkId: string;
@@ -87,12 +89,31 @@ export async function confirmPayment(
         correlationId,
         existingEventId: idempotencyCheck.eventId,
       }, 'Payment already processed (idempotent)');
-      
-      return {
+
+      const earlyResult = {
         success: true,
         alreadyProcessed: true,
         paymentEventId: idempotencyCheck.eventId,
       };
+
+      // Still try referral conversion in case it failed on first run
+      if (idempotencyCheck.eventId) {
+        try {
+          await createReferralConversionFromPaymentConfirmed({
+            paymentLinkId,
+            paymentEventId: idempotencyCheck.eventId,
+            grossAmount: amountReceived,
+            currency: currencyReceived,
+            provider: provider === 'hedera' ? 'hedera' : 'stripe',
+            ...(provider === 'stripe' && { stripePaymentIntentId: paymentIntentId }),
+            ...(provider === 'hedera' && { hederaTransactionId: normalizedProviderRef }),
+          });
+        } catch {
+          // Ignore - already processed path
+        }
+      }
+
+      return earlyResult;
     }
 
     // Execute confirmation pipeline in transaction
@@ -134,14 +155,12 @@ export async function confirmPayment(
         );
       }
 
-      // 2. Update payment link to PAID
+      // 2. Update payment link to PAID (no paid_at - derived from payment_events)
+      const updateData = { status: 'PAID' as const, updated_at: new Date() };
+      assertPaymentLinksUpdateDataValid(updateData);
       await tx.payment_links.update({
         where: { id: paymentLinkId },
-        data: {
-          status: 'PAID',
-          paid_at: new Date(),
-          updated_at: new Date(),
-        },
+        data: updateData,
       });
 
       // 3. Create payment event with idempotency fields
@@ -326,6 +345,48 @@ export async function confirmPayment(
       correlationId,
       paymentEventId: result.paymentEventId,
     }, 'Payment confirmation completed successfully');
+
+    // 6. Auto-create referral conversion (non-blocking; must not fail payment)
+    if (result.success && result.paymentEventId) {
+      try {
+        const refResult = await createReferralConversionFromPaymentConfirmed({
+          paymentLinkId,
+          paymentEventId: result.paymentEventId,
+          grossAmount: amountReceived,
+          currency: currencyReceived,
+          provider: provider === 'hedera' ? 'hedera' : 'stripe',
+          ...(provider === 'stripe' && { stripePaymentIntentId: paymentIntentId }),
+          ...(provider === 'hedera' && { hederaTransactionId: normalizedProviderRef }),
+        });
+        if (refResult.created) {
+          log.info(
+            {
+              correlationId,
+              paymentEventId: result.paymentEventId,
+              paymentLinkId,
+              conversionId: refResult.conversionId,
+              providerRef: provider === 'stripe' ? paymentIntentId : normalizedProviderRef,
+            },
+            '[REFERRAL_AUTO_CONVERSION] conversion created'
+          );
+        } else if (refResult.skipped) {
+          log.info(
+            {
+              correlationId,
+              paymentEventId: result.paymentEventId,
+              paymentLinkId,
+              reason: refResult.reason,
+            },
+            '[REFERRAL_AUTO_CONVERSION] skipped (idempotent)'
+          );
+        }
+      } catch (refErr: any) {
+        log.warn(
+          { correlationId, paymentEventId: result.paymentEventId, paymentLinkId, err: refErr?.message },
+          '[REFERRAL_AUTO_CONVERSION] failed (non-blocking)'
+        );
+      }
+    }
 
     return result;
   } catch (error: any) {

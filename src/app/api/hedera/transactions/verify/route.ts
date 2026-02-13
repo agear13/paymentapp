@@ -355,8 +355,34 @@ export async function POST(request: NextRequest) {
     const idempotencyKey = correlationId;
 
     // mirrorUrl is already declared at line 119, reuse it for metadata
+    const paymentEventData = {
+      payment_link_id: validated.paymentLinkId,
+      event_type: 'PAYMENT_CONFIRMED' as const,
+      payment_method: 'HEDERA' as const,
+      hedera_transaction_id: normalizedTxId,
+      amount_received: amount.toString(),
+      currency_received: tokenType,
+      correlation_id: correlationId,
+      metadata: {
+        transactionId: validated.transactionId,
+        raw_transaction_id: validated.transactionId,
+        normalized_transaction_id: normalizedTxId,
+        amount: amount.toString(),
+        tokenType,
+        sender,
+        recipient,
+        consensus_timestamp: tx.consensus_timestamp,
+        memo,
+        network: validated.network,
+        mirror_url: mirrorUrl,
+        payer_account_id: sender,
+        merchant_account_id: recipient,
+        manuallyVerified: true,
+      },
+    };
+
     // Update payment link and create records
-    await prisma.$transaction([
+    const txResults = await prisma.$transaction([
       // 1. Update payment link status
       prisma.payment_links.update({
         where: { id: validated.paymentLinkId },
@@ -368,31 +394,7 @@ export async function POST(request: NextRequest) {
 
       // 2. Create payment event
       prisma.payment_events.create({
-        data: {
-          payment_link_id: validated.paymentLinkId,
-          event_type: 'PAYMENT_CONFIRMED',
-          payment_method: 'HEDERA',
-          hedera_transaction_id: normalizedTxId,
-          amount_received: amount.toString(),
-          currency_received: tokenType,
-          correlation_id: correlationId,
-          metadata: {
-            transactionId: validated.transactionId,
-            raw_transaction_id: validated.transactionId,
-            normalized_transaction_id: normalizedTxId,
-            amount: amount.toString(),
-            tokenType,
-            sender,
-            recipient,
-            consensus_timestamp: tx.consensus_timestamp,
-            memo,
-            network: validated.network,
-            mirror_url: mirrorUrl,
-            payer_account_id: sender,
-            merchant_account_id: recipient,
-            manuallyVerified: true,
-          },
-        },
+        data: paymentEventData,
       }),
 
       // 3. Create ledger entry: DEBIT Crypto Clearing
@@ -423,6 +425,44 @@ export async function POST(request: NextRequest) {
         },
       }),
     ]);
+
+    const paymentEvent = txResults[1] as { id: string };
+    const grossAmount = parseFloat(String(paymentLink.amount));
+
+    // 5. Auto-create referral conversion (non-blocking)
+    try {
+      const { createReferralConversionFromPaymentConfirmed } = await import('@/lib/referrals/payment-conversion');
+      const refResult = await createReferralConversionFromPaymentConfirmed({
+        paymentLinkId: validated.paymentLinkId,
+        paymentEventId: paymentEvent.id,
+        grossAmount,
+        currency: paymentLink.currency,
+        provider: 'hedera',
+        hederaTransactionId: normalizedTxId,
+      });
+      if (refResult.created) {
+        loggers.hedera.info('[REFERRAL_AUTO_CONVERSION] conversion created', {
+          paymentLinkId: validated.paymentLinkId,
+          paymentEventId: paymentEvent.id,
+          hederaTransactionId: normalizedTxId,
+          conversionId: refResult.conversionId,
+        });
+      } else if (refResult.skipped) {
+        loggers.hedera.info('[REFERRAL_AUTO_CONVERSION] skipped (idempotent)', {
+          paymentLinkId: validated.paymentLinkId,
+          paymentEventId: paymentEvent.id,
+          hederaTransactionId: normalizedTxId,
+          reason: refResult.reason,
+        });
+      }
+    } catch (refErr: unknown) {
+      loggers.hedera.warn('[REFERRAL_AUTO_CONVERSION] failed (non-blocking)', {
+        paymentLinkId: validated.paymentLinkId,
+        paymentEventId: paymentEvent.id,
+        transactionId: validated.transactionId,
+        err: refErr,
+      });
+    }
 
     const duration = Date.now() - startTime;
 

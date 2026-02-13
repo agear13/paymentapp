@@ -13,6 +13,7 @@ import { confirmPayment } from '@/lib/services/payment-confirmation';
 import { generateCorrelationId } from '@/lib/services/correlation';
 import { getTransaction, isTransactionConfirmed } from '@/lib/hedera/transaction-monitor';
 import { prisma } from '@/lib/server/prisma';
+import { getPaidAtForPaymentLink } from '@/lib/payments/paid-at';
 import config from '@/lib/config/env';
 
 // Request validation schema
@@ -80,13 +81,14 @@ export async function POST(request: NextRequest) {
         paymentLinkId,
       }, 'Payment link already paid');
 
+      const paidAt = await getPaidAtForPaymentLink(prisma, paymentLink.id);
       return NextResponse.json({
         success: true,
         alreadyPaid: true,
         paymentLink: {
           id: paymentLink.id,
           status: paymentLink.status,
-          paid_at: paymentLink.paid_at,
+          paid_at: paidAt ? paidAt.toISOString() : null,
         },
       });
     }
@@ -290,6 +292,7 @@ export async function POST(request: NextRequest) {
     const updatedPaymentLink = await prisma.payment_links.findUnique({
       where: { id: paymentLinkId },
     });
+    const paidAt = await getPaidAtForPaymentLink(prisma, paymentLinkId);
 
     log.info({
       correlationId,
@@ -306,7 +309,7 @@ export async function POST(request: NextRequest) {
       paymentLink: {
         id: updatedPaymentLink?.id,
         status: updatedPaymentLink?.status,
-        paid_at: updatedPaymentLink?.paid_at,
+        paid_at: paidAt ? paidAt.toISOString() : null,
       },
       paymentEventId: confirmResult.paymentEventId,
     });
