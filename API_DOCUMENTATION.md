@@ -9,6 +9,7 @@
 ## 📋 Table of Contents
 
 - [Authentication](#authentication)
+- [Version API](#version-api)
 - [Payment Links API](#payment-links-api)
 - [Notifications API](#notifications-api)
 - [Reports API](#reports-api)
@@ -32,6 +33,29 @@ Cookie: __session=<clerk_session_token>
 ### Organization Context
 
 The API automatically scopes requests to the user's current organization based on their Clerk organization membership.
+
+---
+
+## 📌 Version API
+
+Used to verify which build is deployed in production (e.g. on Render).
+
+**Endpoint:** `GET /api/version`  
+**Authentication:** None required
+
+**Response:** `200 OK`
+```json
+{
+  "gitSha": "abc123",
+  "buildTime": "2026-02-13T04:30:00.000Z",
+  "nodeEnv": "production",
+  "timestamp": "2026-02-13T05:10:02.123Z"
+}
+```
+
+**Environment variables:**
+- `gitSha`: From `GIT_SHA` or `RENDER_GIT_COMMIT` (Render sets this automatically on deploy)
+- `buildTime`: From `BUILD_TIME` (set at build time, e.g. in Render build command)
 
 ---
 
