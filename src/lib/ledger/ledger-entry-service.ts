@@ -33,6 +33,7 @@ export interface PostingParams {
   paymentLinkId: string;
   organizationId: string;
   idempotencyKey: string;
+  correlationId?: string; // Optional, for idempotent retry logging
 }
 
 /**
@@ -74,7 +75,7 @@ export class LedgerEntryService {
    * @throws Error if validation fails
    */
   async postJournalEntries(params: PostingParams): Promise<PostingResult> {
-    const { entries, paymentLinkId, organizationId, idempotencyKey } = params;
+    const { entries, paymentLinkId, organizationId, idempotencyKey, correlationId } = params;
 
     loggers.ledger.info(
       {
@@ -85,14 +86,15 @@ export class LedgerEntryService {
       'Starting journal entry posting'
     );
 
-    // 1. Check idempotency - has this already been posted?
-    const alreadyPosted = await this.checkIdempotency(idempotencyKey);
+    // 1. Check idempotency - has this batch already been posted? (first entry key)
+    const firstEntryKey = `${idempotencyKey}-0`;
+    const alreadyPosted = await this.checkIdempotency(firstEntryKey);
     if (alreadyPosted) {
       loggers.ledger.info(
-        { idempotencyKey },
-        'Entries already posted (idempotency check)'
+        { idempotencyKey, correlationId },
+        'Ledger entries already exist (idempotent retry)'
       );
-      
+
       return {
         success: true,
         entriesPosted: 0,
@@ -109,54 +111,56 @@ export class LedgerEntryService {
     // 3. Get account IDs from codes
     const accountIds = await this.getAccountIds(organizationId, entries);
 
-    // 4. Post all entries in a transaction
-    let postedCount = 0;
-    let totalDebits = new Prisma.Decimal(0);
-    let totalCredits = new Prisma.Decimal(0);
+    // 4. Build batch with unique idempotency_key per entry (deterministic)
+    const totalDebits = entries
+      .filter((e) => e.entryType === 'DEBIT')
+      .reduce((sum, e) => sum.add(new Prisma.Decimal(e.amount)), new Prisma.Decimal(0));
+    const totalCredits = entries
+      .filter((e) => e.entryType === 'CREDIT')
+      .reduce((sum, e) => sum.add(new Prisma.Decimal(e.amount)), new Prisma.Decimal(0));
 
-    await prisma.$transaction(async (tx) => {
-      // Create entries
-      for (const entry of entries) {
-        const accountId = accountIds[entry.accountCode];
-        const amount = new Prisma.Decimal(entry.amount);
+    const data = entries.map((entry, i) => ({
+      payment_link_id: paymentLinkId,
+      ledger_account_id: accountIds[entry.accountCode],
+      entry_type: entry.entryType,
+      amount: new Prisma.Decimal(entry.amount),
+      currency: entry.currency,
+      description: entry.description,
+      idempotency_key: `${idempotencyKey}-${i}`,
+    }));
 
-        await tx.ledger_entries.create({
-          data: {
-            payment_link_id: paymentLinkId,
-            ledger_account_id: accountId,
-            entry_type: entry.entryType,
-            amount,
-            currency: entry.currency,
-            description: entry.description,
-            idempotency_key: idempotencyKey,
-          },
-        });
+    // 5. Post via createMany with skipDuplicates (idempotent on retries)
+    const result = await prisma.ledger_entries.createMany({
+      data,
+      skipDuplicates: true,
+    });
 
-        postedCount++;
-
-        // Track totals
-        if (entry.entryType === 'DEBIT') {
-          totalDebits = totalDebits.add(amount);
-        } else {
-          totalCredits = totalCredits.add(amount);
-        }
-      }
-
+    if (result.count === 0) {
+      loggers.ledger.info(
+        { idempotencyKey, correlationId },
+        'Ledger entries already exist (idempotent retry)'
+      );
+    } else if (result.count < entries.length) {
+      loggers.ledger.info(
+        { idempotencyKey, correlationId, inserted: result.count, expected: entries.length },
+        'Ledger entries partially already exist (idempotent retry)'
+      );
+    } else {
       loggers.ledger.info(
         {
           paymentLinkId,
           idempotencyKey,
-          postedCount,
+          postedCount: result.count,
           totalDebits: totalDebits.toString(),
           totalCredits: totalCredits.toString(),
         },
         'Journal entries posted successfully'
       );
-    });
+    }
 
     return {
       success: true,
-      entriesPosted: postedCount,
+      entriesPosted: result.count,
       totalDebits: totalDebits.toString(),
       totalCredits: totalCredits.toString(),
       idempotencyKey,
@@ -182,9 +186,14 @@ export class LedgerEntryService {
       'Starting entry reversal'
     );
 
-    // 1. Get original entries
+    // 1. Get original entries (support both exact key and suffixed keys e.g. key-0, key-1)
     const originalEntries = await prisma.ledger_entries.findMany({
-      where: { idempotency_key: originalIdempotencyKey },
+      where: {
+        OR: [
+          { idempotency_key: originalIdempotencyKey },
+          { idempotency_key: { startsWith: `${originalIdempotencyKey}-` } },
+        ],
+      },
       include: { ledger_accounts: true },
     });
 

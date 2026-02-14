@@ -22,6 +22,7 @@ export interface StripeSettlementParams {
   feeAmount: string; // Stripe processing fee (decimal string)
   currency: string; // ISO 4217 currency code
   netAmount?: string; // Optional: net amount after fees
+  correlationId?: string; // Optional: for idempotent retry logging
 }
 
 /**
@@ -44,6 +45,7 @@ export async function postStripeSettlement(
     grossAmount,
     feeAmount,
     currency,
+    correlationId,
   } = params;
 
   loggers.ledger.info(
@@ -90,6 +92,7 @@ export async function postStripeSettlement(
     paymentLinkId,
     organizationId,
     idempotencyKey: `stripe-payment-${stripePaymentIntentId}`,
+    correlationId,
   });
 
   loggers.ledger.info(
@@ -132,6 +135,7 @@ export async function postStripeSettlement(
       paymentLinkId,
       organizationId,
       idempotencyKey: `stripe-fee-${stripePaymentIntentId}`,
+      correlationId,
     });
 
     loggers.ledger.info(

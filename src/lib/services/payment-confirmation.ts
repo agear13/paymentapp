@@ -226,6 +226,7 @@ export async function confirmPayment(
             grossAmount: amountReceived.toString(),
             feeAmount: calculatedFee,
             currency: currencyReceived,
+            correlationId,
           });
         } else if (provider === 'hedera' && tokenType) {
           // Get FX snapshot for settlement
