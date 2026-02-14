@@ -185,11 +185,10 @@ export async function confirmPayment(
         created_at: new Date(),
       };
 
-      // Add provider-specific fields
+      // Add provider-specific fields (checkoutSessionId in metadata from caller, not as column)
       if (provider === 'stripe') {
         paymentEventData.stripe_event_id = providerRef;
         paymentEventData.stripe_payment_intent_id = paymentIntentId;
-        paymentEventData.stripe_checkout_session_id = checkoutSessionId;
       } else if (provider === 'hedera') {
         paymentEventData.hedera_transaction_id = normalizedProviderRef;
         // Add raw and normalized IDs to metadata
