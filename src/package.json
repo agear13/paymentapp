@@ -6,6 +6,8 @@
     "schema": "prisma/schema.prisma"
   },
   "scripts": {
+    "prebuild": "node ./scripts/generate-build-info.js",
+    "predev": "node ./scripts/generate-build-info.js",
     "dev": "next dev",
     "postinstall": "prisma generate",
     "build": "prisma generate && next build",

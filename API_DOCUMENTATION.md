@@ -53,9 +53,11 @@ Used to verify which build is deployed in production (e.g. on Render).
 }
 ```
 
-**Environment variables:**
-- `gitSha`: From `GIT_SHA` or `RENDER_GIT_COMMIT` (Render sets this automatically on deploy)
-- `buildTime`: From `BUILD_TIME` (set at build time, e.g. in Render build command)
+**Build-time stamping:** `gitSha` and `buildTime` are baked into the build artifact by `src/scripts/generate-build-info.js` (runs via `prebuild` / `predev`). No runtime env vars required.
+
+**Render Build Command:**
+- **Root Directory = `src`:** `npm ci && npm run build`
+- **Root Directory = repo root:** `cd src && npm ci && npm run build`
 
 ---
 
