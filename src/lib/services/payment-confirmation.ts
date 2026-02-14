@@ -209,16 +209,16 @@ export async function confirmPayment(
         paymentLinkId,
       }, 'Payment event created');
 
-      // 4. Post to ledger with idempotency
+      // 4. Post to ledger (best-effort; payment confirmed is source of truth)
       try {
         if (provider === 'stripe') {
           // Import calculateStripeFee for fee calculation
           const { calculateStripeFee } = await import('@/lib/ledger/posting-rules/stripe');
-          
+
           // Convert back to cents for fee calculation
           const amountInCents = Math.round(amountReceived * 100);
           const calculatedFee = calculateStripeFee(amountInCents, currencyReceived.toLowerCase());
-          
+
           await postStripeSettlement({
             paymentLinkId,
             organizationId: paymentLink.organization_id,
@@ -245,9 +245,9 @@ export async function confirmPayment(
             );
           }
 
-          const rate = fxRate || 
-            (typeof fxSnapshot.rate === 'number' 
-              ? fxSnapshot.rate 
+          const rate = fxRate ||
+            (typeof fxSnapshot.rate === 'number'
+              ? fxSnapshot.rate
               : parseFloat(fxSnapshot.rate.toString()));
 
           await postHederaSettlement({
@@ -272,11 +272,38 @@ export async function confirmPayment(
           paymentLinkId,
         }, 'Ledger entries posted and validated');
       } catch (ledgerError: any) {
-        log.error({
-          correlationId,
-          error: ledgerError.message,
-        }, 'Ledger posting failed');
-        throw ledgerError;
+        log.error(
+          {
+            correlationId,
+            organizationId: paymentLink.organization_id,
+            paymentLinkId,
+            error: ledgerError?.message,
+          },
+          'Ledger posting failed (will retry)'
+        );
+
+        // Create notification so user is aware
+        try {
+          await tx.notifications.create({
+            data: {
+              organization_id: paymentLink.organization_id,
+              type: 'SYSTEM_ALERT',
+              title: 'Ledger posting failed',
+              message: `Ledger posting failed for payment link. Payment was confirmed but ledger entries could not be created. Correlation ID: ${correlationId}. Error: ${ledgerError?.message || 'Unknown'}. Ledger posting will be retried.`,
+              data: {
+                paymentLinkId,
+                correlationId,
+                error: ledgerError?.message,
+              },
+            },
+          });
+        } catch (notifErr: any) {
+          log.warn(
+            { correlationId, notifError: notifErr?.message },
+            'Could not create ledger failure notification'
+          );
+        }
+        // Do NOT throw - payment confirmed is source of truth; return 200
       }
 
       // 5. Queue Xero sync if enabled (idempotent upsert)
@@ -341,10 +368,14 @@ export async function confirmPayment(
       };
     });
 
-    log.info({
-      correlationId,
-      paymentEventId: result.paymentEventId,
-    }, 'Payment confirmation completed successfully');
+    log.info(
+      {
+        correlationId,
+        paymentEventId: result.paymentEventId,
+        paymentLinkId,
+      },
+      'Payment confirmed (returning 200)'
+    );
 
     // 6. Auto-create referral conversion (non-blocking; must not fail payment)
     if (result.success && result.paymentEventId) {
