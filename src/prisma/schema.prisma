@@ -112,6 +112,7 @@ model organizations {
   ledger_accounts           ledger_accounts[]
   merchant_settings         merchant_settings[]
   payment_links             payment_links[]
+  referral_links            referral_links[]
   xero_connections          xero_connections?
   notifications             notifications[]
   notification_preferences  notification_preferences[]
@@ -189,6 +190,7 @@ model payment_links {
   organizations     organizations     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   xero_syncs        xero_syncs[]
   multi_currency_invoices multi_currency_invoices[]
+  commission_obligations commission_obligations[]
 
   @@index([organization_id, status])
   @@index([due_date])
@@ -373,6 +375,22 @@ enum EmailStatus {
   FAILED
 }
 
+enum ReferralLinkStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CommissionBasis {
+  GROSS
+  NET
+}
+
+enum CommissionObligationStatus {
+  CREATED
+  POSTED
+  FAILED
+}
+
 // ============================================================================
 // Sprint 25: Multi-Currency Enhancement - New Models
 // ============================================================================
@@ -456,4 +474,63 @@ model multi_currency_invoices {
   payment_links     payment_links @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
 
   @@index([payment_link_id])
+}
+
+// ============================================================================
+// Commission-enabled referral links (Option B)
+// ============================================================================
+
+model referral_links {
+  id                String            @id @default(uuid()) @db.Uuid
+  organization_id   String            @db.Uuid
+  created_by_user_id String?          @db.VarChar(255)
+  code              String            @unique @db.VarChar(50)
+  status            ReferralLinkStatus @default(ACTIVE)
+  checkout_config   Json?
+  created_at        DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime          @updatedAt @db.Timestamptz(6)
+  organizations     organizations     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  referral_rules    referral_rules[]
+  commission_obligations commission_obligations[]
+
+  @@index([organization_id])
+  @@index([code])
+  @@index([status])
+}
+
+model referral_rules {
+  id                String            @id @default(uuid()) @db.Uuid
+  referral_link_id  String            @db.Uuid
+  consultant_id     String            @db.Uuid
+  bd_partner_id     String?           @db.Uuid
+  consultant_pct    Decimal           @db.Decimal(5, 4)
+  bd_partner_pct    Decimal           @db.Decimal(5, 4)
+  basis             CommissionBasis    @default(GROSS)
+  min_cap           Decimal?          @db.Decimal(18, 2)
+  max_cap           Decimal?          @db.Decimal(18, 2)
+  created_at        DateTime          @default(now()) @db.Timestamptz(6)
+  referral_links     referral_links     @relation(fields: [referral_link_id], references: [id], onDelete: Cascade)
+
+  @@index([referral_link_id])
+}
+
+model commission_obligations {
+  id                String                  @id @default(uuid()) @db.Uuid
+  payment_link_id   String                  @db.Uuid
+  referral_link_id  String                  @db.Uuid
+  stripe_event_id   String                  @db.VarChar(255)
+  consultant_amount Decimal                 @db.Decimal(18, 8)
+  bd_partner_amount Decimal                 @db.Decimal(18, 8)
+  currency          String                  @db.Char(3)
+  status            CommissionObligationStatus @default(CREATED)
+  correlation_id    String?                 @db.VarChar(255)
+  created_at        DateTime                @default(now()) @db.Timestamptz(6)
+  payment_links     payment_links           @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+  referral_links    referral_links          @relation(fields: [referral_link_id], references: [id], onDelete: Cascade)
+
+  @@unique([stripe_event_id], name: "commission_obligations_stripe_event_id_unique")
+  @@index([payment_link_id])
+  @@index([referral_link_id])
+  @@index([stripe_event_id])
+  @@index([status])
 }

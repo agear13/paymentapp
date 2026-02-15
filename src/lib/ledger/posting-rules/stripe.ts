@@ -9,7 +9,7 @@
 
 import { LedgerEntryService, JournalEntry } from '../ledger-entry-service';
 import { LEDGER_ACCOUNTS } from '../account-mapping';
-import { ensureDefaultLedgerAccounts } from '../ensure-default-ledger-accounts';
+import { provisionStripeLedgerAccounts } from '../ledger-account-provisioner';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 
@@ -61,8 +61,8 @@ export async function postStripeSettlement(
     'Starting Stripe settlement posting'
   );
 
-  // Ensure required ledger accounts exist (1050, 1200, 6100)
-  await ensureDefaultLedgerAccounts(prisma, organizationId, correlationId);
+  // Provision required ledger accounts (1050, 1200, 6100) before posting
+  await provisionStripeLedgerAccounts(prisma, organizationId, correlationId);
 
   const ledgerService = new LedgerEntryService();
 

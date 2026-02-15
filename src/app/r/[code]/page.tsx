@@ -1,13 +1,46 @@
 import { createUserClient } from '@/lib/supabase/server';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { ReferralLandingClient } from '@/components/referrals/referral-landing-client';
+import { prisma } from '@/lib/server/prisma';
+import { createReferralCheckoutSession } from '@/lib/referrals/referral-checkout';
 
 export default async function ReferralLandingPage({
   params,
 }: {
-  params: { code: string };
+  params: Promise<{ code: string }>;
 }) {
-  // Initialize Supabase client - fail early if env vars missing
+  const { code } = await params;
+  const referralCode = code?.trim()?.toUpperCase() || '';
+
+  if (!referralCode) {
+    notFound();
+  }
+
+  // Option B: Commission-enabled referral links (Prisma) - redirect to Stripe checkout
+  const referralLink = await prisma.referral_links.findFirst({
+    where: { code: referralCode, status: 'ACTIVE' },
+    include: { referral_rules: { take: 1 } },
+  });
+
+  if (referralLink && referralLink.referral_rules.length > 0) {
+    const result = await createReferralCheckoutSession({
+      referralCode,
+      correlationId: `r-${referralCode}-${Date.now()}`,
+    });
+    if (result.success && result.url) {
+      redirect(result.url);
+    }
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md">
+          <h1 className="text-2xl font-bold text-red-600 mb-2">Checkout Error</h1>
+          <p className="text-gray-600">{result.error || 'Unable to start checkout.'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Legacy: Supabase referral participants (landing page with enquiry)
   let supabase;
   try {
     supabase = await createUserClient();
@@ -26,8 +59,6 @@ export default async function ReferralLandingPage({
       </div>
     );
   }
-
-  const referralCode = params.code.toUpperCase();
 
   // Find participant and program (using referral_ namespaced tables)
   const { data: participant, error: participantError } = await supabase

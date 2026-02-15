@@ -24,6 +24,10 @@ export const LEDGER_ACCOUNTS = {
   CRYPTO_CLEARING_AUDD: '1054',
   PROCESSOR_FEE_EXPENSE: '6100',
   REVENUE: '4000',
+  // Commission / Revenue Share (Option B)
+  COMMISSION_EXPENSE: '6105',
+  CONSULTANT_PAYABLE: '2110',
+  BD_PARTNER_PAYABLE: '2120',
 } as const;
 
 /**

@@ -17,6 +17,7 @@ import { fromSmallestUnit } from '@/lib/stripe/client';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { postStripeSettlement, calculateStripeFee } from '@/lib/ledger/posting-rules/stripe';
+import { applyRevenueShareSplits } from '@/lib/referrals/commission-posting';
 import { validatePostingBalance } from '@/lib/ledger/balance-validation';
 import {
   checkDuplicatePayment,
@@ -381,6 +382,36 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event, correlationId
     paymentEventId: result.paymentEventId,
     alreadyProcessed: result.alreadyProcessed,
   }, 'Checkout session payment confirmed successfully');
+
+  // Best-effort: apply revenue share splits (commission posting)
+  try {
+    const amountReceived = session.amount_total ? session.amount_total / 100 : 0;
+    const currencyReceived = session.currency?.toUpperCase() || 'USD';
+    const orgId = session.metadata?.organization_id;
+    if (orgId) {
+      const commissionResult = await applyRevenueShareSplits({
+        session,
+        stripeEventId: event.id,
+        paymentLinkId,
+        organizationId: orgId,
+        grossAmount: amountReceived,
+        currency: currencyReceived,
+        correlationId: eventCorrelationId,
+      });
+      if (commissionResult.posted) {
+        log.info(
+          { correlationId: eventCorrelationId, consultantAmount: commissionResult.consultantAmount, bdPartnerAmount: commissionResult.bdPartnerAmount },
+          'Commission posted successfully'
+        );
+      }
+    }
+  } catch (commissionErr: any) {
+    log.error(
+      { correlationId: eventCorrelationId, paymentLinkId, error: commissionErr?.message },
+      'Commission posting failed (best-effort, payment confirmed)'
+    );
+    // Do NOT throw - return 200
+  }
 }
 
 /**
