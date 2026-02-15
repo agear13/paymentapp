@@ -283,9 +283,9 @@ async function applyRevenueShareSplitsInternal(
     }
   }
 
-  // Persist commission obligation (optional audit trail)
+  // Persist commission obligation + obligation lines (audit trail for payouts)
   try {
-    await prisma.commission_obligations.create({
+    const obligation = await prisma.commission_obligations.create({
       data: {
         payment_link_id: paymentLinkId,
         referral_link_id: meta.referralLinkId,
@@ -297,6 +297,39 @@ async function applyRevenueShareSplitsInternal(
         correlation_id: correlationId || undefined,
       },
     });
+
+    const linesToCreate: { obligation_id: string; payee_user_id: string; role: string; amount: number; currency: string }[] = [];
+    if (consultantAmount >= 0.01 && meta.consultantId) {
+      linesToCreate.push({
+        obligation_id: obligation.id,
+        payee_user_id: meta.consultantId,
+        role: 'CONSULTANT',
+        amount: consultantAmount,
+        currency: currencyUpper,
+      });
+    }
+    if (bdPartnerAmount >= 0.01 && meta.bdPartnerId) {
+      linesToCreate.push({
+        obligation_id: obligation.id,
+        payee_user_id: meta.bdPartnerId,
+        role: 'BD_PARTNER',
+        amount: bdPartnerAmount,
+        currency: currencyUpper,
+      });
+    }
+
+    if (linesToCreate.length > 0) {
+      await prisma.commission_obligation_lines.createMany({
+        data: linesToCreate.map((l) => ({
+          obligation_id: l.obligation_id,
+          payee_user_id: l.payee_user_id,
+          role: l.role,
+          amount: l.amount,
+          currency: l.currency,
+          status: 'POSTED' as const,
+        })),
+      });
+    }
   } catch (obligErr: any) {
     if (obligErr?.code === 'P2002') {
       log.info({ stripeEventId }, 'Commission obligation already exists (idempotent)');

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useOrganization } from '@/hooks/use-organization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,6 +44,7 @@ import {
   Search,
   MoreHorizontal,
   CreditCard,
+  Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CollectReviewModal } from './collect-review-modal';
@@ -51,6 +53,7 @@ import { CreateReferralLinkModal } from './create-referral-link-modal';
 import { ShareLinkModal } from './share-link-modal';
 import { AnalyticsDrawer } from './analytics-drawer';
 import { EditAdvocateModal } from './edit-advocate-modal';
+import { PayoutDestinationCard } from './payout-destination-card';
 import { buildShareTemplates } from '@/lib/referrals/share-templates';
 
 const WATCH_VIDEO_URL = process.env.NEXT_PUBLIC_CONSULTANT_VIDEO_URL || '#';
@@ -287,17 +290,39 @@ export function ConsultantDashboard({
         </Card>
 
         {isConsultant && organizationId && (
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Link (Commission)</CardTitle>
+                <CardDescription>
+                  Generate a &quot;Pay Now&quot; link. Customers pay via Stripe; your commission and BD partner share are posted automatically.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={() => setCreateCommissionLinkOpen(true)}>
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Create Commission Link
+                </Button>
+              </CardContent>
+            </Card>
+            <PayoutDestinationCard />
+          </>
+        )}
+
+        {isConsultant && organizationId && (
           <Card>
             <CardHeader>
-              <CardTitle>Payment Link (Commission)</CardTitle>
+              <CardTitle>Payout destination</CardTitle>
               <CardDescription>
-                Generate a &quot;Pay Now&quot; link. Customers pay via Stripe; your commission and BD partner share are posted automatically.
+                Set your default payout method (PayPal, Wise, etc.) so you can receive commission payouts.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={() => setCreateCommissionLinkOpen(true)}>
-                <CreditCard className="h-4 w-4 mr-2" />
-                Create Commission Link
+              <Button variant="outline" asChild>
+                <Link href="/dashboard/partners/payout-methods">
+                  <Wallet className="h-4 w-4 mr-2" />
+                  Manage payout methods
+                </Link>
               </Button>
             </CardContent>
           </Card>

@@ -95,6 +95,10 @@ const partnersItems = [
         href: '/dashboard/partners/rules',
       },
       {
+        title: 'Payout methods',
+        href: '/dashboard/partners/payout-methods',
+      },
+      {
         title: 'Payouts',
         href: '/dashboard/partners/payouts',
       },

@@ -1,353 +1,276 @@
 'use client';
 
-import { useState } from 'react';
+import * as React from 'react';
+import Link from 'next/link';
+import { Plus, RefreshCw, Download, ChevronRight } from 'lucide-react';
+import { useOrganization } from '@/hooks/use-organization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Separator } from '@/components/ui/separator';
-import { Calendar, DollarSign, TrendingUp, CheckCircle2 } from 'lucide-react';
-import { mockPayouts, type Payout } from '@/lib/data/mock-partners';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { toast } from 'sonner';
+
+interface Batch {
+  id: string;
+  currency: string;
+  status: string;
+  payoutCount: number;
+  totalAmount: number;
+  createdAt: string;
+}
 
 export default function PartnerPayoutsPage() {
-  const [selectedPayout, setSelectedPayout] = useState<Payout | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const { organizationId, isLoading: isOrgLoading } = useOrganization();
+  const [batches, setBatches] = React.useState<Batch[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [createLoading, setCreateLoading] = React.useState(false);
+  const [createCurrency, setCreateCurrency] = React.useState('AUD');
+  const [createThreshold, setCreateThreshold] = React.useState('50');
+  const [createRoleFilter, setCreateRoleFilter] = React.useState<string>(''); // '' = all, CONSULTANT, BD_PARTNER
 
-  const handleRowClick = (payout: Payout) => {
-    setSelectedPayout(payout);
-    setDialogOpen(true);
+  const fetchBatches = React.useCallback(async () => {
+    if (!organizationId) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/payout-batches?organizationId=${organizationId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch');
+      setBatches(data.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load batches');
+    } finally {
+      setLoading(false);
+    }
+  }, [organizationId]);
+
+  React.useEffect(() => {
+    fetchBatches();
+  }, [fetchBatches]);
+
+  const handleCreateBatch = async () => {
+    if (!organizationId) return;
+    const threshold = parseFloat(createThreshold);
+    if (isNaN(threshold) || threshold < 0) {
+      toast.error('Enter a valid minimum threshold');
+      return;
+    }
+    setCreateLoading(true);
+    try {
+      const res = await fetch('/api/payout-batches/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId,
+          currency: createCurrency,
+          minThreshold: threshold,
+          ...(createRoleFilter && {
+            roleFilter: createRoleFilter as 'CONSULTANT' | 'BD_PARTNER',
+          }),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.message || 'Failed to create batch');
+      toast.success('Payout batch created');
+      fetchBatches();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create batch');
+    } finally {
+      setCreateLoading(false);
+    }
   };
 
-  const scheduledPayouts = mockPayouts.filter((p) => p.status === 'Scheduled');
-  const completedPayouts = mockPayouts.filter((p) => p.status === 'Completed');
+  const handleExport = (batchId: string) => {
+    if (!organizationId) return;
+    window.open(
+      `/api/payout-batches/${batchId}/export`,
+      '_blank',
+      'noopener'
+    );
+  };
 
-  const totalScheduled = scheduledPayouts.reduce((sum, p) => sum + p.amount, 0);
-  const totalCompleted = completedPayouts.reduce((sum, p) => sum + p.amount, 0);
+  if (isOrgLoading) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Payouts</h1>
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!organizationId) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Payouts</h1>
+        <p className="text-muted-foreground">No organization selected.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Payouts</h1>
         <p className="text-muted-foreground">
-          View scheduled and completed payouts for your revenue share earnings
+          Create payout batches from posted commissions. Mark payouts as paid after transfer.
         </p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Payouts</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{mockPayouts.length}</div>
-            <p className="text-xs text-muted-foreground">All time transfers</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Scheduled</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              ${totalScheduled.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </div>
-            <p className="text-xs text-muted-foreground">{scheduledPayouts.length} pending</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              ${totalCompleted.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </div>
-            <p className="text-xs text-muted-foreground">{completedPayouts.length} successful</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Payouts Tabs */}
       <Card>
-        <CardHeader>
-          <CardTitle>Payout History</CardTitle>
-          <CardDescription>
-            Click on any payout to view detailed breakdown
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="scheduled">
+        <Tabs defaultValue="create">
+          <CardHeader>
             <TabsList>
-              <TabsTrigger value="scheduled">
-                Scheduled ({scheduledPayouts.length})
-              </TabsTrigger>
-              <TabsTrigger value="completed">
-                Completed ({completedPayouts.length})
-              </TabsTrigger>
+              <TabsTrigger value="create">Create payout batch</TabsTrigger>
+              <TabsTrigger value="batches">Batches</TabsTrigger>
             </TabsList>
-
-            <TabsContent value="scheduled" className="space-y-4">
-              {scheduledPayouts.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Period</TableHead>
-                      <TableHead>Scheduled Date</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Reference ID</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {scheduledPayouts.map((payout) => (
-                      <TableRow
-                        key={payout.id}
-                        className="cursor-pointer"
-                        onClick={() => handleRowClick(payout)}
-                      >
-                        <TableCell className="font-medium">
-                          {new Date(payout.periodStart).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                          })}{' '}
-                          -{' '}
-                          {new Date(payout.periodEnd).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </TableCell>
-                        <TableCell>
-                          {payout.scheduledDate &&
-                            new Date(payout.scheduledDate).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          ${payout.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{payout.method}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{payout.status}</Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">{payout.referenceId}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                  No scheduled payouts
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="completed" className="space-y-4">
-              {completedPayouts.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Period</TableHead>
-                      <TableHead>Completed Date</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Reference ID</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {completedPayouts.map((payout) => (
-                      <TableRow
-                        key={payout.id}
-                        className="cursor-pointer"
-                        onClick={() => handleRowClick(payout)}
-                      >
-                        <TableCell className="font-medium">
-                          {new Date(payout.periodStart).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                          })}{' '}
-                          -{' '}
-                          {new Date(payout.periodEnd).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </TableCell>
-                        <TableCell>
-                          {payout.completedDate &&
-                            new Date(payout.completedDate).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          ${payout.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{payout.method}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="success">{payout.status}</Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">{payout.referenceId}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                  No completed payouts
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Payout Details Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Payout Details</DialogTitle>
-            <DialogDescription>
-              Complete information for this payout transfer
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedPayout && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+          </CardHeader>
+          <CardContent>
+            <TabsContent value="create" className="space-y-4 mt-0">
+              <div className="grid gap-4 sm:grid-cols-2 max-w-md">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Reference ID</p>
-                  <p className="text-sm font-mono">{selectedPayout.referenceId}</p>
+                  <Label htmlFor="currency">Currency</Label>
+                  <Select value={createCurrency} onValueChange={setCreateCurrency}>
+                    <SelectTrigger id="currency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AUD">AUD</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Status</p>
-                  <Badge
-                    variant={
-                      selectedPayout.status === 'Completed'
-                        ? 'success'
-                        : selectedPayout.status === 'Scheduled'
-                        ? 'secondary'
-                        : 'outline'
-                    }
-                    className="mt-1"
+                  <Label htmlFor="threshold">Min threshold</Label>
+                  <Input
+                    id="threshold"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={createThreshold}
+                    onChange={(e) => setCreateThreshold(e.target.value)}
+                    placeholder="50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Only include payees with total &ge; this amount
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="roleFilter">Role filter (optional)</Label>
+                  <Select
+                    value={createRoleFilter || 'all'}
+                    onValueChange={(v) => setCreateRoleFilter(v === 'all' ? '' : v)}
                   >
-                    {selectedPayout.status}
-                  </Badge>
+                    <SelectTrigger id="roleFilter">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="CONSULTANT">Consultant only</SelectItem>
+                      <SelectItem value="BD_PARTNER">BD Partner only</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-
-              <Separator />
-
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Payout Period</p>
-                <div className="flex items-center justify-between">
-                  <p className="text-sm">
-                    {new Date(selectedPayout.periodStart).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </p>
-                  <p className="text-sm text-muted-foreground">to</p>
-                  <p className="text-sm">
-                    {new Date(selectedPayout.periodEnd).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </p>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-muted-foreground">Payment Details</p>
-
-                <div className="flex items-center justify-between">
-                  <p className="text-sm">Payout Amount</p>
-                  <p className="text-lg font-bold text-primary">
-                    ${selectedPayout.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <p className="text-sm">Payment Method</p>
-                  <Badge variant="outline">{selectedPayout.method}</Badge>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <p className="text-sm">Ledger Entries Included</p>
-                  <p className="text-sm font-medium">{selectedPayout.ledgerEntries.length}</p>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="grid grid-cols-2 gap-4">
-                {selectedPayout.scheduledDate && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Scheduled Date</p>
-                    <p className="text-sm mt-1">
-                      {new Date(selectedPayout.scheduledDate).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </p>
-                  </div>
+              <Button onClick={handleCreateBatch} disabled={createLoading}>
+                {createLoading ? 'Creating...' : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create batch
+                  </>
                 )}
-                {selectedPayout.completedDate && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Completed Date</p>
-                    <p className="text-sm mt-1">
-                      {new Date(selectedPayout.completedDate).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </p>
-                  </div>
-                )}
-              </div>
+              </Button>
+            </TabsContent>
 
-              {selectedPayout.status === 'Completed' && (
-                <div className="pt-4 border-t">
-                  <div className="flex items-center gap-2 text-sm text-green-600">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Payout successfully completed</span>
-                  </div>
-                </div>
+            <TabsContent value="batches" className="space-y-4 mt-0">
+              <div className="flex justify-end">
+                <Button variant="outline" size="icon" onClick={fetchBatches} disabled={loading}>
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+              {loading ? (
+                <p className="text-muted-foreground py-8 text-center">Loading...</p>
+              ) : batches.length === 0 ? (
+                <p className="text-muted-foreground py-8 text-center">
+                  No payout batches yet. Create one from the first tab.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Currency</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Count</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {batches.map((b) => (
+                      <TableRow key={b.id}>
+                        <TableCell>
+                          {new Date(b.createdAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>{b.currency}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              b.status === 'COMPLETED'
+                                ? 'default'
+                                : b.status === 'SUBMITTED'
+                                  ? 'secondary'
+                                  : 'outline'
+                            }
+                          >
+                            {b.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">{b.payoutCount}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {b.currency} {b.totalAmount.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleExport(b.id)}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" asChild>
+                              <Link href={`/dashboard/partners/payouts/${b.id}`}>
+                                <ChevronRight className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            </TabsContent>
+          </CardContent>
+        </Tabs>
+      </Card>
     </div>
   );
 }
-
