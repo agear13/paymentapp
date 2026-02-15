@@ -79,6 +79,14 @@ const partnersItems = [
         href: '/dashboard/partners/dashboard',
       },
       {
+        title: 'Referral Links',
+        href: '/dashboard/partners/referral-links',
+      },
+      {
+        title: 'Commissions',
+        href: '/dashboard/partners/commissions',
+      },
+      {
         title: 'Ledger',
         href: '/dashboard/partners/ledger',
       },

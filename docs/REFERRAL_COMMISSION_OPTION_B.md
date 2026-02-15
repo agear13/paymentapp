@@ -174,3 +174,43 @@ GROUP BY rr.bd_partner_id, co.currency;
 - Commission posting is **best-effort**: payment is still marked PAID even if commission fails
 - On failure, a `SYSTEM_ALERT` notification is created
 - Webhook returns 200 so Stripe does not retry for commission-only failures
+
+---
+
+## User Flows (Revenue Share App)
+
+### How BD creates link
+
+1. Go to **Partners → Referral Links** (`/dashboard/partners/referral-links`)
+2. Click **Create Link**
+3. Fill in:
+   - Referral code (auto-generated, editable)
+   - Consultant % and BD Partner % (e.g. 10 and 5; accepts 0.10 or 10)
+   - Optional: assign to a specific consultant
+   - Commission basis (GROSS/NET), status (ACTIVE/INACTIVE)
+   - Default amount and currency for checkout
+4. Submit → link is created. Copy the URL `/r/[code]` or click **Test link** to open in a new tab.
+
+### How consultant creates link
+
+1. Go to **Programs → Consultant** (`/dashboard/consultant`)
+2. In **Payment Link (Commission)** section, click **Create Commission Link**
+3. Fill in:
+   - Referral code (auto-generated)
+   - Consultant % and BD Partner %
+   - Optional: paste a BD referral code to inherit BD partner and their %
+   - Commission basis, status, default amount/currency
+4. Submit → shareable URL `/r/[code]` is created.
+
+### How customer pays
+
+1. Customer opens `/r/[code]` (e.g. `https://yourapp.com/r/ABC123`)
+2. If the code is a commission-enabled link: **Pay Now** page appears with amount, currency, description fields (prefilled from config)
+3. Customer clicks **Pay Now** → redirected to Stripe Checkout
+4. After payment: commissions are posted (DR 6105, CR 2110, 2120) and `commission_obligations` recorded
+
+### How to verify commissions
+
+1. Go to **Partners → Commissions** (`/dashboard/partners/commissions`)
+2. Table shows posted obligations: date, referral code, consultant amount, BD partner amount, status
+3. Or run the SQL queries above to inspect `commission_obligations` and `ledger_entries`

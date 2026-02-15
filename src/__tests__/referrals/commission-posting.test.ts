@@ -107,6 +107,27 @@ describe('Commission Posting', () => {
       });
       expect(meta?.bdPartnerId).toBeNull();
     });
+
+    it('referral checkout metadata keys exist for commission posting', () => {
+      const metadata = {
+        referral_link_id: 'rl-abc',
+        referral_code: 'REF001',
+        consultant_id: 'c-1',
+        bd_partner_id: 'bd-1',
+        consultant_pct: '0.10',
+        bd_partner_pct: '0.05',
+        commission_basis: 'GROSS',
+      };
+      const meta = extractReferralMetadata(metadata);
+      expect(meta).not.toBeNull();
+      expect(meta?.referralLinkId).toBe('rl-abc');
+      expect(meta?.referralCode).toBe('REF001');
+      expect(meta?.consultantId).toBe('c-1');
+      expect(meta?.bdPartnerId).toBe('bd-1');
+      expect(meta?.consultantPct).toBe(0.1);
+      expect(meta?.bdPartnerPct).toBe(0.05);
+      expect(meta?.commissionBasis).toBe('GROSS');
+    });
   });
 
   describe('Idempotency key format', () => {

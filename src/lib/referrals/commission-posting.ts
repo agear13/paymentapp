@@ -57,7 +57,7 @@ function toNumberSafe(value: unknown): number {
 export function extractReferralMetadata(
   metadata?: Stripe.Metadata | null
 ): ReferralMetadata | null {
-  if (!metadata?.referral_link_id || !metadata?.consultant_id) {
+  if (!metadata?.referral_link_id) {
     return null;
   }
 
@@ -68,10 +68,16 @@ export function extractReferralMetadata(
     return null;
   }
 
+  // consultant_id required when consultant_pct > 0
+  const consultantId = metadata.consultant_id || '';
+  if (consultantPct > 0 && !consultantId) {
+    return null;
+  }
+
   return {
     referralLinkId: metadata.referral_link_id,
     referralCode: metadata.referral_code || '',
-    consultantId: metadata.consultant_id,
+    consultantId: consultantId || '',
     bdPartnerId: metadata.bd_partner_id || null,
     consultantPct,
     bdPartnerPct,

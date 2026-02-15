@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useOrganization } from '@/hooks/use-organization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,10 +42,12 @@ import {
   HelpCircle,
   Search,
   MoreHorizontal,
+  CreditCard,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CollectReviewModal } from './collect-review-modal';
 import { CreateAdvocateModal } from './create-advocate-modal';
+import { CreateReferralLinkModal } from './create-referral-link-modal';
 import { ShareLinkModal } from './share-link-modal';
 import { AnalyticsDrawer } from './analytics-drawer';
 import { EditAdvocateModal } from './edit-advocate-modal';
@@ -129,10 +132,12 @@ export function ConsultantDashboard({
     conversions: number;
   } | null>(null);
   const [editAdvocate, setEditAdvocate] = useState<AdvocateWithMetrics | null>(null);
+  const [createCommissionLinkOpen, setCreateCommissionLinkOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'lastActivity' | 'referrals' | 'earnings'>('lastActivity');
   const [copied, setCopied] = useState(false);
   const router = useRouter();
+  const { organizationId } = useOrganization();
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const consultantLink = `${baseUrl}/r/${participant.referral_code}`;
@@ -281,6 +286,23 @@ export function ConsultantDashboard({
           </CardContent>
         </Card>
 
+        {isConsultant && organizationId && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Link (Commission)</CardTitle>
+              <CardDescription>
+                Generate a &quot;Pay Now&quot; link. Customers pay via Stripe; your commission and BD partner share are posted automatically.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => setCreateCommissionLinkOpen(true)}>
+                <CreditCard className="h-4 w-4 mr-2" />
+                Create Commission Link
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {isConsultant && (
           <Card>
             <CardHeader>
@@ -308,6 +330,17 @@ export function ConsultantDashboard({
           programSlug={program.slug}
           onSuccess={handleRefresh}
         />
+        {organizationId && (
+          <CreateReferralLinkModal
+            open={createCommissionLinkOpen}
+            onOpenChange={setCreateCommissionLinkOpen}
+            organizationId={organizationId}
+            userType="CONSULTANT"
+            defaultConsultantPct={10}
+            defaultBdPartnerPct={ownerPercent || 5}
+            onSuccess={handleRefresh}
+          />
+        )}
         <CreateAdvocateModal
           open={createAdvocateOpen}
           onOpenChange={setCreateAdvocateOpen}

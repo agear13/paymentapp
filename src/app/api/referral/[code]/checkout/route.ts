@@ -25,11 +25,23 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const successUrl = body.successUrl || body.success_url;
     const cancelUrl = body.cancelUrl || body.cancel_url;
+    const amountRaw =
+      typeof body.amount === 'number'
+        ? body.amount
+        : typeof body.amount === 'string'
+          ? parseFloat(body.amount)
+          : undefined;
+    const amount = typeof amountRaw === 'number' && !Number.isNaN(amountRaw) ? amountRaw : undefined;
+    const currency = typeof body.currency === 'string' ? body.currency : undefined;
+    const description = typeof body.description === 'string' ? body.description : (typeof body.memo === 'string' ? body.memo : undefined);
 
     const result = await createReferralCheckoutSession({
       referralCode: code.trim().toUpperCase(),
       successUrl: typeof successUrl === 'string' ? successUrl : undefined,
       cancelUrl: typeof cancelUrl === 'string' ? cancelUrl : undefined,
+      amount,
+      currency,
+      description,
     });
 
     if (!result.success) {

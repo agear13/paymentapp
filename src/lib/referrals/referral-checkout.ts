@@ -22,6 +22,12 @@ export interface ReferralCheckoutParams {
   successUrl?: string;
   cancelUrl?: string;
   correlationId?: string;
+  /** Override amount (major units). If not provided, uses checkout_config.amount */
+  amount?: number;
+  /** Override currency. If not provided, uses checkout_config.currency */
+  currency?: string;
+  /** Override description. If not provided, uses checkout_config.description */
+  description?: string;
 }
 
 /**
@@ -31,7 +37,7 @@ export interface ReferralCheckoutParams {
 export async function createReferralCheckoutSession(
   params: ReferralCheckoutParams
 ): Promise<ReferralCheckoutResult> {
-  const { referralCode, successUrl, cancelUrl, correlationId } = params;
+  const { referralCode, successUrl, cancelUrl, correlationId, amount: amountOverride, currency: currencyOverride, description: descriptionOverride } = params;
 
   const code = referralCode.trim().toUpperCase();
   if (!code) {
@@ -82,11 +88,11 @@ export async function createReferralCheckoutSession(
       return { success: false, error: 'Stripe not configured for this merchant' };
     }
 
-    // 2. Get checkout config (default amount/currency/description)
+    // 2. Get checkout config (default amount/currency/description); overrides from params take precedence
     const config = (referralLink.checkout_config as Record<string, unknown>) || {};
-    const amount = Number(config.amount) || 100;
-    const currency = (String(config.currency || 'USD')).toUpperCase().slice(0, 3);
-    const description = String(config.description || `Payment via referral ${code}`);
+    const amount = amountOverride ?? Number(config.amount) ?? 100;
+    const currency = (currencyOverride ?? String(config.currency ?? 'AUD')).toUpperCase().slice(0, 3);
+    const description = descriptionOverride ?? String(config.description ?? `Payment via referral ${code}`);
 
     // 3. Create payment_link
     const shortCode = await generateUniqueShortCode();
@@ -139,8 +145,8 @@ export async function createReferralCheckoutSession(
         // Referral metadata for commission posting
         referral_link_id: referralLink.id,
         referral_code: code,
-        consultant_id: rule.consultant_id,
-        bd_partner_id: rule.bd_partner_id || '',
+        consultant_id: rule.consultant_id ?? '',
+        bd_partner_id: rule.bd_partner_id ?? '',
         consultant_pct: rule.consultant_pct.toString(),
         bd_partner_pct: rule.bd_partner_pct.toString(),
         commission_basis: rule.basis,
@@ -155,8 +161,8 @@ export async function createReferralCheckoutSession(
           short_code: shortCode,
           referral_link_id: referralLink.id,
           referral_code: code,
-          consultant_id: rule.consultant_id,
-          bd_partner_id: rule.bd_partner_id || '',
+          consultant_id: rule.consultant_id ?? '',
+          bd_partner_id: rule.bd_partner_id ?? '',
           consultant_pct: rule.consultant_pct.toString(),
           bd_partner_pct: rule.bd_partner_pct.toString(),
           commission_basis: rule.basis,

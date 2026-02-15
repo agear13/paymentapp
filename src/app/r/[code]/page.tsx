@@ -1,8 +1,8 @@
 import { createUserClient } from '@/lib/supabase/server';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { ReferralLandingClient } from '@/components/referrals/referral-landing-client';
+import { ReferralPayPageClient } from '@/components/referrals/referral-pay-page-client';
 import { prisma } from '@/lib/server/prisma';
-import { createReferralCheckoutSession } from '@/lib/referrals/referral-checkout';
 
 export default async function ReferralLandingPage({
   params,
@@ -16,27 +16,18 @@ export default async function ReferralLandingPage({
     notFound();
   }
 
-  // Option B: Commission-enabled referral links (Prisma) - redirect to Stripe checkout
+  // Option B: Commission-enabled referral links (Prisma) - show Pay Now page
   const referralLink = await prisma.referral_links.findFirst({
     where: { code: referralCode, status: 'ACTIVE' },
     include: { referral_rules: { take: 1 } },
   });
 
   if (referralLink && referralLink.referral_rules.length > 0) {
-    const result = await createReferralCheckoutSession({
-      referralCode,
-      correlationId: `r-${referralCode}-${Date.now()}`,
-    });
-    if (result.success && result.url) {
-      redirect(result.url);
-    }
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold text-red-600 mb-2">Checkout Error</h1>
-          <p className="text-gray-600">{result.error || 'Unable to start checkout.'}</p>
-        </div>
-      </div>
+      <ReferralPayPageClient
+        referralCode={referralCode}
+        checkoutConfig={referralLink.checkout_config}
+      />
     );
   }
 
