@@ -137,8 +137,8 @@ export class LedgerEntryService {
 
     if (result.count === 0) {
       loggers.ledger.info(
-        { idempotencyKey, correlationId },
-        'Ledger entries already exist (idempotent retry)'
+        { idempotencyKey, correlationId, firstEntryKey: `${idempotencyKey}-0` },
+        'Ledger entries already exist (idempotent retry, duplicates skipped)'
       );
     } else if (result.count < entries.length) {
       loggers.ledger.info(

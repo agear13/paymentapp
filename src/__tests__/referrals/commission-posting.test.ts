@@ -65,6 +65,30 @@ describe('Commission Posting', () => {
       expect(meta?.commissionBasis).toBe('GROSS');
     });
 
+    it('normalizes pct: "10" (10%) -> 0.10', () => {
+      const meta = extractReferralMetadata({
+        referral_link_id: 'rl-123',
+        consultant_id: 'c-456',
+        consultant_pct: '10',
+        bd_partner_pct: '5',
+      });
+      expect(meta).not.toBeNull();
+      expect(meta?.consultantPct).toBe(0.1);
+      expect(meta?.bdPartnerPct).toBe(0.05);
+    });
+
+    it('keeps pct "0.1" as 0.1 (already decimal)', () => {
+      const meta = extractReferralMetadata({
+        referral_link_id: 'rl-123',
+        consultant_id: 'c-456',
+        consultant_pct: '0.1',
+        bd_partner_pct: '0.05',
+      });
+      expect(meta).not.toBeNull();
+      expect(meta?.consultantPct).toBe(0.1);
+      expect(meta?.bdPartnerPct).toBe(0.05);
+    });
+
     it('defaults commission_basis to GROSS when missing', () => {
       const meta = extractReferralMetadata({
         referral_link_id: 'rl-123',
@@ -86,20 +110,22 @@ describe('Commission Posting', () => {
   });
 
   describe('Idempotency key format', () => {
-    it('uses commission-{stripeEventId}-consultant for consultant entries', () => {
+    it('uses base key commission-{stripeEventId}-consultant (LedgerEntryService suffixes -0/-1)', () => {
       const stripeEventId = 'evt_123';
-      const key = `commission-${stripeEventId}-consultant`;
-      expect(key).toMatch(/^commission-/);
-      expect(key).toContain(stripeEventId);
-      expect(key).toContain('consultant');
+      const baseKey = `commission-${stripeEventId}-consultant`;
+      expect(baseKey).toMatch(/^commission-/);
+      expect(baseKey).toContain(stripeEventId);
+      expect(baseKey).toContain('consultant');
+      // LedgerEntryService produces: baseKey-0, baseKey-1 for 2 entries
+      expect(`${baseKey}-0`).toBe('commission-evt_123-consultant-0');
+      expect(`${baseKey}-1`).toBe('commission-evt_123-consultant-1');
     });
 
-    it('uses commission-{stripeEventId}-bd for BD partner entries', () => {
+    it('uses base key commission-{stripeEventId}-bd (LedgerEntryService suffixes -0/-1)', () => {
       const stripeEventId = 'evt_123';
-      const key = `commission-${stripeEventId}-bd`;
-      expect(key).toMatch(/^commission-/);
-      expect(key).toContain(stripeEventId);
-      expect(key).toContain('bd');
+      const baseKey = `commission-${stripeEventId}-bd`;
+      expect(`${baseKey}-0`).toBe('commission-evt_123-bd-0');
+      expect(`${baseKey}-1`).toBe('commission-evt_123-bd-1');
     });
   });
 

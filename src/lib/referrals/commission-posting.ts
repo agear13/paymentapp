@@ -33,6 +33,24 @@ export interface ApplyRevenueShareSplitsParams {
 }
 
 /**
+ * Normalize commission percentage: "10" (meaning 10%) -> 0.10, "0.1" stays 0.1
+ */
+function normalizeCommissionPct(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number(String(value ?? ''));
+  if (Number.isNaN(num)) return 0;
+  return num > 1 ? num / 100 : num;
+}
+
+/**
+ * Safe conversion to number for fee strings
+ */
+function toNumberSafe(value: unknown): number {
+  if (typeof value === 'number' && !Number.isNaN(value)) return value;
+  const num = Number(String(value ?? ''));
+  return Number.isNaN(num) ? 0 : num;
+}
+
+/**
  * Extract referral metadata from Stripe session.
  * Returns null if not a commission-enabled session.
  */
@@ -43,8 +61,8 @@ export function extractReferralMetadata(
     return null;
   }
 
-  const consultantPct = parseFloat(metadata.consultant_pct as string) || 0;
-  const bdPartnerPct = parseFloat(metadata.bd_partner_pct as string) || 0;
+  const consultantPct = normalizeCommissionPct(metadata.consultant_pct);
+  const bdPartnerPct = normalizeCommissionPct(metadata.bd_partner_pct);
 
   if (consultantPct <= 0 && bdPartnerPct <= 0) {
     return null;
@@ -78,6 +96,31 @@ export async function applyRevenueShareSplits(
     correlationId,
   } = params;
 
+  try {
+    return await applyRevenueShareSplitsInternal(params);
+  } catch (err: any) {
+    log.error(
+      { correlationId, paymentLinkId, stripeEventId, error: err?.message },
+      'Commission posting unexpected error (webhook-safe, returning 200)'
+    );
+    await createCommissionFailureAlert(organizationId, paymentLinkId, err?.message, correlationId);
+    return { posted: false };
+  }
+}
+
+async function applyRevenueShareSplitsInternal(
+  params: ApplyRevenueShareSplitsParams
+): Promise<{ posted: boolean; consultantAmount?: number; bdPartnerAmount?: number }> {
+  const {
+    session,
+    stripeEventId,
+    paymentLinkId,
+    organizationId,
+    grossAmount,
+    currency,
+    correlationId,
+  } = params;
+
   const meta = extractReferralMetadata(session.metadata);
   if (!meta) {
     log.info(
@@ -87,10 +130,16 @@ export async function applyRevenueShareSplits(
     return { posted: false };
   }
 
-  const basisAmount =
-    meta.commissionBasis === 'NET'
-      ? grossAmount - parseFloat(calculateStripeFee(Math.round(grossAmount * 100), currency))
-      : grossAmount;
+  // NET basis: grossAmount is major units (e.g. 100.00); fee is computed from cents, returned as major units
+  let basisAmount: number;
+  if (meta.commissionBasis === 'NET') {
+    const amountInCents = Math.round(grossAmount * 100);
+    const feeStr = calculateStripeFee(amountInCents, currency);
+    const feeMajor = toNumberSafe(feeStr);
+    basisAmount = Math.max(0, grossAmount - feeMajor);
+  } else {
+    basisAmount = grossAmount;
+  }
 
   let consultantAmount = basisAmount * meta.consultantPct;
   let bdPartnerAmount = meta.bdPartnerId ? basisAmount * meta.bdPartnerPct : 0;
@@ -145,7 +194,7 @@ export async function applyRevenueShareSplits(
         },
       ];
 
-      await ledgerService.postJournalEntries({
+      const consultantResult = await ledgerService.postJournalEntries({
         entries: consultantEntries,
         paymentLinkId,
         organizationId,
@@ -153,10 +202,17 @@ export async function applyRevenueShareSplits(
         correlationId,
       });
 
-      log.info(
-        { correlationId, consultantAmount },
-        'Commission posted successfully (consultant)'
-      );
+      if (consultantResult.entriesPosted === 0) {
+        log.info(
+          { correlationId, idempotencyKey: `commission-${stripeEventId}-consultant` },
+          'Commission consultant entries already exist (idempotent retry)'
+        );
+      } else {
+        log.info(
+          { correlationId, consultantAmount },
+          'Commission posted successfully (consultant)'
+        );
+      }
     } catch (err: any) {
       log.error(
         { correlationId, consultantId: meta.consultantId, error: err?.message },
@@ -192,7 +248,7 @@ export async function applyRevenueShareSplits(
         },
       ];
 
-      await ledgerService.postJournalEntries({
+      const bdResult = await ledgerService.postJournalEntries({
         entries: bdEntries,
         paymentLinkId,
         organizationId,
@@ -200,10 +256,17 @@ export async function applyRevenueShareSplits(
         correlationId,
       });
 
-      log.info(
-        { correlationId, bdPartnerAmount },
-        'Commission posted successfully (BD partner)'
-      );
+      if (bdResult.entriesPosted === 0) {
+        log.info(
+          { correlationId, idempotencyKey: `commission-${stripeEventId}-bd` },
+          'Commission BD partner entries already exist (idempotent retry)'
+        );
+      } else {
+        log.info(
+          { correlationId, bdPartnerAmount },
+          'Commission posted successfully (BD partner)'
+        );
+      }
     } catch (err: any) {
       log.error(
         { correlationId, bdPartnerId: meta.bdPartnerId, error: err?.message },
