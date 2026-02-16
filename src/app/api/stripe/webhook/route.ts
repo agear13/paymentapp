@@ -74,8 +74,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update correlation ID with actual event ID
-    const eventCorrelationId = generateCorrelationId('stripe', event.id);
+    // Event-scoped correlation ID (passed to handlers as correlationId param)
+    const eventScopedCorrelationId = generateCorrelationId('stripe', event.id);
 
     // Check idempotency using new stripe_event_id column
     const existingEvent = await prisma.payment_events.findFirst({
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     if (existingEvent) {
       log.info(
         { 
-          correlationId: eventCorrelationId,
+          correlationId: eventScopedCorrelationId,
           eventId: event.id, 
           eventType: event.type,
           existingPaymentEventId: existingEvent.id,
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     }
 
     log.info({
-      correlationId: eventCorrelationId,
+      correlationId: eventScopedCorrelationId,
       eventId: event.id,
       eventType: event.type,
     }, 'Processing Stripe webhook event');
@@ -108,29 +108,29 @@ export async function POST(request: NextRequest) {
     // Process different event types
     switch (event.type) {
       case 'payment_intent.succeeded':
-        await handlePaymentIntentSucceeded(event, eventCorrelationId);
+        await handlePaymentIntentSucceeded(event, eventScopedCorrelationId);
         break;
 
       case 'payment_intent.payment_failed':
-        await handlePaymentIntentFailed(event, eventCorrelationId);
+        await handlePaymentIntentFailed(event, eventScopedCorrelationId);
         break;
 
       case 'payment_intent.canceled':
-        await handlePaymentIntentCanceled(event, eventCorrelationId);
+        await handlePaymentIntentCanceled(event, eventScopedCorrelationId);
         break;
 
       case 'checkout.session.completed':
-        await handleCheckoutSessionCompleted(event, eventCorrelationId);
+        await handleCheckoutSessionCompleted(event, eventScopedCorrelationId);
         break;
 
       case 'checkout.session.expired':
-        await handleCheckoutSessionExpired(event, eventCorrelationId);
+        await handleCheckoutSessionExpired(event, eventScopedCorrelationId);
         break;
 
       default:
         log.info(
           { 
-            correlationId: eventCorrelationId,
+            correlationId: eventScopedCorrelationId,
             eventType: event.type 
           },
           'Unhandled webhook event type'
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
 
     log.info(
       { 
-        correlationId: eventCorrelationId,
+        correlationId: eventScopedCorrelationId,
         eventId: event.id, 
         eventType: event.type 
       },
@@ -287,7 +287,7 @@ async function handlePaymentIntentFailed(event: Stripe.Event, correlationId: str
 /**
  * Handle payment_intent.canceled event
  */
-async function handlePaymentIntentCanceled(event: Stripe.Event) {
+async function handlePaymentIntentCanceled(event: Stripe.Event, _correlationId?: string) {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;
   const paymentLinkId = extractPaymentLinkId(paymentIntent.metadata);
 
@@ -345,9 +345,10 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event, correlationId
     paymentStatus: session.payment_status,
   }, 'Processing checkout.session.completed');
 
-  // Convert amount from cents to decimal
+  // Compute once and reuse for confirmPayment and commission posting
   const amountReceived = session.amount_total ? session.amount_total / 100 : 0;
-  
+  const currencyReceived = session.currency?.toUpperCase() || 'USD';
+
   // Use unified payment confirmation service (idempotent)
   const result = await confirmPayment({
     paymentLinkId,
@@ -356,7 +357,7 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event, correlationId
     paymentIntentId: session.payment_intent as string,
     checkoutSessionId: session.id,
     amountReceived,
-    currencyReceived: session.currency?.toUpperCase() || 'USD',
+    currencyReceived,
     correlationId,
     metadata: {
       checkoutSessionId: session.id,
@@ -364,6 +365,7 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event, correlationId
       paymentStatus: session.payment_status,
       sessionMode: session.mode,
       sessionUrl: session.url,
+      ...(session.metadata || {}),
     },
   });
 
@@ -385,10 +387,13 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event, correlationId
 
   // Best-effort: apply revenue share splits (commission posting)
   try {
-    const amountReceived = session.amount_total ? session.amount_total / 100 : 0;
-    const currencyReceived = session.currency?.toUpperCase() || 'USD';
     const orgId = session.metadata?.organization_id;
-    if (orgId) {
+    if (!orgId) {
+      log.warn(
+        { correlationId, sessionId: session.id },
+        'Commission skipped: missing organization_id in session.metadata'
+      );
+    } else {
       const commissionResult = await applyRevenueShareSplits({
         session,
         stripeEventId: event.id,
@@ -396,18 +401,28 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event, correlationId
         organizationId: orgId,
         grossAmount: amountReceived,
         currency: currencyReceived,
-        correlationId: eventCorrelationId,
+        correlationId,
       });
       if (commissionResult.posted) {
         log.info(
-          { correlationId: eventCorrelationId, consultantAmount: commissionResult.consultantAmount, bdPartnerAmount: commissionResult.bdPartnerAmount },
+          { correlationId, consultantAmount: commissionResult.consultantAmount, bdPartnerAmount: commissionResult.bdPartnerAmount },
           'Commission posted successfully'
+        );
+      } else {
+        log.info(
+          {
+            correlationId,
+            paymentLinkId,
+            stripeEventId: event.id,
+            referralLinkId: session.metadata?.referral_link_id ?? undefined,
+          },
+          'Commission posting returned posted=false'
         );
       }
     }
   } catch (commissionErr: any) {
     log.error(
-      { correlationId: eventCorrelationId, paymentLinkId, error: commissionErr?.message },
+      { correlationId, paymentLinkId, error: commissionErr?.message },
       'Commission posting failed (best-effort, payment confirmed)'
     );
     // Do NOT throw - return 200
@@ -417,7 +432,7 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event, correlationId
 /**
  * Handle checkout.session.expired event
  */
-async function handleCheckoutSessionExpired(event: Stripe.Event) {
+async function handleCheckoutSessionExpired(event: Stripe.Event, _correlationId?: string) {
   const session = event.data.object as Stripe.Checkout.Session;
   const paymentLinkId = extractPaymentLinkId(session.metadata);
 
