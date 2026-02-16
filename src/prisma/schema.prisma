@@ -520,11 +520,26 @@ model referral_links {
   updated_at        DateTime          @updatedAt @db.Timestamptz(6)
   organizations     organizations     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   referral_rules    referral_rules[]
+  referral_link_splits referral_link_splits[]
   commission_obligations commission_obligations[]
 
   @@index([organization_id])
   @@index([code])
   @@index([status])
+}
+
+model referral_link_splits {
+  id                String            @id @default(uuid()) @db.Uuid
+  referral_link_id  String            @db.Uuid
+  label             String            @db.Text
+  percentage        Decimal           @db.Decimal(10, 4)
+  beneficiary_id    String?           @db.Uuid
+  sort_order        Int               @default(0)
+  created_at        DateTime          @default(now()) @db.Timestamptz(6)
+  referral_links    referral_links    @relation(fields: [referral_link_id], references: [id], onDelete: Cascade)
+  commission_obligation_items commission_obligation_items[]
+
+  @@index([referral_link_id])
 }
 
 model referral_rules {
@@ -557,12 +572,38 @@ model commission_obligations {
   payment_links     payment_links           @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
   referral_links    referral_links          @relation(fields: [referral_link_id], references: [id], onDelete: Cascade)
   obligation_lines  commission_obligation_lines[]
+  obligation_items  commission_obligation_items[]
 
   @@unique([stripe_event_id], name: "commission_obligations_stripe_event_id_unique")
   @@index([payment_link_id])
   @@index([referral_link_id])
   @@index([stripe_event_id])
   @@index([status])
+}
+
+enum CommissionObligationItemStatus {
+  POSTED
+  PENDING_BENEFICIARY
+  PAID
+}
+
+model commission_obligation_items {
+  id                  String                        @id @default(uuid()) @db.Uuid
+  commission_obligation_id String                    @db.Uuid
+  split_id            String                        @db.Uuid
+  amount              Decimal                       @db.Decimal(20, 8)
+  currency            String                        @db.Char(3)
+  status              CommissionObligationItemStatus @default(POSTED)
+  payout_id           String?                       @db.Uuid
+  paid_at             DateTime?                     @db.Timestamptz(6)
+  created_at          DateTime                      @default(now()) @db.Timestamptz(6)
+  commission_obligations commission_obligations      @relation(fields: [commission_obligation_id], references: [id], onDelete: Cascade)
+  referral_link_splits referral_link_splits        @relation(fields: [split_id], references: [id], onDelete: Cascade)
+  payouts             payouts?                     @relation(fields: [payout_id], references: [id], onDelete: SetNull)
+
+  @@index([commission_obligation_id])
+  @@index([split_id])
+  @@index([payout_id])
 }
 
 model commission_obligation_lines {
@@ -636,6 +677,7 @@ model payouts {
   payout_batches      payout_batches  @relation(fields: [batch_id], references: [id], onDelete: Cascade)
   payout_methods      payout_methods?  @relation(fields: [payout_method_id], references: [id], onDelete: SetNull)
   obligation_lines    commission_obligation_lines[]
+  obligation_items    commission_obligation_items[]
 
   @@index([organization_id, user_id, status])
   @@index([batch_id])

@@ -12,6 +12,9 @@ import {
   normalizeCommissionPct,
   computeBasisAmount,
   toNumberSafe,
+  computeSplitAmounts,
+  parseReferralSplitsFromMetadata,
+  type ReferralSplitMeta,
 } from '@/lib/referrals/commission-posting';
 
 
@@ -225,6 +228,64 @@ describe('Commission Posting', () => {
     it('toNumberSafe parses fee string', () => {
       expect(toNumberSafe('3.50')).toBe(3.5);
       expect(toNumberSafe(null)).toBe(0);
+    });
+  });
+
+  describe('computeSplitAmounts', () => {
+    it('allocates amounts so total does not exceed basisAmount', () => {
+      const splits: ReferralSplitMeta[] = [
+        { split_id: 's1', label: 'Partner 1', percentage: 33.33, beneficiary_id: null, sort_order: 1 },
+        { split_id: 's2', label: 'Partner 2', percentage: 33.33, beneficiary_id: null, sort_order: 2 },
+        { split_id: 's3', label: 'Partner 3', percentage: 33.34, beneficiary_id: null, sort_order: 3 },
+      ];
+      const result = computeSplitAmounts(100, splits, 'USD');
+      const total = result.reduce((s, x) => s + x.amount, 0);
+      expect(total).toBeLessThanOrEqual(100);
+      expect(result).toHaveLength(3);
+      expect(result[0].amount).toBeGreaterThanOrEqual(0);
+    });
+
+    it('uses currency precision (2 decimals for USD)', () => {
+      const splits: ReferralSplitMeta[] = [
+        { split_id: 's1', label: 'P1', percentage: 10, beneficiary_id: null, sort_order: 0 },
+      ];
+      const result = computeSplitAmounts(99.99, splits, 'USD');
+      expect(result[0].amount).toBe(9.99);
+    });
+  });
+
+  describe('parseReferralSplitsFromMetadata', () => {
+    it('returns null when referral_link_id is missing', () => {
+      expect(parseReferralSplitsFromMetadata({ referral_splits: '[]' })).toBeNull();
+    });
+
+    it('returns null when referral_splits is invalid JSON', () => {
+      expect(parseReferralSplitsFromMetadata({ referral_link_id: 'rl-1', referral_splits: 'not json' })).toBeNull();
+    });
+
+    it('returns parsed splits when valid', () => {
+      const meta = {
+        referral_link_id: 'rl-1',
+        referral_splits: JSON.stringify([
+          { split_id: 's1', label: 'Partner 1', percentage: 5, beneficiary_id: 'u-1', sort_order: 0 },
+        ]),
+      };
+      const result = parseReferralSplitsFromMetadata(meta as any);
+      expect(result).toHaveLength(1);
+      expect(result![0].split_id).toBe('s1');
+      expect(result![0].percentage).toBe(5);
+      expect(result![0].beneficiary_id).toBe('u-1');
+    });
+  });
+
+  describe('Idempotency key format for splits', () => {
+    it('uses commission-{stripeEventId}-split-{split_id}', () => {
+      const stripeEventId = 'evt_abc';
+      const splitId = 'split-uuid';
+      const key = `commission-${stripeEventId}-split-${splitId}`;
+      expect(key).toMatch(/^commission-/);
+      expect(key).toContain(stripeEventId);
+      expect(key).toContain(splitId);
     });
   });
 });

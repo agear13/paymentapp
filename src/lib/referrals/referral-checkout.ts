@@ -47,24 +47,19 @@ export async function createReferralCheckoutSession(
   log.info({ correlationId, referralCode: code }, 'Creating referral checkout session');
 
   try {
-    // 1. Lookup referral_link + active rule(s) (code stored/compared uppercase)
+    // 1. Lookup referral_link + splits (or legacy rules)
     const referralLink = await prisma.referral_links.findFirst({
       where: {
         code,
         status: 'ACTIVE',
       },
       include: {
-        referral_rules: {
-          orderBy: { created_at: 'desc' },
-          take: 1,
-        },
+        referral_rules: { orderBy: { created_at: 'desc' }, take: 1 },
+        referral_link_splits: { orderBy: { sort_order: 'asc' } },
         organizations: {
           include: {
             merchant_settings: {
-              select: {
-                stripe_account_id: true,
-                display_name: true,
-              },
+              select: { stripe_account_id: true, display_name: true },
             },
           },
         },
@@ -76,10 +71,12 @@ export async function createReferralCheckoutSession(
       return { success: false, error: 'Referral link not found or inactive' };
     }
 
+    const splits = referralLink.referral_link_splits;
     const rule = referralLink.referral_rules[0];
-    if (!rule) {
-      log.warn({ referralLinkId: referralLink.id }, 'No active referral rule');
-      return { success: false, error: 'No referral rule configured' };
+    const hasSplits = splits.length > 0;
+    if (!hasSplits && !rule) {
+      log.warn({ referralLinkId: referralLink.id }, 'No splits or referral rule configured');
+      return { success: false, error: 'No referral rule or splits configured' };
     }
 
     const merchantSettings = referralLink.organizations.merchant_settings[0];
@@ -122,6 +119,34 @@ export async function createReferralCheckoutSession(
     const nowSec = Math.floor(Date.now() / 1000);
     const sessionExpiresAt = nowSec + 86400; // 24h max
 
+    const basis = hasSplits ? 'GROSS' : (rule?.basis ?? 'GROSS');
+    const referralMetadata: Record<string, string> = {
+      payment_link_id: paymentLink.id,
+      organization_id: referralLink.organization_id,
+      short_code: shortCode,
+      invoice_reference: `REF-${code}`,
+      referral_link_id: referralLink.id,
+      referral_code: code,
+      commission_basis: basis,
+    };
+    if (hasSplits) {
+      referralMetadata.referral_splits = JSON.stringify(
+        splits.map((s) => ({
+          split_id: s.id,
+          label: s.label,
+          percentage: Number(s.percentage),
+          beneficiary_id: s.beneficiary_id ?? null,
+          sort_order: s.sort_order,
+        }))
+      );
+    } else if (rule) {
+      referralMetadata.consultant_id = rule.consultant_id ?? '';
+      referralMetadata.bd_partner_id = rule.bd_partner_id ?? '';
+      referralMetadata.consultant_pct = rule.consultant_pct.toString();
+      referralMetadata.bd_partner_pct = rule.bd_partner_pct.toString();
+      referralMetadata.commission_basis = rule.basis;
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [
@@ -137,36 +162,12 @@ export async function createReferralCheckoutSession(
           quantity: 1,
         },
       ],
-      metadata: {
-        payment_link_id: paymentLink.id,
-        organization_id: referralLink.organization_id,
-        short_code: shortCode,
-        invoice_reference: `REF-${code}`,
-        // Referral metadata for commission posting
-        referral_link_id: referralLink.id,
-        referral_code: code,
-        consultant_id: rule.consultant_id ?? '',
-        bd_partner_id: rule.bd_partner_id ?? '',
-        consultant_pct: rule.consultant_pct.toString(),
-        bd_partner_pct: rule.bd_partner_pct.toString(),
-        commission_basis: rule.basis,
-      },
+      metadata: referralMetadata,
       success_url: successUrl || defaultSuccessUrl,
       cancel_url: cancelUrl || defaultCancelUrl,
       expires_at: sessionExpiresAt,
       payment_intent_data: {
-        metadata: {
-          payment_link_id: paymentLink.id,
-          organization_id: referralLink.organization_id,
-          short_code: shortCode,
-          referral_link_id: referralLink.id,
-          referral_code: code,
-          consultant_id: rule.consultant_id ?? '',
-          bd_partner_id: rule.bd_partner_id ?? '',
-          consultant_pct: rule.consultant_pct.toString(),
-          bd_partner_pct: rule.bd_partner_pct.toString(),
-          commission_basis: rule.basis,
-        },
+        metadata: referralMetadata,
       },
     });
 

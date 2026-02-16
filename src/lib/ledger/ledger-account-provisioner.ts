@@ -7,11 +7,12 @@ import type { PrismaClient } from '@prisma/client';
 import { LEDGER_ACCOUNTS } from './account-mapping';
 import { loggers } from '@/lib/logger';
 
-/** Commission posting requires these account codes (Option B) */
+/** Commission posting requires these account codes (Option B + generic splits) */
 const COMMISSION_REQUIRED_ACCOUNTS = [
   { code: LEDGER_ACCOUNTS.COMMISSION_EXPENSE, name: 'Commission Expense', account_type: 'EXPENSE' as const },
   { code: LEDGER_ACCOUNTS.CONSULTANT_PAYABLE, name: 'Consultant Payable', account_type: 'LIABILITY' as const },
   { code: LEDGER_ACCOUNTS.BD_PARTNER_PAYABLE, name: 'BD Partner Payable', account_type: 'LIABILITY' as const },
+  { code: LEDGER_ACCOUNTS.PARTNER_PAYABLE_UNASSIGNED, name: 'Partner Payable (Unassigned)', account_type: 'LIABILITY' as const },
 ];
 
 /** Stripe settlement requires these account codes */

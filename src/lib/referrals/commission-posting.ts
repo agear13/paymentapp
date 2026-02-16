@@ -1,6 +1,6 @@
 /**
  * Commission posting for referral revenue share (Option B).
- * Posts ledger entries for consultant and BD partner commissions.
+ * Supports generic multi-level splits (referral_link_splits) and legacy consultant/BD.
  * Best-effort, idempotent, webhook-safe.
  */
 
@@ -11,6 +11,15 @@ import { provisionCommissionLedgerAccounts } from '@/lib/ledger/ledger-account-p
 import { LEDGER_ACCOUNTS } from '@/lib/ledger/account-mapping';
 import { calculateStripeFee } from '@/lib/ledger/posting-rules/stripe';
 import { log } from '@/lib/logger';
+
+/** Single split from session metadata (from referral_link_splits at checkout) */
+export interface ReferralSplitMeta {
+  split_id: string;
+  label: string;
+  percentage: number; // 0-100, e.g. 5 = 5%
+  beneficiary_id: string | null;
+  sort_order: number;
+}
 
 export interface ReferralMetadata {
   referralLinkId: string;
@@ -69,6 +78,71 @@ export function computeBasisAmount(
   const feeStr = calculateStripeFee(amountInCents, currency);
   const feeMajor = toNumberSafe(feeStr);
   return Math.max(0, grossAmount - feeMajor);
+}
+
+/**
+ * Parse referral_splits from session metadata (JSON array).
+ * Returns null if missing or invalid. Used for generic multi-level split flow.
+ */
+export function parseReferralSplitsFromMetadata(
+  metadata?: Stripe.Metadata | null
+): ReferralSplitMeta[] | null {
+  if (!metadata?.referral_link_id) return null;
+  const raw = metadata.referral_splits;
+  if (raw === undefined || raw === null || typeof raw !== 'string') return null;
+  try {
+    const arr = JSON.parse(raw) as unknown[];
+    if (!Array.isArray(arr) || arr.length === 0 || arr.length > 15) return null;
+    const parsed: ReferralSplitMeta[] = [];
+    for (const item of arr) {
+      const o = item as Record<string, unknown>;
+      const split_id = typeof o.split_id === 'string' ? o.split_id : null;
+      const percentage = toNumberSafe(o.percentage);
+      if (!split_id || percentage < 0) continue;
+      parsed.push({
+        split_id,
+        label: typeof o.label === 'string' ? o.label : `Partner ${parsed.length + 1}`,
+        percentage,
+        beneficiary_id: typeof o.beneficiary_id === 'string' && o.beneficiary_id ? o.beneficiary_id : null,
+        sort_order: typeof o.sort_order === 'number' ? o.sort_order : parsed.length,
+      });
+    }
+    return parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Decimal places for currency (default 2) */
+function currencyPrecision(currency: string): number {
+  const minor = new Set(['JPY', 'KRW']);
+  return minor.has(currency.toUpperCase()) ? 0 : 2;
+}
+
+/**
+ * Compute amount per split so total <= basisAmount. Remainder goes to first split (sort_order 1).
+ */
+export function computeSplitAmounts(
+  basisAmount: number,
+  splits: ReferralSplitMeta[],
+  currency: string
+): { split_id: string; label: string; percentage: number; beneficiary_id: string | null; amount: number }[] {
+  const prec = currencyPrecision(currency);
+  const mult = 10 ** prec;
+  const sorted = [...splits].sort((a, b) => a.sort_order - b.sort_order);
+  const amounts: { split_id: string; label: string; percentage: number; beneficiary_id: string | null; amount: number }[] = [];
+  let total = 0;
+  for (const s of sorted) {
+    const raw = (basisAmount * s.percentage) / 100;
+    const amount = Math.floor(raw * mult) / mult;
+    amounts.push({ ...s, amount });
+    total += amount;
+  }
+  const remainder = Math.floor((basisAmount - total) * mult) / mult;
+  if (remainder > 0 && amounts.length > 0) {
+    amounts[0].amount = Math.floor((amounts[0].amount + remainder) * mult) / mult;
+  }
+  return amounts;
 }
 
 /**
@@ -145,16 +219,15 @@ export async function applyRevenueShareSplits(
 async function applyRevenueShareSplitsInternal(
   params: ApplyRevenueShareSplitsParams
 ): Promise<{ posted: boolean; consultantAmount?: number; bdPartnerAmount?: number }> {
-  const {
-    session,
-    stripeEventId,
-    paymentLinkId,
-    organizationId,
-    grossAmount,
-    currency,
-    correlationId,
-  } = params;
+  const { session, stripeEventId, paymentLinkId, organizationId, grossAmount, currency, correlationId } = params;
 
+  // Generic multi-level splits (from referral_link_splits at checkout)
+  const splitsMeta = parseReferralSplitsFromMetadata(session.metadata);
+  if (splitsMeta && splitsMeta.length > 0) {
+    return applyRevenueShareSplitsFromSplitsInternal(params, splitsMeta);
+  }
+
+  // Legacy: consultant + BD from referral_rules metadata
   const meta = extractReferralMetadata(session.metadata);
   if (!meta) {
     log.info(
@@ -391,6 +464,153 @@ async function applyRevenueShareSplitsInternal(
     consultantAmount: consultantAmountRounded,
     bdPartnerAmount: bdPartnerAmountRounded,
   };
+}
+
+/**
+ * Generic split flow: post ledger and create obligation + items from referral_splits metadata.
+ */
+async function applyRevenueShareSplitsFromSplitsInternal(
+  params: ApplyRevenueShareSplitsParams,
+  splitsMeta: ReferralSplitMeta[]
+): Promise<{ posted: boolean; consultantAmount?: number; bdPartnerAmount?: number }> {
+  const { session, stripeEventId, paymentLinkId, organizationId, grossAmount, currency, correlationId } = params;
+  const metadata = session.metadata || {};
+  const referralLinkId = metadata.referral_link_id as string;
+  const referralCode = (metadata.referral_code as string) || '';
+  const commissionBasis = ((metadata.commission_basis as string) || 'GROSS') as 'GROSS' | 'NET';
+
+  const basisAmount = computeBasisAmount(commissionBasis, grossAmount, currency);
+  const splitAmounts = computeSplitAmounts(basisAmount, splitsMeta, currency);
+  const aboveMin = splitAmounts.filter((s) => s.amount >= 0.01);
+  if (aboveMin.length === 0) {
+    log.info({ stripeEventId, paymentLinkId }, 'Commission skipped: all split amounts below minimum');
+    return { posted: false };
+  }
+
+  try {
+    await provisionCommissionLedgerAccounts(prisma, organizationId, correlationId);
+  } catch (provisionErr: unknown) {
+    const message = (provisionErr as Error)?.message;
+    log.error({ correlationId, organizationId, error: message }, 'Commission accounts provision failed');
+    await createCommissionFailureAlert(organizationId, paymentLinkId, message, correlationId);
+    return { posted: false };
+  }
+
+  const ledgerService = new LedgerEntryService();
+  const currencyUpper = currency.toUpperCase();
+
+  for (const s of aboveMin) {
+    try {
+      const payableAccount = s.beneficiary_id ? LEDGER_ACCOUNTS.CONSULTANT_PAYABLE : LEDGER_ACCOUNTS.PARTNER_PAYABLE_UNASSIGNED;
+      const entries = [
+        {
+          accountCode: LEDGER_ACCOUNTS.COMMISSION_EXPENSE,
+          entryType: 'DEBIT' as const,
+          amount: s.amount.toFixed(2),
+          currency: currencyUpper,
+          description: `Revenue share ${s.label} (${referralCode}) - ${s.amount.toFixed(2)} ${currencyUpper}`,
+        },
+        {
+          accountCode: payableAccount,
+          entryType: 'CREDIT' as const,
+          amount: s.amount.toFixed(2),
+          currency: currencyUpper,
+          description: `Partner payable ${s.label} (${referralCode}) - ${s.amount.toFixed(2)} ${currencyUpper}`,
+        },
+      ];
+      const result = await ledgerService.postJournalEntries({
+        entries,
+        paymentLinkId,
+        organizationId,
+        idempotencyKey: `commission-${stripeEventId}-split-${s.split_id}`,
+        correlationId,
+      });
+      if (result.entriesPosted === 0) {
+        log.info({ correlationId, idempotencyKey: `commission-${stripeEventId}-split-${s.split_id}` }, 'Commission split entries already exist (idempotent retry)');
+      } else {
+        log.info({ correlationId, splitId: s.split_id, amount: s.amount }, 'Commission split posted');
+      }
+    } catch (err: unknown) {
+      const message = (err as Error)?.message;
+      log.error({ correlationId, splitId: s.split_id, error: message }, 'Commission split posting failed');
+      await createCommissionFailureAlert(organizationId, paymentLinkId, message, correlationId);
+      return { posted: false };
+    }
+  }
+
+  const totalAmount = aboveMin.reduce((sum, s) => sum + s.amount, 0);
+  let obligationId: string | null = null;
+  let createdObligation = false;
+  try {
+    const obligation = await prisma.commission_obligations.create({
+      data: {
+        payment_link_id: paymentLinkId,
+        referral_link_id: referralLinkId,
+        stripe_event_id: stripeEventId,
+        consultant_amount: totalAmount,
+        bd_partner_amount: 0,
+        currency: currencyUpper,
+        status: 'POSTED',
+        correlation_id: correlationId || undefined,
+      },
+    });
+    obligationId = obligation.id;
+    createdObligation = true;
+  } catch (obligErr: unknown) {
+    const err = obligErr as { code?: string };
+    if (err?.code === 'P2002') {
+      log.info({ stripeEventId }, 'Commission obligation already exists (idempotent)');
+      const existing = await prisma.commission_obligations.findUnique({
+        where: { stripe_event_id: stripeEventId },
+      });
+      if (existing) obligationId = existing.id;
+    } else {
+      log.warn({ error: (obligErr as Error)?.message }, 'Commission obligation create failed (non-blocking)');
+    }
+  }
+
+  if (obligationId && createdObligation) {
+    for (const s of aboveMin) {
+      try {
+        await prisma.commission_obligation_items.create({
+          data: {
+            commission_obligation_id: obligationId,
+            split_id: s.split_id,
+            amount: s.amount,
+            currency: currencyUpper,
+            status: s.beneficiary_id ? 'POSTED' : 'PENDING_BENEFICIARY',
+          },
+        });
+      } catch (itemErr: unknown) {
+        if ((itemErr as { code?: string })?.code === 'P2002') {
+          log.info({ stripeEventId, splitId: s.split_id }, 'Commission obligation item already exists (idempotent)');
+        } else {
+          log.warn({ error: (itemErr as Error)?.message }, 'Commission obligation item create failed');
+        }
+      }
+    }
+    const payeeUserId = (s: (typeof aboveMin)[0]) => s.beneficiary_id || 'PENDING_BENEFICIARY';
+    try {
+      await prisma.commission_obligation_lines.createMany({
+        data: aboveMin.map((s) => ({
+          obligation_id: obligationId!,
+          payee_user_id: payeeUserId(s),
+          role: s.label,
+          amount: s.amount,
+          currency: currencyUpper,
+          status: 'POSTED' as const,
+        })),
+      });
+    } catch (lineErr: unknown) {
+      if ((lineErr as { code?: string })?.code === 'P2002') {
+        log.info({ stripeEventId }, 'Commission obligation lines already exist (idempotent)');
+      } else {
+        log.warn({ error: (lineErr as Error)?.message }, 'Commission obligation lines create failed');
+      }
+    }
+  }
+
+  return { posted: true, consultantAmount: totalAmount, bdPartnerAmount: 0 };
 }
 
 async function createCommissionFailureAlert(

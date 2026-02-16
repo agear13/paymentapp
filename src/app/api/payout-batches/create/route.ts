@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
         status: 'POSTED',
         payout_id: null,
         currency: currencyUpper,
+        payee_user_id: { not: 'PENDING_BENEFICIARY' },
         ...(roleFilter && { role: roleFilter }),
         commission_obligations: {
           payment_links: { organization_id: organizationId },

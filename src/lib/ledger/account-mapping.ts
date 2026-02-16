@@ -28,6 +28,8 @@ export const LEDGER_ACCOUNTS = {
   COMMISSION_EXPENSE: '6105',
   CONSULTANT_PAYABLE: '2110',
   BD_PARTNER_PAYABLE: '2120',
+  /** Generic partner payable when beneficiary not yet assigned */
+  PARTNER_PAYABLE_UNASSIGNED: '2130',
 } as const;
 
 /**

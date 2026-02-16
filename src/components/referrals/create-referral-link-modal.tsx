@@ -71,21 +71,80 @@ export function CreateReferralLinkModal({
   const [checkoutAmount, setCheckoutAmount] = useState('100');
   const [checkoutCurrency, setCheckoutCurrency] = useState('AUD');
   const [loading, setLoading] = useState(false);
+  const [useSplits, setUseSplits] = useState(false);
+  const [numberOfPartners, setNumberOfPartners] = useState(2);
+  const [splitsRows, setSplitsRows] = useState<{ label: string; percentage: string }[]>([
+    { label: 'Partner 1', percentage: '50' },
+    { label: 'Partner 2', percentage: '50' },
+  ]);
 
   const regenCode = () => setCode(generateReferralCode());
 
+  const updateSplitsCount = (n: number) => {
+    const clamped = Math.min(15, Math.max(1, n));
+    setNumberOfPartners(clamped);
+    setSplitsRows((prev) => {
+      const next = [...prev];
+      while (next.length < clamped) next.push({ label: `Partner ${next.length + 1}`, percentage: '0' });
+      return next.slice(0, clamped);
+    });
+  };
+
   const handleSubmit = async () => {
+    if (!code.trim()) {
+      toast.error('Referral code is required');
+      return;
+    }
+
+    const checkoutConfig = {
+      amount: parseFloat(checkoutAmount) || 100,
+      currency: checkoutCurrency || 'AUD',
+    };
+
+    if (useSplits) {
+      const totalPct = splitsRows.reduce((s, r) => s + normalizePctInput(r.percentage), 0);
+      if (totalPct > 100) {
+        toast.error('Total split percentage cannot exceed 100%');
+        return;
+      }
+      const splits = splitsRows.map((r, i) => ({
+        label: r.label.trim() || `Partner ${i + 1}`,
+        percentage: normalizePctInput(r.percentage) * 100,
+        sort_order: i,
+      }));
+      setLoading(true);
+      try {
+        const res = await fetch('/api/referral-links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            organizationId,
+            code: code.trim().toUpperCase(),
+            basis,
+            status,
+            checkoutConfig,
+            splits,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create');
+        toast.success('Referral link created');
+        onOpenChange(false);
+        onSuccess?.();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to create link');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     const cp = normalizePctInput(consultantPct);
     const bp = normalizePctInput(bdPartnerPct);
     if (cp + bp > 1) {
       toast.error('Consultant + BD Partner percentages cannot exceed 100%');
       return;
     }
-    if (!code.trim()) {
-      toast.error('Referral code is required');
-      return;
-    }
-    // BD-only links: consultantPct may be 0 without selecting a consultant
     if (userType === 'BD_PARTNER' && cp > 0 && !consultantId) {
       toast.error('Select a consultant or set Consultant % to 0 for BD-only link.');
       return;
@@ -105,10 +164,7 @@ export function CreateReferralLinkModal({
         bdPartnerPct: bp * 100,
         basis,
         status,
-        checkoutConfig: {
-          amount: parseFloat(checkoutAmount) || 100,
-          currency: checkoutCurrency || 'AUD',
-        },
+        checkoutConfig,
       };
 
       if (userType === 'BD_PARTNER') {
@@ -168,34 +224,100 @@ export function CreateReferralLinkModal({
             </Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="consultantPct">Consultant % (e.g. 10 or 0.10)</Label>
-              <Input
-                id="consultantPct"
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                value={consultantPct}
-                onChange={(e) => setConsultantPct(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="bdPartnerPct">BD Partner % (e.g. 5 or 0.05)</Label>
-              <Input
-                id="bdPartnerPct"
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                value={bdPartnerPct}
-                onChange={(e) => setBdPartnerPct(e.target.value)}
-              />
-            </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="useSplits"
+              checked={useSplits}
+              onChange={(e) => {
+                setUseSplits(e.target.checked);
+                if (e.target.checked) updateSplitsCount(numberOfPartners);
+              }}
+              className="rounded"
+            />
+            <Label htmlFor="useSplits">Use generic splits (1–15 partners)</Label>
           </div>
 
-          {userType === 'BD_PARTNER' && consultantOptions.length > 0 && (
+          {useSplits ? (
+            <div className="space-y-3">
+              <div>
+                <Label>Number of partners (1–15)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={15}
+                  value={numberOfPartners}
+                  onChange={(e) => updateSplitsCount(parseInt(e.target.value, 10) || 1)}
+                />
+              </div>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {splitsRows.map((row, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input
+                      placeholder={`Partner ${i + 1}`}
+                      value={row.label}
+                      onChange={(e) =>
+                        setSplitsRows((prev) => {
+                          const next = [...prev];
+                          next[i] = { ...next[i], label: e.target.value };
+                          return next;
+                        })
+                      }
+                      className="flex-1"
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      placeholder="%"
+                      value={row.percentage}
+                      onChange={(e) =>
+                        setSplitsRows((prev) => {
+                          const next = [...prev];
+                          next[i] = { ...next[i], percentage: e.target.value };
+                          return next;
+                        })
+                      }
+                      className="w-20"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Total: {splitsRows.reduce((s, r) => s + normalizePctInput(r.percentage), 0) * 100}% (max 100%)
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="consultantPct">Consultant % (e.g. 10 or 0.10)</Label>
+                  <Input
+                    id="consultantPct"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={consultantPct}
+                    onChange={(e) => setConsultantPct(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bdPartnerPct">BD Partner % (e.g. 5 or 0.05)</Label>
+                  <Input
+                    id="bdPartnerPct"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={bdPartnerPct}
+                    onChange={(e) => setBdPartnerPct(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {userType === 'BD_PARTNER' && consultantOptions.length > 0 && (
             <div>
               <Label>Assign to consultant (optional)</Label>
               <p className="text-xs text-muted-foreground mb-1">
@@ -241,6 +363,8 @@ export function CreateReferralLinkModal({
                 </Select>
               )}
             </div>
+          )}
+            </>
           )}
 
           <div className="grid grid-cols-2 gap-4">
