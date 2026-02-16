@@ -1,11 +1,19 @@
 /**
  * Commission Posting Tests (Option B)
  * - Missing referral metadata → commissions skipped safely
+ * - BD-only referral links (consultant_id missing, bd_partner_id set)
  * - Idempotency key format
  * - Commission amount calculation
+ * - Normalization and NET basis
  */
 
-import { extractReferralMetadata } from '@/lib/referrals/commission-posting';
+import {
+  extractReferralMetadata,
+  normalizeCommissionPct,
+  computeBasisAmount,
+  toNumberSafe,
+} from '@/lib/referrals/commission-posting';
+
 
 describe('Commission Posting', () => {
   describe('extractReferralMetadata', () => {
@@ -25,12 +33,13 @@ describe('Commission Posting', () => {
       ).toBeNull();
     });
 
-    it('returns null when consultant_id is missing', () => {
+    it('returns null when consultant_id missing and no BD payee (consultant_pct > 0 only)', () => {
       expect(
         extractReferralMetadata({
           referral_link_id: 'rl-123',
           payment_link_id: 'pl-123',
           consultant_pct: '0.20',
+          bd_partner_pct: '0',
         })
       ).toBeNull();
     });
@@ -63,6 +72,25 @@ describe('Commission Posting', () => {
       expect(meta?.consultantPct).toBe(0.2);
       expect(meta?.bdPartnerPct).toBe(0.05);
       expect(meta?.commissionBasis).toBe('GROSS');
+      expect(meta?.hasConsultant).toBe(true);
+      expect(meta?.hasBd).toBe(true);
+    });
+
+    it('returns meta for BD-only when consultant_id empty and bd_partner_id set', () => {
+      const meta = extractReferralMetadata({
+        referral_link_id: 'rl-bdonly',
+        bd_partner_id: 'bd-789',
+        bd_partner_pct: '0.05',
+        consultant_id: '',
+        consultant_pct: '0.1',
+      });
+      expect(meta).not.toBeNull();
+      expect(meta?.consultantId).toBeNull();
+      expect(meta?.bdPartnerId).toBe('bd-789');
+      expect(meta?.consultantPct).toBe(0.1);
+      expect(meta?.bdPartnerPct).toBe(0.05);
+      expect(meta?.hasConsultant).toBe(false);
+      expect(meta?.hasBd).toBe(true);
     });
 
     it('normalizes pct: "10" (10%) -> 0.10', () => {
@@ -106,6 +134,7 @@ describe('Commission Posting', () => {
         bd_partner_id: '',
       });
       expect(meta?.bdPartnerId).toBeNull();
+      expect(meta?.hasBd).toBe(false);
     });
 
     it('referral checkout metadata keys exist for commission posting', () => {
@@ -127,6 +156,8 @@ describe('Commission Posting', () => {
       expect(meta?.consultantPct).toBe(0.1);
       expect(meta?.bdPartnerPct).toBe(0.05);
       expect(meta?.commissionBasis).toBe('GROSS');
+      expect(meta?.hasConsultant).toBe(true);
+      expect(meta?.hasBd).toBe(true);
     });
   });
 
@@ -163,6 +194,37 @@ describe('Commission Posting', () => {
       const bdPartnerPct = 0.05;
       const bdPartnerAmount = grossAmount * bdPartnerPct;
       expect(bdPartnerAmount).toBe(5);
+    });
+  });
+
+  describe('normalizeCommissionPct', () => {
+    it('"10" => 0.1', () => {
+      expect(normalizeCommissionPct('10')).toBe(0.1);
+      expect(normalizeCommissionPct(10)).toBe(0.1);
+    });
+    it('"0.1" => 0.1', () => {
+      expect(normalizeCommissionPct('0.1')).toBe(0.1);
+      expect(normalizeCommissionPct(0.1)).toBe(0.1);
+    });
+    it('clamps negative to 0', () => {
+      expect(normalizeCommissionPct(-1)).toBe(0);
+    });
+  });
+
+  describe('computeBasisAmount', () => {
+    it('GROSS returns grossAmount', () => {
+      expect(computeBasisAmount('GROSS', 100, 'USD')).toBe(100);
+      expect(computeBasisAmount('GROSS', 50.5, 'AUD')).toBe(50.5);
+    });
+    it('NET subtracts fee and is not negative', () => {
+      const basis = computeBasisAmount('NET', 100, 'USD');
+      expect(basis).toBeLessThanOrEqual(100);
+      expect(basis).toBeGreaterThanOrEqual(0);
+      expect(typeof basis).toBe('number');
+    });
+    it('toNumberSafe parses fee string', () => {
+      expect(toNumberSafe('3.50')).toBe(3.5);
+      expect(toNumberSafe(null)).toBe(0);
     });
   });
 });

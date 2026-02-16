@@ -104,6 +104,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Resolve final payee ids before validating (for BD-only links consultantId can be null)
+    let finalConsultantId: string | null;
+    let finalBdPartnerId: string | null;
+    if (userType === 'BD_PARTNER') {
+      finalBdPartnerId = user.id;
+      finalConsultantId = consultantId ?? null;
+    } else if (userType === 'CONSULTANT') {
+      finalConsultantId = user.id;
+      finalBdPartnerId = resolvedBdPartnerId ?? bdPartnerId ?? null;
+    } else {
+      finalConsultantId = consultantId ?? user.id;
+      finalBdPartnerId = bdPartnerId ?? null;
+    }
+
+    if (consultantPct > 0 && finalConsultantId == null) {
+      return NextResponse.json(
+        { error: 'consultantId is required when consultantPct > 0' },
+        { status: 400 }
+      );
+    }
+    if (bdPartnerPct > 0 && finalBdPartnerId == null) {
+      return NextResponse.json(
+        { error: 'bdPartnerId is required when bdPartnerPct > 0' },
+        { status: 400 }
+      );
+    }
+
     const canCreate = await checkUserPermission(user.id, organizationId, 'create_payment_links');
     if (!canCreate) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -119,20 +146,6 @@ export async function POST(request: NextRequest) {
         { error: `Referral code ${normalizedCode} already exists` },
         { status: 409 }
       );
-    }
-
-    let finalConsultantId: string | null;
-    let finalBdPartnerId: string | null;
-
-    if (userType === 'BD_PARTNER') {
-      finalBdPartnerId = user.id;
-      finalConsultantId = consultantId ?? null;
-    } else if (userType === 'CONSULTANT') {
-      finalConsultantId = user.id;
-      finalBdPartnerId = resolvedBdPartnerId ?? bdPartnerId ?? null;
-    } else {
-      finalConsultantId = consultantId ?? user.id;
-      finalBdPartnerId = bdPartnerId ?? null;
     }
 
     const [referralLink] = await prisma.$transaction([

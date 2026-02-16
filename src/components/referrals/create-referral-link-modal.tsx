@@ -85,6 +85,15 @@ export function CreateReferralLinkModal({
       toast.error('Referral code is required');
       return;
     }
+    // BD-only links: consultantPct may be 0 without selecting a consultant
+    if (userType === 'BD_PARTNER' && cp > 0 && !consultantId) {
+      toast.error('Select a consultant or set Consultant % to 0 for BD-only link.');
+      return;
+    }
+    if (userType === 'CONSULTANT' && bp > 0 && !bdReferralCode.trim() && !bdPartnerId) {
+      toast.error('Enter BD referral code or select a BD partner when BD Partner % > 0.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -189,12 +198,15 @@ export function CreateReferralLinkModal({
           {userType === 'BD_PARTNER' && consultantOptions.length > 0 && (
             <div>
               <Label>Assign to consultant (optional)</Label>
+              <p className="text-xs text-muted-foreground mb-1">
+                Set Consultant % to 0 for BD-only link. If Consultant % &gt; 0, select a consultant.
+              </p>
               <Select value={consultantId ?? 'any'} onValueChange={(v) => setConsultantId(v === 'any' ? null : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Any consultant" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="any">Any consultant</SelectItem>
+                  <SelectItem value="any">Any consultant (BD-only if Consultant % = 0)</SelectItem>
                   {consultantOptions.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
