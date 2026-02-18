@@ -11,16 +11,28 @@ import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
 
-const PayoutMethodTypeEnum = z.enum(['PAYPAL', 'WISE', 'BANK_TRANSFER', 'CRYPTO', 'MANUAL_NOTE']);
+const PayoutMethodTypeEnum = z.enum(['PAYPAL', 'WISE', 'BANK_TRANSFER', 'CRYPTO', 'MANUAL_NOTE', 'HEDERA']);
 
-const CreatePayoutMethodSchema = z.object({
-  organizationId: z.string().uuid(),
-  userId: z.string().min(1).optional(),
-  methodType: PayoutMethodTypeEnum,
-  handle: z.string().max(255).optional().nullable(),
-  notes: z.string().optional().nullable(),
-  isDefault: z.boolean().optional(),
-});
+// Canonical Hedera destination: Account ID string 0.0.x (works with HTS TransferTransaction)
+const HEDERA_ACCOUNT_ID_REGEX = /^0\.0\.\d+$/;
+
+const CreatePayoutMethodSchema = z
+  .object({
+    organizationId: z.string().uuid(),
+    userId: z.string().min(1).optional(),
+    methodType: PayoutMethodTypeEnum,
+    handle: z.string().max(255).optional().nullable(),
+    notes: z.string().optional().nullable(),
+    isDefault: z.boolean().optional(),
+    hederaAccountId: z.string().max(50).optional().nullable(),
+  })
+  .refine(
+    (data) => {
+      if (data.methodType !== 'HEDERA') return true;
+      return data.hederaAccountId != null && HEDERA_ACCOUNT_ID_REGEX.test(data.hederaAccountId.trim());
+    },
+    { message: 'HEDERA method requires hederaAccountId in format 0.0.x', path: ['hederaAccountId'] }
+  );
 
 export async function GET(request: NextRequest) {
   try {
@@ -72,6 +84,7 @@ export async function GET(request: NextRequest) {
         notes: m.notes,
         isDefault: m.is_default,
         status: m.status,
+        hederaAccountId: m.hedera_account_id ?? undefined,
         createdAt: m.created_at,
       })),
     });
@@ -101,7 +114,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { organizationId, methodType, handle, notes, isDefault } = parsed.data;
+    const { organizationId, methodType, handle, notes, isDefault, hederaAccountId } = parsed.data;
     const userId = parsed.data.userId ?? user.id;
 
     const canManage = await checkUserPermission(user.id, organizationId, 'manage_ledger');
@@ -132,6 +145,10 @@ export async function POST(request: NextRequest) {
         handle: handle ?? undefined,
         notes: notes ?? undefined,
         is_default: isDefault ?? false,
+        hedera_account_id:
+          methodType === 'HEDERA' && hederaAccountId?.trim()
+            ? hederaAccountId.trim()
+            : undefined,
       },
     });
 
@@ -143,6 +160,7 @@ export async function POST(request: NextRequest) {
           handle: method.handle,
           notes: method.notes,
           isDefault: method.is_default,
+          hederaAccountId: method.hedera_account_id ?? undefined,
         },
       },
       { status: 201 }

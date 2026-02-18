@@ -79,6 +79,11 @@ export async function POST(
         where: { payout_id: id },
         data: { status: 'PAID', paid_at: paidAtDate },
       });
+      // Option B: mark linked commission_obligation_items as PAID
+      await tx.commission_obligation_items.updateMany({
+        where: { payout_id: id },
+        data: { status: 'PAID', paid_at: paidAtDate },
+      });
     });
 
     log.info(

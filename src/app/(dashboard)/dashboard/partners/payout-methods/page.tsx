@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 
-const METHOD_TYPES = ['PAYPAL', 'WISE', 'BANK_TRANSFER', 'CRYPTO', 'MANUAL_NOTE'] as const;
+const METHOD_TYPES = ['PAYPAL', 'WISE', 'BANK_TRANSFER', 'CRYPTO', 'MANUAL_NOTE', 'HEDERA'] as const;
 
 interface PayoutMethod {
   id: string;
@@ -44,6 +44,7 @@ interface PayoutMethod {
   notes?: string;
   isDefault: boolean;
   status: string;
+  hederaAccountId?: string;
   createdAt: string;
 }
 
@@ -56,6 +57,7 @@ export default function PayoutMethodsPage() {
   const [createType, setCreateType] = React.useState<string>('PAYPAL');
   const [createHandle, setCreateHandle] = React.useState('');
   const [createNotes, setCreateNotes] = React.useState('');
+  const [createHederaAccountId, setCreateHederaAccountId] = React.useState('');
   const [createDefault, setCreateDefault] = React.useState(true);
   const [createLoading, setCreateLoading] = React.useState(false);
   const supabase = createClient();
@@ -100,6 +102,8 @@ export default function PayoutMethodsPage() {
           methodType: createType,
           handle: createHandle.trim() || undefined,
           notes: createNotes.trim() || undefined,
+          hederaAccountId:
+            createType === 'HEDERA' ? createHederaAccountId.trim() || undefined : undefined,
           isDefault: createDefault,
         }),
       });
@@ -109,6 +113,7 @@ export default function PayoutMethodsPage() {
       setCreateOpen(false);
       setCreateHandle('');
       setCreateNotes('');
+      setCreateHederaAccountId('');
       fetchMethods();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed');
@@ -185,7 +190,9 @@ export default function PayoutMethodsPage() {
                     <TableCell>
                       <Badge variant="outline">{m.methodType}</Badge>
                     </TableCell>
-                    <TableCell className="font-mono text-sm">{m.handle || '—'}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {m.methodType === 'HEDERA' ? m.hederaAccountId || m.handle || '—' : m.handle || '—'}
+                    </TableCell>
                     <TableCell className="max-w-xs truncate">{m.notes || '—'}</TableCell>
                     <TableCell>{m.isDefault ? 'Yes' : '—'}</TableCell>
                   </TableRow>
@@ -220,14 +227,28 @@ export default function PayoutMethodsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Handle (e.g. PayPal email, Wise email)</Label>
-              <Input
-                value={createHandle}
-                onChange={(e) => setCreateHandle(e.target.value)}
-                placeholder="payee@example.com"
-              />
-            </div>
+            {createType === 'HEDERA' ? (
+              <div>
+                <Label>Hedera Account ID (canonical destination for HTS payouts)</Label>
+                <Input
+                  value={createHederaAccountId}
+                  onChange={(e) => setCreateHederaAccountId(e.target.value)}
+                  placeholder="0.0.12345"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Format: 0.0.x — used for USDC/USDT/HBAR payouts via HashPack
+                </p>
+              </div>
+            ) : (
+              <div>
+                <Label>Handle (e.g. PayPal email, Wise email)</Label>
+                <Input
+                  value={createHandle}
+                  onChange={(e) => setCreateHandle(e.target.value)}
+                  placeholder="payee@example.com"
+                />
+              </div>
+            )}
             <div>
               <Label>Notes (e.g. bank transfer instructions)</Label>
               <Textarea

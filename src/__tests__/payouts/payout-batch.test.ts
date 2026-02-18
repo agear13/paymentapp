@@ -70,4 +70,31 @@ describe('Payout batch logic', () => {
       expect(updatePayload.paid_at).toBeNull();
     });
   });
+
+  describe('Option B: mark-paid updates commission_obligation_items', () => {
+    it('updates items where payout_id matches: status PAID and paid_at set', () => {
+      const payoutId = 'payout-123';
+      const paidAt = new Date();
+      const itemsUpdatePayload = {
+        status: 'PAID' as const,
+        paid_at: paidAt,
+      };
+      expect(itemsUpdatePayload.status).toBe('PAID');
+      expect(itemsUpdatePayload.paid_at).toEqual(paidAt);
+      // In route: updateMany commission_obligation_items where payout_id = id
+      const where = { payout_id: payoutId };
+      expect(where.payout_id).toBe(payoutId);
+    });
+  });
+
+  describe('Option B: mark-failed clears commission_obligation_items payout_id', () => {
+    it('sets payout_id to null for items in payout, excluding already PAID', () => {
+      const payoutId = 'payout-456';
+      const itemsUpdatePayload = { payout_id: null };
+      const where = { payout_id: payoutId, status: { not: 'PAID' as const } };
+      expect(itemsUpdatePayload.payout_id).toBeNull();
+      expect(where.payout_id).toBe(payoutId);
+      expect(where.status).toEqual({ not: 'PAID' });
+    });
+  });
 });

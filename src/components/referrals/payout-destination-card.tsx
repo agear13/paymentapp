@@ -26,7 +26,7 @@ import {
 import { Wallet, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
-const METHOD_TYPES = ['PAYPAL', 'WISE', 'BANK_TRANSFER', 'CRYPTO', 'MANUAL_NOTE'] as const;
+const METHOD_TYPES = ['PAYPAL', 'WISE', 'BANK_TRANSFER', 'CRYPTO', 'MANUAL_NOTE', 'HEDERA'] as const;
 
 interface PayoutMethod {
   id: string;
@@ -34,6 +34,7 @@ interface PayoutMethod {
   handle: string | null;
   notes: string | null;
   isDefault: boolean;
+  hederaAccountId?: string | null;
   createdAt: string;
 }
 
@@ -51,6 +52,7 @@ export function PayoutDestinationCard() {
     methodType: 'PAYPAL' as (typeof METHOD_TYPES)[number],
     handle: '',
     notes: '',
+    hederaAccountId: '',
     isDefault: true,
   });
 
@@ -86,6 +88,8 @@ export function PayoutDestinationCard() {
           methodType: form.methodType,
           handle: form.handle.trim() || null,
           notes: form.notes.trim() || null,
+          hederaAccountId:
+            form.methodType === 'HEDERA' ? form.hederaAccountId.trim() || null : null,
           isDefault: form.isDefault,
         }),
       });
@@ -93,7 +97,7 @@ export function PayoutDestinationCard() {
       if (!res.ok) throw new Error(data.error || 'Failed to add');
       toast.success('Payout destination added');
       setDialogOpen(false);
-      setForm({ methodType: 'PAYPAL', handle: '', notes: '', isDefault: true });
+      setForm({ methodType: 'PAYPAL', handle: '', notes: '', hederaAccountId: '', isDefault: true });
       fetchMethods();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add');
@@ -153,7 +157,7 @@ export function PayoutDestinationCard() {
                   )}
                 </div>
                 <span className="font-mono text-muted-foreground">
-                  {m.handle || m.notes || '—'}
+                  {m.methodType === 'HEDERA' ? m.hederaAccountId || m.notes || '—' : m.handle || m.notes || '—'}
                 </span>
               </div>
             ))}
@@ -190,15 +194,28 @@ export function PayoutDestinationCard() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="handle">Handle (email, etc.)</Label>
-              <Input
-                id="handle"
-                value={form.handle}
-                onChange={(e) => setForm((f) => ({ ...f, handle: e.target.value }))}
-                placeholder="e.g. payee@example.com"
-              />
-            </div>
+            {form.methodType === 'HEDERA' ? (
+              <div className="space-y-2">
+                <Label htmlFor="hederaAccountId">Hedera Account ID</Label>
+                <Input
+                  id="hederaAccountId"
+                  value={form.hederaAccountId}
+                  onChange={(e) => setForm((f) => ({ ...f, hederaAccountId: e.target.value }))}
+                  placeholder="0.0.12345"
+                />
+                <p className="text-xs text-muted-foreground">Format 0.0.x — for USDC/USDT payouts</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="handle">Handle (email, etc.)</Label>
+                <Input
+                  id="handle"
+                  value={form.handle}
+                  onChange={(e) => setForm((f) => ({ ...f, handle: e.target.value }))}
+                  placeholder="e.g. payee@example.com"
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="notes">Notes (optional)</Label>
               <Textarea

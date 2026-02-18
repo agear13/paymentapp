@@ -44,7 +44,9 @@ export async function GET(request: NextRequest) {
     const payouts = await prisma.payouts.findMany({
       where,
       include: {
-        payout_methods: { select: { method_type: true, handle: true, notes: true } },
+        payout_methods: {
+          select: { method_type: true, handle: true, notes: true, hedera_account_id: true },
+        },
       },
       orderBy: { created_at: 'desc' },
       take: limit,
@@ -69,6 +71,7 @@ export async function GET(request: NextRequest) {
               type: p.payout_methods.method_type,
               handle: p.payout_methods.handle,
               notes: p.payout_methods.notes,
+              hederaAccountId: p.payout_methods.hedera_account_id ?? undefined,
             }
           : null,
       })),

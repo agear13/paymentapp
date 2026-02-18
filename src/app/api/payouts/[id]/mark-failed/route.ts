@@ -65,6 +65,11 @@ export async function POST(
         where: { payout_id: id },
         data: { payout_id: null, status: 'POSTED', paid_at: null },
       });
+      // Option B: unassign commission_obligation_items (so they can be re-batched); do not touch already PAID
+      await tx.commission_obligation_items.updateMany({
+        where: { payout_id: id, status: { not: 'PAID' } },
+        data: { payout_id: null },
+      });
     });
 
     log.info(

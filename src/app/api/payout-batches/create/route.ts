@@ -144,6 +144,27 @@ export async function POST(request: NextRequest) {
           where: { id: { in: payee.lines.map((l) => l.id) } },
           data: { payout_id: payout.id },
         });
+
+        // Option B: link commission_obligation_items to this payout (payee = split.beneficiary_id)
+        const obligationIds = [...new Set(payee.lines.map((l) => l.obligation_id))];
+        const payeeSplitIds = await tx.referral_link_splits
+          .findMany({
+            where: { beneficiary_id: payee.userId },
+            select: { id: true },
+          })
+          .then((s) => s.map((x) => x.id));
+        if (payeeSplitIds.length > 0 && obligationIds.length > 0) {
+          await tx.commission_obligation_items.updateMany({
+            where: {
+              split_id: { in: payeeSplitIds },
+              commission_obligation_id: { in: obligationIds },
+              payout_id: null,
+              status: 'POSTED',
+              currency: currencyUpper,
+            },
+            data: { payout_id: payout.id },
+          });
+        }
       }
 
       return [batch];

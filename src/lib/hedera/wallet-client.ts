@@ -933,6 +933,41 @@ export async function sendTokenPayment(
 }
 
 /**
+ * Send pre-built transaction bytes (e.g. from payout prepare) for merchant signing in HashPack.
+ * Used by "Execute in HashPack (USDC)" payout flow.
+ */
+export async function sendTransactionBytesForPayout(
+  transactionBase64: string,
+  signerAccountId: string
+): Promise<SendPaymentResult> {
+  await initHashConnect();
+  const hc = getHashConnectInstance();
+  if (!hc) throw new Error('HashConnect not initialized');
+  const pairingData = getLatestPairingData();
+  if (!pairingData?.accountIds?.length) throw new Error('No wallet connection. Connect HashPack first.');
+  const sessionTopic = await getSessionTopic(8, 600);
+  if (!sessionTopic) throw new Error('Could not get signing session. Reconnect wallet and try again.');
+  const binaryString = atob(transactionBase64);
+  const transactionBytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) transactionBytes[i] = binaryString.charCodeAt(i);
+  const accountToSign = pairingData.accountIds.includes(signerAccountId) ? signerAccountId : pairingData.accountIds[0];
+  const result = await Promise.race([
+    hc.sendTransaction(sessionTopic, {
+      byteArray: transactionBytes,
+      metadata: { accountToSign, returnTransaction: false },
+    }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Transaction request timeout after 120s')), 120000)
+    ),
+  ]);
+  let transactionId: string | undefined;
+  if (result?.transactionId) transactionId = result.transactionId;
+  else if (result?.receipt?.transactionId) transactionId = result.receipt.transactionId;
+  else if (typeof result === 'string') transactionId = result;
+  return { success: !!transactionId, transactionId };
+}
+
+/**
  * Get current wallet connection status
  */
 export function getWalletConnectionStatus() {

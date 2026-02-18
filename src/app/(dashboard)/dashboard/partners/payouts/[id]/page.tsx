@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Copy, Check, Download, CheckCircle2, XCircle } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import { ArrowLeft, Copy, Check, Download, CheckCircle2, XCircle, Wallet } from 'lucide-react';
 import { useOrganization } from '@/hooks/use-organization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { sendTransactionBytesForPayout } from '@/lib/hedera/wallet-client';
 
 interface Payout {
   id: string;
@@ -38,7 +39,7 @@ interface Payout {
   externalReference?: string;
   paidAt?: string;
   failedReason?: string;
-  method?: { type: string; handle?: string; notes?: string };
+  method?: { type: string; handle?: string; notes?: string; hederaAccountId?: string };
 }
 
 interface Batch {
@@ -64,6 +65,15 @@ export default function PayoutBatchDetailPage() {
   const [failedReason, setFailedReason] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
+  const [hederaDialogOpen, setHederaDialogOpen] = React.useState(false);
+  const [hederaPrepareData, setHederaPrepareData] = React.useState<{
+    transactionBase64: string;
+    merchantAccountId: string;
+    summary: Array<{ userId: string; hederaAccountId: string; amount: number; symbol: string }>;
+    totalAmount: number;
+    tokenSymbol: string;
+  } | null>(null);
+  const [hederaSigning, setHederaSigning] = React.useState(false);
 
   const fetchData = React.useCallback(async () => {
     if (!organizationId || !id) return;
@@ -174,6 +184,69 @@ export default function PayoutBatchDetailPage() {
     window.open(`/api/payout-batches/${id}/export`, '_blank', 'noopener');
   };
 
+  const handleExecuteHederaClick = async () => {
+    if (!organizationId) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/payout-batches/${id}/hedera/prepare?organizationId=${organizationId}`,
+        { method: 'POST' }
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        const msg = json.missingPayeeUserIds?.length
+          ? `Missing Hedera destination for payee(s): ${json.missingPayeeUserIds.join(', ')}`
+          : json.error || 'Failed to prepare';
+        throw new Error(msg);
+      }
+      const data = json.data;
+      setHederaPrepareData({
+        transactionBase64: data.transactionBase64,
+        merchantAccountId: data.merchantAccountId,
+        summary: data.summary,
+        totalAmount: data.totalAmount,
+        tokenSymbol: data.tokenSymbol,
+      });
+      setHederaDialogOpen(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to prepare');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleHederaSign = async () => {
+    if (!hederaPrepareData || !organizationId) return;
+    setHederaSigning(true);
+    try {
+      const result = await sendTransactionBytesForPayout(
+        hederaPrepareData.transactionBase64,
+        hederaPrepareData.merchantAccountId
+      );
+      if (!result.success || !result.transactionId) {
+        throw new Error(result.error || 'Signing failed');
+      }
+      const confirmRes = await fetch(`/api/payout-batches/${id}/hedera/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: result.transactionId,
+          organizationId,
+        }),
+      });
+      const confirmData = await confirmRes.json();
+      if (!confirmRes.ok) throw new Error(confirmData.error || 'Confirm failed');
+      toast.success('Batch paid on Hedera');
+      setHederaDialogOpen(false);
+      setHederaPrepareData(null);
+      fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Signing or confirm failed');
+    } finally {
+      setHederaSigning(false);
+    }
+  };
+
   if (loading || !batch) {
     return (
       <div className="space-y-6">
@@ -213,6 +286,17 @@ export default function PayoutBatchDetailPage() {
                 <Download className="h-4 w-4 mr-2" />
                 Export CSV
               </Button>
+              {(batch.status === 'DRAFT' || batch.status === 'SUBMITTED') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExecuteHederaClick}
+                  disabled={submitting || payouts.filter((p) => p.status !== 'PAID' && p.status !== 'FAILED').length === 0}
+                >
+                  <Wallet className="h-4 w-4 mr-2" />
+                  Execute in HashPack (USDC)
+                </Button>
+              )}
               {batch.status === 'DRAFT' && (
                 <Button size="sm" onClick={handleSubmitBatch} disabled={submitting}>
                   Submit batch
@@ -239,7 +323,9 @@ export default function PayoutBatchDetailPage() {
                   <TableCell className="font-mono text-sm">{p.userId.slice(0, 8)}...</TableCell>
                   <TableCell>{p.method?.type ?? '—'}</TableCell>
                   <TableCell className="max-w-xs truncate">
-                    {p.method?.handle || p.method?.notes || '—'}
+                    {p.method?.type === 'HEDERA'
+                      ? p.method?.hederaAccountId || p.method?.notes || '—'
+                      : p.method?.handle || p.method?.notes || '—'}
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     {p.currency} {p.netAmount.toFixed(2)}
@@ -355,6 +441,45 @@ export default function PayoutBatchDetailPage() {
             </Button>
             <Button onClick={handleMarkFailed} disabled={submitting || !failedReason.trim()}>
               {submitting ? 'Saving...' : 'Mark failed'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={hederaDialogOpen}
+        onOpenChange={(o) => {
+          setHederaDialogOpen(o);
+          if (!o) setHederaPrepareData(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Execute in HashPack (USDC)</DialogTitle>
+            <DialogDescription>
+              Review the summary below. You will sign and submit this transaction in HashPack (merchant account).
+            </DialogDescription>
+          </DialogHeader>
+          {hederaPrepareData && (
+            <div className="space-y-4">
+              <div className="rounded-md border p-3 text-sm space-y-1 max-h-40 overflow-y-auto">
+                {hederaPrepareData.summary.map((s, i) => (
+                  <div key={i}>
+                    {s.hederaAccountId}: {hederaPrepareData.tokenSymbol} {s.amount.toFixed(2)}
+                  </div>
+                ))}
+              </div>
+              <p className="font-medium">
+                Total: {hederaPrepareData.tokenSymbol} {hederaPrepareData.totalAmount.toFixed(2)}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHederaDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleHederaSign} disabled={hederaSigning}>
+              {hederaSigning ? 'Signing...' : 'Sign in HashPack'}
             </Button>
           </DialogFooter>
         </DialogContent>
