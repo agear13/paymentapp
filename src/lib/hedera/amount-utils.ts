@@ -4,38 +4,44 @@
  * Supports HBAR (8 decimals) and HTS tokens (typically 6 decimals)
  */
 
+/** Only digits with optional decimal part; no scientific notation (e/E). */
+const VALID_AMOUNT_REGEX = /^\d+(\.\d+)?$/;
+
 /**
- * Generic: Convert token amount to smallest unit
- * 
- * @param amount - Amount in token units (e.g., 15.046618 USDC)
+ * Generic: Convert token amount to smallest unit (string-based, no floats).
+ * Safe for money/token amounts: no parseFloat/toFixed to avoid rounding/precision bugs.
+ *
+ * @param amount - Amount in token units (e.g., "15.046618" or 15.046618); prefer string.
  * @param decimals - Number of decimals (e.g., 6 for USDC, 8 for HBAR)
  * @returns Amount in smallest unit (bigint)
  */
 export function toSmallestUnit(amount: number | string, decimals: number): bigint {
-  const amountValue = typeof amount === 'string' ? parseFloat(amount) : amount;
-  
-  if (isNaN(amountValue) || !isFinite(amountValue)) {
-    throw new Error('Invalid amount');
-  }
-  
-  if (amountValue < 0) {
-    throw new Error('Amount cannot be negative');
-  }
-  
   if (decimals < 0 || decimals > 18) {
     throw new Error('Decimals must be between 0 and 18');
   }
-  
-  // Use string manipulation to avoid floating point precision issues
-  const amountStr = amountValue.toFixed(decimals);
-  const [whole, decimal = ''] = amountStr.split('.');
-  
-  // Pad decimal to specified digits
-  const paddedDecimal = decimal.padEnd(decimals, '0').slice(0, decimals);
-  
-  // Combine and convert to bigint
-  const smallestUnitStr = whole + paddedDecimal;
-  return BigInt(smallestUnitStr);
+
+  const amountStr =
+    typeof amount === 'string' ? amount.trim() : String(amount);
+  if (amountStr === '' || /[eE]/.test(amountStr)) {
+    throw new Error('Invalid amount: scientific notation or empty');
+  }
+  if (!VALID_AMOUNT_REGEX.test(amountStr)) {
+    throw new Error('Invalid amount: expected digits with optional decimal (e.g. 12.34)');
+  }
+
+  const [whole, fractional = ''] = amountStr.split('.');
+  if (fractional.length > decimals) {
+    throw new Error(
+      `Amount has too many decimal places (max ${decimals}); do not round payouts`
+    );
+  }
+  if (whole.startsWith('-') || amountStr.startsWith('-')) {
+    throw new Error('Amount cannot be negative');
+  }
+
+  const paddedFractional = fractional.padEnd(decimals, '0');
+  const combined = whole + paddedFractional;
+  return BigInt(combined);
 }
 
 /**
@@ -50,7 +56,7 @@ export function fromSmallestUnit(smallestUnit: bigint | number | string, decimal
     ? smallestUnit 
     : BigInt(smallestUnit);
   
-  if (value < 0n) {
+  if (value < BigInt(0)) {
     throw new Error('Smallest unit amount cannot be negative');
   }
   

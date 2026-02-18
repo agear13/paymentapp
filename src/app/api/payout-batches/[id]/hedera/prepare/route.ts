@@ -10,7 +10,7 @@ import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { getPayoutTokenForCurrency } from '@/lib/hedera/tokens';
 import { CURRENT_NODE_ACCOUNT_ID } from '@/lib/hedera/constants';
-import { toSmallestUnit } from '@/lib/hedera/amount-utils';
+import { toSmallestUnit, fromSmallestUnit } from '@/lib/hedera/amount-utils';
 import { TransferTransaction, AccountId, TransactionId } from '@hashgraph/sdk';
 
 export async function POST(
@@ -78,7 +78,7 @@ export async function POST(
 
     const unpaid = batch.payouts;
     const missing: string[] = [];
-    const payees: { userId: string; hederaAccountId: string; netAmount: number }[] = [];
+    const payees: { userId: string; hederaAccountId: string; netAmountStr: string }[] = [];
     for (const p of unpaid) {
       const hederaId = p.payout_methods?.hedera_account_id?.trim();
       if (!hederaId) {
@@ -88,7 +88,7 @@ export async function POST(
       payees.push({
         userId: p.user_id,
         hederaAccountId: hederaId,
-        netAmount: Number(p.net_amount),
+        netAmountStr: p.net_amount.toString(),
       });
     }
 
@@ -113,24 +113,32 @@ export async function POST(
     const transferTx = new TransferTransaction()
       .setNodeAccountIds([AccountId.fromString(CURRENT_NODE_ACCOUNT_ID)]);
 
-    let totalSmallest = 0n;
+    let totalSmallest = BigInt(0);
     for (const payee of payees) {
-      const small = toSmallestUnit(payee.netAmount, decimals);
-      const n = Number(small);
-      if (!Number.isSafeInteger(n)) {
-        return NextResponse.json({ error: 'Payout amount exceeds safe integer range' }, { status: 400 });
+      let small: bigint;
+      try {
+        small = toSmallestUnit(payee.netAmountStr, decimals);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Invalid amount';
+        return NextResponse.json(
+          { error: `Invalid payout amount for payee: ${msg}` },
+          { status: 400 }
+        );
       }
-      transferTx.addTokenTransfer(tokenInfo.tokenId!, AccountId.fromString(payee.hederaAccountId), n);
+      if (small === BigInt(0)) {
+        continue;
+      }
       totalSmallest += small;
-    }
-    const totalNeg = Number(totalSmallest);
-    if (!Number.isSafeInteger(-totalNeg)) {
-      return NextResponse.json({ error: 'Total amount exceeds safe integer range' }, { status: 400 });
+      transferTx.addTokenTransfer(
+        tokenInfo.tokenId!,
+        AccountId.fromString(payee.hederaAccountId),
+        small
+      );
     }
     transferTx.addTokenTransfer(
       tokenInfo.tokenId!,
       AccountId.fromString(merchantAccountId),
-      -totalNeg
+      -totalSmallest
     );
     transferTx.setTransactionMemo(`Provvypay payout batch ${batchId}`);
 
@@ -144,17 +152,18 @@ export async function POST(
     const summary = payees.map((p) => ({
       userId: p.userId,
       hederaAccountId: p.hederaAccountId,
-      amount: p.netAmount,
+      amount: p.netAmountStr,
       symbol: tokenInfo.symbol,
     }));
-    const totalAmount = Number(totalSmallest) / Math.pow(10, decimals);
 
     return NextResponse.json({
       data: {
         transactionBase64,
         merchantAccountId,
         summary,
-        totalAmount,
+        totalAmount: fromSmallestUnit(totalSmallest, decimals),
+        totalSmallestUnit: totalSmallest.toString(),
+        decimals,
         tokenSymbol: tokenInfo.symbol,
         tokenId: tokenInfo.tokenId,
         batchId,

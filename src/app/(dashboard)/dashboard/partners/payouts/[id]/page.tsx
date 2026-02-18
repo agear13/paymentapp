@@ -69,8 +69,8 @@ export default function PayoutBatchDetailPage() {
   const [hederaPrepareData, setHederaPrepareData] = React.useState<{
     transactionBase64: string;
     merchantAccountId: string;
-    summary: Array<{ userId: string; hederaAccountId: string; amount: number; symbol: string }>;
-    totalAmount: number;
+    summary: Array<{ userId: string; hederaAccountId: string; amount: string; symbol: string }>;
+    totalAmount: string;
     tokenSymbol: string;
   } | null>(null);
   const [hederaSigning, setHederaSigning] = React.useState(false);
@@ -465,12 +465,12 @@ export default function PayoutBatchDetailPage() {
               <div className="rounded-md border p-3 text-sm space-y-1 max-h-40 overflow-y-auto">
                 {hederaPrepareData.summary.map((s, i) => (
                   <div key={i}>
-                    {s.hederaAccountId}: {hederaPrepareData.tokenSymbol} {s.amount.toFixed(2)}
+                    {s.hederaAccountId}: {hederaPrepareData.tokenSymbol} {s.amount}
                   </div>
                 ))}
               </div>
               <p className="font-medium">
-                Total: {hederaPrepareData.tokenSymbol} {hederaPrepareData.totalAmount.toFixed(2)}
+                Total: {hederaPrepareData.tokenSymbol} {hederaPrepareData.totalAmount}
               </p>
             </div>
           )}
