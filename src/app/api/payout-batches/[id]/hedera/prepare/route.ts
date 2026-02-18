@@ -3,6 +3,7 @@
  * Builds a Hedera HTS transfer (USDC MVP) from merchant to all payees; returns frozen tx as base64 for HashPack signing.
  */
 
+import Long from 'long';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
@@ -44,14 +45,10 @@ export async function POST(
       include: {
         payouts: {
           where: { status: { not: 'PAID' } },
-          include: {
-            payout_methods: { select: { hedera_account_id: true, method_type: true } },
-          },
+          include: { payout_methods: true },
         },
         organizations: {
-          include: {
-            merchant_settings: { select: { hedera_account_id: true } },
-          },
+          include: { merchant_settings: { select: { hedera_account_id: true } } },
         },
       },
     });
@@ -78,14 +75,22 @@ export async function POST(
 
     const unpaid = batch.payouts;
     const missing: string[] = [];
-    const payees: { userId: string; hederaAccountId: string; netAmountStr: string }[] = [];
+    const payees: {
+      payoutId: string;
+      userId: string;
+      hederaAccountId: string;
+      netAmountStr: string;
+    }[] = [];
     for (const p of unpaid) {
-      const hederaId = p.payout_methods?.hedera_account_id?.trim();
+      const method = p.payout_methods;
+      const isHedera = String(method?.method_type) === 'HEDERA';
+      const hederaId = isHedera ? (method as { hedera_account_id?: string | null })?.hedera_account_id?.trim() : undefined;
       if (!hederaId) {
         missing.push(p.user_id);
         continue;
       }
       payees.push({
+        payoutId: p.id,
         userId: p.user_id,
         hederaAccountId: hederaId,
         netAmountStr: p.net_amount.toString(),
@@ -95,7 +100,7 @@ export async function POST(
     if (missing.length > 0) {
       return NextResponse.json(
         {
-          error: 'Some payees do not have a Hedera payout destination',
+          error: 'Some payees do not have a Hedera payout destination (method_type must be HEDERA)',
           missingPayeeUserIds: missing,
         },
         { status: 400 }
@@ -113,7 +118,10 @@ export async function POST(
     const transferTx = new TransferTransaction()
       .setNodeAccountIds([AccountId.fromString(CURRENT_NODE_ACCOUNT_ID)]);
 
+    const includedPayees: typeof payees = [];
+    const includedPayoutIds: string[] = [];
     let totalSmallest = BigInt(0);
+
     for (const payee of payees) {
       let small: bigint;
       try {
@@ -129,16 +137,27 @@ export async function POST(
         continue;
       }
       totalSmallest += small;
+      includedPayees.push(payee);
+      includedPayoutIds.push(payee.payoutId);
+      // Hedera SDK expects int64; Long avoids bigint/Number overflow for token units.
       transferTx.addTokenTransfer(
         tokenInfo.tokenId!,
         AccountId.fromString(payee.hederaAccountId),
-        small
+        Long.fromString(small.toString())
       );
     }
+
+    if (includedPayees.length === 0 || totalSmallest === BigInt(0)) {
+      return NextResponse.json(
+        { error: 'Nothing to pay (all payee amounts are zero)' },
+        { status: 400 }
+      );
+    }
+
     transferTx.addTokenTransfer(
       tokenInfo.tokenId!,
       AccountId.fromString(merchantAccountId),
-      -totalSmallest
+      Long.fromString(totalSmallest.toString()).negate()
     );
     transferTx.setTransactionMemo(`Provvypay payout batch ${batchId}`);
 
@@ -149,7 +168,7 @@ export async function POST(
     const bytes = frozen.toBytes();
     const transactionBase64 = Buffer.from(bytes).toString('base64');
 
-    const summary = payees.map((p) => ({
+    const summary = includedPayees.map((p) => ({
       userId: p.userId,
       hederaAccountId: p.hederaAccountId,
       amount: p.netAmountStr,
@@ -161,13 +180,14 @@ export async function POST(
         transactionBase64,
         merchantAccountId,
         summary,
+        includedPayoutIds,
         totalAmount: fromSmallestUnit(totalSmallest, decimals),
         totalSmallestUnit: totalSmallest.toString(),
         decimals,
         tokenSymbol: tokenInfo.symbol,
         tokenId: tokenInfo.tokenId,
         batchId,
-        payeeCount: payees.length,
+        payeeCount: includedPayees.length,
       },
     });
   } catch (error: unknown) {

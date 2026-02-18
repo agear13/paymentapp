@@ -1,6 +1,7 @@
 /**
  * POST /api/payout-batches/[id]/hedera/confirm
- * Verifies Hedera transaction then marks all batch payouts (and their lines/items) as PAID.
+ * Verifies Hedera transaction then marks only the payouts included in the tx (includedPayoutIds) as PAID.
+ * includedPayoutIds is required so we never mark payouts that were not actually paid on-chain.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,6 +16,7 @@ import { z } from 'zod';
 const ConfirmSchema = z.object({
   transactionId: z.string().regex(/^0\.0\.\d+[@-]\d+\.\d+$/),
   organizationId: z.string().uuid(),
+  includedPayoutIds: z.array(z.string().uuid()).min(1, 'includedPayoutIds is required and must have at least one payout id'),
 });
 
 const MIRROR_URL =
@@ -40,13 +42,15 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const parsed = ConfirmSchema.safeParse(body);
     if (!parsed.success) {
+      const issues = parsed.error.issues;
+      const msg = issues.map((e: { message: string }) => e.message).join('; ') || 'transactionId, organizationId, and includedPayoutIds required';
       return NextResponse.json(
-        { error: 'transactionId and organizationId required', details: parsed.error.errors },
+        { error: msg, details: issues },
         { status: 400 }
       );
     }
 
-    const { transactionId, organizationId } = parsed.data;
+    const { transactionId, organizationId, includedPayoutIds } = parsed.data;
 
     const canManage = await checkUserPermission(user.id, organizationId, 'manage_ledger');
     if (!canManage) {
@@ -55,11 +59,36 @@ export async function POST(
 
     const batch = await prisma.payout_batches.findFirst({
       where: { id: batchId, organization_id: organizationId },
-      include: { payouts: { where: { status: { not: 'PAID' } }, select: { id: true } } },
+      include: {
+        payouts: {
+          where: { status: { not: 'PAID' } },
+          select: { id: true },
+        },
+      },
     });
 
     if (!batch) {
       return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
+    }
+
+    const unpaidIds = new Set(batch.payouts.map((p) => p.id));
+    if (unpaidIds.size === 0) {
+      return NextResponse.json(
+        { error: 'No unpaid payouts in this batch; nothing to confirm' },
+        { status: 400 }
+      );
+    }
+
+    for (const id of includedPayoutIds) {
+      if (!unpaidIds.has(id)) {
+        return NextResponse.json(
+          {
+            error: 'One or more includedPayoutIds do not belong to this batch or are already PAID',
+            invalidPayoutId: id,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const normalizedTxId = transactionId.replace('@', '-');
@@ -86,30 +115,34 @@ export async function POST(
 
     const paidAt = new Date();
     const externalRef = `hedera:${normalizedTxId}`;
-    const payoutIds = batch.payouts.map((p) => p.id);
-
+    // Only mark payouts that were actually included in the on-chain tx (deterministic linkage).
     await prisma.$transaction(async (tx) => {
       await tx.payouts.updateMany({
-        where: { id: { in: payoutIds } },
+        where: { id: { in: includedPayoutIds } },
         data: { status: 'PAID', external_reference: externalRef, paid_at: paidAt },
       });
       await tx.commission_obligation_lines.updateMany({
-        where: { payout_id: { in: payoutIds } },
+        where: { payout_id: { in: includedPayoutIds } },
         data: { status: 'PAID', paid_at: paidAt },
       });
-      await tx.commission_obligation_items.updateMany({
-        where: { payout_id: { in: payoutIds } },
-        data: { status: 'PAID', paid_at: paidAt },
-      });
+      const txAny = tx as Record<string, { updateMany?: (args: unknown) => Promise<unknown> } | undefined>;
+      if (txAny.commission_obligation_items?.updateMany) {
+        await txAny.commission_obligation_items.updateMany({
+          where: { payout_id: { in: includedPayoutIds } },
+          data: { status: 'PAID', paid_at: paidAt },
+        });
+      }
     });
 
-    log.info(
-      { batchId, organizationId, transactionId: normalizedTxId, payoutCount: payoutIds.length },
-      'Payout batch confirmed and marked PAID (Hedera)'
-    );
+    log.info('Payout batch confirmed and marked PAID (Hedera)', {
+      batchId,
+      organizationId,
+      transactionId: normalizedTxId,
+      payoutCount: includedPayoutIds.length,
+    });
 
     return NextResponse.json({
-      data: { batchId, transactionId: normalizedTxId, payoutIds, status: 'PAID' },
+      data: { batchId, transactionId: normalizedTxId, payoutIds: includedPayoutIds, status: 'PAID' },
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';

@@ -70,6 +70,7 @@ export default function PayoutBatchDetailPage() {
     transactionBase64: string;
     merchantAccountId: string;
     summary: Array<{ userId: string; hederaAccountId: string; amount: string; symbol: string }>;
+    includedPayoutIds: string[];
     totalAmount: string;
     tokenSymbol: string;
   } | null>(null);
@@ -204,6 +205,7 @@ export default function PayoutBatchDetailPage() {
         transactionBase64: data.transactionBase64,
         merchantAccountId: data.merchantAccountId,
         summary: data.summary,
+        includedPayoutIds: data.includedPayoutIds ?? [],
         totalAmount: data.totalAmount,
         tokenSymbol: data.tokenSymbol,
       });
@@ -232,6 +234,7 @@ export default function PayoutBatchDetailPage() {
         body: JSON.stringify({
           transactionId: result.transactionId,
           organizationId,
+          includedPayoutIds: hederaPrepareData.includedPayoutIds,
         }),
       });
       const confirmData = await confirmRes.json();
