@@ -68,7 +68,9 @@ export async function POST(
     const tokenInfo = getPayoutTokenForCurrency(batch.currency);
     if (!tokenInfo || !tokenInfo.tokenId) {
       return NextResponse.json(
-        { error: `Batch currency ${batch.currency} is not supported for on-chain payout. MVP: USD/USDC only.` },
+        {
+          error: `Batch currency ${batch.currency} is not supported for on-chain payout. Supported: USD/USDC → USDC, AUD/AUDD → AUDD.`,
+        },
         { status: 400 }
       );
     }

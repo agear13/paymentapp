@@ -31,6 +31,7 @@ interface PaymentPageContentProps {
     availablePaymentMethods: {
       stripe: boolean;
       hedera: boolean;
+      wise?: boolean;
     };
   };
   onPaymentStarted?: () => void;
@@ -43,9 +44,9 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
   onPaymentStarted,
 }) => {
   const [currentStep, setCurrentStep] = useState<PaymentStep>('select_method');
-  const [selectedMethod, setSelectedMethod] = useState<'stripe' | 'hedera' | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<'stripe' | 'hedera' | 'wise' | null>(null);
 
-  const handleMethodSelect = (method: 'stripe' | 'hedera') => {
+  const handleMethodSelect = (method: 'stripe' | 'hedera' | 'wise') => {
     setSelectedMethod(method);
     // Notify that payment has started
     onPaymentStarted?.();

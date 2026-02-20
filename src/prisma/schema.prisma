@@ -89,7 +89,11 @@ model merchant_settings {
   xero_usdc_clearing_account_id String?       @db.VarChar(255)
   xero_usdt_clearing_account_id String?       @db.VarChar(255)
   xero_audd_clearing_account_id String?       @db.VarChar(255)
+  xero_wise_clearing_account_id String?       @db.VarChar(255)
   xero_fee_expense_account_id   String?       @db.VarChar(255)
+  
+  // Wise (payment links): profile id for API; null = Wise not enabled
+  wise_profile_id               String?       @db.VarChar(255)
   
   // Sprint 25: Multi-Currency Enhancement
   enabled_currencies                String[]      @default(["USD", "AUD"])
@@ -149,6 +153,7 @@ model payment_events {
   stripe_payment_intent_id String?          @db.VarChar(255)
   stripe_event_id          String?          @db.VarChar(255)
   hedera_transaction_id    String?          @db.VarChar(255)
+  wise_transfer_id         String?          @db.VarChar(255)
   amount_received          Decimal?         @db.Decimal(18, 8)
   currency_received        String?          @db.VarChar(10)
   correlation_id           String?          @db.VarChar(255)
@@ -158,6 +163,7 @@ model payment_events {
 
   @@index([payment_link_id, created_at])
   @@index([stripe_event_id])
+  @@index([wise_transfer_id])
   @@unique([payment_link_id, correlation_id], name: "payment_events_payment_link_correlation_unique")
 }
 
@@ -166,6 +172,7 @@ model payment_links {
   organization_id   String            @db.Uuid
   short_code        String            @unique @db.VarChar(8)
   status            PaymentLinkStatus @default(DRAFT)
+  payment_method    PaymentMethod?    // STRIPE | HEDERA | WISE (null = legacy, all methods)
   amount            Decimal           @db.Decimal(18, 2)
   currency          String            @db.Char(3)
   description       String
@@ -185,6 +192,13 @@ model payment_links {
   base_amount                   Decimal?          @db.Decimal(18, 2)
   base_currency                 String?           @db.Char(3)
   
+  // Wise-specific (when payment_method = WISE)
+  wise_quote_id           String?           @db.VarChar(255)
+  wise_transfer_id        String?           @db.VarChar(255)
+  wise_status             String?           @db.VarChar(50)
+  wise_received_amount    Decimal?          @db.Decimal(18, 8)
+  wise_received_currency  String?           @db.Char(3)
+  
   created_at        DateTime          @default(now()) @db.Timestamptz(6)
   updated_at        DateTime          @db.Timestamptz(6)
   fx_snapshots      fx_snapshots[]
@@ -198,6 +212,7 @@ model payment_links {
   @@index([organization_id, status])
   @@index([due_date])
   @@index([expires_at])
+  @@index([payment_method])
 }
 
 model xero_connections {
@@ -336,6 +351,7 @@ enum PaymentLinkStatus {
 enum PaymentMethod {
   STRIPE
   HEDERA
+  WISE
 }
 
 enum PaymentToken {

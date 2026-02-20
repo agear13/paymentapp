@@ -1,6 +1,6 @@
 /**
  * Payment Method Selector Component
- * Allows users to choose between Stripe (fiat) and Hedera (crypto) payments
+ * Allows users to choose between Stripe (fiat), Hedera (crypto), and Wise (bank transfer)
  */
 
 'use client';
@@ -8,11 +8,10 @@
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { StripePaymentOption } from '@/components/public/stripe-payment-option';
+import { WisePaymentOption } from '@/components/public/wise-payment-option';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
-// CRITICAL: Dynamic import with ssr: false to keep hashconnect out of server/shared bundles
-// This is the isolation boundary - Hedera UI never SSR'd, never in server chunks
 const HederaPaymentOption = dynamic(
   () => import('@/components/public/hedera-payment-option').then(mod => ({ default: mod.HederaPaymentOption })),
   {
@@ -30,9 +29,10 @@ interface PaymentMethodSelectorProps {
   availablePaymentMethods: {
     stripe: boolean;
     hedera: boolean;
+    wise?: boolean;
   };
-  selectedMethod: 'stripe' | 'hedera' | null;
-  onSelectMethod: (method: 'stripe' | 'hedera') => void;
+  selectedMethod: 'stripe' | 'hedera' | 'wise' | null;
+  onSelectMethod: (method: 'stripe' | 'hedera' | 'wise') => void;
   paymentLinkId: string;
   shortCode: string;
   amount: string;
@@ -48,10 +48,12 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   amount,
   currency,
 }) => {
-  const [hoveredMethod, setHoveredMethod] = useState<'stripe' | 'hedera' | null>(null);
+  const [hoveredMethod, setHoveredMethod] = useState<'stripe' | 'hedera' | 'wise' | null>(null);
 
-  // Check if any payment methods are available
-  const hasAnyMethod = availablePaymentMethods.stripe || availablePaymentMethods.hedera;
+  const hasAnyMethod =
+    availablePaymentMethods.stripe ||
+    availablePaymentMethods.hedera ||
+    !!availablePaymentMethods.wise;
 
   if (!hasAnyMethod) {
     return (
@@ -79,7 +81,6 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
         currency={currency}
       />
 
-      {/* Hedera Payment Option - Re-enabled with SSR disabled */}
       {availablePaymentMethods.hedera && (
         <HederaPaymentOption
           isAvailable={availablePaymentMethods.hedera}
@@ -95,7 +96,21 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
         />
       )}
 
-      {/* Payment Method Info */}
+      {availablePaymentMethods.wise && (
+        <WisePaymentOption
+          isAvailable={availablePaymentMethods.wise}
+          isSelected={selectedMethod === 'wise'}
+          isHovered={hoveredMethod === 'wise'}
+          onSelect={() => onSelectMethod('wise')}
+          onHoverStart={() => setHoveredMethod('wise')}
+          onHoverEnd={() => setHoveredMethod(null)}
+          paymentLinkId={paymentLinkId}
+          shortCode={shortCode}
+          amount={amount}
+          currency={currency}
+        />
+      )}
+
       {selectedMethod && (
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-900">
@@ -107,6 +122,11 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             {selectedMethod === 'hedera' && (
               <>
                 <span className="font-medium">Crypto Payment:</span> Pay with HBAR, USDC, USDT, or AUDD on the Hedera network. Connect your wallet to continue.
+              </>
+            )}
+            {selectedMethod === 'wise' && (
+              <>
+                <span className="font-medium">Wise Payment:</span> Pay by bank transfer. Get payment reference and bank details, then complete the transfer in your bank.
               </>
             )}
           </p>

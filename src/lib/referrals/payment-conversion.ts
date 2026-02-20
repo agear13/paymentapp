@@ -15,9 +15,10 @@ export interface CreateReferralConversionParams {
   paymentEventId: string;
   grossAmount: number;
   currency: string;
-  provider: 'stripe' | 'hedera' | 'manual';
+  provider: 'stripe' | 'hedera' | 'wise' | 'manual';
   stripePaymentIntentId?: string;
   hederaTransactionId?: string;
+  wiseTransferId?: string;
 }
 
 export interface CreateReferralConversionResult {

@@ -17,8 +17,8 @@ export interface PaymentRecordingParams {
   amount: string;
   currency: string;
   paymentDate: Date;
-  paymentMethod: 'STRIPE' | 'HEDERA';
-  paymentToken?: TokenType; // HBAR | USDC | USDT | AUDD
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE';
+  paymentToken?: TokenType;
   transactionId: string;
   fxRate?: number;
   cryptoAmount?: string;
@@ -138,32 +138,29 @@ export async function recordXeroPayment(
 
 /**
  * Get clearing account ID based on payment method and token
- * ⭐ CRITICAL: Each crypto token must map to its own Xero clearing account
  */
 function getClearingAccountId(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   settings: any,
-  paymentMethod: 'STRIPE' | 'HEDERA',
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE',
   paymentToken?: TokenType
 ): string | null {
   if (paymentMethod === 'STRIPE') {
     return settings.xero_stripe_clearing_account_id;
   }
-
-  // Hedera - map based on token type
-  // CRITICAL: Each token must have its own clearing account for proper reconciliation
+  if (paymentMethod === 'WISE') {
+    return settings.xero_wise_clearing_account_id;
+  }
   switch (paymentToken) {
     case 'HBAR':
-      return settings.xero_hbar_clearing_account_id; // Typically account 1051
+      return settings.xero_hbar_clearing_account_id;
     case 'USDC':
-      return settings.xero_usdc_clearing_account_id; // Typically account 1052
+      return settings.xero_usdc_clearing_account_id;
     case 'USDT':
-      return settings.xero_usdt_clearing_account_id; // Typically account 1053
+      return settings.xero_usdt_clearing_account_id;
     case 'AUDD':
-      return settings.xero_audd_clearing_account_id; // Typically account 1054 ⭐
+      return settings.xero_audd_clearing_account_id;
     default:
-      // ⚠️ FALLBACK: If token is undefined, default to HBAR (most common)
-      // This handles legacy payments where token type wasn't captured
       return settings.xero_hbar_clearing_account_id;
   }
 }
@@ -172,23 +169,24 @@ function getClearingAccountId(
  * Build payment reference for Xero
  */
 function buildPaymentReference(
-  paymentMethod: 'STRIPE' | 'HEDERA',
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE',
   paymentToken: TokenType | undefined,
   transactionId: string
 ): string {
   if (paymentMethod === 'STRIPE') {
     return `STRIPE: ${transactionId.substring(0, 20)}`;
   }
-
+  if (paymentMethod === 'WISE') {
+    return `WISE: ${transactionId.substring(0, 30)}`;
+  }
   return `${paymentToken}: ${transactionId.substring(0, 30)}`;
 }
 
 /**
  * Build payment narration per specification
- * Includes: Method, Transaction ID, Token, FX Rate, Amounts
  */
 function buildPaymentNarration(
-  paymentMethod: 'STRIPE' | 'HEDERA',
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE',
   paymentToken: TokenType | undefined,
   transactionId: string,
   fxRate: number | undefined,
@@ -197,11 +195,11 @@ function buildPaymentNarration(
   fiatCurrency: string
 ): string {
   if (paymentMethod === 'STRIPE') {
-    return `Payment via STRIPE
-Transaction: ${transactionId}
-Amount: ${fiatAmount} ${fiatCurrency}`;
+    return `Payment via STRIPE\nTransaction: ${transactionId}\nAmount: ${fiatAmount} ${fiatCurrency}`;
   }
-
+  if (paymentMethod === 'WISE') {
+    return `Payment via WISE\nTransfer: ${transactionId}\nAmount: ${fiatAmount} ${fiatCurrency}`;
+  }
   // Hedera payment
   const parts = [
     `Payment via HEDERA_${paymentToken}`,

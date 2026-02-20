@@ -22,6 +22,7 @@ export const LEDGER_ACCOUNTS = {
   CRYPTO_CLEARING_USDC: '1052',
   CRYPTO_CLEARING_USDT: '1053',
   CRYPTO_CLEARING_AUDD: '1054',
+  WISE_CLEARING: '1055',
   PROCESSOR_FEE_EXPENSE: '6100',
   REVENUE: '4000',
   // Commission / Revenue Share (Option B)
@@ -173,6 +174,10 @@ export function getClearingAccountName(accountCode: string): string {
 
   if (accountCode === LEDGER_ACCOUNTS.STRIPE_CLEARING) {
     return 'Stripe Clearing';
+  }
+
+  if (accountCode === LEDGER_ACCOUNTS.WISE_CLEARING) {
+    return 'Wise Clearing';
   }
 
   return 'Unknown Clearing Account';

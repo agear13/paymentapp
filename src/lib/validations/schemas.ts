@@ -27,7 +27,7 @@ export const PaymentEventTypeSchema = z.enum([
   'CANCELED',
 ]);
 
-export const PaymentMethodSchema = z.enum(['STRIPE', 'HEDERA']);
+export const PaymentMethodSchema = z.enum(['STRIPE', 'HEDERA', 'WISE']);
 
 export const FxSnapshotTypeSchema = z.enum(['CREATION', 'SETTLEMENT']);
 
@@ -232,6 +232,7 @@ export const CreatePaymentLinkSchema = z.object({
     .datetime('Invalid datetime format')
     .optional()
     .or(z.date().optional()),
+  paymentMethod: PaymentMethodSchema.optional(),
 });
 
 export const UpdatePaymentLinkSchema = z.object({

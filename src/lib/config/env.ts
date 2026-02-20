@@ -50,11 +50,17 @@ const envSchema = z.object({
   // Email (optional)
   RESEND_API_KEY: z.string().optional(),
 
+  // Wise (optional – for payment link Wise rail)
+  WISE_API_TOKEN: z.string().optional(),
+  WISE_PROFILE_ID: z.string().optional(),
+  WISE_WEBHOOK_SECRET: z.string().optional(),
+
   // Feature Flags
   ENABLE_HEDERA_PAYMENTS: z.string().optional().default('true'),
   ENABLE_HEDERA_STABLECOINS: z.string().optional().default('false'),
   ENABLE_XERO_SYNC: z.string().optional().default('true'),
   ENABLE_BETA_OPS: z.string().optional().default('false'),
+  ENABLE_WISE_PAYMENTS: z.string().optional().default('false'),
 
   // Beta/Admin
   ADMIN_EMAIL_ALLOWLIST: z.string().optional(),
@@ -102,6 +108,10 @@ function validateEnv() {
       ENABLE_HEDERA_STABLECOINS: process.env.ENABLE_HEDERA_STABLECOINS || 'false',
       ENABLE_XERO_SYNC: process.env.ENABLE_XERO_SYNC || 'true',
       ENABLE_BETA_OPS: process.env.ENABLE_BETA_OPS || 'false',
+      ENABLE_WISE_PAYMENTS: process.env.ENABLE_WISE_PAYMENTS || 'false',
+      WISE_API_TOKEN: process.env.WISE_API_TOKEN,
+      WISE_PROFILE_ID: process.env.WISE_PROFILE_ID,
+      WISE_WEBHOOK_SECRET: process.env.WISE_WEBHOOK_SECRET,
       ADMIN_EMAIL_ALLOWLIST: process.env.ADMIN_EMAIL_ALLOWLIST,
       SENTRY_DSN: process.env.SENTRY_DSN,
     };
@@ -196,12 +206,21 @@ export const config = {
     isConfigured: !!env.RESEND_API_KEY,
   },
   
+  // Wise
+  wise: {
+    apiToken: env.WISE_API_TOKEN,
+    profileId: env.WISE_PROFILE_ID,
+    webhookSecret: env.WISE_WEBHOOK_SECRET,
+    isConfigured: !!(env.WISE_API_TOKEN && env.WISE_PROFILE_ID),
+  },
+
   // Feature Flags
   features: {
     hederaPayments: env.ENABLE_HEDERA_PAYMENTS === 'true',
     hederaStablecoins: env.ENABLE_HEDERA_STABLECOINS === 'true',
     xeroSync: env.ENABLE_XERO_SYNC === 'true' && !!(env.XERO_CLIENT_ID && env.XERO_CLIENT_SECRET),
     betaOps: env.ENABLE_BETA_OPS === 'true',
+    wisePayments: env.ENABLE_WISE_PAYMENTS === 'true' && !!(env.WISE_API_TOKEN && env.WISE_PROFILE_ID),
   },
   
   // Admin

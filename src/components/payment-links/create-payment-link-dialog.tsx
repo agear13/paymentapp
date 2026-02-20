@@ -42,8 +42,15 @@ import {
 import { CurrencySelect } from './currency-select';
 import { cn } from '@/lib/utils';
 
+const PAYMENT_METHOD_OPTIONS = [
+  { value: 'STRIPE', label: 'Credit / Debit card (Stripe)' },
+  { value: 'HEDERA', label: 'Crypto (Hashpack)' },
+  { value: 'WISE', label: 'Bank transfer (Wise)' },
+] as const;
+
 // Form validation schema - SMB-friendly (customer contact details optional)
 const createPaymentLinkFormSchema = z.object({
+  paymentMethod: z.enum(['STRIPE', 'HEDERA', 'WISE']).default('STRIPE'),
   amount: z.coerce
     .number({
       invalid_type_error: 'Enter an amount to invoice.',
@@ -134,6 +141,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   React.useEffect(() => {
     if (defaultValues && open) {
       form.reset({
+        paymentMethod: 'STRIPE',
         amount: undefined,
         currency: defaultCurrency,
         description: '',
@@ -161,6 +169,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         body: JSON.stringify({
           organizationId,
           ...data,
+          paymentMethod: data.paymentMethod || 'STRIPE',
           customerEmail: data.customerEmail || undefined,
           customerName: data.customerName || undefined,
           customerPhone: data.customerPhone || undefined,
@@ -219,6 +228,34 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit, onInvalidSubmit)} className="space-y-6">
+            {/* Payment Method */}
+            <FormField
+              control={form.control}
+              name="paymentMethod"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment method</FormLabel>
+                  <FormControl>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={field.value}
+                      onChange={(e) => field.onChange(e.target.value as 'STRIPE' | 'HEDERA' | 'WISE')}
+                    >
+                      {PAYMENT_METHOD_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </FormControl>
+                  <FormDescription>
+                    How your customer will pay this invoice
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {/* Amount and Currency */}
             <div className="grid grid-cols-2 gap-4">
               <FormField

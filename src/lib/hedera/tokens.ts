@@ -22,7 +22,7 @@ export interface PayoutTokenInfo {
 
 const NETWORK_KEY: 'MAINNET' | 'TESTNET' = CURRENT_NETWORK === 'mainnet' ? 'MAINNET' : 'TESTNET';
 
-/** Env overrides for payout token IDs (optional). Example: HEDERA_PAYOUT_USDC_TOKEN_ID=0.0.429274 */
+/** Env overrides for payout token IDs (optional). E.g. HEDERA_PAYOUT_USDC_TOKEN_ID, HEDERA_PAYOUT_AUDD_TOKEN_ID. Fallback: TOKEN_IDS[network]. */
 function getTokenId(symbol: PayoutTokenSymbol): string | null {
   if (symbol === 'HBAR') return null;
   const envKey = `HEDERA_PAYOUT_${symbol}_TOKEN_ID`;
@@ -42,11 +42,10 @@ export function getPayoutTokenInfo(symbol: PayoutTokenSymbol): PayoutTokenInfo {
   };
 }
 
-/** MVP: only USDC supported for on-chain payout. Batch currency USD -> USDC. */
+/** Map batch currency to HTS payout token. USD/USDC -> USDC; AUD/AUDD -> AUDD. */
 export function getPayoutTokenForCurrency(currency: string): PayoutTokenInfo | null {
-  const upper = currency.toUpperCase();
-  if (upper === 'USD') return getPayoutTokenInfo('USDC');
-  if (upper === 'USDC') return getPayoutTokenInfo('USDC');
-  // Future: USDT, AUDD, HBAR when batch currency matches
+  const upper = currency.trim().toUpperCase();
+  if (upper === 'USD' || upper === 'USDC') return getPayoutTokenInfo('USDC');
+  if (upper === 'AUD' || upper === 'AUDD') return getPayoutTokenInfo('AUDD');
   return null;
 }

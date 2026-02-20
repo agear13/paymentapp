@@ -116,16 +116,15 @@ export async function syncPaymentToXero(
       throw new Error('Payment event not found');
     }
 
-    // Extract payment method and token
-    const paymentMethod = paymentEvent.payment_method as 'STRIPE' | 'HEDERA';
+    const paymentMethod = paymentEvent.payment_method as 'STRIPE' | 'HEDERA' | 'WISE';
     const paymentToken = paymentEvent.metadata
-      ? (paymentEvent.metadata as any).paymentToken as TokenType | undefined
+      ? (paymentEvent.metadata as Record<string, unknown>).paymentToken as TokenType | undefined
       : undefined;
 
-    // Get transaction ID
     const transactionId =
       paymentEvent.stripe_payment_intent_id ||
       paymentEvent.hedera_transaction_id ||
+      paymentEvent.wise_transfer_id ||
       '';
 
     if (!transactionId) {

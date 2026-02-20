@@ -240,19 +240,21 @@ export async function GET(
     const lastEvent = paymentLink.payment_events[0];
     const validTransitions = getValidNextStates(currentStatus);
 
-    // Build transaction information if available
     let transactionInfo = null;
-    if (lastEvent?.metadata) {
-      const metadata = lastEvent.metadata as any;
-      if (metadata.transactionId || metadata.stripePaymentIntentId) {
-        transactionInfo = {
-          transactionId: metadata.transactionId || metadata.stripePaymentIntentId,
-          paymentMethod: lastEvent.payment_method,
-          timestamp: lastEvent.created_at,
-          amount: metadata.amount,
-          currency: metadata.currency,
-        };
-      }
+    const txId =
+      lastEvent?.stripe_payment_intent_id ||
+      lastEvent?.hedera_transaction_id ||
+      lastEvent?.wise_transfer_id ||
+      (lastEvent?.metadata && typeof lastEvent.metadata === 'object' && (lastEvent.metadata as Record<string, unknown>).transactionId as string);
+    if (txId) {
+      const metadata = (lastEvent?.metadata as Record<string, unknown>) || {};
+      transactionInfo = {
+        transactionId: txId,
+        paymentMethod: lastEvent?.payment_method,
+        timestamp: lastEvent?.created_at,
+        amount: metadata.amount ?? (lastEvent?.amount_received?.toString()),
+        currency: metadata.currency ?? lastEvent?.currency_received,
+      };
     }
 
     // Generate human-readable status message

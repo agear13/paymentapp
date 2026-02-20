@@ -118,13 +118,19 @@ export async function GET(
         organization_logo_url: true,
         stripe_account_id: true,
         hedera_account_id: true,
+        wise_profile_id: true,
       },
     });
+
+    const wiseEnabled =
+      !!merchantSettings?.wise_profile_id ||
+      (process.env.ENABLE_WISE_PAYMENTS === 'true' && !!(process.env.WISE_API_TOKEN && process.env.WISE_PROFILE_ID));
 
     // Determine available payment methods
     const availablePaymentMethods = {
       stripe: !!merchantSettings?.stripe_account_id,
       hedera: !!merchantSettings?.hedera_account_id,
+      wise: wiseEnabled,
     };
 
     loggers.api.info(
@@ -142,6 +148,7 @@ export async function GET(
         id: paymentLink.id,
         shortCode: paymentLink.short_code,
         status: currentStatus,
+        paymentMethod: paymentLink.payment_method,
         amount: paymentLink.amount.toString(),
         currency: paymentLink.currency,
         description: paymentLink.description,
@@ -155,6 +162,8 @@ export async function GET(
           logoUrl: merchantSettings?.organization_logo_url || null,
         },
         availablePaymentMethods,
+        wiseTransferId: paymentLink.wise_transfer_id ?? null,
+        wiseStatus: paymentLink.wise_status ?? null,
         fxSnapshot: paymentLink.fx_snapshots?.[0] || null,
         lastEvent: paymentLink.payment_events?.[0] || null,
       },

@@ -9,6 +9,7 @@ import { log } from '@/lib/logger';
 import { generateCorrelationId } from './correlation';
 import { postStripeSettlement } from '@/lib/ledger/posting-rules/stripe';
 import { postHederaSettlement } from '@/lib/ledger/posting-rules/hedera';
+import { postWiseSettlement } from '@/lib/ledger/posting-rules/wise';
 import { validatePostingBalance } from '@/lib/ledger/balance-validation';
 import config from '@/lib/config/env';
 import { normalizeHederaTransactionId } from '@/lib/hedera/txid';
@@ -17,14 +18,14 @@ import { assertPaymentLinksUpdateDataValid } from '@/lib/payments/payment-links-
 
 export interface ConfirmPaymentParams {
   paymentLinkId: string;
-  provider: 'stripe' | 'hedera';
-  providerRef: string; // Stripe event_id or Hedera tx_id
+  provider: 'stripe' | 'hedera' | 'wise';
+  providerRef: string; // Stripe event_id, Hedera tx_id, or Wise transfer_id/event_id
   paymentIntentId?: string; // For Stripe
   checkoutSessionId?: string; // For Stripe
-  transactionId?: string; // For Hedera
+  transactionId?: string; // For Hedera or Wise transfer id
   amountReceived: number;
   currencyReceived: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   correlationId?: string;
   // Hedera-specific
   tokenType?: 'HBAR' | 'USDC' | 'USDT' | 'AUDD';
@@ -59,10 +60,11 @@ export async function confirmPayment(
     fxRate,
   } = params;
 
-  // Normalize Hedera transaction ID for consistent storage
-  const normalizedProviderRef = provider === 'hedera' 
-    ? normalizeHederaTransactionId(providerRef)
-    : providerRef;
+  // Normalize provider ref per rail
+  const normalizedProviderRef =
+    provider === 'hedera'
+      ? normalizeHederaTransactionId(providerRef)
+      : providerRef;
 
   // Generate or use provided correlation ID (from normalized ref)
   const correlationId = params.correlationId || 
@@ -79,10 +81,12 @@ export async function confirmPayment(
   }, 'Starting payment confirmation');
 
   try {
-    // Check idempotency based on provider (check both formats for Hedera)
-    const idempotencyCheck = provider === 'stripe'
-      ? await checkStripeIdempotency(providerRef)
-      : await checkHederaIdempotency(normalizedProviderRef, providerRef);
+    const idempotencyCheck =
+      provider === 'stripe'
+        ? await checkStripeIdempotency(providerRef)
+        : provider === 'wise'
+          ? await checkWiseIdempotency(normalizedProviderRef)
+          : await checkHederaIdempotency(normalizedProviderRef, providerRef);
 
     if (idempotencyCheck.exists) {
       log.info({
@@ -185,17 +189,21 @@ export async function confirmPayment(
         created_at: new Date(),
       };
 
-      // Add provider-specific fields (checkoutSessionId in metadata from caller, not as column)
       if (provider === 'stripe') {
         paymentEventData.stripe_event_id = providerRef;
         paymentEventData.stripe_payment_intent_id = paymentIntentId;
       } else if (provider === 'hedera') {
         paymentEventData.hedera_transaction_id = normalizedProviderRef;
-        // Add raw and normalized IDs to metadata
         paymentEventData.metadata = {
           ...paymentEventData.metadata,
           raw_transaction_id: providerRef,
           normalized_transaction_id: normalizedProviderRef,
+        };
+      } else if (provider === 'wise') {
+        paymentEventData.wise_transfer_id = transactionId || normalizedProviderRef;
+        paymentEventData.metadata = {
+          ...paymentEventData.metadata,
+          wise_event_id: providerRef,
         };
       }
 
@@ -229,7 +237,6 @@ export async function confirmPayment(
             correlationId,
           });
         } else if (provider === 'hedera' && tokenType) {
-          // Get FX snapshot for settlement
           const fxSnapshot = await tx.fx_snapshots.findFirst({
             where: {
               payment_link_id: paymentLinkId,
@@ -260,7 +267,16 @@ export async function confirmPayment(
             fxRate: rate,
             transactionId: transactionId || providerRef,
             correlationId,
-            idempotencyKey: correlationId, // Use correlation_id for idempotency
+            idempotencyKey: correlationId,
+          });
+        } else if (provider === 'wise') {
+          await postWiseSettlement({
+            paymentLinkId,
+            organizationId: paymentLink.organization_id,
+            wiseTransferId: transactionId || normalizedProviderRef,
+            grossAmount: amountReceived.toString(),
+            currency: currencyReceived,
+            correlationId,
           });
         }
 
@@ -385,9 +401,10 @@ export async function confirmPayment(
           paymentEventId: result.paymentEventId,
           grossAmount: amountReceived,
           currency: currencyReceived,
-          provider: provider === 'hedera' ? 'hedera' : 'stripe',
+          provider: provider === 'hedera' ? 'hedera' : provider === 'wise' ? 'wise' : 'stripe',
           ...(provider === 'stripe' && { stripePaymentIntentId: paymentIntentId }),
           ...(provider === 'hedera' && { hederaTransactionId: normalizedProviderRef }),
+          ...(provider === 'wise' && { wiseTransferId: transactionId || normalizedProviderRef }),
         });
         if (refResult.created) {
           log.info(
@@ -452,23 +469,33 @@ async function checkStripeIdempotency(eventId: string) {
 
 /**
  * Check if Hedera payment already processed
- * Checks both normalized and raw formats for backwards compatibility
  */
 async function checkHederaIdempotency(normalizedTxId: string, rawTxId?: string) {
   const existing = await prisma.payment_events.findFirst({
     where: {
       OR: [
         { hedera_transaction_id: normalizedTxId },
-        ...(rawTxId && rawTxId !== normalizedTxId ? [
-          { hedera_transaction_id: rawTxId },
-        ] : []),
+        ...(rawTxId && rawTxId !== normalizedTxId
+          ? [{ hedera_transaction_id: rawTxId }]
+          : []),
       ],
     },
   });
+  return { exists: !!existing, eventId: existing?.id };
+}
 
-  return {
-    exists: !!existing,
-    eventId: existing?.id,
-  };
+/**
+ * Check if Wise payment already processed (by transfer id or event id in providerRef)
+ */
+async function checkWiseIdempotency(transferIdOrEventId: string) {
+  const existing = await prisma.payment_events.findFirst({
+    where: {
+      OR: [
+        { wise_transfer_id: transferIdOrEventId },
+        { correlation_id: transferIdOrEventId },
+      ],
+    },
+  });
+  return { exists: !!existing, eventId: existing?.id };
 }
 

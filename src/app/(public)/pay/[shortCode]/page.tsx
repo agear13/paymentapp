@@ -36,9 +36,13 @@ interface PaymentLinkData {
   availablePaymentMethods: {
     stripe: boolean;
     hedera: boolean;
+    wise?: boolean;
   };
-  fxSnapshot: any;
-  lastEvent: any;
+  paymentMethod?: string | null;
+  wiseTransferId?: string | null;
+  wiseStatus?: string | null;
+  fxSnapshot: unknown;
+  lastEvent: unknown;
 }
 
 type LoadingState = 'loading' | 'found' | 'not_found' | 'error';

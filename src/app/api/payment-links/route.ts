@@ -20,12 +20,13 @@ import { generateUniqueShortCode } from '@/lib/server/short-code';
 import { generateQRCodeDataUrl } from '@/lib/qr-code';
 
 // Helper to transform snake_case DB fields to camelCase for frontend
-function transformPaymentLink(link: any) {
+function transformPaymentLink(link: Record<string, unknown>) {
   return {
     id: link.id,
     organizationId: link.organization_id,
     shortCode: link.short_code,
     status: link.status,
+    paymentMethod: link.payment_method ?? null,
     amount: Number(link.amount),
     currency: link.currency,
     description: link.description,
@@ -242,6 +243,7 @@ export async function POST(request: NextRequest) {
           organization_id: dbOrgId,
           short_code: shortCode,
           status: 'OPEN',
+          payment_method: validatedData.paymentMethod ?? null,
           amount: validatedData.amount,
           currency: validatedData.currency,
           description: validatedData.description,
@@ -249,8 +251,8 @@ export async function POST(request: NextRequest) {
           customer_email: validatedData.customerEmail || null,
           customer_name: validatedData.customerName || null,
           customer_phone: validatedData.customerPhone || null,
-          due_date: validatedData.dueDate ? new Date(validatedData.dueDate as any) : null,
-          expires_at: validatedData.expiresAt ? new Date(validatedData.expiresAt as any) : null,
+          due_date: validatedData.dueDate ? new Date(validatedData.dueDate as string) : null,
+          expires_at: validatedData.expiresAt ? new Date(validatedData.expiresAt as string) : null,
           created_at: now,
           updated_at: now,
         },
