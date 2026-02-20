@@ -107,8 +107,8 @@ export default function CommissionsPage() {
                   <TableHead>Date</TableHead>
                   <TableHead>Referral code</TableHead>
                   <TableHead>Payment</TableHead>
-                  <TableHead className="text-right">Consultant</TableHead>
-                  <TableHead className="text-right">BD Partner</TableHead>
+                  <TableHead className="text-right">Partner 1</TableHead>
+                  <TableHead className="text-right">Partner 2</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>

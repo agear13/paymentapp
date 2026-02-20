@@ -1,0 +1,96 @@
+---
+description: Revenue Share app demo changes for Hedera grant – programmable payments engine, generic partner terms, rules UI, compliance gate, value props
+globs: "**/partners/**/*,**/referrals/**/*,**/referral-links/**/*,**/rules/**/*,**/payouts/**/*,**/commissions/**/*"
+alwaysApply: false
+---
+
+# Revenue Share App – Hedera Demo (Programmable Payments Engine)
+
+Use this rule when altering the revenue share / referral / partners module for the Hedera team product demo. Goal: make it obvious that Provvypay is a **programmable payments engine** and surface the three value propositions below.
+
+---
+
+## 1. Generic Partner Terminology (No BD / Consultant / Advocate)
+
+**Scope:** Referral links page, create/edit modals, tables, API response labels, sidebar, any copy.
+
+- **Remove all mentions of:** BD, BD Partner, consultant, advocate.
+- **Replace with generic terms:** Partner 1, Partner 2, Partner 3, … (or “Tier 1”, “Tier 2” if multi-tier).
+- **Referral links page** (`dashboard/partners/referral-links/page.tsx`):
+  - Table: replace “Consultant %” / “BD Partner %” with “Partner 1 %”, “Partner 2 %” (or “Tier 1 %”, “Tier 2 %”).
+  - Description: e.g. “Create commission-enabled links. Revenue splits are applied automatically per your rules.”
+- **Create referral link modal** (`create-referral-link-modal.tsx`):
+  - Support multi-tier (e.g. Partner 1, Partner 2, …) with percentage splits; no `userType: 'BD_PARTNER' | 'CONSULTANT'` in labels.
+  - Props can stay for data model, but UI labels must be generic (Partner 1 %, Partner 2 %, etc.).
+- **Other components:** `edit-advocate-modal`, `create-advocate-modal`, participants table, conversions table – use “Partner” and “Partner 1/2/3” (or “Tier 1/2”) in labels and headings. Avoid “advocate”, “consultant”, “BD partner” in user-facing text.
+- Keep the ability to create **multi-tier programs**; only the labels and copy become generic.
+
+---
+
+## 2. Rules Page – Programmable Engine & Link Assignment
+
+**Scope:** `dashboard/partners/rules/page.tsx` and any rules-related UI.
+
+- **Framing:** Make it clear that “rules” are the **program** that runs when a payment hits a link. Headline/subtitle: e.g. “Programmable revenue share rules – define how earnings are split and when they execute.”
+- **Create / edit rules (demo):**
+  - Add UI to “Create rule” (e.g. name, type: percentage / fixed / tiered, value, priority, optional conditions). For the demo, **saving does not need to be fully functional** – can write to local state or a mock list; focus on UI and narrative.
+  - Show a list of “Saved rules” that can be **assigned** to a link or to a partner.
+- **Link ↔ rules:**
+  - Clearly show that **unique links** can be generated and that each link **executes** one or more rules when used (e.g. “Link XYZ executes Rule A + Rule B”).
+  - Optional: “Assign rules to link” or “Link generated from rule set” so the Hedera team sees: create rules → generate link → give link to partner/influencer → when customer pays via link, rules execute.
+- **Copy:** Use phrases like “Rules execute on payment”, “Links execute these rules”, “Assign rule set to partner link”.
+
+---
+
+## 3. Payouts Page – Compliance Gate & Preferred Rail/Currency
+
+**Scope:** `dashboard/partners/payouts/page.tsx` and payout detail/list UI.
+
+- **Compliance gate narrative:**
+  - Show which **partners have completed compliance** (e.g. badge or column: “Compliance complete” / “Pending compliance”) and which have not. For demo, this can be mock or derived from a simple flag.
+  - Messaging: “Payouts are available once the partner completes compliance. Until then, earnings are tracked in the ledger but not sent.”
+- **Preferred rail and currency:**
+  - For each partner or payout batch, show **preferred payout rail** (e.g. Bank, Hedera, Wise, PayPal) and **preferred currency** (AUD, USD, etc.).
+  - Optional: “Payout conductor” or “Provvypay conducts payouts in the partner’s preferred rail and currency after compliance.”
+- **UI additions:**
+  - Table or cards: Partner name, Earnings, Compliance status, Preferred rail, Preferred currency, Payout status (e.g. Ready / Scheduled / Paid).
+  - Short line of copy: e.g. “Partners receive payouts in their chosen rail and currency once compliance is complete.”
+
+---
+
+## 4. Value Propositions to Surface in UI
+
+Add small **info callouts**, tooltips, or one-line descriptions so the Hedera team sees:
+
+**(a) No KYC to add partners and start tracking**
+- Where: e.g. Referral links page, “Add partner” or “Create link” flow.
+- Message: “Add partners without KYC. Generate a unique link and start tracking attribution immediately. No Stripe Connect–style onboarding required.”
+
+**(b) Compliance gate only at payout**
+- Where: Payouts page, or a “Compliance” section near payouts.
+- Message: “Compliance only applies when a partner wants to receive their payout. Until then, we track attribution and earnings in the ledger; no compliance step required to earn.”
+
+**(c) Non-custodial, ledger truth, clawback/refund and account controls**
+- Where: Ledger view, or a small “Program controls” / “Ledger & clawback” callout (e.g. on Rules or Payouts).
+- Message: “Provvypay is non-custodial. The ledger is the real-time source of truth. On clawback or refund, we alert the business to the correct balances and, if a partner does not return their portion, we can freeze the partner account and apply other controls.”
+
+Optional: add a “Value” or “Why Provvypay” card/section on the Partners dashboard or Rules page that lists (a), (b), (c) in short bullets.
+
+---
+
+## 5. Files to Touch (Reference)
+
+- **Referral links:** `src/app/(dashboard)/dashboard/partners/referral-links/page.tsx`, `src/components/referrals/create-referral-link-modal.tsx`, `edit-advocate-modal.tsx`, `create-advocate-modal.tsx`.
+- **Rules:** `src/app/(dashboard)/dashboard/partners/rules/page.tsx`, `src/lib/data/mock-partners.ts` (mockAllocationRules, etc.).
+- **Payouts:** `src/app/(dashboard)/dashboard/partners/payouts/page.tsx`, `src/app/(dashboard)/dashboard/partners/payouts/[id]/page.tsx`.
+- **Sidebar / nav:** `src/components/dashboard/app-sidebar.tsx` – ensure no “BD” or “Consultant” in labels; use “Partners” or “Revenue share”.
+- **Participants / conversions:** `participants-table.tsx`, `conversions-table.tsx` – generic “Partner” and “Partner 1/2” only.
+- **Commissions:** `dashboard/partners/commissions/page.tsx` – same generic terminology.
+
+---
+
+## 6. Implementation Notes
+
+- **Demo-first:** Functional backend for “create rule” or “compliance complete” is not required; mock data and clear UI are enough.
+- **Consistency:** Use “Partner 1”, “Partner 2” (or “Tier 1”, “Tier 2”) everywhere in the revenue share UI; avoid consultant/advocate/BD in user-facing strings.
+- **Narrative:** Every change should reinforce: programmable rules, unique links that execute those rules, compliance at payout, non-custodial ledger and clawback/account controls.

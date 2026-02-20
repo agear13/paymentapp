@@ -91,7 +91,10 @@ export default function ReferralLinksPage() {
         <div>
           <h1 className="text-3xl font-bold">Referral Links</h1>
           <p className="text-muted-foreground">
-            Create commission-enabled links. Customers pay via Stripe; revenue splits are applied automatically.
+            Programmable payments engine: create commission-enabled links. Revenue splits execute automatically per your rules.
+          </p>
+          <p className="text-xs text-muted-foreground mt-2 rounded-md bg-muted/60 p-2 max-w-xl">
+            Add partners without KYC. Generate a unique link and start tracking attribution immediately—no Stripe Connect–style onboarding required.
           </p>
         </div>
         <div className="flex gap-2">
@@ -109,7 +112,7 @@ export default function ReferralLinksPage() {
         <CardHeader>
           <CardTitle>Your links</CardTitle>
           <CardDescription>
-            Share these URLs. Each payment triggers commission posting (DR 6105, CR 2110, 2120).
+            Share these URLs. Each payment executes your rules and posts commissions to the ledger.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -126,8 +129,8 @@ export default function ReferralLinksPage() {
                   <TableHead>Code</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Basis</TableHead>
-                  <TableHead>Consultant %</TableHead>
-                  <TableHead>BD Partner %</TableHead>
+                  <TableHead>Partner 1 %</TableHead>
+                  <TableHead>Partner 2 %</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -186,6 +189,7 @@ export default function ReferralLinksPage() {
         onOpenChange={setCreateOpen}
         organizationId={organizationId}
         userType="BD_PARTNER"
+        defaultUseSplits
         onSuccess={fetchLinks}
       />
     </div>

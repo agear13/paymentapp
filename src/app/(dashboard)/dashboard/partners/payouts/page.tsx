@@ -43,7 +43,7 @@ export default function PartnerPayoutsPage() {
   const [createLoading, setCreateLoading] = React.useState(false);
   const [createCurrency, setCreateCurrency] = React.useState('AUD');
   const [createThreshold, setCreateThreshold] = React.useState('50');
-  const [createRoleFilter, setCreateRoleFilter] = React.useState<string>(''); // '' = all, CONSULTANT, BD_PARTNER
+  const [createRoleFilter, setCreateRoleFilter] = React.useState<string>(''); // '' = all, CONSULTANT (Partner 1), BD_PARTNER (Partner 2)
 
   const fetchBatches = React.useCallback(async () => {
     if (!organizationId) return;
@@ -128,9 +128,62 @@ export default function PartnerPayoutsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Payouts</h1>
         <p className="text-muted-foreground">
-          Create payout batches from posted commissions. Mark payouts as paid after transfer.
+          Provvypay conducts payouts in each partner&apos;s preferred rail and currency. Create batches from posted commissions; payouts are available once compliance is complete.
+        </p>
+        <p className="text-xs text-muted-foreground mt-2 rounded-md bg-muted/60 p-2 max-w-xl">
+          Compliance only applies when a partner wants to receive their payout. Until then, we track attribution and earnings in the ledger—no compliance step required to earn.
         </p>
       </div>
+
+      {/* Partners & compliance (demo) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Partners &amp; compliance</CardTitle>
+          <CardDescription>
+            Partners who have completed compliance can receive payouts in their preferred rail and currency. Provvypay acts as the conductor.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Partner</TableHead>
+                <TableHead className="text-right">Earnings</TableHead>
+                <TableHead>Compliance</TableHead>
+                <TableHead>Preferred rail</TableHead>
+                <TableHead>Preferred currency</TableHead>
+                <TableHead>Payout status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell className="font-medium">Partner 1 (Alex)</TableCell>
+                <TableCell className="text-right font-medium">3,890.50</TableCell>
+                <TableCell><Badge variant="default">Complete</Badge></TableCell>
+                <TableCell>Bank (Wise)</TableCell>
+                <TableCell>AUD</TableCell>
+                <TableCell><Badge variant="secondary">Ready</Badge></TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Partner 2 (Sam)</TableCell>
+                <TableCell className="text-right font-medium">2,340.00</TableCell>
+                <TableCell><Badge variant="default">Complete</Badge></TableCell>
+                <TableCell>Hedera</TableCell>
+                <TableCell>USD</TableCell>
+                <TableCell><Badge variant="secondary">Scheduled</Badge></TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Partner 3 (Jordan)</TableCell>
+                <TableCell className="text-right font-medium">1,205.25</TableCell>
+                <TableCell><Badge variant="outline">Pending</Badge></TableCell>
+                <TableCell>Bank</TableCell>
+                <TableCell>EUR</TableCell>
+                <TableCell><Badge variant="outline">Awaiting compliance</Badge></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       <Card>
         <Tabs defaultValue="create">
@@ -172,7 +225,7 @@ export default function PartnerPayoutsPage() {
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor="roleFilter">Role filter (optional)</Label>
+                  <Label htmlFor="roleFilter">Partner filter (optional)</Label>
                   <Select
                     value={createRoleFilter || 'all'}
                     onValueChange={(v) => setCreateRoleFilter(v === 'all' ? '' : v)}
@@ -182,8 +235,8 @@ export default function PartnerPayoutsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="CONSULTANT">Consultant only</SelectItem>
-                      <SelectItem value="BD_PARTNER">BD Partner only</SelectItem>
+                      <SelectItem value="CONSULTANT">Partner 1 only</SelectItem>
+                      <SelectItem value="BD_PARTNER">Partner 2 only</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

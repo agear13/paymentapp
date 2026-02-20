@@ -46,6 +46,8 @@ interface CreateReferralLinkModalProps {
   bdPartnerOptions?: { id: string; name: string }[];
   defaultConsultantPct?: number;
   defaultBdPartnerPct?: number;
+  /** Default to generic multi-tier splits (Partner 1, Partner 2, ...) for demo. */
+  defaultUseSplits?: boolean;
   onSuccess?: () => void;
 }
 
@@ -58,6 +60,7 @@ export function CreateReferralLinkModal({
   bdPartnerOptions = [],
   defaultConsultantPct = 10,
   defaultBdPartnerPct = 5,
+  defaultUseSplits = false,
   onSuccess,
 }: CreateReferralLinkModalProps) {
   const [code, setCode] = useState(() => generateReferralCode());
@@ -71,7 +74,7 @@ export function CreateReferralLinkModal({
   const [checkoutAmount, setCheckoutAmount] = useState('100');
   const [checkoutCurrency, setCheckoutCurrency] = useState('AUD');
   const [loading, setLoading] = useState(false);
-  const [useSplits, setUseSplits] = useState(false);
+  const [useSplits, setUseSplits] = useState(defaultUseSplits);
   const [numberOfPartners, setNumberOfPartners] = useState(2);
   const [splitsRows, setSplitsRows] = useState<{ label: string; percentage: string }[]>([
     { label: 'Partner 1', percentage: '50' },
@@ -142,15 +145,15 @@ export function CreateReferralLinkModal({
     const cp = normalizePctInput(consultantPct);
     const bp = normalizePctInput(bdPartnerPct);
     if (cp + bp > 1) {
-      toast.error('Consultant + BD Partner percentages cannot exceed 100%');
+      toast.error('Partner 1 + Partner 2 percentages cannot exceed 100%');
       return;
     }
     if (userType === 'BD_PARTNER' && cp > 0 && !consultantId) {
-      toast.error('Select a consultant or set Consultant % to 0 for BD-only link.');
+      toast.error('Select a partner or set Partner 1 % to 0 for single-partner link.');
       return;
     }
     if (userType === 'CONSULTANT' && bp > 0 && !bdReferralCode.trim() && !bdPartnerId) {
-      toast.error('Enter BD referral code or select a BD partner when BD Partner % > 0.');
+      toast.error('Enter referral code or select a partner when Partner 2 % > 0.');
       return;
     }
 
@@ -292,7 +295,7 @@ export function CreateReferralLinkModal({
             <>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="consultantPct">Consultant % (e.g. 10 or 0.10)</Label>
+                  <Label htmlFor="consultantPct">Partner 1 % (e.g. 10 or 0.10)</Label>
                   <Input
                     id="consultantPct"
                     type="number"
@@ -304,7 +307,7 @@ export function CreateReferralLinkModal({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="bdPartnerPct">BD Partner % (e.g. 5 or 0.05)</Label>
+                  <Label htmlFor="bdPartnerPct">Partner 2 % (e.g. 5 or 0.05)</Label>
                   <Input
                     id="bdPartnerPct"
                     type="number"
@@ -319,16 +322,16 @@ export function CreateReferralLinkModal({
 
               {userType === 'BD_PARTNER' && consultantOptions.length > 0 && (
             <div>
-              <Label>Assign to consultant (optional)</Label>
+              <Label>Assign to partner (optional)</Label>
               <p className="text-xs text-muted-foreground mb-1">
-                Set Consultant % to 0 for BD-only link. If Consultant % &gt; 0, select a consultant.
+                Set Partner 1 % to 0 for single-partner link. If Partner 1 % &gt; 0, select a partner.
               </p>
               <Select value={consultantId ?? 'any'} onValueChange={(v) => setConsultantId(v === 'any' ? null : v)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Any consultant" />
+                  <SelectValue placeholder="Any partner" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="any">Any consultant (BD-only if Consultant % = 0)</SelectItem>
+                  <SelectItem value="any">Any partner (single-tier if Partner 1 % = 0)</SelectItem>
                   {consultantOptions.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
@@ -341,16 +344,16 @@ export function CreateReferralLinkModal({
 
           {userType === 'CONSULTANT' && (
             <div className="space-y-2">
-              <Label>BD Partner (optional)</Label>
+              <Label>Partner 2 (optional)</Label>
               <Input
-                placeholder="Paste BD referral code to inherit"
+                placeholder="Paste referral code to inherit"
                 value={bdReferralCode}
                 onChange={(e) => setBdReferralCode(e.target.value)}
               />
               {bdPartnerOptions.length > 0 && (
                 <Select value={bdPartnerId ?? 'none'} onValueChange={(v) => setBdPartnerId(v === 'none' ? null : v)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Or select BD partner" />
+                    <SelectValue placeholder="Or select partner" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
