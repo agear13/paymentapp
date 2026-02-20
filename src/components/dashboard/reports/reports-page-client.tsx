@@ -91,8 +91,8 @@ export function ReportsPageClient({ organizationId }: ReportsPageClientProps) {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reports & Analytics</h1>
           <p className="text-muted-foreground">
-            Comprehensive reporting across all payment methods including Stripe and Hedera
-            (HBAR, USDC, USDT, AUDD)
+            Comprehensive reporting across all payment methods including Stripe, Hedera
+            (HBAR, USDC, USDT, AUDD), and Wise
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -126,10 +126,14 @@ export function ReportsPageClient({ organizationId }: ReportsPageClientProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold">💳</div>
               <div className="text-sm font-medium mt-1">Stripe</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold">🏦</div>
+              <div className="text-sm font-medium mt-1">Wise</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold">ℏ</div>

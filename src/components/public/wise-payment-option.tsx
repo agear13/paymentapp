@@ -74,10 +74,32 @@ export const WisePaymentOption: React.FC<WisePaymentOptionProps> = ({
     try {
       const res = await fetch(`/api/public/pay/${shortCode}/wise`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load payment details');
+      if (!res.ok) {
+        const msg = data.error || 'Failed to load payment details';
+        if (res.status === 400 && (msg.includes('not configured') || msg.includes('Wise'))) {
+          setInstructions({
+            type: 'bank_transfer',
+            reference: `DEMO-${shortCode}`,
+            transferId: 'demo',
+            message: 'Wise is coming soon. This payment method will be available once configured. For now, use Card (Stripe) or Crypto (Hashpack).',
+          });
+          return;
+        }
+        throw new Error(msg);
+      }
       setInstructions(data.instructions ?? { reference: data.transferId, transferId: data.transferId });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to load payment details');
+      const msg = e instanceof Error ? e.message : 'Failed to load payment details';
+      if (msg.includes('not configured') || msg.includes('Wise')) {
+        setInstructions({
+          type: 'bank_transfer',
+          reference: `DEMO-${shortCode}`,
+          transferId: 'demo',
+          message: 'Wise is coming soon. Use Card or Crypto to pay for now.',
+        });
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setIsLoading(false);
     }

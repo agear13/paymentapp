@@ -306,7 +306,7 @@ export function OnboardingForm() {
           <AlertTitle>Configure Payment Methods</AlertTitle>
           <AlertDescription>
             To accept payments, you need to connect at least one payment processor. 
-            You can add Stripe for traditional card payments and/or Hedera for cryptocurrency payments.
+            You can add Stripe for card payments, Wise for bank transfer, and/or Hedera for cryptocurrency payments.
           </AlertDescription>
         </Alert>
 
@@ -358,7 +358,7 @@ export function OnboardingForm() {
               <Building className="h-4 w-4" />
               <AlertTitle>At least one payment method required</AlertTitle>
               <AlertDescription>
-                You must configure at least one payment method (Stripe or Hedera) to create payment links that can collect payments.
+                You must configure at least one payment method (Stripe, Wise, or Hedera) to create payment links that can collect payments.
                 You can skip this step and configure it later from Settings &gt; Merchant Settings.
               </AlertDescription>
             </Alert>

@@ -57,7 +57,7 @@ export default async function TransactionsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
         <p className="text-muted-foreground">
-          View all payment transactions across Stripe and Hedera.
+          View all payment transactions across Stripe, Wise, and Hedera.
         </p>
       </div>
 
@@ -73,7 +73,7 @@ export default async function TransactionsPage() {
             <CardHeader>
               <CardTitle>All Transactions</CardTitle>
               <CardDescription>
-                Complete transaction history across all payment methods.
+                Complete transaction history across Stripe, Wise, and Hedera.
               </CardDescription>
             </CardHeader>
             <CardContent>

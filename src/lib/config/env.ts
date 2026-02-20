@@ -61,6 +61,8 @@ const envSchema = z.object({
   ENABLE_XERO_SYNC: z.string().optional().default('true'),
   ENABLE_BETA_OPS: z.string().optional().default('false'),
   ENABLE_WISE_PAYMENTS: z.string().optional().default('false'),
+  /** Show Wise as a payment option in UI for demo (even when backend not configured) */
+  NEXT_PUBLIC_SHOW_WISE_DEMO: z.string().optional().default('true'),
 
   // Beta/Admin
   ADMIN_EMAIL_ALLOWLIST: z.string().optional(),
@@ -109,6 +111,7 @@ function validateEnv() {
       ENABLE_XERO_SYNC: process.env.ENABLE_XERO_SYNC || 'true',
       ENABLE_BETA_OPS: process.env.ENABLE_BETA_OPS || 'false',
       ENABLE_WISE_PAYMENTS: process.env.ENABLE_WISE_PAYMENTS || 'false',
+      NEXT_PUBLIC_SHOW_WISE_DEMO: process.env.NEXT_PUBLIC_SHOW_WISE_DEMO || 'true',
       WISE_API_TOKEN: process.env.WISE_API_TOKEN,
       WISE_PROFILE_ID: process.env.WISE_PROFILE_ID,
       WISE_WEBHOOK_SECRET: process.env.WISE_WEBHOOK_SECRET,

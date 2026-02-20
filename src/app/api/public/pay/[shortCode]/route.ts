@@ -124,7 +124,8 @@ export async function GET(
 
     const wiseEnabled =
       !!merchantSettings?.wise_profile_id ||
-      (process.env.ENABLE_WISE_PAYMENTS === 'true' && !!(process.env.WISE_API_TOKEN && process.env.WISE_PROFILE_ID));
+      (process.env.ENABLE_WISE_PAYMENTS === 'true' && !!(process.env.WISE_API_TOKEN && process.env.WISE_PROFILE_ID)) ||
+      process.env.NEXT_PUBLIC_SHOW_WISE_DEMO === 'true';
 
     // Determine available payment methods
     const availablePaymentMethods = {
