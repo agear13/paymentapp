@@ -79,27 +79,98 @@ export function ReconciliationReport({ organizationId }: ReconciliationReportPro
     );
   }
 
+  // Placeholder data for demo when API fails
+  const placeholderData: ReconciliationData = {
+    report: {
+      stripe: { expectedRevenue: 1250, ledgerBalance: 1250, difference: 0, paymentCount: 12 },
+      hedera_hbar: { expectedRevenue: 320, ledgerBalance: 320, difference: 0, paymentCount: 4 },
+      hedera_usdc: { expectedRevenue: 580, ledgerBalance: 580, difference: 0, paymentCount: 6 },
+      hedera_usdt: { expectedRevenue: 0, ledgerBalance: 0, difference: 0, paymentCount: 0 },
+      hedera_audd: { expectedRevenue: 450, ledgerBalance: 450, difference: 0, paymentCount: 3 },
+    },
+    isReconciled: true,
+    totalDifference: 0,
+    timestamp: new Date().toISOString(),
+  };
+
+  const displayData = data ?? placeholderData;
+  const items = [
+    { label: 'Stripe', data: displayData.report.stripe },
+    { label: 'Hedera - HBAR', data: displayData.report.hedera_hbar },
+    { label: 'Hedera - USDC', data: displayData.report.hedera_usdc },
+    { label: 'Hedera - USDT', data: displayData.report.hedera_usdt },
+    { label: 'Hedera - AUDD', data: displayData.report.hedera_audd },
+  ];
+
   if (error || !data) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Reconciliation Report</CardTitle>
-          <CardDescription>Error loading data</CardDescription>
+          <CardDescription>
+            Sample data for demo — live data unavailable
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-destructive">{error}</p>
+          <Alert className="mb-4 border-amber-200 bg-amber-50">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Using sample data</AlertTitle>
+            <AlertDescription>
+              {error ?? 'Could not load report.'} Showing sample data for demo.
+            </AlertDescription>
+          </Alert>
+          <div className="space-y-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Payment Method</TableHead>
+                  <TableHead className="text-right">Expected</TableHead>
+                  <TableHead className="text-right">Ledger Balance</TableHead>
+                  <TableHead className="text-right">Difference</TableHead>
+                  <TableHead className="text-right">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map(({ label, data: item }) => {
+                  const isBalanced = Math.abs(item.difference) < 0.01;
+                  return (
+                    <TableRow key={label}>
+                      <TableCell className="font-medium">{label}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        ${item.expectedRevenue.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        ${item.ledgerBalance.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        ${Math.abs(item.difference).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isBalanced ? (
+                          <Badge variant="outline" className="text-green-600">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Balanced
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Off by ${Math.abs(item.difference).toFixed(2)}
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <div className="text-xs text-muted-foreground text-right">
+              Last updated: {new Date(displayData.timestamp).toLocaleString()}
+            </div>
+          </div>
         </CardContent>
       </Card>
     );
   }
-
-  const items = [
-    { label: 'Stripe', data: data.report.stripe },
-    { label: 'Hedera - HBAR', data: data.report.hedera_hbar },
-    { label: 'Hedera - USDC', data: data.report.hedera_usdc },
-    { label: 'Hedera - USDT', data: data.report.hedera_usdt },
-    { label: 'Hedera - AUDD', data: data.report.hedera_audd },
-  ];
 
   return (
     <Card>
@@ -111,8 +182,7 @@ export function ReconciliationReport({ organizationId }: ReconciliationReportPro
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {/* Status Alert */}
-          {data.isReconciled ? (
+          {displayData.isReconciled ? (
             <Alert>
               <CheckCircle className="h-4 w-4" />
               <AlertTitle>Reconciled</AlertTitle>
@@ -125,13 +195,12 @@ export function ReconciliationReport({ organizationId }: ReconciliationReportPro
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Discrepancy Detected</AlertTitle>
               <AlertDescription>
-                Total difference: ${data.totalDifference.toFixed(2)}. Please review
+                Total difference: ${displayData.totalDifference.toFixed(2)}. Please review
                 the details below.
               </AlertDescription>
             </Alert>
           )}
 
-          {/* Reconciliation Table */}
           <Table>
             <TableHeader>
               <TableRow>
@@ -184,9 +253,8 @@ export function ReconciliationReport({ organizationId }: ReconciliationReportPro
             </TableBody>
           </Table>
 
-          {/* Timestamp */}
           <div className="text-xs text-muted-foreground text-right">
-            Last updated: {new Date(data.timestamp).toLocaleString()}
+            Last updated: {new Date(displayData.timestamp).toLocaleString()}
           </div>
         </div>
       </CardContent>

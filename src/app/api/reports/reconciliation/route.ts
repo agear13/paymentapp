@@ -30,11 +30,11 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get all confirmed payments
+    // Get all paid payment links (status is PAID, not CONFIRMED)
     const confirmedPayments = await prisma.payment_links.findMany({
       where: {
         organization_id: organizationId,
-        status: 'CONFIRMED',
+        status: 'PAID',
       },
       include: {
         payment_events: {

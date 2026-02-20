@@ -70,21 +70,40 @@ export function TokenBreakdownChart({
     );
   }
 
+  const placeholderBreakdown: TokenBreakdownItem[] = [
+    { label: 'Stripe', value: 52, count: 12, revenue: 1250, color: '#635BFF' },
+    { label: 'Hedera - HBAR', value: 18, count: 4, revenue: 432, color: '#82A4F8' },
+    { label: 'Hedera - USDC', value: 22, count: 6, revenue: 528, color: '#2775CA' },
+    { label: 'Hedera - USDT', value: 4, count: 1, revenue: 96, color: '#26A17B' },
+    { label: 'Hedera - AUDD', value: 4, count: 2, revenue: 96, color: '#00843D' },
+  ];
+  const displayData =
+    data ??
+    ({
+      breakdown: placeholderBreakdown,
+      totalRevenue: 2402,
+      totalPayments: 25,
+    } as TokenBreakdown);
+
   if (error || !data) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Token Breakdown</CardTitle>
-          <CardDescription>Error loading data</CardDescription>
+          <CardDescription>
+            Sample data for demo — live data unavailable
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-destructive">{error}</p>
+          <p className="text-sm text-amber-700 mb-4">
+            {error ?? 'Could not load data.'} Showing sample data for demo.
+          </p>
+          <TokenBreakdownContent data={displayData} />
         </CardContent>
       </Card>
     );
   }
 
-  // Simple horizontal bar chart representation
   return (
     <Card>
       <CardHeader>
@@ -94,8 +113,16 @@ export function TokenBreakdownChart({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {data.breakdown.map((item, index) => (
+        <TokenBreakdownContent data={displayData} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function TokenBreakdownContent({ data }: { data: TokenBreakdown }) {
+  return (
+    <div className="space-y-4">
+      {data.breakdown.map((item, index) => (
             <div key={index} className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
@@ -125,17 +152,15 @@ export function TokenBreakdownChart({
             </div>
           ))}
 
-          <div className="pt-4 border-t">
-            <div className="flex justify-between text-sm font-medium">
-              <span>Total</span>
-              <span>
-                {data.totalPayments} payments · ${data.totalRevenue.toFixed(2)}
-              </span>
-            </div>
-          </div>
+      <div className="pt-4 border-t">
+        <div className="flex justify-between text-sm font-medium">
+          <span>Total</span>
+          <span>
+            {data.totalPayments} payments · ${data.totalRevenue.toFixed(2)}
+          </span>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 

@@ -40,11 +40,11 @@ export async function GET(req: NextRequest) {
       dateFilter.lte = new Date(endDate);
     }
 
-    // Get all confirmed payments
+    // Get all paid payment links
     const payments = await prisma.payment_links.findMany({
       where: {
         organization_id: organizationId,
-        status: 'CONFIRMED',
+        status: 'PAID',
         updated_at: dateFilter,
       },
       include: {
