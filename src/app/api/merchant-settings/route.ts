@@ -41,7 +41,15 @@ export async function GET(request: NextRequest) {
       orderBy: { created_at: 'desc' },
     });
 
-    return apiResponse(settings);
+    // Include global feature flags in response for client-side checks
+    const settingsWithFeatures = settings.map(s => ({
+      ...s,
+      _features: {
+        wiseGloballyEnabled: config.features.wisePayments,
+      },
+    }));
+
+    return apiResponse(settingsWithFeatures);
   } catch (error) {
     log.error(`Failed to fetch merchant settings: ${error}`);
     return apiError('Failed to fetch merchant settings', 500);

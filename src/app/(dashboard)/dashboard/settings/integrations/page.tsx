@@ -6,6 +6,8 @@ import { XeroAccountMapping } from '@/components/dashboard/settings/xero-account
 import { getCurrentUser } from '@/lib/auth/session';
 import { getUserOrganization } from '@/lib/auth/get-org';
 import { redirect } from 'next/navigation';
+import { prisma } from '@/lib/server/prisma';
+import Link from 'next/link';
 
 export default async function IntegrationsPage() {
   // Get current user's organization with proper data isolation
@@ -22,6 +24,27 @@ export default async function IntegrationsPage() {
   }
 
   const organizationId = org.id;
+
+  // Fetch merchant settings to check Wise configuration
+  const merchantSettings = await prisma.merchant_settings.findFirst({
+    where: { organization_id: organizationId },
+    select: {
+      stripe_account_id: true,
+      hedera_account_id: true,
+      wise_profile_id: true,
+      wise_enabled: true,
+    },
+  });
+
+  const stripeConfigured = !!merchantSettings?.stripe_account_id;
+  const hederaConfigured = !!merchantSettings?.hedera_account_id;
+  const wiseConfigured = !!merchantSettings?.wise_enabled && !!merchantSettings?.wise_profile_id;
+  const wiseEnabled = !!merchantSettings?.wise_enabled;
+
+  // Mask profile ID for display
+  const maskedWiseProfileId = merchantSettings?.wise_profile_id 
+    ? `${merchantSettings.wise_profile_id.slice(0, 4)}****`
+    : null;
 
   return (
     <div className="space-y-6">
@@ -46,15 +69,17 @@ export default async function IntegrationsPage() {
                   </CardDescription>
                 </div>
               </div>
+              {stripeConfigured ? (
+                <Badge variant="default" className="bg-green-600">Connected</Badge>
+              ) : (
+                <Badge variant="secondary">Not Configured</Badge>
+              )}
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
-              <Badge variant="secondary">Configured in Settings</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Configure Stripe in Merchant Settings
-            </p>
+            <Link href="/dashboard/settings/merchant" className="text-sm text-primary hover:underline">
+              Configure in Merchant Settings →
+            </Link>
           </CardContent>
         </Card>
 
@@ -71,15 +96,51 @@ export default async function IntegrationsPage() {
                   </CardDescription>
                 </div>
               </div>
+              {hederaConfigured ? (
+                <Badge variant="default" className="bg-green-600">Connected</Badge>
+              ) : (
+                <Badge variant="secondary">Not Configured</Badge>
+              )}
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
-              <Badge variant="secondary">Configured in Settings</Badge>
+            <Link href="/dashboard/settings/merchant" className="text-sm text-primary hover:underline">
+              Configure in Merchant Settings →
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Wise Integration */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="text-3xl">🏦</div>
+                <div>
+                  <CardTitle>Wise (Bank Transfer)</CardTitle>
+                  <CardDescription className="mt-1">
+                    Accept bank transfer payments via Wise multi-currency accounts.
+                  </CardDescription>
+                </div>
+              </div>
+              {wiseConfigured ? (
+                <Badge variant="default" className="bg-emerald-600">Connected</Badge>
+              ) : wiseEnabled ? (
+                <Badge variant="outline" className="border-amber-500 text-amber-600">Enabled (Missing Profile ID)</Badge>
+              ) : (
+                <Badge variant="secondary">Not Configured</Badge>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Configure Hedera in Merchant Settings
-            </p>
+          </CardHeader>
+          <CardContent>
+            {wiseConfigured && maskedWiseProfileId && (
+              <p className="text-xs text-muted-foreground mb-2">
+                Profile ID: {maskedWiseProfileId}
+              </p>
+            )}
+            <Link href="/dashboard/settings/merchant" className="text-sm text-primary hover:underline">
+              Configure in Merchant Settings →
+            </Link>
           </CardContent>
         </Card>
 

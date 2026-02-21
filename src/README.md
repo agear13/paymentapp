@@ -70,3 +70,85 @@ DEFAULT_WISE_PROFILE_ID=84420198
 - Set `wise_currency` for the default payout currency
 
 When properly configured, customers will see real bank details (IBAN, account number, BIC/SWIFT) and a unique payment reference when selecting Wise as a payment method.
+
+## Manual Verification Checklist - Wise Payments
+
+Use this checklist to verify Wise payments are working correctly in development or production:
+
+### 1. Server Environment Setup
+
+```bash
+# Required environment variables (add to .env or Render)
+ENABLE_WISE_PAYMENTS=true
+WISE_API_TOKEN=your-wise-api-token
+DEFAULT_WISE_PROFILE_ID=84420198  # Your Wise Business profile ID
+```
+
+### 2. Merchant Settings Configuration
+
+1. Log in to the dashboard
+2. Navigate to **Settings → Merchant**
+3. Scroll to the **Wise (Bank Transfer)** section
+4. Verify:
+   - [ ] "Enable Wise Payments" toggle is ON
+   - [ ] Wise Profile ID is entered (numeric, e.g., `84420198`)
+   - [ ] Wise Currency is selected (or defaults to merchant currency)
+   - [ ] Green success message: "Wise is configured and will appear as a payment option"
+
+### 3. Integrations Page Verification
+
+1. Navigate to **Settings → Integrations**
+2. Verify:
+   - [ ] Wise card shows "Connected" badge (green)
+   - [ ] Profile ID is displayed (masked, e.g., `8442****`)
+
+### 4. Create Invoice with Wise
+
+1. Navigate to **Invoices** page
+2. Click **Create Invoice**
+3. Verify:
+   - [ ] "Bank transfer (Wise)" appears in payment method dropdown
+   - [ ] Wise option is NOT disabled/grayed out
+   - [ ] No warning message about Wise configuration
+4. Select "Bank transfer (Wise)" and create the invoice
+5. Copy the payment link URL
+
+### 5. Public Pay Page Verification
+
+1. Open the payment link URL in a new browser/incognito window
+2. Verify:
+   - [ ] Wise appears as a payment option: "Bank Transfer (Wise)"
+   - [ ] Click/select Wise payment option
+   - [ ] Click "Get payment details" button
+   - [ ] Real bank details are displayed (NOT "demo reference"):
+     - [ ] Amount and currency
+     - [ ] Recipient name
+     - [ ] IBAN or Account Number
+     - [ ] BIC/SWIFT code
+     - [ ] Bank name
+     - [ ] Payment reference (e.g., `PROVVY-abc123`)
+   - [ ] All fields have copy buttons that work
+   - [ ] Reference is prominently displayed with bold text
+
+### 6. Error Handling Verification
+
+Test these scenarios to ensure proper error messages:
+
+| Scenario | Expected Result |
+|----------|-----------------|
+| `ENABLE_WISE_PAYMENTS=false` | Wise section disabled in Merchant Settings |
+| Wise enabled but no Profile ID | Warning: "Wise is enabled but no Profile ID is set" |
+| Select Wise in create invoice when not configured | Error: "Wise payments are not configured" |
+| Public pay page when merchant Wise disabled | Wise option not shown |
+
+### 7. Render Deployment
+
+Add these environment variables in Render dashboard:
+
+```
+ENABLE_WISE_PAYMENTS=true
+WISE_API_TOKEN=<your-production-token>
+DEFAULT_WISE_PROFILE_ID=84420198
+```
+
+After deployment, repeat steps 2-5 to verify production setup.

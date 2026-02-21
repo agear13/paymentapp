@@ -10,7 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { CalendarIcon, Loader2 } from 'lucide-react';
+import { CalendarIcon, Loader2, AlertCircle, Settings } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -39,14 +39,24 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CurrencySelect } from './currency-select';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
-const PAYMENT_METHOD_OPTIONS = [
-  { value: 'STRIPE', label: 'Credit / Debit card (Stripe)' },
-  { value: 'HEDERA', label: 'Crypto (Hashpack)' },
-  { value: 'WISE', label: 'Bank transfer (Wise)' },
-] as const;
+interface PaymentMethodOption {
+  value: 'STRIPE' | 'HEDERA' | 'WISE';
+  label: string;
+  available: boolean;
+  unavailableReason?: string;
+}
+
+interface MerchantSettings {
+  stripeAccountId?: string;
+  hederaAccountId?: string;
+  wiseEnabled?: boolean;
+  wiseProfileId?: string;
+}
 
 // Form validation schema - SMB-friendly (customer contact details optional)
 const createPaymentLinkFormSchema = z.object({
@@ -116,10 +126,68 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   const [internalOpen, setInternalOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [descriptionLength, setDescriptionLength] = React.useState(0);
+  const [merchantSettings, setMerchantSettings] = React.useState<MerchantSettings | null>(null);
 
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
+
+  // Fetch merchant settings when dialog opens
+  React.useEffect(() => {
+    async function fetchMerchantSettings() {
+      if (!organizationId || !open) return;
+      
+      try {
+        const response = await fetch(`/api/merchant-settings?organizationId=${organizationId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0) {
+            const settings = data[0];
+            setMerchantSettings({
+              stripeAccountId: settings.stripe_account_id,
+              hederaAccountId: settings.hedera_account_id,
+              wiseEnabled: settings.wise_enabled,
+              wiseProfileId: settings.wise_profile_id,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch merchant settings:', error);
+      }
+    }
+
+    fetchMerchantSettings();
+  }, [organizationId, open]);
+
+  // Compute available payment methods based on merchant settings
+  const paymentMethodOptions = React.useMemo((): PaymentMethodOption[] => {
+    const wiseConfigured = merchantSettings?.wiseEnabled && merchantSettings?.wiseProfileId;
+    
+    return [
+      { 
+        value: 'STRIPE', 
+        label: 'Credit / Debit card (Stripe)', 
+        available: true 
+      },
+      { 
+        value: 'HEDERA', 
+        label: 'Crypto (Hashpack)', 
+        available: true 
+      },
+      { 
+        value: 'WISE', 
+        label: 'Bank transfer (Wise)', 
+        available: !!wiseConfigured,
+        unavailableReason: !merchantSettings?.wiseEnabled 
+          ? 'Wise payments not enabled' 
+          : !merchantSettings?.wiseProfileId 
+            ? 'Wise Profile ID not configured'
+            : undefined
+      },
+    ];
+  }, [merchantSettings]);
+
+  const wiseConfigured = merchantSettings?.wiseEnabled && merchantSettings?.wiseProfileId;
 
   const form = useForm<CreatePaymentLinkFormValues>({
     resolver: zodResolver(createPaymentLinkFormSchema),
@@ -158,6 +226,15 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   }, [defaultValues, open, form, defaultCurrency]);
 
   const handleSubmit = async (data: CreatePaymentLinkFormValues) => {
+    // Block submission if Wise is selected but not configured
+    if (data.paymentMethod === 'WISE' && !wiseConfigured) {
+      form.setError('root', {
+        type: 'manual',
+        message: 'Wise payments are not configured. Please set up Wise in Merchant Settings first.',
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -239,11 +316,21 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                     <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       value={field.value}
-                      onChange={(e) => field.onChange(e.target.value as 'STRIPE' | 'HEDERA' | 'WISE')}
+                      onChange={(e) => {
+                        const selectedValue = e.target.value as 'STRIPE' | 'HEDERA' | 'WISE';
+                        const option = paymentMethodOptions.find(opt => opt.value === selectedValue);
+                        if (option?.available) {
+                          field.onChange(selectedValue);
+                        }
+                      }}
                     >
-                      {PAYMENT_METHOD_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
+                      {paymentMethodOptions.map((opt) => (
+                        <option 
+                          key={opt.value} 
+                          value={opt.value}
+                          disabled={!opt.available}
+                        >
+                          {opt.label}{!opt.available ? ' (Not configured)' : ''}
                         </option>
                       ))}
                     </select>
@@ -255,6 +342,24 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                 </FormItem>
               )}
             />
+
+            {/* Wise not configured warning */}
+            {form.watch('paymentMethod') === 'WISE' && !wiseConfigured && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span>
+                    Wise payments are not fully configured. Please set up Wise in Merchant Settings first.
+                  </span>
+                  <Link href="/dashboard/settings/merchant">
+                    <Button variant="outline" size="sm" className="ml-2">
+                      <Settings className="h-4 w-4 mr-1" />
+                      Configure
+                    </Button>
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Amount and Currency */}
             <div className="grid grid-cols-2 gap-4">

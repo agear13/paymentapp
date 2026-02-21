@@ -23,8 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Loader2, Upload, X } from 'lucide-react';
+import { Loader2, Upload, X, Building2, AlertCircle, ExternalLink } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // ISO 4217 Currency codes - common ones
 const currencies = [
@@ -50,6 +52,13 @@ const merchantSettingsSchema = z.object({
     (val) => !val || /^0\.0\.\d+$/.test(val),
     'Hedera account ID must be in format 0.0.xxxxx'
   ),
+  // Wise settings
+  wiseProfileId: z.string().optional().refine(
+    (val) => !val || /^\d+$/.test(val),
+    'Wise Profile ID must be a numeric ID'
+  ),
+  wiseEnabled: z.boolean().optional(),
+  wiseCurrency: z.string().length(3, 'Currency must be a 3-letter ISO code').optional().or(z.literal('')),
 });
 
 type MerchantSettingsFormValues = z.infer<typeof merchantSettingsSchema>;
@@ -60,6 +69,7 @@ export function MerchantSettingsForm() {
   const [settingsId, setSettingsId] = React.useState<string | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = React.useState(false);
   const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
+  const [wiseGloballyEnabled, setWiseGloballyEnabled] = React.useState(true); // Default to true, will be updated from API
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const form = useForm<MerchantSettingsFormValues>({
@@ -70,6 +80,9 @@ export function MerchantSettingsForm() {
       defaultCurrency: 'USD',
       stripeAccountId: '',
       hederaAccountId: '',
+      wiseProfileId: '',
+      wiseEnabled: false,
+      wiseCurrency: '',
     },
   });
 
@@ -95,11 +108,19 @@ export function MerchantSettingsForm() {
               defaultCurrency: settings.default_currency || 'USD',
               stripeAccountId: settings.stripe_account_id || '',
               hederaAccountId: settings.hedera_account_id || '',
+              wiseProfileId: settings.wise_profile_id || '',
+              wiseEnabled: settings.wise_enabled || false,
+              wiseCurrency: settings.wise_currency || '',
             });
             
             // Set logo preview if URL exists
             if (settings.organization_logo_url) {
               setLogoPreview(settings.organization_logo_url);
+            }
+            
+            // Update global Wise feature flag from API response
+            if (settings._features?.wiseGloballyEnabled !== undefined) {
+              setWiseGloballyEnabled(settings._features.wiseGloballyEnabled);
             }
           }
         }
@@ -216,6 +237,9 @@ export function MerchantSettingsForm() {
             defaultCurrency: data.defaultCurrency,
             stripeAccountId: data.stripeAccountId || undefined,
             hederaAccountId: data.hederaAccountId || undefined,
+            wiseProfileId: data.wiseProfileId || undefined,
+            wiseEnabled: data.wiseEnabled,
+            wiseCurrency: data.wiseCurrency || undefined,
           }),
         });
 
@@ -236,6 +260,9 @@ export function MerchantSettingsForm() {
             defaultCurrency: data.defaultCurrency,
             stripeAccountId: data.stripeAccountId || undefined,
             hederaAccountId: data.hederaAccountId || undefined,
+            wiseProfileId: data.wiseProfileId || undefined,
+            wiseEnabled: data.wiseEnabled,
+            wiseCurrency: data.wiseCurrency || undefined,
           }),
         });
 
@@ -427,6 +454,127 @@ export function MerchantSettingsForm() {
             </FormItem>
           )}
         />
+
+        {/* Wise (Bank Transfer) Section */}
+        <div className="border-t pt-6 mt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Building2 className="h-5 w-5 text-emerald-600" />
+            <h3 className="text-lg font-semibold">Wise (Bank Transfer)</h3>
+          </div>
+
+          {!wiseGloballyEnabled ? (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Wise payments are not enabled on this environment. Contact your administrator to enable Wise.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="wiseEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Enable Wise Payments</FormLabel>
+                      <FormDescription>
+                        Allow customers to pay via bank transfer using Wise.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="wiseProfileId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Wise Profile ID</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="84420198" 
+                        {...field} 
+                        disabled={!form.watch('wiseEnabled')}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Your Wise Business profile ID (numeric).{' '}
+                      <a 
+                        href="https://api-docs.wise.com/api-reference/profile" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-emerald-600 hover:underline inline-flex items-center gap-1"
+                      >
+                        Find via Wise API: GET /v2/profiles (id field)
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="wiseCurrency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Wise Currency</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value || ''} 
+                      disabled={!form.watch('wiseEnabled')}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select currency (defaults to merchant currency)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">Use default currency</SelectItem>
+                        {currencies.map((currency) => (
+                          <SelectItem key={currency.code} value={currency.code}>
+                            {currency.code} - {currency.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Currency for Wise bank details. Defaults to your merchant default currency.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {form.watch('wiseEnabled') && !form.watch('wiseProfileId') && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Wise is enabled but no Profile ID is set. Wise will not appear as a payment option until you add your Profile ID.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {form.watch('wiseEnabled') && form.watch('wiseProfileId') && (
+                <Alert className="border-emerald-200 bg-emerald-50">
+                  <Building2 className="h-4 w-4 text-emerald-600" />
+                  <AlertDescription className="text-emerald-800">
+                    Wise is configured and will appear as a payment option on your invoices.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="flex justify-end">
           <Button type="submit" disabled={form.formState.isSubmitting || isLoading}>
