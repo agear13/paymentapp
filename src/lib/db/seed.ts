@@ -11,6 +11,7 @@ config({ path: resolve(__dirname, '../../.env.local') });
 
 import { logger } from '@/lib/logger';
 import { prisma } from '../server/prisma';
+import config from '../config/env';
 
 // ============================================================================
 // SEED DATA
@@ -100,6 +101,15 @@ const seedMerchantSettings = async (organizations: any[]) => {
       continue;
     }
     
+    // Resolve Wise defaults for new merchant settings
+    const wiseProfileId = config.wise.defaultProfileId;
+    const wiseEnabled = true; // Auto-enable for new orgs
+    const wiseCurrency = 'AUD';
+
+    if (wiseEnabled && !wiseProfileId) {
+      logger.warn(`Wise enabled for ${org.name} but no profile ID. Set DEFAULT_WISE_PROFILE_ID or WISE_PROFILE_ID.`);
+    }
+
     const settings = await prisma.merchant_settings.create({
       data: {
         organization_id: org.id,
@@ -107,7 +117,10 @@ const seedMerchantSettings = async (organizations: any[]) => {
         default_currency: 'AUD',
         stripe_account_id: `acct_test_${org.clerk_org_id}`,
         hedera_account_id: org.clerk_org_id === 'org_dev_001' ? '0.0.12345' : '0.0.67890',
-      },
+        wise_profile_id: wiseProfileId,
+        wise_enabled: wiseEnabled,
+        wise_currency: wiseCurrency,
+      } as Parameters<typeof prisma.merchant_settings.create>[0]['data'],
     });
     
     merchantSettings.push(settings);

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/server/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
 import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
+import config from '@/lib/config/env';
 
 const createMerchantSettingsSchema = z.object({
   organizationId: z.string().uuid(),
@@ -64,6 +65,25 @@ export async function POST(request: NextRequest) {
 
     // TODO: Check if user has permission to create settings for this organization
 
+    // Resolve Wise defaults for new merchant settings (auto-enable for beta orgs)
+    // Only apply defaults if caller did NOT explicitly provide these values
+    const resolvedWiseProfileId = body.wiseProfileId !== undefined 
+      ? body.wiseProfileId 
+      : config.wise.defaultProfileId;
+    
+    const resolvedWiseEnabled = body.wiseEnabled !== undefined 
+      ? body.wiseEnabled 
+      : true; // Default to enabled for new orgs
+    
+    const resolvedWiseCurrency = body.wiseCurrency !== undefined 
+      ? body.wiseCurrency 
+      : (body.defaultCurrency || 'AUD');
+
+    // DEV warning if Wise is enabled but no profile ID
+    if (resolvedWiseEnabled && !resolvedWiseProfileId && config.isDevelopment) {
+      log.warn(`Wise enabled for new merchant settings but no profile ID available. Wise won't show on public pay page. Set DEFAULT_WISE_PROFILE_ID or WISE_PROFILE_ID env var.`);
+    }
+
     // Build create data, including wise fields (may not be in generated types yet)
     const createData: Record<string, unknown> = {
       organization_id: body.organizationId,
@@ -71,16 +91,16 @@ export async function POST(request: NextRequest) {
       default_currency: body.defaultCurrency,
       stripe_account_id: body.stripeAccountId,
       hedera_account_id: body.hederaAccountId,
-      wise_profile_id: body.wiseProfileId,
-      wise_enabled: body.wiseEnabled ?? false,
-      wise_currency: body.wiseCurrency,
+      wise_profile_id: resolvedWiseProfileId,
+      wise_enabled: resolvedWiseEnabled,
+      wise_currency: resolvedWiseCurrency,
     };
 
     const settings = await prisma.merchant_settings.create({
       data: createData as Parameters<typeof prisma.merchant_settings.create>[0]['data'],
     });
 
-    log.info(`Created merchant settings: ${settings.id} for org ${body.organizationId}`);
+    log.info(`Created merchant settings: ${settings.id} for org ${body.organizationId} (wise_enabled=${resolvedWiseEnabled}, wise_profile_id=${resolvedWiseProfileId ? 'set' : 'null'})`);
 
     return apiResponse(settings, 201);
   } catch (error) {

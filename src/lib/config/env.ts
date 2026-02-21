@@ -54,6 +54,8 @@ const envSchema = z.object({
   WISE_API_TOKEN: z.string().optional(),
   WISE_PROFILE_ID: z.string().optional(),
   WISE_WEBHOOK_SECRET: z.string().optional(),
+  // Default Wise profile ID for new merchant settings (auto-enable Wise for new orgs)
+  DEFAULT_WISE_PROFILE_ID: z.string().optional(),
 
   // Feature Flags
   ENABLE_HEDERA_PAYMENTS: z.string().optional().default('true'),
@@ -115,6 +117,7 @@ function validateEnv() {
       WISE_API_TOKEN: process.env.WISE_API_TOKEN,
       WISE_PROFILE_ID: process.env.WISE_PROFILE_ID,
       WISE_WEBHOOK_SECRET: process.env.WISE_WEBHOOK_SECRET,
+      DEFAULT_WISE_PROFILE_ID: process.env.DEFAULT_WISE_PROFILE_ID,
       ADMIN_EMAIL_ALLOWLIST: process.env.ADMIN_EMAIL_ALLOWLIST,
       SENTRY_DSN: process.env.SENTRY_DSN,
     };
@@ -215,6 +218,8 @@ export const config = {
     profileId: env.WISE_PROFILE_ID,
     webhookSecret: env.WISE_WEBHOOK_SECRET,
     isConfigured: !!(env.WISE_API_TOKEN && env.WISE_PROFILE_ID),
+    // Default profile ID for new merchant settings (auto-enable Wise for new orgs)
+    defaultProfileId: env.DEFAULT_WISE_PROFILE_ID || env.WISE_PROFILE_ID || null,
   },
 
   // Feature Flags
@@ -265,6 +270,8 @@ if (config.isDevelopment) {
   console.log('    wisePayments (computed):', config.features.wisePayments);
   console.log('    WISE_API_TOKEN present:', !!env.WISE_API_TOKEN);
   console.log('    WISE_PROFILE_ID present:', !!env.WISE_PROFILE_ID);
+  console.log('    DEFAULT_WISE_PROFILE_ID present:', !!env.DEFAULT_WISE_PROFILE_ID);
+  console.log('    defaultProfileId (resolved):', config.wise.defaultProfileId || '(none)');
 }
 
 // Validate beta environment consistency

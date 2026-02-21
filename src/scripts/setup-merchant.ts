@@ -7,6 +7,7 @@
 
 import { randomUUID } from 'crypto';
 import { prisma } from '../lib/server/prisma';
+import config from '../lib/config/env';
 
 async function setupMerchant() {
   try {
@@ -64,6 +65,15 @@ async function setupMerchant() {
       } else {
         console.log('  📝 Creating new merchant settings...');
 
+        // Resolve Wise defaults for new merchant settings
+        const wiseProfileId = config.wise.defaultProfileId;
+        const wiseEnabled = true; // Auto-enable for new orgs
+        const wiseCurrency = 'USD';
+
+        if (wiseEnabled && !wiseProfileId) {
+          console.log('  ⚠️  Warning: Wise enabled but no profile ID. Set DEFAULT_WISE_PROFILE_ID or WISE_PROFILE_ID.');
+        }
+
         await prisma.merchant_settings.create({
           data: {
             id: randomUUID(),
@@ -72,12 +82,16 @@ async function setupMerchant() {
             default_currency: 'USD',
             stripe_account_id: 'acct_test_' + Math.random().toString(36).substring(7),
             hedera_account_id: '0.0.1234', // Test account
+            wise_profile_id: wiseProfileId,
+            wise_enabled: wiseEnabled,
+            wise_currency: wiseCurrency,
             created_at: new Date(),
             updated_at: new Date(),
-          },
+          } as Parameters<typeof prisma.merchant_settings.create>[0]['data'],
         });
 
         console.log('  ✅ Merchant settings created with test payment methods!');
+        console.log(`     Wise: enabled=${wiseEnabled}, profile_id=${wiseProfileId || '(none)'}`);
       }
     }
 
