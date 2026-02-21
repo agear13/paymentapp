@@ -8,7 +8,6 @@ datasource db {
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
-
 model audit_logs {
   id              String         @id @default(uuid()) @db.Uuid
   organization_id String?        @db.Uuid
@@ -71,63 +70,63 @@ model ledger_entries {
 }
 
 model merchant_settings {
-  id                            String        @id @default(uuid()) @db.Uuid
-  organization_id               String        @db.Uuid
-  display_name                  String        @db.VarChar(255)
-  default_currency              String        @db.Char(3)
-  stripe_account_id             String?       @db.VarChar(255)
-  hedera_account_id             String?       @db.VarChar(50)
-  
+  id                String  @id @default(uuid()) @db.Uuid
+  organization_id   String  @db.Uuid
+  display_name      String  @db.VarChar(255)
+  default_currency  String  @db.Char(3)
+  stripe_account_id String? @db.VarChar(255)
+  hedera_account_id String? @db.VarChar(50)
+
   // Sprint 26: Invoice UX Improvements
-  organization_logo_url         String?       @db.VarChar(1024)
-  
+  organization_logo_url String? @db.VarChar(1024)
+
   // Xero Account Mappings
-  xero_revenue_account_id       String?       @db.VarChar(255)
-  xero_receivable_account_id    String?       @db.VarChar(255)
-  xero_stripe_clearing_account_id String?     @db.VarChar(255)
-  xero_hbar_clearing_account_id String?       @db.VarChar(255)
-  xero_usdc_clearing_account_id String?       @db.VarChar(255)
-  xero_usdt_clearing_account_id String?       @db.VarChar(255)
-  xero_audd_clearing_account_id String?       @db.VarChar(255)
-  xero_wise_clearing_account_id String?       @db.VarChar(255)
-  xero_fee_expense_account_id   String?       @db.VarChar(255)
-  
+  xero_revenue_account_id         String? @db.VarChar(255)
+  xero_receivable_account_id      String? @db.VarChar(255)
+  xero_stripe_clearing_account_id String? @db.VarChar(255)
+  xero_hbar_clearing_account_id   String? @db.VarChar(255)
+  xero_usdc_clearing_account_id   String? @db.VarChar(255)
+  xero_usdt_clearing_account_id   String? @db.VarChar(255)
+  xero_audd_clearing_account_id   String? @db.VarChar(255)
+  xero_wise_clearing_account_id   String? @db.VarChar(255)
+  xero_fee_expense_account_id     String? @db.VarChar(255)
+
   // Wise (payment links): profile id for API; null = Wise not enabled
-  wise_profile_id               String?       @db.VarChar(255)
-  
+  wise_profile_id String? @db.VarChar(255)
+
   // Sprint 25: Multi-Currency Enhancement
-  enabled_currencies                String[]      @default(["USD", "AUD"])
-  show_symbols_in_ui                Boolean       @default(true)
-  show_codes_in_ui                  Boolean       @default(false)
-  auto_refresh_rates                Boolean       @default(true)
-  rate_refresh_interval_minutes     Int           @default(5)
-  
-  created_at                    DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at                    DateTime      @updatedAt @db.Timestamptz(6)
-  organizations                 organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  enabled_currencies            String[] @default(["USD", "AUD"])
+  show_symbols_in_ui            Boolean  @default(true)
+  show_codes_in_ui              Boolean  @default(false)
+  auto_refresh_rates            Boolean  @default(true)
+  rate_refresh_interval_minutes Int      @default(5)
+
+  created_at    DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime      @updatedAt @db.Timestamptz(6)
+  organizations organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 model organizations {
-  id                        String                          @id @default(uuid()) @db.Uuid
-  clerk_org_id              String                          @unique @db.VarChar(255)
-  name                      String                          @db.VarChar(255)
-  created_at                DateTime                        @default(now()) @db.Timestamptz(6)
-  audit_logs                audit_logs[]
-  ledger_accounts           ledger_accounts[]
-  merchant_settings         merchant_settings[]
-  payment_links             payment_links[]
-  referral_links            referral_links[]
-  xero_connections          xero_connections?
-  notifications             notifications[]
-  notification_preferences  notification_preferences[]
+  id                           String                         @id @default(uuid()) @db.Uuid
+  clerk_org_id                 String                         @unique @db.VarChar(255)
+  name                         String                         @db.VarChar(255)
+  created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  audit_logs                   audit_logs[]
+  ledger_accounts              ledger_accounts[]
+  merchant_settings            merchant_settings[]
+  payment_links                payment_links[]
+  referral_links               referral_links[]
+  xero_connections             xero_connections?
+  notifications                notifications[]
+  notification_preferences     notification_preferences[]
   // Sprint 25: Multi-Currency Enhancement
-  currency_configs          currency_configs[]
-  fx_rate_overrides         fx_rate_overrides[]
+  currency_configs             currency_configs[]
+  fx_rate_overrides            fx_rate_overrides[]
   currency_display_preferences currency_display_preferences[]
-  user_organizations        user_organizations[]
+  user_organizations           user_organizations[]
   // Manual payouts (Option B)
-  payout_methods            payout_methods[]
-  payout_batches            payout_batches[]
+  payout_methods               payout_methods[]
+  payout_batches               payout_batches[]
 }
 
 model user_organizations {
@@ -161,10 +160,10 @@ model payment_events {
   created_at               DateTime         @default(now()) @db.Timestamptz(6)
   payment_links            payment_links    @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
 
+  @@index([payment_link_id, correlation_id], name: "payment_events_payment_link_correlation_idx")
   @@index([payment_link_id, created_at])
   @@index([stripe_event_id])
   @@index([wise_transfer_id])
-  @@unique([payment_link_id, correlation_id], name: "payment_events_payment_link_correlation_unique")
 }
 
 model payment_links {
@@ -172,7 +171,7 @@ model payment_links {
   organization_id   String            @db.Uuid
   short_code        String            @unique @db.VarChar(8)
   status            PaymentLinkStatus @default(DRAFT)
-  payment_method    PaymentMethod?    // STRIPE | HEDERA | WISE (null = legacy, all methods)
+  payment_method    PaymentMethod? // STRIPE | HEDERA | WISE (null = legacy, all methods)
   amount            Decimal           @db.Decimal(18, 2)
   currency          String            @db.Char(3)
   description       String
@@ -181,33 +180,33 @@ model payment_links {
   customer_phone    String?           @db.VarChar(50)
   customer_name     String?           @db.VarChar(255)
   expires_at        DateTime?         @db.Timestamptz(6)
-  
+
   // Sprint 26: Invoice UX Improvements
-  due_date          DateTime?         @db.Timestamptz(6)
-  xero_invoice_number String?         @db.VarChar(255)
-  
+  due_date            DateTime? @db.Timestamptz(6)
+  xero_invoice_number String?   @db.VarChar(255)
+
   // Sprint 25: Multi-Currency Enhancement
-  customer_selected_currency    String?           @db.Char(3)
-  conversion_rate_at_creation   Decimal?          @db.Decimal(18, 8)
-  base_amount                   Decimal?          @db.Decimal(18, 2)
-  base_currency                 String?           @db.Char(3)
-  
+  customer_selected_currency  String?  @db.Char(3)
+  conversion_rate_at_creation Decimal? @db.Decimal(18, 8)
+  base_amount                 Decimal? @db.Decimal(18, 2)
+  base_currency               String?  @db.Char(3)
+
   // Wise-specific (when payment_method = WISE)
-  wise_quote_id           String?           @db.VarChar(255)
-  wise_transfer_id        String?           @db.VarChar(255)
-  wise_status             String?           @db.VarChar(50)
-  wise_received_amount    Decimal?          @db.Decimal(18, 8)
-  wise_received_currency  String?           @db.Char(3)
-  
-  created_at        DateTime          @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime          @db.Timestamptz(6)
-  fx_snapshots      fx_snapshots[]
-  ledger_entries    ledger_entries[]
-  payment_events    payment_events[]
-  organizations     organizations     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-  xero_syncs        xero_syncs[]
+  wise_quote_id          String?  @db.VarChar(255)
+  wise_transfer_id       String?  @db.VarChar(255)
+  wise_status            String?  @db.VarChar(50)
+  wise_received_amount   Decimal? @db.Decimal(18, 8)
+  wise_received_currency String?  @db.Char(3)
+
+  created_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime                  @db.Timestamptz(6)
+  fx_snapshots            fx_snapshots[]
+  ledger_entries          ledger_entries[]
+  payment_events          payment_events[]
+  organizations           organizations             @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  xero_syncs              xero_syncs[]
   multi_currency_invoices multi_currency_invoices[]
-  commission_obligations commission_obligations[]
+  commission_obligations  commission_obligations[]
 
   @@index([organization_id, status])
   @@index([due_date])
@@ -268,22 +267,22 @@ model notifications {
 }
 
 model email_logs {
-  id                String        @id @default(uuid()) @db.Uuid
-  notification_id   String?       @db.Uuid
-  to_email          String        @db.VarChar(255)
-  from_email        String        @db.VarChar(255)
-  subject           String        @db.VarChar(500)
-  template_name     String        @db.VarChar(100)
+  id                String         @id @default(uuid()) @db.Uuid
+  notification_id   String?        @db.Uuid
+  to_email          String         @db.VarChar(255)
+  from_email        String         @db.VarChar(255)
+  subject           String         @db.VarChar(500)
+  template_name     String         @db.VarChar(100)
   template_data     Json?
-  status            EmailStatus   @default(PENDING)
-  provider_id       String?       @db.VarChar(255)
+  status            EmailStatus    @default(PENDING)
+  provider_id       String?        @db.VarChar(255)
   provider_response Json?
   error_message     String?
-  opened_at         DateTime?     @db.Timestamptz(6)
-  clicked_at        DateTime?     @db.Timestamptz(6)
-  bounced_at        DateTime?     @db.Timestamptz(6)
-  created_at        DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime      @updatedAt @db.Timestamptz(6)
+  opened_at         DateTime?      @db.Timestamptz(6)
+  clicked_at        DateTime?      @db.Timestamptz(6)
+  bounced_at        DateTime?      @db.Timestamptz(6)
+  created_at        DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime       @updatedAt @db.Timestamptz(6)
   notifications     notifications? @relation(fields: [notification_id], references: [id], onDelete: SetNull)
 
   @@index([status, created_at(sort: Desc)])
@@ -442,82 +441,82 @@ enum CommissionObligationLineStatus {
 // ============================================================================
 
 model currency_configs {
-  id                        String        @id @default(uuid()) @db.Uuid
-  organization_id           String        @db.Uuid
-  currency_code             String        @db.Char(3)
-  is_enabled                Boolean       @default(true)
-  is_default                Boolean       @default(false)
-  display_priority          Int           @default(0)
-  custom_symbol             String?       @db.VarChar(10)
-  custom_decimal_places     Int?
-  xero_clearing_account_id  String?       @db.VarChar(255)
-  created_at                DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at                DateTime      @updatedAt @db.Timestamptz(6)
-  organizations             organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  id                       String        @id @default(uuid()) @db.Uuid
+  organization_id          String        @db.Uuid
+  currency_code            String        @db.Char(3)
+  is_enabled               Boolean       @default(true)
+  is_default               Boolean       @default(false)
+  display_priority         Int           @default(0)
+  custom_symbol            String?       @db.VarChar(10)
+  custom_decimal_places    Int?
+  xero_clearing_account_id String?       @db.VarChar(255)
+  created_at               DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime      @updatedAt @db.Timestamptz(6)
+  organizations            organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 
   @@unique([organization_id, currency_code])
   @@index([organization_id, is_enabled])
 }
 
 model fx_rate_history {
-  id              String    @id @default(uuid()) @db.Uuid
-  base_currency   String    @db.Char(3)
-  quote_currency  String    @db.Char(3)
-  rate            Decimal   @db.Decimal(18, 8)
-  provider        String    @db.VarChar(100)
-  recorded_at     DateTime  @default(now()) @db.Timestamptz(6)
-  metadata        Json?
+  id             String   @id @default(uuid()) @db.Uuid
+  base_currency  String   @db.Char(3)
+  quote_currency String   @db.Char(3)
+  rate           Decimal  @db.Decimal(18, 8)
+  provider       String   @db.VarChar(100)
+  recorded_at    DateTime @default(now()) @db.Timestamptz(6)
+  metadata       Json?
 
   @@index([base_currency, quote_currency, recorded_at(sort: Desc)])
   @@index([recorded_at(sort: Desc)])
 }
 
 model fx_rate_overrides {
-  id                String        @id @default(uuid()) @db.Uuid
-  organization_id   String        @db.Uuid
-  base_currency     String        @db.Char(3)
-  quote_currency    String        @db.Char(3)
-  override_rate     Decimal       @db.Decimal(18, 8)
-  effective_from    DateTime      @db.Timestamptz(6)
-  effective_until   DateTime?     @db.Timestamptz(6)
-  reason            String?
-  created_by        String?       @db.VarChar(255)
-  created_at        DateTime      @default(now()) @db.Timestamptz(6)
-  organizations     organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  id              String        @id @default(uuid()) @db.Uuid
+  organization_id String        @db.Uuid
+  base_currency   String        @db.Char(3)
+  quote_currency  String        @db.Char(3)
+  override_rate   Decimal       @db.Decimal(18, 8)
+  effective_from  DateTime      @db.Timestamptz(6)
+  effective_until DateTime?     @db.Timestamptz(6)
+  reason          String?
+  created_by      String?       @db.VarChar(255)
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  organizations   organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 
   @@unique([organization_id, base_currency, quote_currency, effective_from])
   @@index([organization_id])
 }
 
 model currency_display_preferences {
-  id                  String        @id @default(uuid()) @db.Uuid
-  organization_id     String        @db.Uuid
-  currency_code       String        @db.Char(3)
-  display_format      String        @default("symbol_amount_code") @db.VarChar(50)
-  thousand_separator  String        @default(",") @db.VarChar(5)
-  decimal_separator   String        @default(".") @db.VarChar(5)
-  symbol_position     String        @default("before") @db.VarChar(10)
-  space_after_symbol  Boolean       @default(false)
-  created_at          DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime      @updatedAt @db.Timestamptz(6)
-  organizations       organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  id                 String        @id @default(uuid()) @db.Uuid
+  organization_id    String        @db.Uuid
+  currency_code      String        @db.Char(3)
+  display_format     String        @default("symbol_amount_code") @db.VarChar(50)
+  thousand_separator String        @default(",") @db.VarChar(5)
+  decimal_separator  String        @default(".") @db.VarChar(5)
+  symbol_position    String        @default("before") @db.VarChar(10)
+  space_after_symbol Boolean       @default(false)
+  created_at         DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime      @updatedAt @db.Timestamptz(6)
+  organizations      organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 
   @@unique([organization_id, currency_code])
   @@index([organization_id])
 }
 
 model multi_currency_invoices {
-  id                String        @id @default(uuid()) @db.Uuid
-  payment_link_id   String        @db.Uuid
-  invoice_currency  String        @db.Char(3)
-  line_items        Json
-  subtotal          Decimal       @db.Decimal(18, 2)
-  tax_amount        Decimal       @default(0) @db.Decimal(18, 2)
-  total_amount      Decimal       @db.Decimal(18, 2)
-  conversion_rates  Json?
-  created_at        DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime      @updatedAt @db.Timestamptz(6)
-  payment_links     payment_links @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+  id               String        @id @default(uuid()) @db.Uuid
+  payment_link_id  String        @db.Uuid
+  invoice_currency String        @db.Char(3)
+  line_items       Json
+  subtotal         Decimal       @db.Decimal(18, 2)
+  tax_amount       Decimal       @default(0) @db.Decimal(18, 2)
+  total_amount     Decimal       @db.Decimal(18, 2)
+  conversion_rates Json?
+  created_at       DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime      @updatedAt @db.Timestamptz(6)
+  payment_links    payment_links @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
 
   @@index([payment_link_id])
 }
@@ -527,17 +526,17 @@ model multi_currency_invoices {
 // ============================================================================
 
 model referral_links {
-  id                String            @id @default(uuid()) @db.Uuid
-  organization_id   String            @db.Uuid
-  created_by_user_id String?          @db.VarChar(255)
-  code              String            @unique @db.VarChar(50)
-  status            ReferralLinkStatus @default(ACTIVE)
-  checkout_config   Json?
-  created_at        DateTime          @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime          @updatedAt @db.Timestamptz(6)
-  organizations     organizations     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-  referral_rules    referral_rules[]
-  referral_link_splits referral_link_splits[]
+  id                     String                   @id @default(uuid()) @db.Uuid
+  organization_id        String                   @db.Uuid
+  created_by_user_id     String?                  @db.VarChar(255)
+  code                   String                   @unique @db.VarChar(50)
+  status                 ReferralLinkStatus       @default(ACTIVE)
+  checkout_config        Json?
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @updatedAt @db.Timestamptz(6)
+  organizations          organizations            @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  referral_rules         referral_rules[]
+  referral_link_splits   referral_link_splits[]
   commission_obligations commission_obligations[]
 
   @@index([organization_id])
@@ -546,48 +545,48 @@ model referral_links {
 }
 
 model referral_link_splits {
-  id                String            @id @default(uuid()) @db.Uuid
-  referral_link_id  String            @db.Uuid
-  label             String            @db.Text
-  percentage        Decimal           @db.Decimal(10, 4)
-  beneficiary_id    String?           @db.Uuid
-  sort_order        Int               @default(0)
-  created_at        DateTime          @default(now()) @db.Timestamptz(6)
-  referral_links    referral_links    @relation(fields: [referral_link_id], references: [id], onDelete: Cascade)
+  id                          String                        @id @default(uuid()) @db.Uuid
+  referral_link_id            String                        @db.Uuid
+  label                       String                        @db.Text
+  percentage                  Decimal                       @db.Decimal(10, 4)
+  beneficiary_id              String?                       @db.Uuid
+  sort_order                  Int                           @default(0)
+  created_at                  DateTime                      @default(now()) @db.Timestamptz(6)
+  referral_links              referral_links                @relation(fields: [referral_link_id], references: [id], onDelete: Cascade)
   commission_obligation_items commission_obligation_items[]
 
   @@index([referral_link_id])
 }
 
 model referral_rules {
-  id                String            @id @default(uuid()) @db.Uuid
-  referral_link_id  String            @db.Uuid
-  consultant_id     String?           @db.Uuid
-  bd_partner_id     String?           @db.Uuid
-  consultant_pct    Decimal           @db.Decimal(5, 4)
-  bd_partner_pct    Decimal           @db.Decimal(5, 4)
-  basis             CommissionBasis    @default(GROSS)
-  min_cap           Decimal?          @db.Decimal(18, 2)
-  max_cap           Decimal?          @db.Decimal(18, 2)
-  created_at        DateTime          @default(now()) @db.Timestamptz(6)
-  referral_links     referral_links     @relation(fields: [referral_link_id], references: [id], onDelete: Cascade)
+  id               String          @id @default(uuid()) @db.Uuid
+  referral_link_id String          @db.Uuid
+  consultant_id    String?         @db.Uuid
+  bd_partner_id    String?         @db.Uuid
+  consultant_pct   Decimal         @db.Decimal(5, 4)
+  bd_partner_pct   Decimal         @db.Decimal(5, 4)
+  basis            CommissionBasis @default(GROSS)
+  min_cap          Decimal?        @db.Decimal(18, 2)
+  max_cap          Decimal?        @db.Decimal(18, 2)
+  created_at       DateTime        @default(now()) @db.Timestamptz(6)
+  referral_links   referral_links  @relation(fields: [referral_link_id], references: [id], onDelete: Cascade)
 
   @@index([referral_link_id])
 }
 
 model commission_obligations {
-  id                String                  @id @default(uuid()) @db.Uuid
-  payment_link_id   String                  @db.Uuid
-  referral_link_id  String                  @db.Uuid
-  stripe_event_id   String                  @db.VarChar(255)
-  consultant_amount Decimal                 @db.Decimal(18, 8)
-  bd_partner_amount Decimal                 @db.Decimal(18, 8)
-  currency          String                  @db.Char(3)
-  status            CommissionObligationStatus @default(CREATED)
-  correlation_id    String?                 @db.VarChar(255)
-  created_at        DateTime                @default(now()) @db.Timestamptz(6)
-  payment_links     payment_links           @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
-  referral_links    referral_links          @relation(fields: [referral_link_id], references: [id], onDelete: Cascade)
+  id                String                        @id @default(uuid()) @db.Uuid
+  payment_link_id   String                        @db.Uuid
+  referral_link_id  String                        @db.Uuid
+  stripe_event_id   String                        @db.VarChar(255)
+  consultant_amount Decimal                       @db.Decimal(18, 8)
+  bd_partner_amount Decimal                       @db.Decimal(18, 8)
+  currency          String                        @db.Char(3)
+  status            CommissionObligationStatus    @default(CREATED)
+  correlation_id    String?                       @db.VarChar(255)
+  created_at        DateTime                      @default(now()) @db.Timestamptz(6)
+  payment_links     payment_links                 @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+  referral_links    referral_links                @relation(fields: [referral_link_id], references: [id], onDelete: Cascade)
   obligation_lines  commission_obligation_lines[]
   obligation_items  commission_obligation_items[]
 
@@ -605,18 +604,18 @@ enum CommissionObligationItemStatus {
 }
 
 model commission_obligation_items {
-  id                  String                        @id @default(uuid()) @db.Uuid
-  commission_obligation_id String                    @db.Uuid
-  split_id            String                        @db.Uuid
-  amount              Decimal                       @db.Decimal(20, 8)
-  currency            String                        @db.Char(3)
-  status              CommissionObligationItemStatus @default(POSTED)
-  payout_id           String?                       @db.Uuid
-  paid_at             DateTime?                     @db.Timestamptz(6)
-  created_at          DateTime                      @default(now()) @db.Timestamptz(6)
-  commission_obligations commission_obligations      @relation(fields: [commission_obligation_id], references: [id], onDelete: Cascade)
-  referral_link_splits referral_link_splits        @relation(fields: [split_id], references: [id], onDelete: Cascade)
-  payouts             payouts?                     @relation(fields: [payout_id], references: [id], onDelete: SetNull)
+  id                       String                         @id @default(uuid()) @db.Uuid
+  commission_obligation_id String                         @db.Uuid
+  split_id                 String                         @db.Uuid
+  amount                   Decimal                        @db.Decimal(20, 8)
+  currency                 String                         @db.Char(3)
+  status                   CommissionObligationItemStatus @default(POSTED)
+  payout_id                String?                        @db.Uuid
+  paid_at                  DateTime?                      @db.Timestamptz(6)
+  created_at               DateTime                       @default(now()) @db.Timestamptz(6)
+  commission_obligations   commission_obligations         @relation(fields: [commission_obligation_id], references: [id], onDelete: Cascade)
+  referral_link_splits     referral_link_splits           @relation(fields: [split_id], references: [id], onDelete: Cascade)
+  payouts                  payouts?                       @relation(fields: [payout_id], references: [id], onDelete: SetNull)
 
   @@index([commission_obligation_id])
   @@index([split_id])
@@ -624,18 +623,18 @@ model commission_obligation_items {
 }
 
 model commission_obligation_lines {
-  id              String                        @id @default(uuid()) @db.Uuid
-  obligation_id   String                        @db.Uuid
-  payee_user_id   String                        @db.VarChar(255)
-  role            String                        @db.VarChar(50)
-  amount          Decimal                       @db.Decimal(18, 8)
-  currency        String                        @db.Char(3)
-  status          CommissionObligationLineStatus @default(POSTED)
-  payout_id       String?                       @db.Uuid
-  paid_at         DateTime?                     @db.Timestamptz(6)
-  created_at      DateTime                      @default(now()) @db.Timestamptz(6)
-  commission_obligations commission_obligations @relation(fields: [obligation_id], references: [id], onDelete: Cascade)
-  payouts         payouts?                      @relation(fields: [payout_id], references: [id], onDelete: SetNull)
+  id                     String                         @id @default(uuid()) @db.Uuid
+  obligation_id          String                         @db.Uuid
+  payee_user_id          String                         @db.VarChar(255)
+  role                   String                         @db.VarChar(50)
+  amount                 Decimal                        @db.Decimal(18, 8)
+  currency               String                         @db.Char(3)
+  status                 CommissionObligationLineStatus @default(POSTED)
+  payout_id              String?                        @db.Uuid
+  paid_at                DateTime?                      @db.Timestamptz(6)
+  created_at             DateTime                       @default(now()) @db.Timestamptz(6)
+  commission_obligations commission_obligations         @relation(fields: [obligation_id], references: [id], onDelete: Cascade)
+  payouts                payouts?                       @relation(fields: [payout_id], references: [id], onDelete: SetNull)
 
   @@index([obligation_id])
   @@index([payee_user_id, status])
@@ -643,19 +642,19 @@ model commission_obligation_lines {
 }
 
 model payout_methods {
-  id                 String           @id @default(uuid()) @db.Uuid
-  organization_id    String           @db.Uuid
-  user_id            String           @db.VarChar(255)
-  method_type        PayoutMethodType
-  handle             String?          @db.VarChar(255)
-  notes              String?          @db.Text
-  is_default         Boolean          @default(false)
-  status             String           @default("ACTIVE") @db.VarChar(50)
-  hedera_account_id  String?          @db.VarChar(50)
-  created_at         DateTime         @default(now()) @db.Timestamptz(6)
-  updated_at         DateTime         @updatedAt @db.Timestamptz(6)
-  organizations      organizations    @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-  payouts            payouts[]
+  id                String           @id @default(uuid()) @db.Uuid
+  organization_id   String           @db.Uuid
+  user_id           String           @db.VarChar(255)
+  method_type       PayoutMethodType
+  handle            String?          @db.VarChar(255)
+  notes             String?          @db.Text
+  is_default        Boolean          @default(false)
+  status            String           @default("ACTIVE") @db.VarChar(50)
+  hedera_account_id String?          @db.VarChar(50)
+  created_at        DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime         @updatedAt @db.Timestamptz(6)
+  organizations     organizations    @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  payouts           payouts[]
 
   @@index([organization_id, user_id])
 }
@@ -668,7 +667,7 @@ model payout_batches {
   payout_count    Int               @default(0)
   total_amount    Decimal           @default(0) @db.Decimal(18, 8)
   created_by      String?           @db.VarChar(255)
-  created_at      DateTime         @default(now()) @db.Timestamptz(6)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
   submitted_at    DateTime?         @db.Timestamptz(6)
   completed_at    DateTime?         @db.Timestamptz(6)
   organizations   organizations     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
@@ -678,24 +677,24 @@ model payout_batches {
 }
 
 model payouts {
-  id                  String          @id @default(uuid()) @db.Uuid
-  organization_id     String          @db.Uuid
-  batch_id            String          @db.Uuid
-  user_id             String          @db.VarChar(255)
-  payout_method_id    String?         @db.Uuid
-  currency            String          @db.Char(3)
-  gross_amount        Decimal         @db.Decimal(18, 8)
-  fee_amount          Decimal         @default(0) @db.Decimal(18, 8)
-  net_amount          Decimal         @db.Decimal(18, 8)
-  status              PayoutStatus    @default(DRAFT)
-  external_reference  String?          @db.VarChar(255)
-  paid_at             DateTime?       @db.Timestamptz(6)
-  failed_reason       String?          @db.Text
-  created_at          DateTime        @default(now()) @db.Timestamptz(6)
-  payout_batches      payout_batches  @relation(fields: [batch_id], references: [id], onDelete: Cascade)
-  payout_methods      payout_methods?  @relation(fields: [payout_method_id], references: [id], onDelete: SetNull)
-  obligation_lines    commission_obligation_lines[]
-  obligation_items    commission_obligation_items[]
+  id                 String                        @id @default(uuid()) @db.Uuid
+  organization_id    String                        @db.Uuid
+  batch_id           String                        @db.Uuid
+  user_id            String                        @db.VarChar(255)
+  payout_method_id   String?                       @db.Uuid
+  currency           String                        @db.Char(3)
+  gross_amount       Decimal                       @db.Decimal(18, 8)
+  fee_amount         Decimal                       @default(0) @db.Decimal(18, 8)
+  net_amount         Decimal                       @db.Decimal(18, 8)
+  status             PayoutStatus                  @default(DRAFT)
+  external_reference String?                       @db.VarChar(255)
+  paid_at            DateTime?                     @db.Timestamptz(6)
+  failed_reason      String?                       @db.Text
+  created_at         DateTime                      @default(now()) @db.Timestamptz(6)
+  payout_batches     payout_batches                @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  payout_methods     payout_methods?               @relation(fields: [payout_method_id], references: [id], onDelete: SetNull)
+  obligation_lines   commission_obligation_lines[]
+  obligation_items   commission_obligation_items[]
 
   @@index([organization_id, user_id, status])
   @@index([batch_id])
