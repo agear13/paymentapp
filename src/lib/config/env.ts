@@ -223,7 +223,9 @@ export const config = {
     hederaStablecoins: env.ENABLE_HEDERA_STABLECOINS === 'true',
     xeroSync: env.ENABLE_XERO_SYNC === 'true' && !!(env.XERO_CLIENT_ID && env.XERO_CLIENT_SECRET),
     betaOps: env.ENABLE_BETA_OPS === 'true',
-    wisePayments: env.ENABLE_WISE_PAYMENTS === 'true' && !!(env.WISE_API_TOKEN && env.WISE_PROFILE_ID),
+    // Wise: enabled when ENABLE_WISE_PAYMENTS is "true" or "1" (case-insensitive) AND API token present
+    // Note: WISE_PROFILE_ID is now optional globally; prefer per-merchant wise_profile_id
+    wisePayments: ['true', '1'].includes((env.ENABLE_WISE_PAYMENTS || '').toLowerCase()) && !!env.WISE_API_TOKEN,
   },
   
   // Admin
@@ -257,6 +259,12 @@ if (config.isDevelopment) {
   console.log('  Stripe Test Mode:', config.stripe.isTestMode);
   console.log('  Hedera Network:', config.hedera.network);
   console.log('  Features:', config.features);
+  // DEV-ONLY: Wise config debugging (no secrets)
+  console.log('  Wise config:');
+  console.log('    ENABLE_WISE_PAYMENTS:', env.ENABLE_WISE_PAYMENTS);
+  console.log('    wisePayments (computed):', config.features.wisePayments);
+  console.log('    WISE_API_TOKEN present:', !!env.WISE_API_TOKEN);
+  console.log('    WISE_PROFILE_ID present:', !!env.WISE_PROFILE_ID);
 }
 
 // Validate beta environment consistency

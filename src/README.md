@@ -34,3 +34,27 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Environment Variables
+
+### Wise Payments Configuration
+
+To enable Wise bank transfer payments:
+
+```bash
+# Enable Wise payments globally
+ENABLE_WISE_PAYMENTS=true
+
+# Wise API token (from Wise Business account)
+WISE_API_TOKEN=your-wise-api-token
+
+# Optional: Global Wise profile ID (per-merchant wise_profile_id is preferred)
+WISE_PROFILE_ID=your-profile-id
+```
+
+**Per-merchant configuration:**
+- Each merchant must enable Wise in their merchant settings (`wise_enabled = true`)
+- Each merchant must set their `wise_profile_id` in merchant settings
+- Optionally set `wise_currency` for the default payout currency
+
+When properly configured, customers will see real bank details (IBAN, account number, BIC/SWIFT) and a unique payment reference when selecting Wise as a payment method.

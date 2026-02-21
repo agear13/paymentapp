@@ -1,12 +1,13 @@
 /**
- * Wise API client (v3).
+ * Wise API client.
  * Uses WISE_API_TOKEN and profile from config or param.
- * When credentials are missing, methods return mock data for development.
+ * When credentials are missing, methods throw explicit errors (no mock data in production).
  */
 
 import config from '@/lib/config/env';
 
-const WISE_API_BASE = 'https://api.wise.com/v3';
+const WISE_API_BASE_V1 = 'https://api.wise.com/v1';
+const WISE_API_BASE_V3 = 'https://api.wise.com/v3';
 
 export interface WiseQuoteRequest {
   profileId: string;
@@ -73,21 +74,30 @@ function getAuthHeader(): string | null {
   return token ? `Bearer ${token}` : null;
 }
 
+export function hasWiseCredentials(): boolean {
+  return !!getAuthHeader();
+}
+
 async function wiseFetch<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  apiVersion: 'v1' | 'v3' = 'v3'
 ): Promise<T> {
   const auth = getAuthHeader();
-  const url = `${WISE_API_BASE}${path}`;
+  if (!auth) {
+    throw new Error('WISE_API_TOKEN missing; Wise is not configured');
+  }
+  const base = apiVersion === 'v1' ? WISE_API_BASE_V1 : WISE_API_BASE_V3;
+  const url = `${base}${path}`;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    Authorization: auth,
     ...((options.headers as Record<string, string>) || {}),
   };
-  if (auth) headers['Authorization'] = auth;
 
   const res = await fetch(url, {
     ...options,
-    headers: { ...headers, ...options.headers },
+    headers,
   });
 
   if (!res.ok) {
@@ -102,8 +112,8 @@ async function wiseFetch<T>(
  */
 export async function createQuote(params: WiseQuoteRequest): Promise<WiseQuote> {
   const profileId = params.profileId || config.wise?.profileId || process.env.WISE_PROFILE_ID;
-  if (!profileId || !getAuthHeader()) {
-    return mockCreateQuote(params);
+  if (!profileId) {
+    throw new Error('Wise profile ID is required to create a quote');
   }
   const body: Record<string, unknown> = {
     sourceCurrency: params.sourceCurrency,
@@ -128,9 +138,6 @@ export async function createTransfer(
   profileId: string,
   params: WiseTransferRequest
 ): Promise<WiseTransfer> {
-  if (!getAuthHeader()) {
-    return mockCreateTransfer(params);
-  }
   const body = {
     targetAccount: params.targetAccountId ? { id: params.targetAccountId } : undefined,
     quoteUuid: params.quoteId,
@@ -151,9 +158,6 @@ export async function getTransfer(
   profileId: string,
   transferId: number
 ): Promise<WiseTransfer> {
-  if (!getAuthHeader()) {
-    return mockGetTransfer(transferId);
-  }
   return wiseFetch<WiseTransfer>(`/profiles/${profileId}/transfers/${transferId}`);
 }
 
@@ -165,9 +169,6 @@ export async function getPayerInstructions(
   profileId: string,
   transferId: number
 ): Promise<WisePayerInstructions | null> {
-  if (!getAuthHeader()) {
-    return mockPayerInstructions(transferId);
-  }
   try {
     const instructions = await wiseFetch<WisePayerInstructions>(
       `/profiles/${profileId}/transfers/${transferId}/account`
@@ -178,65 +179,97 @@ export async function getPayerInstructions(
   }
 }
 
-// —— Mocks for when API is not configured ——
+// ============================================================================
+// Profile and Account Details APIs (for fetching merchant bank details)
+// ============================================================================
 
-function mockCreateQuote(params: WiseQuoteRequest): Promise<WiseQuote> {
-  const sourceAmount = params.sourceAmount ?? (params.targetAmount ?? 100) * 0.65;
-  const targetAmount = params.targetAmount ?? (params.sourceAmount ?? 100) / 0.65;
-  return Promise.resolve({
-    id: Math.floor(Math.random() * 1e9),
-    sourceCurrency: params.sourceCurrency,
-    targetCurrency: params.targetCurrency,
-    sourceAmount,
-    targetAmount,
-    rate: 0.65,
-    rateType: 'FIXED',
-    createdTime: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-  });
+export interface WiseProfile {
+  id: number;
+  type: 'personal' | 'business';
+  fullName?: string;
+  businessName?: string;
 }
 
-function mockCreateTransfer(params: WiseTransferRequest): Promise<WiseTransfer> {
-  return Promise.resolve({
-    id: Math.floor(Math.random() * 1e9),
-    quoteId: params.quoteId,
-    status: 'incoming_payment_waiting',
-    rate: 0.65,
-    sourceCurrency: 'AUD',
-    targetCurrency: 'AUD',
-    sourceAmount: 100,
-    targetAmount: 100,
-    created: new Date().toISOString(),
-    reference: params.details?.reference,
-  });
+export interface WiseBalanceAccount {
+  id: number;
+  profileId: number;
+  currency: string;
+  cashAmount: { value: number; currency: string };
+  reservedAmount: { value: number; currency: string };
+  totalWorth: { value: number; currency: string };
+  creationTime: string;
+  modificationTime: string;
+  visible: boolean;
+  primary: boolean;
 }
 
-function mockGetTransfer(transferId: number): Promise<WiseTransfer> {
-  return Promise.resolve({
-    id: transferId,
-    quoteId: 1,
-    status: 'incoming_payment_waiting',
-    rate: 0.65,
-    sourceCurrency: 'AUD',
-    targetCurrency: 'AUD',
-    sourceAmount: 100,
-    targetAmount: 100,
-    created: new Date().toISOString(),
-  });
-}
-
-function mockPayerInstructions(transferId: number): WisePayerInstructions | null {
-  return {
-    type: 'bank_transfer',
-    accountHolderName: 'Provvypay (Wise)',
-    currency: 'AUD',
-    bankDetails: {
-      legalName: 'Provvypay Pty Ltd',
-      accountNumber: '****1234',
-      bic: 'XXXXXXXX',
-    },
-    reference: `PAY-${transferId}`,
-    transferId: String(transferId),
-    quoteId: 1,
+export interface WiseBankDetails {
+  id: number;
+  currency: string;
+  bankCode?: string;
+  accountNumber?: string;
+  swift?: string;
+  iban?: string;
+  bankName?: string;
+  accountHolderName?: string;
+  bankAddress?: {
+    addressFirstLine?: string;
+    city?: string;
+    country?: string;
+    postCode?: string;
   };
+}
+
+/**
+ * Get all profiles for the authenticated user.
+ * GET /v1/profiles
+ */
+export async function getProfiles(): Promise<WiseProfile[]> {
+  return wiseFetch<WiseProfile[]>('/profiles', {}, 'v1');
+}
+
+/**
+ * Get balances for a profile.
+ * GET /v1/borderless-accounts?profileId={profileId}
+ */
+export async function getBalances(profileId: string): Promise<WiseBalanceAccount[]> {
+  const response = await wiseFetch<{ balances?: WiseBalanceAccount[] }[]>(
+    `/borderless-accounts?profileId=${profileId}`,
+    {},
+    'v1'
+  );
+  return response?.[0]?.balances ?? [];
+}
+
+/**
+ * Get bank details for receiving money into a Wise balance.
+ * GET /v1/borderless-accounts/{accountId}/bank-details?currency={currency}
+ * 
+ * This returns the bank details that payers should use to send money to the merchant's Wise account.
+ */
+export async function getBankDetails(
+  profileId: string,
+  currency: string
+): Promise<WiseBankDetails[]> {
+  // First get the borderless account ID
+  const accounts = await wiseFetch<{ id: number; profileId: number }[]>(
+    `/borderless-accounts?profileId=${profileId}`,
+    {},
+    'v1'
+  );
+  
+  if (!accounts || accounts.length === 0) {
+    throw new Error('No Wise borderless account found for this profile');
+  }
+
+  const accountId = accounts[0].id;
+  
+  // Get bank details for the specified currency
+  const bankDetails = await wiseFetch<WiseBankDetails[]>(
+    `/borderless-accounts/${accountId}/bank-details?currency=${currency}`,
+    {},
+    'v1'
+  );
+  
+  return bankDetails;
 }

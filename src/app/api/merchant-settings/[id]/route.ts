@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
@@ -12,6 +12,10 @@ const updateMerchantSettingsSchema = z.object({
   defaultCurrency: z.string().length(3).optional(),
   stripeAccountId: z.string().optional(),
   hederaAccountId: z.string().regex(/^0\.0\.\d+$/).optional(),
+  // Wise settings
+  wiseProfileId: z.string().optional().nullable(),
+  wiseEnabled: z.boolean().optional(),
+  wiseCurrency: z.string().length(3).optional().nullable(),
 });
 
 // GET /api/merchant-settings/[id]
@@ -31,7 +35,7 @@ export async function GET(
     const settings = await prisma.merchant_settings.findUnique({
       where: { id },
       include: {
-        organization: {
+        organizations: {
           select: {
             id: true,
             name: true,
@@ -48,7 +52,7 @@ export async function GET(
 
     return apiResponse(settings);
   } catch (error) {
-    log.error({ error }, 'Failed to fetch merchant settings');
+    log.error(`Failed to fetch merchant settings: ${error}`);
     return apiError('Failed to fetch merchant settings', 500);
   }
 }
@@ -74,22 +78,30 @@ export async function PATCH(
 
     // TODO: Check if user has permission to update these settings
 
+    // Build update data, including wise fields (may not be in generated types yet)
+    const updateData: Record<string, unknown> = {
+      display_name: body.displayName,
+      organization_logo_url: body.organizationLogoUrl,
+      default_currency: body.defaultCurrency,
+      stripe_account_id: body.stripeAccountId,
+      hedera_account_id: body.hederaAccountId,
+    };
+    
+    // Add wise fields if provided
+    if (body.wiseProfileId !== undefined) updateData.wise_profile_id = body.wiseProfileId;
+    if (body.wiseEnabled !== undefined) updateData.wise_enabled = body.wiseEnabled;
+    if (body.wiseCurrency !== undefined) updateData.wise_currency = body.wiseCurrency;
+
     const settings = await prisma.merchant_settings.update({
       where: { id },
-      data: {
-        display_name: body.displayName,
-        organization_logo_url: body.organizationLogoUrl,
-        default_currency: body.defaultCurrency,
-        stripe_account_id: body.stripeAccountId,
-        hedera_account_id: body.hederaAccountId,
-      },
+      data: updateData as Parameters<typeof prisma.merchant_settings.update>[0]['data'],
     });
 
-    log.info({ settingsId: id, userId: user.id }, 'Updated merchant settings');
+    log.info(`Updated merchant settings: ${id} by user ${user.id}`);
 
     return apiResponse(settings);
   } catch (error) {
-    log.error({ error }, 'Failed to update merchant settings');
+    log.error(`Failed to update merchant settings: ${error}`);
     return apiError('Failed to update merchant settings', 500);
   }
 }
@@ -114,11 +126,11 @@ export async function DELETE(
       where: { id },
     });
 
-    log.info({ settingsId: id, userId: user.id }, 'Deleted merchant settings');
+    log.info(`Deleted merchant settings: ${id} by user ${user.id}`);
 
     return apiResponse({ success: true });
   } catch (error) {
-    log.error({ error }, 'Failed to delete merchant settings');
+    log.error(`Failed to delete merchant settings: ${error}`);
     return apiError('Failed to delete merchant settings', 500);
   }
 }

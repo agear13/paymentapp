@@ -1,26 +1,118 @@
 /**
  * Wise payment setup for a payment link (public, no auth).
- * POST: create quote + transfer, store on link, return payer instructions.
- * GET: return payer instructions if transfer already exists.
+ * GET: return payer instructions (bank details + reference) for the payment link.
+ * POST: generate/store reference and return payer instructions.
+ * 
+ * Returns REAL bank details when Wise is properly configured.
+ * Returns explicit errors when configuration is missing.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
-import { createQuote, createTransfer, getPayerInstructions } from '@/lib/wise/client';
+import { getBankDetails, hasWiseCredentials, WiseBankDetails } from '@/lib/wise/client';
 import config from '@/lib/config/env';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
+import { randomUUID } from 'crypto';
 
-function getProfileId(organizationId: string): string | null {
-  if (!config.features.wisePayments) return null;
-  const profileId = config.wise?.profileId ?? process.env.WISE_PROFILE_ID;
-  if (profileId) return profileId;
-  return null;
+interface WisePaymentInstructions {
+  reference: string;
+  amount: string;
+  currency: string;
+  recipient: {
+    name: string;
+    accountDetails: WiseBankDetails[];
+  };
+  instructions: {
+    type: 'BANK_TRANSFER';
+    details: WiseBankDetails | null;
+  };
 }
 
 /**
- * GET – return payer instructions if this link already has a Wise transfer
+ * Generate a stable reference for a payment link.
+ * Format: PROVVY-{shortCode} (max 18 chars for bank transfer references)
+ */
+function generateReference(shortCode: string): string {
+  return `PROVVY-${shortCode}`;
+}
+
+interface MerchantWiseSettings {
+  wise_profile_id: string;
+  wise_enabled: boolean;
+  wise_currency: string | null;
+  display_name: string;
+}
+
+/**
+ * Validate Wise configuration and return error response if missing.
+ */
+async function validateWiseConfig(
+  organizationId: string
+): Promise<{ error: NextResponse } | { merchantSettings: MerchantWiseSettings }> {
+  // Check global feature flag
+  if (!config.features.wisePayments) {
+    return {
+      error: NextResponse.json(
+        { error: 'Wise payments are not enabled', code: 'WISE_DISABLED' },
+        { status: 400 }
+      ),
+    };
+  }
+
+  // Check API token
+  if (!hasWiseCredentials()) {
+    return {
+      error: NextResponse.json(
+        { error: 'WISE_API_TOKEN missing; Wise is not configured', code: 'WISE_TOKEN_MISSING' },
+        { status: 400 }
+      ),
+    };
+  }
+
+  // Check merchant settings - query all fields and extract what we need
+  const merchantSettings = await prisma.merchant_settings.findFirst({
+    where: { organization_id: organizationId },
+  });
+
+  // Type assertion for fields that may not be in generated types yet (migration pending)
+  const settings = merchantSettings as (typeof merchantSettings & {
+    wise_profile_id?: string | null;
+    wise_enabled?: boolean;
+    wise_currency?: string | null;
+  }) | null;
+
+  if (!settings?.wise_enabled) {
+    return {
+      error: NextResponse.json(
+        { error: 'Wise is not enabled for this merchant', code: 'WISE_NOT_ENABLED' },
+        { status: 400 }
+      ),
+    };
+  }
+
+  if (!settings?.wise_profile_id) {
+    return {
+      error: NextResponse.json(
+        { error: 'Wise profile ID is not configured for this merchant', code: 'WISE_PROFILE_MISSING' },
+        { status: 400 }
+      ),
+    };
+  }
+
+  return {
+    merchantSettings: {
+      wise_profile_id: settings.wise_profile_id,
+      wise_enabled: settings.wise_enabled,
+      wise_currency: settings.wise_currency ?? null,
+      display_name: settings.display_name,
+    },
+  };
+}
+
+/**
+ * GET – return payer instructions if this link already has a Wise reference stored
  */
 export async function GET(
   request: NextRequest,
@@ -40,57 +132,72 @@ export async function GET(
     where: { short_code: shortCode },
   });
 
-  if (!paymentLink || !paymentLink.wise_transfer_id) {
-    return NextResponse.json(
-      { error: 'No Wise transfer for this link', instructions: null },
-      { status: 200 }
-    );
+  if (!paymentLink) {
+    return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
   }
 
-  const profileId =
-    getProfileId(paymentLink.organization_id) ??
-    (await prisma.merchant_settings.findFirst({
-      where: { organization_id: paymentLink.organization_id },
-      select: { wise_profile_id: true },
-    }))?.wise_profile_id;
-
-  if (!profileId) {
-    return NextResponse.json({
-      instructions: {
-        type: 'bank_transfer',
-        reference: paymentLink.wise_transfer_id,
-        transferId: paymentLink.wise_transfer_id,
-        message: 'Use the reference above when making your bank transfer.',
-      },
-    });
+  // Validate Wise configuration
+  const validation = await validateWiseConfig(paymentLink.organization_id);
+  if ('error' in validation) {
+    return validation.error;
   }
 
+  const { merchantSettings } = validation;
+  const profileId = merchantSettings.wise_profile_id;
+  const currency = merchantSettings.wise_currency || paymentLink.currency;
+  const reference = generateReference(shortCode);
+
+  // Check if we already have stored instructions in payment_events
+  // Use PAYMENT_INITIATED as the event type (PAYMENT_PENDING may not exist in enum yet)
+  const existingEvent = await prisma.payment_events.findFirst({
+    where: {
+      payment_link_id: paymentLink.id,
+      payment_method: 'WISE',
+    },
+    orderBy: { created_at: 'desc' },
+  });
+
+  if (existingEvent?.metadata && typeof existingEvent.metadata === 'object') {
+    const meta = existingEvent.metadata as Record<string, unknown>;
+    if (meta.wise_instructions && meta.wise_reference === reference) {
+      return NextResponse.json({
+        instructions: meta.wise_instructions,
+      });
+    }
+  }
+
+  // Fetch fresh bank details from Wise
   try {
-    const instructions = await getPayerInstructions(
-      profileId,
-      Number(paymentLink.wise_transfer_id)
-    );
-    return NextResponse.json({
-      instructions: instructions ?? {
-        type: 'bank_transfer',
-        reference: paymentLink.wise_transfer_id,
-        transferId: paymentLink.wise_transfer_id,
+    const bankDetails = await getBankDetails(profileId, currency);
+    const primaryDetails = bankDetails[0] || null;
+
+    const instructions: WisePaymentInstructions = {
+      reference,
+      amount: paymentLink.amount.toString(),
+      currency,
+      recipient: {
+        name: merchantSettings.display_name,
+        accountDetails: bankDetails,
       },
-    });
-  } catch (e) {
-    loggers.api.warn({ shortCode, error: (e as Error).message }, 'Wise get instructions failed');
-    return NextResponse.json({
       instructions: {
-        type: 'bank_transfer',
-        reference: paymentLink.wise_transfer_id,
-        transferId: paymentLink.wise_transfer_id,
+        type: 'BANK_TRANSFER',
+        details: primaryDetails,
       },
-    });
+    };
+
+    return NextResponse.json({ instructions });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Failed to fetch Wise bank details';
+    loggers.api.error(`Wise GET bank details failed: ${message} (shortCode: ${shortCode})`);
+    return NextResponse.json(
+      { error: message, code: 'WISE_API_ERROR' },
+      { status: 500 }
+    );
   }
 }
 
 /**
- * POST – create Wise quote + transfer, update link, return payer instructions
+ * POST – create/store reference and return payer instructions
  */
 export async function POST(
   request: NextRequest,
@@ -118,99 +225,82 @@ export async function POST(
     return NextResponse.json({ error: 'Link is not open for payment' }, { status: 400 });
   }
 
-  const profileId =
-    getProfileId(paymentLink.organization_id) ??
-    (await prisma.merchant_settings.findFirst({
-      where: { organization_id: paymentLink.organization_id },
-      select: { wise_profile_id: true },
-    }))?.wise_profile_id ??
-    config.wise?.profileId ??
-    process.env.WISE_PROFILE_ID;
-
-  if (!profileId) {
-    return NextResponse.json(
-      { error: 'Wise is not configured for this merchant' },
-      { status: 400 }
-    );
+  // Validate Wise configuration
+  const validation = await validateWiseConfig(paymentLink.organization_id);
+  if ('error' in validation) {
+    return validation.error;
   }
 
-  if (paymentLink.wise_transfer_id) {
-    try {
-      const instructions = await getPayerInstructions(
-        profileId,
-        Number(paymentLink.wise_transfer_id)
-      );
+  const { merchantSettings } = validation;
+  const profileId = merchantSettings.wise_profile_id;
+  const currency = merchantSettings.wise_currency || paymentLink.currency;
+  const reference = generateReference(shortCode);
+
+  // Check for existing instructions (idempotency)
+  const existingEvent = await prisma.payment_events.findFirst({
+    where: {
+      payment_link_id: paymentLink.id,
+      payment_method: 'WISE',
+    },
+    orderBy: { created_at: 'desc' },
+  });
+
+  if (existingEvent?.metadata && typeof existingEvent.metadata === 'object') {
+    const meta = existingEvent.metadata as Record<string, unknown>;
+    if (meta.wise_instructions && meta.wise_reference === reference) {
+      loggers.api.info(`Returning existing Wise instructions (idempotent) for ${shortCode}`);
       return NextResponse.json({
-        transferId: paymentLink.wise_transfer_id,
-        quoteId: paymentLink.wise_quote_id,
-        instructions: instructions ?? {
-          type: 'bank_transfer',
-          reference: paymentLink.wise_transfer_id,
-          transferId: paymentLink.wise_transfer_id,
-        },
+        instructions: meta.wise_instructions,
       });
-    } catch {
-      // fall through to create again if fetch failed
     }
   }
 
+  // Fetch bank details from Wise API
   try {
-    const amount = Number(paymentLink.amount);
-    const currency = paymentLink.currency;
+    const bankDetails = await getBankDetails(profileId, currency);
+    const primaryDetails = bankDetails[0] || null;
 
-    const quote = await createQuote({
-      profileId,
-      sourceCurrency: currency,
-      targetCurrency: currency,
-      targetAmount: amount,
-    });
-
-    const transfer = await createTransfer(profileId, {
-      quoteId: quote.id,
-      customerTransactionId: paymentLink.id,
-      details: {
-        reference: `PAY-${paymentLink.short_code}`,
-        transferPurpose: paymentLink.description?.slice(0, 200),
+    const instructions: WisePaymentInstructions = {
+      reference,
+      amount: paymentLink.amount.toString(),
+      currency,
+      recipient: {
+        name: merchantSettings.display_name,
+        accountDetails: bankDetails,
       },
-    });
+      instructions: {
+        type: 'BANK_TRANSFER',
+        details: primaryDetails,
+      },
+    };
 
-    await prisma.payment_links.update({
-      where: { id: paymentLink.id },
+    // Store instructions in payment_events for idempotency
+    // Use PAYMENT_INITIATED as the event type
+    await prisma.payment_events.create({
       data: {
-        wise_quote_id: String(quote.id),
-        wise_transfer_id: String(transfer.id),
-        wise_status: transfer.status,
-        updated_at: new Date(),
+        id: randomUUID(),
+        payment_link_id: paymentLink.id,
+        event_type: 'PAYMENT_INITIATED',
+        payment_method: 'WISE',
+        metadata: {
+          wise_reference: reference,
+          wise_instructions: JSON.parse(JSON.stringify(instructions)),
+          wise_profile_id: profileId,
+          created_at: new Date().toISOString(),
+        } as object,
+        created_at: new Date(),
       },
     });
 
-    const instructions = await getPayerInstructions(profileId, transfer.id);
+    loggers.api.info(`Wise payment instructions created for ${shortCode} (ref: ${reference}, currency: ${currency})`);
 
-    loggers.api.info(
-      {
-        paymentLinkId: paymentLink.id,
-        shortCode,
-        wiseTransferId: transfer.id,
-        wiseQuoteId: quote.id,
-      },
-      'Wise transfer created for payment link'
-    );
-
-    return NextResponse.json({
-      transferId: String(transfer.id),
-      quoteId: String(quote.id),
-      status: transfer.status,
-      instructions: instructions ?? {
-        type: 'bank_transfer',
-        reference: `PAY-${paymentLink.short_code}`,
-        transferId: String(transfer.id),
-        accountHolderName: 'Merchant',
-        currency: transfer.targetCurrency ?? currency,
-      },
-    });
+    return NextResponse.json({ instructions });
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Wise setup failed';
-    loggers.api.error({ shortCode, error: message }, 'Wise create transfer failed');
-    return NextResponse.json({ error: message }, { status: 500 });
+    const message = e instanceof Error ? e.message : 'Failed to fetch Wise bank details';
+    loggers.api.error(`Wise POST bank details failed: ${message} (shortCode: ${shortCode})`);
+    return NextResponse.json(
+      { error: message, code: 'WISE_API_ERROR' },
+      { status: 500 }
+    );
   }
 }

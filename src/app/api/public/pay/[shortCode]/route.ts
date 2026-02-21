@@ -9,6 +9,7 @@ import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
+import config from '@/lib/config/env';
 
 /**
  * GET /api/public/pay/[shortCode]
@@ -119,20 +120,26 @@ export async function GET(
         stripe_account_id: true,
         hedera_account_id: true,
         wise_profile_id: true,
+        wise_enabled: true,
+        wise_currency: true,
       },
     });
 
-    const showWiseDemo = process.env.NEXT_PUBLIC_SHOW_WISE_DEMO !== 'false';
-    const wiseEnabled =
-      !!merchantSettings?.wise_profile_id ||
-      (process.env.ENABLE_WISE_PAYMENTS === 'true' && !!(process.env.WISE_API_TOKEN && process.env.WISE_PROFILE_ID)) ||
-      showWiseDemo;
+    // Wise is available when:
+    // a) global config.features.wisePayments === true (ENABLE_WISE_PAYMENTS + WISE_API_TOKEN)
+    // b) payment link allows WISE (payment_method is WISE or null for all methods)
+    // c) merchant_settings.wise_enabled === true
+    // d) merchant_settings.wise_profile_id is present
+    const globalWiseEnabled = config.features.wisePayments;
+    const linkAllowsWise = !paymentLink.payment_method || paymentLink.payment_method === 'WISE';
+    const merchantWiseConfigured = !!merchantSettings?.wise_enabled && !!merchantSettings?.wise_profile_id;
+    const wiseAvailable = globalWiseEnabled && linkAllowsWise && merchantWiseConfigured;
 
     // Determine available payment methods
     const availablePaymentMethods = {
       stripe: !!merchantSettings?.stripe_account_id,
       hedera: !!merchantSettings?.hedera_account_id,
-      wise: wiseEnabled,
+      wise: wiseAvailable,
     };
 
     loggers.api.info(

@@ -93,6 +93,8 @@ model merchant_settings {
 
   // Wise (payment links): profile id for API; null = Wise not enabled
   wise_profile_id String? @db.VarChar(255)
+  wise_enabled    Boolean @default(false)
+  wise_currency   String? @db.Char(3) // default currency for Wise payouts, falls back to default_currency
 
   // Sprint 25: Multi-Currency Enhancement
   enabled_currencies            String[] @default(["USD", "AUD"])
@@ -333,6 +335,7 @@ enum PaymentEventType {
   CREATED
   OPENED
   PAYMENT_INITIATED
+  PAYMENT_PENDING
   PAYMENT_CONFIRMED
   PAYMENT_FAILED
   EXPIRED
