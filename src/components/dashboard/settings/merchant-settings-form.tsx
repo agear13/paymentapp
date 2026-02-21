@@ -529,8 +529,8 @@ export function MerchantSettingsForm() {
                   <FormItem>
                     <FormLabel>Wise Currency</FormLabel>
                     <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value || ''} 
+                      onValueChange={(value) => field.onChange(value === '__default__' ? '' : value)} 
+                      value={field.value || '__default__'} 
                       disabled={!form.watch('wiseEnabled')}
                     >
                       <FormControl>
@@ -539,7 +539,7 @@ export function MerchantSettingsForm() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Use default currency</SelectItem>
+                        <SelectItem value="__default__">Use default currency</SelectItem>
                         {currencies.map((currency) => (
                           <SelectItem key={currency.code} value={currency.code}>
                             {currency.code} - {currency.name}
