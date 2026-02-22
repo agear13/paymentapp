@@ -2,15 +2,29 @@
  * Mark Payout Failed API
  * POST /api/payouts/[id]/mark-failed
  * Unassigns obligation lines (payout_id = null) so they can be re-batched
+ * 
+ * NOTE: This API is restricted to beta admins during BETA_LOCKDOWN_MODE
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
+import { isBetaAdminEmail } from '@/lib/auth/admin';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { log } from '@/lib/logger';
 import { z } from 'zod';
+
+function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
+  const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
+  if (betaLockdownEnabled && !isBetaAdminEmail(userEmail)) {
+    return NextResponse.json(
+      { error: 'Forbidden: This feature is restricted during beta' },
+      { status: 403 }
+    );
+  }
+  return null;
+}
 
 const MarkFailedSchema = z.object({
   failed_reason: z.string().min(1),
@@ -29,6 +43,9 @@ export async function POST(
     const auth = await requireAuth(request);
     if (!auth.user) return auth.response!;
     const { user } = auth;
+
+    const lockdownResponse = checkBetaLockdown(user.email);
+    if (lockdownResponse) return lockdownResponse;
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));

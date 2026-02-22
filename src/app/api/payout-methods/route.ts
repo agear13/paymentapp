@@ -2,14 +2,28 @@
  * Payout Methods API
  * GET /api/payout-methods - List payout methods for user
  * POST /api/payout-methods - Create or update payout method
+ * 
+ * NOTE: This API is restricted to beta admins during BETA_LOCKDOWN_MODE
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
+import { isBetaAdminEmail } from '@/lib/auth/admin';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
+
+function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
+  const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
+  if (betaLockdownEnabled && !isBetaAdminEmail(userEmail)) {
+    return NextResponse.json(
+      { error: 'Forbidden: This feature is restricted during beta' },
+      { status: 403 }
+    );
+  }
+  return null;
+}
 
 const PayoutMethodTypeEnum = z.enum(['PAYPAL', 'WISE', 'BANK_TRANSFER', 'CRYPTO', 'MANUAL_NOTE', 'HEDERA']);
 
@@ -44,6 +58,9 @@ export async function GET(request: NextRequest) {
     const auth = await requireAuth(request);
     if (!auth.user) return auth.response!;
     const { user } = auth;
+
+    const lockdownResponse = checkBetaLockdown(user.email);
+    if (lockdownResponse) return lockdownResponse;
 
     const searchParams = request.nextUrl.searchParams;
     const organizationId = searchParams.get('organizationId');
@@ -104,6 +121,9 @@ export async function POST(request: NextRequest) {
     const auth = await requireAuth(request);
     if (!auth.user) return auth.response!;
     const { user } = auth;
+
+    const lockdownResponse = checkBetaLockdown(user.email);
+    if (lockdownResponse) return lockdownResponse;
 
     const body = await request.json();
     const parsed = CreatePayoutMethodSchema.safeParse(body);

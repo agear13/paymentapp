@@ -65,6 +65,8 @@ const envSchema = z.object({
   ENABLE_WISE_PAYMENTS: z.string().optional().default('false'),
   /** Show Wise as a payment option in UI for demo (even when backend not configured) */
   NEXT_PUBLIC_SHOW_WISE_DEMO: z.string().optional().default('true'),
+  /** Beta lockdown mode - restrict Revenue Share and Platform Preview to admin only */
+  BETA_LOCKDOWN_MODE: z.string().optional().default('true'),
 
   // Beta/Admin
   ADMIN_EMAIL_ALLOWLIST: z.string().optional(),
@@ -114,6 +116,7 @@ function validateEnv() {
       ENABLE_BETA_OPS: process.env.ENABLE_BETA_OPS || 'false',
       ENABLE_WISE_PAYMENTS: process.env.ENABLE_WISE_PAYMENTS || 'false',
       NEXT_PUBLIC_SHOW_WISE_DEMO: process.env.NEXT_PUBLIC_SHOW_WISE_DEMO || 'true',
+      BETA_LOCKDOWN_MODE: process.env.BETA_LOCKDOWN_MODE || 'true',
       WISE_API_TOKEN: process.env.WISE_API_TOKEN,
       WISE_PROFILE_ID: process.env.WISE_PROFILE_ID,
       WISE_WEBHOOK_SECRET: process.env.WISE_WEBHOOK_SECRET,
@@ -231,6 +234,8 @@ export const config = {
     // Wise: enabled when ENABLE_WISE_PAYMENTS is "true" or "1" (case-insensitive) AND API token present
     // Note: WISE_PROFILE_ID is now optional globally; prefer per-merchant wise_profile_id
     wisePayments: ['true', '1'].includes((env.ENABLE_WISE_PAYMENTS || '').toLowerCase()) && !!env.WISE_API_TOKEN,
+    // Beta lockdown: restrict Revenue Share and Platform Preview to admin emails only
+    betaLockdown: ['true', '1'].includes((env.BETA_LOCKDOWN_MODE || 'true').toLowerCase()),
   },
   
   // Admin

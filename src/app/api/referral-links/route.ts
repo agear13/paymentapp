@@ -2,15 +2,29 @@
  * Referral Links API - Create and list commission-enabled referral links
  * POST /api/referral-links - Create new referral link with rules
  * GET /api/referral-links - List referral links for organization
+ * 
+ * NOTE: This API is restricted to beta admins during BETA_LOCKDOWN_MODE
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
+import { isBetaAdminEmail } from '@/lib/auth/admin';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { log } from '@/lib/logger';
 import { z } from 'zod';
+
+function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
+  const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
+  if (betaLockdownEnabled && !isBetaAdminEmail(userEmail)) {
+    return NextResponse.json(
+      { error: 'Forbidden: This feature is restricted during beta' },
+      { status: 403 }
+    );
+  }
+  return null;
+}
 
 function normalizePct(value: number): number {
   return value > 1 ? value / 100 : value;
@@ -76,6 +90,9 @@ export async function POST(request: NextRequest) {
     const auth = await requireAuth(request);
     if (!auth.user) return auth.response!;
     const { user } = auth;
+
+    const lockdownResponse = checkBetaLockdown(user.email);
+    if (lockdownResponse) return lockdownResponse;
 
     const body = await request.json();
     const parsed = CreateReferralLinkSchema.safeParse(body);
@@ -241,6 +258,9 @@ export async function GET(request: NextRequest) {
     const auth = await requireAuth(request);
     if (!auth.user) return auth.response!;
     const { user } = auth;
+
+    const lockdownResponse = checkBetaLockdown(user.email);
+    if (lockdownResponse) return lockdownResponse;
 
     const searchParams = request.nextUrl.searchParams;
     const organizationId = searchParams.get('organizationId');

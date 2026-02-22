@@ -33,6 +33,15 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
 })
 
 /**
+ * Get the current user's email address
+ * Convenience wrapper for beta lockdown checks
+ */
+export async function getCurrentUserEmail(): Promise<string | null> {
+  const user = await getCurrentUser()
+  return user?.email ?? null
+}
+
+/**
  * Get the current session
  */
 export async function getSession() {

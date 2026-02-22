@@ -1,6 +1,8 @@
 /**
  * POST /api/payout-batches/[id]/hedera/prepare
  * Builds a Hedera HTS transfer (USDC MVP) from merchant to all payees; returns frozen tx as base64 for HashPack signing.
+ * 
+ * NOTE: This API is restricted to beta admins during BETA_LOCKDOWN_MODE
  */
 
 import Long from 'long';
@@ -8,11 +10,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
+import { isBetaAdminEmail } from '@/lib/auth/admin';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { getPayoutTokenForCurrency } from '@/lib/hedera/tokens';
 import { CURRENT_NODE_ACCOUNT_ID } from '@/lib/hedera/constants';
 import { toSmallestUnit, fromSmallestUnit } from '@/lib/hedera/amount-utils';
 import { TransferTransaction, AccountId, TransactionId } from '@hashgraph/sdk';
+
+function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
+  const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
+  if (betaLockdownEnabled && !isBetaAdminEmail(userEmail)) {
+    return NextResponse.json(
+      { error: 'Forbidden: This feature is restricted during beta' },
+      { status: 403 }
+    );
+  }
+  return null;
+}
 
 export async function POST(
   request: NextRequest,
@@ -27,6 +41,9 @@ export async function POST(
     const auth = await requireAuth(request);
     if (!auth.user) return auth.response!;
     const { user } = auth;
+
+    const lockdownResponse = checkBetaLockdown(user.email);
+    if (lockdownResponse) return lockdownResponse;
 
     const { id: batchId } = await params;
     const searchParams = request.nextUrl.searchParams;

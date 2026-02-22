@@ -1,14 +1,28 @@
 /**
  * Submit Payout Batch API
  * POST /api/payout-batches/[id]/submit
+ * 
+ * NOTE: This API is restricted to beta admins during BETA_LOCKDOWN_MODE
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
+import { isBetaAdminEmail } from '@/lib/auth/admin';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { log } from '@/lib/logger';
+
+function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
+  const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
+  if (betaLockdownEnabled && !isBetaAdminEmail(userEmail)) {
+    return NextResponse.json(
+      { error: 'Forbidden: This feature is restricted during beta' },
+      { status: 403 }
+    );
+  }
+  return null;
+}
 
 export async function POST(
   request: NextRequest,
@@ -23,6 +37,9 @@ export async function POST(
     const auth = await requireAuth(request);
     if (!auth.user) return auth.response!;
     const { user } = auth;
+
+    const lockdownResponse = checkBetaLockdown(user.email);
+    if (lockdownResponse) return lockdownResponse;
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));

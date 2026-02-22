@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { isBetaAdminEmail } from '@/lib/auth/admin';
 import {
   LayoutDashboard,
   Link as LinkIcon,
@@ -184,6 +185,7 @@ export function AppSidebar() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [user, setUser] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
+  const [isBetaAdmin, setIsBetaAdmin] = React.useState(false);
 
   React.useEffect(() => {
     // Get initial user
@@ -194,6 +196,7 @@ export function AppSidebar() {
           console.error('Error loading user:', error);
         } else {
           setUser(user);
+          setIsBetaAdmin(isBetaAdminEmail(user?.email));
         }
       } catch (error) {
         console.error('Error in getUser:', error);
@@ -209,6 +212,7 @@ export function AppSidebar() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      setIsBetaAdmin(isBetaAdminEmail(session?.user?.email));
       setLoading(false);
     });
 
@@ -296,110 +300,114 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Partners */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Revenue Share</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {partnersItems.map((item) => (
-                <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/partners')}>
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton>
-                        <item.icon className="size-4" />
-                        <span>{item.title}</span>
-                        <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {item.items?.map((subItem) => {
-                          const isActive = pathname === subItem.href;
-                          return (
-                            <SidebarMenuSubItem key={subItem.href}>
-                              <SidebarMenuSubButton asChild isActive={isActive}>
-                                <Link href={subItem.href}>
-                                  <span>{subItem.title}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          );
-                        })}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </SidebarMenuItem>
-                </Collapsible>
-              ))}
-              {programsItems.map((item) => (
-                <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/programs')}>
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton>
-                        <item.icon className="size-4" />
-                        <span>{item.title}</span>
-                        <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {item.items?.map((subItem) => {
-                          const isActive = pathname === subItem.href;
-                          return (
-                            <SidebarMenuSubItem key={subItem.href}>
-                              <SidebarMenuSubButton asChild isActive={isActive}>
-                                <Link href={subItem.href}>
-                                  <span>{subItem.title}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          );
-                        })}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </SidebarMenuItem>
-                </Collapsible>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Partners - Admin only during beta lockdown */}
+        {isBetaAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Revenue Share</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {partnersItems.map((item) => (
+                  <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/partners')}>
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton>
+                          <item.icon className="size-4" />
+                          <span>{item.title}</span>
+                          <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {item.items?.map((subItem) => {
+                            const isActive = pathname === subItem.href;
+                            return (
+                              <SidebarMenuSubItem key={subItem.href}>
+                                <SidebarMenuSubButton asChild isActive={isActive}>
+                                  <Link href={subItem.href}>
+                                    <span>{subItem.title}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            );
+                          })}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                ))}
+                {programsItems.map((item) => (
+                  <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/programs')}>
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton>
+                          <item.icon className="size-4" />
+                          <span>{item.title}</span>
+                          <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {item.items?.map((subItem) => {
+                            const isActive = pathname === subItem.href;
+                            return (
+                              <SidebarMenuSubItem key={subItem.href}>
+                                <SidebarMenuSubButton asChild isActive={isActive}>
+                                  <Link href={subItem.href}>
+                                    <span>{subItem.title}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            );
+                          })}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
-        {/* Platform Preview */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Platform Preview</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {platformPreviewItems.map((item) => (
-                <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/platform-preview')}>
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton>
-                        <item.icon className="size-4" />
-                        <span>{item.title}</span>
-                        <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {item.items?.map((subItem) => {
-                          const isActive = pathname === subItem.href;
-                          return (
-                            <SidebarMenuSubItem key={subItem.href}>
-                              <SidebarMenuSubButton asChild isActive={isActive}>
-                                <Link href={subItem.href}>
-                                  <span>{subItem.title}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          );
-                        })}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </SidebarMenuItem>
-                </Collapsible>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Platform Preview - Admin only during beta lockdown */}
+        {isBetaAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Platform Preview</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {platformPreviewItems.map((item) => (
+                  <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/platform-preview')}>
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton>
+                          <item.icon className="size-4" />
+                          <span>{item.title}</span>
+                          <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {item.items?.map((subItem) => {
+                            const isActive = pathname === subItem.href;
+                            return (
+                              <SidebarMenuSubItem key={subItem.href}>
+                                <SidebarMenuSubButton asChild isActive={isActive}>
+                                  <Link href={subItem.href}>
+                                    <span>{subItem.title}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            );
+                          })}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* Settings */}
         <SidebarGroup>
