@@ -13,6 +13,52 @@ import { checkUserPermission } from '@/lib/auth/permissions';
 
 // Helper to transform snake_case DB fields to camelCase for frontend
 function transformPaymentLink(link: any) {
+  // Transform FX snapshots to camelCase
+  const fxSnapshots = link.fx_snapshots?.map((snapshot: any) => ({
+    id: snapshot.id,
+    snapshotType: snapshot.snapshot_type,
+    tokenType: snapshot.token_type,
+    baseCurrency: snapshot.base_currency,
+    quoteCurrency: snapshot.quote_currency,
+    rate: Number(snapshot.rate),
+    provider: snapshot.provider,
+    capturedAt: snapshot.captured_at,
+  })) || [];
+
+  // Transform payment events to camelCase
+  const paymentEvents = link.payment_events?.map((event: any) => ({
+    id: event.id,
+    eventType: event.event_type,
+    paymentMethod: event.payment_method,
+    amountReceived: event.amount_received ? Number(event.amount_received) : null,
+    currencyReceived: event.currency_received,
+    createdAt: event.created_at,
+    metadata: event.metadata,
+  })) || [];
+
+  // Transform ledger entries to camelCase
+  const ledgerEntries = link.ledger_entries?.map((entry: any) => ({
+    id: entry.id,
+    entryType: entry.entry_type,
+    amount: Number(entry.amount),
+    currency: entry.currency,
+    description: entry.description,
+    createdAt: entry.created_at,
+    ledgerAccount: entry.ledger_accounts ? {
+      code: entry.ledger_accounts.code,
+      name: entry.ledger_accounts.name,
+    } : null,
+  })) || [];
+
+  // Transform xero syncs to camelCase
+  const xeroSyncs = link.xero_syncs?.map((sync: any) => ({
+    id: sync.id,
+    syncType: sync.sync_type,
+    status: sync.status,
+    errorMessage: sync.error_message,
+    createdAt: sync.created_at,
+  })) || [];
+
   return {
     id: link.id,
     shortCode: link.short_code,
@@ -26,7 +72,10 @@ function transformPaymentLink(link: any) {
     expiresAt: link.expires_at,
     createdAt: link.created_at,
     updatedAt: link.updated_at,
-    paymentEvents: link.payment_events,
+    paymentEvents,
+    fxSnapshots,
+    ledgerEntries,
+    xeroSyncs,
   };
 }
 import { applyRateLimit } from '@/lib/rate-limit';

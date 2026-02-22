@@ -52,7 +52,10 @@ export async function GET(
       );
     }
 
-    // Find payment link with related data
+    // Get selected token from query params (for best snapshot selection)
+    const selectedToken = request.nextUrl.searchParams.get('token')?.toUpperCase();
+
+    // Find payment link with related data (fetch all CREATION snapshots for selection)
     const paymentLink = await prisma.payment_links.findUnique({
       where: { short_code: shortCode },
       include: {
@@ -69,7 +72,6 @@ export async function GET(
         fx_snapshots: {
           where: { snapshot_type: 'CREATION' },
           orderBy: { captured_at: 'desc' },
-          take: 1,
         },
       },
     });
@@ -142,14 +144,64 @@ export async function GET(
       wise: wiseAvailable,
     };
 
+    // Select best FX snapshot:
+    // 1. If selectedToken is provided, find matching snapshot
+    // 2. Otherwise, return the latest CREATION snapshot
+    let bestFxSnapshot = null;
+    const allCreationSnapshots = paymentLink.fx_snapshots || [];
+
+    if (selectedToken && allCreationSnapshots.length > 0) {
+      bestFxSnapshot = allCreationSnapshots.find(
+        (s) => s.token_type === selectedToken
+      ) || allCreationSnapshots[0];
+    } else if (allCreationSnapshots.length > 0) {
+      bestFxSnapshot = allCreationSnapshots[0];
+    }
+
+    // Dev-only debug logging when no snapshots exist
+    if (!bestFxSnapshot && process.env.NODE_ENV !== 'production') {
+      loggers.api.debug(
+        {
+          paymentLinkId: paymentLink.id,
+          shortCode,
+          selectedToken,
+          reason: 'No CREATION FX snapshots found for this payment link',
+        },
+        'FX snapshot missing (dev debug)'
+      );
+    }
+
     loggers.api.info(
       {
         shortCode,
         paymentLinkId: paymentLink.id,
         status: currentStatus,
+        hasFxSnapshot: !!bestFxSnapshot,
+        selectedToken,
       },
       'Public payment link fetched'
     );
+
+    // Transform FX snapshot to camelCase if exists
+    const fxSnapshot = bestFxSnapshot
+      ? {
+          id: bestFxSnapshot.id,
+          snapshotType: bestFxSnapshot.snapshot_type,
+          tokenType: bestFxSnapshot.token_type,
+          baseCurrency: bestFxSnapshot.base_currency,
+          quoteCurrency: bestFxSnapshot.quote_currency,
+          rate: Number(bestFxSnapshot.rate),
+          provider: bestFxSnapshot.provider,
+          capturedAt: bestFxSnapshot.captured_at,
+        }
+      : null;
+
+    // Also return all available token snapshots for UI selection
+    const availableFxSnapshots = allCreationSnapshots.map((s) => ({
+      tokenType: s.token_type,
+      rate: Number(s.rate),
+      capturedAt: s.captured_at,
+    }));
 
     // Return sanitized data (exclude sensitive info)
     return NextResponse.json({
@@ -173,7 +225,8 @@ export async function GET(
         availablePaymentMethods,
         wiseTransferId: paymentLink.wise_transfer_id ?? null,
         wiseStatus: paymentLink.wise_status ?? null,
-        fxSnapshot: paymentLink.fx_snapshots?.[0] || null,
+        fxSnapshot,
+        availableFxSnapshots,
         lastEvent: paymentLink.payment_events?.[0] || null,
       },
     });

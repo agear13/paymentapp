@@ -19,6 +19,8 @@ import {
   Calendar,
   Activity,
   Send,
+  TrendingUp,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -62,9 +64,11 @@ export interface PaymentLinkDetails {
   fxSnapshots?: Array<{
     id: string;
     snapshotType: string;
+    tokenType: string | null;
     baseCurrency: string;
     quoteCurrency: string;
     rate: number;
+    provider: string;
     capturedAt: Date;
   }>;
   ledgerEntries?: Array<{
@@ -172,8 +176,9 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
         </DialogHeader>
 
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="fx">FX Rates</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
             <TabsTrigger value="ledger">Ledger</TabsTrigger>
             <TabsTrigger value="xero">Xero Sync</TabsTrigger>
@@ -302,6 +307,126 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* FX Rates Tab */}
+          <TabsContent value="fx" className="space-y-4">
+            {(() => {
+              const creationSnapshots = paymentLink.fxSnapshots?.filter(
+                (s) => s.snapshotType === 'CREATION'
+              ) || [];
+              const settlementSnapshots = paymentLink.fxSnapshots?.filter(
+                (s) => s.snapshotType === 'SETTLEMENT'
+              ) || [];
+
+              if (creationSnapshots.length === 0 && settlementSnapshots.length === 0) {
+                return (
+                  <div className="text-center py-8">
+                    <ArrowRightLeft className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">
+                      No FX snapshots captured yet
+                    </p>
+                    {process.env.NODE_ENV !== 'production' && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        (Dev: Snapshots are created when payment link is created)
+                      </p>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <>
+                  {creationSnapshots.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4" />
+                          Creation Rates
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="rounded-md border">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b bg-muted/50">
+                                <th className="px-3 py-2 text-left font-medium">Token</th>
+                                <th className="px-3 py-2 text-left font-medium">Rate</th>
+                                <th className="px-3 py-2 text-left font-medium">Provider</th>
+                                <th className="px-3 py-2 text-left font-medium">Captured</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {creationSnapshots.map((snapshot) => (
+                                <tr key={snapshot.id} className="border-b last:border-0">
+                                  <td className="px-3 py-2 font-medium">
+                                    {snapshot.tokenType || snapshot.baseCurrency}
+                                  </td>
+                                  <td className="px-3 py-2 font-mono">
+                                    1 {snapshot.baseCurrency} = {snapshot.rate.toFixed(8)} {snapshot.quoteCurrency}
+                                  </td>
+                                  <td className="px-3 py-2 text-muted-foreground">
+                                    {snapshot.provider}
+                                  </td>
+                                  <td className="px-3 py-2 text-muted-foreground">
+                                    {format(new Date(snapshot.capturedAt), 'PPp')}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {settlementSnapshots.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <DollarSign className="h-4 w-4" />
+                          Settlement Rate
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="rounded-md border">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b bg-muted/50">
+                                <th className="px-3 py-2 text-left font-medium">Token</th>
+                                <th className="px-3 py-2 text-left font-medium">Rate</th>
+                                <th className="px-3 py-2 text-left font-medium">Provider</th>
+                                <th className="px-3 py-2 text-left font-medium">Settled</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {settlementSnapshots.map((snapshot) => (
+                                <tr key={snapshot.id} className="border-b last:border-0">
+                                  <td className="px-3 py-2 font-medium">
+                                    <Badge variant="success">
+                                      {snapshot.tokenType || snapshot.baseCurrency}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-3 py-2 font-mono">
+                                    1 {snapshot.baseCurrency} = {snapshot.rate.toFixed(8)} {snapshot.quoteCurrency}
+                                  </td>
+                                  <td className="px-3 py-2 text-muted-foreground">
+                                    {snapshot.provider}
+                                  </td>
+                                  <td className="px-3 py-2 text-muted-foreground">
+                                    {format(new Date(snapshot.capturedAt), 'PPp')}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              );
+            })()}
           </TabsContent>
 
           {/* Events Tab */}

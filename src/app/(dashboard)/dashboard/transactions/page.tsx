@@ -23,7 +23,7 @@ export default async function TransactionsPage() {
     redirect('/onboarding');
   }
 
-  // Fetch all payment events for this organization
+  // Fetch all payment events for this organization (include FX snapshots for fiat equivalent)
   const allEvents = await prisma.payment_events.findMany({
     where: {
       payment_links: {
@@ -40,6 +40,11 @@ export default async function TransactionsPage() {
           invoice_reference: true,
           amount: true,
           currency: true,
+          fx_snapshots: {
+            where: { snapshot_type: 'SETTLEMENT' },
+            orderBy: { captured_at: 'desc' },
+            take: 1,
+          },
         },
       },
     },

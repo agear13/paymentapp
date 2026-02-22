@@ -18,9 +18,43 @@ import {
 } from '@/lib/validations/schemas';
 import { generateUniqueShortCode } from '@/lib/server/short-code';
 import { generateQRCodeDataUrl } from '@/lib/qr-code';
+import { getFxService, type Currency } from '@/lib/fx';
+
+/** FX summary for list view (lightweight) */
+export interface FxSummary {
+  hasFxCreationSnapshots: boolean;
+  hasSettlementSnapshot: boolean;
+  settlementRate: number | null;
+  settlementToken: string | null;
+}
 
 // Helper to transform snake_case DB fields to camelCase for frontend
 function transformPaymentLink(link: Record<string, unknown>) {
+  const fxSnapshots = link.fx_snapshots as Array<{
+    snapshot_type: string;
+    token_type: string | null;
+    rate: number | string;
+  }> | undefined;
+
+  const fxSummary: FxSummary = {
+    hasFxCreationSnapshots: false,
+    hasSettlementSnapshot: false,
+    settlementRate: null,
+    settlementToken: null,
+  };
+
+  if (fxSnapshots && fxSnapshots.length > 0) {
+    fxSummary.hasFxCreationSnapshots = fxSnapshots.some(
+      (s) => s.snapshot_type === 'CREATION'
+    );
+    const settlement = fxSnapshots.find((s) => s.snapshot_type === 'SETTLEMENT');
+    if (settlement) {
+      fxSummary.hasSettlementSnapshot = true;
+      fxSummary.settlementRate = Number(settlement.rate);
+      fxSummary.settlementToken = settlement.token_type;
+    }
+  }
+
   return {
     id: link.id,
     organizationId: link.organization_id,
@@ -40,6 +74,7 @@ function transformPaymentLink(link: Record<string, unknown>) {
     createdAt: link.created_at,
     updatedAt: link.updated_at,
     paymentEvents: link.payment_events,
+    fxSummary,
   };
 }
 
@@ -137,13 +172,20 @@ export async function GET(request: NextRequest) {
     // Get total count
     const total = await prisma.payment_links.count({ where });
 
-    // Get paginated results
+    // Get paginated results (include fx_snapshots for fxSummary)
     const paymentLinks = await prisma.payment_links.findMany({
       where,
       include: {
         payment_events: {
           orderBy: { created_at: 'desc' },
           take: 1,
+        },
+        fx_snapshots: {
+          select: {
+            snapshot_type: true,
+            token_type: true,
+            rate: true,
+          },
         },
       },
       orderBy: { created_at: 'desc' },
@@ -302,6 +344,31 @@ export async function POST(request: NextRequest) {
       },
       'Payment link created'
     );
+
+    // Capture FX creation snapshots for all supported tokens (fail-open)
+    try {
+      const fxService = getFxService();
+      const snapshots = await fxService.captureAllCreationSnapshots(
+        paymentLink.id,
+        validatedData.currency as Currency
+      );
+      loggers.payment.info(
+        {
+          paymentLinkId: paymentLink.id,
+          snapshotCount: snapshots.length,
+          tokens: snapshots.map((s) => s.token_type),
+        },
+        'FX creation snapshots captured'
+      );
+    } catch (fxError: any) {
+      loggers.payment.warn(
+        {
+          paymentLinkId: paymentLink.id,
+          error: fxError.message,
+        },
+        'Failed to capture FX creation snapshots (non-blocking)'
+      );
+    }
 
     // Generate QR code (async, don't wait)
     generateQRCodeDataUrl(shortCode).catch((error) => {
