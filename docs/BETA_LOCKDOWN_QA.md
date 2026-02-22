@@ -107,12 +107,14 @@ To show all features to everyone (e.g., for demos or after beta):
 ## Files Changed
 
 ### Core Auth
-- `src/lib/auth/admin.ts` - Added `BETA_ADMIN_EMAILS`, `isBetaAdminEmail()`, `requireBetaAdminOrThrow()`, `checkBetaAdminAuth()`
+- `src/lib/auth/admin.ts` - Server-only module with `checkAdminAuth()`, `checkBetaAdminAuth()`, `requireAdminAuth()`. Re-exports from admin-shared.ts.
+- `src/lib/auth/admin-shared.ts` - Client-safe module with `BETA_ADMIN_EMAILS`, `isBetaAdminEmail()`, `requireBetaAdminOrThrow()`
 - `src/lib/auth/session.ts` - Added `getCurrentUserEmail()`
 - `src/lib/config/env.ts` - Added `BETA_LOCKDOWN_MODE` flag and `features.betaLockdown`
+- `src/lib/supabase/server.ts` - Added `server-only` import guard
 
 ### UI
-- `src/components/dashboard/app-sidebar.tsx` - Conditionally render Revenue Share and Platform Preview sections
+- `src/components/dashboard/app-sidebar.tsx` - Imports from `admin-shared.ts` (client-safe), conditionally renders Revenue Share and Platform Preview sections
 
 ### Route Protection
 - `src/middleware.ts` - Added beta lockdown route protection for restricted dashboard routes

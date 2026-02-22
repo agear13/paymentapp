@@ -4,7 +4,11 @@
  * 
  * Uses anon key + cookie-based sessions
  * Subject to Row Level Security (RLS)
+ * 
+ * WARNING: This module uses next/headers and is SERVER-ONLY.
+ * Do NOT import this from client components.
  */
+import 'server-only';
 
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';

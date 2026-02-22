@@ -1,37 +1,18 @@
 /**
- * Admin Authorization Helpers
+ * Admin Authorization Helpers - SERVER ONLY
  * Protects admin-only routes and operations
+ * 
+ * WARNING: This module uses next/headers via Supabase. 
+ * Do NOT import this from client components.
+ * For client-safe helpers, use ./admin-shared.ts
  */
+import 'server-only';
 
 import { createUserClient } from '@/lib/supabase/server';
+import { isBetaAdminEmail, BETA_ADMIN_EMAILS, requireBetaAdminOrThrow } from './admin-shared';
 
-/**
- * Beta lockdown admin emails - hardcoded for safety
- * Only these accounts can see Revenue Share and Platform Preview features
- */
-export const BETA_ADMIN_EMAILS = ['alishajayne13@gmail.com'] as const;
-
-/**
- * Check if an email is a beta admin (case-insensitive)
- * Used for feature gating during beta testing
- */
-export function isBetaAdminEmail(email?: string | null): boolean {
-  if (!email) return false;
-  const normalized = email.trim().toLowerCase();
-  return BETA_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === normalized);
-}
-
-/**
- * Require beta admin access or throw 403 error
- * Use this in API routes that should be restricted during beta
- */
-export function requireBetaAdminOrThrow(sessionUserEmail?: string | null): void {
-  if (!isBetaAdminEmail(sessionUserEmail)) {
-    const error = new Error('Forbidden: Beta admin access required');
-    (error as any).status = 403;
-    throw error;
-  }
-}
+// Re-export client-safe helpers for convenience in server code
+export { isBetaAdminEmail, BETA_ADMIN_EMAILS, requireBetaAdminOrThrow };
 
 /**
  * Check if the current user is an admin based on ADMIN_EMAILS allowlist

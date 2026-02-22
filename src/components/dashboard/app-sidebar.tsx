@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { isBetaAdminEmail } from '@/lib/auth/admin';
+import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import {
   LayoutDashboard,
   Link as LinkIcon,
