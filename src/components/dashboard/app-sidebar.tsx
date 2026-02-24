@@ -1,10 +1,17 @@
 'use client';
 
+/**
+ * App Sidebar Component
+ * 
+ * NOTE: isBetaAdmin is passed from the server layout to avoid importing
+ * server-only modules (like next/headers) in this client component.
+ * See src/app/(dashboard)/layout.tsx for where this prop is computed.
+ */
+
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import {
   LayoutDashboard,
   Link as LinkIcon,
@@ -178,17 +185,21 @@ const settingsItems = [
   },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  /** Beta admin status computed on server and passed as prop */
+  isBetaAdmin: boolean;
+}
+
+export function AppSidebar({ isBetaAdmin }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [user, setUser] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
-  const [isBetaAdmin, setIsBetaAdmin] = React.useState(false);
 
   React.useEffect(() => {
-    // Get initial user
+    // Get initial user for display purposes (name, email, avatar)
     async function loadUser() {
       try {
         const { data: { user }, error } = await supabase.auth.getUser();
@@ -196,7 +207,6 @@ export function AppSidebar() {
           console.error('Error loading user:', error);
         } else {
           setUser(user);
-          setIsBetaAdmin(isBetaAdminEmail(user?.email));
         }
       } catch (error) {
         console.error('Error in getUser:', error);
@@ -207,12 +217,11 @@ export function AppSidebar() {
 
     loadUser();
 
-    // Listen for auth changes
+    // Listen for auth changes (for user display info only)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      setIsBetaAdmin(isBetaAdminEmail(session?.user?.email));
       setLoading(false);
     });
 
