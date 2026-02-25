@@ -1,12 +1,17 @@
 /**
- * Supabase User/Session Client (Server)
- * For user-facing operations and authentication checks
+ * Supabase User/Session Client (Server Components)
  * 
- * Uses anon key + cookie-based sessions
- * Subject to Row Level Security (RLS)
- * 
- * WARNING: This module uses next/headers and is SERVER-ONLY.
- * Do NOT import this from client components.
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║  NODE.JS RUNTIME ONLY - SERVER COMPONENTS                                     ║
+ * ║                                                                               ║
+ * ║  This module uses next/headers (cookies()) which requires Node.js runtime.   ║
+ * ║  DO NOT import from:                                                         ║
+ * ║    - middleware.ts (Edge runtime)                                            ║
+ * ║    - Client components ('use client')                                        ║
+ * ║                                                                               ║
+ * ║  For API routes, use: @/lib/supabase/middleware (requireAuth)                ║
+ * ║  For middleware, use: inline @supabase/ssr client                            ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
  */
 import 'server-only';
 

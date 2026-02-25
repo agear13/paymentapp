@@ -1,8 +1,19 @@
 /**
  * Admin Authorization - Shared/Client-Safe Helpers
  * 
- * This module contains ONLY pure functions and constants that can be safely
- * imported by both server and client components. NO server-only imports here.
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║  CLIENT-SAFE MODULE                                                           ║
+ * ║                                                                               ║
+ * ║  This module contains ONLY pure functions and constants.                     ║
+ * ║  It can be safely imported from both server and client components.           ║
+ * ║                                                                               ║
+ * ║  DO NOT add any imports from:                                                ║
+ * ║    - next/headers                                                            ║
+ * ║    - @/lib/supabase/server                                                   ║
+ * ║    - Any module that uses cookies() or headers()                             ║
+ * ║                                                                               ║
+ * ║  For server-only auth checks, use: @/lib/auth/admin.server                   ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
  */
 
 /**

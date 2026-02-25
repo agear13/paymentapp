@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPartnerLedgerEntryForReferralConversion } from '@/lib/referrals/partners-integration';
-import { checkAdminAuth } from '@/lib/auth/admin';
+import { checkAdminAuth } from '@/lib/auth/admin.server';
 
 /**
  * POST /api/referrals/conversions/[id]/replay-ledger

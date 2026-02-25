@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConversionsTable } from '@/components/referrals/conversions-table';
-import { checkAdminAuth } from '@/lib/auth/admin';
+import { checkAdminAuth } from '@/lib/auth/admin.server';
 
 export default async function ConversionsPage({
   searchParams,

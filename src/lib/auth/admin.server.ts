@@ -2,9 +2,19 @@
  * Admin Authorization Helpers - SERVER ONLY
  * Protects admin-only routes and operations
  * 
- * WARNING: This module uses next/headers via Supabase. 
- * Do NOT import this from client components.
- * For client-safe helpers, use ./admin-shared.ts
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║  WARNING: SERVER-ONLY MODULE                                                  ║
+ * ║                                                                               ║
+ * ║  This module uses next/headers via Supabase server client.                   ║
+ * ║  It MUST NEVER be imported from:                                             ║
+ * ║    - Any file with 'use client' directive                                    ║
+ * ║    - Any component that could be bundled client-side                         ║
+ * ║                                                                               ║
+ * ║  For client-safe helpers, use: @/lib/auth/admin-shared                       ║
+ * ║                                                                               ║
+ * ║  The 'server-only' import below will cause a build error if this module      ║
+ * ║  is accidentally imported from client code.                                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
  */
 import 'server-only';
 

@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { checkAdminAuth } from '@/lib/auth/admin';
+import { checkAdminAuth } from '@/lib/auth/admin.server';
 
 export async function POST(
   request: NextRequest,

@@ -1,8 +1,21 @@
 /**
- * Supabase helpers
- * - updateSession(request): used by Next.js middleware to refresh session + redirect
- * - requireAuth(request): used by API route handlers to read authenticated user
+ * Supabase Auth Helpers for API Routes
+ * 
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║  NODE.JS RUNTIME ONLY                                                         ║
+ * ║                                                                               ║
+ * ║  This module is designed for API route handlers (Node.js runtime).           ║
+ * ║  DO NOT import this from middleware.ts (Edge runtime).                       ║
+ * ║                                                                               ║
+ * ║  The middleware.ts file has its own inline Supabase client that uses         ║
+ * ║  only @supabase/ssr (Edge-compatible).                                       ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
+ * 
+ * Exports:
+ * - requireAuth(request): For API routes to get authenticated user
+ * - updateSession(request): Legacy - prefer using middleware.ts directly
  */
+import 'server-only';
 
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'

@@ -1,3 +1,12 @@
+/**
+ * Dashboard Page
+ * 
+ * Force dynamic rendering to ensure cookies/session are always fresh.
+ * This eliminates "Dynamic server usage (cookies)" warnings.
+ */
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getUserOrganization } from '@/lib/auth/get-org';

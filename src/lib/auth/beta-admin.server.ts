@@ -1,10 +1,15 @@
 /**
  * Beta Admin Server Check
  * 
- * SERVER-ONLY module for checking beta admin status.
- * Uses Supabase server client with cookies/headers.
- * 
- * DO NOT import this from client components.
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║  WARNING: SERVER-ONLY MODULE                                                  ║
+ * ║                                                                               ║
+ * ║  This module uses next/headers via Supabase server client.                   ║
+ * ║  It MUST NEVER be imported from 'use client' components.                     ║
+ * ║                                                                               ║
+ * ║  Used by: src/app/(dashboard)/layout.tsx to compute isBetaAdmin              ║
+ * ║  The boolean result is passed as a prop to client components.                ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
  */
 import 'server-only';
 
