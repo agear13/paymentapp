@@ -13,6 +13,7 @@ import { TOKEN_CONFIG } from '@/lib/hedera/constants';
 import { fromSmallestUnit } from '@/lib/hedera/token-service';
 import { generateCorrelationId } from '@/lib/services/correlation';
 import { normalizeHederaTransactionId } from '@/lib/hedera/txid';
+import { getFxService } from '@/lib/fx';
 
 const requestSchema = z.object({
   paymentLinkId: z.string().uuid(),
@@ -351,10 +352,13 @@ export async function POST(request: NextRequest) {
     );
 
     const now = new Date();
-    // Use correlation_id as base for idempotency keys
     const idempotencyKey = correlationId;
 
-    // mirrorUrl is already declared at line 119, reuse it for metadata
+    // Settlement FX snapshot for audit (manual verify path)
+    const fxService = getFxService();
+    const invoiceCurrency = paymentLink.currency as 'USD' | 'AUD';
+    const exchangeRate = await fxService.getRate(tokenType, invoiceCurrency);
+
     const paymentEventData = {
       payment_link_id: validated.paymentLinkId,
       event_type: 'PAYMENT_CONFIRMED' as const,
@@ -397,7 +401,21 @@ export async function POST(request: NextRequest) {
         data: paymentEventData,
       }),
 
-      // 3. Create ledger entry: DEBIT Crypto Clearing
+      // 3. Settlement FX snapshot (audit)
+      prisma.fx_snapshots.create({
+        data: {
+          payment_link_id: validated.paymentLinkId,
+          snapshot_type: 'SETTLEMENT',
+          token_type: tokenType,
+          base_currency: tokenType,
+          quote_currency: paymentLink.currency,
+          rate: exchangeRate.rate,
+          provider: exchangeRate.provider,
+          captured_at: exchangeRate.timestamp,
+        },
+      }),
+
+      // 4. Ledger entry: DEBIT Crypto Clearing
       prisma.ledger_entries.create({
         data: {
           payment_link_id: validated.paymentLinkId,
@@ -411,7 +429,7 @@ export async function POST(request: NextRequest) {
         },
       }),
 
-      // 4. Create ledger entry: CREDIT Accounts Receivable
+      // 5. Create ledger entry: CREDIT Accounts Receivable
       prisma.ledger_entries.create({
         data: {
           payment_link_id: validated.paymentLinkId,

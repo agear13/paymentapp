@@ -352,19 +352,22 @@ export async function POST(request: NextRequest) {
         paymentLink.id,
         validatedData.currency as Currency
       );
+      const tokenList = snapshots.map((s) => (s as { token_type: string | null }).token_type ?? (s as { tokenType?: string }).tokenType);
       loggers.payment.info(
         {
           paymentLinkId: paymentLink.id,
           snapshotCount: snapshots.length,
-          tokens: snapshots.map((s) => s.token_type),
+          tokens: tokenList,
         },
         'FX creation snapshots captured'
       );
-    } catch (fxError: any) {
+    } catch (fxError: unknown) {
+      const err = fxError instanceof Error ? fxError : new Error(String(fxError));
       loggers.payment.warn(
         {
           paymentLinkId: paymentLink.id,
-          error: fxError.message,
+          error: err.message,
+          stack: err.stack,
         },
         'Failed to capture FX creation snapshots (non-blocking)'
       );

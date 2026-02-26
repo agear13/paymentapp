@@ -15,6 +15,8 @@ import config from '@/lib/config/env';
 import { normalizeHederaTransactionId } from '@/lib/hedera/txid';
 import { createReferralConversionFromPaymentConfirmed } from '@/lib/referrals/payment-conversion';
 import { assertPaymentLinksUpdateDataValid } from '@/lib/payments/payment-links-update-guard';
+import { getFxService } from '@/lib/fx';
+import { getFxSnapshotService } from '@/lib/fx/fx-snapshot-service';
 
 export interface ConfirmPaymentParams {
   paymentLinkId: string;
@@ -217,13 +219,30 @@ export async function confirmPayment(
         paymentLinkId,
       }, 'Payment event created');
 
-      // 4. Post to ledger (best-effort; payment confirmed is source of truth)
+      // 4. Create settlement FX snapshot (audit consistency), then post to ledger
       try {
         if (provider === 'stripe') {
-          // Import calculateStripeFee for fee calculation
-          const { calculateStripeFee } = await import('@/lib/ledger/posting-rules/stripe');
+          const invoiceCurrency = paymentLink.currency;
+          const sameCurrency = currencyReceived.toUpperCase() === invoiceCurrency.toUpperCase();
+          if (sameCurrency) {
+            await getFxSnapshotService().createSettlementSnapshotInTx(tx, {
+              payment_link_id: paymentLinkId,
+              snapshot_type: 'SETTLEMENT',
+              token_type: null,
+              base_currency: invoiceCurrency,
+              quote_currency: invoiceCurrency,
+              rate: 1.0,
+              provider: 'stripe',
+              captured_at: new Date(),
+            });
+          } else {
+            log.warn(
+              { paymentLinkId, currencyReceived, invoiceCurrency, correlationId },
+              'Stripe settlement: currency differs from invoice, skipping FX settlement snapshot'
+            );
+          }
 
-          // Convert back to cents for fee calculation
+          const { calculateStripeFee } = await import('@/lib/ledger/posting-rules/stripe');
           const amountInCents = Math.round(amountReceived * 100);
           const calculatedFee = calculateStripeFee(amountInCents, currencyReceived.toLowerCase());
 
@@ -237,6 +256,20 @@ export async function confirmPayment(
             correlationId,
           });
         } else if (provider === 'hedera' && tokenType) {
+          const invoiceCurrency = paymentLink.currency;
+          const fxService = getFxService();
+          const exchangeRate = await fxService.getRate(tokenType, invoiceCurrency as 'USD' | 'AUD');
+          await getFxSnapshotService().createSettlementSnapshotInTx(tx, {
+            payment_link_id: paymentLinkId,
+            snapshot_type: 'SETTLEMENT',
+            token_type: tokenType,
+            base_currency: tokenType,
+            quote_currency: invoiceCurrency,
+            rate: exchangeRate.rate,
+            provider: exchangeRate.provider,
+            captured_at: exchangeRate.timestamp,
+          });
+
           const fxSnapshot = await tx.fx_snapshots.findFirst({
             where: {
               payment_link_id: paymentLinkId,
@@ -270,6 +303,26 @@ export async function confirmPayment(
             idempotencyKey: correlationId,
           });
         } else if (provider === 'wise') {
+          const invoiceCurrency = paymentLink.currency;
+          const sameCurrency = currencyReceived.toUpperCase() === invoiceCurrency.toUpperCase();
+          if (sameCurrency) {
+            await getFxSnapshotService().createSettlementSnapshotInTx(tx, {
+              payment_link_id: paymentLinkId,
+              snapshot_type: 'SETTLEMENT',
+              token_type: null,
+              base_currency: invoiceCurrency,
+              quote_currency: invoiceCurrency,
+              rate: 1.0,
+              provider: 'wise',
+              captured_at: new Date(),
+            });
+          } else {
+            log.warn(
+              { paymentLinkId, currencyReceived, invoiceCurrency, correlationId },
+              'Wise settlement: currency differs from invoice, skipping FX settlement snapshot'
+            );
+          }
+
           await postWiseSettlement({
             paymentLinkId,
             organizationId: paymentLink.organization_id,

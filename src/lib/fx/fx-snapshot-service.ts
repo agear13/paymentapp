@@ -43,20 +43,19 @@ export class FxSnapshotService {
     );
 
     try {
-      // Validate snapshot data
       this.validateSnapshotData(data);
 
-      // Create snapshot in database
-      const snapshot = await prisma.fxSnapshot.create({
+      const capturedAt = data.capturedAt || new Date();
+      const snapshot = await prisma.fx_snapshots.create({
         data: {
-          paymentLinkId: data.paymentLinkId,
-          snapshotType: data.snapshotType,
-          tokenType: data.tokenType,
-          baseCurrency: data.baseCurrency,
-          quoteCurrency: data.quoteCurrency,
+          payment_link_id: data.paymentLinkId,
+          snapshot_type: data.snapshotType,
+          token_type: data.tokenType ?? null,
+          base_currency: data.baseCurrency,
+          quote_currency: data.quoteCurrency,
           rate: data.rate,
           provider: data.provider,
-          capturedAt: data.capturedAt || new Date(),
+          captured_at: capturedAt,
         },
       });
 
@@ -65,10 +64,15 @@ export class FxSnapshotService {
         'FX snapshot created'
       );
 
-      return snapshot;
-    } catch (error) {
+      return snapshot as FxSnapshot;
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error(String(error));
       logger.error(
-        { error, data },
+        {
+          paymentLinkId: data.paymentLinkId,
+          error: err.message,
+          stack: err.stack,
+        },
         'Failed to create FX snapshot'
       );
       throw error;
@@ -131,58 +135,63 @@ export class FxSnapshotService {
 
     const rates = await Promise.all(ratePromises);
 
-    // 📊 PERFORMANCE: Prepare batch insert data
-    const capturedAt = new Date(); // Same timestamp for all snapshots
+    const capturedAt = new Date();
     const snapshotData = tokens
       .map((token, i) => {
         const rate = rates[i];
         if (!rate) return null;
-
+        const ts = rate.timestamp || capturedAt;
         return {
           id: randomUUID(),
-          paymentLinkId,
-          snapshotType: 'CREATION' as const,
-          tokenType: token,
-          baseCurrency: token,
-          quoteCurrency,
+          payment_link_id: paymentLinkId,
+          snapshot_type: 'CREATION' as const,
+          token_type: token,
+          base_currency: token,
+          quote_currency: quoteCurrency,
           rate: rate.rate,
           provider: rate.provider,
-          capturedAt: rate.timestamp || capturedAt,
+          captured_at: ts,
         };
       })
-      .filter((data): data is NonNullable<typeof data> => data !== null);
+      .filter((row): row is NonNullable<typeof row> => row !== null);
 
-    // 📊 PERFORMANCE: Batch insert all snapshots in a single DB query
-    // This reduces 4 sequential inserts (~200ms) to 1 batch insert (~50ms)
     if (snapshotData.length > 0) {
-      const result = await prisma.fxSnapshot.createMany({
-        data: snapshotData,
-        skipDuplicates: true, // Safety net
-      });
-
-      logger.info(
-        { paymentLinkId, count: result.count, tokens: snapshotData.map(s => s.tokenType) },
-        'Batch created FX snapshots for all tokens'
+      try {
+        const result = await prisma.fx_snapshots.createMany({
+          data: snapshotData,
+          skipDuplicates: true,
+        });
+        const tokenList = snapshotData.map((s) => s.token_type);
+        logger.info(
+          { paymentLinkId, snapshotCount: result.count, tokens: tokenList },
+          'FX creation snapshots captured'
+        );
+      } catch (err: unknown) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        logger.error(
+          { paymentLinkId, error: e.message, stack: e.stack },
+          'Failed to batch create FX creation snapshots'
+        );
+        throw err;
+      }
+    } else {
+      logger.warn(
+        { paymentLinkId, quoteCurrency },
+        'No FX creation snapshots inserted (all rate fetches failed or returned null)'
       );
     }
 
-    // Fetch the created snapshots to return (with IDs)
-    const snapshots = await prisma.fxSnapshot.findMany({
+    const snapshots = await prisma.fx_snapshots.findMany({
       where: {
-        paymentLinkId,
-        snapshotType: 'CREATION',
-        tokenType: { in: tokens },
+        payment_link_id: paymentLinkId,
+        snapshot_type: 'CREATION',
+        token_type: { in: tokens },
       },
-      orderBy: { capturedAt: 'desc' },
+      orderBy: { captured_at: 'desc' },
       take: tokens.length,
     });
 
-    logger.info(
-      { paymentLinkId, count: snapshots.length },
-      'Created creation-time snapshots for all tokens'
-    );
-
-    return snapshots;
+    return snapshots as FxSnapshot[];
   }
 
   /**
@@ -220,10 +229,10 @@ export class FxSnapshotService {
    * Get all snapshots for a payment link
    */
   async getSnapshots(paymentLinkId: string): Promise<FxSnapshot[]> {
-    return prisma.fxSnapshot.findMany({
-      where: { paymentLinkId },
-      orderBy: { capturedAt: 'asc' },
-    });
+    return prisma.fx_snapshots.findMany({
+      where: { payment_link_id: paymentLinkId },
+      orderBy: { captured_at: 'asc' },
+    }) as Promise<FxSnapshot[]>;
   }
 
   /**
@@ -234,14 +243,15 @@ export class FxSnapshotService {
     snapshotType: FxSnapshotType,
     tokenType?: Currency
   ): Promise<FxSnapshot | null> {
-    return prisma.fxSnapshot.findFirst({
+    const row = await prisma.fx_snapshots.findFirst({
       where: {
-        paymentLinkId,
-        snapshotType,
-        ...(tokenType && { tokenType }),
+        payment_link_id: paymentLinkId,
+        snapshot_type: snapshotType,
+        ...(tokenType && { token_type: tokenType }),
       },
-      orderBy: { capturedAt: 'desc' },
+      orderBy: { captured_at: 'desc' },
     });
+    return row as FxSnapshot | null;
   }
 
   /**
@@ -251,13 +261,13 @@ export class FxSnapshotService {
     paymentLinkId: string,
     tokenType: Currency
   ): Promise<FxSnapshot[]> {
-    return prisma.fxSnapshot.findMany({
+    return prisma.fx_snapshots.findMany({
       where: {
-        paymentLinkId,
-        tokenType,
+        payment_link_id: paymentLinkId,
+        token_type: tokenType,
       },
-      orderBy: { capturedAt: 'asc' },
-    });
+      orderBy: { captured_at: 'asc' },
+    }) as Promise<FxSnapshot[]>;
   }
 
   /**
@@ -323,14 +333,14 @@ export class FxSnapshotService {
     };
 
     const rate = parseFloat(snapshot.rate.toString());
+    const base = (snapshot as { base_currency?: string }).base_currency ?? (snapshot as { baseCurrency?: string }).baseCurrency;
+    const quote = (snapshot as { quote_currency?: string }).quote_currency ?? (snapshot as { quoteCurrency?: string }).quoteCurrency;
 
-    // Check if rate is positive
     if (rate <= 0) {
       result.isValid = false;
       result.errors.push('Rate must be positive');
     }
 
-    // Check for extreme rates (potential errors)
     if (rate < 0.000001) {
       result.warnings.push('Rate is very low, please verify');
     }
@@ -339,30 +349,27 @@ export class FxSnapshotService {
       result.warnings.push('Rate is very high, please verify');
     }
 
-    // Check for USDC/USD peg (should be close to 1.0)
     if (
-      snapshot.baseCurrency === 'USDC' &&
-      snapshot.quoteCurrency === 'USD'
+      base === 'USDC' &&
+      quote === 'USD'
     ) {
       if (Math.abs(rate - 1.0) > 0.05) {
         result.warnings.push('USDC/USD rate deviates significantly from 1.0 peg');
       }
     }
 
-    // Check for USDT/USD peg (should be close to 1.0)
     if (
-      snapshot.baseCurrency === 'USDT' &&
-      snapshot.quoteCurrency === 'USD'
+      base === 'USDT' &&
+      quote === 'USD'
     ) {
       if (Math.abs(rate - 1.0) > 0.05) {
         result.warnings.push('USDT/USD rate deviates significantly from 1.0 peg');
       }
     }
 
-    // Check for AUDD/AUD peg (should be close to 1.0)
     if (
-      snapshot.baseCurrency === 'AUDD' &&
-      snapshot.quoteCurrency === 'AUD'
+      base === 'AUDD' &&
+      quote === 'AUD'
     ) {
       if (Math.abs(rate - 1.0) > 0.05) {
         result.warnings.push('AUDD/AUD rate deviates significantly from 1.0 peg');
@@ -418,6 +425,42 @@ export class FxSnapshotService {
     if (!['CREATION', 'SETTLEMENT'].includes(data.snapshotType)) {
       throw new Error('Invalid snapshot type');
     }
+  }
+
+  /**
+   * Create a SETTLEMENT snapshot inside a Prisma transaction (for payment confirmation).
+   * Use this when confirming payment so the snapshot and event are in the same transaction.
+   */
+  async createSettlementSnapshotInTx(
+    tx: Pick<typeof prisma, 'fx_snapshots'>,
+    data: {
+      payment_link_id: string;
+      snapshot_type: 'SETTLEMENT';
+      token_type: Currency | null;
+      base_currency: string;
+      quote_currency: string;
+      rate: number;
+      provider: string;
+      captured_at: Date;
+    }
+  ): Promise<FxSnapshot> {
+    const snapshot = await tx.fx_snapshots.create({
+      data: {
+        payment_link_id: data.payment_link_id,
+        snapshot_type: data.snapshot_type,
+        token_type: data.token_type,
+        base_currency: data.base_currency,
+        quote_currency: data.quote_currency,
+        rate: data.rate,
+        provider: data.provider,
+        captured_at: data.captured_at,
+      },
+    });
+    logger.info(
+      { paymentLinkId: data.payment_link_id, tokenType: data.token_type, provider: data.provider },
+      'Settlement FX snapshot created in transaction'
+    );
+    return snapshot as FxSnapshot;
   }
 }
 
