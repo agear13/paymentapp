@@ -346,30 +346,39 @@ export async function POST(request: NextRequest) {
     );
 
     // Capture FX creation snapshots for all supported tokens (fail-open)
+    const paymentLinkId = paymentLink.id;
+    const invoiceCurrency = validatedData.currency;
+    loggers.payment.info(
+      { paymentLinkId, invoiceCurrency },
+      'FX_CREATION_START'
+    );
     try {
       const fxService = getFxService();
       const snapshots = await fxService.captureAllCreationSnapshots(
-        paymentLink.id,
-        validatedData.currency as Currency
+        paymentLinkId,
+        invoiceCurrency as Currency
       );
-      const tokenList = snapshots.map((s) => (s as { token_type: string | null }).token_type ?? (s as { tokenType?: string }).tokenType);
+      const tokenList = snapshots?.map((s) => (s as { token_type?: string | null }).token_type ?? (s as { tokenType?: string }).tokenType) ?? [];
       loggers.payment.info(
         {
-          paymentLinkId: paymentLink.id,
-          snapshotCount: snapshots.length,
+          paymentLinkId,
+          snapshotCount: snapshots?.length ?? 0,
           tokens: tokenList,
         },
-        'FX creation snapshots captured'
+        'FX_CREATION_SUCCESS'
       );
     } catch (fxError: unknown) {
       const err = fxError instanceof Error ? fxError : new Error(String(fxError));
-      loggers.payment.warn(
+      loggers.payment.error(
         {
-          paymentLinkId: paymentLink.id,
-          error: err.message,
+          paymentLinkId,
+          invoiceCurrency,
+          errName: err.name,
+          errMessage: err.message,
           stack: err.stack,
+          cause: err.cause != null ? String(err.cause) : undefined,
         },
-        'Failed to capture FX creation snapshots (non-blocking)'
+        'FX_CREATION_FAIL'
       );
     }
 

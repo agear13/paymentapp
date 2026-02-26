@@ -33,8 +33,8 @@ model fx_snapshots {
   payment_link_id String         @db.Uuid
   snapshot_type   FxSnapshotType
   token_type      PaymentToken?
-  base_currency   String         @db.Char(3)
-  quote_currency  String         @db.Char(3)
+  base_currency   String         @db.VarChar(10)
+  quote_currency  String         @db.VarChar(10)
   rate            Decimal        @db.Decimal(18, 8)
   provider        String         @db.VarChar(100)
   captured_at     DateTime       @default(now()) @db.Timestamptz(6)
