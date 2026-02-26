@@ -248,6 +248,90 @@ export function extractStripeFee(paymentIntent: any): string {
   return calculateStripeFee(paymentIntent.amount, paymentIntent.currency);
 }
 
+/**
+ * Parameters for Stripe refund reversal posting
+ */
+export interface StripeRefundReversalParams {
+  paymentLinkId: string;
+  organizationId: string;
+  stripePaymentIntentId: string;
+  refundAmountDollars: string;
+  currency: string;
+  stripeEventId: string;
+  correlationId?: string;
+}
+
+/**
+ * Post Stripe refund reversal to ledger (gross only; no fee reversal for launch).
+ * Reverses the settlement: DR Accounts Receivable (1200), CR Stripe Clearing (1050).
+ * Idempotency: stripe-refund-${stripeEventId} so duplicate webhook delivery does not double-post.
+ */
+export async function postStripeRefundReversal(
+  params: StripeRefundReversalParams
+): Promise<void> {
+  const {
+    paymentLinkId,
+    organizationId,
+    stripePaymentIntentId,
+    refundAmountDollars,
+    currency,
+    stripeEventId,
+    correlationId,
+  } = params;
+
+  loggers.ledger.info(
+    {
+      paymentLinkId,
+      stripePaymentIntentId,
+      refundAmountDollars,
+      currency,
+      stripeEventId,
+    },
+    'Starting Stripe refund reversal posting'
+  );
+
+  await provisionStripeLedgerAccounts(prisma, organizationId, correlationId);
+
+  const ledgerService = new LedgerEntryService();
+  const idempotencyKey = `stripe-refund-${stripeEventId}`;
+  const description = [
+    'Stripe refund reversal',
+    `Payment Intent: ${stripePaymentIntentId}`,
+    `Refund amount: ${refundAmountDollars} ${currency}`,
+    `Event: ${stripeEventId}`,
+  ].join('\n');
+
+  const entries: JournalEntry[] = [
+    {
+      accountCode: LEDGER_ACCOUNTS.ACCOUNTS_RECEIVABLE,
+      entryType: 'DEBIT',
+      amount: refundAmountDollars,
+      currency,
+      description,
+    },
+    {
+      accountCode: LEDGER_ACCOUNTS.STRIPE_CLEARING,
+      entryType: 'CREDIT',
+      amount: refundAmountDollars,
+      currency,
+      description,
+    },
+  ];
+
+  await ledgerService.postJournalEntries({
+    entries,
+    paymentLinkId,
+    organizationId,
+    idempotencyKey,
+    correlationId,
+  });
+
+  loggers.ledger.info(
+    { paymentLinkId, stripeEventId, refundAmountDollars },
+    'Stripe refund reversal posted'
+  );
+}
+
 
 
 

@@ -16,7 +16,7 @@ import { verifyWebhookSignature, isEventProcessed, extractPaymentLinkId } from '
 import { fromSmallestUnit } from '@/lib/stripe/client';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
-import { postStripeSettlement, calculateStripeFee } from '@/lib/ledger/posting-rules/stripe';
+import { postStripeSettlement, calculateStripeFee, postStripeRefundReversal } from '@/lib/ledger/posting-rules/stripe';
 import { applyRevenueShareSplits } from '@/lib/referrals/commission-posting';
 import { validatePostingBalance } from '@/lib/ledger/balance-validation';
 import {
@@ -125,6 +125,10 @@ export async function POST(request: NextRequest) {
 
       case 'checkout.session.expired':
         await handleCheckoutSessionExpired(event, eventScopedCorrelationId);
+        break;
+
+      case 'charge.refunded':
+        await handleChargeRefunded(event, eventScopedCorrelationId);
         break;
 
       default:
@@ -446,6 +450,142 @@ async function handleCheckoutSessionExpired(event: Stripe.Event, _correlationId?
       sessionId: session.id,
     },
     'Checkout session expired'
+  );
+}
+
+/**
+ * Handle charge.refunded event (full or partial Stripe refund).
+ * Creates REFUND_CONFIRMED payment_event, posts ledger reversal (gross only), updates payment_links.status.
+ * Idempotency: existing check by stripe_event_id at webhook entry; delta from cumulative amount_refunded vs sum(REFUND_CONFIRMED).
+ */
+async function handleChargeRefunded(event: Stripe.Event, correlationId: string) {
+  const charge = event.data.object as Stripe.Charge;
+  const paymentIntentId =
+    typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+  if (!paymentIntentId) {
+    log.warn({ correlationId, eventId: event.id, chargeId: charge.id }, 'charge.refunded: missing payment_intent');
+    return;
+  }
+
+  const amountRefundedCents = charge.amount_refunded ?? 0;
+  if (amountRefundedCents <= 0) {
+    log.info({ correlationId, eventId: event.id }, 'charge.refunded: no amount_refunded, skipping');
+    return;
+  }
+
+  const paymentEventForLink = await prisma.payment_events.findFirst({
+    where: {
+      stripe_payment_intent_id: paymentIntentId,
+      event_type: 'PAYMENT_CONFIRMED',
+    },
+    select: { payment_link_id: true },
+  });
+  if (!paymentEventForLink) {
+    log.warn(
+      { correlationId, eventId: event.id, paymentIntentId },
+      'charge.refunded: no PAYMENT_CONFIRMED event for this payment intent'
+    );
+    return;
+  }
+  const paymentLinkId = paymentEventForLink.payment_link_id;
+
+  const alreadyRefundedResult = await prisma.payment_events.aggregate({
+    where: {
+      payment_link_id: paymentLinkId,
+      stripe_payment_intent_id: paymentIntentId,
+      event_type: 'REFUND_CONFIRMED',
+    },
+    _sum: { amount_received: true },
+  });
+  const alreadyRefundedDollars = Number(alreadyRefundedResult._sum.amount_received ?? 0);
+  const totalRefundedCents = amountRefundedCents;
+  const totalRefundedDollars = totalRefundedCents / 100;
+  const deltaDollars = totalRefundedDollars - alreadyRefundedDollars;
+  if (deltaDollars <= 0) {
+    log.info(
+      { correlationId, eventId: event.id, paymentLinkId, alreadyRefundedDollars, totalRefundedDollars },
+      'charge.refunded: delta <= 0, already processed (idempotent)'
+    );
+    return;
+  }
+
+  const paymentLink = await prisma.payment_links.findUnique({
+    where: { id: paymentLinkId },
+    select: { organization_id: true, status: true },
+  });
+  if (!paymentLink) {
+    log.error({ correlationId, paymentLinkId }, 'charge.refunded: payment link not found');
+    return;
+  }
+  if (paymentLink.status !== 'PAID' && paymentLink.status !== 'PARTIALLY_REFUNDED') {
+    log.warn(
+      { correlationId, paymentLinkId, status: paymentLink.status },
+      'charge.refunded: link not in PAID/PARTIALLY_REFUNDED, skipping'
+    );
+    return;
+  }
+
+  const currency = (charge.currency ?? 'usd').toUpperCase();
+  const refundAmountStr = deltaDollars.toFixed(2);
+
+  await prisma.payment_events.create({
+    data: {
+      payment_link_id: paymentLinkId,
+      event_type: 'REFUND_CONFIRMED',
+      payment_method: 'STRIPE',
+      stripe_event_id: event.id,
+      stripe_payment_intent_id: paymentIntentId,
+      amount_received: deltaDollars,
+      currency_received: currency,
+      correlation_id: correlationId,
+      metadata: {
+        chargeId: charge.id,
+        amountRefundedCents,
+        totalAmountRefundedCents: charge.amount_refunded,
+      },
+    },
+  });
+
+  await postStripeRefundReversal({
+    paymentLinkId,
+    organizationId: paymentLink.organization_id,
+    stripePaymentIntentId: paymentIntentId,
+    refundAmountDollars: refundAmountStr,
+    currency,
+    stripeEventId: event.id,
+    correlationId,
+  });
+
+  const [paidSum, refundSum] = await Promise.all([
+    prisma.payment_events.aggregate({
+      where: { payment_link_id: paymentLinkId, event_type: 'PAYMENT_CONFIRMED' },
+      _sum: { amount_received: true },
+    }),
+    prisma.payment_events.aggregate({
+      where: { payment_link_id: paymentLinkId, event_type: 'REFUND_CONFIRMED' },
+      _sum: { amount_received: true },
+    }),
+  ]);
+  const totalPaid = Number(paidSum._sum.amount_received ?? 0);
+  const totalRefunded = Number(refundSum._sum.amount_received ?? 0);
+  const newStatus =
+    totalRefunded >= totalPaid ? 'REFUNDED' : totalRefunded > 0 ? 'PARTIALLY_REFUNDED' : 'PAID';
+  await prisma.payment_links.update({
+    where: { id: paymentLinkId },
+    data: { status: newStatus, updated_at: new Date() },
+  });
+
+  log.info(
+    {
+      correlationId,
+      eventId: event.id,
+      paymentLinkId,
+      refundAmountDollars: refundAmountStr,
+      totalPaid,
+      totalRefunded,
+      newStatus,
+    },
+    'charge.refunded processed: REFUND_CONFIRMED created, ledger reversed, status updated'
   );
 }
 
