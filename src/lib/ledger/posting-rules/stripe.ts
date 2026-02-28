@@ -249,7 +249,8 @@ export function extractStripeFee(paymentIntent: any): string {
 }
 
 /**
- * Parameters for Stripe refund reversal posting
+ * Parameters for Stripe refund reversal posting.
+ * Prefer refundId for idempotency (refund object events); fallback to stripeEventId (charge.refunded).
  */
 export interface StripeRefundReversalParams {
   paymentLinkId: string;
@@ -257,14 +258,17 @@ export interface StripeRefundReversalParams {
   stripePaymentIntentId: string;
   refundAmountDollars: string;
   currency: string;
-  stripeEventId: string;
+  /** Preferred: stable refund id (e.g. re_xxx) for refund.created/refund.updated. Keys: stripe-refund-${refundId}-0/1 */
+  refundId?: string;
+  /** Fallback when refundId not set (e.g. charge.refunded). Keys: stripe-refund-${stripeEventId}-0/1 */
+  stripeEventId?: string;
   correlationId?: string;
 }
 
 /**
  * Post Stripe refund reversal to ledger (gross only; no fee reversal for launch).
  * Reverses the settlement: DR Accounts Receivable (1200), CR Stripe Clearing (1050).
- * Idempotency: stripe-refund-${stripeEventId} so duplicate webhook delivery does not double-post.
+ * Idempotency: refundId preferred (stripe-refund-${refundId}), else stripe-refund-${stripeEventId}. Entries use -0/-1 suffix.
  */
 export async function postStripeRefundReversal(
   params: StripeRefundReversalParams
@@ -275,9 +279,23 @@ export async function postStripeRefundReversal(
     stripePaymentIntentId,
     refundAmountDollars,
     currency,
+    refundId,
     stripeEventId,
     correlationId,
   } = params;
+
+  const keyBase = refundId
+    ? `stripe-refund-${refundId}`
+    : stripeEventId
+      ? `stripe-refund-${stripeEventId}`
+      : null;
+  if (!keyBase) {
+    loggers.ledger.warn(
+      { paymentLinkId, stripePaymentIntentId },
+      'Stripe refund reversal: missing refundId and stripeEventId, cannot post'
+    );
+    return;
+  }
 
   loggers.ledger.info(
     {
@@ -285,7 +303,9 @@ export async function postStripeRefundReversal(
       stripePaymentIntentId,
       refundAmountDollars,
       currency,
+      refundId,
       stripeEventId,
+      idempotencyKeyBase: keyBase,
     },
     'Starting Stripe refund reversal posting'
   );
@@ -293,12 +313,12 @@ export async function postStripeRefundReversal(
   await provisionStripeLedgerAccounts(prisma, organizationId, correlationId);
 
   const ledgerService = new LedgerEntryService();
-  const idempotencyKey = `stripe-refund-${stripeEventId}`;
   const description = [
     'Stripe refund reversal',
     `Payment Intent: ${stripePaymentIntentId}`,
     `Refund amount: ${refundAmountDollars} ${currency}`,
-    `Event: ${stripeEventId}`,
+    ...(refundId ? [`Refund: ${refundId}`] : []),
+    ...(stripeEventId ? [`Event: ${stripeEventId}`] : []),
   ].join('\n');
 
   const entries: JournalEntry[] = [
@@ -322,12 +342,12 @@ export async function postStripeRefundReversal(
     entries,
     paymentLinkId,
     organizationId,
-    idempotencyKey,
+    idempotencyKey: keyBase,
     correlationId,
   });
 
   loggers.ledger.info(
-    { paymentLinkId, stripeEventId, refundAmountDollars },
+    { paymentLinkId, refundId, stripeEventId, refundAmountDollars },
     'Stripe refund reversal posted'
   );
 }
