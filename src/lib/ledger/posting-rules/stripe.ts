@@ -292,9 +292,15 @@ export async function postStripeRefundReversal(
   if (!keyBase) {
     loggers.ledger.warn(
       { paymentLinkId, stripePaymentIntentId },
-      'Stripe refund reversal: missing refundId and stripeEventId, cannot post'
+      'Stripe refund reversal: refundId is required (charge.refunded is no longer a write path); cannot post'
     );
     return;
+  }
+  if (!refundId) {
+    loggers.ledger.warn(
+      { paymentLinkId, stripePaymentIntentId, stripeEventId },
+      'Stripe refund reversal: refundId missing (expected from refund.created/refund.updated only); posting with event id fallback'
+    );
   }
 
   loggers.ledger.info(

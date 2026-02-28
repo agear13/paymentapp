@@ -11,6 +11,9 @@
 | **payment_intent.canceled** | `payment_events` create (CANCELED, stripe_payment_intent_id, metadata). No payment_links or ledger. |
 | **checkout.session.completed** | Same as payment_intent.succeeded via `confirmPayment()`; then best-effort `applyRevenueShareSplits()` (commission). |
 | **checkout.session.expired** | Log only; no DB writes. |
+| **refund.created** / **refund.updated** | `handleRefundObjectEvent()` → REFUND_CONFIRMED (correlation_id = stripe_refund_&lt;refundId&gt;), ledger reversal (stripe-refund-&lt;refundId&gt;-0/1), payment_links.status. |
+| **charge.refund.created** / **charge.refund.updated** | Same as above (routed to handleRefundObjectEvent in default). |
+| **charge.refunded** | Log only; no DB or ledger writes (refund.* is single source of truth). |
 
 Idempotency at webhook entry: `prisma.payment_events.findFirst({ where: { stripe_event_id: event.id } })` — if any payment_event has this `stripe_event_id`, return 200 without processing.
 
@@ -161,8 +164,25 @@ GROUP BY la.code;
 
 ---
 
+## Duplicate detection (REFUND_CONFIRMED)
+
+To detect duplicate REFUND_CONFIRMED rows (e.g. from legacy charge.refunded + refund.* double-write):
+
+```sql
+SELECT correlation_id, COUNT(*) AS cnt
+FROM payment_events
+WHERE event_type = 'REFUND_CONFIRMED'
+GROUP BY correlation_id
+HAVING COUNT(*) > 1;
+```
+
+If any row is returned, the same refund was processed more than once. Single-path ingestion (refund.* only; charge.refunded log-only) prevents new duplicates.
+
+---
+
 ## Constraints satisfied
 
 - Minimal for launch: one new event type, two new statuses, one new webhook case, one new ledger helper.
 - No new table: reuse payment_events and ledger_entries.
-- Partial and multiple refunds: each charge.refunded creates one REFUND_CONFIRMED row with delta; status derived from cumulative refunded vs paid.
+- **Single-path refund:** Only `refund.created` / `refund.updated` (and fallback `charge.refund.created` / `charge.refund.updated`) write REFUND_CONFIRMED and ledger reversals; `charge.refunded` is log-only and never writes.
+- Partial and multiple refunds: one REFUND_CONFIRMED per refundId; status derived from cumulative refunded vs paid.

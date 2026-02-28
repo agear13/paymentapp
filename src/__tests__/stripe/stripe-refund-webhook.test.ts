@@ -64,4 +64,39 @@ describe('Stripe refund webhook (Option A)', () => {
     expect(content).toContain('REFUNDED');
     expect(content).toContain('totalRefunded >= totalPaid');
   });
+
+  describe('single-path refund: no double-write (charge.refunded is log-only)', () => {
+    it('charge.refunded case only logs and does not write DB or ledger', () => {
+      const content = fs.readFileSync(WEBHOOK_ROUTE_PATH, 'utf-8');
+      expect(content).toContain("case 'charge.refunded':");
+      expect(content).toContain('charge.refunded ignored');
+      expect(content).toContain('refund.* is source of truth');
+      expect(content).toContain('no DB or ledger writes');
+      // Must NOT call a handler that does prisma.payment_events.create or postStripeRefundReversal for charge.refunded
+      const chargeRefundedBlock = content.slice(
+        content.indexOf("case 'charge.refunded':"),
+        content.indexOf("default:") > 0 ? content.indexOf("default:") : content.length
+      );
+      expect(chargeRefundedBlock).not.toContain('handleChargeRefunded');
+      expect(chargeRefundedBlock).not.toContain('prisma.payment_events.create');
+      expect(chargeRefundedBlock).not.toContain('postStripeRefundReversal');
+    });
+
+    it('only handleRefundObjectEvent writes REFUND_CONFIRMED with correlation_id stripe_refund_<refundId>', () => {
+      const content = fs.readFileSync(WEBHOOK_ROUTE_PATH, 'utf-8');
+      expect(content).toContain('refundCorrelationId = `stripe_refund_${refundId}`');
+      expect(content).toContain('event_type: \'REFUND_CONFIRMED\'');
+      expect(content).toContain('correlation_id: refundCorrelationId');
+      expect(content).toContain('existingRefund');
+    });
+
+    it('ledger reversal uses refundId-only idempotency keys (stripe-refund-<refundId>-0 and -1)', () => {
+      const content = fs.readFileSync(STRIPE_POSTING_PATH, 'utf-8');
+      expect(content).toContain('stripe-refund-${refundId}');
+      expect(content).toContain('keyBase');
+      expect(content).toContain('idempotencyKey: keyBase');
+      expect(content).toContain('refundId is required');
+      expect(content).toContain('charge.refunded is no longer a write path');
+    });
+  });
 });
