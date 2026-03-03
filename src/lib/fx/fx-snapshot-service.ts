@@ -599,6 +599,54 @@ export class FxSnapshotService {
   }
 
   /**
+   * Ensure exactly one SETTLEMENT fx_snapshot exists for (payment_link_id, SETTLEMENT, currency, currency).
+   * Used in confirmPayment() so every PAYMENT_CONFIRMED has a canonical settlement snapshot.
+   * Idempotent: check then create; if row exists, log and return. Uses provider='INTERNAL', rate=1.
+   */
+  async ensureSettlementFxSnapshot(
+    tx: Pick<typeof prisma, 'fx_snapshots'>,
+    paymentLink: { id: string; currency: string }
+  ): Promise<void> {
+    const paymentLinkId = paymentLink.id;
+    const currency = (paymentLink.currency ?? '').trim().toUpperCase();
+    if (!currency || currency.length < 3 || currency.length > 10) {
+      logger.warn({ paymentLinkId, currency: paymentLink.currency }, 'ensureSettlementFxSnapshot: invalid currency, skip');
+      return;
+    }
+    const existing = await tx.fx_snapshots.findFirst({
+      where: {
+        payment_link_id: paymentLinkId,
+        snapshot_type: 'SETTLEMENT',
+        base_currency: currency,
+        quote_currency: currency,
+      },
+    });
+    if (existing) {
+      logger.info(
+        { paymentLinkId, base_currency: currency, quote_currency: currency },
+        'SETTLEMENT fx snapshot already exists (idempotent)'
+      );
+      return;
+    }
+    await tx.fx_snapshots.create({
+      data: {
+        payment_link_id: paymentLinkId,
+        snapshot_type: 'SETTLEMENT',
+        token_type: null,
+        base_currency: currency,
+        quote_currency: currency,
+        rate: 1,
+        provider: 'INTERNAL',
+        captured_at: new Date(),
+      },
+    });
+    logger.info(
+      { paymentLinkId, base_currency: currency, quote_currency: currency },
+      'SETTLEMENT fx snapshot created (INTERNAL, rate=1)'
+    );
+  }
+
+  /**
    * Create a SETTLEMENT snapshot inside a Prisma transaction (for payment confirmation).
    * Use this when confirming payment so the snapshot and event are in the same transaction.
    * Normalizes base/quote to 3–10 chars and provider to <=100 chars to satisfy DB constraints.

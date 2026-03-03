@@ -139,15 +139,16 @@ export async function confirmPayment(
           paymentLinkId,
           status: paymentLink.status,
         }, 'Payment link already paid');
-        
-        // Find existing event
+        await getFxSnapshotService().ensureSettlementFxSnapshot(tx, {
+          id: paymentLinkId,
+          currency: paymentLink.currency,
+        });
         const existingEvent = await tx.payment_events.findFirst({
           where: {
             payment_link_id: paymentLinkId,
             event_type: 'PAYMENT_CONFIRMED',
           },
         });
-
         return {
           success: true,
           alreadyProcessed: true,
@@ -219,29 +220,14 @@ export async function confirmPayment(
         paymentLinkId,
       }, 'Payment event created');
 
-      // 4. Create settlement FX snapshot (audit consistency), then post to ledger
+      // 4. Ensure canonical SETTLEMENT fx snapshot (payment_link_id, SETTLEMENT, currency, currency); then post to ledger
       try {
-        if (provider === 'stripe') {
-          const invoiceCurrency = paymentLink.currency;
-          const sameCurrency = currencyReceived.toUpperCase() === invoiceCurrency.toUpperCase();
-          if (sameCurrency) {
-            await getFxSnapshotService().createSettlementSnapshotInTx(tx, {
-              payment_link_id: paymentLinkId,
-              snapshot_type: 'SETTLEMENT',
-              token_type: null,
-              base_currency: invoiceCurrency,
-              quote_currency: invoiceCurrency,
-              rate: 1.0,
-              provider: 'stripe',
-              captured_at: new Date(),
-            });
-          } else {
-            log.warn(
-              { paymentLinkId, currencyReceived, invoiceCurrency, correlationId },
-              'Stripe settlement: currency differs from invoice, skipping FX settlement snapshot'
-            );
-          }
+        await getFxSnapshotService().ensureSettlementFxSnapshot(tx, {
+          id: paymentLinkId,
+          currency: paymentLink.currency,
+        });
 
+        if (provider === 'stripe') {
           const { calculateStripeFee } = await import('@/lib/ledger/posting-rules/stripe');
           const amountInCents = Math.round(amountReceived * 100);
           const calculatedFee = calculateStripeFee(amountInCents, currencyReceived.toLowerCase());
@@ -303,26 +289,6 @@ export async function confirmPayment(
             idempotencyKey: correlationId,
           });
         } else if (provider === 'wise') {
-          const invoiceCurrency = paymentLink.currency;
-          const sameCurrency = currencyReceived.toUpperCase() === invoiceCurrency.toUpperCase();
-          if (sameCurrency) {
-            await getFxSnapshotService().createSettlementSnapshotInTx(tx, {
-              payment_link_id: paymentLinkId,
-              snapshot_type: 'SETTLEMENT',
-              token_type: null,
-              base_currency: invoiceCurrency,
-              quote_currency: invoiceCurrency,
-              rate: 1.0,
-              provider: 'wise',
-              captured_at: new Date(),
-            });
-          } else {
-            log.warn(
-              { paymentLinkId, currencyReceived, invoiceCurrency, correlationId },
-              'Wise settlement: currency differs from invoice, skipping FX settlement snapshot'
-            );
-          }
-
           await postWiseSettlement({
             paymentLinkId,
             organizationId: paymentLink.organization_id,
