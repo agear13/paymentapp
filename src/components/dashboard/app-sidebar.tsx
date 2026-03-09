@@ -87,6 +87,10 @@ const partnersItems = [
         href: '/dashboard/partners/dashboard',
       },
       {
+        title: 'Deal Network (Demo)',
+        href: '/dashboard/partners/deal-network',
+      },
+      {
         title: 'Referral Links',
         href: '/dashboard/partners/referral-links',
       },

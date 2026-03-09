@@ -12,10 +12,16 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { verifyWebhookSignature, isEventProcessed, extractPaymentLinkId } from '@/lib/stripe/webhook';
+import { verifyWebhookSignature, extractPaymentLinkId } from '@/lib/stripe/webhook';
 import { fromSmallestUnit } from '@/lib/stripe/client';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
+import {
+  recordStripeWebhookReceived,
+  markStripeWebhookProcessing,
+  markStripeWebhookOutcome,
+  extractStripeLinkage,
+} from '@/lib/webhooks/stripe-audit';
 import { postStripeSettlement, calculateStripeFee, postStripeRefundReversal } from '@/lib/ledger/posting-rules/stripe';
 import { applyRevenueShareSplits } from '@/lib/referrals/commission-posting';
 import { validatePostingBalance } from '@/lib/ledger/balance-validation';
@@ -34,9 +40,10 @@ import Stripe from 'stripe';
  * Process Stripe webhook events
  */
 export async function POST(request: NextRequest) {
-  // Generate correlation ID for distributed tracing
   const correlationId = generateCorrelationId('stripe', `webhook_${Date.now()}`);
-  
+  let webhookEventId: string | null = null;
+  let webhookStartMs = 0;
+
   try {
     // Early guard: Check if webhook processing is disabled
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -65,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     // Verify webhook signature
     const event = await verifyWebhookSignature(body, signature);
-    
+
     if (!event) {
       log.error({ correlationId }, 'Invalid webhook signature');
       return NextResponse.json(
@@ -74,109 +81,90 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Event-scoped correlation ID (passed to handlers as correlationId param)
     const eventScopedCorrelationId = generateCorrelationId('stripe', event.id);
-
-    // Check idempotency using new stripe_event_id column
-    const existingEvent = await prisma.payment_events.findFirst({
-      where: { stripe_event_id: event.id },
-    });
-    
-    if (existingEvent) {
-      log.info(
-        { 
-          correlationId: eventScopedCorrelationId,
-          eventId: event.id, 
-          eventType: event.type,
-          existingPaymentEventId: existingEvent.id,
-        },
-        'Webhook event already processed (idempotent)'
-      );
-      return NextResponse.json({ 
-        received: true, 
-        processed: false,
-        duplicate: true,
-      });
+    const linkage = extractStripeLinkage(event);
+    const headersRecord: Record<string, string | undefined> = {};
+    for (const key of ['stripe-signature', 'user-agent', 'cf-connecting-ip', 'x-forwarded-for']) {
+      const v = headersList.get(key);
+      if (v) headersRecord[key] = v;
     }
 
-    log.info({
+    const auditResult = await recordStripeWebhookReceived({
+      rawBody: body,
+      headers: headersRecord,
+      parsedStripeEvent: event,
+      linkage,
       correlationId: eventScopedCorrelationId,
-      eventId: event.id,
-      eventType: event.type,
-    }, 'Processing Stripe webhook event');
+    });
 
-    // Process different event types
-    switch (event.type) {
-      case 'payment_intent.succeeded':
-        await handlePaymentIntentSucceeded(event, eventScopedCorrelationId);
-        break;
-
-      case 'payment_intent.payment_failed':
-        await handlePaymentIntentFailed(event, eventScopedCorrelationId);
-        break;
-
-      case 'payment_intent.canceled':
-        await handlePaymentIntentCanceled(event, eventScopedCorrelationId);
-        break;
-
-      case 'checkout.session.completed':
-        await handleCheckoutSessionCompleted(event, eventScopedCorrelationId);
-        break;
-
-      case 'checkout.session.expired':
-        await handleCheckoutSessionExpired(event, eventScopedCorrelationId);
-        break;
-
-      case 'refund.created':
-      case 'refund.updated':
-        await handleRefundObjectEvent(event, eventScopedCorrelationId);
-        break;
-
-      case 'charge.refunded':
-        log.info(
-          {
-            correlationId: eventScopedCorrelationId,
-            eventId: event.id,
-            eventType: event.type,
-          },
-          'charge.refunded ignored (refund.* is source of truth; no DB or ledger writes)'
-        );
-        break;
-
-      default:
-        if (
-          event.type === 'charge.refund.created' ||
-          event.type === 'charge.refund.updated'
-        ) {
-          await handleRefundObjectEvent(event, eventScopedCorrelationId);
-        } else {
-          log.info(
-            {
-              correlationId: eventScopedCorrelationId,
-              eventType: event.type,
-            },
-            'Unhandled webhook event type'
-          );
-        }
+    if (auditResult.isDuplicate) {
+      log.info(
+        {
+          correlationId: eventScopedCorrelationId,
+          webhookEventId: auditResult.row.id,
+          providerEventId: auditResult.row.provider_event_id,
+          eventType: auditResult.row.event_type,
+          attemptCount: auditResult.row.attempt_count,
+        },
+        'Duplicate webhook delivery; skipping handlers'
+      );
+      return NextResponse.json({ received: true, processed: false, duplicate: true });
     }
+
+    webhookEventId = auditResult.row.id;
+    webhookStartMs = Date.now();
+    await markStripeWebhookProcessing(webhookEventId);
 
     log.info(
-      { 
+      {
         correlationId: eventScopedCorrelationId,
-        eventId: event.id, 
-        eventType: event.type 
+        webhookEventId,
+        providerEventId: event.id,
+        eventType: event.type,
+        attemptCount: auditResult.row.attempt_count + 1,
+      },
+      'Processing Stripe webhook event'
+    );
+
+    const outcome = await processStripeWebhookEvent(event, eventScopedCorrelationId);
+
+    const durationMs = Date.now() - webhookStartMs;
+    await markStripeWebhookOutcome({
+      id: webhookEventId,
+      outcome,
+      durationMs,
+    });
+
+    log.info(
+      {
+        correlationId: eventScopedCorrelationId,
+        webhookEventId,
+        providerEventId: event.id,
+        eventType: event.type,
+        attemptCount: auditResult.row.attempt_count + 1,
+        durationMs,
       },
       'Webhook event processed successfully'
     );
 
     return NextResponse.json({ received: true, processed: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as { message?: string; stack?: string };
+    if (webhookEventId) {
+      const durationMs = webhookStartMs ? Date.now() - webhookStartMs : undefined;
+      try {
+        await markStripeWebhookOutcome({
+          id: webhookEventId,
+          outcome: 'ERROR',
+          durationMs,
+          errorMessage: err?.message ? `${err.message}${err?.stack ? `\n${err.stack}` : ''}` : undefined,
+        });
+      } catch (markErr) {
+        log.error({ correlationId, markErr }, 'Failed to mark webhook outcome ERROR');
+      }
+    }
     log.error(
-      { 
-        correlationId,
-        error: error.message,
-        stack: error.stack,
-      },
+      { correlationId, error: err?.message, stack: err?.stack },
       'Failed to process webhook'
     );
     return NextResponse.json(
@@ -184,6 +172,67 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Run business logic for a Stripe webhook event. Used by POST handler and replay.
+ * Returns PROCESSED or IGNORED. Throws on handler errors.
+ */
+export async function processStripeWebhookEvent(
+  event: Stripe.Event,
+  correlationId: string
+): Promise<'PROCESSED' | 'IGNORED'> {
+  let outcome: 'PROCESSED' | 'IGNORED' = 'PROCESSED';
+
+  switch (event.type) {
+    case 'payment_intent.succeeded':
+      await handlePaymentIntentSucceeded(event, correlationId);
+      break;
+
+    case 'payment_intent.payment_failed':
+      await handlePaymentIntentFailed(event, correlationId);
+      break;
+
+    case 'payment_intent.canceled':
+      await handlePaymentIntentCanceled(event, correlationId);
+      break;
+
+    case 'checkout.session.completed':
+      await handleCheckoutSessionCompleted(event, correlationId);
+      break;
+
+    case 'checkout.session.expired':
+      await handleCheckoutSessionExpired(event, correlationId);
+      break;
+
+    case 'refund.created':
+    case 'refund.updated':
+      await handleRefundObjectEvent(event, correlationId);
+      break;
+
+    case 'charge.refunded':
+      log.info(
+        { correlationId, eventId: event.id, eventType: event.type },
+        'charge.refunded ignored (refund.* is source of truth; no DB or ledger writes)'
+      );
+      break;
+
+    default:
+      if (
+        event.type === 'charge.refund.created' ||
+        event.type === 'charge.refund.updated'
+      ) {
+        await handleRefundObjectEvent(event, correlationId);
+      } else {
+        outcome = 'IGNORED';
+        log.info(
+          { correlationId, eventType: event.type },
+          'Unhandled webhook event type'
+        );
+      }
+  }
+
+  return outcome;
 }
 
 /**

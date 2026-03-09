@@ -28,6 +28,54 @@ model audit_logs {
   @@index([user_id])
 }
 
+enum WebhookProvider {
+  STRIPE
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  DUPLICATE
+  IGNORED
+  ERROR
+}
+
+model webhook_events {
+  id                       String              @id @default(uuid()) @db.Uuid
+  provider                 WebhookProvider
+  provider_event_id        String              @db.VarChar(255)
+  event_type               String              @db.VarChar(128)
+  livemode                 Boolean             @default(false)
+  api_version              String?             @db.VarChar(32)
+  request_id               String?             @db.VarChar(255)
+  signature_present        Boolean             @default(false)
+  signature_header         String?             @db.VarChar(512)
+  received_at              DateTime            @default(now()) @db.Timestamptz(6)
+  processed_at             DateTime?          @db.Timestamptz(6)
+  status                   WebhookEventStatus  @default(RECEIVED)
+  attempt_count            Int                 @default(0)
+  last_error               String?             @db.Text
+  last_error_at            DateTime?          @db.Timestamptz(6)
+  duration_ms              Int?
+  raw_body                 String              @db.Text
+  headers                  Json?
+  parsed_event             Json?
+  correlation_id           String?             @db.VarChar(255)
+  organization_id          String?             @db.Uuid
+  payment_link_id          String?             @db.Uuid
+  stripe_payment_intent_id String?             @db.VarChar(255)
+  stripe_charge_id         String?             @db.VarChar(255)
+  stripe_refund_id         String?             @db.VarChar(255)
+
+  @@unique([provider, provider_event_id], name: "ux_webhook_events_provider_event_id")
+  @@index([provider, status, received_at(sort: Desc)])
+  @@index([payment_link_id, received_at(sort: Desc)])
+  @@index([organization_id, received_at(sort: Desc)])
+  @@index([stripe_payment_intent_id])
+  @@index([stripe_refund_id])
+}
+
 model fx_snapshots {
   id              String         @id @default(uuid()) @db.Uuid
   payment_link_id String         @db.Uuid
