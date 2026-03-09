@@ -195,11 +195,14 @@ export async function middleware(request: NextRequest) {
   }
 
   // Beta lockdown: restrict certain routes to admin emails only
+  // Only redirect when we have a definite non-admin (email parsed and not in allowlist).
+  // When email is null (JWT parse failed), allow through so server-side can enforce (avoids
+  // incorrectly blocking admins whose cookie we couldn't parse).
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
 
   if (betaLockdownEnabled && restricted) {
-    // If we can't determine email or user is not admin, redirect (UX only; server/API enforce auth)
-    if (!isBetaAdminEmail(email)) {
+    const isKnownNonAdmin = email !== null && !isBetaAdminEmail(email);
+    if (isKnownNonAdmin) {
       if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=redirect_restricted_to_dashboard'); }
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = '/dashboard';
