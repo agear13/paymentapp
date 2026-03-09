@@ -20,12 +20,14 @@ import {
   DollarSign,
   Users,
   FileCheck,
+  FileSignature,
   TrendingUp,
   Briefcase,
   Percent,
   Banknote,
   ArrowRight,
   Sparkles,
+  Handshake,
 } from 'lucide-react';
 import {
   dealNetworkSummary,
@@ -151,7 +153,7 @@ export default function DealNetworkPage() {
       {/* Summary KPIs */}
       <div>
         <h2 className="text-lg font-semibold tracking-tight mb-3">Network summary</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total deal value</CardTitle>
@@ -162,6 +164,17 @@ export default function DealNetworkPage() {
                 ${(dealNetworkSummary.totalDealsGenerated / 1_000_000).toFixed(1)}M
               </div>
               <p className="text-xs text-muted-foreground">Cumulative attributed deal value</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Contracts signed</CardTitle>
+              <FileSignature className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{dealNetworkSummary.contractsSigned}</div>
+              <p className="text-xs text-muted-foreground">Contract-driven deals</p>
             </CardContent>
           </Card>
 
@@ -188,6 +201,19 @@ export default function DealNetworkPage() {
                 ${(dealNetworkSummary.commissionsPaid / 1_000_000).toFixed(1)}M
               </div>
               <p className="text-xs text-muted-foreground">Settled and paid</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Referral revenue generated</CardTitle>
+              <Handshake className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                ${(dealNetworkSummary.referralRevenueGenerated / 1000).toFixed(0)}k
+              </div>
+              <p className="text-xs text-muted-foreground">From referral-attributed deals</p>
             </CardContent>
           </Card>
 

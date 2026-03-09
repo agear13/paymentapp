@@ -7,8 +7,10 @@ export type DealStatus = 'Pending' | 'Eligible' | 'Paid' | 'Reversed' | 'In Revi
 
 export interface DealSummary {
   totalDealsGenerated: number;
+  contractsSigned: number;
   commissionsPending: number;
   commissionsPaid: number;
+  referralRevenueGenerated: number;
   activePartners: number;
   openDeals: number;
   avgCommissionRate: number;
@@ -69,8 +71,10 @@ export interface PayoutRail {
 
 export const dealNetworkSummary: DealSummary = {
   totalDealsGenerated: 3_200_000,
+  contractsSigned: 18,
   commissionsPending: 210_000,
   commissionsPaid: 1_100_000,
+  referralRevenueGenerated: 620_000,
   activePartners: 47,
   openDeals: 18,
   avgCommissionRate: 12.4,
