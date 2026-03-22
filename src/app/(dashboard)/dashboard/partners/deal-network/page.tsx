@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import {
   Card,
   CardContent,
@@ -28,19 +29,43 @@ import {
   ArrowRight,
   Sparkles,
   Handshake,
+  Plus,
+  UserPlus,
+  Download,
+  CreditCard,
+  Shield,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   dealNetworkSummary,
-  featuredDeal,
-  recentDeals,
+  featuredDeal as featuredDealSeed,
+  recentDeals as recentDealsSeed,
   commissionFunnelStages,
   attributionBreakdown,
-  topEarners,
+  topEarners as topEarnersSeed,
   payoutRails,
 } from '@/lib/data/mock-deal-network';
-import type { DealStatus } from '@/lib/data/mock-deal-network';
+import type { DealStatus, FeaturedDeal, RecentDeal, TopEarner } from '@/lib/data/mock-deal-network';
+import {
+  adjustFunnelCounts,
+  getNextSettlementStatus,
+  statusToFunnelLabel,
+} from '@/lib/deal-network-demo/demo-helpers';
+import { computePipelineMetrics, formatUsdCompact } from '@/lib/deal-network-demo/pipeline-metrics';
+import { CreateDealModal } from '@/components/deal-network-demo/create-deal-modal';
+import {
+  InviteParticipantModal,
+  type DemoParticipant,
+} from '@/components/deal-network-demo/invite-participant-modal';
+import {
+  ExportPayoutsModal,
+  buildExportPayoutRows,
+} from '@/components/deal-network-demo/export-payouts-modal';
 
-function getStatusVariant(status: DealStatus): 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'info' | 'outline' {
+function getStatusVariant(
+  status: DealStatus
+): 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'info' | 'outline' {
   switch (status) {
     case 'Paid':
       return 'success';
@@ -48,6 +73,8 @@ function getStatusVariant(status: DealStatus): 'default' | 'secondary' | 'destru
       return 'warning';
     case 'Eligible':
       return 'info';
+    case 'Approved':
+      return 'secondary';
     case 'Reversed':
       return 'destructive';
     case 'In Review':
@@ -57,7 +84,104 @@ function getStatusVariant(status: DealStatus): 'default' | 'secondary' | 'destru
   }
 }
 
+function bumpEarnersOnPaid(prev: TopEarner[], commission: number): TopEarner[] {
+  return prev.map((e) => {
+    if (e.name !== 'Charlie') return e;
+    return {
+      ...e,
+      amount: e.amount + Math.min(5000, Math.round(commission * 0.1)),
+      type: 'paid' as const,
+    };
+  });
+}
+
 export default function DealNetworkPage() {
+  const [deals, setDeals] = React.useState<RecentDeal[]>(() => [...recentDealsSeed]);
+  const [featured, setFeatured] = React.useState<FeaturedDeal>(() => ({ ...featuredDealSeed }));
+  const [funnel, setFunnel] = React.useState(() =>
+    commissionFunnelStages.map((s) => ({ ...s }))
+  );
+  const [participants, setParticipants] = React.useState<DemoParticipant[]>([]);
+  const [topEarnersState, setTopEarnersState] = React.useState<TopEarner[]>(() => [...topEarnersSeed]);
+
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [inviteOpen, setInviteOpen] = React.useState(false);
+  const [exportOpen, setExportOpen] = React.useState(false);
+
+  const pipelineMetrics = React.useMemo(() => computePipelineMetrics(deals), [deals]);
+
+  const exportRows = React.useMemo(
+    () =>
+      buildExportPayoutRows(deals, participants, {
+        name: featured.name,
+        partner: featured.partner,
+        payoutTrigger: featured.payoutTrigger,
+        dealValue: featured.dealValue,
+      }),
+    [deals, participants, featured.name, featured.partner, featured.payoutTrigger, featured.dealValue]
+  );
+
+  const handleCreateDeal = React.useCallback((deal: RecentDeal) => {
+    setDeals((prev) => [deal, ...prev]);
+    setFunnel((prev) => adjustFunnelCounts(prev, null, 'Pending'));
+  }, []);
+
+  const handleInviteParticipant = React.useCallback(
+    (p: DemoParticipant) => {
+      setParticipants((prev) => [
+        ...prev,
+        { ...p, dealName: featured.name, partner: featured.partner },
+      ]);
+    },
+    [featured.name, featured.partner]
+  );
+
+  const toggleParticipant = React.useCallback((id: string) => {
+    setParticipants((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, status: p.status === 'Pending' ? 'Confirmed' : 'Pending' }
+          : p
+      )
+    );
+  }, []);
+
+  const markContractPaid = React.useCallback(() => {
+    if (featured.status !== 'Pending') return;
+    const from = statusToFunnelLabel(featured.status);
+    const to = statusToFunnelLabel('Eligible');
+    setFeatured((f) => ({ ...f, status: 'Eligible' }));
+    setFunnel((prev) => adjustFunnelCounts(prev, from, to));
+    setDeals((prev) =>
+      prev.map((d) =>
+        d.dealName === featured.name
+          ? { ...d, status: 'Eligible', lastUpdated: new Date().toISOString() }
+          : d
+      )
+    );
+  }, [featured.name, featured.status]);
+
+  const advanceDealStatus = React.useCallback((dealId: string) => {
+    setDeals((prev) => {
+      const d = prev.find((row) => row.id === dealId);
+      if (!d) return prev;
+      const next = getNextSettlementStatus(d.status);
+      if (next === d.status) return prev;
+      const fromLabel = statusToFunnelLabel(d.status);
+      const toLabel = statusToFunnelLabel(next);
+      setFunnel((f) => adjustFunnelCounts(f, fromLabel, toLabel));
+      if (next === 'Paid' && d.status !== 'Paid') {
+        setTopEarnersState((te) => bumpEarnersOnPaid(te, d.commission));
+      }
+      setFeatured((f) => (d.dealName === f.name ? { ...f, status: next } : f));
+      return prev.map((row) =>
+        row.id === dealId
+          ? { ...row, status: next, lastUpdated: new Date().toISOString() }
+          : row
+      );
+    });
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -72,69 +196,89 @@ export default function DealNetworkPage() {
         <p className="text-muted-foreground text-sm">
           Multi-party deal tracking and payout transparency for high-trust networks. Provvypay powers BD and referral commission ops end-to-end.
         </p>
+        <Alert className="mt-4 border-amber-200/80 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900/50">
+          <Shield className="text-amber-700 dark:text-amber-500" aria-hidden />
+          <AlertTitle className="text-amber-900 dark:text-amber-100">Governance & controls</AlertTitle>
+          <AlertDescription className="text-amber-900/90 dark:text-amber-100/90">
+            <span className="font-medium">Admin approval required before payout release.</span>{' '}
+            Settlement advances as Pending → Eligible → Approved → Paid; only approved payouts can move to Paid in this demo.
+          </AlertDescription>
+        </Alert>
       </div>
 
       {/* Featured Deal — visual centerpiece */}
       <Card className="border-primary/40 bg-gradient-to-b from-primary/5 to-transparent shadow-sm">
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" aria-hidden />
-              <CardTitle className="text-xl">Featured Deal</CardTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" aria-hidden />
+                <CardTitle className="text-xl">Featured Deal</CardTitle>
+              </div>
+              <CardDescription className="mt-2">
+                One example deal: who gets credit (roles), who earns what (entitlements), and when payouts run (trigger). Same logic for enterprise and community-style deals.
+              </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Deal Status</span>
-              <Badge variant={getStatusVariant(featuredDeal.status)}>{featuredDeal.status}</Badge>
+              <Badge variant={getStatusVariant(featured.status)}>{featured.status}</Badge>
+              <Button type="button" variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
+                <UserPlus className="h-4 w-4 mr-1" />
+                Invite participant
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={markContractPaid}
+                disabled={featured.status !== 'Pending'}
+              >
+                <CreditCard className="h-4 w-4 mr-1" />
+                Mark contract as paid
+              </Button>
             </div>
           </div>
-          <CardDescription>
-            One example deal: who gets credit (roles), who earns what (entitlements), and when payouts run (trigger). Same logic for enterprise and community-style deals.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Deal details — grouped */}
           <div className="rounded-lg border bg-background/60 p-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Deal details</p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Deal</p>
-                <p className="font-semibold text-foreground">{featuredDeal.name}</p>
+                <p className="font-semibold text-foreground">{featured.name}</p>
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Deal value</p>
-                <p className="font-semibold text-foreground">${featuredDeal.dealValue.toLocaleString()}</p>
+                <p className="font-semibold text-foreground">${featured.dealValue.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Payout trigger</p>
-                <p className="font-semibold text-foreground">{featuredDeal.payoutTrigger}</p>
+                <p className="font-semibold text-foreground">{featured.payoutTrigger}</p>
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Partner</p>
-                <p className="font-semibold text-foreground">{featuredDeal.partner}</p>
+                <p className="font-semibold text-foreground">{featured.partner}</p>
               </div>
             </div>
           </div>
 
-          {/* Attributed roles — grouped */}
           <div className="rounded-lg border bg-background/60 p-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Attributed roles</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Introducer</p>
-                <p className="font-medium text-foreground">{featuredDeal.introducer}</p>
+                <p className="font-medium text-foreground">{featured.introducer}</p>
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Closer</p>
-                <p className="font-medium text-foreground">{featuredDeal.closer}</p>
+                <p className="font-medium text-foreground">{featured.closer}</p>
               </div>
             </div>
           </div>
 
-          {/* Commission entitlements — grouped */}
           <div className="rounded-lg border bg-background/60 p-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Commission entitlements</p>
             <div className="flex flex-wrap gap-3">
-              {featuredDeal.commissionSplits.map((split) => (
+              {featured.commissionSplits.map((split) => (
                 <div
                   key={split.role}
                   className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2"
@@ -147,12 +291,73 @@ export default function DealNetworkPage() {
               ))}
             </div>
           </div>
+
+          {participants.length > 0 && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-2 justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Invited participants
+                  </span>
+                  <Badge variant="outline" className="font-medium border-primary/40 bg-background">
+                    {featured.name}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">Partner: {featured.partner}</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Enrollment for this deal only. Click a row to toggle invitation status (Pending ↔ Confirmed).
+              </p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Deal</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Commission</TableHead>
+                    <TableHead>Invitation</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {participants.map((p) => (
+                    <TableRow
+                      key={p.id}
+                      className="cursor-pointer hover:bg-muted/60"
+                      onClick={() => toggleParticipant(p.id)}
+                      title="Toggle Pending / Confirmed"
+                    >
+                      <TableCell className="font-medium text-muted-foreground text-sm">
+                        {p.dealName ?? featured.name}
+                      </TableCell>
+                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{p.email}</TableCell>
+                      <TableCell>{p.role}</TableCell>
+                      <TableCell>
+                        {p.commissionType === 'percent'
+                          ? `${p.commissionValue}%`
+                          : `$${p.commissionValue.toLocaleString()}`}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={p.status === 'Confirmed' ? 'success' : 'warning'}>
+                          {p.status === 'Confirmed' ? 'Confirmed' : 'Pending invite'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Summary KPIs */}
+      {/* Summary KPIs — baseline + pipeline-derived where noted */}
       <div>
-        <h2 className="text-lg font-semibold tracking-tight mb-3">Network summary</h2>
+        <h2 className="text-lg font-semibold tracking-tight mb-1">Network summary</h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Open deals, commissions pending, and commissions paid reflect the live demo pipeline below.
+        </p>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -184,10 +389,8 @@ export default function DealNetworkPage() {
               <FileCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                ${(dealNetworkSummary.commissionsPending / 1000).toFixed(0)}k
-              </div>
-              <p className="text-xs text-muted-foreground">Awaiting payout trigger</p>
+              <div className="text-2xl font-bold">{formatUsdCompact(pipelineMetrics.commissionsPending)}</div>
+              <p className="text-xs text-muted-foreground">From pipeline (pre-Paid)</p>
             </CardContent>
           </Card>
 
@@ -197,10 +400,8 @@ export default function DealNetworkPage() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                ${(dealNetworkSummary.commissionsPaid / 1_000_000).toFixed(1)}M
-              </div>
-              <p className="text-xs text-muted-foreground">Settled and paid</p>
+              <div className="text-2xl font-bold">{formatUsdCompact(pipelineMetrics.commissionsPaid)}</div>
+              <p className="text-xs text-muted-foreground">From pipeline (Paid)</p>
             </CardContent>
           </Card>
 
@@ -234,8 +435,8 @@ export default function DealNetworkPage() {
               <Briefcase className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dealNetworkSummary.openDeals}</div>
-              <p className="text-xs text-muted-foreground">In pipeline</p>
+              <div className="text-2xl font-bold">{pipelineMetrics.openDeals}</div>
+              <p className="text-xs text-muted-foreground">Not Paid / Reversed</p>
             </CardContent>
           </Card>
 
@@ -252,13 +453,26 @@ export default function DealNetworkPage() {
         </div>
       </div>
 
-      {/* Recent Deals Table */}
+      {/* Deal pipeline */}
       <Card>
-        <CardHeader>
-          <CardTitle>Deal pipeline</CardTitle>
-          <CardDescription>
-            Recent deals—enterprise partners and community or membership-style commissions. Each row shows who introduced, who closed, the commission amount, and current payout state.
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Deal pipeline</CardTitle>
+            <CardDescription>
+              Recent deals—enterprise partners and community or membership-style commissions. Click a settlement badge to advance{' '}
+              <span className="font-medium">Pending → Eligible → Approved → Paid</span> (admin approval step before Paid in production).
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button type="button" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Create deal
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setExportOpen(true)}>
+              <Download className="h-4 w-4 mr-1" />
+              Export payouts
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -275,20 +489,23 @@ export default function DealNetworkPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {recentDeals.map((deal) => (
+              {deals.map((deal) => (
                 <TableRow key={deal.id}>
                   <TableCell className="font-medium">{deal.dealName}</TableCell>
                   <TableCell>{deal.partner}</TableCell>
-                  <TableCell className="text-right">
-                    ${deal.value.toLocaleString()}
-                  </TableCell>
+                  <TableCell className="text-right">${deal.value.toLocaleString()}</TableCell>
                   <TableCell>{deal.introducer}</TableCell>
                   <TableCell>{deal.closer}</TableCell>
-                  <TableCell className="text-right font-medium">
-                    ${deal.commission.toLocaleString()}
-                  </TableCell>
+                  <TableCell className="text-right font-medium">${deal.commission.toLocaleString()}</TableCell>
                   <TableCell>
-                    <Badge variant={getStatusVariant(deal.status)}>{deal.status}</Badge>
+                    <button
+                      type="button"
+                      className="inline-flex cursor-pointer rounded-full border-0 bg-transparent p-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      onClick={() => advanceDealStatus(deal.id)}
+                      title="Advance: Pending → Eligible → Approved → Paid"
+                    >
+                      <Badge variant={getStatusVariant(deal.status)}>{deal.status}</Badge>
+                    </button>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {new Date(deal.lastUpdated).toLocaleDateString('en-US', {
@@ -304,18 +521,18 @@ export default function DealNetworkPage() {
         </CardContent>
       </Card>
 
-      {/* Secondary: Settlement funnel, attribution, top earners, payout rails */}
+      {/* Secondary */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Settlement state funnel</CardTitle>
             <CardDescription>
-              Where deals sit in the payout lifecycle: pending → eligible → approved → paid.
+              Where deals sit in the payout lifecycle: pending → eligible → approved → paid. Approved is the control gate before funds release.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {commissionFunnelStages.map((stage) => (
+              {funnel.map((stage) => (
                 <div key={stage.label} className="flex items-center justify-between">
                   <span className="text-sm font-medium">{stage.label}</span>
                   <span className="text-sm text-muted-foreground">{stage.count} deals</span>
@@ -329,7 +546,7 @@ export default function DealNetworkPage() {
           <CardHeader>
             <CardTitle className="text-base">Attributed roles (default split)</CardTitle>
             <CardDescription>
-              Role-based share of commission entitlements. Configurable per program.
+              Who gets what share of each commission—introducer, connector, closer, platform. Configurable per program.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -356,7 +573,7 @@ export default function DealNetworkPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {topEarners.map((earner) => (
+              {topEarnersState.map((earner) => (
                 <div key={earner.name} className="flex items-center justify-between">
                   <span className="font-medium">{earner.name}</span>
                   <span className="text-sm">
@@ -387,7 +604,8 @@ export default function DealNetworkPage() {
                     {rail.method}
                   </span>
                   <span className="text-sm text-muted-foreground">
-                    {rail.count} partners · Last {new Date(rail.lastUsed).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {rail.count} partners · Last{' '}
+                    {new Date(rail.lastUsed).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                 </div>
               ))}
@@ -395,6 +613,10 @@ export default function DealNetworkPage() {
           </CardContent>
         </Card>
       </div>
+
+      <CreateDealModal open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreateDeal} />
+      <InviteParticipantModal open={inviteOpen} onOpenChange={setInviteOpen} onInvite={handleInviteParticipant} />
+      <ExportPayoutsModal open={exportOpen} onOpenChange={setExportOpen} rows={exportRows} />
     </div>
   );
 }

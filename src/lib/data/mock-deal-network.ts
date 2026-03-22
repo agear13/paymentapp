@@ -3,7 +3,13 @@
  * UI-only demo for investor/partner conversations. Replace with real API when ready.
  */
 
-export type DealStatus = 'Pending' | 'Eligible' | 'Paid' | 'Reversed' | 'In Review';
+export type DealStatus =
+  | 'Pending'
+  | 'Eligible'
+  | 'Approved'
+  | 'Paid'
+  | 'Reversed'
+  | 'In Review';
 
 export interface DealSummary {
   totalDealsGenerated: number;
@@ -44,6 +50,8 @@ export interface RecentDeal {
   commission: number;
   status: DealStatus;
   lastUpdated: string;
+  /** Set when created from the demo “Create deal” flow */
+  payoutTrigger?: string;
 }
 
 export interface FunnelStage {
