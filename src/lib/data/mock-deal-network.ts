@@ -52,6 +52,12 @@ export interface RecentDeal {
   lastUpdated: string;
   /** Set when created from the demo “Create deal” flow */
   payoutTrigger?: string;
+  /** Rabbit Hole identity graph (demo): selected contact id */
+  rhContactId?: string;
+  /** e.g. Bob — BD Lead — CertiK */
+  rhContactLine?: string;
+  /** Graph-recorded introducer for the selected contact (audit / override messaging) */
+  rhGraphIntroducer?: string;
 }
 
 export interface FunnelStage {

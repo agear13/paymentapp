@@ -20,6 +20,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { DealStatus, RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
 
 export interface ExportPayoutRow {
   dealName: string;
@@ -233,10 +234,15 @@ export function buildExportPayoutRows(
     const settlement = deal?.status ?? 'Pending';
     const pt = deal?.payoutTrigger ?? featured.payoutTrigger;
     const lu = deal ? formatExportDate(deal.lastUpdated) : formatExportDate(new Date().toISOString());
-    const amt =
-      p.commissionType === 'percent'
-        ? Math.round(featured.dealValue * (p.commissionValue / 100))
-        : p.commissionValue;
+    const { total: amt } = resolveParticipantCommissionUsd(
+      {
+        commissionKind: p.commissionKind,
+        commissionValue: p.commissionValue,
+        baseParticipant: p.baseParticipant,
+        formulaExpression: p.formulaExpression,
+      },
+      featured.dealValue
+    );
 
     out.push({
       dealName,

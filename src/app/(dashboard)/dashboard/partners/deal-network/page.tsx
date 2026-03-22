@@ -53,6 +53,10 @@ import {
   statusToFunnelLabel,
 } from '@/lib/deal-network-demo/demo-helpers';
 import { computePipelineMetrics, formatUsdCompact } from '@/lib/deal-network-demo/pipeline-metrics';
+import {
+  COMMISSION_STRUCTURE_OPTIONS,
+  resolveParticipantCommissionUsd,
+} from '@/lib/deal-network-demo/commission-structure';
 import { CreateDealModal } from '@/components/deal-network-demo/create-deal-modal';
 import {
   InviteParticipantModal,
@@ -334,9 +338,28 @@ export default function DealNetworkPage() {
                       <TableCell className="text-muted-foreground text-sm">{p.email}</TableCell>
                       <TableCell>{p.role}</TableCell>
                       <TableCell>
-                        {p.commissionType === 'percent'
-                          ? `${p.commissionValue}%`
-                          : `$${p.commissionValue.toLocaleString()}`}
+                        {(() => {
+                          const kindLabel =
+                            COMMISSION_STRUCTURE_OPTIONS.find((o) => o.value === p.commissionKind)?.label ??
+                            p.commissionKind;
+                          const resolved = resolveParticipantCommissionUsd(
+                            {
+                              commissionKind: p.commissionKind,
+                              commissionValue: p.commissionValue,
+                              baseParticipant: p.baseParticipant,
+                              formulaExpression: p.formulaExpression,
+                            },
+                            featured.dealValue
+                          );
+                          return (
+                            <div className="space-y-0.5">
+                              <span className="text-xs text-muted-foreground block">{kindLabel}</span>
+                              <span className="font-medium tabular-nums">
+                                ${resolved.total.toLocaleString()}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <Badge variant={p.status === 'Confirmed' ? 'success' : 'warning'}>
@@ -492,7 +515,18 @@ export default function DealNetworkPage() {
               {deals.map((deal) => (
                 <TableRow key={deal.id}>
                   <TableCell className="font-medium">{deal.dealName}</TableCell>
-                  <TableCell>{deal.partner}</TableCell>
+                  <TableCell>
+                    <span className="font-medium">{deal.partner}</span>
+                    {deal.rhContactLine ? (
+                      <span className="mt-0.5 block text-xs text-muted-foreground">{deal.rhContactLine}</span>
+                    ) : null}
+                    {deal.rhGraphIntroducer &&
+                    deal.introducer.trim() !== deal.rhGraphIntroducer.trim() ? (
+                      <span className="mt-1 block text-xs text-amber-700 dark:text-amber-400">
+                        Introducer override — graph: {deal.rhGraphIntroducer}
+                      </span>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="text-right">${deal.value.toLocaleString()}</TableCell>
                   <TableCell>{deal.introducer}</TableCell>
                   <TableCell>{deal.closer}</TableCell>
@@ -615,7 +649,12 @@ export default function DealNetworkPage() {
       </div>
 
       <CreateDealModal open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreateDeal} />
-      <InviteParticipantModal open={inviteOpen} onOpenChange={setInviteOpen} onInvite={handleInviteParticipant} />
+      <InviteParticipantModal
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        onInvite={handleInviteParticipant}
+        featuredDealValue={featured.dealValue}
+      />
       <ExportPayoutsModal open={exportOpen} onOpenChange={setExportOpen} rows={exportRows} />
     </div>
   );
