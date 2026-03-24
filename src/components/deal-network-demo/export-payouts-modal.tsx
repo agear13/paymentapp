@@ -25,12 +25,18 @@ import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commiss
 export interface ExportPayoutRow {
   dealName: string;
   partner: string;
+  contactPerson: string;
   participant: string;
+  email: string;
   role: string;
-  commissionAmount: number;
+  commissionStructure: string;
+  payoutAmount: number;
+  approvalStatus: 'Pending approval' | 'Approved';
   settlementStatus: DealStatus;
+  contractPaidStatus: 'Contract Unpaid' | 'Contract Paid';
   payoutTrigger: string;
   lastUpdated: string;
+  approvedAt?: string;
 }
 
 function formatExportDate(iso: string): string {
@@ -68,12 +74,18 @@ function rowsToCsv(rows: ExportPayoutRow[]): string {
   const header = [
     'Deal Name',
     'Partner',
+    'Contact Person',
     'Participant',
+    'Email',
     'Role',
-    'Commission Amount',
+    'Commission Structure',
+    'Calculated Payout Amount',
+    'Approval Status',
     'Settlement Status',
+    'Deal Trigger Status / Contract Paid Status',
     'Payout Trigger',
     'Last Updated',
+    'Approved At',
   ];
   const lines = [header.join(',')];
   const esc = (s: string) =>
@@ -85,12 +97,18 @@ function rowsToCsv(rows: ExportPayoutRow[]): string {
       [
         esc(r.dealName),
         esc(r.partner),
+        esc(r.contactPerson),
         esc(r.participant),
+        esc(r.email),
         esc(r.role),
-        String(r.commissionAmount),
+        esc(r.commissionStructure),
+        String(r.payoutAmount),
+        esc(r.approvalStatus),
         esc(r.settlementStatus),
+        esc(r.contractPaidStatus),
         esc(r.payoutTrigger),
         esc(r.lastUpdated),
+        esc(r.approvedAt ?? ''),
       ].join(',')
     );
   }
@@ -101,9 +119,15 @@ export interface ExportPayoutsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   rows: ExportPayoutRow[];
+  excludedUnapprovedCount?: number;
 }
 
-export function ExportPayoutsModal({ open, onOpenChange, rows }: ExportPayoutsModalProps) {
+export function ExportPayoutsModal({
+  open,
+  onOpenChange,
+  rows,
+  excludedUnapprovedCount = 0,
+}: ExportPayoutsModalProps) {
   function downloadCsv() {
     const csv = rowsToCsv(rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -124,6 +148,11 @@ export function ExportPayoutsModal({ open, onOpenChange, rows }: ExportPayoutsMo
             Accounting-ready extract: deal, partner, participant line items, settlement status, and
             payout trigger. Download CSV for CFO / controller review.
           </DialogDescription>
+          {excludedUnapprovedCount > 0 ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              {excludedUnapprovedCount} unapproved participant line item(s) excluded from payout export.
+            </p>
+          ) : null}
         </DialogHeader>
         <div className="overflow-auto rounded-md border flex-1 min-h-0">
           <Table>
@@ -131,18 +160,24 @@ export function ExportPayoutsModal({ open, onOpenChange, rows }: ExportPayoutsMo
               <TableRow className="bg-muted/50">
                 <TableHead className="whitespace-nowrap">Deal name</TableHead>
                 <TableHead className="whitespace-nowrap">Partner</TableHead>
+                <TableHead className="whitespace-nowrap">Contact person</TableHead>
                 <TableHead className="whitespace-nowrap">Participant</TableHead>
+                <TableHead className="whitespace-nowrap">Email</TableHead>
                 <TableHead className="whitespace-nowrap">Role</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Commission amount</TableHead>
+                <TableHead className="whitespace-nowrap">Commission structure</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Calculated payout</TableHead>
+                <TableHead className="whitespace-nowrap">Approval status</TableHead>
                 <TableHead className="whitespace-nowrap">Settlement status</TableHead>
+                <TableHead className="whitespace-nowrap">Contract paid status</TableHead>
                 <TableHead className="whitespace-nowrap">Payout trigger</TableHead>
                 <TableHead className="whitespace-nowrap">Last updated</TableHead>
+                <TableHead className="whitespace-nowrap">Approved at</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
                     No rows to export yet.
                   </TableCell>
                 </TableRow>
@@ -151,17 +186,29 @@ export function ExportPayoutsModal({ open, onOpenChange, rows }: ExportPayoutsMo
                   <TableRow key={`${r.dealName}-${r.participant}-${r.role}-${i}`}>
                     <TableCell className="font-medium align-top">{r.dealName}</TableCell>
                     <TableCell className="align-top">{r.partner}</TableCell>
+                    <TableCell className="align-top">{r.contactPerson}</TableCell>
                     <TableCell className="align-top">{r.participant}</TableCell>
+                    <TableCell className="align-top text-muted-foreground text-sm">{r.email}</TableCell>
                     <TableCell className="align-top">{r.role}</TableCell>
+                    <TableCell className="align-top text-xs text-muted-foreground">{r.commissionStructure}</TableCell>
                     <TableCell className="text-right font-mono text-sm align-top">
-                      ${r.commissionAmount.toLocaleString()}
+                      ${r.payoutAmount.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <Badge variant={r.approvalStatus === 'Approved' ? 'success' : 'warning'}>
+                        {r.approvalStatus}
+                      </Badge>
                     </TableCell>
                     <TableCell className="align-top">
                       <Badge variant={getStatusVariant(r.settlementStatus)}>{r.settlementStatus}</Badge>
                     </TableCell>
+                    <TableCell className="align-top">{r.contractPaidStatus}</TableCell>
                     <TableCell className="text-sm align-top">{r.payoutTrigger}</TableCell>
                     <TableCell className="text-muted-foreground text-sm whitespace-nowrap align-top">
                       {r.lastUpdated}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm whitespace-nowrap align-top">
+                      {r.approvedAt ?? '-'}
                     </TableCell>
                   </TableRow>
                 ))
@@ -183,9 +230,6 @@ export function ExportPayoutsModal({ open, onOpenChange, rows }: ExportPayoutsMo
 }
 
 export interface FeaturedContext {
-  name: string;
-  partner: string;
-  payoutTrigger: string;
   dealValue: number;
 }
 
@@ -196,44 +240,27 @@ export function buildExportPayoutRows(
   deals: RecentDeal[],
   participants: DemoParticipant[],
   featured: FeaturedContext
-): ExportPayoutRow[] {
+): { rows: ExportPayoutRow[]; excludedUnapprovedCount: number } {
   const out: ExportPayoutRow[] = [];
+  let excludedUnapprovedCount = 0;
+  const dealById = new Map(deals.map((d) => [d.id, d]));
   const dealByName = new Map(deals.map((d) => [d.dealName, d]));
 
-  for (const d of deals) {
-    const half = Math.round(d.commission / 2);
-    const rest = d.commission - half;
-    const pt = d.payoutTrigger ?? 'Contract Paid';
-    const lu = formatExportDate(d.lastUpdated);
-    out.push({
-      dealName: d.dealName,
-      partner: d.partner,
-      participant: d.introducer,
-      role: 'Introducer',
-      commissionAmount: half,
-      settlementStatus: d.status,
-      payoutTrigger: pt,
-      lastUpdated: lu,
-    });
-    out.push({
-      dealName: d.dealName,
-      partner: d.partner,
-      participant: d.closer,
-      role: 'Closer',
-      commissionAmount: rest,
-      settlementStatus: d.status,
-      payoutTrigger: pt,
-      lastUpdated: lu,
-    });
-  }
-
   for (const p of participants) {
-    const dealName = p.dealName ?? featured.name;
-    const partner = p.partner ?? featured.partner;
-    const deal = dealByName.get(dealName);
+    const deal =
+      (p.dealId ? dealById.get(p.dealId) : undefined) ??
+      (p.dealName ? dealByName.get(p.dealName) : undefined);
+    if (!deal) continue;
+
+    const dealIsPaid = deal.status === 'Approved' || deal.status === 'Paid';
+    if (dealIsPaid && p.approvalStatus !== 'Approved') {
+      excludedUnapprovedCount += 1;
+      continue;
+    }
+
     const settlement = deal?.status ?? 'Pending';
-    const pt = deal?.payoutTrigger ?? featured.payoutTrigger;
-    const lu = deal ? formatExportDate(deal.lastUpdated) : formatExportDate(new Date().toISOString());
+    const pt = deal?.payoutTrigger ?? 'Manual';
+    const lu = formatExportDate(deal.lastUpdated);
     const { total: amt } = resolveParticipantCommissionUsd(
       {
         commissionKind: p.commissionKind,
@@ -243,18 +270,27 @@ export function buildExportPayoutRows(
       },
       featured.dealValue
     );
+    const structureLabel = p.commissionKind
+      .replaceAll('_', ' ')
+      .replace(/\b\w/g, (m) => m.toUpperCase());
 
     out.push({
-      dealName,
-      partner,
+      dealName: deal.dealName,
+      partner: deal.partner,
+      contactPerson: deal.rhContactLine?.split(' — ')[0] ?? '-',
       participant: p.name,
-      role: `${p.role} (invite)`,
-      commissionAmount: amt,
+      email: p.email,
+      role: p.role,
+      commissionStructure: structureLabel,
+      payoutAmount: amt,
+      approvalStatus: p.approvalStatus,
       settlementStatus: settlement,
+      contractPaidStatus: dealIsPaid ? 'Contract Paid' : 'Contract Unpaid',
       payoutTrigger: pt,
       lastUpdated: lu,
+      approvedAt: p.approvedAt ? formatExportDate(p.approvedAt) : undefined,
     });
   }
 
-  return out;
+  return { rows: out, excludedUnapprovedCount };
 }

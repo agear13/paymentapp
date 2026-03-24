@@ -62,7 +62,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
   const [companyId, setCompanyId] = React.useState<string>('');
   const [contactId, setContactId] = React.useState<string>('');
   const [dealValue, setDealValue] = React.useState('');
-  const [payoutTrigger, setPayoutTrigger] = React.useState('Contract Signed');
+  const [payoutTrigger, setPayoutTrigger] = React.useState('Manual');
   const [introducer, setIntroducer] = React.useState('');
   const [graphIntroducer, setGraphIntroducer] = React.useState('');
   const [closer, setCloser] = React.useState('');
@@ -117,7 +117,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
       setCompanyId('');
       setContactId('');
       setDealValue('');
-      setPayoutTrigger('Contract Signed');
+      setPayoutTrigger('Manual');
       setIntroducer('');
       setGraphIntroducer('');
       setCloser('');

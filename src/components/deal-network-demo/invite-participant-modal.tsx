@@ -40,9 +40,16 @@ export interface DemoParticipant {
   baseParticipant?: BaseParticipantSlot;
   formulaExpression?: string;
   status: 'Pending' | 'Confirmed';
+  inviteStatus: 'Invited' | 'Opened';
+  approvalStatus: 'Pending approval' | 'Approved';
+  approvedAt?: string;
+  approvalNote?: string;
+  inviteToken: string;
   /** Set by parent when saving — ties invite to the featured deal (demo). */
   dealName?: string;
   partner?: string;
+  dealId?: string;
+  inviteLink?: string;
 }
 
 export interface InviteParticipantModalProps {
@@ -66,6 +73,10 @@ export function InviteParticipantModal({
   const [commissionValue, setCommissionValue] = React.useState('10');
   const [baseParticipant, setBaseParticipant] = React.useState<BaseParticipantSlot>('Closer');
   const [formulaExpression, setFormulaExpression] = React.useState('');
+
+  function makeToken() {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
 
   React.useEffect(() => {
     if (!open) {
@@ -109,6 +120,9 @@ export function InviteParticipantModal({
         commissionKind === 'pct_of_participant' ? baseParticipant : undefined,
       formulaExpression: commissionKind === 'formula_advanced' ? formulaExpression.trim() : undefined,
       status: 'Pending',
+      inviteStatus: 'Invited',
+      approvalStatus: 'Pending approval',
+      inviteToken: makeToken(),
     };
     onInvite(participant);
     onOpenChange(false);

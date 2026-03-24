@@ -66,6 +66,7 @@ import {
   ExportPayoutsModal,
   buildExportPayoutRows,
 } from '@/components/deal-network-demo/export-payouts-modal';
+import { loadPilotStore, savePilotStore } from '@/lib/deal-network-demo/pilot-store';
 
 function getStatusVariant(
   status: DealStatus
@@ -114,16 +115,24 @@ export default function DealNetworkPage() {
 
   const pipelineMetrics = React.useMemo(() => computePipelineMetrics(deals), [deals]);
 
-  const exportRows = React.useMemo(
+  const exportData = React.useMemo(
     () =>
       buildExportPayoutRows(deals, participants, {
-        name: featured.name,
-        partner: featured.partner,
-        payoutTrigger: featured.payoutTrigger,
         dealValue: featured.dealValue,
       }),
-    [deals, participants, featured.name, featured.partner, featured.payoutTrigger, featured.dealValue]
+    [deals, participants, featured.dealValue]
   );
+
+  React.useEffect(() => {
+    const stored = loadPilotStore();
+    if (!stored) return;
+    if (stored.deals.length) setDeals(stored.deals);
+    setParticipants(stored.participants);
+  }, []);
+
+  React.useEffect(() => {
+    savePilotStore({ deals, participants });
+  }, [deals, participants]);
 
   const handleCreateDeal = React.useCallback((deal: RecentDeal) => {
     setDeals((prev) => [deal, ...prev]);
@@ -132,34 +141,48 @@ export default function DealNetworkPage() {
 
   const handleInviteParticipant = React.useCallback(
     (p: DemoParticipant) => {
+      const linkedDeal = deals.find((d) => d.dealName === featured.name);
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
       setParticipants((prev) => [
         ...prev,
-        { ...p, dealName: featured.name, partner: featured.partner },
+        {
+          ...p,
+          dealId: linkedDeal?.id,
+          dealName: linkedDeal?.dealName ?? featured.name,
+          partner: linkedDeal?.partner ?? featured.partner,
+          inviteLink: `${origin}/deal-invites/${p.inviteToken}`,
+        },
       ]);
     },
-    [featured.name, featured.partner]
+    [featured.name, featured.partner, deals]
   );
 
   const toggleParticipant = React.useCallback((id: string) => {
     setParticipants((prev) =>
       prev.map((p) =>
         p.id === id
-          ? { ...p, status: p.status === 'Pending' ? 'Confirmed' : 'Pending' }
+          ? {
+              ...p,
+              status: p.status === 'Pending' ? 'Confirmed' : 'Pending',
+              approvalStatus: p.approvalStatus === 'Approved' ? 'Pending approval' : 'Approved',
+              approvedAt:
+                p.approvalStatus === 'Approved' ? undefined : new Date().toISOString(),
+            }
           : p
       )
     );
   }, []);
 
   const markContractPaid = React.useCallback(() => {
-    if (featured.status !== 'Pending') return;
+    if (featured.status !== 'Pending' && featured.status !== 'Eligible') return;
     const from = statusToFunnelLabel(featured.status);
-    const to = statusToFunnelLabel('Eligible');
-    setFeatured((f) => ({ ...f, status: 'Eligible' }));
+    const to = statusToFunnelLabel('Approved');
+    setFeatured((f) => ({ ...f, status: 'Approved' }));
     setFunnel((prev) => adjustFunnelCounts(prev, from, to));
     setDeals((prev) =>
       prev.map((d) =>
         d.dealName === featured.name
-          ? { ...d, status: 'Eligible', lastUpdated: new Date().toISOString() }
+          ? { ...d, status: 'Approved', lastUpdated: new Date().toISOString() }
           : d
       )
     );
@@ -234,7 +257,7 @@ export default function DealNetworkPage() {
                 type="button"
                 size="sm"
                 onClick={markContractPaid}
-                disabled={featured.status !== 'Pending'}
+                disabled={featured.status === 'Approved' || featured.status === 'Paid'}
               >
                 <CreditCard className="h-4 w-4 mr-1" />
                 Mark contract as paid
@@ -310,7 +333,7 @@ export default function DealNetworkPage() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Enrollment for this deal only. Click a row to toggle invitation status (Pending ↔ Confirmed).
+                Enrollment for this deal only. Participants approve through their invite link.
               </p>
               <Table>
                 <TableHeader>
@@ -320,7 +343,9 @@ export default function DealNetworkPage() {
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Commission</TableHead>
-                    <TableHead>Invitation</TableHead>
+                    <TableHead>Invite</TableHead>
+                    <TableHead>Approval</TableHead>
+                    <TableHead>Approved at</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -329,7 +354,7 @@ export default function DealNetworkPage() {
                       key={p.id}
                       className="cursor-pointer hover:bg-muted/60"
                       onClick={() => toggleParticipant(p.id)}
-                      title="Toggle Pending / Confirmed"
+                      title="Manual fallback toggle for demo"
                     >
                       <TableCell className="font-medium text-muted-foreground text-sm">
                         {p.dealName ?? featured.name}
@@ -362,9 +387,35 @@ export default function DealNetworkPage() {
                         })()}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={p.status === 'Confirmed' ? 'success' : 'warning'}>
-                          {p.status === 'Confirmed' ? 'Confirmed' : 'Pending invite'}
+                        <Badge variant={p.inviteStatus === 'Opened' ? 'info' : 'outline'}>
+                          {p.inviteStatus}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={p.approvalStatus === 'Approved' ? 'success' : 'warning'}>
+                          {p.approvalStatus}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {p.approvedAt
+                          ? new Date(p.approvedAt).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : '-'}
+                        {p.inviteLink ? (
+                          <a
+                            href={p.inviteLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ml-2 underline text-primary"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Open link
+                          </a>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -655,7 +706,12 @@ export default function DealNetworkPage() {
         onInvite={handleInviteParticipant}
         featuredDealValue={featured.dealValue}
       />
-      <ExportPayoutsModal open={exportOpen} onOpenChange={setExportOpen} rows={exportRows} />
+      <ExportPayoutsModal
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        rows={exportData.rows}
+        excludedUnapprovedCount={exportData.excludedUnapprovedCount}
+      />
     </div>
   );
 }
