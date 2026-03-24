@@ -29,7 +29,6 @@ export default function DealInviteApprovalPage() {
       (p.dealId ? store.deals.find((row) => row.id === p.dealId) : undefined) ??
       (p.dealName ? store.deals.find((row) => row.dealName === p.dealName) : undefined) ??
       null;
-    const now = new Date().toISOString();
     const nextParticipants = store.participants.map((row) =>
       row.inviteToken === token ? { ...row, inviteStatus: 'Opened' as const } : row
     );

@@ -32,6 +32,8 @@ import {
   type BaseParticipantSlot,
   type CommissionStructureKind,
   resolveCommissionWithValidation,
+} from '@/lib/deal-network-demo/commission-structure';
+import {
   rhCompanies,
   getCompanyById,
   getContactsForCompany,
