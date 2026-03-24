@@ -26,7 +26,7 @@ import {
   BASE_PARTICIPANT_OPTIONS,
   type BaseParticipantSlot,
   type CommissionStructureKind,
-  computeDealCommissionTotal,
+  resolveCommissionWithValidation,
 } from '@/lib/deal-network-demo/commission-structure';
 
 export type DemoParticipantRole = 'Introducer' | 'Connector' | 'Closer' | 'Contributor';
@@ -60,6 +60,7 @@ export interface InviteParticipantModalProps {
   onInvite: (participant: DemoParticipant) => void;
   /** Featured deal value for commission previews */
   featuredDealValue: number;
+  featuredRoleAmounts?: Partial<Record<BaseParticipantSlot, number>>;
 }
 
 export function InviteParticipantModal({
@@ -67,6 +68,7 @@ export function InviteParticipantModal({
   onOpenChange,
   onInvite,
   featuredDealValue,
+  featuredRoleAmounts,
 }: InviteParticipantModalProps) {
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -76,6 +78,7 @@ export function InviteParticipantModal({
   const [baseParticipant, setBaseParticipant] = React.useState<BaseParticipantSlot>('Closer');
   const [formulaExpression, setFormulaExpression] = React.useState('');
   const [successLink, setSuccessLink] = React.useState<string | null>(null);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
 
   function makeToken() {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -91,27 +94,33 @@ export function InviteParticipantModal({
       setBaseParticipant('Closer');
       setFormulaExpression('');
       setSuccessLink(null);
+      setSubmitError(null);
     }
   }, [open]);
 
   const preview = React.useMemo(() => {
     const v = featuredDealValue > 0 ? featuredDealValue : 100_000;
-    return computeDealCommissionTotal(
-      commissionKind,
-      v,
-      commissionKind === 'pct_deal_value' ? parseFloat(commissionValue) || 0 : 20,
-      commissionKind === 'fixed_amount' ? parseFloat(commissionValue) || 0 : 0,
-      baseParticipant,
-      commissionKind === 'pct_of_participant' ? parseFloat(commissionValue) || 0 : 5,
-      formulaExpression
+    return resolveCommissionWithValidation(
+      {
+        commissionKind,
+        commissionValue: parseFloat(commissionValue) || 0,
+        baseParticipant,
+        formulaExpression,
+      },
+      { dealValue: v, roleAmounts: featuredRoleAmounts }
     );
-  }, [commissionKind, commissionValue, baseParticipant, formulaExpression, featuredDealValue]);
+  }, [commissionKind, commissionValue, baseParticipant, formulaExpression, featuredDealValue, featuredRoleAmounts]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !email.trim()) return;
     const num = parseFloat(commissionValue);
     if (commissionKind !== 'formula_advanced' && (Number.isNaN(num) || num < 0)) return;
+    if (!preview.valid || preview.total <= 0) {
+      setSubmitError(preview.error ?? 'Invalid commission setup. Please fix the inputs.');
+      return;
+    }
+    setSubmitError(null);
 
     const token = makeToken();
     const participant: DemoParticipant = {
@@ -120,7 +129,7 @@ export function InviteParticipantModal({
       email: email.trim(),
       role,
       commissionKind,
-      commissionValue: commissionKind === 'formula_advanced' ? 0 : num,
+      commissionValue: commissionKind === 'formula_advanced' ? num : num,
       baseParticipant:
         commissionKind === 'pct_of_participant' ? baseParticipant : undefined,
       formulaExpression: commissionKind === 'formula_advanced' ? formulaExpression.trim() : undefined,
@@ -132,6 +141,7 @@ export function InviteParticipantModal({
     onInvite(participant);
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     setSuccessLink(`${origin}/deal-invites/${token}`);
+    toast.success('Participant invited');
   }
 
   async function copyLink() {
@@ -329,6 +339,10 @@ export function InviteParticipantModal({
                 <p className="mt-1 font-semibold tabular-nums">
                   Resolved (demo): ${preview.total.toLocaleString()}
                 </p>
+                {preview.error ? (
+                  <p className="mt-1 text-xs text-destructive">{preview.error}</p>
+                ) : null}
+                {submitError ? <p className="mt-1 text-xs text-destructive">{submitError}</p> : null}
               </div>
             </div>
 
@@ -336,7 +350,9 @@ export function InviteParticipantModal({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Invite participant</Button>
+              <Button type="submit" disabled={!preview.valid || preview.total <= 0}>
+                Invite Participant
+              </Button>
             </DialogFooter>
           </form>
         )}

@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { loadPilotStore, savePilotStore } from '@/lib/deal-network-demo/pilot-store';
-import { getDealRolePayout } from '@/lib/deal-network-demo/demo-helpers';
+import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
 
 export default function DealInviteApprovalPage() {
   const params = useParams<{ token: string }>();
@@ -75,7 +75,23 @@ export default function DealInviteApprovalPage() {
     );
   }
 
-  const rolePayout = deal ? getDealRolePayout(deal, participant.role) : null;
+  const rolePayout =
+    deal == null
+      ? null
+      : resolveParticipantCommissionUsd(
+          {
+            commissionKind: participant.commissionKind,
+            commissionValue: participant.commissionValue,
+            baseParticipant: participant.baseParticipant,
+            formulaExpression: participant.formulaExpression,
+          },
+          deal.value,
+          {
+            Introducer: deal.introducerAmount,
+            Closer: deal.closerAmount,
+            Platform: deal.platformFee,
+          }
+        );
 
   return (
     <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
@@ -110,10 +126,13 @@ export default function DealInviteApprovalPage() {
 
           <div className="rounded-md border p-3 bg-background">
             <p className="text-sm font-medium">Role allocation ({participant.role})</p>
-            {rolePayout == null ? (
+            {rolePayout == null || rolePayout.total <= 0 ? (
               <p className="text-sm text-muted-foreground">No commission structure defined for this deal yet.</p>
             ) : (
-              <p className="font-semibold mt-1">Calculated payout: ${rolePayout.toLocaleString()}</p>
+              <>
+                <p className="text-sm text-muted-foreground">{rolePayout.previewLine}</p>
+                <p className="font-semibold mt-1">Calculated payout: ${rolePayout.total.toLocaleString()}</p>
+              </>
             )}
           </div>
 

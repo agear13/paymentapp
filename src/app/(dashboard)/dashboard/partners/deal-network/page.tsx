@@ -51,12 +51,12 @@ import type { DealStatus, RecentDeal, TopEarner } from '@/lib/data/mock-deal-net
 import {
   adjustFunnelCounts,
   getDealCommissionTotal,
-  getDealRolePayout,
   getNextSettlementStatus,
   recentDealToFeatured,
   statusToFunnelLabel,
 } from '@/lib/deal-network-demo/demo-helpers';
 import { computePipelineMetrics, formatUsdCompact } from '@/lib/deal-network-demo/pipeline-metrics';
+import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
 import { CreateDealModal } from '@/components/deal-network-demo/create-deal-modal';
 import {
   InviteParticipantModal,
@@ -486,14 +486,27 @@ export default function DealNetworkPage() {
                           if (!activeDeal) {
                             return <span className="text-sm text-muted-foreground">No deal selected</span>;
                           }
-                          const payout = getDealRolePayout(activeDeal, p.role);
-                          if (payout == null) {
+                          const payout = resolveParticipantCommissionUsd(
+                            {
+                              commissionKind: p.commissionKind,
+                              commissionValue: p.commissionValue,
+                              baseParticipant: p.baseParticipant,
+                              formulaExpression: p.formulaExpression,
+                            },
+                            activeDeal.value,
+                            {
+                              Introducer: activeDeal.introducerAmount,
+                              Closer: activeDeal.closerAmount,
+                              Platform: activeDeal.platformFee,
+                            }
+                          );
+                          if (payout.total <= 0) {
                             return <span className="text-sm text-muted-foreground">No commission structure defined</span>;
                           }
                           return (
                             <div className="space-y-0.5">
-                              <span className="text-xs text-muted-foreground block">Role allocation ({p.role})</span>
-                              <span className="font-medium tabular-nums">${payout.toLocaleString()}</span>
+                              <span className="text-xs text-muted-foreground block">{payout.previewLine}</span>
+                              <span className="font-medium tabular-nums">${payout.total.toLocaleString()}</span>
                             </div>
                           );
                         })()}
@@ -789,7 +802,7 @@ export default function DealNetworkPage() {
           <CardHeader>
             <CardTitle className="text-base">Attributed roles</CardTitle>
             <CardDescription>
-              Role definitions used by the pilot. Actual payout amounts come from each deal's explicit commission structure.
+              Role definitions used by the pilot. Actual payout amounts come from each deal&apos;s explicit commission structure.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -869,6 +882,11 @@ export default function DealNetworkPage() {
         onOpenChange={setInviteOpen}
         onInvite={handleInviteParticipant}
         featuredDealValue={featured.dealValue}
+        featuredRoleAmounts={{
+          Introducer: activeDeal?.introducerAmount,
+          Closer: activeDeal?.closerAmount,
+          Platform: activeDeal?.platformFee,
+        }}
       />
       <ExportPayoutsModal
         open={exportOpen}

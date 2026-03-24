@@ -20,7 +20,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { DealStatus, RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { getDealRolePayout } from '@/lib/deal-network-demo/demo-helpers';
+import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
 
 export interface ExportPayoutRow {
   dealName: string;
@@ -278,9 +278,22 @@ export function buildExportPayoutRows(
     const lu = formatExportDate(deal.lastUpdated);
     const paymentStatus = deal.paymentStatus ?? 'Not Paid';
     const paidAt = deal.paidAt ? formatExportDate(deal.paidAt) : undefined;
-    const amt = getDealRolePayout(deal, p.role);
-    const structureLabel = 'Role allocation (explicit deal amounts)';
-    if (amt == null) {
+    const resolved = resolveParticipantCommissionUsd(
+      {
+        commissionKind: p.commissionKind,
+        commissionValue: p.commissionValue,
+        baseParticipant: p.baseParticipant,
+        formulaExpression: p.formulaExpression,
+      },
+      deal.value,
+      {
+        Introducer: deal.introducerAmount,
+        Closer: deal.closerAmount,
+        Platform: deal.platformFee,
+      }
+    );
+    const structureLabel = resolved.previewLine;
+    if (resolved.total <= 0) {
       continue;
     }
 
@@ -292,7 +305,7 @@ export function buildExportPayoutRows(
       email: p.email,
       role: p.role,
       commissionStructure: structureLabel,
-      payoutAmount: amt,
+      payoutAmount: resolved.total,
       approvalStatus: p.approvalStatus,
       settlementStatus: settlement,
       contractPaidStatus: dealIsPaid ? 'Contract Paid' : 'Contract Unpaid',

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Command,
@@ -25,6 +27,11 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import {
+  BASE_PARTICIPANT_OPTIONS,
+  COMMISSION_STRUCTURE_OPTIONS,
+  type BaseParticipantSlot,
+  type CommissionStructureKind,
+  resolveCommissionWithValidation,
   rhCompanies,
   getCompanyById,
   getContactsForCompany,
@@ -41,6 +48,13 @@ function norm(s: string) {
 
 function toInputNumber(v: number | undefined): string {
   return typeof v === 'number' && Number.isFinite(v) ? String(v) : '';
+}
+
+interface RoleCommissionState {
+  kind: CommissionStructureKind;
+  value: string;
+  baseParticipant: BaseParticipantSlot;
+  formula: string;
 }
 
 export interface CreateDealModalProps {
@@ -70,9 +84,24 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
   const [manualEmail, setManualEmail] = React.useState('');
   const [manualRole, setManualRole] = React.useState('');
 
-  const [introducerAmount, setIntroducerAmount] = React.useState('');
-  const [closerAmount, setCloserAmount] = React.useState('');
-  const [platformFee, setPlatformFee] = React.useState('');
+  const [introducerCommission, setIntroducerCommission] = React.useState<RoleCommissionState>({
+    kind: 'fixed_amount',
+    value: '',
+    baseParticipant: 'Closer',
+    formula: '',
+  });
+  const [closerCommission, setCloserCommission] = React.useState<RoleCommissionState>({
+    kind: 'fixed_amount',
+    value: '',
+    baseParticipant: 'Introducer',
+    formula: '',
+  });
+  const [platformCommission, setPlatformCommission] = React.useState<RoleCommissionState>({
+    kind: 'fixed_amount',
+    value: '',
+    baseParticipant: 'Closer',
+    formula: '',
+  });
   const [paymentLink, setPaymentLink] = React.useState('');
   const [paidAmount, setPaidAmount] = React.useState('');
 
@@ -100,25 +129,60 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
   const showOverrideNotice = Boolean(contactId && graphIntroducer && !introducerMatchesGraph);
 
   const dealValueNum = parseFloat(dealValue.replace(/,/g, ''));
-  const introNum = parseFloat(introducerAmount);
-  const closerNum = parseFloat(closerAmount);
-  const platformNum = parseFloat(platformFee);
-  const hasDefinedCommission =
-    !Number.isNaN(introNum) &&
-    introNum >= 0 &&
-    !Number.isNaN(closerNum) &&
-    closerNum >= 0 &&
-    !Number.isNaN(platformNum) &&
-    platformNum >= 0;
-  const totalCommission = hasDefinedCommission ? introNum + closerNum + platformNum : null;
+  const introResolved = resolveCommissionWithValidation(
+    {
+      commissionKind: introducerCommission.kind,
+      commissionValue: parseFloat(introducerCommission.value) || 0,
+      baseParticipant: introducerCommission.baseParticipant,
+      formulaExpression: introducerCommission.formula,
+    },
+    { dealValue: dealValueNum, roleAmounts: {} }
+  );
+  const closerResolved = resolveCommissionWithValidation(
+    {
+      commissionKind: closerCommission.kind,
+      commissionValue: parseFloat(closerCommission.value) || 0,
+      baseParticipant: closerCommission.baseParticipant,
+      formulaExpression: closerCommission.formula,
+    },
+    {
+      dealValue: dealValueNum,
+      roleAmounts: { Introducer: introResolved.valid ? introResolved.total : undefined },
+    }
+  );
+  const platformResolved = resolveCommissionWithValidation(
+    {
+      commissionKind: platformCommission.kind,
+      commissionValue: parseFloat(platformCommission.value) || 0,
+      baseParticipant: platformCommission.baseParticipant,
+      formulaExpression: platformCommission.formula,
+    },
+    {
+      dealValue: dealValueNum,
+      roleAmounts: {
+        Introducer: introResolved.valid ? introResolved.total : undefined,
+        Closer: closerResolved.valid ? closerResolved.total : undefined,
+      },
+    }
+  );
+
+  const totalCommission = introResolved.total + closerResolved.total + platformResolved.total;
   const commissionPct =
-    totalCommission != null && !Number.isNaN(dealValueNum) && dealValueNum > 0
-      ? (totalCommission / dealValueNum) * 100
-      : null;
+    !Number.isNaN(dealValueNum) && dealValueNum > 0 ? (totalCommission / dealValueNum) * 100 : null;
+  const hasDefinedCommission = introResolved.valid && closerResolved.valid && platformResolved.valid;
+  const overAllocated = !Number.isNaN(dealValueNum) && dealValueNum > 0 && totalCommission > dealValueNum;
+  const remainingAmount =
+    !Number.isNaN(dealValueNum) && dealValueNum > 0 ? Math.max(0, dealValueNum - totalCommission) : 0;
 
   const valueOk = !Number.isNaN(dealValueNum) && dealValueNum > 0;
   const hasPartner = Boolean(companyId && contactId && company && contact);
-  const canSubmit = Boolean(dealName.trim()) && hasPartner && valueOk;
+  const canSubmit =
+    Boolean(dealName.trim()) &&
+    hasPartner &&
+    valueOk &&
+    hasDefinedCommission &&
+    totalCommission > 0 &&
+    !overAllocated;
 
   const isDirty = React.useMemo(() => {
     if (!open) return false;
@@ -130,9 +194,9 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
         dealValue.trim() !== '' ||
         introducer.trim() !== '' ||
         closer.trim() !== '' ||
-        introducerAmount.trim() !== '' ||
-        closerAmount.trim() !== '' ||
-        platformFee.trim() !== '' ||
+        introducerCommission.value.trim() !== '' ||
+        closerCommission.value.trim() !== '' ||
+        platformCommission.value.trim() !== '' ||
         paymentLink.trim() !== '' ||
         paidAmount.trim() !== ''
       );
@@ -143,9 +207,9 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       dealValue.trim() !== (base ? String(base.value) : '') ||
       introducer.trim() !== (base?.introducer ?? '').trim() ||
       closer.trim() !== (base?.closer ?? '').trim() ||
-      introducerAmount.trim() !== (base ? toInputNumber(base.introducerAmount) : '') ||
-      closerAmount.trim() !== (base ? toInputNumber(base.closerAmount) : '') ||
-      platformFee.trim() !== (base ? toInputNumber(base.platformFee) : '') ||
+      introducerCommission.value.trim() !== (base ? toInputNumber(base.introducerAmount) : '') ||
+      closerCommission.value.trim() !== (base ? toInputNumber(base.closerAmount) : '') ||
+      platformCommission.value.trim() !== (base ? toInputNumber(base.platformFee) : '') ||
       paymentLink.trim() !== (base?.paymentLink ?? '').trim() ||
       paidAmount.trim() !== (base ? toInputNumber(base.paidAmount) : '')
     );
@@ -158,9 +222,9 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
     contactId,
     introducer,
     closer,
-    introducerAmount,
-    closerAmount,
-    platformFee,
+    introducerCommission,
+    closerCommission,
+    platformCommission,
     paymentLink,
     paidAmount,
   ]);
@@ -184,9 +248,9 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       setIntroducer('');
       setGraphIntroducer('');
       setCloser('');
-      setIntroducerAmount('');
-      setCloserAmount('');
-      setPlatformFee('');
+      setIntroducerCommission({ kind: 'fixed_amount', value: '', baseParticipant: 'Closer', formula: '' });
+      setCloserCommission({ kind: 'fixed_amount', value: '', baseParticipant: 'Introducer', formula: '' });
+      setPlatformCommission({ kind: 'fixed_amount', value: '', baseParticipant: 'Closer', formula: '' });
       setPaymentLink('');
       setPaidAmount('');
       return;
@@ -196,9 +260,24 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
     setDealValue(String(editDeal.value));
     setIntroducer(editDeal.introducer);
     setCloser(editDeal.closer);
-    setIntroducerAmount(toInputNumber(editDeal.introducerAmount));
-    setCloserAmount(toInputNumber(editDeal.closerAmount));
-    setPlatformFee(toInputNumber(editDeal.platformFee));
+    setIntroducerCommission({
+      kind: 'fixed_amount',
+      value: toInputNumber(editDeal.introducerAmount),
+      baseParticipant: 'Closer',
+      formula: '',
+    });
+    setCloserCommission({
+      kind: 'fixed_amount',
+      value: toInputNumber(editDeal.closerAmount),
+      baseParticipant: 'Introducer',
+      formula: '',
+    });
+    setPlatformCommission({
+      kind: 'fixed_amount',
+      value: toInputNumber(editDeal.platformFee),
+      baseParticipant: 'Closer',
+      formula: '',
+    });
     setPaymentLink(editDeal.paymentLink ?? '');
     setPaidAmount(toInputNumber(editDeal.paidAmount));
 
@@ -312,9 +391,9 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       value: dealValueNum,
       introducer: introducer.trim(),
       closer: closer.trim(),
-      introducerAmount: introNum,
-      closerAmount: closerNum,
-      platformFee: platformNum,
+      introducerAmount: introResolved.total,
+      closerAmount: closerResolved.total,
+      platformFee: platformResolved.total,
       status: editDeal?.status ?? 'Pending',
       lastUpdated: new Date().toISOString(),
       payoutTrigger: PAYOUT_TRIGGER_MANUAL,
@@ -327,6 +406,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       rhGraphIntroducer: contact.introducedBy,
     };
     onCreate(newDeal);
+    toast.success(editDeal ? 'Deal updated' : 'Deal created');
     onOpenChange(false);
   }
 
@@ -547,57 +627,86 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
 
           <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
             <p className="text-sm font-medium">Commission structure</p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="dn-intro-amt">Introducer amount (USD)</Label>
-                <Input
-                  id="dn-intro-amt"
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={introducerAmount}
-                  onChange={(e) => setIntroducerAmount(e.target.value)}
-                  placeholder="0"
-                />
+            {(
+              [
+                ['Introducer', introducerCommission, setIntroducerCommission, introResolved],
+                ['Closer', closerCommission, setCloserCommission, closerResolved],
+                ['Platform', platformCommission, setPlatformCommission, platformResolved],
+              ] as const
+            ).map(([label, state, setState, result]) => (
+              <div key={label} className="rounded-md border bg-background p-3 space-y-2">
+                <p className="text-sm font-medium">{label}</p>
+                <Select
+                  value={state.kind}
+                  onValueChange={(v) =>
+                    setState((prev) => ({ ...prev, kind: v as CommissionStructureKind }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMMISSION_STRUCTURE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {state.kind === 'pct_of_participant' ? (
+                  <Select
+                    value={state.baseParticipant}
+                    onValueChange={(v) =>
+                      setState((prev) => ({ ...prev, baseParticipant: v as BaseParticipantSlot }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BASE_PARTICIPANT_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
+
+                {state.kind === 'formula_advanced' ? (
+                  <Input
+                    value={state.formula}
+                    onChange={(e) => setState((prev) => ({ ...prev, formula: e.target.value }))}
+                    placeholder="Formula expression (preview only)"
+                  />
+                ) : (
+                  <Input
+                    type="number"
+                    min={0}
+                    step={state.kind === 'fixed_amount' ? 1 : 0.5}
+                    value={state.value}
+                    onChange={(e) => setState((prev) => ({ ...prev, value: e.target.value }))}
+                    placeholder={state.kind === 'fixed_amount' ? 'USD amount' : 'Percent'}
+                  />
+                )}
+                <p className="text-xs text-muted-foreground">{result.previewLine}</p>
+                {result.error ? <p className="text-xs text-destructive">{result.error}</p> : null}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="dn-closer-amt">Closer amount (USD)</Label>
-                <Input
-                  id="dn-closer-amt"
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={closerAmount}
-                  onChange={(e) => setCloserAmount(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dn-platform-fee">Platform fee (USD)</Label>
-                <Input
-                  id="dn-platform-fee"
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={platformFee}
-                  onChange={(e) => setPlatformFee(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            <div className="rounded-md border bg-background px-3 py-2 text-sm">
-              {totalCommission == null ? (
-                <p className="text-muted-foreground">No commission structure defined.</p>
-              ) : (
-                <>
-                  <p className="font-medium">Total commission: ${totalCommission.toLocaleString()}</p>
-                  <p className="text-muted-foreground mt-1">
-                    {commissionPct == null
-                      ? 'Set deal value to derive percentage.'
-                      : `${commissionPct.toFixed(2)}% of deal value`}
-                  </p>
-                </>
-              )}
+            ))}
+
+            <div className="rounded-md border bg-background px-3 py-2 text-sm space-y-1">
+              <p className="font-medium">Total deal value: ${valueOk ? dealValueNum.toLocaleString() : '0'}</p>
+              <p>Allocated so far: ${totalCommission.toLocaleString()}</p>
+              <p>Remaining: ${remainingAmount.toLocaleString()}</p>
+              {commissionPct != null ? (
+                <p className="text-muted-foreground">{commissionPct.toFixed(2)}% allocated</p>
+              ) : null}
+              {overAllocated ? (
+                <p className="text-destructive font-medium">
+                  Over-allocated. Total allocations cannot exceed deal value.
+                </p>
+              ) : null}
             </div>
           </div>
 
