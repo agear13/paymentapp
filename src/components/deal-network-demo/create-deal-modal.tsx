@@ -74,6 +74,8 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
   const [introducerAmount, setIntroducerAmount] = React.useState('');
   const [closerAmount, setCloserAmount] = React.useState('');
   const [platformFee, setPlatformFee] = React.useState('');
+  const [paymentLink, setPaymentLink] = React.useState('');
+  const [paidAmount, setPaidAmount] = React.useState('');
 
   const mergedCompanies = React.useMemo(() => [...rhCompanies, ...extraCompanies], [extraCompanies]);
 
@@ -146,6 +148,8 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       setIntroducerAmount('');
       setCloserAmount('');
       setPlatformFee('');
+      setPaymentLink('');
+      setPaidAmount('');
       return;
     }
 
@@ -156,6 +160,8 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
     setIntroducerAmount(toInputNumber(editDeal.introducerAmount));
     setCloserAmount(toInputNumber(editDeal.closerAmount));
     setPlatformFee(toInputNumber(editDeal.platformFee));
+    setPaymentLink(editDeal.paymentLink ?? '');
+    setPaidAmount(toInputNumber(editDeal.paidAmount));
 
     const graphCo = rhCompanies.find((co) => co.name === editDeal.partner);
     if (graphCo) {
@@ -258,6 +264,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit || !company || !contact || totalCommission == null) return;
+    const paidAmountNum = paidAmount.trim() ? parseFloat(paidAmount) : undefined;
 
     const newDeal: RecentDeal = {
       id: editDeal?.id ?? `demo-${Date.now()}`,
@@ -272,6 +279,10 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       status: editDeal?.status ?? 'Pending',
       lastUpdated: new Date().toISOString(),
       payoutTrigger: PAYOUT_TRIGGER_MANUAL,
+      paymentLink: paymentLink.trim() || undefined,
+      paymentStatus: editDeal?.paymentStatus ?? 'Not Paid',
+      paidAmount: paidAmountNum != null && !Number.isNaN(paidAmountNum) ? paidAmountNum : undefined,
+      paidAt: editDeal?.paidAt,
       rhContactId: contact.id,
       rhContactLine: formatRhContactLine(contact, company.name),
       rhGraphIntroducer: contact.introducedBy,
@@ -523,6 +534,34 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
 
           <div className="rounded-md border border-dashed bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
             Payout is triggered manually when the contract is marked as paid on the deal card.
+          </div>
+
+          <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+            <p className="text-sm font-medium">Payment (optional)</p>
+            <div className="space-y-2">
+              <Label htmlFor="dn-payment-link">Payment link</Label>
+              <Input
+                id="dn-payment-link"
+                value={paymentLink}
+                onChange={(e) => setPaymentLink(e.target.value)}
+                placeholder="Paste Stripe / bank / invoice link (optional)"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-paid-amount">Paid amount (USD)</Label>
+              <Input
+                id="dn-paid-amount"
+                type="number"
+                min={0}
+                step={1}
+                value={paidAmount}
+                onChange={(e) => setPaidAmount(e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This can be used to track how the client pays for this deal.
+            </p>
           </div>
 
           <div className="space-y-2">

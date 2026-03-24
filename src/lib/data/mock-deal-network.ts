@@ -55,6 +55,11 @@ export interface RecentDeal {
   lastUpdated: string;
   /** Set when created from the demo “Create deal” flow */
   payoutTrigger?: string;
+  /** Optional payment tracking for pilot visibility only. */
+  paymentLink?: string;
+  paymentStatus: 'Not Paid' | 'Paid';
+  paidAmount?: number;
+  paidAt?: string;
   /** Rabbit Hole identity graph (demo): selected contact id */
   rhContactId?: string;
   /** e.g. Bob — BD Lead — CertiK */
@@ -126,6 +131,7 @@ export const recentDeals: RecentDeal[] = [
     platformFee: 5_000,
     status: 'Pending',
     lastUpdated: '2026-03-07T14:00:00Z',
+    paymentStatus: 'Not Paid',
   },
   {
     id: '2',
@@ -139,6 +145,7 @@ export const recentDeals: RecentDeal[] = [
     platformFee: 7_813,
     status: 'Eligible',
     lastUpdated: '2026-03-06T11:30:00Z',
+    paymentStatus: 'Not Paid',
   },
   {
     id: '3',
@@ -152,6 +159,9 @@ export const recentDeals: RecentDeal[] = [
     platformFee: 5_400,
     status: 'Paid',
     lastUpdated: '2026-03-05T09:00:00Z',
+    paymentStatus: 'Paid',
+    paidAmount: 180_000,
+    paidAt: '2026-03-05T08:30:00Z',
   },
   {
     id: '4',
@@ -165,6 +175,7 @@ export const recentDeals: RecentDeal[] = [
     platformFee: 2_250,
     status: 'In Review',
     lastUpdated: '2026-03-04T16:45:00Z',
+    paymentStatus: 'Not Paid',
   },
   {
     id: '5',
@@ -178,6 +189,9 @@ export const recentDeals: RecentDeal[] = [
     platformFee: 1_350,
     status: 'Paid',
     lastUpdated: '2026-03-03T10:00:00Z',
+    paymentStatus: 'Paid',
+    paidAmount: 45_000,
+    paidAt: '2026-03-03T09:45:00Z',
   },
 ];
 

@@ -35,6 +35,9 @@ export interface ExportPayoutRow {
   settlementStatus: DealStatus;
   contractPaidStatus: 'Contract Unpaid' | 'Contract Paid';
   payoutTrigger: string;
+  paymentStatus: 'Not Paid' | 'Paid';
+  paidAmount?: number;
+  paidAt?: string;
   lastUpdated: string;
   approvedAt?: string;
 }
@@ -84,6 +87,9 @@ function rowsToCsv(rows: ExportPayoutRow[]): string {
     'Settlement Status',
     'Deal Trigger Status / Contract Paid Status',
     'Payout Trigger',
+    'Payment Status',
+    'Paid Amount',
+    'Paid At',
     'Last Updated',
     'Approved At',
   ];
@@ -107,6 +113,9 @@ function rowsToCsv(rows: ExportPayoutRow[]): string {
         esc(r.settlementStatus),
         esc(r.contractPaidStatus),
         esc(r.payoutTrigger),
+        esc(r.paymentStatus),
+        String(r.paidAmount ?? ''),
+        esc(r.paidAt ?? ''),
         esc(r.lastUpdated),
         esc(r.approvedAt ?? ''),
       ].join(',')
@@ -170,6 +179,9 @@ export function ExportPayoutsModal({
                 <TableHead className="whitespace-nowrap">Settlement status</TableHead>
                 <TableHead className="whitespace-nowrap">Contract paid status</TableHead>
                 <TableHead className="whitespace-nowrap">Payout trigger</TableHead>
+                <TableHead className="whitespace-nowrap">Payment status</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Paid amount</TableHead>
+                <TableHead className="whitespace-nowrap">Paid at</TableHead>
                 <TableHead className="whitespace-nowrap">Last updated</TableHead>
                 <TableHead className="whitespace-nowrap">Approved at</TableHead>
               </TableRow>
@@ -177,7 +189,7 @@ export function ExportPayoutsModal({
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={17} className="text-center text-muted-foreground py-8">
                     No rows to export yet.
                   </TableCell>
                 </TableRow>
@@ -204,6 +216,17 @@ export function ExportPayoutsModal({
                     </TableCell>
                     <TableCell className="align-top">{r.contractPaidStatus}</TableCell>
                     <TableCell className="text-sm align-top">{r.payoutTrigger}</TableCell>
+                    <TableCell className="align-top">
+                      <Badge variant={r.paymentStatus === 'Paid' ? 'success' : 'outline'}>
+                        {r.paymentStatus}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm align-top">
+                      {typeof r.paidAmount === 'number' ? `$${r.paidAmount.toLocaleString()}` : '-'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm whitespace-nowrap align-top">
+                      {r.paidAt ?? '-'}
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm whitespace-nowrap align-top">
                       {r.lastUpdated}
                     </TableCell>
@@ -253,6 +276,8 @@ export function buildExportPayoutRows(
     const settlement = deal?.status ?? 'Pending';
     const pt = deal?.payoutTrigger ?? 'Manual';
     const lu = formatExportDate(deal.lastUpdated);
+    const paymentStatus = deal.paymentStatus ?? 'Not Paid';
+    const paidAt = deal.paidAt ? formatExportDate(deal.paidAt) : undefined;
     const amt = getDealRolePayout(deal, p.role);
     const structureLabel = 'Role allocation (explicit deal amounts)';
     if (amt == null) {
@@ -272,6 +297,9 @@ export function buildExportPayoutRows(
       settlementStatus: settlement,
       contractPaidStatus: dealIsPaid ? 'Contract Paid' : 'Contract Unpaid',
       payoutTrigger: pt,
+      paymentStatus,
+      paidAmount: deal.paidAmount,
+      paidAt,
       lastUpdated: lu,
       approvedAt: p.approvedAt ? formatExportDate(p.approvedAt) : undefined,
     });

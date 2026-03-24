@@ -90,6 +90,12 @@ function getStatusVariant(
   }
 }
 
+function getPaymentVariant(
+  status: 'Not Paid' | 'Paid'
+): 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'info' | 'outline' {
+  return status === 'Paid' ? 'success' : 'outline';
+}
+
 function bumpEarnersOnPaid(prev: TopEarner[], commissionTotal: number): TopEarner[] {
   return prev.map((e) => {
     if (e.name !== 'Charlie') return e;
@@ -214,11 +220,18 @@ export default function DealNetworkPage() {
     if (activeDeal.status !== 'Pending' && activeDeal.status !== 'Eligible') return;
     const from = statusToFunnelLabel(activeDeal.status);
     const to = statusToFunnelLabel('Approved');
+    const paidAt = new Date().toISOString();
     setFunnel((prev) => adjustFunnelCounts(prev, from, to));
     setDeals((prev) =>
       prev.map((d) =>
         d.id === activeDeal.id
-          ? { ...d, status: 'Approved', lastUpdated: new Date().toISOString() }
+          ? {
+              ...d,
+              status: 'Approved',
+              paymentStatus: 'Paid',
+              paidAt,
+              lastUpdated: paidAt,
+            }
           : d
       )
     );
@@ -387,6 +400,42 @@ export default function DealNetworkPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="rounded-lg border bg-background/60 p-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Payment</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Payment status</span>
+                <Badge variant={getPaymentVariant(activeDeal?.paymentStatus ?? 'Not Paid')}>
+                  {activeDeal?.paymentStatus ?? 'Not Paid'}
+                </Badge>
+              </div>
+              {activeDeal?.paymentLink ? (
+                <p className="text-sm">
+                  <a href={activeDeal.paymentLink} target="_blank" rel="noreferrer" className="text-primary underline">
+                    {activeDeal.paymentLink}
+                  </a>
+                </p>
+              ) : null}
+              {typeof activeDeal?.paidAmount === 'number' ? (
+                <p className="text-sm text-muted-foreground">
+                  Amount paid: ${activeDeal.paidAmount.toLocaleString()}
+                </p>
+              ) : null}
+              {activeDeal?.paidAt ? (
+                <p className="text-sm text-muted-foreground">
+                  Paid at:{' '}
+                  {new Date(activeDeal.paidAt).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+              ) : null}
+            </div>
           </div>
 
           {activeParticipants.length > 0 && (
@@ -623,6 +672,7 @@ export default function DealNetworkPage() {
                 <TableHead>Closer</TableHead>
                 <TableHead className="text-right">Commission</TableHead>
                 <TableHead>Settlement state</TableHead>
+                <TableHead>Payment</TableHead>
                 <TableHead>Last updated</TableHead>
                 <TableHead className="w-[1%] text-right">View</TableHead>
               </TableRow>
@@ -679,6 +729,11 @@ export default function DealNetworkPage() {
                     >
                       <Badge variant={getStatusVariant(deal.status)}>{deal.status}</Badge>
                     </button>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={getPaymentVariant(deal.paymentStatus ?? 'Not Paid')}>
+                      {deal.paymentStatus ?? 'Not Paid'}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {new Date(deal.lastUpdated).toLocaleDateString('en-US', {
