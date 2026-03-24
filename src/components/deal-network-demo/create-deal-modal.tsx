@@ -6,7 +6,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -119,12 +118,52 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
 
   const valueOk = !Number.isNaN(dealValueNum) && dealValueNum > 0;
   const hasPartner = Boolean(companyId && contactId && company && contact);
-  const canSubmit =
-    Boolean(dealName.trim()) &&
-    hasPartner &&
-    valueOk &&
-    Boolean(introducer.trim() && closer.trim()) &&
-    hasDefinedCommission;
+  const canSubmit = Boolean(dealName.trim()) && hasPartner && valueOk;
+
+  const isDirty = React.useMemo(() => {
+    if (!open) return false;
+    if (!editDeal) {
+      return (
+        dealName.trim() !== '' ||
+        companyId.trim() !== '' ||
+        contactId.trim() !== '' ||
+        dealValue.trim() !== '' ||
+        introducer.trim() !== '' ||
+        closer.trim() !== '' ||
+        introducerAmount.trim() !== '' ||
+        closerAmount.trim() !== '' ||
+        platformFee.trim() !== '' ||
+        paymentLink.trim() !== '' ||
+        paidAmount.trim() !== ''
+      );
+    }
+    const base = editDeal;
+    return (
+      dealName.trim() !== (base?.dealName ?? '').trim() ||
+      dealValue.trim() !== (base ? String(base.value) : '') ||
+      introducer.trim() !== (base?.introducer ?? '').trim() ||
+      closer.trim() !== (base?.closer ?? '').trim() ||
+      introducerAmount.trim() !== (base ? toInputNumber(base.introducerAmount) : '') ||
+      closerAmount.trim() !== (base ? toInputNumber(base.closerAmount) : '') ||
+      platformFee.trim() !== (base ? toInputNumber(base.platformFee) : '') ||
+      paymentLink.trim() !== (base?.paymentLink ?? '').trim() ||
+      paidAmount.trim() !== (base ? toInputNumber(base.paidAmount) : '')
+    );
+  }, [
+    open,
+    editDeal,
+    dealName,
+    dealValue,
+    companyId,
+    contactId,
+    introducer,
+    closer,
+    introducerAmount,
+    closerAmount,
+    platformFee,
+    paymentLink,
+    paidAmount,
+  ]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -263,7 +302,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canSubmit || !company || !contact || totalCommission == null) return;
+    if (!canSubmit || !company || !contact) return;
     const paidAmountNum = paidAmount.trim() ? parseFloat(paidAmount) : undefined;
 
     const newDeal: RecentDeal = {
@@ -291,16 +330,46 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
     onOpenChange(false);
   }
 
+  function requestClose() {
+    if (!isDirty) {
+      onOpenChange(false);
+      return;
+    }
+    if (window.confirm('Discard changes?')) {
+      onOpenChange(false);
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          onOpenChange(true);
+          return;
+        }
+        requestClose();
+      }}
+    >
+      <DialogContent
+        className="sm:max-w-2xl max-h-[90vh] p-0 overflow-hidden"
+        onInteractOutside={(e) => {
+          e.preventDefault();
+          requestClose();
+        }}
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
+          requestClose();
+        }}
+      >
+        <DialogHeader className="px-6 pt-6">
           <DialogTitle>{editDeal ? 'Edit deal' : 'Create deal'}</DialogTitle>
           <DialogDescription>
             Set partner attribution and explicit commission amounts for this deal.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex max-h-[90vh] min-h-0 flex-col">
+          <div className="flex-1 space-y-4 overflow-y-auto px-6 pb-4">
           <div className="space-y-2">
             <Label htmlFor="dn-deal-name">Deal name</Label>
             <Input
@@ -571,7 +640,6 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
               value={introducer}
               onChange={(e) => setIntroducer(e.target.value)}
               placeholder="Who gets introducer credit"
-              required
             />
             {contactId && introducerMatchesGraph && graphIntroducer ? (
               <p className="text-xs text-muted-foreground">Suggested from Rabbit Hole network history.</p>
@@ -594,19 +662,19 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
               value={closer}
               onChange={(e) => setCloser(e.target.value)}
               placeholder="Who closed the deal"
-              required
             />
             <p className="text-xs text-muted-foreground">Enter manually (not sourced from the graph in this demo).</p>
           </div>
+          </div>
 
-          <DialogFooter className="gap-2 sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <div className="flex items-center justify-between border-t px-6 py-4">
+            <Button type="button" variant="outline" onClick={requestClose}>
               Cancel
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              {editDeal ? 'Save Deal' : 'Create Deal'}
+              {editDeal ? 'Save Changes' : 'Create Deal'}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
