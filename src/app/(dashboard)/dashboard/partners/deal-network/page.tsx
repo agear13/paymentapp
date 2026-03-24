@@ -34,12 +34,12 @@ import {
   Download,
   CreditCard,
   Shield,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   dealNetworkSummary,
-  featuredDeal as featuredDealSeed,
   recentDeals as recentDealsSeed,
   commissionFunnelStages,
   attributionBreakdown,
@@ -50,6 +50,7 @@ import type { DealStatus, FeaturedDeal, RecentDeal, TopEarner } from '@/lib/data
 import {
   adjustFunnelCounts,
   getNextSettlementStatus,
+  recentDealToFeatured,
   statusToFunnelLabel,
 } from '@/lib/deal-network-demo/demo-helpers';
 import { computePipelineMetrics, formatUsdCompact } from '@/lib/deal-network-demo/pipeline-metrics';
@@ -67,6 +68,7 @@ import {
   buildExportPayoutRows,
 } from '@/components/deal-network-demo/export-payouts-modal';
 import { loadPilotStore, savePilotStore } from '@/lib/deal-network-demo/pilot-store';
+import { cn } from '@/lib/utils';
 
 function getStatusVariant(
   status: DealStatus
@@ -102,7 +104,7 @@ function bumpEarnersOnPaid(prev: TopEarner[], commission: number): TopEarner[] {
 
 export default function DealNetworkPage() {
   const [deals, setDeals] = React.useState<RecentDeal[]>(() => [...recentDealsSeed]);
-  const [featured, setFeatured] = React.useState<FeaturedDeal>(() => ({ ...featuredDealSeed }));
+  const [activeDealId, setActiveDealId] = React.useState(() => recentDealsSeed[0]?.id ?? '');
   const [funnel, setFunnel] = React.useState(() =>
     commissionFunnelStages.map((s) => ({ ...s }))
   );
@@ -112,6 +114,32 @@ export default function DealNetworkPage() {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
+
+  const activeDeal = React.useMemo(() => {
+    const hit = deals.find((d) => d.id === activeDealId);
+    return hit ?? deals[0];
+  }, [deals, activeDealId]);
+
+  const featured = React.useMemo(() => {
+    if (!activeDeal) return recentDealToFeatured(recentDealsSeed[0]);
+    return recentDealToFeatured(activeDeal);
+  }, [activeDeal]);
+
+  const activeParticipants = React.useMemo(
+    () =>
+      participants.filter(
+        (p) =>
+          p.dealId === activeDeal?.id ||
+          (p.dealId == null && p.dealName === activeDeal?.dealName)
+      ),
+    [participants, activeDeal]
+  );
+
+  React.useEffect(() => {
+    if (!deals.some((d) => d.id === activeDealId)) {
+      setActiveDealId(deals[0]?.id ?? '');
+    }
+  }, [deals, activeDealId]);
 
   const pipelineMetrics = React.useMemo(() => computePipelineMetrics(deals), [deals]);
 
@@ -126,7 +154,10 @@ export default function DealNetworkPage() {
   React.useEffect(() => {
     const stored = loadPilotStore();
     if (!stored) return;
-    if (stored.deals.length) setDeals(stored.deals);
+    if (stored.deals.length) {
+      setDeals(stored.deals);
+      setActiveDealId(stored.deals[0].id);
+    }
     setParticipants(stored.participants);
   }, []);
 
@@ -136,25 +167,26 @@ export default function DealNetworkPage() {
 
   const handleCreateDeal = React.useCallback((deal: RecentDeal) => {
     setDeals((prev) => [deal, ...prev]);
+    setActiveDealId(deal.id);
     setFunnel((prev) => adjustFunnelCounts(prev, null, 'Pending'));
   }, []);
 
   const handleInviteParticipant = React.useCallback(
     (p: DemoParticipant) => {
-      const linkedDeal = deals.find((d) => d.dealName === featured.name);
+      if (!activeDeal) return;
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       setParticipants((prev) => [
         ...prev,
         {
           ...p,
-          dealId: linkedDeal?.id,
-          dealName: linkedDeal?.dealName ?? featured.name,
-          partner: linkedDeal?.partner ?? featured.partner,
+          dealId: activeDeal.id,
+          dealName: activeDeal.dealName,
+          partner: activeDeal.partner,
           inviteLink: `${origin}/deal-invites/${p.inviteToken}`,
         },
       ]);
     },
-    [featured.name, featured.partner, deals]
+    [activeDeal]
   );
 
   const toggleParticipant = React.useCallback((id: string) => {
@@ -174,19 +206,19 @@ export default function DealNetworkPage() {
   }, []);
 
   const markContractPaid = React.useCallback(() => {
-    if (featured.status !== 'Pending' && featured.status !== 'Eligible') return;
-    const from = statusToFunnelLabel(featured.status);
+    if (!activeDeal) return;
+    if (activeDeal.status !== 'Pending' && activeDeal.status !== 'Eligible') return;
+    const from = statusToFunnelLabel(activeDeal.status);
     const to = statusToFunnelLabel('Approved');
-    setFeatured((f) => ({ ...f, status: 'Approved' }));
     setFunnel((prev) => adjustFunnelCounts(prev, from, to));
     setDeals((prev) =>
       prev.map((d) =>
-        d.dealName === featured.name
+        d.id === activeDeal.id
           ? { ...d, status: 'Approved', lastUpdated: new Date().toISOString() }
           : d
       )
     );
-  }, [featured.name, featured.status]);
+  }, [activeDeal]);
 
   const advanceDealStatus = React.useCallback((dealId: string) => {
     setDeals((prev) => {
@@ -200,13 +232,16 @@ export default function DealNetworkPage() {
       if (next === 'Paid' && d.status !== 'Paid') {
         setTopEarnersState((te) => bumpEarnersOnPaid(te, d.commission));
       }
-      setFeatured((f) => (d.dealName === f.name ? { ...f, status: next } : f));
       return prev.map((row) =>
         row.id === dealId
           ? { ...row, status: next, lastUpdated: new Date().toISOString() }
           : row
       );
     });
+  }, []);
+
+  const selectDeal = React.useCallback((dealId: string) => {
+    setActiveDealId(dealId);
   }, []);
 
   return (
@@ -240,16 +275,22 @@ export default function DealNetworkPage() {
             <div>
               <div className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" aria-hidden />
-                <CardTitle className="text-xl">Featured Deal</CardTitle>
+                <CardTitle className="text-xl">Active deal</CardTitle>
               </div>
               <CardDescription className="mt-2">
-                One example deal: who gets credit (roles), who earns what (entitlements), and when payouts run (trigger). Same logic for enterprise and community-style deals.
+                Active deal from your pipeline: attribution, commission pool preview, invites, and payout actions stay scoped to this selection.
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Deal Status</span>
               <Badge variant={getStatusVariant(featured.status)}>{featured.status}</Badge>
-              <Button type="button" variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setInviteOpen(true)}
+                disabled={!activeDeal}
+              >
                 <UserPlus className="h-4 w-4 mr-1" />
                 Invite participant
               </Button>
@@ -257,7 +298,9 @@ export default function DealNetworkPage() {
                 type="button"
                 size="sm"
                 onClick={markContractPaid}
-                disabled={featured.status === 'Approved' || featured.status === 'Paid'}
+                disabled={
+                  !activeDeal || featured.status === 'Approved' || featured.status === 'Paid'
+                }
               >
                 <CreditCard className="h-4 w-4 mr-1" />
                 Mark contract as paid
@@ -286,6 +329,12 @@ export default function DealNetworkPage() {
                 <p className="font-semibold text-foreground">{featured.partner}</p>
               </div>
             </div>
+            {activeDeal?.rhContactLine ? (
+              <div className="mt-4 pt-4 border-t border-border/60">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Contact</p>
+                <p className="font-semibold text-foreground mt-1">{activeDeal.rhContactLine}</p>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-lg border bg-background/60 p-4">
@@ -319,7 +368,7 @@ export default function DealNetworkPage() {
             </div>
           </div>
 
-          {participants.length > 0 && (
+          {activeParticipants.length > 0 && (
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
               <div className="flex flex-wrap items-center gap-2 justify-between">
                 <div className="flex flex-wrap items-center gap-2">
@@ -349,7 +398,7 @@ export default function DealNetworkPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {participants.map((p) => (
+                  {activeParticipants.map((p) => (
                     <TableRow
                       key={p.id}
                       className="cursor-pointer hover:bg-muted/60"
@@ -357,7 +406,7 @@ export default function DealNetworkPage() {
                       title="Manual fallback toggle for demo"
                     >
                       <TableCell className="font-medium text-muted-foreground text-sm">
-                        {p.dealName ?? featured.name}
+                        {p.dealName ?? activeDeal?.dealName ?? featured.name}
                       </TableCell>
                       <TableCell className="font-medium">{p.name}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{p.email}</TableCell>
@@ -533,7 +582,8 @@ export default function DealNetworkPage() {
           <div>
             <CardTitle>Deal pipeline</CardTitle>
             <CardDescription>
-              Recent deals—enterprise partners and community or membership-style commissions. Click a settlement badge to advance{' '}
+              Recent deals—enterprise partners and community or membership-style commissions. Click a row or{' '}
+              <span className="font-medium">View</span> to open it in the detail panel above. Click a settlement badge to advance{' '}
               <span className="font-medium">Pending → Eligible → Approved → Paid</span> (admin approval step before Paid in production).
             </CardDescription>
           </div>
@@ -560,11 +610,27 @@ export default function DealNetworkPage() {
                 <TableHead className="text-right">Commission</TableHead>
                 <TableHead>Settlement state</TableHead>
                 <TableHead>Last updated</TableHead>
+                <TableHead className="w-[1%] text-right">View</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {deals.map((deal) => (
-                <TableRow key={deal.id}>
+                <TableRow
+                  key={deal.id}
+                  role="button"
+                  tabIndex={0}
+                  className={cn(
+                    'cursor-pointer',
+                    deal.id === activeDealId && 'bg-muted/50 border-l-2 border-l-primary'
+                  )}
+                  onClick={() => selectDeal(deal.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      selectDeal(deal.id);
+                    }
+                  }}
+                >
                   <TableCell className="font-medium">{deal.dealName}</TableCell>
                   <TableCell>
                     <span className="font-medium">{deal.partner}</span>
@@ -586,7 +652,10 @@ export default function DealNetworkPage() {
                     <button
                       type="button"
                       className="inline-flex cursor-pointer rounded-full border-0 bg-transparent p-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                      onClick={() => advanceDealStatus(deal.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        advanceDealStatus(deal.id);
+                      }}
                       title="Advance: Pending → Eligible → Approved → Paid"
                     >
                       <Badge variant={getStatusVariant(deal.status)}>{deal.status}</Badge>
@@ -598,6 +667,21 @@ export default function DealNetworkPage() {
                       day: 'numeric',
                       year: 'numeric',
                     })}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectDeal(deal.id);
+                      }}
+                    >
+                      <Eye className="h-3.5 w-3.5" aria-hidden />
+                      View
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}

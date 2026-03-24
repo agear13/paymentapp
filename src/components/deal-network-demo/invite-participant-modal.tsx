@@ -1,6 +1,8 @@
 'use client';
 
 import * as React from 'react';
+import { Copy, ExternalLink } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -73,6 +75,7 @@ export function InviteParticipantModal({
   const [commissionValue, setCommissionValue] = React.useState('10');
   const [baseParticipant, setBaseParticipant] = React.useState<BaseParticipantSlot>('Closer');
   const [formulaExpression, setFormulaExpression] = React.useState('');
+  const [successLink, setSuccessLink] = React.useState<string | null>(null);
 
   function makeToken() {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -87,6 +90,7 @@ export function InviteParticipantModal({
       setCommissionValue('10');
       setBaseParticipant('Closer');
       setFormulaExpression('');
+      setSuccessLink(null);
     }
   }, [open]);
 
@@ -109,6 +113,7 @@ export function InviteParticipantModal({
     const num = parseFloat(commissionValue);
     if (commissionKind !== 'formula_advanced' && (Number.isNaN(num) || num < 0)) return;
 
+    const token = makeToken();
     const participant: DemoParticipant = {
       id: `part-${Date.now()}`,
       name: name.trim(),
@@ -122,132 +127,124 @@ export function InviteParticipantModal({
       status: 'Pending',
       inviteStatus: 'Invited',
       approvalStatus: 'Pending approval',
-      inviteToken: makeToken(),
+      inviteToken: token,
     };
     onInvite(participant);
-    onOpenChange(false);
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    setSuccessLink(`${origin}/deal-invites/${token}`);
+  }
+
+  async function copyLink() {
+    if (!successLink) return;
+    try {
+      await navigator.clipboard.writeText(successLink);
+      toast.success('Link copied');
+    } catch {
+      toast.error('Could not copy');
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Invite participant</DialogTitle>
+          <DialogTitle>{successLink ? 'Participant invited' : 'Invite participant'}</DialogTitle>
           <DialogDescription>
-            Add a participant to the featured deal. Commission can follow flexible structures (demo).
+            {successLink
+              ? 'Share this link so they can review and approve their participation (demo).'
+              : 'Add a participant to the featured deal. Commission can follow flexible structures (demo).'}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="inv-name">Name</Label>
-            <Input
-              id="inv-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Full name"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="inv-email">Email</Label>
-            <Input
-              id="inv-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@company.com"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Role</Label>
-            <Select value={role} onValueChange={(v) => setRole(v as DemoParticipantRole)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Introducer">Introducer</SelectItem>
-                <SelectItem value="Connector">Connector</SelectItem>
-                <SelectItem value="Closer">Closer</SelectItem>
-                <SelectItem value="Contributor">Contributor</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
-          <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-            <div className="space-y-2">
-              <Label>Commission type</Label>
-              <Select
-                value={commissionKind}
-                onValueChange={(v) => setCommissionKind(v as CommissionStructureKind)}
+        {successLink ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <Label className="text-xs text-muted-foreground">Invite link</Label>
+              <div className="flex gap-2">
+                <Input readOnly value={successLink} className="font-mono text-xs" />
+                <Button type="button" variant="outline" size="icon" onClick={copyLink} aria-label="Copy invite link">
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => window.open(successLink, '_blank', 'noopener,noreferrer')}
               >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Open link
+              </Button>
+            </div>
+            <DialogFooter>
+              <Button type="button" onClick={() => onOpenChange(false)}>
+                Done
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="inv-name">Name</Label>
+              <Input
+                id="inv-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Full name"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="inv-email">Email</Label>
+              <Input
+                id="inv-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@company.com"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={role} onValueChange={(v) => setRole(v as DemoParticipantRole)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMMISSION_STRUCTURE_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="Introducer">Introducer</SelectItem>
+                  <SelectItem value="Connector">Connector</SelectItem>
+                  <SelectItem value="Closer">Closer</SelectItem>
+                  <SelectItem value="Contributor">Contributor</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {commissionKind === 'pct_deal_value' ? (
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
               <div className="space-y-2">
-                <Label htmlFor="inv-pct-deal">Percentage of deal value</Label>
-                <Input
-                  id="inv-pct-deal"
-                  type="number"
-                  min={0}
-                  step={0.5}
-                  value={commissionValue}
-                  onChange={(e) => setCommissionValue(e.target.value)}
-                  required
-                />
+                <Label>Commission type</Label>
+                <Select
+                  value={commissionKind}
+                  onValueChange={(v) => setCommissionKind(v as CommissionStructureKind)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMMISSION_STRUCTURE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            ) : null}
 
-            {commissionKind === 'fixed_amount' ? (
-              <div className="space-y-2">
-                <Label htmlFor="inv-fixed">Fixed amount (USD)</Label>
-                <Input
-                  id="inv-fixed"
-                  type="number"
-                  min={0}
-                  step={100}
-                  value={commissionValue}
-                  onChange={(e) => setCommissionValue(e.target.value)}
-                  required
-                />
-              </div>
-            ) : null}
-
-            {commissionKind === 'pct_of_participant' ? (
-              <div className="grid gap-3 sm:grid-cols-2">
+              {commissionKind === 'pct_deal_value' ? (
                 <div className="space-y-2">
-                  <Label>Base participant</Label>
-                  <Select
-                    value={baseParticipant}
-                    onValueChange={(v) => setBaseParticipant(v as BaseParticipantSlot)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BASE_PARTICIPANT_OPTIONS.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="inv-pct-base">Percentage of base</Label>
+                  <Label htmlFor="inv-pct-deal">Percentage of deal value</Label>
                   <Input
-                    id="inv-pct-base"
+                    id="inv-pct-deal"
                     type="number"
                     min={0}
                     step={0.5}
@@ -256,43 +253,93 @@ export function InviteParticipantModal({
                     required
                   />
                 </div>
-              </div>
-            ) : null}
+              ) : null}
 
-            {commissionKind === 'formula_advanced' ? (
-              <div className="space-y-2">
-                <Label htmlFor="inv-formula">Formula</Label>
-                <Input
-                  id="inv-formula"
-                  value={formulaExpression}
-                  onChange={(e) => setFormulaExpression(e.target.value)}
-                  placeholder="e.g. 5% of closer share + $500"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Supports expressions like % of salary, % of another participant, etc. (Static preview
-                  only.)
+              {commissionKind === 'fixed_amount' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="inv-fixed">Fixed amount (USD)</Label>
+                  <Input
+                    id="inv-fixed"
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={commissionValue}
+                    onChange={(e) => setCommissionValue(e.target.value)}
+                    required
+                  />
+                </div>
+              ) : null}
+
+              {commissionKind === 'pct_of_participant' ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Base participant</Label>
+                    <Select
+                      value={baseParticipant}
+                      onValueChange={(v) => setBaseParticipant(v as BaseParticipantSlot)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BASE_PARTICIPANT_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="inv-pct-base">Percentage of base</Label>
+                    <Input
+                      id="inv-pct-base"
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      value={commissionValue}
+                      onChange={(e) => setCommissionValue(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {commissionKind === 'formula_advanced' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="inv-formula">Formula</Label>
+                  <Input
+                    id="inv-formula"
+                    value={formulaExpression}
+                    onChange={(e) => setFormulaExpression(e.target.value)}
+                    placeholder="e.g. 5% of closer share + $500"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Supports expressions like % of salary, % of another participant, etc. (Static preview
+                    only.)
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="rounded-md border bg-background px-3 py-2 text-sm">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                  Preview
+                </p>
+                <p className="text-foreground">{preview.previewLine}</p>
+                <p className="mt-1 font-semibold tabular-nums">
+                  Resolved (demo): ${preview.total.toLocaleString()}
                 </p>
               </div>
-            ) : null}
-
-            <div className="rounded-md border bg-background px-3 py-2 text-sm">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-                Preview
-              </p>
-              <p className="text-foreground">{preview.previewLine}</p>
-              <p className="mt-1 font-semibold tabular-nums">
-                Resolved (demo): ${preview.total.toLocaleString()}
-              </p>
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">Add participant</Button>
-          </DialogFooter>
-        </form>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Invite participant</Button>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );

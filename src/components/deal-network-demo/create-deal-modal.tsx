@@ -37,6 +37,7 @@ import {
   getCompanyById,
   getContactsForCompany,
   formatRhContactLine,
+  type RhCompany,
   type RhContact,
 } from '@/lib/data/mock-rabbit-hole-network';
 import {
@@ -46,6 +47,8 @@ import {
   computeDealCommissionTotal,
   BASE_PARTICIPANT_OPTIONS,
 } from '@/lib/deal-network-demo/commission-structure';
+
+const PAYOUT_TRIGGER_MANUAL = 'Manual' as const;
 
 function norm(s: string) {
   return s.trim().toLowerCase();
@@ -62,12 +65,20 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
   const [companyId, setCompanyId] = React.useState<string>('');
   const [contactId, setContactId] = React.useState<string>('');
   const [dealValue, setDealValue] = React.useState('');
-  const [payoutTrigger, setPayoutTrigger] = React.useState('Manual');
   const [introducer, setIntroducer] = React.useState('');
   const [graphIntroducer, setGraphIntroducer] = React.useState('');
   const [closer, setCloser] = React.useState('');
   const [companyOpen, setCompanyOpen] = React.useState(false);
   const [contactOpen, setContactOpen] = React.useState(false);
+
+  /** Session-local companies/contacts added via “Add new partner” (merged into pickers). */
+  const [extraCompanies, setExtraCompanies] = React.useState<RhCompany[]>([]);
+  const [extraContacts, setExtraContacts] = React.useState<RhContact[]>([]);
+  const [manualPartnerMode, setManualPartnerMode] = React.useState(false);
+  const [manualPartnerName, setManualPartnerName] = React.useState('');
+  const [manualContactName, setManualContactName] = React.useState('');
+  const [manualEmail, setManualEmail] = React.useState('');
+  const [manualRole, setManualRole] = React.useState('');
 
   const [commissionKind, setCommissionKind] = React.useState<CommissionStructureKind>('pct_deal_value');
   const [commissionPctDeal, setCommissionPctDeal] = React.useState('20');
@@ -77,11 +88,24 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
   const [commissionPctOfParticipant, setCommissionPctOfParticipant] = React.useState('5');
   const [formulaText, setFormulaText] = React.useState('');
 
-  const company = companyId ? getCompanyById(companyId) : undefined;
-  const contacts = companyId ? getContactsForCompany(companyId) : [];
-  const contact = contactId
-    ? contacts.find((c) => c.id === contactId)
-    : undefined;
+  const mergedCompanies = React.useMemo(() => [...rhCompanies, ...extraCompanies], [extraCompanies]);
+
+  const resolveCompany = React.useCallback(
+    (id: string): RhCompany | undefined => getCompanyById(id) ?? extraCompanies.find((c) => c.id === id),
+    [extraCompanies]
+  );
+
+  const resolveContacts = React.useCallback(
+    (id: string): RhContact[] => [
+      ...getContactsForCompany(id),
+      ...extraContacts.filter((c) => c.companyId === id),
+    ],
+    [extraContacts]
+  );
+
+  const company = companyId ? resolveCompany(companyId) : undefined;
+  const contacts = companyId ? resolveContacts(companyId) : [];
+  const contact = contactId ? contacts.find((c) => c.id === contactId) : undefined;
 
   const introducerMatchesGraph =
     !contactId || !graphIntroducer || norm(introducer) === norm(graphIntroducer);
@@ -111,18 +135,31 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
     formulaText,
   ]);
 
+  const valueOk = !Number.isNaN(dealValueNum) && dealValueNum > 0;
+  const hasPartner = Boolean(companyId && contactId && company && contact);
+  const canSubmit =
+    Boolean(dealName.trim()) &&
+    hasPartner &&
+    valueOk &&
+    Boolean(introducer.trim() && closer.trim()) &&
+    commissionPreview.total > 0;
+
   React.useEffect(() => {
     if (!open) {
       setDealName('');
       setCompanyId('');
       setContactId('');
       setDealValue('');
-      setPayoutTrigger('Manual');
       setIntroducer('');
       setGraphIntroducer('');
       setCloser('');
       setCompanyOpen(false);
       setContactOpen(false);
+      setManualPartnerMode(false);
+      setManualPartnerName('');
+      setManualContactName('');
+      setManualEmail('');
+      setManualRole('');
       setCommissionKind('pct_deal_value');
       setCommissionPctDeal('20');
       setCommissionFixed('20000');
@@ -133,11 +170,59 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
   }, [open]);
 
   function selectCompany(id: string) {
+    setManualPartnerMode(false);
     setCompanyId(id);
     setContactId('');
     setIntroducer('');
     setGraphIntroducer('');
     setCompanyOpen(false);
+  }
+
+  function beginAddNewPartner() {
+    setManualPartnerMode(true);
+    setCompanyId('');
+    setContactId('');
+    setIntroducer('');
+    setGraphIntroducer('');
+    setCompanyOpen(false);
+  }
+
+  function cancelManualPartner() {
+    setManualPartnerMode(false);
+    setManualPartnerName('');
+    setManualContactName('');
+    setManualEmail('');
+    setManualRole('');
+  }
+
+  function saveManualPartner() {
+    const pn = manualPartnerName.trim();
+    const cn = manualContactName.trim();
+    if (!pn || !cn) return;
+    const coId = `co-pilot-${Date.now()}`;
+    const ctId = `ct-pilot-${Date.now()}`;
+    const newCompany: RhCompany = { id: coId, name: pn };
+    const title = manualRole.trim() || 'Contact';
+    const specialty = manualEmail.trim() ? manualEmail.trim() : 'Added partner';
+    const newContact: RhContact = {
+      id: ctId,
+      companyId: coId,
+      name: cn,
+      title,
+      specialty,
+      introducedBy: '',
+    };
+    setExtraCompanies((prev) => [...prev, newCompany]);
+    setExtraContacts((prev) => [...prev, newContact]);
+    setCompanyId(coId);
+    setContactId(ctId);
+    setIntroducer('');
+    setGraphIntroducer('');
+    setManualPartnerMode(false);
+    setManualPartnerName('');
+    setManualContactName('');
+    setManualEmail('');
+    setManualRole('');
   }
 
   function selectContact(c: RhContact) {
@@ -150,8 +235,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const value = parseFloat(dealValue.replace(/,/g, ''));
-    if (!dealName.trim() || !company || !contact || Number.isNaN(value) || value <= 0) return;
-    if (!introducer.trim() || !closer.trim()) return;
+    if (!canSubmit || !company || !contact) return;
 
     const { total: commission } = computeDealCommissionTotal(
       commissionKind,
@@ -175,7 +259,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
       commission,
       status: 'Pending',
       lastUpdated: new Date().toISOString(),
-      payoutTrigger,
+      payoutTrigger: PAYOUT_TRIGGER_MANUAL,
       rhContactId: contact.id,
       rhContactLine,
       rhGraphIntroducer: contact.introducedBy,
@@ -190,8 +274,8 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
         <DialogHeader>
           <DialogTitle>Create deal</DialogTitle>
           <DialogDescription>
-            Pull partner and contact context from the Rabbit Hole network graph (demo). Configure how the
-            total commission pool is calculated.
+            Pull partner and contact context from the Rabbit Hole network graph (demo), or add a partner
+            not yet in the graph. Configure how the total commission pool is calculated.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -207,7 +291,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
           </div>
 
           <div className="space-y-2">
-            <Label>Partner (network company)</Label>
+            <Label>Partner</Label>
             <Popover open={companyOpen} onOpenChange={setCompanyOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -217,7 +301,11 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
                   aria-expanded={companyOpen}
                   className="w-full justify-between font-normal"
                 >
-                  {company ? company.name : 'Search Rabbit Hole companies…'}
+                  {manualPartnerMode && !companyId
+                    ? '+ Add new partner'
+                    : company
+                      ? company.name
+                      : 'Search Rabbit Hole companies…'}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -225,21 +313,84 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
                 <Command>
                   <CommandInput placeholder="Search companies…" />
                   <CommandList>
-                    <CommandEmpty>No company in graph.</CommandEmpty>
+                    <CommandEmpty>No company found.</CommandEmpty>
                     <CommandGroup heading="Rabbit Hole network">
-                      {rhCompanies.map((c) => (
+                      {mergedCompanies.map((c) => (
                         <CommandItem key={c.id} value={`${c.name} ${c.id}`} onSelect={() => selectCompany(c.id)}>
                           <Check className={cn('mr-2 h-4 w-4', companyId === c.id ? 'opacity-100' : 'opacity-0')} />
                           {c.name}
                         </CommandItem>
                       ))}
+                      <CommandItem value="__add_new_partner__" onSelect={beginAddNewPartner}>
+                        <span className="font-medium text-primary">+ Add new partner</span>
+                      </CommandItem>
                     </CommandGroup>
                   </CommandList>
                 </Command>
               </PopoverContent>
             </Popover>
-            <p className="text-xs text-muted-foreground">Companies registered in the demo identity graph.</p>
+            <p className="text-xs text-muted-foreground">
+              Companies from the demo identity graph, plus any partners you add for this session.
+            </p>
           </div>
+
+          {manualPartnerMode && !companyId ? (
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+              <p className="text-sm font-medium">New partner</p>
+              <div className="space-y-2">
+                <Label htmlFor="dn-man-co">Partner name</Label>
+                <Input
+                  id="dn-man-co"
+                  value={manualPartnerName}
+                  onChange={(e) => setManualPartnerName(e.target.value)}
+                  placeholder="Company or organization"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dn-man-ct">Contact name</Label>
+                <Input
+                  id="dn-man-ct"
+                  value={manualContactName}
+                  onChange={(e) => setManualContactName(e.target.value)}
+                  placeholder="Primary contact"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dn-man-email">Email (optional)</Label>
+                <Input
+                  id="dn-man-email"
+                  type="email"
+                  value={manualEmail}
+                  onChange={(e) => setManualEmail(e.target.value)}
+                  placeholder="name@company.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dn-man-role">Role (optional)</Label>
+                <Input
+                  id="dn-man-role"
+                  value={manualRole}
+                  onChange={(e) => setManualRole(e.target.value)}
+                  placeholder="e.g. BD Lead"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 justify-end">
+                <Button type="button" variant="ghost" size="sm" onClick={cancelManualPartner}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={saveManualPartner}
+                  disabled={!manualPartnerName.trim() || !manualContactName.trim()}
+                >
+                  Save partner
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <Label>Contact person</Label>
@@ -249,7 +400,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
                   type="button"
                   variant="outline"
                   role="combobox"
-                  disabled={!companyId}
+                  disabled={!companyId || manualPartnerMode}
                   aria-expanded={contactOpen}
                   className="w-full justify-between font-normal"
                 >
@@ -410,18 +561,8 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Payout trigger</Label>
-            <Select value={payoutTrigger} onValueChange={setPayoutTrigger}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Contract Signed">Contract Signed</SelectItem>
-                <SelectItem value="Contract Paid">Contract Paid</SelectItem>
-                <SelectItem value="Manual">Manual</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="rounded-md border border-dashed bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            Payout is triggered manually when the contract is marked as paid on the deal card.
           </div>
 
           <div className="space-y-2">
@@ -459,12 +600,12 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
             <p className="text-xs text-muted-foreground">Enter manually (not sourced from the graph in this demo).</p>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:justify-end">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!companyId || !contactId}>
-              Add to pipeline
+            <Button type="submit" disabled={!canSubmit}>
+              Create Deal
             </Button>
           </DialogFooter>
         </form>

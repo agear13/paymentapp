@@ -3,7 +3,41 @@
  * No backend — safe to replace with API-driven logic later.
  */
 
-import type { DealStatus, FunnelStage } from '@/lib/data/mock-deal-network';
+import type {
+  CommissionSplit,
+  DealStatus,
+  FeaturedDeal,
+  FunnelStage,
+  RecentDeal,
+} from '@/lib/data/mock-deal-network';
+
+/** Pilot-only: split total commission pool for the featured detail preview (not persisted on RecentDeal). */
+export function buildPilotCommissionSplits(deal: RecentDeal): CommissionSplit[] {
+  const t = deal.commission;
+  const intro = Math.round(t * 0.5);
+  const closerAmt = Math.round(t * 0.25);
+  const platform = Math.max(0, t - intro - closerAmt);
+  return [
+    { role: 'Introducer', name: deal.introducer, amount: intro },
+    { role: 'Closer', name: deal.closer, amount: closerAmt },
+    { role: 'Rabbit Hole / Platform', name: 'Platform', amount: platform },
+  ];
+}
+
+/** Map pipeline row → featured/detail card shape (single source of truth: RecentDeal). */
+export function recentDealToFeatured(deal: RecentDeal): FeaturedDeal {
+  return {
+    id: deal.id,
+    name: deal.dealName,
+    dealValue: deal.value,
+    status: deal.status,
+    introducer: deal.introducer,
+    closer: deal.closer,
+    partner: deal.partner,
+    payoutTrigger: deal.payoutTrigger ?? 'Manual',
+    commissionSplits: buildPilotCommissionSplits(deal),
+  };
+}
 
 /** Settlement progression for clickable badges (demo). */
 const SETTLEMENT_CYCLE: DealStatus[] = ['Pending', 'Eligible', 'Approved', 'Paid'];
