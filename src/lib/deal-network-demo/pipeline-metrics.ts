@@ -16,13 +16,27 @@ export function computePipelineMetrics(deals: RecentDeal[]) {
     (d) => d.status !== 'Paid' && d.status !== 'Reversed'
   ).length;
 
+  const dealCommissionTotal = (d: RecentDeal) => {
+    if (
+      d.introducerAmount == null ||
+      d.closerAmount == null ||
+      d.platformFee == null ||
+      d.introducerAmount < 0 ||
+      d.closerAmount < 0 ||
+      d.platformFee < 0
+    ) {
+      return 0;
+    }
+    return d.introducerAmount + d.closerAmount + d.platformFee;
+  };
+
   const commissionsPending = deals
     .filter((d) => PENDING_ENTITLEMENT_STATUSES.includes(d.status))
-    .reduce((sum, d) => sum + d.commission, 0);
+    .reduce((sum, d) => sum + dealCommissionTotal(d), 0);
 
   const commissionsPaid = deals
     .filter((d) => d.status === 'Paid')
-    .reduce((sum, d) => sum + d.commission, 0);
+    .reduce((sum, d) => sum + dealCommissionTotal(d), 0);
 
   return { openDeals, commissionsPending, commissionsPaid };
 }

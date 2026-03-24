@@ -13,13 +13,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Command,
@@ -40,13 +33,6 @@ import {
   type RhCompany,
   type RhContact,
 } from '@/lib/data/mock-rabbit-hole-network';
-import {
-  COMMISSION_STRUCTURE_OPTIONS,
-  type BaseParticipantSlot,
-  type CommissionStructureKind,
-  computeDealCommissionTotal,
-  BASE_PARTICIPANT_OPTIONS,
-} from '@/lib/deal-network-demo/commission-structure';
 
 const PAYOUT_TRIGGER_MANUAL = 'Manual' as const;
 
@@ -54,13 +40,18 @@ function norm(s: string) {
   return s.trim().toLowerCase();
 }
 
+function toInputNumber(v: number | undefined): string {
+  return typeof v === 'number' && Number.isFinite(v) ? String(v) : '';
+}
+
 export interface CreateDealModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreate: (deal: RecentDeal) => void;
+  editDeal?: RecentDeal | null;
 }
 
-export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModalProps) {
+export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: CreateDealModalProps) {
   const [dealName, setDealName] = React.useState('');
   const [companyId, setCompanyId] = React.useState<string>('');
   const [contactId, setContactId] = React.useState<string>('');
@@ -80,13 +71,9 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
   const [manualEmail, setManualEmail] = React.useState('');
   const [manualRole, setManualRole] = React.useState('');
 
-  const [commissionKind, setCommissionKind] = React.useState<CommissionStructureKind>('pct_deal_value');
-  const [commissionPctDeal, setCommissionPctDeal] = React.useState('20');
-  const [commissionFixed, setCommissionFixed] = React.useState('20000');
-  const [commissionBaseParticipant, setCommissionBaseParticipant] =
-    React.useState<BaseParticipantSlot>('Closer');
-  const [commissionPctOfParticipant, setCommissionPctOfParticipant] = React.useState('5');
-  const [formulaText, setFormulaText] = React.useState('');
+  const [introducerAmount, setIntroducerAmount] = React.useState('');
+  const [closerAmount, setCloserAmount] = React.useState('');
+  const [platformFee, setPlatformFee] = React.useState('');
 
   const mergedCompanies = React.useMemo(() => [...rhCompanies, ...extraCompanies], [extraCompanies]);
 
@@ -112,28 +99,21 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
   const showOverrideNotice = Boolean(contactId && graphIntroducer && !introducerMatchesGraph);
 
   const dealValueNum = parseFloat(dealValue.replace(/,/g, ''));
-  const commissionPreview = React.useMemo(() => {
-    if (Number.isNaN(dealValueNum) || dealValueNum <= 0) {
-      return { total: 0, previewLine: 'Enter deal value to preview commission pool.' };
-    }
-    return computeDealCommissionTotal(
-      commissionKind,
-      dealValueNum,
-      parseFloat(commissionPctDeal) || 0,
-      parseFloat(commissionFixed) || 0,
-      commissionBaseParticipant,
-      parseFloat(commissionPctOfParticipant) || 0,
-      formulaText
-    );
-  }, [
-    commissionKind,
-    dealValueNum,
-    commissionPctDeal,
-    commissionFixed,
-    commissionBaseParticipant,
-    commissionPctOfParticipant,
-    formulaText,
-  ]);
+  const introNum = parseFloat(introducerAmount);
+  const closerNum = parseFloat(closerAmount);
+  const platformNum = parseFloat(platformFee);
+  const hasDefinedCommission =
+    !Number.isNaN(introNum) &&
+    introNum >= 0 &&
+    !Number.isNaN(closerNum) &&
+    closerNum >= 0 &&
+    !Number.isNaN(platformNum) &&
+    platformNum >= 0;
+  const totalCommission = hasDefinedCommission ? introNum + closerNum + platformNum : null;
+  const commissionPct =
+    totalCommission != null && !Number.isNaN(dealValueNum) && dealValueNum > 0
+      ? (totalCommission / dealValueNum) * 100
+      : null;
 
   const valueOk = !Number.isNaN(dealValueNum) && dealValueNum > 0;
   const hasPartner = Boolean(companyId && contactId && company && contact);
@@ -142,10 +122,20 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
     hasPartner &&
     valueOk &&
     Boolean(introducer.trim() && closer.trim()) &&
-    commissionPreview.total > 0;
+    hasDefinedCommission;
 
   React.useEffect(() => {
-    if (!open) {
+    if (!open) return;
+
+    setCompanyOpen(false);
+    setContactOpen(false);
+    setManualPartnerMode(false);
+    setManualPartnerName('');
+    setManualContactName('');
+    setManualEmail('');
+    setManualRole('');
+
+    if (!editDeal) {
       setDealName('');
       setCompanyId('');
       setContactId('');
@@ -153,21 +143,54 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
       setIntroducer('');
       setGraphIntroducer('');
       setCloser('');
-      setCompanyOpen(false);
-      setContactOpen(false);
-      setManualPartnerMode(false);
-      setManualPartnerName('');
-      setManualContactName('');
-      setManualEmail('');
-      setManualRole('');
-      setCommissionKind('pct_deal_value');
-      setCommissionPctDeal('20');
-      setCommissionFixed('20000');
-      setCommissionBaseParticipant('Closer');
-      setCommissionPctOfParticipant('5');
-      setFormulaText('');
+      setIntroducerAmount('');
+      setCloserAmount('');
+      setPlatformFee('');
+      return;
     }
-  }, [open]);
+
+    setDealName(editDeal.dealName);
+    setDealValue(String(editDeal.value));
+    setIntroducer(editDeal.introducer);
+    setCloser(editDeal.closer);
+    setIntroducerAmount(toInputNumber(editDeal.introducerAmount));
+    setCloserAmount(toInputNumber(editDeal.closerAmount));
+    setPlatformFee(toInputNumber(editDeal.platformFee));
+
+    const graphCo = rhCompanies.find((co) => co.name === editDeal.partner);
+    if (graphCo) {
+      setCompanyId(graphCo.id);
+      if (editDeal.rhContactId) {
+        setContactId(editDeal.rhContactId);
+      } else {
+        const graphContact = getContactsForCompany(graphCo.id).find(
+          (c) => formatRhContactLine(c, graphCo.name) === editDeal.rhContactLine
+        );
+        setContactId(graphContact?.id ?? '');
+      }
+      setGraphIntroducer(editDeal.rhGraphIntroducer ?? '');
+    } else {
+      const coId = `co-edit-${Date.now()}`;
+      const ctId = `ct-edit-${Date.now()}`;
+      const co: RhCompany = { id: coId, name: editDeal.partner };
+      const line = editDeal.rhContactLine?.split(' — ') ?? [];
+      const contactName = line[0] || editDeal.partner;
+      const contactRole = line[1] || 'Contact';
+      const ct: RhContact = {
+        id: ctId,
+        companyId: coId,
+        name: contactName,
+        title: contactRole,
+        specialty: 'Added partner',
+        introducedBy: editDeal.rhGraphIntroducer ?? '',
+      };
+      setExtraCompanies((prev) => (prev.some((x) => x.name === co.name) ? prev : [...prev, co]));
+      setExtraContacts((prev) => (prev.some((x) => x.id === ct.id) ? prev : [...prev, ct]));
+      setCompanyId(coId);
+      setContactId(ctId);
+      setGraphIntroducer(editDeal.rhGraphIntroducer ?? '');
+    }
+  }, [open, editDeal]);
 
   function selectCompany(id: string) {
     setManualPartnerMode(false);
@@ -234,34 +257,23 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const value = parseFloat(dealValue.replace(/,/g, ''));
-    if (!canSubmit || !company || !contact) return;
-
-    const { total: commission } = computeDealCommissionTotal(
-      commissionKind,
-      value,
-      parseFloat(commissionPctDeal) || 0,
-      parseFloat(commissionFixed) || 0,
-      commissionBaseParticipant,
-      parseFloat(commissionPctOfParticipant) || 0,
-      formulaText
-    );
-    if (commission <= 0) return;
-    const rhContactLine = formatRhContactLine(contact, company.name);
+    if (!canSubmit || !company || !contact || totalCommission == null) return;
 
     const newDeal: RecentDeal = {
-      id: `demo-${Date.now()}`,
+      id: editDeal?.id ?? `demo-${Date.now()}`,
       dealName: dealName.trim(),
       partner: company.name,
-      value,
+      value: dealValueNum,
       introducer: introducer.trim(),
       closer: closer.trim(),
-      commission,
-      status: 'Pending',
+      introducerAmount: introNum,
+      closerAmount: closerNum,
+      platformFee: platformNum,
+      status: editDeal?.status ?? 'Pending',
       lastUpdated: new Date().toISOString(),
       payoutTrigger: PAYOUT_TRIGGER_MANUAL,
       rhContactId: contact.id,
-      rhContactLine,
+      rhContactLine: formatRhContactLine(contact, company.name),
       rhGraphIntroducer: contact.introducedBy,
     };
     onCreate(newDeal);
@@ -272,10 +284,9 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Create deal</DialogTitle>
+          <DialogTitle>{editDeal ? 'Edit deal' : 'Create deal'}</DialogTitle>
           <DialogDescription>
-            Pull partner and contact context from the Rabbit Hole network graph (demo), or add a partner
-            not yet in the graph. Configure how the total commission pool is calculated.
+            Set partner attribution and explicit commission amounts for this deal.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -455,109 +466,58 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
           </div>
 
           <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-            <div className="space-y-2">
-              <Label>Commission type</Label>
-              <Select
-                value={commissionKind}
-                onValueChange={(v) => setCommissionKind(v as CommissionStructureKind)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {COMMISSION_STRUCTURE_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <p className="text-sm font-medium">Commission structure</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="dn-intro-amt">Introducer amount (USD)</Label>
+                <Input
+                  id="dn-intro-amt"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={introducerAmount}
+                  onChange={(e) => setIntroducerAmount(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dn-closer-amt">Closer amount (USD)</Label>
+                <Input
+                  id="dn-closer-amt"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={closerAmount}
+                  onChange={(e) => setCloserAmount(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dn-platform-fee">Platform fee (USD)</Label>
+                <Input
+                  id="dn-platform-fee"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={platformFee}
+                  onChange={(e) => setPlatformFee(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
             </div>
-
-            {commissionKind === 'pct_deal_value' ? (
-              <div className="space-y-2">
-                <Label htmlFor="dn-comm-pct-deal">Percentage of deal value</Label>
-                <Input
-                  id="dn-comm-pct-deal"
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  value={commissionPctDeal}
-                  onChange={(e) => setCommissionPctDeal(e.target.value)}
-                />
-              </div>
-            ) : null}
-
-            {commissionKind === 'fixed_amount' ? (
-              <div className="space-y-2">
-                <Label htmlFor="dn-comm-fixed">Fixed amount (USD)</Label>
-                <Input
-                  id="dn-comm-fixed"
-                  type="number"
-                  min={0}
-                  step={100}
-                  value={commissionFixed}
-                  onChange={(e) => setCommissionFixed(e.target.value)}
-                />
-              </div>
-            ) : null}
-
-            {commissionKind === 'pct_of_participant' ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Base participant</Label>
-                  <Select
-                    value={commissionBaseParticipant}
-                    onValueChange={(v) => setCommissionBaseParticipant(v as BaseParticipantSlot)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BASE_PARTICIPANT_OPTIONS.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dn-comm-pct-part">Percentage of base</Label>
-                  <Input
-                    id="dn-comm-pct-part"
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    value={commissionPctOfParticipant}
-                    onChange={(e) => setCommissionPctOfParticipant(e.target.value)}
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            {commissionKind === 'formula_advanced' ? (
-              <div className="space-y-2">
-                <Label htmlFor="dn-formula">Formula</Label>
-                <Input
-                  id="dn-formula"
-                  value={formulaText}
-                  onChange={(e) => setFormulaText(e.target.value)}
-                  placeholder="e.g. 10% of closer draw + $2k kicker"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Supports expressions like % of salary, % of another participant, etc. (Preview is static
-                  in this demo — no live parsing.)
-                </p>
-              </div>
-            ) : null}
-
             <div className="rounded-md border bg-background px-3 py-2 text-sm">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Preview</p>
-              <p className="text-foreground">{commissionPreview.previewLine}</p>
-              <p className="mt-1 font-semibold tabular-nums">
-                Total commission pool: ${commissionPreview.total.toLocaleString()}
-              </p>
+              {totalCommission == null ? (
+                <p className="text-muted-foreground">No commission structure defined.</p>
+              ) : (
+                <>
+                  <p className="font-medium">Total commission: ${totalCommission.toLocaleString()}</p>
+                  <p className="text-muted-foreground mt-1">
+                    {commissionPct == null
+                      ? 'Set deal value to derive percentage.'
+                      : `${commissionPct.toFixed(2)}% of deal value`}
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -605,7 +565,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate }: CreateDealModa
               Cancel
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              Create Deal
+              {editDeal ? 'Save Deal' : 'Create Deal'}
             </Button>
           </DialogFooter>
         </form>

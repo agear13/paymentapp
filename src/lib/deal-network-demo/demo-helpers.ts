@@ -3,23 +3,42 @@
  * No backend — safe to replace with API-driven logic later.
  */
 
-import type {
-  CommissionSplit,
-  DealStatus,
-  FeaturedDeal,
-  FunnelStage,
-  RecentDeal,
-} from '@/lib/data/mock-deal-network';
+import type { CommissionSplit, DealStatus, FeaturedDeal, FunnelStage, RecentDeal } from '@/lib/data/mock-deal-network';
 
-/** Pilot-only: split total commission pool for the featured detail preview (not persisted on RecentDeal). */
-export function buildPilotCommissionSplits(deal: RecentDeal): CommissionSplit[] {
-  const t = deal.commission;
-  const intro = Math.round(t * 0.5);
-  const closerAmt = Math.round(t * 0.25);
-  const platform = Math.max(0, t - intro - closerAmt);
+function toDefinedAmount(v: number | undefined): number | null {
+  if (v == null) return null;
+  if (!Number.isFinite(v) || v < 0) return null;
+  return v;
+}
+
+export function getDealCommissionTotal(deal: RecentDeal): number | null {
+  const intro = toDefinedAmount(deal.introducerAmount);
+  const closer = toDefinedAmount(deal.closerAmount);
+  const platform = toDefinedAmount(deal.platformFee);
+  if (intro == null || closer == null || platform == null) return null;
+  return intro + closer + platform;
+}
+
+export function getDealRolePayout(
+  deal: RecentDeal,
+  role: 'Introducer' | 'Closer' | 'Platform' | 'Connector' | 'Contributor'
+): number | null {
+  if (getDealCommissionTotal(deal) == null) return null;
+  if (role === 'Introducer') return toDefinedAmount(deal.introducerAmount);
+  if (role === 'Closer') return toDefinedAmount(deal.closerAmount);
+  if (role === 'Platform') return toDefinedAmount(deal.platformFee);
+  return 0;
+}
+
+/** Explicit commission preview for the featured/detail card. */
+export function buildExplicitCommissionSplits(deal: RecentDeal): CommissionSplit[] {
+  const intro = toDefinedAmount(deal.introducerAmount);
+  const closer = toDefinedAmount(deal.closerAmount);
+  const platform = toDefinedAmount(deal.platformFee);
+  if (intro == null || closer == null || platform == null) return [];
   return [
     { role: 'Introducer', name: deal.introducer, amount: intro },
-    { role: 'Closer', name: deal.closer, amount: closerAmt },
+    { role: 'Closer', name: deal.closer, amount: closer },
     { role: 'Rabbit Hole / Platform', name: 'Platform', amount: platform },
   ];
 }
@@ -35,7 +54,7 @@ export function recentDealToFeatured(deal: RecentDeal): FeaturedDeal {
     closer: deal.closer,
     partner: deal.partner,
     payoutTrigger: deal.payoutTrigger ?? 'Manual',
-    commissionSplits: buildPilotCommissionSplits(deal),
+    commissionSplits: buildExplicitCommissionSplits(deal),
   };
 }
 

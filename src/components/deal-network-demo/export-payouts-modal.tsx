@@ -20,7 +20,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { DealStatus, RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
+import { getDealRolePayout } from '@/lib/deal-network-demo/demo-helpers';
 
 export interface ExportPayoutRow {
   dealName: string;
@@ -229,17 +229,9 @@ export function ExportPayoutsModal({
   );
 }
 
-export interface FeaturedContext {
-  dealValue: number;
-}
-
-/**
- * Builds export rows: introducer/closer split per deal, plus invited participant lines for the featured deal.
- */
 export function buildExportPayoutRows(
   deals: RecentDeal[],
-  participants: DemoParticipant[],
-  featured: FeaturedContext
+  participants: DemoParticipant[]
 ): { rows: ExportPayoutRow[]; excludedUnapprovedCount: number } {
   const out: ExportPayoutRow[] = [];
   let excludedUnapprovedCount = 0;
@@ -261,18 +253,11 @@ export function buildExportPayoutRows(
     const settlement = deal?.status ?? 'Pending';
     const pt = deal?.payoutTrigger ?? 'Manual';
     const lu = formatExportDate(deal.lastUpdated);
-    const { total: amt } = resolveParticipantCommissionUsd(
-      {
-        commissionKind: p.commissionKind,
-        commissionValue: p.commissionValue,
-        baseParticipant: p.baseParticipant,
-        formulaExpression: p.formulaExpression,
-      },
-      featured.dealValue
-    );
-    const structureLabel = p.commissionKind
-      .replaceAll('_', ' ')
-      .replace(/\b\w/g, (m) => m.toUpperCase());
+    const amt = getDealRolePayout(deal, p.role);
+    const structureLabel = 'Role allocation (explicit deal amounts)';
+    if (amt == null) {
+      continue;
+    }
 
     out.push({
       dealName: deal.dealName,

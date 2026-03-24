@@ -47,7 +47,10 @@ export interface RecentDeal {
   value: number;
   introducer: string;
   closer: string;
-  commission: number;
+  /** Explicit commission allocations. No implicit split assumptions. */
+  introducerAmount?: number;
+  closerAmount?: number;
+  platformFee?: number;
   status: DealStatus;
   lastUpdated: string;
   /** Set when created from the demo “Create deal” flow */
@@ -118,7 +121,9 @@ export const recentDeals: RecentDeal[] = [
     value: 100_000,
     introducer: 'Alice',
     closer: 'Charlie',
-    commission: 20_000,
+    introducerAmount: 10_000,
+    closerAmount: 5_000,
+    platformFee: 5_000,
     status: 'Pending',
     lastUpdated: '2026-03-07T14:00:00Z',
   },
@@ -129,7 +134,9 @@ export const recentDeals: RecentDeal[] = [
     value: 250_000,
     introducer: 'Ben',
     closer: 'Charlie',
-    commission: 31_250,
+    introducerAmount: 15_625,
+    closerAmount: 7_812,
+    platformFee: 7_813,
     status: 'Eligible',
     lastUpdated: '2026-03-06T11:30:00Z',
   },
@@ -140,7 +147,9 @@ export const recentDeals: RecentDeal[] = [
     value: 180_000,
     introducer: 'Alice',
     closer: 'Alice',
-    commission: 21_600,
+    introducerAmount: 10_800,
+    closerAmount: 5_400,
+    platformFee: 5_400,
     status: 'Paid',
     lastUpdated: '2026-03-05T09:00:00Z',
   },
@@ -151,7 +160,9 @@ export const recentDeals: RecentDeal[] = [
     value: 75_000,
     introducer: 'Charlie',
     closer: 'Ben',
-    commission: 9_000,
+    introducerAmount: 4_500,
+    closerAmount: 2_250,
+    platformFee: 2_250,
     status: 'In Review',
     lastUpdated: '2026-03-04T16:45:00Z',
   },
@@ -162,7 +173,9 @@ export const recentDeals: RecentDeal[] = [
     value: 45_000,
     introducer: 'Alice',
     closer: 'Charlie',
-    commission: 5_400,
+    introducerAmount: 2_700,
+    closerAmount: 1_350,
+    platformFee: 1_350,
     status: 'Paid',
     lastUpdated: '2026-03-03T10:00:00Z',
   },

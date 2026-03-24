@@ -31,6 +31,7 @@ import {
   Handshake,
   Plus,
   UserPlus,
+  Pencil,
   Download,
   CreditCard,
   Shield,
@@ -46,18 +47,16 @@ import {
   topEarners as topEarnersSeed,
   payoutRails,
 } from '@/lib/data/mock-deal-network';
-import type { DealStatus, FeaturedDeal, RecentDeal, TopEarner } from '@/lib/data/mock-deal-network';
+import type { DealStatus, RecentDeal, TopEarner } from '@/lib/data/mock-deal-network';
 import {
   adjustFunnelCounts,
+  getDealCommissionTotal,
+  getDealRolePayout,
   getNextSettlementStatus,
   recentDealToFeatured,
   statusToFunnelLabel,
 } from '@/lib/deal-network-demo/demo-helpers';
 import { computePipelineMetrics, formatUsdCompact } from '@/lib/deal-network-demo/pipeline-metrics';
-import {
-  COMMISSION_STRUCTURE_OPTIONS,
-  resolveParticipantCommissionUsd,
-} from '@/lib/deal-network-demo/commission-structure';
 import { CreateDealModal } from '@/components/deal-network-demo/create-deal-modal';
 import {
   InviteParticipantModal,
@@ -91,12 +90,12 @@ function getStatusVariant(
   }
 }
 
-function bumpEarnersOnPaid(prev: TopEarner[], commission: number): TopEarner[] {
+function bumpEarnersOnPaid(prev: TopEarner[], commissionTotal: number): TopEarner[] {
   return prev.map((e) => {
     if (e.name !== 'Charlie') return e;
     return {
       ...e,
-      amount: e.amount + Math.min(5000, Math.round(commission * 0.1)),
+      amount: e.amount + Math.min(5000, Math.round(commissionTotal * 0.1)),
       type: 'paid' as const,
     };
   });
@@ -112,6 +111,7 @@ export default function DealNetworkPage() {
   const [topEarnersState, setTopEarnersState] = React.useState<TopEarner[]>(() => [...topEarnersSeed]);
 
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
 
@@ -144,11 +144,8 @@ export default function DealNetworkPage() {
   const pipelineMetrics = React.useMemo(() => computePipelineMetrics(deals), [deals]);
 
   const exportData = React.useMemo(
-    () =>
-      buildExportPayoutRows(deals, participants, {
-        dealValue: featured.dealValue,
-      }),
-    [deals, participants, featured.dealValue]
+    () => buildExportPayoutRows(deals, participants),
+    [deals, participants]
   );
 
   React.useEffect(() => {
@@ -166,10 +163,17 @@ export default function DealNetworkPage() {
   }, [deals, participants]);
 
   const handleCreateDeal = React.useCallback((deal: RecentDeal) => {
-    setDeals((prev) => [deal, ...prev]);
+    setDeals((prev) => {
+      const exists = prev.some((d) => d.id === deal.id);
+      return exists
+        ? prev.map((d) => (d.id === deal.id ? deal : d))
+        : [deal, ...prev];
+    });
     setActiveDealId(deal.id);
-    setFunnel((prev) => adjustFunnelCounts(prev, null, 'Pending'));
-  }, []);
+    if (!editOpen) {
+      setFunnel((prev) => adjustFunnelCounts(prev, null, 'Pending'));
+    }
+  }, [editOpen]);
 
   const handleInviteParticipant = React.useCallback(
     (p: DemoParticipant) => {
@@ -230,7 +234,10 @@ export default function DealNetworkPage() {
       const toLabel = statusToFunnelLabel(next);
       setFunnel((f) => adjustFunnelCounts(f, fromLabel, toLabel));
       if (next === 'Paid' && d.status !== 'Paid') {
-        setTopEarnersState((te) => bumpEarnersOnPaid(te, d.commission));
+        const total = getDealCommissionTotal(d);
+        if (total != null) {
+          setTopEarnersState((te) => bumpEarnersOnPaid(te, total));
+        }
       }
       return prev.map((row) =>
         row.id === dealId
@@ -296,6 +303,16 @@ export default function DealNetworkPage() {
               </Button>
               <Button
                 type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEditOpen(true)}
+                disabled={!activeDeal}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Edit deal
+              </Button>
+              <Button
+                type="button"
                 size="sm"
                 onClick={markContractPaid}
                 disabled={
@@ -353,19 +370,23 @@ export default function DealNetworkPage() {
 
           <div className="rounded-lg border bg-background/60 p-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Commission entitlements</p>
-            <div className="flex flex-wrap gap-3">
-              {featured.commissionSplits.map((split) => (
-                <div
-                  key={split.role}
-                  className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2"
-                >
-                  <span className="text-sm font-medium">{split.name}</span>
-                  <span className="text-muted-foreground">({split.role})</span>
-                  <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" aria-hidden />
-                  <span className="font-semibold">${split.amount.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
+            {featured.commissionSplits.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No commission structure defined.</p>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                {featured.commissionSplits.map((split) => (
+                  <div
+                    key={split.role}
+                    className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2"
+                  >
+                    <span className="text-sm font-medium">{split.name}</span>
+                    <span className="text-muted-foreground">({split.role})</span>
+                    <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" aria-hidden />
+                    <span className="font-semibold">${split.amount.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {activeParticipants.length > 0 && (
@@ -413,24 +434,17 @@ export default function DealNetworkPage() {
                       <TableCell>{p.role}</TableCell>
                       <TableCell>
                         {(() => {
-                          const kindLabel =
-                            COMMISSION_STRUCTURE_OPTIONS.find((o) => o.value === p.commissionKind)?.label ??
-                            p.commissionKind;
-                          const resolved = resolveParticipantCommissionUsd(
-                            {
-                              commissionKind: p.commissionKind,
-                              commissionValue: p.commissionValue,
-                              baseParticipant: p.baseParticipant,
-                              formulaExpression: p.formulaExpression,
-                            },
-                            featured.dealValue
-                          );
+                          if (!activeDeal) {
+                            return <span className="text-sm text-muted-foreground">No deal selected</span>;
+                          }
+                          const payout = getDealRolePayout(activeDeal, p.role);
+                          if (payout == null) {
+                            return <span className="text-sm text-muted-foreground">No commission structure defined</span>;
+                          }
                           return (
                             <div className="space-y-0.5">
-                              <span className="text-xs text-muted-foreground block">{kindLabel}</span>
-                              <span className="font-medium tabular-nums">
-                                ${resolved.total.toLocaleString()}
-                              </span>
+                              <span className="text-xs text-muted-foreground block">Role allocation ({p.role})</span>
+                              <span className="font-medium tabular-nums">${payout.toLocaleString()}</span>
                             </div>
                           );
                         })()}
@@ -647,7 +661,12 @@ export default function DealNetworkPage() {
                   <TableCell className="text-right">${deal.value.toLocaleString()}</TableCell>
                   <TableCell>{deal.introducer}</TableCell>
                   <TableCell>{deal.closer}</TableCell>
-                  <TableCell className="text-right font-medium">${deal.commission.toLocaleString()}</TableCell>
+                  <TableCell className="text-right font-medium">
+                    {(() => {
+                      const total = getDealCommissionTotal(deal);
+                      return total == null ? '—' : `$${total.toLocaleString()}`;
+                    })()}
+                  </TableCell>
                   <TableCell>
                     <button
                       type="button"
@@ -713,9 +732,9 @@ export default function DealNetworkPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Attributed roles (default split)</CardTitle>
+            <CardTitle className="text-base">Attributed roles</CardTitle>
             <CardDescription>
-              Who gets what share of each commission—introducer, connector, closer, platform. Configurable per program.
+              Role definitions used by the pilot. Actual payout amounts come from each deal's explicit commission structure.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -784,6 +803,12 @@ export default function DealNetworkPage() {
       </div>
 
       <CreateDealModal open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreateDeal} />
+      <CreateDealModal
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onCreate={handleCreateDeal}
+        editDeal={activeDeal ?? null}
+      />
       <InviteParticipantModal
         open={inviteOpen}
         onOpenChange={setInviteOpen}
