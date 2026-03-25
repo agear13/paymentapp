@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useParams } from 'next/navigation';
+import { ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,10 @@ import { Textarea } from '@/components/ui/textarea';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { loadPilotStore, savePilotStore } from '@/lib/deal-network-demo/pilot-store';
-import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
+import {
+  COMMISSION_STRUCTURE_OPTIONS,
+  resolveParticipantCommissionUsd,
+} from '@/lib/deal-network-demo/commission-structure';
 
 export default function DealInviteApprovalPage() {
   const params = useParams<{ token: string }>();
@@ -74,6 +78,10 @@ export default function DealInviteApprovalPage() {
     );
   }
 
+  const commissionStructureLabel =
+    COMMISSION_STRUCTURE_OPTIONS.find((o) => o.value === participant.commissionKind)?.label ??
+    participant.commissionKind;
+
   const rolePayout =
     deal == null
       ? null
@@ -96,9 +104,10 @@ export default function DealInviteApprovalPage() {
     <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
       <Card className="w-full max-w-2xl">
         <CardHeader>
-          <CardTitle>Commission Approval</CardTitle>
+          <CardTitle>Role &amp; commission agreement</CardTitle>
           <CardDescription>
-            Review your assigned commission for this Rabbit Hole pilot deal and approve once confirmed.
+            Review the role, payout terms, and commission for this Rabbit Hole pilot invite. Approving
+            confirms you acknowledge this lightweight agreement record (demo only, not a legal contract).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -112,7 +121,7 @@ export default function DealInviteApprovalPage() {
               <p className="font-medium">{deal?.partner ?? participant.partner ?? '-'}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Role</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Assigned role</p>
               <p className="font-medium">{participant.role}</p>
             </div>
             <div>
@@ -123,20 +132,66 @@ export default function DealInviteApprovalPage() {
             </div>
           </div>
 
+          {(participant.roleDetails?.trim() ||
+            participant.payoutCondition?.trim() ||
+            participant.agreementNotes?.trim() ||
+            participant.attachmentUrl?.trim()) && (
+            <div className="rounded-md border p-3 bg-background space-y-3">
+              <p className="text-sm font-medium">Agreement context</p>
+              {participant.roleDetails?.trim() ? (
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Role details / scope</p>
+                  <p className="text-sm whitespace-pre-wrap">{participant.roleDetails.trim()}</p>
+                </div>
+              ) : null}
+              {participant.payoutCondition?.trim() ? (
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Payout condition</p>
+                  <p className="text-sm whitespace-pre-wrap">{participant.payoutCondition.trim()}</p>
+                </div>
+              ) : null}
+              {participant.agreementNotes?.trim() ? (
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Notes from inviter</p>
+                  <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+                    {participant.agreementNotes.trim()}
+                  </p>
+                </div>
+              ) : null}
+              {participant.attachmentUrl?.trim() ? (
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Reference</p>
+                  <a
+                    href={participant.attachmentUrl.trim()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-primary inline-flex items-center gap-1 hover:underline"
+                  >
+                    {participant.attachmentLabel?.trim() || participant.attachmentUrl.trim()}
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  </a>
+                </div>
+              ) : null}
+            </div>
+          )}
+
           <div className="rounded-md border p-3 bg-background">
-            <p className="text-sm font-medium">Role allocation ({participant.role})</p>
+            <p className="text-sm font-medium">Commission structure &amp; payout preview</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{commissionStructureLabel}</p>
             {rolePayout == null || rolePayout.total <= 0 ? (
-              <p className="text-sm text-muted-foreground">No commission structure defined for this deal yet.</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                No commission structure defined for this deal yet.
+              </p>
             ) : (
               <>
-                <p className="text-sm text-muted-foreground">{rolePayout.previewLine}</p>
+                <p className="text-sm text-muted-foreground mt-2">{rolePayout.previewLine}</p>
                 <p className="font-semibold mt-1">Calculated payout: ${rolePayout.total.toLocaleString()}</p>
               </>
             )}
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Optional note</label>
+            <label className="text-sm font-medium">Your optional confirmation note</label>
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -147,7 +202,7 @@ export default function DealInviteApprovalPage() {
 
           <div className="flex items-center gap-2">
             <Button onClick={approve} disabled={approved}>
-              {approved ? 'Commission Approved' : 'Approve Commission'}
+              {approved ? 'Agreement approved' : 'Approve role and commission'}
             </Button>
             {approved && participant.approvedAt ? (
               <span className="text-xs text-muted-foreground">

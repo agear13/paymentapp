@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -52,6 +53,16 @@ export interface DemoParticipant {
   partner?: string;
   dealId?: string;
   inviteLink?: string;
+  /** Scope of work / role context shown on the approval page (pilot agreement record). */
+  roleDetails?: string;
+  /** When this participant becomes entitled to payout (pilot). */
+  payoutCondition?: string;
+  /** Optional extra context from the inviter. */
+  agreementNotes?: string;
+  /** Reference to an external doc (URL only in pilot; no upload backend). */
+  attachmentUrl?: string;
+  /** Short label for the attachment link in UI. */
+  attachmentLabel?: string;
 }
 
 export interface InviteParticipantModalProps {
@@ -77,6 +88,11 @@ export function InviteParticipantModal({
   const [commissionValue, setCommissionValue] = React.useState('10');
   const [baseParticipant, setBaseParticipant] = React.useState<BaseParticipantSlot>('Closer');
   const [formulaExpression, setFormulaExpression] = React.useState('');
+  const [roleDetails, setRoleDetails] = React.useState('');
+  const [payoutCondition, setPayoutCondition] = React.useState('');
+  const [agreementNotes, setAgreementNotes] = React.useState('');
+  const [attachmentUrl, setAttachmentUrl] = React.useState('');
+  const [attachmentLabel, setAttachmentLabel] = React.useState('');
   const [successLink, setSuccessLink] = React.useState<string | null>(null);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
 
@@ -93,6 +109,11 @@ export function InviteParticipantModal({
       setCommissionValue('10');
       setBaseParticipant('Closer');
       setFormulaExpression('');
+      setRoleDetails('');
+      setPayoutCondition('');
+      setAgreementNotes('');
+      setAttachmentUrl('');
+      setAttachmentLabel('');
       setSuccessLink(null);
       setSubmitError(null);
     }
@@ -114,6 +135,10 @@ export function InviteParticipantModal({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !email.trim()) return;
+    if (!roleDetails.trim() || !payoutCondition.trim()) {
+      setSubmitError('Role details and payout condition are required for the agreement record.');
+      return;
+    }
     const num = parseFloat(commissionValue);
     if (commissionKind !== 'formula_advanced' && (Number.isNaN(num) || num < 0)) return;
     if (!preview.valid || preview.total <= 0) {
@@ -123,6 +148,7 @@ export function InviteParticipantModal({
     setSubmitError(null);
 
     const token = makeToken();
+    const trimmedUrl = attachmentUrl.trim();
     const participant: DemoParticipant = {
       id: `part-${Date.now()}`,
       name: name.trim(),
@@ -137,6 +163,11 @@ export function InviteParticipantModal({
       inviteStatus: 'Invited',
       approvalStatus: 'Pending approval',
       inviteToken: token,
+      roleDetails: roleDetails.trim(),
+      payoutCondition: payoutCondition.trim(),
+      agreementNotes: agreementNotes.trim() || undefined,
+      attachmentUrl: trimmedUrl || undefined,
+      attachmentLabel: attachmentLabel.trim() || undefined,
     };
     onInvite(participant);
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -228,6 +259,72 @@ export function InviteParticipantModal({
                   <SelectItem value="Contributor">Contributor</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
+              <div>
+                <p className="text-sm font-medium">Agreement details</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Shown on the invite approval page as a lightweight role and payout context (pilot demo).
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inv-role-details">Role details / scope of work</Label>
+                <Textarea
+                  id="inv-role-details"
+                  value={roleDetails}
+                  onChange={(e) => setRoleDetails(e.target.value)}
+                  placeholder="What this person is responsible for and how it ties to the deal."
+                  rows={4}
+                  required
+                  className="min-h-[88px] resize-y"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inv-payout-condition">Payout condition</Label>
+                <Textarea
+                  id="inv-payout-condition"
+                  value={payoutCondition}
+                  onChange={(e) => setPayoutCondition(e.target.value)}
+                  placeholder="e.g. When deal closes and payment is received; subject to partner approval."
+                  rows={3}
+                  required
+                  className="min-h-[72px] resize-y"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inv-agreement-notes">Notes (optional)</Label>
+                <Textarea
+                  id="inv-agreement-notes"
+                  value={agreementNotes}
+                  onChange={(e) => setAgreementNotes(e.target.value)}
+                  placeholder="Any extra context for the participant."
+                  rows={2}
+                  className="resize-y"
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="inv-attachment-url">Attachment / reference (URL, optional)</Label>
+                  <Input
+                    id="inv-attachment-url"
+                    type="url"
+                    inputMode="url"
+                    value={attachmentUrl}
+                    onChange={(e) => setAttachmentUrl(e.target.value)}
+                    placeholder="https://…"
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="inv-attachment-label">Link label (optional)</Label>
+                  <Input
+                    id="inv-attachment-label"
+                    value={attachmentLabel}
+                    onChange={(e) => setAttachmentLabel(e.target.value)}
+                    placeholder="e.g. SOW excerpt, rate card"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
