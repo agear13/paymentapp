@@ -163,11 +163,17 @@ export default function DealNetworkPage() {
         const roleKey = role.toLowerCase();
         const participantId = `internal-${roleKey}-${deal.id}`;
         const inviteToken = `internal-${roleKey}-${deal.id}`;
-        const nameValue = (role === 'Introducer' ? deal.introducer : deal.closer).trim();
-        const displayName = nameValue || role;
-        const amountValue = role === 'Introducer' ? deal.introducerAmount ?? 0 : deal.closerAmount ?? 0;
+        const amountValue = role === 'Introducer' ? deal.introducerAmount : deal.closerAmount;
 
         const idx = next.findIndex((p) => p.id === participantId || p.inviteToken === inviteToken);
+
+        if (amountValue == null) {
+          if (idx >= 0) next.splice(idx, 1);
+          return;
+        }
+
+        const nameValue = (role === 'Introducer' ? deal.introducer : deal.closer).trim();
+        const displayName = nameValue || role;
         const prev = idx >= 0 ? next[idx] : undefined;
 
         const roleDetails =
@@ -474,11 +480,15 @@ export default function DealNetworkPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Introducer</p>
-                <p className="font-medium text-foreground">{featured.introducer}</p>
+                <p className="font-medium text-foreground">
+                  {featured.introducer?.trim() ? featured.introducer : '—'}
+                </p>
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Closer</p>
-                <p className="font-medium text-foreground">{featured.closer}</p>
+                <p className="font-medium text-foreground">
+                  {featured.closer?.trim() ? featured.closer : '—'}
+                </p>
               </div>
             </div>
           </div>
@@ -486,7 +496,7 @@ export default function DealNetworkPage() {
           <div className="rounded-lg border bg-background/60 p-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Commission entitlements</p>
             {featured.commissionSplits.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No commission structure defined.</p>
+              <p className="text-sm text-muted-foreground">No commission structure defined yet.</p>
             ) : (
               <div className="flex flex-wrap gap-3">
                 {featured.commissionSplits.map((split) => (

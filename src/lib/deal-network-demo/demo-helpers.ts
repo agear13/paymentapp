@@ -15,15 +15,14 @@ export function getDealCommissionTotal(deal: RecentDeal): number | null {
   const intro = toDefinedAmount(deal.introducerAmount);
   const closer = toDefinedAmount(deal.closerAmount);
   const platform = toDefinedAmount(deal.platformFee);
-  if (intro == null || closer == null || platform == null) return null;
-  return intro + closer + platform;
+  if (intro == null && closer == null && platform == null) return null;
+  return (intro ?? 0) + (closer ?? 0) + (platform ?? 0);
 }
 
 export function getDealRolePayout(
   deal: RecentDeal,
   role: 'Introducer' | 'Closer' | 'Platform' | 'Connector' | 'Contributor'
 ): number | null {
-  if (getDealCommissionTotal(deal) == null) return null;
   if (role === 'Introducer') return toDefinedAmount(deal.introducerAmount);
   if (role === 'Closer') return toDefinedAmount(deal.closerAmount);
   if (role === 'Platform') return toDefinedAmount(deal.platformFee);
@@ -32,15 +31,28 @@ export function getDealRolePayout(
 
 /** Explicit commission preview for the featured/detail card. */
 export function buildExplicitCommissionSplits(deal: RecentDeal): CommissionSplit[] {
+  const out: CommissionSplit[] = [];
   const intro = toDefinedAmount(deal.introducerAmount);
+  if (intro != null) {
+    out.push({
+      role: 'Introducer',
+      name: deal.introducer?.trim() ? deal.introducer : 'Introducer',
+      amount: intro,
+    });
+  }
   const closer = toDefinedAmount(deal.closerAmount);
+  if (closer != null) {
+    out.push({
+      role: 'Closer',
+      name: deal.closer?.trim() ? deal.closer : 'Closer',
+      amount: closer,
+    });
+  }
   const platform = toDefinedAmount(deal.platformFee);
-  if (intro == null || closer == null || platform == null) return [];
-  return [
-    { role: 'Introducer', name: deal.introducer, amount: intro },
-    { role: 'Closer', name: deal.closer, amount: closer },
-    { role: 'Rabbit Hole / Platform', name: 'Platform', amount: platform },
-  ];
+  if (platform != null) {
+    out.push({ role: 'Rabbit Hole / Platform', name: 'Platform', amount: platform });
+  }
+  return out;
 }
 
 /** Map pipeline row → featured/detail card shape (single source of truth: RecentDeal). */

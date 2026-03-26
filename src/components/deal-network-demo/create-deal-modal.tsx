@@ -191,23 +191,31 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
     }
   );
 
-  const totalCommission = introResolved.total + closerResolved.total + platformResolved.total;
+  /** Sum of commission lines the user has actually entered (blank inputs contribute 0). */
+  const allocatedSum = React.useMemo(() => {
+    const a =
+      introducerCommission.value.trim() !== '' && introResolved.valid ? introResolved.total : 0;
+    const b = closerCommission.value.trim() !== '' && closerResolved.valid ? closerResolved.total : 0;
+    const c = platformCommission.value.trim() !== '' && platformResolved.valid ? platformResolved.total : 0;
+    return a + b + c;
+  }, [
+    introducerCommission.value,
+    closerCommission.value,
+    platformCommission.value,
+    introResolved,
+    closerResolved,
+    platformResolved,
+  ]);
+
   const commissionPct =
-    !Number.isNaN(dealValueNum) && dealValueNum > 0 ? (totalCommission / dealValueNum) * 100 : null;
-  const hasDefinedCommission = introResolved.valid && closerResolved.valid && platformResolved.valid;
-  const overAllocated = !Number.isNaN(dealValueNum) && dealValueNum > 0 && totalCommission > dealValueNum;
+    !Number.isNaN(dealValueNum) && dealValueNum > 0 ? (allocatedSum / dealValueNum) * 100 : null;
+  const overAllocated = !Number.isNaN(dealValueNum) && dealValueNum > 0 && allocatedSum > dealValueNum;
   const remainingAmount =
-    !Number.isNaN(dealValueNum) && dealValueNum > 0 ? Math.max(0, dealValueNum - totalCommission) : 0;
+    !Number.isNaN(dealValueNum) && dealValueNum > 0 ? Math.max(0, dealValueNum - allocatedSum) : 0;
 
   const valueOk = !Number.isNaN(dealValueNum) && dealValueNum > 0;
   const hasPartner = Boolean(companyId && contactId && company && contact);
-  const canSubmit =
-    Boolean(dealName.trim()) &&
-    hasPartner &&
-    valueOk &&
-    hasDefinedCommission &&
-    totalCommission > 0 &&
-    !overAllocated;
+  const canSubmit = Boolean(dealName.trim()) && hasPartner && valueOk && !overAllocated;
 
   const isDirty = React.useMemo(() => {
     if (!open) return false;
@@ -461,6 +469,14 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
     if (!canSubmit || !company || !contact) return;
     const paidAmountNum = parseUsdAmountInput(paidAmount);
 
+    const amountOrUndefined = (
+      raw: string,
+      resolved: { valid: boolean; total: number }
+    ): number | undefined => {
+      if (raw.trim() === '') return undefined;
+      return resolved.valid ? resolved.total : undefined;
+    };
+
     const newDeal: RecentDeal = {
       id: editDeal?.id ?? `demo-${Date.now()}`,
       dealName: dealName.trim(),
@@ -468,9 +484,9 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       value: dealValueNum,
       introducer: introducer.trim(),
       closer: closer.trim(),
-      introducerAmount: introResolved.total,
-      closerAmount: closerResolved.total,
-      platformFee: platformResolved.total,
+      introducerAmount: amountOrUndefined(introducerCommission.value, introResolved),
+      closerAmount: amountOrUndefined(closerCommission.value, closerResolved),
+      platformFee: amountOrUndefined(platformCommission.value, platformResolved),
       status: editDeal?.status ?? 'Pending',
       lastUpdated: new Date().toISOString(),
       payoutTrigger: PAYOUT_TRIGGER_MANUAL,
@@ -713,7 +729,13 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
           </div>
 
           <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-            <p className="text-sm font-medium">Commission structure</p>
+            <div>
+              <p className="text-sm font-medium">Commission structure</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional for now — you can save the deal and define introducer, closer, and platform payouts
+                later.
+              </p>
+            </div>
             {(
               [
                 ['Introducer', introducerCommission, setIntroducerCommission, introResolved],
@@ -777,14 +799,25 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
                     placeholder={state.kind === 'fixed_amount' ? 'USD amount' : 'Percent'}
                   />
                 )}
-                <p className="text-xs text-muted-foreground">{result.previewLine}</p>
-                {result.error ? <p className="text-xs text-destructive">{result.error}</p> : null}
+                <p className="text-xs text-muted-foreground">
+                  {state.kind === 'formula_advanced'
+                    ? state.formula.trim() === ''
+                      ? 'Not set yet — optional.'
+                      : result.previewLine
+                    : state.value.trim() === ''
+                      ? 'Not set yet — optional.'
+                      : result.previewLine}
+                </p>
+                {(state.kind === 'formula_advanced' ? state.formula.trim() !== '' : state.value.trim() !== '') &&
+                result.error ? (
+                  <p className="text-xs text-destructive">{result.error}</p>
+                ) : null}
               </div>
             ))}
 
             <div className="rounded-md border bg-background px-3 py-2 text-sm space-y-1">
               <p className="font-medium">Total deal value: ${valueOk ? dealValueNum.toLocaleString() : '0'}</p>
-              <p>Allocated so far: ${totalCommission.toLocaleString()}</p>
+              <p>Allocated so far: ${allocatedSum.toLocaleString()}</p>
               <p>Remaining: ${remainingAmount.toLocaleString()}</p>
               {commissionPct != null ? (
                 <p className="text-muted-foreground">{commissionPct.toFixed(2)}% allocated</p>

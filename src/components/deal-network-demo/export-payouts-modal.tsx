@@ -282,26 +282,27 @@ export function buildExportPayoutRows(
 
     const contactPerson = deal.rhContactLine?.split(' — ')[0] ?? '-';
 
-    const platformFee = deal.platformFee ?? 0;
-    out.push({
-      dealName: deal.dealName,
-      partner: deal.partner,
-      contactPerson,
-      participant: 'Rabbit Hole Platform',
-      email: '',
-      role: 'Platform',
-      commissionStructure: `Fixed commission pool: $${platformFee.toLocaleString()}`,
-      payoutAmount: platformFee,
-      approvalStatus: 'Not required',
-      settlementStatus,
-      contractPaidStatus,
-      payoutTrigger,
-      paymentStatus,
-      paidAmount: deal.paidAmount,
-      paidAt,
-      lastUpdated: lu,
-      approvedAt: undefined,
-    });
+    if (deal.platformFee != null) {
+      out.push({
+        dealName: deal.dealName,
+        partner: deal.partner,
+        contactPerson,
+        participant: 'Rabbit Hole Platform',
+        email: '',
+        role: 'Platform',
+        commissionStructure: `Fixed commission pool: $${deal.platformFee.toLocaleString()}`,
+        payoutAmount: deal.platformFee,
+        approvalStatus: 'Not required',
+        settlementStatus,
+        contractPaidStatus,
+        payoutTrigger,
+        paymentStatus,
+        paidAmount: deal.paidAmount,
+        paidAt,
+        lastUpdated: lu,
+        approvedAt: undefined,
+      });
+    }
   }
 
   for (const p of participants) {

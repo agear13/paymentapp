@@ -17,17 +17,11 @@ export function computePipelineMetrics(deals: RecentDeal[]) {
   ).length;
 
   const dealCommissionTotal = (d: RecentDeal) => {
-    if (
-      d.introducerAmount == null ||
-      d.closerAmount == null ||
-      d.platformFee == null ||
-      d.introducerAmount < 0 ||
-      d.closerAmount < 0 ||
-      d.platformFee < 0
-    ) {
-      return 0;
-    }
-    return d.introducerAmount + d.closerAmount + d.platformFee;
+    const a = d.introducerAmount ?? 0;
+    const b = d.closerAmount ?? 0;
+    const c = d.platformFee ?? 0;
+    if (a < 0 || b < 0 || c < 0) return 0;
+    return a + b + c;
   };
 
   const commissionsPending = deals
