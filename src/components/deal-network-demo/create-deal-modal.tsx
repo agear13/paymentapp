@@ -52,6 +52,15 @@ function toInputNumber(v: number | undefined): string {
   return typeof v === 'number' && Number.isFinite(v) ? String(v) : '';
 }
 
+/** Parse paid amount from user input; strips commas/spaces and avoids parseFloat partial matches. */
+function parseUsdAmountInput(raw: string): number | undefined {
+  const t = raw.trim().replace(/,/g, '').replace(/\s+/g, '');
+  if (t === '') return undefined;
+  const n = Number(t);
+  if (!Number.isFinite(n)) return undefined;
+  return n;
+}
+
 interface RoleCommissionState {
   kind: CommissionStructureKind;
   value: string;
@@ -384,7 +393,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit || !company || !contact) return;
-    const paidAmountNum = paidAmount.trim() ? parseFloat(paidAmount) : undefined;
+    const paidAmountNum = parseUsdAmountInput(paidAmount);
 
     const newDeal: RecentDeal = {
       id: editDeal?.id ?? `demo-${Date.now()}`,
@@ -434,7 +443,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       }}
     >
       <DialogContent
-        className="sm:max-w-2xl max-h-[90vh] p-0 overflow-hidden"
+        className="sm:max-w-2xl max-h-[90vh] p-0 overflow-hidden flex flex-col gap-0 min-h-0"
         onInteractOutside={(e) => {
           e.preventDefault();
           requestClose();
@@ -444,14 +453,14 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
           requestClose();
         }}
       >
-        <DialogHeader className="px-6 pt-6">
+        <DialogHeader className="px-6 pt-6 shrink-0">
           <DialogTitle>{editDeal ? 'Edit deal' : 'Create deal'}</DialogTitle>
           <DialogDescription>
             Set partner attribution and explicit commission amounts for this deal.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex max-h-[90vh] min-h-0 flex-col">
-          <div className="flex-1 space-y-4 overflow-y-auto px-6 pb-4">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col max-h-[min(90vh,calc(100vh-2rem))]">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4">
           <div className="space-y-2">
             <Label htmlFor="dn-deal-name">Deal name</Label>
             <Input
@@ -731,9 +740,9 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
               <Label htmlFor="dn-paid-amount">Paid amount (USD)</Label>
               <Input
                 id="dn-paid-amount"
-                type="number"
-                min={0}
-                step={1}
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 value={paidAmount}
                 onChange={(e) => setPaidAmount(e.target.value)}
                 placeholder="Optional"
@@ -778,7 +787,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
           </div>
           </div>
 
-          <div className="flex items-center justify-between border-t px-6 py-4">
+          <div className="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 border-t bg-background px-6 py-4">
             <Button type="button" variant="outline" onClick={requestClose}>
               Cancel
             </Button>

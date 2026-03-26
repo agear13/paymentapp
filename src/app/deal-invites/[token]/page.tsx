@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useParams } from 'next/navigation';
+import { toast } from 'sonner';
 import { ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -63,6 +64,7 @@ export default function DealInviteApprovalPage() {
     const p = nextParticipants.find((row) => row.inviteToken === token) ?? null;
     setParticipant(p);
     setApproved(true);
+    toast.success('Agreement approved');
   }
 
   if (!participant) {
@@ -120,6 +122,12 @@ export default function DealInviteApprovalPage() {
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Partner</p>
               <p className="font-medium">{deal?.partner ?? participant.partner ?? '-'}</p>
             </div>
+            {participant.email?.trim() ? (
+              <div className="sm:col-span-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Email</p>
+                <p className="font-medium">{participant.email.trim()}</p>
+              </div>
+            ) : null}
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Assigned role</p>
               <p className="font-medium">{participant.role}</p>
@@ -190,32 +198,43 @@ export default function DealInviteApprovalPage() {
             )}
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Your optional confirmation note</label>
-            <Textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Add an optional confirmation note"
-              disabled={approved}
-            />
-          </div>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!approved) approve();
+            }}
+          >
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="invite-approval-note">
+                Your optional confirmation note
+              </label>
+              <Textarea
+                id="invite-approval-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Add an optional confirmation note"
+                disabled={approved}
+              />
+            </div>
 
-          <div className="flex items-center gap-2">
-            <Button onClick={approve} disabled={approved}>
-              {approved ? 'Agreement approved' : 'Approve role and commission'}
-            </Button>
-            {approved && participant.approvedAt ? (
-              <span className="text-xs text-muted-foreground">
-                Approved at{' '}
-                {new Date(participant.approvedAt).toLocaleString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
-            ) : null}
-          </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="submit" disabled={approved}>
+                {approved ? 'Agreement approved' : 'Approve role and commission'}
+              </Button>
+              {approved && participant.approvedAt ? (
+                <span className="text-xs text-muted-foreground">
+                  Approved at{' '}
+                  {new Date(participant.approvedAt).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              ) : null}
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>

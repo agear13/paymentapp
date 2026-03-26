@@ -200,7 +200,9 @@ export function ExportPayoutsModal({
                     <TableCell className="align-top">{r.partner}</TableCell>
                     <TableCell className="align-top">{r.contactPerson}</TableCell>
                     <TableCell className="align-top">{r.participant}</TableCell>
-                    <TableCell className="align-top text-muted-foreground text-sm">{r.email}</TableCell>
+                    <TableCell className="align-top text-muted-foreground text-sm">
+                      {r.email?.trim() ? r.email : '—'}
+                    </TableCell>
                     <TableCell className="align-top">{r.role}</TableCell>
                     <TableCell className="align-top text-xs text-muted-foreground">{r.commissionStructure}</TableCell>
                     <TableCell className="text-right font-mono text-sm align-top">
@@ -302,7 +304,7 @@ export function buildExportPayoutRows(
       partner: deal.partner,
       contactPerson: deal.rhContactLine?.split(' — ')[0] ?? '-',
       participant: p.name,
-      email: p.email,
+      email: p.email?.trim() ?? '',
       role: p.role,
       commissionStructure: structureLabel,
       payoutAmount: resolved.total,

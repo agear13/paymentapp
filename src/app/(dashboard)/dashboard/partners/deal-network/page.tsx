@@ -268,9 +268,24 @@ export default function DealNetworkPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 mb-2">
-          <h1 className="text-3xl font-bold tracking-tight">Commission Operations</h1>
-          <Badge variant="secondary">Demo</Badge>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Commission Operations</h1>
+            <Badge variant="secondary">Demo</Badge>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setEditOpen(false);
+                setCreateOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Create Deal
+            </Button>
+          </div>
         </div>
         <p className="text-sm font-medium text-foreground mb-1">
           Attribution, commission entitlements, and payout state across your deal network—in one place.
@@ -479,7 +494,9 @@ export default function DealNetworkPage() {
                         {p.dealName ?? activeDeal?.dealName ?? featured.name}
                       </TableCell>
                       <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{p.email}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {p.email?.trim() ? p.email : '—'}
+                      </TableCell>
                       <TableCell>{p.role}</TableCell>
                       <TableCell>
                         {(() => {

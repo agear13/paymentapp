@@ -35,6 +35,7 @@ export type DemoParticipantRole = 'Introducer' | 'Connector' | 'Closer' | 'Contr
 export interface DemoParticipant {
   id: string;
   name: string;
+  /** Optional in pilot; invite link works without it. */
   email: string;
   role: DemoParticipantRole;
   commissionKind: CommissionStructureKind;
@@ -101,23 +102,68 @@ export function InviteParticipantModal({
   }
 
   React.useEffect(() => {
-    if (!open) {
-      setName('');
-      setEmail('');
-      setRole('Connector');
-      setCommissionKind('pct_deal_value');
-      setCommissionValue('10');
-      setBaseParticipant('Closer');
-      setFormulaExpression('');
-      setRoleDetails('');
-      setPayoutCondition('');
-      setAgreementNotes('');
-      setAttachmentUrl('');
-      setAttachmentLabel('');
-      setSuccessLink(null);
-      setSubmitError(null);
-    }
+    if (!open) return;
+    setName('');
+    setEmail('');
+    setRole('Connector');
+    setCommissionKind('pct_deal_value');
+    setCommissionValue('10');
+    setBaseParticipant('Closer');
+    setFormulaExpression('');
+    setRoleDetails('');
+    setPayoutCondition('');
+    setAgreementNotes('');
+    setAttachmentUrl('');
+    setAttachmentLabel('');
+    setSuccessLink(null);
+    setSubmitError(null);
   }, [open]);
+
+  const isInviteDirty = React.useMemo(() => {
+    if (successLink) return false;
+    return (
+      name.trim() !== '' ||
+      email.trim() !== '' ||
+      role !== 'Connector' ||
+      commissionKind !== 'pct_deal_value' ||
+      commissionValue !== '10' ||
+      baseParticipant !== 'Closer' ||
+      formulaExpression.trim() !== '' ||
+      roleDetails.trim() !== '' ||
+      payoutCondition.trim() !== '' ||
+      agreementNotes.trim() !== '' ||
+      attachmentUrl.trim() !== '' ||
+      attachmentLabel.trim() !== ''
+    );
+  }, [
+    successLink,
+    name,
+    email,
+    role,
+    commissionKind,
+    commissionValue,
+    baseParticipant,
+    formulaExpression,
+    roleDetails,
+    payoutCondition,
+    agreementNotes,
+    attachmentUrl,
+    attachmentLabel,
+  ]);
+
+  function requestClose() {
+    if (successLink) {
+      onOpenChange(false);
+      return;
+    }
+    if (!isInviteDirty) {
+      onOpenChange(false);
+      return;
+    }
+    if (window.confirm('Discard changes?')) {
+      onOpenChange(false);
+    }
+  }
 
   const preview = React.useMemo(() => {
     const v = featuredDealValue > 0 ? featuredDealValue : 100_000;
@@ -134,7 +180,7 @@ export function InviteParticipantModal({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !email.trim()) return;
+    if (!name.trim()) return;
     if (!roleDetails.trim() || !payoutCondition.trim()) {
       setSubmitError('Role details and payout condition are required for the agreement record.');
       return;
@@ -186,8 +232,28 @@ export function InviteParticipantModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          onOpenChange(true);
+          return;
+        }
+        requestClose();
+      }}
+    >
+      <DialogContent
+        className="sm:max-w-lg max-h-[90vh] flex flex-col gap-0 overflow-hidden p-0"
+        onInteractOutside={(e) => {
+          e.preventDefault();
+          requestClose();
+        }}
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
+          requestClose();
+        }}
+      >
+        <div className="max-h-[90vh] overflow-y-auto px-6 pt-6 pb-6">
         <DialogHeader>
           <DialogTitle>{successLink ? 'Participant invited' : 'Invite participant'}</DialogTitle>
           <DialogDescription>
@@ -236,14 +302,14 @@ export function InviteParticipantModal({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="inv-email">Email</Label>
+              <Label htmlFor="inv-email">Email (optional)</Label>
               <Input
                 id="inv-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@company.com"
-                required
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">
@@ -444,7 +510,7 @@ export function InviteParticipantModal({
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={requestClose}>
                 Cancel
               </Button>
               <Button type="submit" disabled={!preview.valid || preview.total <= 0}>
@@ -453,6 +519,7 @@ export function InviteParticipantModal({
             </DialogFooter>
           </form>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );
