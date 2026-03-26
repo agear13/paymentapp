@@ -22,13 +22,11 @@
  *   real authorization (e.g. requireAuth + isBetaAdminEmail / checkAdminAuth).
  */
 
-import { NextResponse, type NextRequest } from 'next/server'
-
-/**
- * Beta admin emails - must match src/lib/auth/admin-shared.ts
- * Duplicated here because middleware can't safely import from lib modules
- */
-const BETA_ADMIN_EMAILS = ['alishajayne13@gmail.com'];
+import { NextResponse, type NextRequest } from 'next/server';
+import {
+  isBetaAdminEmail,
+  isRabbitHolePilotEmail,
+} from '@/lib/auth/admin-shared';
 
 /**
  * Single source of truth for path prefixes restricted to beta admins.
@@ -47,7 +45,32 @@ const RESTRICTED_PATH_PREFIXES = [
  * Centralized here so the route list is easy to audit.
  */
 function isRestrictedPath(pathname: string): boolean {
-  return RESTRICTED_PATH_PREFIXES.some(prefix => pathname.startsWith(prefix));
+  return RESTRICTED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+/** Rabbit Hole pilot users may only use this product route under dashboard. */
+function isRabbitHoleDealNetworkPath(pathname: string): boolean {
+  return (
+    pathname === '/dashboard/partners/deal-network' ||
+    pathname.startsWith('/dashboard/partners/deal-network/')
+  );
+}
+
+/**
+ * Pilot allowlist: static (admin-shared) + RABBIT_HOLE_PILOT_EMAILS env (comma-separated).
+ * Beta admin wins — must match dashboard-product.server.ts / partners layout.
+ */
+function isRabbitHolePilotSessionUser(email: string | null): boolean {
+  if (!email) return false;
+  if (isBetaAdminEmail(email)) return false;
+  if (isRabbitHolePilotEmail(email)) return true;
+  const raw = process.env.RABBIT_HOLE_PILOT_EMAILS;
+  if (!raw) return false;
+  const emails = raw
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return emails.includes(email.trim().toLowerCase());
 }
 
 /**
@@ -139,22 +162,22 @@ function parseTokenValue(tokenValue: string): string | null {
   }
 }
 
-/**
- * Check if email is in beta admin allowlist
- */
-function isBetaAdminEmail(email: string | null): boolean {
-  if (!email) return false;
-  const normalized = email.trim().toLowerCase();
-  return BETA_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === normalized);
-}
-
 const DEBUG_MIDDLEWARE = process.env.DEBUG_MIDDLEWARE === 'true';
+
+function nextWithPathnameAndSecurityHeaders(request: NextRequest, pathname: string) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-pathname', pathname);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  response.headers.set('Cache-Control', 'no-store');
+  return response;
+}
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-
-  // Create response that we'll modify
-  const response = NextResponse.next({ request });
 
   // Detect session from cookies (lightweight, no Supabase import)
   const { hasSession, email } = getSessionFromCookies(request);
@@ -194,6 +217,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
+  // Rabbit Hole pilot: only /dashboard/partners/deal-network (and subpaths) under dashboard
+  if (
+    hasSession &&
+    isDashboardRoute &&
+    email &&
+    isRabbitHolePilotSessionUser(email)
+  ) {
+    if (!isRabbitHoleDealNetworkPath(pathname)) {
+      if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=redirect_pilot_to_deal_network'); }
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = '/dashboard/partners/deal-network';
+      return NextResponse.redirect(redirectUrl);
+    }
+  }
+
   // Beta lockdown: restrict certain routes to admin emails only
   // Only redirect when we have a definite non-admin (email parsed and not in allowlist).
   // When email is null (JWT parse failed), allow through so server-side can enforce (avoids
@@ -201,6 +239,16 @@ export async function middleware(request: NextRequest) {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
 
   if (betaLockdownEnabled && restricted) {
+    const pilotOnDealNetwork =
+      email !== null &&
+      isRabbitHolePilotSessionUser(email) &&
+      isRabbitHoleDealNetworkPath(pathname);
+
+    if (pilotOnDealNetwork) {
+      if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=next_pilot_deal_network'); }
+      return nextWithPathnameAndSecurityHeaders(request, pathname);
+    }
+
     const isKnownNonAdmin = email !== null && !isBetaAdminEmail(email);
     if (isKnownNonAdmin) {
       if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=redirect_restricted_to_dashboard'); }
@@ -211,15 +259,8 @@ export async function middleware(request: NextRequest) {
   }
 
   if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=next'); }
-  
-  // Add security headers
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  response.headers.set('Cache-Control', 'no-store');
-  
-  return response;
+
+  return nextWithPathnameAndSecurityHeaders(request, pathname);
 }
 
 export const config = {
@@ -232,16 +273,3 @@ export const config = {
     '/auth/:path*',
   ],
 };
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,7 +1,7 @@
 /**
  * Dashboard Layout (Server Component)
  * 
- * Computes isBetaAdmin on the server and passes to client sidebar.
+ * Computes product profile on the server and passes to client shell.
  * This avoids importing server-only modules from client components.
  * 
  * Force dynamic to ensure session cookies are always read fresh.
@@ -9,7 +9,7 @@
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-import { getIsBetaAdmin } from '@/lib/auth/beta-admin.server';
+import { getDashboardProductProfile } from '@/lib/auth/dashboard-product.server';
 import { DashboardLayoutClient } from '@/components/dashboard/dashboard-layout-client';
 
 export default async function DashboardLayout({
@@ -17,11 +17,10 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Compute beta admin status on server (uses cookies/headers)
-  const isBetaAdmin = await getIsBetaAdmin();
+  const productProfile = await getDashboardProductProfile();
 
   return (
-    <DashboardLayoutClient isBetaAdmin={isBetaAdmin}>
+    <DashboardLayoutClient productProfile={productProfile}>
       {children}
     </DashboardLayoutClient>
   );

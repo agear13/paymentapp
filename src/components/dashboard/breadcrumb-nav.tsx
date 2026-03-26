@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -23,11 +24,29 @@ const pathTitles: Record<string, string> = {
   merchant: 'Merchant',
   team: 'Team',
   integrations: 'Integrations',
+  partners: 'Partners',
+  'deal-network': 'Deal Network',
 };
 
-export function BreadcrumbNav() {
+interface BreadcrumbNavProps {
+  productProfile: DashboardProductProfile;
+}
+
+export function BreadcrumbNav({ productProfile }: BreadcrumbNavProps) {
   const pathname = usePathname();
-  
+
+  if (productProfile === 'rabbit_hole_pilot') {
+    return (
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbPage>Rabbit Hole Deal Network</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+    );
+  }
+
   // Split the pathname into segments and filter out empty strings
   const segments = pathname.split('/').filter(Boolean);
   

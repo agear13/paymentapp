@@ -35,6 +35,28 @@ export function isBetaAdminEmail(email?: string | null): boolean {
 }
 
 /**
+ * Product surface shown in the dashboard shell (computed server-side).
+ */
+export type DashboardProductProfile = 'admin' | 'standard' | 'rabbit_hole_pilot';
+
+/**
+ * Rabbit Hole Deal Network pilot — allowlist (case-insensitive).
+ * Prefer RABBIT_HOLE_PILOT_EMAILS (comma-separated) in env for production; add here for local dev.
+ */
+export const RABBIT_HOLE_PILOT_EMAILS = [] as const;
+
+/**
+ * True if this email is a Rabbit Hole pilot-only user (not beta admin).
+ * Server code should also merge process.env.RABBIT_HOLE_PILOT_EMAILS — see dashboard-product.server.ts.
+ */
+export function isRabbitHolePilotEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  const list = RABBIT_HOLE_PILOT_EMAILS as readonly string[];
+  return list.some((e) => e.toLowerCase() === normalized);
+}
+
+/**
  * Require beta admin access or throw 403 error
  * Use this in API routes that should be restricted during beta
  * 

@@ -3,11 +3,12 @@
 /**
  * App Sidebar Component
  * 
- * NOTE: isBetaAdmin is passed from the server layout to avoid importing
+ * NOTE: productProfile is passed from the server layout to avoid importing
  * server-only modules (like next/headers) in this client component.
  * See src/app/(dashboard)/layout.tsx for where this prop is computed.
  */
 
+import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -190,11 +191,12 @@ const settingsItems = [
 ];
 
 interface AppSidebarProps {
-  /** Beta admin status computed on server and passed as prop */
-  isBetaAdmin: boolean;
+  productProfile: DashboardProductProfile;
 }
 
-export function AppSidebar({ isBetaAdmin }: AppSidebarProps) {
+export function AppSidebar({ productProfile }: AppSidebarProps) {
+  const isBetaAdmin = productProfile === 'admin';
+  const isRabbitHolePilot = productProfile === 'rabbit_hole_pilot';
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -269,6 +271,89 @@ export function AppSidebar({ isBetaAdmin }: AppSidebarProps) {
         .toUpperCase()
         .slice(0, 2)
     : '?';
+
+  if (isRabbitHolePilot) {
+    const pilotHome = '/dashboard/partners/deal-network';
+    return (
+      <Sidebar collapsible="icon">
+        <SidebarHeader>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" asChild>
+                <Link href={pilotHome}>
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                    <span className="text-lg font-bold">R</span>
+                  </div>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">Rabbit Hole Deal Network</span>
+                    <span className="truncate text-xs text-muted-foreground">Pilot Workspace</span>
+                  </div>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
+
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Pilot</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname === pilotHome || pathname.startsWith(`${pilotHome}/`)}>
+                    <Link href={pilotHome}>
+                      <Handshake className="size-4" />
+                      <span>Deal Network</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              {loading ? (
+                <SidebarMenuButton disabled>
+                  <Avatar className="size-6">
+                    <AvatarFallback>...</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">Loading...</span>
+                    <span className="truncate text-xs text-muted-foreground">Please wait</span>
+                  </div>
+                </SidebarMenuButton>
+              ) : user ? (
+                <SidebarMenuButton onClick={handleSignOut} disabled={loading}>
+                  <Avatar className="size-6">
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">{displayName}</span>
+                    <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                  </div>
+                  <LogOut className="size-4 ml-auto" />
+                </SidebarMenuButton>
+              ) : (
+                <SidebarMenuButton onClick={handleSignIn}>
+                  <Avatar className="size-6">
+                    <AvatarFallback>?</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">Sign In</span>
+                    <span className="truncate text-xs text-muted-foreground">Click to login</span>
+                  </div>
+                  <ChevronRight className="size-4 ml-auto" />
+                </SidebarMenuButton>
+              )}
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      </Sidebar>
+    );
+  }
 
   return (
     <Sidebar collapsible="icon">
