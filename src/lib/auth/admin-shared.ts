@@ -41,9 +41,9 @@ export type DashboardProductProfile = 'admin' | 'standard' | 'rabbit_hole_pilot'
 
 /**
  * Rabbit Hole Deal Network pilot — allowlist (case-insensitive).
- * Prefer RABBIT_HOLE_PILOT_EMAILS (comma-separated) in env for production; add here for local dev.
+ * Also supported: RABBIT_HOLE_PILOT_EMAILS (comma-separated) in env (e.g. on Render).
  */
-export const RABBIT_HOLE_PILOT_EMAILS = [] as const;
+export const RABBIT_HOLE_PILOT_EMAILS = ['jaynealisha77@gmail.com'] as const;
 
 /**
  * True if this email is a Rabbit Hole pilot-only user (not beta admin).
