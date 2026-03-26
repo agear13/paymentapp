@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +9,6 @@ import { Label } from '@/components/ui/label';
 
 export default function ResetPasswordPage() {
   const supabase = createClient();
-  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,15 +18,22 @@ export default function ResetPasswordPage() {
   const [readyToSetPassword, setReadyToSetPassword] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const tokenHash = searchParams.get('token_hash');
-  const type = searchParams.get('type');
-
-  const isRecoveryLink = useMemo(() => type === 'recovery', [type]);
+  const [isRecoveryLink, setIsRecoveryLink] = useState(false);
+  const [tokenHash, setTokenHash] = useState<string | null>(null);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const type = params.get('type');
+    const token = params.get('token_hash');
+    setIsRecoveryLink(type === 'recovery');
+    setTokenHash(token);
+  }, []);
+
+  useEffect(() => {
+    if (!isRecoveryLink || !tokenHash) return;
+
     async function bootstrapRecoverySession() {
-      if (!isRecoveryLink || !tokenHash) return;
       setVerifyingToken(true);
       setError(null);
       try {
@@ -46,7 +51,7 @@ export default function ResetPasswordPage() {
     }
 
     bootstrapRecoverySession();
-  }, [isRecoveryLink, tokenHash, supabase.auth]);
+  }, [isRecoveryLink, tokenHash, supabase]);
 
   const handleSendReset = async (e: React.FormEvent) => {
     e.preventDefault();
