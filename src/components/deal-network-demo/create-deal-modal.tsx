@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -116,6 +117,19 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
   const [paymentLink, setPaymentLink] = React.useState('');
   const [paidAmount, setPaidAmount] = React.useState('');
 
+  // Pilot-only agreement context for internal Introducer/Closer participant approval pages.
+  const [introducerRoleDetails, setIntroducerRoleDetails] = React.useState('');
+  const [introducerPayoutCondition, setIntroducerPayoutCondition] = React.useState('');
+  const [introducerAgreementNotes, setIntroducerAgreementNotes] = React.useState('');
+  const [introducerAttachmentUrl, setIntroducerAttachmentUrl] = React.useState('');
+  const [introducerAttachmentLabel, setIntroducerAttachmentLabel] = React.useState('');
+
+  const [closerRoleDetails, setCloserRoleDetails] = React.useState('');
+  const [closerPayoutCondition, setCloserPayoutCondition] = React.useState('');
+  const [closerAgreementNotes, setCloserAgreementNotes] = React.useState('');
+  const [closerAttachmentUrl, setCloserAttachmentUrl] = React.useState('');
+  const [closerAttachmentLabel, setCloserAttachmentLabel] = React.useState('');
+
   const mergedCompanies = React.useMemo(() => [...rhCompanies, ...extraCompanies], [extraCompanies]);
 
   const resolveCompany = React.useCallback(
@@ -208,6 +222,16 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
         introducerCommission.value.trim() !== '' ||
         closerCommission.value.trim() !== '' ||
         platformCommission.value.trim() !== '' ||
+        introducerRoleDetails.trim() !== '' ||
+        introducerPayoutCondition.trim() !== '' ||
+        introducerAgreementNotes.trim() !== '' ||
+        introducerAttachmentUrl.trim() !== '' ||
+        introducerAttachmentLabel.trim() !== '' ||
+        closerRoleDetails.trim() !== '' ||
+        closerPayoutCondition.trim() !== '' ||
+        closerAgreementNotes.trim() !== '' ||
+        closerAttachmentUrl.trim() !== '' ||
+        closerAttachmentLabel.trim() !== '' ||
         paymentLink.trim() !== '' ||
         paidAmount.trim() !== ''
       );
@@ -221,6 +245,16 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       introducerCommission.value.trim() !== (base ? toInputNumber(base.introducerAmount) : '') ||
       closerCommission.value.trim() !== (base ? toInputNumber(base.closerAmount) : '') ||
       platformCommission.value.trim() !== (base ? toInputNumber(base.platformFee) : '') ||
+      introducerRoleDetails.trim() !== (base?.introducerRoleDetails ?? '').trim() ||
+      introducerPayoutCondition.trim() !== (base?.introducerPayoutCondition ?? '').trim() ||
+      introducerAgreementNotes.trim() !== (base?.introducerAgreementNotes ?? '').trim() ||
+      introducerAttachmentUrl.trim() !== (base?.introducerAttachmentUrl ?? '').trim() ||
+      introducerAttachmentLabel.trim() !== (base?.introducerAttachmentLabel ?? '').trim() ||
+      closerRoleDetails.trim() !== (base?.closerRoleDetails ?? '').trim() ||
+      closerPayoutCondition.trim() !== (base?.closerPayoutCondition ?? '').trim() ||
+      closerAgreementNotes.trim() !== (base?.closerAgreementNotes ?? '').trim() ||
+      closerAttachmentUrl.trim() !== (base?.closerAttachmentUrl ?? '').trim() ||
+      closerAttachmentLabel.trim() !== (base?.closerAttachmentLabel ?? '').trim() ||
       paymentLink.trim() !== (base?.paymentLink ?? '').trim() ||
       paidAmount.trim() !== (base ? toInputNumber(base.paidAmount) : '')
     );
@@ -236,6 +270,16 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
     introducerCommission,
     closerCommission,
     platformCommission,
+    introducerRoleDetails,
+    introducerPayoutCondition,
+    introducerAgreementNotes,
+    introducerAttachmentUrl,
+    introducerAttachmentLabel,
+    closerRoleDetails,
+    closerPayoutCondition,
+    closerAgreementNotes,
+    closerAttachmentUrl,
+    closerAttachmentLabel,
     paymentLink,
     paidAmount,
   ]);
@@ -264,6 +308,16 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       setPlatformCommission({ kind: 'fixed_amount', value: '', baseParticipant: 'Closer', formula: '' });
       setPaymentLink('');
       setPaidAmount('');
+      setIntroducerRoleDetails('');
+      setIntroducerPayoutCondition('');
+      setIntroducerAgreementNotes('');
+      setIntroducerAttachmentUrl('');
+      setIntroducerAttachmentLabel('');
+      setCloserRoleDetails('');
+      setCloserPayoutCondition('');
+      setCloserAgreementNotes('');
+      setCloserAttachmentUrl('');
+      setCloserAttachmentLabel('');
       return;
     }
 
@@ -291,6 +345,18 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
     });
     setPaymentLink(editDeal.paymentLink ?? '');
     setPaidAmount(toInputNumber(editDeal.paidAmount));
+
+    setIntroducerRoleDetails(editDeal.introducerRoleDetails ?? '');
+    setIntroducerPayoutCondition(editDeal.introducerPayoutCondition ?? '');
+    setIntroducerAgreementNotes(editDeal.introducerAgreementNotes ?? '');
+    setIntroducerAttachmentUrl(editDeal.introducerAttachmentUrl ?? '');
+    setIntroducerAttachmentLabel(editDeal.introducerAttachmentLabel ?? '');
+
+    setCloserRoleDetails(editDeal.closerRoleDetails ?? '');
+    setCloserPayoutCondition(editDeal.closerPayoutCondition ?? '');
+    setCloserAgreementNotes(editDeal.closerAgreementNotes ?? '');
+    setCloserAttachmentUrl(editDeal.closerAttachmentUrl ?? '');
+    setCloserAttachmentLabel(editDeal.closerAttachmentLabel ?? '');
 
     const graphCo = rhCompanies.find((co) => co.name === editDeal.partner);
     if (graphCo) {
@@ -415,6 +481,16 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       rhContactId: contact.id,
       rhContactLine: formatRhContactLine(contact, company.name),
       rhGraphIntroducer: contact.introducedBy,
+      introducerRoleDetails: introducerRoleDetails.trim() || undefined,
+      introducerPayoutCondition: introducerPayoutCondition.trim() || undefined,
+      introducerAgreementNotes: introducerAgreementNotes.trim() || undefined,
+      introducerAttachmentUrl: introducerAttachmentUrl.trim() || undefined,
+      introducerAttachmentLabel: introducerAttachmentLabel.trim() || undefined,
+      closerRoleDetails: closerRoleDetails.trim() || undefined,
+      closerPayoutCondition: closerPayoutCondition.trim() || undefined,
+      closerAgreementNotes: closerAgreementNotes.trim() || undefined,
+      closerAttachmentUrl: closerAttachmentUrl.trim() || undefined,
+      closerAttachmentLabel: closerAttachmentLabel.trim() || undefined,
     };
     onCreate(newDeal);
     toast.success(editDeal ? 'Deal updated' : 'Deal created');
@@ -775,6 +851,61 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
             ) : null}
           </div>
 
+          <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+            <p className="text-sm font-medium">Introducer agreement (pilot)</p>
+            <div className="space-y-2">
+              <Label htmlFor="dn-intro-role-details">Role details / scope of work</Label>
+              <Textarea
+                id="dn-intro-role-details"
+                value={introducerRoleDetails}
+                onChange={(e) => setIntroducerRoleDetails(e.target.value)}
+                placeholder="What this person is responsible for and how it ties to the deal."
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-intro-payout-condition">Payout condition</Label>
+              <Textarea
+                id="dn-intro-payout-condition"
+                value={introducerPayoutCondition}
+                onChange={(e) => setIntroducerPayoutCondition(e.target.value)}
+                placeholder="When does this role become entitled to payout?"
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-intro-notes">Notes (optional)</Label>
+              <Textarea
+                id="dn-intro-notes"
+                value={introducerAgreementNotes}
+                onChange={(e) => setIntroducerAgreementNotes(e.target.value)}
+                placeholder="Any additional agreement context."
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-intro-attachment-url">Attachment / reference URL (optional)</Label>
+              <Input
+                id="dn-intro-attachment-url"
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                value={introducerAttachmentUrl}
+                onChange={(e) => setIntroducerAttachmentUrl(e.target.value)}
+                placeholder="https://…"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-intro-attachment-label">Link label (optional)</Label>
+              <Input
+                id="dn-intro-attachment-label"
+                value={introducerAttachmentLabel}
+                onChange={(e) => setIntroducerAttachmentLabel(e.target.value)}
+                placeholder="e.g. SOW excerpt, rate card"
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="dn-closer">Closer</Label>
             <Input
@@ -784,6 +915,61 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
               placeholder="Who closed the deal"
             />
             <p className="text-xs text-muted-foreground">Enter manually (not sourced from the graph in this demo).</p>
+          </div>
+
+          <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+            <p className="text-sm font-medium">Closer agreement (pilot)</p>
+            <div className="space-y-2">
+              <Label htmlFor="dn-closer-role-details">Role details / scope of work</Label>
+              <Textarea
+                id="dn-closer-role-details"
+                value={closerRoleDetails}
+                onChange={(e) => setCloserRoleDetails(e.target.value)}
+                placeholder="What this person is responsible for and how it ties to the deal."
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-closer-payout-condition">Payout condition</Label>
+              <Textarea
+                id="dn-closer-payout-condition"
+                value={closerPayoutCondition}
+                onChange={(e) => setCloserPayoutCondition(e.target.value)}
+                placeholder="When does this role become entitled to payout?"
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-closer-notes">Notes (optional)</Label>
+              <Textarea
+                id="dn-closer-notes"
+                value={closerAgreementNotes}
+                onChange={(e) => setCloserAgreementNotes(e.target.value)}
+                placeholder="Any additional agreement context."
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-closer-attachment-url">Attachment / reference URL (optional)</Label>
+              <Input
+                id="dn-closer-attachment-url"
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                value={closerAttachmentUrl}
+                onChange={(e) => setCloserAttachmentUrl(e.target.value)}
+                placeholder="https://…"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-closer-attachment-label">Link label (optional)</Label>
+              <Input
+                id="dn-closer-attachment-label"
+                value={closerAttachmentLabel}
+                onChange={(e) => setCloserAttachmentLabel(e.target.value)}
+                placeholder="e.g. SOW excerpt, rate card"
+              />
+            </div>
           </div>
           </div>
 

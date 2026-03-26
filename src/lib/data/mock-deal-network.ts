@@ -51,6 +51,18 @@ export interface RecentDeal {
   introducerAmount?: number;
   closerAmount?: number;
   platformFee?: number;
+  /** Optional agreement context for the Introducer role (pilot-only). */
+  introducerRoleDetails?: string;
+  introducerPayoutCondition?: string;
+  introducerAgreementNotes?: string;
+  introducerAttachmentUrl?: string;
+  introducerAttachmentLabel?: string;
+  /** Optional agreement context for the Closer role (pilot-only). */
+  closerRoleDetails?: string;
+  closerPayoutCondition?: string;
+  closerAgreementNotes?: string;
+  closerAttachmentUrl?: string;
+  closerAttachmentLabel?: string;
   status: DealStatus;
   lastUpdated: string;
   /** Set when created from the demo “Create deal” flow */

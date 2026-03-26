@@ -154,6 +154,78 @@ export default function DealNetworkPage() {
     [deals, participants]
   );
 
+  const syncInternalRoleParticipants = React.useCallback(
+    (existingParticipants: DemoParticipant[], dealsToSync: RecentDeal[]) => {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const next = [...existingParticipants];
+
+      const upsertRoleParticipant = (deal: RecentDeal, role: 'Introducer' | 'Closer') => {
+        const roleKey = role.toLowerCase();
+        const participantId = `internal-${roleKey}-${deal.id}`;
+        const inviteToken = `internal-${roleKey}-${deal.id}`;
+        const nameValue = (role === 'Introducer' ? deal.introducer : deal.closer).trim();
+        const displayName = nameValue || role;
+        const amountValue = role === 'Introducer' ? deal.introducerAmount ?? 0 : deal.closerAmount ?? 0;
+
+        const idx = next.findIndex((p) => p.id === participantId || p.inviteToken === inviteToken);
+        const prev = idx >= 0 ? next[idx] : undefined;
+
+        const roleDetails =
+          role === 'Introducer' ? deal.introducerRoleDetails : deal.closerRoleDetails;
+        const payoutCondition =
+          role === 'Introducer' ? deal.introducerPayoutCondition : deal.closerPayoutCondition;
+        const agreementNotes =
+          role === 'Introducer' ? deal.introducerAgreementNotes : deal.closerAgreementNotes;
+        const attachmentUrl =
+          role === 'Introducer' ? deal.introducerAttachmentUrl : deal.closerAttachmentUrl;
+        const attachmentLabel =
+          role === 'Introducer' ? deal.introducerAttachmentLabel : deal.closerAttachmentLabel;
+
+        const inviteLink = origin ? `${origin}/deal-invites/${inviteToken}` : undefined;
+
+        const updated: DemoParticipant = {
+          id: participantId,
+          name: displayName,
+          email: prev?.email ?? '',
+          role,
+          commissionKind: 'fixed_amount',
+          commissionValue: amountValue,
+          baseParticipant: undefined,
+          formulaExpression: undefined,
+          status: prev?.status ?? 'Pending',
+          inviteStatus: prev?.inviteStatus ?? 'Invited',
+          approvalStatus: prev?.approvalStatus ?? 'Pending approval',
+          approvedAt: prev?.approvedAt,
+          approvalNote: prev?.approvalNote,
+          inviteToken,
+          dealName: deal.dealName,
+          partner: deal.partner,
+          dealId: deal.id,
+          inviteLink,
+          roleDetails: roleDetails || undefined,
+          payoutCondition: payoutCondition || undefined,
+          agreementNotes: agreementNotes || undefined,
+          attachmentUrl: attachmentUrl || undefined,
+          attachmentLabel: attachmentLabel || undefined,
+        };
+
+        if (idx >= 0) {
+          next[idx] = { ...next[idx], ...updated };
+        } else {
+          next.push(updated);
+        }
+      };
+
+      for (const d of dealsToSync) {
+        upsertRoleParticipant(d, 'Introducer');
+        upsertRoleParticipant(d, 'Closer');
+      }
+
+      return next;
+    },
+    []
+  );
+
   React.useEffect(() => {
     const stored = loadPilotStore();
     if (!stored) return;
@@ -161,12 +233,24 @@ export default function DealNetworkPage() {
       setDeals(stored.deals);
       setActiveDealId(stored.deals[0].id);
     }
-    setParticipants(stored.participants);
-  }, []);
+    setParticipants(syncInternalRoleParticipants(stored.participants, stored.deals));
+  }, [syncInternalRoleParticipants]);
+
+  React.useEffect(() => {
+    setParticipants((prev) => syncInternalRoleParticipants(prev, deals));
+  }, [deals, syncInternalRoleParticipants]);
 
   React.useEffect(() => {
     savePilotStore({ deals, participants });
   }, [deals, participants]);
+
+  React.useEffect(() => {
+    if (!exportOpen) return;
+    const stored = loadPilotStore();
+    if (!stored) return;
+    setDeals(stored.deals);
+    setParticipants(syncInternalRoleParticipants(stored.participants, stored.deals));
+  }, [exportOpen, syncInternalRoleParticipants]);
 
   const handleCreateDeal = React.useCallback((deal: RecentDeal) => {
     setDeals((prev) => {
@@ -176,10 +260,13 @@ export default function DealNetworkPage() {
         : [deal, ...prev];
     });
     setActiveDealId(deal.id);
+
+    setParticipants((prev) => syncInternalRoleParticipants(prev, [deal]));
+
     if (!editOpen) {
       setFunnel((prev) => adjustFunnelCounts(prev, null, 'Pending'));
     }
-  }, [editOpen]);
+  }, [editOpen, syncInternalRoleParticipants]);
 
   const handleInviteParticipant = React.useCallback(
     (p: DemoParticipant) => {
@@ -453,12 +540,12 @@ export default function DealNetworkPage() {
             </div>
           </div>
 
-          {activeParticipants.length > 0 && (
+          {(activeParticipants.length > 0 || typeof activeDeal?.platformFee === 'number') && (
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
               <div className="flex flex-wrap items-center gap-2 justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Invited participants
+                    Deal payout parties
                   </span>
                   <Badge variant="outline" className="font-medium border-primary/40 bg-background">
                     {featured.name}
@@ -467,7 +554,7 @@ export default function DealNetworkPage() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Enrollment for this deal only. Participants approve through their invite link.
+                Introducer/Closer roles and invited participants approve through their invite link.
               </p>
               <Table>
                 <TableHeader>
@@ -561,6 +648,34 @@ export default function DealNetworkPage() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {typeof activeDeal?.platformFee === 'number' ? (
+                    <TableRow className="hover:bg-muted/60">
+                      <TableCell className="font-medium text-muted-foreground text-sm">
+                        {activeDeal?.dealName ?? featured.name}
+                      </TableCell>
+                      <TableCell className="font-medium">Rabbit Hole Platform</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">—</TableCell>
+                      <TableCell>Platform</TableCell>
+                      <TableCell>
+                        <div className="space-y-0.5">
+                          <span className="text-xs text-muted-foreground block">
+                            Fixed commission pool: $
+                            {activeDeal.platformFee.toLocaleString()}
+                          </span>
+                          <span className="font-medium tabular-nums">
+                            ${activeDeal.platformFee.toLocaleString()}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">Internal</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">Not required</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">-</TableCell>
+                    </TableRow>
+                  ) : null}
                 </TableBody>
               </Table>
             </div>

@@ -31,7 +31,7 @@ export interface ExportPayoutRow {
   role: string;
   commissionStructure: string;
   payoutAmount: number;
-  approvalStatus: 'Pending approval' | 'Approved';
+  approvalStatus: 'Pending approval' | 'Approved' | 'Not required';
   settlementStatus: DealStatus;
   contractPaidStatus: 'Contract Unpaid' | 'Contract Paid';
   payoutTrigger: string;
@@ -209,7 +209,15 @@ export function ExportPayoutsModal({
                       ${r.payoutAmount.toLocaleString()}
                     </TableCell>
                     <TableCell className="align-top">
-                      <Badge variant={r.approvalStatus === 'Approved' ? 'success' : 'warning'}>
+                      <Badge
+                        variant={
+                          r.approvalStatus === 'Approved'
+                            ? 'success'
+                            : r.approvalStatus === 'Pending approval'
+                              ? 'warning'
+                              : 'outline'
+                        }
+                      >
                         {r.approvalStatus}
                       </Badge>
                     </TableCell>
@@ -263,6 +271,39 @@ export function buildExportPayoutRows(
   const dealById = new Map(deals.map((d) => [d.id, d]));
   const dealByName = new Map(deals.map((d) => [d.dealName, d]));
 
+  for (const deal of deals) {
+    const dealIsPaid = deal.status === 'Approved' || deal.status === 'Paid';
+    const settlementStatus = deal.status ?? 'Pending';
+    const payoutTrigger = deal.payoutTrigger ?? 'Manual';
+    const lu = formatExportDate(deal.lastUpdated);
+    const paymentStatus = deal.paymentStatus ?? 'Not Paid';
+    const paidAt = deal.paidAt ? formatExportDate(deal.paidAt) : undefined;
+    const contractPaidStatus = dealIsPaid ? 'Contract Paid' : 'Contract Unpaid';
+
+    const contactPerson = deal.rhContactLine?.split(' — ')[0] ?? '-';
+
+    const platformFee = deal.platformFee ?? 0;
+    out.push({
+      dealName: deal.dealName,
+      partner: deal.partner,
+      contactPerson,
+      participant: 'Rabbit Hole Platform',
+      email: '',
+      role: 'Platform',
+      commissionStructure: `Fixed commission pool: $${platformFee.toLocaleString()}`,
+      payoutAmount: platformFee,
+      approvalStatus: 'Not required',
+      settlementStatus,
+      contractPaidStatus,
+      payoutTrigger,
+      paymentStatus,
+      paidAmount: deal.paidAmount,
+      paidAt,
+      lastUpdated: lu,
+      approvedAt: undefined,
+    });
+  }
+
   for (const p of participants) {
     const deal =
       (p.dealId ? dealById.get(p.dealId) : undefined) ??
@@ -270,16 +311,13 @@ export function buildExportPayoutRows(
     if (!deal) continue;
 
     const dealIsPaid = deal.status === 'Approved' || deal.status === 'Paid';
-    if (dealIsPaid && p.approvalStatus !== 'Approved') {
-      excludedUnapprovedCount += 1;
-      continue;
-    }
-
-    const settlement = deal?.status ?? 'Pending';
-    const pt = deal?.payoutTrigger ?? 'Manual';
+    const settlementStatus = deal.status ?? 'Pending';
+    const payoutTrigger = deal.payoutTrigger ?? 'Manual';
     const lu = formatExportDate(deal.lastUpdated);
     const paymentStatus = deal.paymentStatus ?? 'Not Paid';
     const paidAt = deal.paidAt ? formatExportDate(deal.paidAt) : undefined;
+    const contractPaidStatus = dealIsPaid ? 'Contract Paid' : 'Contract Unpaid';
+
     const resolved = resolveParticipantCommissionUsd(
       {
         commissionKind: p.commissionKind,
@@ -294,10 +332,6 @@ export function buildExportPayoutRows(
         Platform: deal.platformFee,
       }
     );
-    const structureLabel = resolved.previewLine;
-    if (resolved.total <= 0) {
-      continue;
-    }
 
     out.push({
       dealName: deal.dealName,
@@ -306,12 +340,12 @@ export function buildExportPayoutRows(
       participant: p.name,
       email: p.email?.trim() ?? '',
       role: p.role,
-      commissionStructure: structureLabel,
+      commissionStructure: resolved.previewLine,
       payoutAmount: resolved.total,
       approvalStatus: p.approvalStatus,
-      settlementStatus: settlement,
-      contractPaidStatus: dealIsPaid ? 'Contract Paid' : 'Contract Unpaid',
-      payoutTrigger: pt,
+      settlementStatus,
+      contractPaidStatus,
+      payoutTrigger,
       paymentStatus,
       paidAmount: deal.paidAmount,
       paidAt,
