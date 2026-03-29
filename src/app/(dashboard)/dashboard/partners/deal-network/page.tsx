@@ -50,6 +50,7 @@ import {
 import type { DealStatus, RecentDeal, TopEarner } from '@/lib/data/mock-deal-network';
 import {
   adjustFunnelCounts,
+  buildFunnelFromDeals,
   getDealCommissionTotal,
   getNextSettlementStatus,
   recentDealToFeatured,
@@ -66,7 +67,7 @@ import {
   ExportPayoutsModal,
   buildExportPayoutRows,
 } from '@/components/deal-network-demo/export-payouts-modal';
-import { loadPilotStore, savePilotStore } from '@/lib/deal-network-demo/pilot-store';
+import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import { cn } from '@/lib/utils';
 
 function getStatusVariant(
@@ -108,8 +109,9 @@ function bumpEarnersOnPaid(prev: TopEarner[], commissionTotal: number): TopEarne
 }
 
 export default function DealNetworkPage() {
-  const [deals, setDeals] = React.useState<RecentDeal[]>(() => [...recentDealsSeed]);
-  const [activeDealId, setActiveDealId] = React.useState(() => recentDealsSeed[0]?.id ?? '');
+  const [pilotHydrated, setPilotHydrated] = React.useState(false);
+  const [deals, setDeals] = React.useState<RecentDeal[]>([]);
+  const [activeDealId, setActiveDealId] = React.useState('');
   const [funnel, setFunnel] = React.useState(() =>
     commissionFunnelStages.map((s) => ({ ...s }))
   );
@@ -127,9 +129,20 @@ export default function DealNetworkPage() {
   }, [deals, activeDealId]);
 
   const featured = React.useMemo(() => {
-    if (!activeDeal) return recentDealToFeatured(recentDealsSeed[0]);
-    return recentDealToFeatured(activeDeal);
-  }, [activeDeal]);
+    if (activeDeal) return recentDealToFeatured(activeDeal);
+    if (!pilotHydrated) return recentDealToFeatured(recentDealsSeed[0]);
+    return recentDealToFeatured({
+      id: '__placeholder__',
+      dealName: 'No deal yet',
+      partner: '—',
+      value: 0,
+      introducer: '',
+      closer: '',
+      status: 'Pending',
+      lastUpdated: new Date().toISOString(),
+      paymentStatus: 'Not Paid',
+    });
+  }, [activeDeal, pilotHydrated]);
 
   const activeParticipants = React.useMemo(
     () =>
@@ -233,13 +246,29 @@ export default function DealNetworkPage() {
   );
 
   React.useEffect(() => {
-    const stored = loadPilotStore();
-    if (!stored) return;
-    if (stored.deals.length) {
-      setDeals(stored.deals);
-      setActiveDealId(stored.deals[0].id);
-    }
-    setParticipants(syncInternalRoleParticipants(stored.participants, stored.deals));
+    let cancelled = false;
+    void fetchPilotSnapshot().then((stored) => {
+      if (cancelled) return;
+      if (stored === null) {
+        setPilotHydrated(true);
+        return;
+      }
+      if (stored.deals.length > 0) {
+        setDeals(stored.deals);
+        setActiveDealId(stored.deals[0].id);
+        setParticipants(syncInternalRoleParticipants(stored.participants, stored.deals));
+        setFunnel(buildFunnelFromDeals(stored.deals));
+      } else {
+        setDeals([]);
+        setActiveDealId('');
+        setParticipants([]);
+        setFunnel(buildFunnelFromDeals([]));
+      }
+      setPilotHydrated(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [syncInternalRoleParticipants]);
 
   React.useEffect(() => {
@@ -247,16 +276,12 @@ export default function DealNetworkPage() {
   }, [deals, syncInternalRoleParticipants]);
 
   React.useEffect(() => {
-    savePilotStore({ deals, participants });
-  }, [deals, participants]);
-
-  React.useEffect(() => {
-    if (!exportOpen) return;
-    const stored = loadPilotStore();
-    if (!stored) return;
-    setDeals(stored.deals);
-    setParticipants(syncInternalRoleParticipants(stored.participants, stored.deals));
-  }, [exportOpen, syncInternalRoleParticipants]);
+    if (!pilotHydrated) return;
+    const t = setTimeout(() => {
+      void persistPilotSnapshot({ deals, participants });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [deals, participants, pilotHydrated]);
 
   const handleCreateDeal = React.useCallback((deal: RecentDeal) => {
     setDeals((prev) => {

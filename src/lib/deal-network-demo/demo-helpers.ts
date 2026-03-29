@@ -105,3 +105,23 @@ export function adjustFunnelCounts(
     return { ...s, count: Math.max(0, c) };
   });
 }
+
+/** Rebuild funnel stage counts from the current deal list (server-backed pilot). */
+export function buildFunnelFromDeals(deals: RecentDeal[]): FunnelStage[] {
+  const counts: Record<string, number> = {
+    Pending: 0,
+    Eligible: 0,
+    Approved: 0,
+    Paid: 0,
+  };
+  for (const d of deals) {
+    const label = statusToFunnelLabel(d.status);
+    if (label && label in counts) counts[label] += 1;
+  }
+  return [
+    { label: 'Pending', count: counts.Pending },
+    { label: 'Eligible', count: counts.Eligible },
+    { label: 'Approved', count: counts.Approved },
+    { label: 'Paid', count: counts.Paid },
+  ];
+}

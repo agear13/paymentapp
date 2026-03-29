@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { loadPilotStore, savePilotStore } from '@/lib/deal-network-demo/pilot-store';
 import {
   COMMISSION_STRUCTURE_OPTIONS,
   resolveParticipantCommissionUsd,
@@ -24,56 +23,85 @@ export default function DealInviteApprovalPage() {
   const [participant, setParticipant] = React.useState<DemoParticipant | null>(null);
   const [note, setNote] = React.useState('');
   const [approved, setApproved] = React.useState(false);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const store = loadPilotStore();
-    if (!store || !token) return;
-    const p = store.participants.find((row) => row.inviteToken === token);
-    if (!p) return;
-    const d =
-      (p.dealId ? store.deals.find((row) => row.id === p.dealId) : undefined) ??
-      (p.dealName ? store.deals.find((row) => row.dealName === p.dealName) : undefined) ??
-      null;
-    const nextParticipants = store.participants.map((row) =>
-      row.inviteToken === token ? { ...row, inviteStatus: 'Opened' as const } : row
-    );
-    savePilotStore({ deals: store.deals, participants: nextParticipants });
-    setDeal(d);
-    setParticipant({ ...p, inviteStatus: 'Opened' });
-    setApproved(p.approvalStatus === 'Approved');
-    setNote(p.approvalNote ?? '');
+    if (!token) {
+      setLoading(false);
+      setLoadError('Missing invite token');
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    void fetch(`/api/deal-network-pilot/invites/${encodeURIComponent(token)}`, { cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { error?: string }).error || 'Invite not found');
+        }
+        return res.json() as Promise<{ deal: RecentDeal; participant: DemoParticipant }>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setDeal(data.deal);
+        setParticipant(data.participant);
+        setApproved(data.participant.approvalStatus === 'Approved');
+        setNote(data.participant.approvalNote ?? '');
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setLoadError(e.message || 'Failed to load invite');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
-  function approve() {
-    const store = loadPilotStore();
-    if (!store || !token) return;
-    const now = new Date().toISOString();
-    const nextParticipants = store.participants.map((row) =>
-      row.inviteToken === token
-        ? {
-            ...row,
-            status: 'Confirmed' as const,
-            inviteStatus: 'Opened' as const,
-            approvalStatus: 'Approved' as const,
-            approvedAt: now,
-            approvalNote: note.trim() || undefined,
-          }
-        : row
-    );
-    savePilotStore({ deals: store.deals, participants: nextParticipants });
-    const p = nextParticipants.find((row) => row.inviteToken === token) ?? null;
-    setParticipant(p);
-    setApproved(true);
-    toast.success('Agreement approved');
+  async function approve() {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/deal-network-pilot/invites/${encodeURIComponent(token)}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: note.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'Approval failed');
+      }
+      const data = (await res.json()) as { deal: RecentDeal; participant: DemoParticipant };
+      setParticipant(data.participant);
+      setDeal(data.deal);
+      setApproved(true);
+      toast.success('Agreement approved');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Approval failed';
+      toast.error(msg);
+    }
   }
 
-  if (!participant) {
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
+        <p className="text-sm text-muted-foreground">Loading invite…</p>
+      </div>
+    );
+  }
+
+  if (loadError || !participant) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
         <Card className="w-full max-w-xl">
           <CardHeader>
             <CardTitle>Invite link not found</CardTitle>
-            <CardDescription>This invite token is invalid or has expired in the demo store.</CardDescription>
+            <CardDescription>
+              {loadError ||
+                'This invite token is invalid or no longer exists.'}
+            </CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -202,7 +230,7 @@ export default function DealInviteApprovalPage() {
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!approved) approve();
+              if (!approved) void approve();
             }}
           >
             <div className="space-y-2">
@@ -240,4 +268,3 @@ export default function DealInviteApprovalPage() {
     </div>
   );
 }
-

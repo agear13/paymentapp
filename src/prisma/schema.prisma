@@ -755,3 +755,44 @@ model payouts {
   @@index([organization_id, user_id, status])
   @@index([batch_id])
 }
+
+/// Rabbit Hole Deal Network pilot — per Supabase auth user (user_id = auth.users.id)
+model deal_network_pilot_deals {
+  id               String   @id @db.VarChar(255)
+  user_id          String   @db.VarChar(255)
+  name             String
+  partner          String
+  contact          String?  @db.Text
+  deal_value       Decimal  @db.Decimal(18, 2)
+  payment_link     String?  @db.Text
+  payment_status   String   @db.VarChar(32)
+  paid_amount      Decimal? @db.Decimal(18, 2)
+  paid_at          DateTime? @db.Timestamptz(6)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @updatedAt @db.Timestamptz(6)
+  deal_payload     Json
+
+  participants deal_network_pilot_participants[]
+
+  @@index([user_id])
+}
+
+model deal_network_pilot_participants {
+  id                   String   @id @db.VarChar(255)
+  deal_id              String   @db.VarChar(255)
+  invite_token         String   @unique @db.VarChar(255)
+  name                 String
+  email                String?  @db.VarChar(512)
+  role                 String   @db.VarChar(64)
+  role_details         String?  @db.Text
+  payout_condition     String?  @db.Text
+  approval_status      String   @db.VarChar(64)
+  approved_at          DateTime? @db.Timestamptz(6)
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime @updatedAt @db.Timestamptz(6)
+  participant_payload  Json
+
+  deal deal_network_pilot_deals @relation(fields: [deal_id], references: [id], onDelete: Cascade)
+
+  @@index([deal_id])
+}
