@@ -11,6 +11,37 @@ export type DealStatus =
   | 'Reversed'
   | 'In Review';
 
+/** Operating workflow stage (separate from settlement / payment status). */
+export type DealOperatingStage =
+  | 'Introduced'
+  | 'Call Scheduled'
+  | 'Call Completed'
+  | 'Proposal Sent'
+  | 'Contract Sent'
+  | 'Contract Signed'
+  | 'Work In Progress'
+  | 'Payment Pending'
+  | 'Payment Received'
+  | 'Settled';
+
+export interface DealActivityEntry {
+  at: string;
+  text: string;
+}
+
+export const DEAL_OPERATING_STAGES: DealOperatingStage[] = [
+  'Introduced',
+  'Call Scheduled',
+  'Call Completed',
+  'Proposal Sent',
+  'Contract Sent',
+  'Contract Signed',
+  'Work In Progress',
+  'Payment Pending',
+  'Payment Received',
+  'Settled',
+];
+
 export interface DealSummary {
   totalDealsGenerated: number;
   contractsSigned: number;
@@ -78,6 +109,17 @@ export interface RecentDeal {
   rhContactLine?: string;
   /** Graph-recorded introducer for the selected contact (audit / override messaging) */
   rhGraphIntroducer?: string;
+  /** Hidden from active pipeline but kept for history */
+  archived?: boolean;
+  /** Where the deal is in the sales / delivery workflow */
+  currentStage?: DealOperatingStage;
+  /** Short next action */
+  nextStep?: string;
+  /** Latest note / summary */
+  latestUpdate?: string;
+  lastContactedAt?: string;
+  /** Manual timeline entries */
+  activityLog?: DealActivityEntry[];
 }
 
 export interface FunnelStage {

@@ -36,25 +36,24 @@ import {
   CreditCard,
   Shield,
   Eye,
+  Archive,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   dealNetworkSummary,
   recentDeals as recentDealsSeed,
-  commissionFunnelStages,
   attributionBreakdown,
   topEarners as topEarnersSeed,
   payoutRails,
 } from '@/lib/data/mock-deal-network';
 import type { DealStatus, RecentDeal, TopEarner } from '@/lib/data/mock-deal-network';
 import {
-  adjustFunnelCounts,
   buildFunnelFromDeals,
   getDealCommissionTotal,
   getNextSettlementStatus,
   recentDealToFeatured,
-  statusToFunnelLabel,
 } from '@/lib/deal-network-demo/demo-helpers';
 import { computePipelineMetrics, formatUsdCompact } from '@/lib/deal-network-demo/pipeline-metrics';
 import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
@@ -68,7 +67,24 @@ import {
   buildExportPayoutRows,
 } from '@/components/deal-network-demo/export-payouts-modal';
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
+import {
+  dedupeParticipantsForDisplay,
+  mergePilotInvite,
+  normParticipantName,
+  stripDuplicateRoleInvites,
+} from '@/lib/deal-network-demo/participant-merge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 function getStatusVariant(
   status: DealStatus
@@ -112,10 +128,22 @@ export default function DealNetworkPage() {
   const [pilotHydrated, setPilotHydrated] = React.useState(false);
   const [deals, setDeals] = React.useState<RecentDeal[]>([]);
   const [activeDealId, setActiveDealId] = React.useState('');
-  const [funnel, setFunnel] = React.useState(() =>
-    commissionFunnelStages.map((s) => ({ ...s }))
-  );
+  const [showArchived, setShowArchived] = React.useState(false);
+  const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(null);
   const [participants, setParticipants] = React.useState<DemoParticipant[]>([]);
+
+  const activePipelineDeals = React.useMemo(
+    () => deals.filter((d) => !d.archived),
+    [deals]
+  );
+  const archivedDeals = React.useMemo(
+    () => deals.filter((d) => d.archived),
+    [deals]
+  );
+  const funnel = React.useMemo(
+    () => buildFunnelFromDeals(activePipelineDeals),
+    [activePipelineDeals]
+  );
   const [topEarnersState, setTopEarnersState] = React.useState<TopEarner[]>(() => [...topEarnersSeed]);
 
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -124,9 +152,12 @@ export default function DealNetworkPage() {
   const [exportOpen, setExportOpen] = React.useState(false);
 
   const activeDeal = React.useMemo(() => {
-    const hit = deals.find((d) => d.id === activeDealId);
-    return hit ?? deals[0];
-  }, [deals, activeDealId]);
+    const fromActive = activePipelineDeals.find((d) => d.id === activeDealId);
+    if (fromActive) return fromActive;
+    const fromAny = deals.find((d) => d.id === activeDealId);
+    if (fromAny) return fromAny;
+    return activePipelineDeals[0] ?? deals[0];
+  }, [deals, activePipelineDeals, activeDealId]);
 
   const featured = React.useMemo(() => {
     if (activeDeal) return recentDealToFeatured(activeDeal);
@@ -144,27 +175,49 @@ export default function DealNetworkPage() {
     });
   }, [activeDeal, pilotHydrated]);
 
-  const activeParticipants = React.useMemo(
-    () =>
-      participants.filter(
-        (p) =>
-          p.dealId === activeDeal?.id ||
-          (p.dealId == null && p.dealName === activeDeal?.dealName)
-      ),
-    [participants, activeDeal]
-  );
+  const activeParticipants = React.useMemo(() => {
+    const raw = participants.filter(
+      (p) =>
+        p.dealId === activeDeal?.id ||
+        (p.dealId == null && p.dealName === activeDeal?.dealName)
+    );
+    if (!activeDeal) return [];
+    return dedupeParticipantsForDisplay(raw);
+  }, [participants, activeDeal]);
+
+  const duplicateParticipantWarnings = React.useMemo(() => {
+    if (!activeDeal) return [];
+    const keys = new Map<string, number>();
+    const dups: string[] = [];
+    for (const p of activeParticipants) {
+      const k = `${p.role}|${normParticipantName(p.name)}`;
+      keys.set(k, (keys.get(k) ?? 0) + 1);
+    }
+    for (const [k, c] of keys) {
+      if (c > 1) dups.push(k);
+    }
+    return dups;
+  }, [activeParticipants, activeDeal]);
 
   React.useEffect(() => {
     if (!deals.some((d) => d.id === activeDealId)) {
-      setActiveDealId(deals[0]?.id ?? '');
+      setActiveDealId(activePipelineDeals[0]?.id ?? deals[0]?.id ?? '');
+      return;
     }
-  }, [deals, activeDealId]);
+    const current = deals.find((d) => d.id === activeDealId);
+    if (current?.archived && activePipelineDeals.length > 0) {
+      setActiveDealId(activePipelineDeals[0].id);
+    }
+  }, [deals, activeDealId, activePipelineDeals]);
 
-  const pipelineMetrics = React.useMemo(() => computePipelineMetrics(deals), [deals]);
+  const pipelineMetrics = React.useMemo(
+    () => computePipelineMetrics(activePipelineDeals),
+    [activePipelineDeals]
+  );
 
   const exportData = React.useMemo(
-    () => buildExportPayoutRows(deals, participants),
-    [deals, participants]
+    () => buildExportPayoutRows(activePipelineDeals, participants),
+    [activePipelineDeals, participants]
   );
 
   const syncInternalRoleParticipants = React.useCallback(
@@ -240,7 +293,7 @@ export default function DealNetworkPage() {
         upsertRoleParticipant(d, 'Closer');
       }
 
-      return next;
+      return stripDuplicateRoleInvites(next, dealsToSync);
     },
     []
   );
@@ -255,14 +308,13 @@ export default function DealNetworkPage() {
       }
       if (stored.deals.length > 0) {
         setDeals(stored.deals);
-        setActiveDealId(stored.deals[0].id);
+        const activeFirst = stored.deals.filter((d) => !d.archived);
+        setActiveDealId((activeFirst[0] ?? stored.deals[0]).id);
         setParticipants(syncInternalRoleParticipants(stored.participants, stored.deals));
-        setFunnel(buildFunnelFromDeals(stored.deals));
       } else {
         setDeals([]);
         setActiveDealId('');
         setParticipants([]);
-        setFunnel(buildFunnelFromDeals([]));
       }
       setPilotHydrated(true);
     });
@@ -293,29 +345,35 @@ export default function DealNetworkPage() {
     setActiveDealId(deal.id);
 
     setParticipants((prev) => syncInternalRoleParticipants(prev, [deal]));
-
-    if (!editOpen) {
-      setFunnel((prev) => adjustFunnelCounts(prev, null, 'Pending'));
-    }
-  }, [editOpen, syncInternalRoleParticipants]);
+  }, [syncInternalRoleParticipants]);
 
   const handleInviteParticipant = React.useCallback(
     (p: DemoParticipant) => {
       if (!activeDeal) return;
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      setParticipants((prev) => [
-        ...prev,
-        {
-          ...p,
-          dealId: activeDeal.id,
-          dealName: activeDeal.dealName,
-          partner: activeDeal.partner,
-          inviteLink: `${origin}/deal-invites/${p.inviteToken}`,
-        },
-      ]);
+      setParticipants((prev) => mergePilotInvite(prev, p, activeDeal));
     },
     [activeDeal]
   );
+
+  const archiveDealById = React.useCallback((id: string) => {
+    const now = new Date().toISOString();
+    setDeals((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, archived: true, lastUpdated: now } : d))
+    );
+  }, []);
+
+  const runDeleteDeal = React.useCallback((id: string) => {
+    setDeals((prev) => prev.filter((d) => d.id !== id));
+    setParticipants((prev) => prev.filter((p) => p.dealId !== id));
+    setActiveDealId((cur) => (cur === id ? '' : cur));
+  }, []);
+
+  const restoreDealById = React.useCallback((id: string) => {
+    const now = new Date().toISOString();
+    setDeals((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, archived: false, lastUpdated: now } : d))
+    );
+  }, []);
 
   const toggleParticipant = React.useCallback((id: string) => {
     setParticipants((prev) =>
@@ -336,10 +394,7 @@ export default function DealNetworkPage() {
   const markContractPaid = React.useCallback(() => {
     if (!activeDeal) return;
     if (activeDeal.status !== 'Pending' && activeDeal.status !== 'Eligible') return;
-    const from = statusToFunnelLabel(activeDeal.status);
-    const to = statusToFunnelLabel('Approved');
     const paidAt = new Date().toISOString();
-    setFunnel((prev) => adjustFunnelCounts(prev, from, to));
     setDeals((prev) =>
       prev.map((d) =>
         d.id === activeDeal.id
@@ -361,9 +416,6 @@ export default function DealNetworkPage() {
       if (!d) return prev;
       const next = getNextSettlementStatus(d.status);
       if (next === d.status) return prev;
-      const fromLabel = statusToFunnelLabel(d.status);
-      const toLabel = statusToFunnelLabel(next);
-      setFunnel((f) => adjustFunnelCounts(f, fromLabel, toLabel));
       if (next === 'Paid' && d.status !== 'Paid') {
         const total = getDealCommissionTotal(d);
         if (total != null) {
@@ -392,6 +444,9 @@ export default function DealNetworkPage() {
             <Badge variant="secondary">Demo</Badge>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link href="/dashboard/payment-links">Invoice dashboard</Link>
+            </Button>
             <Button
               type="button"
               size="sm"
@@ -442,7 +497,7 @@ export default function DealNetworkPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setInviteOpen(true)}
-                disabled={!activeDeal}
+                disabled={!activeDeal || activeDeal.archived || activeDeal.id === '__placeholder__'}
               >
                 <UserPlus className="h-4 w-4 mr-1" />
                 Invite participant
@@ -452,17 +507,41 @@ export default function DealNetworkPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setEditOpen(true)}
-                disabled={!activeDeal}
+                disabled={!activeDeal || activeDeal.id === '__placeholder__'}
               >
                 <Pencil className="h-4 w-4 mr-1" />
                 Edit deal
               </Button>
               <Button
                 type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => activeDeal && activeDeal.id !== '__placeholder__' && archiveDealById(activeDeal.id)}
+                disabled={!activeDeal || activeDeal.id === '__placeholder__' || activeDeal.archived}
+              >
+                <Archive className="h-4 w-4 mr-1" />
+                Archive
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => activeDeal && activeDeal.id !== '__placeholder__' && setDeleteTargetId(activeDeal.id)}
+                disabled={!activeDeal || activeDeal.id === '__placeholder__'}
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete
+              </Button>
+              <Button
+                type="button"
                 size="sm"
                 onClick={markContractPaid}
                 disabled={
-                  !activeDeal || featured.status === 'Approved' || featured.status === 'Paid'
+                  !activeDeal ||
+                  activeDeal.archived ||
+                  featured.status === 'Approved' ||
+                  featured.status === 'Paid'
                 }
               >
                 <CreditCard className="h-4 w-4 mr-1" />
@@ -498,6 +577,64 @@ export default function DealNetworkPage() {
                 <p className="font-semibold text-foreground mt-1">{activeDeal.rhContactLine}</p>
               </div>
             ) : null}
+          </div>
+
+          <div className="rounded-lg border bg-background/60 p-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Deal progress</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Operating stage</p>
+                <Badge variant="secondary" className="mt-1">
+                  {activeDeal?.currentStage ?? '—'}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Last contact</p>
+                <p className="text-sm font-medium mt-1">
+                  {activeDeal?.lastContactedAt
+                    ? new Date(activeDeal.lastContactedAt).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '—'}
+                </p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Next step</p>
+                <p className="text-sm font-medium mt-1 whitespace-pre-wrap">
+                  {activeDeal?.nextStep?.trim() ? activeDeal.nextStep : '—'}
+                </p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Latest update</p>
+                <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
+                  {activeDeal?.latestUpdate?.trim() ? activeDeal.latestUpdate : '—'}
+                </p>
+              </div>
+              {activeDeal?.activityLog && activeDeal.activityLog.length > 0 ? (
+                <div className="sm:col-span-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Activity</p>
+                  <ul className="text-xs space-y-1 max-h-32 overflow-y-auto rounded border bg-muted/30 p-2">
+                    {activeDeal.activityLog.map((e, i) => (
+                      <li key={`${e.at}-${i}`} className="text-muted-foreground">
+                        <span className="font-medium text-foreground">
+                          {new Date(e.at).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>{' '}
+                        {e.text}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="rounded-lg border bg-background/60 p-4">
@@ -574,6 +711,18 @@ export default function DealNetworkPage() {
               ) : null}
             </div>
           </div>
+
+          {duplicateParticipantWarnings.length > 0 ? (
+            <Alert className="border-amber-200/80 bg-amber-50/50 dark:bg-amber-950/20">
+              <AlertTitle className="text-amber-900 dark:text-amber-100">Possible duplicate payout parties</AlertTitle>
+              <AlertDescription className="text-amber-900/90 dark:text-amber-100/90">
+                The same name appears more than once for a role on this deal (
+                {duplicateParticipantWarnings.join('; ')}). New invites for Introducer/Closer now merge with the deal
+                role when the name matches. Use Edit deal to fix attribution, or remove stray invites from the list
+                by adjusting roles.
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
           {(activeParticipants.length > 0 || typeof activeDeal?.platformFee === 'number') && (
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
@@ -839,6 +988,11 @@ export default function DealNetworkPage() {
               <Download className="h-4 w-4 mr-1" />
               Export payouts
             </Button>
+            {archivedDeals.length > 0 ? (
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowArchived((v) => !v)}>
+                {showArchived ? 'Hide archived' : `Archived (${archivedDeals.length})`}
+              </Button>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent>
@@ -848,17 +1002,20 @@ export default function DealNetworkPage() {
                 <TableHead>Deal name</TableHead>
                 <TableHead>Partner</TableHead>
                 <TableHead className="text-right">Value</TableHead>
+                <TableHead>Stage</TableHead>
+                <TableHead className="max-w-[160px]">Next step</TableHead>
                 <TableHead>Introducer</TableHead>
                 <TableHead>Closer</TableHead>
                 <TableHead className="text-right">Commission</TableHead>
                 <TableHead>Settlement state</TableHead>
                 <TableHead>Payment</TableHead>
                 <TableHead>Last updated</TableHead>
+                <TableHead className="w-[1%] text-right">Actions</TableHead>
                 <TableHead className="w-[1%] text-right">View</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deals.map((deal) => (
+              {activePipelineDeals.map((deal) => (
                 <TableRow
                   key={deal.id}
                   role="button"
@@ -889,6 +1046,16 @@ export default function DealNetworkPage() {
                     ) : null}
                   </TableCell>
                   <TableCell className="text-right">${deal.value.toLocaleString()}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="font-normal">
+                      {deal.currentStage ?? '—'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="max-w-[160px]">
+                    <span className="line-clamp-2 text-sm text-muted-foreground" title={deal.nextStep ?? ''}>
+                      {deal.nextStep?.trim() ? deal.nextStep : '—'}
+                    </span>
+                  </TableCell>
                   <TableCell>{deal.introducer}</TableCell>
                   <TableCell>{deal.closer}</TableCell>
                   <TableCell className="text-right font-medium">
@@ -922,6 +1089,30 @@ export default function DealNetworkPage() {
                       year: 'numeric',
                     })}
                   </TableCell>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="inline-flex items-center gap-0">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="Archive deal"
+                        onClick={() => archiveDealById(deal.id)}
+                      >
+                        <Archive className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        title="Delete deal"
+                        onClick={() => setDeleteTargetId(deal.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       type="button"
@@ -941,6 +1132,36 @@ export default function DealNetworkPage() {
               ))}
             </TableBody>
           </Table>
+
+          {showArchived && archivedDeals.length > 0 ? (
+            <div className="mt-6 space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Archived deals</p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Deal name</TableHead>
+                    <TableHead>Partner</TableHead>
+                    <TableHead className="text-right">Value</TableHead>
+                    <TableHead className="w-[1%] text-right">Restore</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {archivedDeals.map((deal) => (
+                    <TableRow key={`arch-${deal.id}`}>
+                      <TableCell className="font-medium">{deal.dealName}</TableCell>
+                      <TableCell>{deal.partner}</TableCell>
+                      <TableCell className="text-right">${deal.value.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">
+                        <Button type="button" variant="outline" size="sm" onClick={() => restoreDealById(deal.id)}>
+                          Restore
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -1036,6 +1257,29 @@ export default function DealNetworkPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={deleteTargetId !== null} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this deal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the deal and its payout party rows from your pilot workspace. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTargetId) runDeleteDeal(deleteTargetId);
+                setDeleteTargetId(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <CreateDealModal open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreateDeal} />
       <CreateDealModal

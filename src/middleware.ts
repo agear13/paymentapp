@@ -48,7 +48,21 @@ function isRestrictedPath(pathname: string): boolean {
   return RESTRICTED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
-/** Rabbit Hole pilot users may only use this product route under dashboard. */
+/** Rabbit Hole pilot: deal network + invoices (payment links) + main dashboard hub only. */
+function isRabbitHolePilotAllowedPath(pathname: string): boolean {
+  if (pathname === '/dashboard' || pathname === '/dashboard/') return true;
+  if (pathname === '/dashboard/payment-links' || pathname.startsWith('/dashboard/payment-links/')) {
+    return true;
+  }
+  if (
+    pathname === '/dashboard/partners/deal-network' ||
+    pathname.startsWith('/dashboard/partners/deal-network/')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function isRabbitHoleDealNetworkPath(pathname: string): boolean {
   return (
     pathname === '/dashboard/partners/deal-network' ||
@@ -217,14 +231,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Rabbit Hole pilot: only /dashboard/partners/deal-network (and subpaths) under dashboard
+  // Rabbit Hole pilot: deal network + invoices + /dashboard hub only
   if (
     hasSession &&
     isDashboardRoute &&
     email &&
     isRabbitHolePilotSessionUser(email)
   ) {
-    if (!isRabbitHoleDealNetworkPath(pathname)) {
+    if (!isRabbitHolePilotAllowedPath(pathname)) {
       if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=redirect_pilot_to_deal_network'); }
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = '/dashboard/partners/deal-network';

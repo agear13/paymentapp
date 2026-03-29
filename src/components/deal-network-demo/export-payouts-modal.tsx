@@ -262,16 +262,21 @@ export function ExportPayoutsModal({
   );
 }
 
+function normExportName(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 export function buildExportPayoutRows(
   deals: RecentDeal[],
   participants: DemoParticipant[]
 ): { rows: ExportPayoutRow[]; excludedUnapprovedCount: number } {
   const out: ExportPayoutRow[] = [];
   let excludedUnapprovedCount = 0;
-  const dealById = new Map(deals.map((d) => [d.id, d]));
-  const dealByName = new Map(deals.map((d) => [d.dealName, d]));
+  const activeDeals = deals.filter((d) => !d.archived);
+  const dealById = new Map(activeDeals.map((d) => [d.id, d]));
+  const dealByName = new Map(activeDeals.map((d) => [d.dealName, d]));
 
-  for (const deal of deals) {
+  for (const deal of activeDeals) {
     const dealIsPaid = deal.status === 'Approved' || deal.status === 'Paid';
     const settlementStatus = deal.status ?? 'Pending';
     const payoutTrigger = deal.payoutTrigger ?? 'Manual';
@@ -305,11 +310,16 @@ export function buildExportPayoutRows(
     }
   }
 
+  const seenParticipantLine = new Set<string>();
   for (const p of participants) {
     const deal =
       (p.dealId ? dealById.get(p.dealId) : undefined) ??
       (p.dealName ? dealByName.get(p.dealName) : undefined);
     if (!deal) continue;
+
+    const dedupeKey = `${deal.id}|${p.role}|${normExportName(p.name)}`;
+    if (seenParticipantLine.has(dedupeKey)) continue;
+    seenParticipantLine.add(dedupeKey);
 
     const dealIsPaid = deal.status === 'Approved' || deal.status === 'Paid';
     const settlementStatus = deal.status ?? 'Pending';

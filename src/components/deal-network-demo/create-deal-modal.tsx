@@ -26,7 +26,8 @@ import {
 } from '@/components/ui/command';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
-import type { RecentDeal } from '@/lib/data/mock-deal-network';
+import type { DealActivityEntry, DealOperatingStage, RecentDeal } from '@/lib/data/mock-deal-network';
+import { DEAL_OPERATING_STAGES } from '@/lib/data/mock-deal-network';
 import {
   BASE_PARTICIPANT_OPTIONS,
   COMMISSION_STRUCTURE_OPTIONS,
@@ -116,6 +117,13 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
   });
   const [paymentLink, setPaymentLink] = React.useState('');
   const [paidAmount, setPaidAmount] = React.useState('');
+
+  const [currentStage, setCurrentStage] = React.useState<DealOperatingStage>('Introduced');
+  const [nextStep, setNextStep] = React.useState('');
+  const [latestUpdate, setLatestUpdate] = React.useState('');
+  const [lastContactedAt, setLastContactedAt] = React.useState('');
+  const [activityLog, setActivityLog] = React.useState<DealActivityEntry[]>([]);
+  const [activityDraft, setActivityDraft] = React.useState('');
 
   // Pilot-only agreement context for internal Introducer/Closer participant approval pages.
   const [introducerRoleDetails, setIntroducerRoleDetails] = React.useState('');
@@ -241,7 +249,12 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
         closerAttachmentUrl.trim() !== '' ||
         closerAttachmentLabel.trim() !== '' ||
         paymentLink.trim() !== '' ||
-        paidAmount.trim() !== ''
+        paidAmount.trim() !== '' ||
+        currentStage !== 'Introduced' ||
+        nextStep.trim() !== '' ||
+        latestUpdate.trim() !== '' ||
+        lastContactedAt.trim() !== '' ||
+        activityDraft.trim() !== ''
       );
     }
     const base = editDeal;
@@ -264,7 +277,16 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       closerAttachmentUrl.trim() !== (base?.closerAttachmentUrl ?? '').trim() ||
       closerAttachmentLabel.trim() !== (base?.closerAttachmentLabel ?? '').trim() ||
       paymentLink.trim() !== (base?.paymentLink ?? '').trim() ||
-      paidAmount.trim() !== (base ? toInputNumber(base.paidAmount) : '')
+      paidAmount.trim() !== (base ? toInputNumber(base.paidAmount) : '') ||
+      currentStage !== (base?.currentStage ?? 'Introduced') ||
+      nextStep.trim() !== (base?.nextStep ?? '').trim() ||
+      latestUpdate.trim() !== (base?.latestUpdate ?? '').trim() ||
+      lastContactedAt !==
+        (base?.lastContactedAt
+          ? new Date(base.lastContactedAt).toISOString().slice(0, 16)
+          : '') ||
+      activityDraft.trim() !== '' ||
+      JSON.stringify(activityLog) !== JSON.stringify(base?.activityLog ?? [])
     );
   }, [
     open,
@@ -290,6 +312,12 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
     closerAttachmentLabel,
     paymentLink,
     paidAmount,
+    currentStage,
+    nextStep,
+    latestUpdate,
+    lastContactedAt,
+    activityLog,
+    activityDraft,
   ]);
 
   React.useEffect(() => {
@@ -326,6 +354,12 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       setCloserAgreementNotes('');
       setCloserAttachmentUrl('');
       setCloserAttachmentLabel('');
+      setCurrentStage('Introduced');
+      setNextStep('');
+      setLatestUpdate('');
+      setLastContactedAt('');
+      setActivityLog([]);
+      setActivityDraft('');
       return;
     }
 
@@ -365,6 +399,17 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
     setCloserAgreementNotes(editDeal.closerAgreementNotes ?? '');
     setCloserAttachmentUrl(editDeal.closerAttachmentUrl ?? '');
     setCloserAttachmentLabel(editDeal.closerAttachmentLabel ?? '');
+
+    setCurrentStage(editDeal.currentStage ?? 'Introduced');
+    setNextStep(editDeal.nextStep ?? '');
+    setLatestUpdate(editDeal.latestUpdate ?? '');
+    setLastContactedAt(
+      editDeal.lastContactedAt
+        ? new Date(editDeal.lastContactedAt).toISOString().slice(0, 16)
+        : ''
+    );
+    setActivityLog(editDeal.activityLog ?? []);
+    setActivityDraft('');
 
     const graphCo = rhCompanies.find((co) => co.name === editDeal.partner);
     if (graphCo) {
@@ -477,6 +522,14 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       return resolved.valid ? resolved.total : undefined;
     };
 
+    let nextActivityLog = activityLog;
+    if (activityDraft.trim()) {
+      nextActivityLog = [
+        ...activityLog,
+        { at: new Date().toISOString(), text: activityDraft.trim() },
+      ];
+    }
+
     const newDeal: RecentDeal = {
       id: editDeal?.id ?? `demo-${Date.now()}`,
       dealName: dealName.trim(),
@@ -507,6 +560,14 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       closerAgreementNotes: closerAgreementNotes.trim() || undefined,
       closerAttachmentUrl: closerAttachmentUrl.trim() || undefined,
       closerAttachmentLabel: closerAttachmentLabel.trim() || undefined,
+      archived: editDeal?.archived ?? false,
+      currentStage,
+      nextStep: nextStep.trim() || undefined,
+      latestUpdate: latestUpdate.trim() || undefined,
+      lastContactedAt: lastContactedAt
+        ? new Date(lastContactedAt).toISOString()
+        : undefined,
+      activityLog: nextActivityLog.length ? nextActivityLog : undefined,
     };
     onCreate(newDeal);
     toast.success(editDeal ? 'Deal updated' : 'Deal created');
@@ -860,6 +921,88 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
             <p className="text-xs text-muted-foreground">
               This can be used to track how the client pays for this deal.
             </p>
+          </div>
+
+          <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+            <p className="text-sm font-medium">Deal progress &amp; next steps</p>
+            <div className="space-y-2">
+              <Label htmlFor="dn-current-stage">Operating stage</Label>
+              <Select
+                value={currentStage}
+                onValueChange={(v) => setCurrentStage(v as DealOperatingStage)}
+              >
+                <SelectTrigger id="dn-current-stage">
+                  <SelectValue placeholder="Stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEAL_OPERATING_STAGES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-next-step">Next step</Label>
+              <Textarea
+                id="dn-next-step"
+                value={nextStep}
+                onChange={(e) => setNextStep(e.target.value)}
+                placeholder="e.g. Schedule follow-up call Thursday"
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-latest-update">Latest update / notes</Label>
+              <Textarea
+                id="dn-latest-update"
+                value={latestUpdate}
+                onChange={(e) => setLatestUpdate(e.target.value)}
+                placeholder="What happened last — call summary, decision, blockers"
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dn-last-contact">Last contact (optional)</Label>
+              <Input
+                id="dn-last-contact"
+                type="datetime-local"
+                value={lastContactedAt}
+                onChange={(e) => setLastContactedAt(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Activity log</Label>
+              {activityLog.length > 0 ? (
+                <ul className="text-xs space-y-1 max-h-28 overflow-y-auto rounded border bg-background p-2">
+                  {activityLog.map((e, i) => (
+                    <li key={`${e.at}-${i}`} className="text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {new Date(e.at).toLocaleString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>{' '}
+                      {e.text}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">No entries yet.</p>
+              )}
+              <div className="flex gap-2">
+                <Textarea
+                  value={activityDraft}
+                  onChange={(e) => setActivityDraft(e.target.value)}
+                  placeholder="Add a dated note (saved when you save the deal)"
+                  rows={2}
+                  className="min-h-0"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">

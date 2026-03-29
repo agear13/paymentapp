@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { Menu } from 'lucide-react';
 import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,11 @@ export function AppHeader({ productProfile }: AppHeaderProps) {
       <BreadcrumbNav productProfile={productProfile} />
 
       <div className="ml-auto flex items-center gap-2">
+        {isRabbitHolePilot && (
+          <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
+            <Link href="/dashboard/payment-links">Invoice dashboard</Link>
+          </Button>
+        )}
         {!isRabbitHolePilot && (
           <>
             <NotificationCenter />

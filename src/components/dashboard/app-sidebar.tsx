@@ -307,6 +307,17 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === '/dashboard/payment-links' || pathname.startsWith('/dashboard/payment-links/')}
+                  >
+                    <Link href="/dashboard/payment-links">
+                      <LinkIcon className="size-4" />
+                      <span>Invoices</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
