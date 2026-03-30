@@ -103,6 +103,8 @@ export function stripDuplicateRoleInvites(
 ): DemoParticipant[] {
   const dealById = new Map(deals.map((d) => [d.id, d]));
   return participants.filter((p) => {
+    // If an operator intentionally created a duplicate, keep it visible.
+    if (p.userRequestedDuplicate) return true;
     if (!p.dealId || p.id.startsWith('internal-')) return true;
     const deal = dealById.get(p.dealId);
     if (!deal) return true;
@@ -117,7 +119,9 @@ export function stripDuplicateRoleInvites(
 export function dedupeParticipantsForDisplay(rows: DemoParticipant[]): DemoParticipant[] {
   const seen = new Map<string, DemoParticipant>();
   for (const p of rows) {
-    const key = `${p.dealId ?? ''}|${p.role}|${normParticipantName(p.name)}`;
+    // When an operator intentionally created duplicates, keep them distinct in display/export.
+    const duplicateSuffix = p.userRequestedDuplicate ? `|${p.inviteToken}` : '';
+    const key = `${p.dealId ?? ''}|${p.role}|${normParticipantName(p.name)}${duplicateSuffix}`;
     const existing = seen.get(key);
     if (!existing) {
       seen.set(key, p);

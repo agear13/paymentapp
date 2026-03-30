@@ -11,6 +11,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +39,7 @@ import {
   type CommissionStructureKind,
   resolveCommissionWithValidation,
 } from '@/lib/deal-network-demo/commission-structure';
+import { normParticipantName } from '@/lib/deal-network-demo/participant-merge';
 
 export type DemoParticipantRole = 'Introducer' | 'Connector' | 'Closer' | 'Contributor';
 
@@ -58,6 +69,11 @@ export interface DemoParticipant {
   roleDetails?: string;
   /** When this participant becomes entitled to payout (pilot). */
   payoutCondition?: string;
+  /**
+   * If true, this row was intentionally created as a duplicate by the operator.
+   * Used to prevent the pilot UI from silently merging/deduping it.
+   */
+  userRequestedDuplicate?: boolean;
   /** Optional extra context from the inviter. */
   agreementNotes?: string;
   /** Reference to an external doc (URL only in pilot; no upload backend). */
@@ -69,7 +85,11 @@ export interface DemoParticipant {
 export interface InviteParticipantModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onInvite: (participant: DemoParticipant) => void;
+  onInvite: (
+    participant: DemoParticipant,
+    duplicateAction: 'use_existing' | 'create_duplicate_anyway'
+  ) => Promise<DemoParticipant>;
+  existingParticipantsForDuplicateCheck: DemoParticipant[];
   /** Featured deal value for commission previews */
   featuredDealValue: number;
   featuredRoleAmounts?: Partial<Record<BaseParticipantSlot, number>>;
@@ -79,6 +99,7 @@ export function InviteParticipantModal({
   open,
   onOpenChange,
   onInvite,
+  existingParticipantsForDuplicateCheck,
   featuredDealValue,
   featuredRoleAmounts,
 }: InviteParticipantModalProps) {
@@ -96,6 +117,12 @@ export function InviteParticipantModal({
   const [attachmentLabel, setAttachmentLabel] = React.useState('');
   const [successLink, setSuccessLink] = React.useState<string | null>(null);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = React.useState(false);
+  const [pendingDuplicateParticipant, setPendingDuplicateParticipant] = React.useState<
+    DemoParticipant | null
+  >(null);
+  const [duplicateCandidates, setDuplicateCandidates] = React.useState<DemoParticipant[]>([]);
+  const [duplicateSubmitting, setDuplicateSubmitting] = React.useState(false);
 
   function makeToken() {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -117,6 +144,10 @@ export function InviteParticipantModal({
     setAttachmentLabel('');
     setSuccessLink(null);
     setSubmitError(null);
+    setDuplicateDialogOpen(false);
+    setPendingDuplicateParticipant(null);
+    setDuplicateCandidates([]);
+    setDuplicateSubmitting(false);
   }, [open]);
 
   const isInviteDirty = React.useMemo(() => {
@@ -215,10 +246,36 @@ export function InviteParticipantModal({
       attachmentUrl: trimmedUrl || undefined,
       attachmentLabel: attachmentLabel.trim() || undefined,
     };
-    onInvite(participant);
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    setSuccessLink(`${origin}/deal-invites/${token}`);
-    toast.success('Participant invited');
+
+    const incomingNameKey = normParticipantName(participant.name);
+    const existingDupes = existingParticipantsForDuplicateCheck.filter(
+      (p) =>
+        p.role === participant.role &&
+        normParticipantName(p.name) === incomingNameKey
+    );
+
+    if (existingDupes.length > 0) {
+      setDuplicateCandidates(existingDupes);
+      setPendingDuplicateParticipant(participant);
+      setDuplicateDialogOpen(true);
+      return;
+    }
+
+    void (async () => {
+      try {
+        setSubmitError(null);
+        const shared = await onInvite(participant, 'create_duplicate_anyway');
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const inviteLink =
+          shared.inviteLink ??
+          (origin ? `${origin}/deal-invites/${shared.inviteToken}` : '');
+        setSuccessLink(inviteLink);
+        toast.success('Participant invited');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to invite participant';
+        setSubmitError(msg);
+      }
+    })();
   }
 
   async function copyLink() {
@@ -232,6 +289,7 @@ export function InviteParticipantModal({
   }
 
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(next) => {
@@ -522,5 +580,104 @@ export function InviteParticipantModal({
         </div>
       </DialogContent>
     </Dialog>
+    {pendingDuplicateParticipant ? (
+      <AlertDialog
+        open={duplicateDialogOpen}
+        onOpenChange={(next) => {
+          if (!next) {
+            setDuplicateDialogOpen(false);
+            setPendingDuplicateParticipant(null);
+            setDuplicateCandidates([]);
+            setDuplicateSubmitting(false);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Possible duplicate detected</AlertDialogTitle>
+            <AlertDialogDescription>
+              A participant with the same name and role already exists on this deal. Choose how to proceed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="rounded-md border bg-muted/30 p-3 space-y-2 text-sm">
+            <p>
+              <span className="font-medium">Name:</span> {pendingDuplicateParticipant.name}
+            </p>
+            <p>
+              <span className="font-medium">Role:</span> {pendingDuplicateParticipant.role}
+            </p>
+            <p className="text-muted-foreground">Matches found: {duplicateCandidates.length}</p>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={duplicateSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-muted text-foreground hover:bg-muted/80"
+              disabled={duplicateSubmitting}
+              onClick={() => {
+                void (async () => {
+                  try {
+                    setDuplicateSubmitting(true);
+                    const shared = await onInvite(
+                      pendingDuplicateParticipant,
+                      'use_existing'
+                    );
+                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                    const inviteLink =
+                      shared.inviteLink ??
+                      (origin ? `${origin}/deal-invites/${shared.inviteToken}` : '');
+                    setSuccessLink(inviteLink);
+                    setDuplicateDialogOpen(false);
+                    setPendingDuplicateParticipant(null);
+                    setDuplicateCandidates([]);
+                    toast.success('Participant invite re-used');
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : 'Failed to use existing participant';
+                    setSubmitError(msg);
+                  } finally {
+                    setDuplicateSubmitting(false);
+                  }
+                })();
+              }}
+            >
+              Use existing participant
+            </AlertDialogAction>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={duplicateSubmitting}
+              onClick={() => {
+                void (async () => {
+                  try {
+                    setDuplicateSubmitting(true);
+                    const shared = await onInvite(
+                      pendingDuplicateParticipant,
+                      'create_duplicate_anyway'
+                    );
+                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                    const inviteLink =
+                      shared.inviteLink ??
+                      (origin ? `${origin}/deal-invites/${shared.inviteToken}` : '');
+                    setSuccessLink(inviteLink);
+                    setDuplicateDialogOpen(false);
+                    setPendingDuplicateParticipant(null);
+                    setDuplicateCandidates([]);
+                    toast.success('Duplicate participant created');
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : 'Failed to create duplicate';
+                    setSubmitError(msg);
+                  } finally {
+                    setDuplicateSubmitting(false);
+                  }
+                })();
+              }}
+            >
+              Create duplicate anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    ) : null}
+    </>
   );
 }

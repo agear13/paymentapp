@@ -130,6 +130,7 @@ export default function DealNetworkPage() {
   const [activeDealId, setActiveDealId] = React.useState('');
   const [showArchived, setShowArchived] = React.useState(false);
   const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(null);
+  const [removeParticipantTargetId, setRemoveParticipantTargetId] = React.useState<string | null>(null);
   const [participants, setParticipants] = React.useState<DemoParticipant[]>([]);
 
   const activePipelineDeals = React.useMemo(
@@ -185,6 +186,15 @@ export default function DealNetworkPage() {
     return dedupeParticipantsForDisplay(raw);
   }, [participants, activeDeal]);
 
+  const participantsForActiveDealForInviteCheck = React.useMemo(() => {
+    if (!activeDeal) return [];
+    return participants.filter(
+      (p) =>
+        p.dealId === activeDeal.id ||
+        (p.dealId == null && p.dealName === activeDeal.dealName)
+    );
+  }, [participants, activeDeal]);
+
   const duplicateParticipantWarnings = React.useMemo(() => {
     if (!activeDeal) return [];
     const keys = new Map<string, number>();
@@ -198,6 +208,11 @@ export default function DealNetworkPage() {
     }
     return dups;
   }, [activeParticipants, activeDeal]);
+
+  const removeTargetParticipant = React.useMemo(() => {
+    if (!removeParticipantTargetId) return null;
+    return participants.find((p) => p.id === removeParticipantTargetId) ?? null;
+  }, [participants, removeParticipantTargetId]);
 
   React.useEffect(() => {
     if (!deals.some((d) => d.id === activeDealId)) {
@@ -348,11 +363,41 @@ export default function DealNetworkPage() {
   }, [syncInternalRoleParticipants]);
 
   const handleInviteParticipant = React.useCallback(
-    (p: DemoParticipant) => {
-      if (!activeDeal) return;
-      setParticipants((prev) => mergePilotInvite(prev, p, activeDeal));
+    async (p: DemoParticipant, duplicateAction: 'use_existing' | 'create_duplicate_anyway') => {
+      if (!activeDeal) throw new Error('No active deal selected');
+
+      if (duplicateAction === 'use_existing') {
+        const next = mergePilotInvite(participants, p, activeDeal);
+        setParticipants(next);
+        const n = normParticipantName(p.name);
+        const candidates = next.filter(
+          (x) =>
+            x.dealId === activeDeal.id &&
+            x.role === p.role &&
+            normParticipantName(x.name) === n
+        );
+        return (
+          candidates.find((x) => !x.id.startsWith('internal-')) ??
+          candidates[0] ??
+          next.find((x) => x.dealId === activeDeal.id && x.role === p.role && normParticipantName(x.name) === n) ??
+          p
+        );
+      }
+
+      // Intentionally allow duplicates: bypass merge logic and keep this row separate.
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const withMeta: DemoParticipant = {
+        ...p,
+        dealId: activeDeal.id,
+        dealName: activeDeal.dealName,
+        partner: activeDeal.partner,
+        userRequestedDuplicate: true,
+        inviteLink: p.inviteLink ?? (origin ? `${origin}/deal-invites/${p.inviteToken}` : undefined),
+      };
+      setParticipants((prev) => [...prev, withMeta]);
+      return withMeta;
     },
-    [activeDeal]
+    [activeDeal, participants]
   );
 
   const archiveDealById = React.useCallback((id: string) => {
@@ -366,6 +411,11 @@ export default function DealNetworkPage() {
     setDeals((prev) => prev.filter((d) => d.id !== id));
     setParticipants((prev) => prev.filter((p) => p.dealId !== id));
     setActiveDealId((cur) => (cur === id ? '' : cur));
+  }, []);
+
+  const runRemoveParticipant = React.useCallback((id: string) => {
+    setParticipants((prev) => prev.filter((p) => p.id !== id));
+    setRemoveParticipantTargetId(null);
   }, []);
 
   const restoreDealById = React.useCallback((id: string) => {
@@ -829,6 +879,22 @@ export default function DealNetworkPage() {
                             Open link
                           </a>
                         ) : null}
+                        {!p.id.startsWith('internal-') ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 ml-2 text-destructive hover:text-destructive"
+                            title="Remove invited participant"
+                            aria-label={`Remove ${p.name} from this deal`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRemoveParticipantTargetId(p.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1281,6 +1347,44 @@ export default function DealNetworkPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog
+        open={removeParticipantTargetId !== null}
+        onOpenChange={(open) => !open && setRemoveParticipantTargetId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove participant?</AlertDialogTitle>
+            {removeTargetParticipant ? (
+              <AlertDialogDescription>
+                {removeTargetParticipant.approvalStatus === 'Approved' ? (
+                  <>
+                    {removeTargetParticipant.name} has already approved this role. Removing them will
+                    invalidate their invite link and exclude them from payout exports.
+                    <span className="block mt-1 font-medium">Do you still want to remove them?</span>
+                  </>
+                ) : (
+                  <>
+                    Removing {removeTargetParticipant.name} will invalidate their invite link. If they
+                    have not approved yet, they will not be able to approve after removal.
+                  </>
+                )}
+              </AlertDialogDescription>
+            ) : null}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (removeParticipantTargetId) runRemoveParticipant(removeParticipantTargetId);
+              }}
+            >
+              Remove participant
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <CreateDealModal open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreateDeal} />
       <CreateDealModal
         open={editOpen}
@@ -1292,6 +1396,7 @@ export default function DealNetworkPage() {
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         onInvite={handleInviteParticipant}
+        existingParticipantsForDuplicateCheck={participantsForActiveDealForInviteCheck}
         featuredDealValue={featured.dealValue}
         featuredRoleAmounts={{
           Introducer: activeDeal?.introducerAmount,

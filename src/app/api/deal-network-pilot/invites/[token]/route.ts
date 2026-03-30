@@ -21,7 +21,10 @@ export async function GET(
   try {
     const row = await getParticipantByInviteToken(token);
     if (!row || !row.deal) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Invite link is inactive (participant removed)' },
+        { status: 404 }
+      );
     }
 
     await markParticipantInviteOpened(token);

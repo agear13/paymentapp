@@ -24,7 +24,10 @@ export async function POST(
   try {
     const result = await approveParticipantByInviteToken(token, note);
     if (!result) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Invite link is inactive (participant removed)' },
+        { status: 404 }
+      );
     }
     return NextResponse.json(result);
   } catch (e) {

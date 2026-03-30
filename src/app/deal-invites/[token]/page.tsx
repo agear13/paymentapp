@@ -97,7 +97,11 @@ export default function DealInviteApprovalPage() {
       <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
         <Card className="w-full max-w-xl">
           <CardHeader>
-            <CardTitle>Invite link not found</CardTitle>
+            <CardTitle>
+              {loadError?.toLowerCase().includes('inactive')
+                ? 'Invite link inactive'
+                : 'Invite link not found'}
+            </CardTitle>
             <CardDescription>
               {loadError ||
                 'This invite token is invalid or no longer exists.'}

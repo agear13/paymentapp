@@ -271,7 +271,7 @@ export function buildExportPayoutRows(
   participants: DemoParticipant[]
 ): { rows: ExportPayoutRow[]; excludedUnapprovedCount: number } {
   const out: ExportPayoutRow[] = [];
-  let excludedUnapprovedCount = 0;
+  const excludedUnapprovedCount = 0;
   const activeDeals = deals.filter((d) => !d.archived);
   const dealById = new Map(activeDeals.map((d) => [d.id, d]));
   const dealByName = new Map(activeDeals.map((d) => [d.dealName, d]));
@@ -317,7 +317,9 @@ export function buildExportPayoutRows(
       (p.dealName ? dealByName.get(p.dealName) : undefined);
     if (!deal) continue;
 
-    const dedupeKey = `${deal.id}|${p.role}|${normExportName(p.name)}`;
+    const dedupeKey = `${deal.id}|${p.role}|${normExportName(p.name)}${
+      p.userRequestedDuplicate ? `|${p.inviteToken}` : ''
+    }`;
     if (seenParticipantLine.has(dedupeKey)) continue;
     seenParticipantLine.add(dedupeKey);
 
