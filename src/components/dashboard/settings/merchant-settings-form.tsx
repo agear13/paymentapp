@@ -61,9 +61,30 @@ const merchantSettingsSchema = z.object({
   wiseCurrency: z.string().length(3, 'Currency must be a 3-letter ISO code').optional().or(z.literal('')),
 });
 
-type MerchantSettingsFormValues = z.infer<typeof merchantSettingsSchema>;
+const pilotMerchantSettingsSchema = z.object({
+  stripeAccountId: z.string().trim().min(1, 'Stripe account ID is required'),
+  wiseProfileId: z.string().trim().min(1, 'Wise details are required'),
+  hederaAccountId: z
+    .string()
+    .trim()
+    .min(1, 'HashPack wallet is required')
+    .refine((val) => (!val.startsWith('0.0.') ? true : /^0\.0\.\d+$/.test(val)), {
+      message: 'If using Hedera format, use 0.0.x',
+    }),
+});
 
-export function MerchantSettingsForm() {
+type MerchantSettingsFormValues = z.infer<typeof merchantSettingsSchema> & {
+  stripeAccountId: string;
+  wiseProfileId: string;
+  hederaAccountId: string;
+};
+
+interface MerchantSettingsFormProps {
+  variant?: 'full' | 'pilot';
+}
+
+export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormProps) {
+  const isPilotVariant = variant === 'pilot';
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const [isLoading, setIsLoading] = React.useState(true);
   const [settingsId, setSettingsId] = React.useState<string | null>(null);
@@ -73,7 +94,7 @@ export function MerchantSettingsForm() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const form = useForm<MerchantSettingsFormValues>({
-    resolver: zodResolver(merchantSettingsSchema),
+    resolver: zodResolver(isPilotVariant ? pilotMerchantSettingsSchema : merchantSettingsSchema),
     defaultValues: {
       displayName: '',
       organizationLogoUrl: '',
@@ -198,8 +219,9 @@ export function MerchantSettingsForm() {
       setLogoPreview(result.url);
 
       toast.success('Logo uploaded successfully');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to upload logo');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to upload logo';
+      toast.error(message);
       console.error('Logo upload error:', error);
     } finally {
       setIsUploadingLogo(false);
@@ -228,42 +250,60 @@ export function MerchantSettingsForm() {
     try {
       if (settingsId) {
         // Update existing settings
+        const updatePayload = isPilotVariant
+          ? {
+              stripeAccountId: data.stripeAccountId || undefined,
+              wiseProfileId: data.wiseProfileId || undefined,
+              hederaAccountId: data.hederaAccountId || undefined,
+            }
+          : {
+              displayName: data.displayName,
+              organizationLogoUrl: data.organizationLogoUrl || undefined,
+              defaultCurrency: data.defaultCurrency,
+              stripeAccountId: data.stripeAccountId || undefined,
+              hederaAccountId: data.hederaAccountId || undefined,
+              wiseProfileId: data.wiseProfileId || undefined,
+              wiseEnabled: data.wiseEnabled,
+              wiseCurrency: data.wiseCurrency || undefined,
+            };
         const response = await fetch(`/api/merchant-settings/${settingsId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            displayName: data.displayName,
-            organizationLogoUrl: data.organizationLogoUrl || undefined,
-            defaultCurrency: data.defaultCurrency,
-            stripeAccountId: data.stripeAccountId || undefined,
-            hederaAccountId: data.hederaAccountId || undefined,
-            wiseProfileId: data.wiseProfileId || undefined,
-            wiseEnabled: data.wiseEnabled,
-            wiseCurrency: data.wiseCurrency || undefined,
-          }),
+          body: JSON.stringify(updatePayload),
         });
 
         if (!response.ok) {
           throw new Error('Failed to update settings');
         }
 
-        toast.success('Merchant settings updated successfully');
+        toast.success(isPilotVariant ? 'Settings saved' : 'Merchant settings updated successfully');
       } else {
         // Create new settings
+        const createPayload = isPilotVariant
+          ? {
+              organizationId,
+              displayName: 'Rabbit Hole Merchant',
+              defaultCurrency: 'USD',
+              stripeAccountId: data.stripeAccountId || undefined,
+              wiseProfileId: data.wiseProfileId || undefined,
+              hederaAccountId: data.hederaAccountId || undefined,
+              wiseEnabled: true,
+            }
+          : {
+              organizationId,
+              displayName: data.displayName,
+              organizationLogoUrl: data.organizationLogoUrl || undefined,
+              defaultCurrency: data.defaultCurrency,
+              stripeAccountId: data.stripeAccountId || undefined,
+              hederaAccountId: data.hederaAccountId || undefined,
+              wiseProfileId: data.wiseProfileId || undefined,
+              wiseEnabled: data.wiseEnabled,
+              wiseCurrency: data.wiseCurrency || undefined,
+            };
         const response = await fetch('/api/merchant-settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            organizationId,
-            displayName: data.displayName,
-            organizationLogoUrl: data.organizationLogoUrl || undefined,
-            defaultCurrency: data.defaultCurrency,
-            stripeAccountId: data.stripeAccountId || undefined,
-            hederaAccountId: data.hederaAccountId || undefined,
-            wiseProfileId: data.wiseProfileId || undefined,
-            wiseEnabled: data.wiseEnabled,
-            wiseCurrency: data.wiseCurrency || undefined,
-          }),
+          body: JSON.stringify(createPayload),
         });
 
         if (!response.ok) {
@@ -272,7 +312,7 @@ export function MerchantSettingsForm() {
 
         const result = await response.json();
         setSettingsId(result.id);
-        toast.success('Merchant settings created successfully');
+        toast.success(isPilotVariant ? 'Settings saved' : 'Merchant settings created successfully');
       }
     } catch (error) {
       toast.error('Failed to save merchant settings');
@@ -292,6 +332,72 @@ export function MerchantSettingsForm() {
           <div className="h-10 bg-gray-200 rounded"></div>
         </div>
       </div>
+    );
+  }
+
+  if (isPilotVariant) {
+    return (
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <FormField
+            control={form.control}
+            name="stripeAccountId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Stripe Account ID</FormLabel>
+                <FormControl>
+                  <Input placeholder="acct_xxxxxxxxxxxxx" {...field} />
+                </FormControl>
+                <FormDescription>
+                  Enter the Stripe account ID used for invoice payment collection.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="wiseProfileId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Wise Details</FormLabel>
+                <FormControl>
+                  <Input placeholder="Wise profile ID or account details" {...field} />
+                </FormControl>
+                <FormDescription>
+                  Flexible text field for Wise payout and receiving details in this pilot.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="hederaAccountId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>HashPack Wallet</FormLabel>
+                <FormControl>
+                  <Input placeholder="0.0.12345 or wallet address" {...field} />
+                </FormControl>
+                <FormDescription>
+                  Enter the HashPack wallet address. If using Hedera format, use 0.0.x.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="flex justify-end">
+            <Button type="submit" disabled={form.formState.isSubmitting || isLoading}>
+              {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save settings
+            </Button>
+          </div>
+        </form>
+      </Form>
     );
   }
 
@@ -431,7 +537,7 @@ export function MerchantSettingsForm() {
                 <Input placeholder="acct_xxxxxxxxxxxxx" {...field} />
               </FormControl>
               <FormDescription>
-                Your Stripe Connect account ID (starts with "acct_").
+                Your Stripe Connect account ID (starts with &quot;acct_&quot;).
               </FormDescription>
               <FormMessage />
             </FormItem>

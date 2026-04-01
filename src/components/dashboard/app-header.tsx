@@ -34,9 +34,14 @@ export function AppHeader({ productProfile }: AppHeaderProps) {
 
       <div className="ml-auto flex items-center gap-2">
         {isRabbitHolePilot && (
-          <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
-            <Link href="/dashboard/payment-links">Invoice dashboard</Link>
-          </Button>
+          <>
+            <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
+              <Link href="/dashboard/payment-links">Invoice dashboard</Link>
+            </Button>
+            <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
+              <Link href="/dashboard/settings/merchant">Merchant settings</Link>
+            </Button>
+          </>
         )}
         {!isRabbitHolePilot && (
           <>

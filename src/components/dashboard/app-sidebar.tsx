@@ -26,6 +26,7 @@ import {
   Handshake,
   Target,
   Layers,
+  Building2,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -315,6 +316,17 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                     <Link href="/dashboard/payment-links">
                       <LinkIcon className="size-4" />
                       <span>Invoices</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === '/dashboard/settings/merchant' || pathname.startsWith('/dashboard/settings/merchant/')}
+                  >
+                    <Link href="/dashboard/settings/merchant">
+                      <Building2 className="size-4" />
+                      <span>Merchant Settings</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

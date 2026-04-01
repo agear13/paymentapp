@@ -11,7 +11,7 @@ const createMerchantSettingsSchema = z.object({
   displayName: z.string().min(2).max(255),
   defaultCurrency: z.string().length(3),
   stripeAccountId: z.string().optional(),
-  hederaAccountId: z.string().regex(/^0\.0\.\d+$/).optional(),
+  hederaAccountId: z.string().min(1).optional(),
   // Wise settings
   wiseProfileId: z.string().optional(),
   wiseEnabled: z.boolean().optional(),

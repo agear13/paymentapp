@@ -11,7 +11,7 @@ const updateMerchantSettingsSchema = z.object({
   organizationLogoUrl: z.string().min(1).optional(),
   defaultCurrency: z.string().length(3).optional(),
   stripeAccountId: z.string().optional(),
-  hederaAccountId: z.string().regex(/^0\.0\.\d+$/).optional(),
+  hederaAccountId: z.string().min(1).optional(),
   // Wise settings
   wiseProfileId: z.string().optional().nullable(),
   wiseEnabled: z.boolean().optional(),
@@ -78,16 +78,13 @@ export async function PATCH(
 
     // TODO: Check if user has permission to update these settings
 
-    // Build update data, including wise fields (may not be in generated types yet)
-    const updateData: Record<string, unknown> = {
-      display_name: body.displayName,
-      organization_logo_url: body.organizationLogoUrl,
-      default_currency: body.defaultCurrency,
-      stripe_account_id: body.stripeAccountId,
-      hedera_account_id: body.hederaAccountId,
-    };
-    
-    // Add wise fields if provided
+    // Partial update: only set fields explicitly provided (pilot saves may send Stripe/Wise/HashPack only).
+    const updateData: Record<string, unknown> = {};
+    if (body.displayName !== undefined) updateData.display_name = body.displayName;
+    if (body.organizationLogoUrl !== undefined) updateData.organization_logo_url = body.organizationLogoUrl;
+    if (body.defaultCurrency !== undefined) updateData.default_currency = body.defaultCurrency;
+    if (body.stripeAccountId !== undefined) updateData.stripe_account_id = body.stripeAccountId;
+    if (body.hederaAccountId !== undefined) updateData.hedera_account_id = body.hederaAccountId;
     if (body.wiseProfileId !== undefined) updateData.wise_profile_id = body.wiseProfileId;
     if (body.wiseEnabled !== undefined) updateData.wise_enabled = body.wiseEnabled;
     if (body.wiseCurrency !== undefined) updateData.wise_currency = body.wiseCurrency;
