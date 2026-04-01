@@ -183,6 +183,8 @@ export async function GET(
         id: true,
         short_code: true,
         status: true,
+        payment_method: true,
+        wise_status: true,
         amount: true,
         currency: true,
         expires_at: true,
@@ -272,6 +274,7 @@ export async function GET(
           paymentMethod: lastEvent?.payment_method || null,
           validTransitions,
           transactionInfo,
+          wiseStatus: paymentLink.wise_status ?? null,
           expiresAt: paymentLink.expires_at,
           isExpired,
           updatedAt: paymentLink.updated_at,
@@ -304,11 +307,14 @@ function generateStatusMessage(status: string, lastEvent?: any): string {
     case 'DRAFT':
       return 'Payment link is in draft mode';
     case 'OPEN':
+      if (lastEvent?.payment_method === 'WISE') {
+        return 'Awaiting Wise bank transfer (manual settlement confirmation for pilot)';
+      }
       return 'Awaiting payment';
     case 'PAID':
       const method = lastEvent?.payment_method;
       return method 
-        ? `Payment completed via ${method === 'STRIPE' ? 'Card' : 'Crypto'}`
+        ? `Payment completed via ${method === 'STRIPE' ? 'Card' : method === 'HEDERA' ? 'Crypto' : 'Wise bank transfer'}`
         : 'Payment completed';
     case 'EXPIRED':
       return 'Payment link has expired';

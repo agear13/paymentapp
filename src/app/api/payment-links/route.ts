@@ -19,6 +19,7 @@ import {
 import { generateUniqueShortCode } from '@/lib/server/short-code';
 import { generateQRCodeDataUrl } from '@/lib/qr-code';
 import { getFxService, type Currency } from '@/lib/fx';
+import { buildWisePaymentContext, getMerchantWiseConfig } from '@/lib/payments/wise';
 
 /** FX summary for list view (lightweight) */
 export interface FxSummary {
@@ -71,6 +72,8 @@ function transformPaymentLink(link: Record<string, unknown>) {
     dueDate: link.due_date,
     expiresAt: link.expires_at,
     xeroInvoiceNumber: link.xero_invoice_number,
+    wiseStatus: link.wise_status ?? null,
+    wiseTransferId: link.wise_transfer_id ?? null,
     createdAt: link.created_at,
     updatedAt: link.updated_at,
     paymentEvents: link.payment_events,
@@ -273,6 +276,24 @@ export async function POST(request: NextRequest) {
 
     // Generate unique short code
     const shortCode = await generateUniqueShortCode();
+    const isWisePayment = validatedData.paymentMethod === 'WISE';
+    let wiseContext: Awaited<ReturnType<typeof buildWisePaymentContext>> | null = null;
+
+    if (isWisePayment) {
+      try {
+        // Validate merchant-level Wise config before creating invoice
+        await getMerchantWiseConfig(dbOrgId, validatedData.currency);
+        wiseContext = await buildWisePaymentContext({
+          shortCode,
+          amount: validatedData.amount.toString(),
+          organizationId: dbOrgId,
+          fallbackCurrency: validatedData.currency,
+        });
+      } catch (wiseError: unknown) {
+        const message = wiseError instanceof Error ? wiseError.message : 'Failed to prepare Wise payment context';
+        return NextResponse.json({ error: message, code: 'WISE_CONFIG_ERROR' }, { status: 400 });
+      }
+    }
 
     // Create payment link with initial event
     const now = new Date();
@@ -297,6 +318,7 @@ export async function POST(request: NextRequest) {
           expires_at: validatedData.expiresAt ? new Date(validatedData.expiresAt as string) : null,
           created_at: now,
           updated_at: now,
+          wise_status: wiseContext ? 'INSTRUCTIONS_READY' : null,
         },
       });
 
@@ -312,6 +334,19 @@ export async function POST(request: NextRequest) {
           created_at: now,
         },
       });
+
+      if (wiseContext) {
+        await tx.payment_events.create({
+          data: {
+            id: randomUUID(),
+            payment_link_id: link.id,
+            event_type: 'PAYMENT_INITIATED',
+            payment_method: 'WISE',
+            metadata: wiseContext.metadata as object,
+            created_at: now,
+          },
+        });
+      }
 
       // Create audit log
       await tx.audit_logs.create({
@@ -341,6 +376,7 @@ export async function POST(request: NextRequest) {
         organizationId: dbOrgId,
         amount: validatedData.amount,
         currency: validatedData.currency,
+        wiseContextPrepared: !!wiseContext,
       },
       'Payment link created'
     );

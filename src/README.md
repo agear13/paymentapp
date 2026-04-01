@@ -71,6 +71,13 @@ DEFAULT_WISE_PROFILE_ID=84420198
 
 When properly configured, customers will see real bank details (IBAN, account number, BIC/SWIFT) and a unique payment reference when selecting Wise as a payment method.
 
+### Wise Pilot Status Handling (Money-In)
+
+- On invoice/payment-link creation with `payment_method=WISE`, server prepares Wise payment context and stores a Wise metadata snapshot.
+- Public pay page reads that stored snapshot (or recreates it if missing) to render real payer instructions.
+- Pilot settlement remains intentionally manual: operators confirm payment using existing status transition flow.
+- `wise_status` starts as `INSTRUCTIONS_READY` and can be used by ops views to indicate "awaiting Wise transfer confirmation".
+
 ## Manual Verification Checklist - Wise Payments
 
 Use this checklist to verify Wise payments are working correctly in development or production:
