@@ -55,6 +55,12 @@ import {
   getNextSettlementStatus,
   recentDealToFeatured,
 } from '@/lib/deal-network-demo/demo-helpers';
+import {
+  getPreferredDealIdFromSession,
+  persistPreferredDealIdToSession,
+  resolveActiveDealId,
+  resolvePreviewDeal,
+} from '@/lib/deal-network-demo/active-deal-resolution';
 import { computePipelineMetrics, formatUsdCompact } from '@/lib/deal-network-demo/pipeline-metrics';
 import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
 import { CreateDealModal } from '@/components/deal-network-demo/create-deal-modal';
@@ -127,7 +133,8 @@ function bumpEarnersOnPaid(prev: TopEarner[], commissionTotal: number): TopEarne
 export default function DealNetworkPage() {
   const [pilotHydrated, setPilotHydrated] = React.useState(false);
   const [deals, setDeals] = React.useState<RecentDeal[]>([]);
-  const [activeDealId, setActiveDealId] = React.useState('');
+  /** User preference + session-restored id; may be invalid until synced with `deals`. */
+  const [preferredDealId, setPreferredDealId] = React.useState('');
   const [showArchived, setShowArchived] = React.useState(false);
   const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(null);
   const [removeParticipantTargetId, setRemoveParticipantTargetId] = React.useState<string | null>(null);
@@ -152,13 +159,16 @@ export default function DealNetworkPage() {
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
 
-  const activeDeal = React.useMemo(() => {
-    const fromActive = activePipelineDeals.find((d) => d.id === activeDealId);
-    if (fromActive) return fromActive;
-    const fromAny = deals.find((d) => d.id === activeDealId);
-    if (fromAny) return fromAny;
-    return activePipelineDeals[0] ?? deals[0];
-  }, [deals, activePipelineDeals, activeDealId]);
+  const resolvedActiveDealId = React.useMemo(
+    () => resolveActiveDealId(deals, preferredDealId),
+    [deals, preferredDealId]
+  );
+
+  /** Always defined when `deals.length > 0` (preview + pipeline scope). */
+  const activeDeal = React.useMemo(
+    () => resolvePreviewDeal(deals, resolvedActiveDealId),
+    [deals, resolvedActiveDealId]
+  );
 
   const featured = React.useMemo(() => {
     if (activeDeal) return recentDealToFeatured(activeDeal);
@@ -214,16 +224,18 @@ export default function DealNetworkPage() {
     return participants.find((p) => p.id === removeParticipantTargetId) ?? null;
   }, [participants, removeParticipantTargetId]);
 
+  /** Keep stored preference aligned with pipeline (invalid id / archived selection). */
   React.useEffect(() => {
-    if (!deals.some((d) => d.id === activeDealId)) {
-      setActiveDealId(activePipelineDeals[0]?.id ?? deals[0]?.id ?? '');
+    if (deals.length === 0) {
+      if (preferredDealId) setPreferredDealId('');
       return;
     }
-    const current = deals.find((d) => d.id === activeDealId);
-    if (current?.archived && activePipelineDeals.length > 0) {
-      setActiveDealId(activePipelineDeals[0].id);
+    const resolved = resolveActiveDealId(deals, preferredDealId);
+    if (resolved && resolved !== preferredDealId) {
+      setPreferredDealId(resolved);
+      persistPreferredDealIdToSession(resolved);
     }
-  }, [deals, activeDealId, activePipelineDeals]);
+  }, [deals, preferredDealId]);
 
   const pipelineMetrics = React.useMemo(
     () => computePipelineMetrics(activePipelineDeals),
@@ -324,11 +336,17 @@ export default function DealNetworkPage() {
       if (stored.deals.length > 0) {
         setDeals(stored.deals);
         const activeFirst = stored.deals.filter((d) => !d.archived);
-        setActiveDealId((activeFirst[0] ?? stored.deals[0]).id);
+        const fromSession = getPreferredDealIdFromSession();
+        const initialPreferred =
+          fromSession ?? (activeFirst[0] ?? stored.deals[0]).id;
+        const resolved = resolveActiveDealId(stored.deals, initialPreferred);
+        setPreferredDealId(resolved ?? '');
+        if (resolved) persistPreferredDealIdToSession(resolved);
         setParticipants(syncInternalRoleParticipants(stored.participants, stored.deals));
       } else {
         setDeals([]);
-        setActiveDealId('');
+        setPreferredDealId('');
+        persistPreferredDealIdToSession('');
         setParticipants([]);
       }
       setPilotHydrated(true);
@@ -357,7 +375,8 @@ export default function DealNetworkPage() {
         ? prev.map((d) => (d.id === deal.id ? deal : d))
         : [deal, ...prev];
     });
-    setActiveDealId(deal.id);
+    setPreferredDealId(deal.id);
+    persistPreferredDealIdToSession(deal.id);
 
     setParticipants((prev) => syncInternalRoleParticipants(prev, [deal]));
   }, [syncInternalRoleParticipants]);
@@ -410,7 +429,7 @@ export default function DealNetworkPage() {
   const runDeleteDeal = React.useCallback((id: string) => {
     setDeals((prev) => prev.filter((d) => d.id !== id));
     setParticipants((prev) => prev.filter((p) => p.dealId !== id));
-    setActiveDealId((cur) => (cur === id ? '' : cur));
+    setPreferredDealId((cur) => (cur === id ? '' : cur));
   }, []);
 
   const runRemoveParticipant = React.useCallback((id: string) => {
@@ -481,8 +500,24 @@ export default function DealNetworkPage() {
   }, []);
 
   const selectDeal = React.useCallback((dealId: string) => {
-    setActiveDealId(dealId);
+    setPreferredDealId(dealId);
+    persistPreferredDealIdToSession(dealId);
   }, []);
+
+  const prevDealCountRef = React.useRef(0);
+  /** After pilot data hydrates, reset dashboard main scroll so sections 1–2 aren’t “missing” below the fold. */
+  React.useLayoutEffect(() => {
+    if (!pilotHydrated || deals.length === 0) {
+      prevDealCountRef.current = deals.length;
+      return;
+    }
+    const prev = prevDealCountRef.current;
+    prevDealCountRef.current = deals.length;
+    if (prev === 0 && deals.length > 0) {
+      const main = document.querySelector('main.flex-1.overflow-y-auto');
+      if (main) main.scrollTop = 0;
+    }
+  }, [pilotHydrated, deals.length]);
 
   return (
     <div className="space-y-6">
@@ -527,7 +562,10 @@ export default function DealNetworkPage() {
       </div>
 
       {/* Featured Deal — visual centerpiece */}
-      <Card className="border-primary/40 bg-gradient-to-b from-primary/5 to-transparent shadow-sm">
+      <Card
+        id="deal-network-active-deal"
+        className="scroll-mt-6 border-primary/40 bg-gradient-to-b from-primary/5 to-transparent shadow-sm"
+      >
         <CardHeader className="pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -934,7 +972,7 @@ export default function DealNetworkPage() {
       </Card>
 
       {/* Summary KPIs — baseline + pipeline-derived where noted */}
-      <div>
+      <div id="deal-network-summary" className="scroll-mt-6">
         <h2 className="text-lg font-semibold tracking-tight mb-1">Network summary</h2>
         <p className="text-xs text-muted-foreground mb-3">
           Open deals, commissions pending, and commissions paid reflect the live demo pipeline below.
@@ -1088,7 +1126,7 @@ export default function DealNetworkPage() {
                   tabIndex={0}
                   className={cn(
                     'cursor-pointer',
-                    deal.id === activeDealId && 'bg-muted/50 border-l-2 border-l-primary'
+                    deal.id === resolvedActiveDealId && 'bg-muted/50 border-l-2 border-l-primary'
                   )}
                   onClick={() => selectDeal(deal.id)}
                   onKeyDown={(e) => {

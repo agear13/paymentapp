@@ -55,12 +55,21 @@ export function buildExplicitCommissionSplits(deal: RecentDeal): CommissionSplit
   return out;
 }
 
+function coerceDealNumeric(value: unknown, fallback = 0): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return fallback;
+}
+
 /** Map pipeline row → featured/detail card shape (single source of truth: RecentDeal). */
 export function recentDealToFeatured(deal: RecentDeal): FeaturedDeal {
   return {
     id: deal.id,
     name: deal.dealName,
-    dealValue: deal.value,
+    dealValue: coerceDealNumeric(deal.value, 0),
     status: deal.status,
     introducer: deal.introducer,
     closer: deal.closer,
