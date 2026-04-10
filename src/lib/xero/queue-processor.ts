@@ -73,7 +73,7 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
             'Skipping sync - payment link not in PAID status'
           );
           stats.skipped++;
-          continue;
+          return;
         }
 
         // Mark as in progress
