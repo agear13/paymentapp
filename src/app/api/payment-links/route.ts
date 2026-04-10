@@ -72,6 +72,8 @@ function transformPaymentLink(link: Record<string, unknown>) {
     dueDate: link.due_date,
     expiresAt: link.expires_at,
     xeroInvoiceNumber: link.xero_invoice_number,
+    invoiceOnlyMode: (link as { invoice_only_mode?: boolean }).invoice_only_mode ?? false,
+    hederaCheckoutMode: (link as { hedera_checkout_mode?: string | null }).hedera_checkout_mode ?? null,
     wiseStatus: link.wise_status ?? null,
     wiseTransferId: link.wise_transfer_id ?? null,
     createdAt: link.created_at,
@@ -276,7 +278,9 @@ export async function POST(request: NextRequest) {
 
     // Generate unique short code
     const shortCode = await generateUniqueShortCode();
-    const isWisePayment = validatedData.paymentMethod === 'WISE';
+    const invoiceOnly = validatedData.invoiceOnlyMode === true;
+    const resolvedPaymentMethod = invoiceOnly ? null : validatedData.paymentMethod ?? null;
+    const isWisePayment = !invoiceOnly && validatedData.paymentMethod === 'WISE';
     let wiseContext: Awaited<ReturnType<typeof buildWisePaymentContext>> | null = null;
 
     if (isWisePayment) {
@@ -300,13 +304,18 @@ export async function POST(request: NextRequest) {
     const paymentLink = await prisma.$transaction(async (tx) => {
       const linkId = randomUUID();
 
+      const hederaCheckoutMode =
+        !invoiceOnly && resolvedPaymentMethod === 'HEDERA'
+          ? validatedData.hederaCheckoutMode ?? 'INTERACTIVE'
+          : null;
+
       const link = await tx.payment_links.create({
         data: {
           id: linkId,
           organization_id: dbOrgId,
           short_code: shortCode,
           status: 'OPEN',
-          payment_method: validatedData.paymentMethod ?? null,
+          payment_method: resolvedPaymentMethod,
           amount: validatedData.amount,
           currency: validatedData.currency,
           description: validatedData.description,
@@ -316,6 +325,8 @@ export async function POST(request: NextRequest) {
           customer_phone: validatedData.customerPhone || null,
           due_date: validatedData.dueDate ? new Date(validatedData.dueDate as string) : null,
           expires_at: validatedData.expiresAt ? new Date(validatedData.expiresAt as string) : null,
+          invoice_only_mode: invoiceOnly,
+          hedera_checkout_mode: hederaCheckoutMode,
           created_at: now,
           updated_at: now,
           wise_status: wiseContext ? 'INSTRUCTIONS_READY' : null,

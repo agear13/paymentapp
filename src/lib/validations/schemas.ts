@@ -233,7 +233,15 @@ export const CreatePaymentLinkSchema = z.object({
     .optional()
     .or(z.date().optional()),
   paymentMethod: PaymentMethodSchema.optional(),
-});
+  /** Invoice-only public page (no online checkout UI). */
+  invoiceOnlyMode: z.boolean().optional(),
+  /** When payment_method = HEDERA */
+  hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']).optional(),
+})
+  .refine(
+    (d) => d.invoiceOnlyMode === true || d.paymentMethod !== undefined,
+    { message: 'Payment method is required unless using invoice-only mode', path: ['paymentMethod'] }
+  );
 
 export const UpdatePaymentLinkSchema = z.object({
   status: PaymentLinkStatusSchema.optional(),

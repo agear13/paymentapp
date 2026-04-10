@@ -4,8 +4,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { exchangeCodeForTokens, getXeroTenants, storeXeroConnection } from '@/lib/xero';
 import { logger } from '@/lib/logger';
+import { verifyOAuthState } from '@/lib/security/oauth-state';
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,13 +32,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Decode state parameter
-    let stateData: { organizationId: string; userId: string };
-    try {
-      stateData = JSON.parse(
-        Buffer.from(state, 'base64').toString('utf8')
-      );
-    } catch {
+    // Verify and decode signed state parameter.
+    const stateData = verifyOAuthState<{ organizationId: string; userId: string }>(state);
+    if (!stateData?.organizationId || !stateData?.userId) {
       logger.error('Invalid state parameter in Xero callback');
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=invalid_state`
@@ -44,6 +42,16 @@ export async function GET(request: NextRequest) {
     }
 
     const { organizationId, userId } = stateData;
+
+    // Bind callback to the same authenticated user who initiated OAuth.
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user || user.id !== userId) {
+      logger.error('Xero callback user mismatch', { callbackUserId: user?.id, stateUserId: userId });
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=unauthorized`
+      );
+    }
 
     // Exchange authorization code for tokens
     const tokens = await exchangeCodeForTokens(code);

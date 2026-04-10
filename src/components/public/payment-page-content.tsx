@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { PaymentAmountDisplay } from '@/components/public/payment-amount-display';
 import { MerchantBranding } from '@/components/public/merchant-branding';
@@ -33,6 +33,10 @@ interface PaymentPageContentProps {
       hedera: boolean;
       wise?: boolean;
     };
+    paymentMethod?: string | null;
+    hederaCheckoutMode?: string | null;
+    hederaWalletAddress?: string | null;
+    availableFxSnapshots?: Array<{ tokenType: string }>;
   };
   onPaymentStarted?: () => void;
 }
@@ -45,6 +49,15 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
 }) => {
   const [currentStep, setCurrentStep] = useState<PaymentStep>('select_method');
   const [selectedMethod, setSelectedMethod] = useState<'stripe' | 'hedera' | 'wise' | null>(null);
+
+  useEffect(() => {
+    if (
+      paymentLink.paymentMethod === 'HEDERA' &&
+      (paymentLink.hederaCheckoutMode ?? 'INTERACTIVE') === 'MANUAL'
+    ) {
+      setSelectedMethod('hedera');
+    }
+  }, [paymentLink.paymentMethod, paymentLink.hederaCheckoutMode]);
 
   const handleMethodSelect = (method: 'stripe' | 'hedera' | 'wise') => {
     setSelectedMethod(method);
@@ -94,6 +107,11 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
                 shortCode={paymentLink.shortCode}
                 amount={paymentLink.amount}
                 currency={paymentLink.currency}
+                paymentMethod={paymentLink.paymentMethod ?? null}
+                hederaCheckoutMode={paymentLink.hederaCheckoutMode ?? null}
+                hederaWalletAddress={paymentLink.hederaWalletAddress ?? null}
+                invoiceReference={paymentLink.invoiceReference}
+                availableFxSnapshots={paymentLink.availableFxSnapshots}
               />
             </div>
 

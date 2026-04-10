@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { PaymentPageContent } from '@/components/public/payment-page-content';
+import { InvoiceOnlyPageContent } from '@/components/public/invoice-only-page-content';
 import { PaymentLinkExpired } from '@/components/public/payment-link-expired';
 import { PaymentLinkCanceled } from '@/components/public/payment-link-canceled';
 import { PaymentLinkNotFound } from '@/components/public/payment-link-not-found';
@@ -41,6 +42,10 @@ interface PaymentLinkData {
   paymentMethod?: string | null;
   wiseTransferId?: string | null;
   wiseStatus?: string | null;
+  invoiceOnlyMode?: boolean;
+  hederaCheckoutMode?: string | null;
+  hederaWalletAddress?: string | null;
+  availableFxSnapshots?: Array<{ tokenType: string; rate: number; capturedAt: string }>;
   fxSnapshot: unknown;
   lastEvent: unknown;
 }
@@ -178,6 +183,11 @@ export default function PayPage() {
   // Draft - should not be publicly accessible
   if (paymentLink.status === 'DRAFT') {
     return <PaymentLinkNotFound shortCode={shortCode} />;
+  }
+
+  // Open state — invoice-only (no checkout UI)
+  if (paymentLink.invoiceOnlyMode === true) {
+    return <InvoiceOnlyPageContent paymentLink={paymentLink} />;
   }
 
   // Open state - show payment page

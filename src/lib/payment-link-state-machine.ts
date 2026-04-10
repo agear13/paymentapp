@@ -18,7 +18,10 @@ import { log } from '@/lib/logger';
 const VALID_TRANSITIONS: Record<PaymentLinkStatus, PaymentLinkStatus[]> = {
   DRAFT: ['OPEN', 'CANCELED'],
   OPEN: ['PAID', 'EXPIRED', 'CANCELED'],
-  PAID: [], // Terminal state - no transitions allowed
+  /** Operator correction: mistaken manual / mis-recorded settlement (pilot-friendly). */
+  PAID: ['OPEN'],
+  PARTIALLY_REFUNDED: [],
+  REFUNDED: [],
   EXPIRED: [], // Terminal state - no transitions allowed
   CANCELED: [], // Terminal state - no transitions allowed
 };
@@ -114,6 +117,8 @@ export const transitionPaymentLinkStatus = async (
       DRAFT: 'CREATED',
       OPEN: 'OPENED',
       PAID: 'PAYMENT_CONFIRMED',
+      PARTIALLY_REFUNDED: 'REFUND_CONFIRMED',
+      REFUNDED: 'REFUND_CONFIRMED',
       EXPIRED: 'EXPIRED',
       CANCELED: 'CANCELED',
     };

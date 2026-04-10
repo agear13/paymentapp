@@ -40,6 +40,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { CurrencySelect } from './currency-select';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -59,8 +60,11 @@ interface MerchantSettings {
 }
 
 // Form validation schema - SMB-friendly (customer contact details optional)
-const createPaymentLinkFormSchema = z.object({
-  paymentMethod: z.enum(['STRIPE', 'HEDERA', 'WISE']).default('STRIPE'),
+const createPaymentLinkFormSchema = z
+  .object({
+  collectionMode: z.enum(['payment_request', 'invoice_only']),
+  paymentMethod: z.enum(['STRIPE', 'HEDERA', 'WISE']).optional(),
+  hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']),
   amount: z.coerce
     .number({
       invalid_type_error: 'Enter an amount to invoice.',
@@ -100,7 +104,11 @@ const createPaymentLinkFormSchema = z.object({
     .optional(),
   dueDate: z.date().optional(),
   expiresAt: z.date().optional(),
-});
+})
+  .refine(
+    (d) => d.collectionMode === 'invoice_only' || d.paymentMethod !== undefined,
+    { message: 'Select a payment method', path: ['paymentMethod'] }
+  );
 
 type CreatePaymentLinkFormValues = z.infer<typeof createPaymentLinkFormSchema>;
 
@@ -209,7 +217,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   React.useEffect(() => {
     if (defaultValues && open) {
       form.reset({
+        collectionMode: 'payment_request',
         paymentMethod: 'STRIPE',
+        hederaCheckoutMode: 'INTERACTIVE',
         amount: undefined,
         currency: defaultCurrency,
         description: '',
@@ -226,8 +236,11 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   }, [defaultValues, open, form, defaultCurrency]);
 
   const handleSubmit = async (data: CreatePaymentLinkFormValues) => {
+    const invoiceOnly = data.collectionMode === 'invoice_only';
+    const effectivePaymentMethod = invoiceOnly ? undefined : data.paymentMethod;
+
     // Block submission if Wise is selected but not configured
-    if (data.paymentMethod === 'WISE' && !wiseConfigured) {
+    if (!invoiceOnly && data.paymentMethod === 'WISE' && !wiseConfigured) {
       form.setError('root', {
         type: 'manual',
         message: 'Wise payments are not configured. Please set up Wise in Merchant Settings first.',
@@ -245,14 +258,19 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         },
         body: JSON.stringify({
           organizationId,
-          ...data,
-          paymentMethod: data.paymentMethod || 'STRIPE',
+          amount: data.amount,
+          currency: data.currency,
+          description: data.description,
+          invoiceReference: data.invoiceReference || undefined,
           customerEmail: data.customerEmail || undefined,
           customerName: data.customerName || undefined,
           customerPhone: data.customerPhone || undefined,
-          invoiceReference: data.invoiceReference || undefined,
           dueDate: data.dueDate?.toISOString(),
           expiresAt: data.expiresAt?.toISOString(),
+          invoiceOnlyMode: invoiceOnly,
+          paymentMethod: effectivePaymentMethod,
+          hederaCheckoutMode:
+            !invoiceOnly && data.paymentMethod === 'HEDERA' ? data.hederaCheckoutMode : undefined,
         }),
       });
 
@@ -305,7 +323,46 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit, onInvalidSubmit)} className="space-y-6">
+            <FormField
+              control={form.control}
+              name="collectionMode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Invoice type</FormLabel>
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      className="flex flex-col gap-2"
+                    >
+                      <div className="flex items-center space-x-2 rounded-md border p-3">
+                        <RadioGroupItem value="payment_request" id="mode-pay" />
+                        <label htmlFor="mode-pay" className="text-sm cursor-pointer leading-snug">
+                          <span className="font-medium">Invoice with payment request</span>
+                          <span className="block text-muted-foreground">
+                            Customer gets a normal pay page (card, crypto, or Wise as configured).
+                          </span>
+                        </label>
+                      </div>
+                      <div className="flex items-center space-x-2 rounded-md border p-3">
+                        <RadioGroupItem value="invoice_only" id="mode-invoice" />
+                        <label htmlFor="mode-invoice" className="text-sm cursor-pointer leading-snug">
+                          <span className="font-medium">Invoice only / no payment request</span>
+                          <span className="block text-muted-foreground">
+                            Share amount and details only; no checkout on the public link. You can record payment
+                            manually later.
+                          </span>
+                        </label>
+                      </div>
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {/* Payment Method */}
+            {form.watch('collectionMode') === 'payment_request' ? (
             <FormField
               control={form.control}
               name="paymentMethod"
@@ -315,7 +372,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                   <FormControl>
                     <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      value={field.value}
+                      value={field.value ?? 'STRIPE'}
                       onChange={(e) => {
                         const selectedValue = e.target.value as 'STRIPE' | 'HEDERA' | 'WISE';
                         const option = paymentMethodOptions.find(opt => opt.value === selectedValue);
@@ -342,9 +399,52 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                 </FormItem>
               )}
             />
+            ) : null}
+
+            {form.watch('collectionMode') === 'payment_request' &&
+            form.watch('paymentMethod') === 'HEDERA' ? (
+              <FormField
+                control={form.control}
+                name="hederaCheckoutMode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Crypto checkout style</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        className="flex flex-col gap-2"
+                      >
+                        <div className="flex items-center space-x-2 rounded-md border p-3">
+                          <RadioGroupItem value="INTERACTIVE" id="hedera-int" />
+                          <label htmlFor="hedera-int" className="text-sm cursor-pointer leading-snug">
+                            <span className="font-medium">Interactive wallet payment (HashPack)</span>
+                            <span className="block text-muted-foreground">
+                              Customer connects a wallet on the pay page.
+                            </span>
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-2 rounded-md border p-3">
+                          <RadioGroupItem value="MANUAL" id="hedera-manual" />
+                          <label htmlFor="hedera-manual" className="text-sm cursor-pointer leading-snug">
+                            <span className="font-medium">Manual wallet instructions</span>
+                            <span className="block text-muted-foreground">
+                              Show wallet address and copy-paste instructions; you confirm payment manually when funds
+                              arrive.
+                            </span>
+                          </label>
+                        </div>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
 
             {/* Wise not configured warning */}
-            {form.watch('paymentMethod') === 'WISE' && !wiseConfigured && (
+            {form.watch('collectionMode') === 'payment_request' &&
+            form.watch('paymentMethod') === 'WISE' && !wiseConfigured && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription className="flex items-center justify-between">

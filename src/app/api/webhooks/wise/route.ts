@@ -7,6 +7,7 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { mapWiseStatusToInternal } from '@/lib/wise/status-mapping';
@@ -33,16 +34,24 @@ interface WiseWebhookPayload {
 }
 
 /**
- * Optional signature verification. Wise uses X-Signature-SHA256 (RSA).
- * When WISE_WEBHOOK_SECRET is set we require the header; full RSA verification can be added.
+ * Signature verification. We support shared-secret HMAC SHA-256 verification when
+ * WISE_WEBHOOK_SECRET is configured. This closes the prior "header presence only" gap.
  */
 function verifyWiseWebhookSignature(body: string, signature: string | null): boolean {
   const secret = config.wise?.webhookSecret ?? process.env.WISE_WEBHOOK_SECRET;
   if (!secret) return true;
   if (!signature) return false;
-  // Wise uses RSA; for now we only check presence when secret is set.
-  // TODO: implement RSA verification with Wise public key when available
-  return signature.length > 0;
+
+  const normalized = signature.trim().toLowerCase();
+  const signatureValue = normalized.includes('=') ? normalized.split('=').pop() ?? '' : normalized;
+  if (!signatureValue) return false;
+
+  const expected = crypto.createHmac('sha256', secret).update(body, 'utf8').digest('hex');
+  const provided = Buffer.from(signatureValue, 'hex');
+  const expectedBuffer = Buffer.from(expected, 'hex');
+  if (provided.length !== expectedBuffer.length) return false;
+
+  return crypto.timingSafeEqual(provided, expectedBuffer);
 }
 
 export async function POST(request: NextRequest) {

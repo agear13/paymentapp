@@ -91,6 +91,19 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  effectiveParticipantPayoutStatus,
+  type ParticipantPayoutSettlementStatus,
+} from '@/lib/deal-network-demo/participant-payout-status';
 
 function getStatusVariant(
   status: DealStatus
@@ -247,6 +260,51 @@ export default function DealNetworkPage() {
     [activePipelineDeals, participants]
   );
 
+  const applyParticipantPayoutStatus = React.useCallback(
+    (
+      id: string,
+      status: ParticipantPayoutSettlementStatus,
+      options?: { paidAt?: string; note?: string }
+    ) => {
+      setParticipants((prev) =>
+        prev.map((p) => {
+          if (p.id !== id) return p;
+          return {
+            ...p,
+            payoutSettlementStatus: status,
+            payoutPaidAt:
+              status === 'Paid' ? options?.paidAt ?? new Date().toISOString() : undefined,
+            payoutStatusNote:
+              options?.note !== undefined
+                ? options.note.trim() || undefined
+                : p.payoutStatusNote,
+          };
+        })
+      );
+    },
+    []
+  );
+
+  const handleParticipantPayoutStatusSelect = React.useCallback(
+    (p: DemoParticipant, value: string) => {
+      if (!activeDeal) return;
+      const next = value as ParticipantPayoutSettlementStatus;
+      const current = effectiveParticipantPayoutStatus(p, activeDeal);
+      if (next === 'Paid' && current !== 'Paid') {
+        setPayoutPaidConfirmParticipantId(p.id);
+        setPayoutPaidConfirmNote(p.payoutStatusNote ?? '');
+        return;
+      }
+      applyParticipantPayoutStatus(p.id, next);
+    },
+    [activeDeal, applyParticipantPayoutStatus]
+  );
+
+  const payoutPaidConfirmParticipant = React.useMemo(() => {
+    if (!payoutPaidConfirmParticipantId) return null;
+    return participants.find((x) => x.id === payoutPaidConfirmParticipantId) ?? null;
+  }, [participants, payoutPaidConfirmParticipantId]);
+
   const syncInternalRoleParticipants = React.useCallback(
     (existingParticipants: DemoParticipant[], dealsToSync: RecentDeal[]) => {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -306,6 +364,9 @@ export default function DealNetworkPage() {
           agreementNotes: agreementNotes || undefined,
           attachmentUrl: attachmentUrl || undefined,
           attachmentLabel: attachmentLabel || undefined,
+          payoutSettlementStatus: prev?.payoutSettlementStatus,
+          payoutPaidAt: prev?.payoutPaidAt,
+          payoutStatusNote: prev?.payoutStatusNote,
         };
 
         if (idx >= 0) {
@@ -838,6 +899,8 @@ export default function DealNetworkPage() {
                     <TableHead>Commission</TableHead>
                     <TableHead>Invite</TableHead>
                     <TableHead>Approval</TableHead>
+                    <TableHead>Payout status</TableHead>
+                    <TableHead>Payout settled</TableHead>
                     <TableHead>Approved at</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -896,6 +959,52 @@ export default function DealNetworkPage() {
                         <Badge variant={p.approvalStatus === 'Approved' ? 'success' : 'warning'}>
                           {p.approvalStatus}
                         </Badge>
+                      </TableCell>
+                      <TableCell
+                        className="min-w-[140px]"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {activeDeal ? (
+                          <div className="space-y-1">
+                            <Select
+                              value={effectiveParticipantPayoutStatus(p, activeDeal)}
+                              onValueChange={(v) => handleParticipantPayoutStatusSelect(p, v)}
+                            >
+                              <SelectTrigger className="h-8 text-xs" aria-label={`Payout status for ${p.name}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Pending">Pending</SelectItem>
+                                <SelectItem value="Eligible">Eligible</SelectItem>
+                                <SelectItem value="Approved">Approved</SelectItem>
+                                <SelectItem value="Paid">Paid</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {p.payoutStatusNote ? (
+                              <p className="text-[10px] text-muted-foreground leading-tight">{p.payoutStatusNote}</p>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell
+                        className="text-xs text-muted-foreground whitespace-nowrap"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {activeDeal &&
+                        effectiveParticipantPayoutStatus(p, activeDeal) === 'Paid' &&
+                        p.payoutPaidAt
+                          ? new Date(p.payoutPaidAt).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : '—'}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {p.approvedAt
@@ -960,6 +1069,24 @@ export default function DealNetworkPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">Not required</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {activeDeal ? (
+                          <Badge variant={getStatusVariant(activeDeal.status)}>{activeDeal.status}</Badge>
+                        ) : (
+                          '—'
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {activeDeal?.paidAt
+                          ? new Date(activeDeal.paidAt).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : '—'}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">-</TableCell>
                     </TableRow>
@@ -1380,6 +1507,58 @@ export default function DealNetworkPage() {
               }}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={payoutPaidConfirmParticipantId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPayoutPaidConfirmParticipantId(null);
+            setPayoutPaidConfirmNote('');
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark this payout as paid?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This should only be used once settlement has actually occurred.
+              {payoutPaidConfirmParticipant ? (
+                <span className="block mt-2 font-medium text-foreground">
+                  {payoutPaidConfirmParticipant.name} · {payoutPaidConfirmParticipant.role}
+                </span>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="payout-status-note" className="text-sm">
+              Optional note
+            </Label>
+            <Input
+              id="payout-status-note"
+              value={payoutPaidConfirmNote}
+              onChange={(e) => setPayoutPaidConfirmNote(e.target.value)}
+              placeholder="e.g. reference, batch, or correction"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (payoutPaidConfirmParticipantId) {
+                  applyParticipantPayoutStatus(payoutPaidConfirmParticipantId, 'Paid', {
+                    paidAt: new Date().toISOString(),
+                    note: payoutPaidConfirmNote,
+                  });
+                }
+                setPayoutPaidConfirmParticipantId(null);
+                setPayoutPaidConfirmNote('');
+              }}
+            >
+              Mark paid
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

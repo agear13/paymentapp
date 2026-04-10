@@ -147,6 +147,29 @@ export async function getPendingSyncJobs(batchSize: number = 10) {
 }
 
 /**
+ * Get a specific sync job in a processable state.
+ */
+export async function getProcessableSyncJobById(syncId: string) {
+  const now = new Date();
+  return prisma.xero_syncs.findFirst({
+    where: {
+      id: syncId,
+      status: { in: ['PENDING', 'RETRYING'] },
+      OR: [{ next_retry_at: null }, { next_retry_at: { lte: now } }],
+    },
+    include: {
+      payment_links: {
+        select: {
+          id: true,
+          organization_id: true,
+          status: true,
+        },
+      },
+    },
+  });
+}
+
+/**
  * Mark sync as in progress (RETRYING status)
  * 
  * @param syncId - Sync record ID

@@ -9,7 +9,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { log } from '@/lib/logger';
 
-const CSRF_SECRET = process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production';
+function getCsrfSecret(): string {
+  const secret = process.env.CSRF_SECRET;
+  if (!secret) {
+    throw new Error('CSRF_SECRET environment variable must be configured');
+  }
+  return secret;
+}
 const CSRF_TOKEN_LENGTH = 32;
 const CSRF_COOKIE_NAME = 'csrf_token';
 const CSRF_HEADER_NAME = 'x-csrf-token';
@@ -26,7 +32,7 @@ export function generateCSRFToken(): string {
  * Sign a CSRF token with HMAC
  */
 function signToken(token: string): string {
-  const hmac = crypto.createHmac('sha256', CSRF_SECRET);
+  const hmac = crypto.createHmac('sha256', getCsrfSecret());
   hmac.update(token);
   return hmac.digest('base64');
 }

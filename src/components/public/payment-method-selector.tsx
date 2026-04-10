@@ -9,6 +9,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { StripePaymentOption } from '@/components/public/stripe-payment-option';
 import { WisePaymentOption } from '@/components/public/wise-payment-option';
+import { ManualHederaInstructions } from '@/components/public/manual-hedera-instructions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
@@ -37,6 +38,11 @@ interface PaymentMethodSelectorProps {
   shortCode: string;
   amount: string;
   currency: string;
+  paymentMethod?: string | null;
+  hederaCheckoutMode?: string | null;
+  hederaWalletAddress?: string | null;
+  invoiceReference?: string | null;
+  availableFxSnapshots?: Array<{ tokenType: string }>;
 }
 
 export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
@@ -47,8 +53,30 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   shortCode,
   amount,
   currency,
+  paymentMethod = null,
+  hederaCheckoutMode = null,
+  hederaWalletAddress = null,
+  invoiceReference = null,
+  availableFxSnapshots = [],
 }) => {
   const [hoveredMethod, setHoveredMethod] = useState<'stripe' | 'hedera' | 'wise' | null>(null);
+
+  const useManualHedera =
+    availablePaymentMethods.hedera &&
+    paymentMethod === 'HEDERA' &&
+    (hederaCheckoutMode ?? 'INTERACTIVE') === 'MANUAL';
+
+  const acceptedTokens = Array.from(
+    new Set(
+      (availableFxSnapshots ?? [])
+        .map((s) => s.tokenType)
+        .filter((t): t is string => typeof t === 'string' && t.length > 0)
+    )
+  );
+
+  const paymentMemo =
+    invoiceReference?.trim() ||
+    `Invoice ${shortCode}`;
 
   const hasAnyMethod =
     availablePaymentMethods.stripe ||
@@ -81,7 +109,26 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
         currency={currency}
       />
 
-      {availablePaymentMethods.hedera && (
+      {useManualHedera ? (
+        hederaWalletAddress ? (
+          <ManualHederaInstructions
+            walletAddress={hederaWalletAddress}
+            amount={amount}
+            currency={currency}
+            acceptedTokens={acceptedTokens}
+            paymentReference={paymentMemo}
+          />
+        ) : (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Crypto pay-to wallet is not configured for this merchant. Please contact them to complete payment.
+            </AlertDescription>
+          </Alert>
+        )
+      ) : null}
+
+      {availablePaymentMethods.hedera && !useManualHedera ? (
         <HederaPaymentOption
           isAvailable={availablePaymentMethods.hedera}
           isSelected={selectedMethod === 'hedera'}
@@ -94,7 +141,7 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
           amount={amount}
           currency={currency}
         />
-      )}
+      ) : null}
 
       {availablePaymentMethods.wise && (
         <WisePaymentOption
@@ -121,7 +168,10 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             )}
             {selectedMethod === 'hedera' && (
               <>
-                <span className="font-medium">Crypto Payment:</span> Pay with HBAR, USDC, USDT, or AUDD on the Hedera network. Connect your wallet to continue.
+                <span className="font-medium">Crypto Payment:</span>{' '}
+                {useManualHedera
+                  ? 'Use the wallet instructions above to send funds manually.'
+                  : 'Pay with HBAR, USDC, USDT, or AUDD on the Hedera network. Connect your wallet to continue.'}
               </>
             )}
             {selectedMethod === 'wise' && (

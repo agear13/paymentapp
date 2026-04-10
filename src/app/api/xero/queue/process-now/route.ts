@@ -1,38 +1,42 @@
 /**
- * Xero Queue Manual Trigger (For Testing/Admin Use)
- * Processes pending Xero syncs without requiring CRON_SECRET
- * 
- * WARNING: This endpoint should be protected or removed in production
+ * Xero Queue Manual Trigger (ops / automation)
+ * Requires either CRON_SECRET (same as /api/xero/queue/process) or global admin (ADMIN_EMAILS).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { checkAdminAuth } from '@/lib/auth/admin.server';
 import { processQueue } from '@/lib/xero/queue-processor';
 import { logger } from '@/lib/logger';
 
+function isAuthorizedCron(request: NextRequest): boolean {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return false;
+  const auth = request.headers.get('authorization');
+  return auth === `Bearer ${cronSecret}`;
+}
+
 /**
  * POST /api/xero/queue/process-now
- * 
- * Manually trigger queue processing (no auth required for testing)
- * In production, you should either:
- * 1. Remove this endpoint
- * 2. Add authentication
- * 3. Use the /api/xero/queue/process endpoint with CRON_SECRET
+ *
+ * Authorization: `Authorization: Bearer <CRON_SECRET>` (automation) or global admin session (ADMIN_EMAILS).
  */
 export async function POST(request: NextRequest) {
   try {
-    // Optional: Add simple authentication
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized - please log in' },
-        { status: 401 }
-      );
+    if (isAuthorizedCron(request)) {
+      logger.info({}, 'Manual queue processing triggered via CRON_SECRET');
+    } else {
+      const adminAuth = await checkAdminAuth();
+      if (!adminAuth.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (!adminAuth.isAdmin) {
+        return NextResponse.json(
+          { error: 'Forbidden — admin or cron token required' },
+          { status: 403 }
+        );
+      }
+      logger.info({ userId: adminAuth.user.id }, 'Manual queue processing triggered by admin');
     }
-
-    logger.info({ userId: user.id }, 'Manual queue processing triggered');
 
     // Get batch size from query params
     const { searchParams } = new URL(request.url);
@@ -44,7 +48,6 @@ export async function POST(request: NextRequest) {
       .then((stats) => {
         logger.info(
           {
-            userId: user.id,
             processed: stats.processed,
             succeeded: stats.succeeded,
             failed: stats.failed,
@@ -54,10 +57,7 @@ export async function POST(request: NextRequest) {
         );
       })
       .catch((error) => {
-        logger.error(
-          { userId: user.id, error: error.message },
-          'Background queue processing failed'
-        );
+        logger.error({ error: error.message }, 'Background queue processing failed');
       });
 
     // Return immediately to avoid timeout
@@ -87,14 +87,17 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized - please log in' },
-        { status: 401 }
-      );
+    if (!isAuthorizedCron(request)) {
+      const adminAuth = await checkAdminAuth();
+      if (!adminAuth.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (!adminAuth.isAdmin) {
+        return NextResponse.json(
+          { error: 'Forbidden — admin or cron token required' },
+          { status: 403 }
+        );
+      }
     }
 
     // Get pending sync count

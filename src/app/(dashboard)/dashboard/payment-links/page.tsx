@@ -159,6 +159,21 @@ export default function PaymentLinksPage() {
     }
   };
 
+  const handleManualSettlementComplete = React.useCallback(async () => {
+    await fetchPaymentLinks();
+    const id = selectedPaymentLink?.id;
+    if (!id) return;
+    try {
+      const res = await fetch(`/api/payment-links/${id}`);
+      if (res.ok) {
+        const result = await res.json();
+        setSelectedPaymentLink(result.data);
+      }
+    } catch {
+      /* ignore refresh errors */
+    }
+  }, [fetchPaymentLinks, selectedPaymentLink?.id]);
+
   const handleResend = async (paymentLink: PaymentLinkDetails) => {
     try {
       const response = await fetch(`/api/payment-links/${paymentLink.id}/resend`, {
@@ -466,6 +481,7 @@ export default function PaymentLinksPage() {
         open={detailDialogOpen}
         onOpenChange={setDetailDialogOpen}
         onResend={handleResend}
+        onManualSettlementComplete={handleManualSettlementComplete}
       />
 
       {/* Edit Payment Link Dialog */}

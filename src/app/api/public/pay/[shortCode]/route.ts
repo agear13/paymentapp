@@ -132,16 +132,24 @@ export async function GET(
     // b) payment link allows WISE (payment_method is WISE or null for all methods)
     // c) merchant_settings.wise_enabled === true
     // d) merchant_settings.wise_profile_id is present
+    const invoiceOnly = paymentLink.invoice_only_mode === true;
+    const pm = paymentLink.payment_method;
+    const allowsStripe = !pm || pm === 'STRIPE';
+    const allowsHedera = !pm || pm === 'HEDERA';
+    const allowsWise = !pm || pm === 'WISE';
+
     const globalWiseEnabled = config.features.wisePayments;
-    const linkAllowsWise = !paymentLink.payment_method || paymentLink.payment_method === 'WISE';
+    const linkAllowsWise = allowsWise && (!paymentLink.payment_method || paymentLink.payment_method === 'WISE');
     const merchantWiseConfigured = !!merchantSettings?.wise_enabled && !!merchantSettings?.wise_profile_id;
     const wiseAvailable = globalWiseEnabled && linkAllowsWise && merchantWiseConfigured;
 
-    // Determine available payment methods
+    // Determine available payment methods (invoice-only links never expose checkout rails here)
     const availablePaymentMethods = {
-      stripe: !!merchantSettings?.stripe_account_id,
-      hedera: !!merchantSettings?.hedera_account_id,
-      wise: wiseAvailable,
+      stripe:
+        !invoiceOnly && allowsStripe && !!merchantSettings?.stripe_account_id,
+      hedera:
+        !invoiceOnly && allowsHedera && !!merchantSettings?.hedera_account_id,
+      wise: !invoiceOnly && allowsWise && wiseAvailable,
     };
 
     // Select best FX snapshot:
@@ -225,6 +233,9 @@ export async function GET(
         availablePaymentMethods,
         wiseTransferId: paymentLink.wise_transfer_id ?? null,
         wiseStatus: paymentLink.wise_status ?? null,
+        invoiceOnlyMode: invoiceOnly,
+        hederaCheckoutMode: paymentLink.hedera_checkout_mode ?? null,
+        hederaWalletAddress: merchantSettings?.hedera_account_id ?? null,
         fxSnapshot,
         availableFxSnapshots,
         lastEvent: paymentLink.payment_events?.[0] || null,

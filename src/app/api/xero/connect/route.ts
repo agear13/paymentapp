@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generateAuthUrl, isXeroConfigured } from '@/lib/xero';
 import { logger } from '@/lib/logger';
+import { signOAuthState } from '@/lib/security/oauth-state';
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,13 +50,11 @@ export async function GET(request: NextRequest) {
     // Generate authorization URL
     const authUrl = await generateAuthUrl();
 
-    // Store organization_id in state parameter for callback
-    const stateParam = Buffer.from(
-      JSON.stringify({
-        organizationId,
-        userId: user.id,
-      })
-    ).toString('base64');
+    // Store signed state for callback CSRF and replay protection.
+    const stateParam = signOAuthState({
+      organizationId,
+      userId: user.id,
+    });
 
     const authUrlWithState = `${authUrl}&state=${stateParam}`;
 

@@ -49,6 +49,8 @@ const envSchema = z.object({
 
   // Email (optional)
   RESEND_API_KEY: z.string().optional(),
+  /** Resend webhooks use Svix; set signing secret from Resend dashboard to verify requests */
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
 
   // Wise (optional – for payment link Wise rail)
   WISE_API_TOKEN: z.string().optional(),
@@ -110,6 +112,8 @@ function validateEnv() {
       UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
       UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
       RESEND_API_KEY: process.env.RESEND_API_KEY,
+      RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+      RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
       ENABLE_HEDERA_PAYMENTS: process.env.ENABLE_HEDERA_PAYMENTS || 'true',
       ENABLE_HEDERA_STABLECOINS: process.env.ENABLE_HEDERA_STABLECOINS || 'false',
       ENABLE_XERO_SYNC: process.env.ENABLE_XERO_SYNC || 'true',
@@ -212,7 +216,9 @@ export const config = {
   // Email
   email: {
     apiKey: env.RESEND_API_KEY,
+    webhookSecret: env.RESEND_WEBHOOK_SECRET,
     isConfigured: !!env.RESEND_API_KEY,
+    webhooksVerified: !!env.RESEND_WEBHOOK_SECRET,
   },
   
   // Wise

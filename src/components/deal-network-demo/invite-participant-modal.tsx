@@ -40,6 +40,7 @@ import {
   resolveCommissionWithValidation,
 } from '@/lib/deal-network-demo/commission-structure';
 import { normParticipantName } from '@/lib/deal-network-demo/participant-merge';
+import type { ParticipantPayoutSettlementStatus } from '@/lib/deal-network-demo/participant-payout-status';
 
 export type DemoParticipantRole = 'Introducer' | 'Connector' | 'Closer' | 'Contributor';
 
@@ -80,6 +81,11 @@ export interface DemoParticipant {
   attachmentUrl?: string;
   /** Short label for the attachment link in UI. */
   attachmentLabel?: string;
+  /** Override deal settlement for this payout line (pilot). */
+  payoutSettlementStatus?: ParticipantPayoutSettlementStatus;
+  /** When payout line is Paid, optional timestamp (pilot). */
+  payoutPaidAt?: string;
+  payoutStatusNote?: string;
 }
 
 export interface InviteParticipantModalProps {

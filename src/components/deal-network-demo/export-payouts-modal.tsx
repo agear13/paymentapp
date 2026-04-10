@@ -21,6 +21,11 @@ import { Badge } from '@/components/ui/badge';
 import type { DealStatus, RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
+import {
+  coerceDealStatusToPayout,
+  effectiveParticipantPayoutStatus,
+  type ParticipantPayoutSettlementStatus,
+} from '@/lib/deal-network-demo/participant-payout-status';
 
 export interface ExportPayoutRow {
   dealName: string;
@@ -32,7 +37,7 @@ export interface ExportPayoutRow {
   commissionStructure: string;
   payoutAmount: number;
   approvalStatus: 'Pending approval' | 'Approved' | 'Not required';
-  settlementStatus: DealStatus;
+  settlementStatus: ParticipantPayoutSettlementStatus;
   contractPaidStatus: 'Contract Unpaid' | 'Contract Paid';
   payoutTrigger: string;
   paymentStatus: 'Not Paid' | 'Paid';
@@ -53,7 +58,7 @@ function formatExportDate(iso: string): string {
 }
 
 function getStatusVariant(
-  status: DealStatus
+  status: DealStatus | ParticipantPayoutSettlementStatus
 ): 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'info' | 'outline' {
   switch (status) {
     case 'Paid':
@@ -278,7 +283,7 @@ export function buildExportPayoutRows(
 
   for (const deal of activeDeals) {
     const dealIsPaid = deal.status === 'Approved' || deal.status === 'Paid';
-    const settlementStatus = deal.status ?? 'Pending';
+    const settlementStatus = coerceDealStatusToPayout(deal.status ?? 'Pending');
     const payoutTrigger = deal.payoutTrigger ?? 'Manual';
     const lu = formatExportDate(deal.lastUpdated);
     const paymentStatus = deal.paymentStatus ?? 'Not Paid';
@@ -324,11 +329,14 @@ export function buildExportPayoutRows(
     seenParticipantLine.add(dedupeKey);
 
     const dealIsPaid = deal.status === 'Approved' || deal.status === 'Paid';
-    const settlementStatus = deal.status ?? 'Pending';
+    const lineSettlement = effectiveParticipantPayoutStatus(p, deal);
     const payoutTrigger = deal.payoutTrigger ?? 'Manual';
     const lu = formatExportDate(deal.lastUpdated);
     const paymentStatus = deal.paymentStatus ?? 'Not Paid';
-    const paidAt = deal.paidAt ? formatExportDate(deal.paidAt) : undefined;
+    const paidAt =
+      lineSettlement === 'Paid' && p.payoutPaidAt
+        ? formatExportDate(p.payoutPaidAt)
+        : undefined;
     const contractPaidStatus = dealIsPaid ? 'Contract Paid' : 'Contract Unpaid';
 
     const resolved = resolveParticipantCommissionUsd(
@@ -356,7 +364,7 @@ export function buildExportPayoutRows(
       commissionStructure: resolved.previewLine,
       payoutAmount: resolved.total,
       approvalStatus: p.approvalStatus,
-      settlementStatus,
+      settlementStatus: lineSettlement,
       contractPaidStatus,
       payoutTrigger,
       paymentStatus,

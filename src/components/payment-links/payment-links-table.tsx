@@ -67,6 +67,10 @@ export interface PaymentLink {
   dueDate: Date | string | null;
   expiresAt: Date | string | null;
   xeroInvoiceNumber: string | null;
+  /** STRIPE | HEDERA | WISE when restricted; omitted on invoice-only links */
+  paymentMethod?: string | null;
+  invoiceOnlyMode?: boolean;
+  hederaCheckoutMode?: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
   paymentEvents?: any[];

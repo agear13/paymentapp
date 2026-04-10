@@ -21,6 +21,7 @@ import {
   Send,
   TrendingUp,
   ArrowRightLeft,
+  User,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +42,17 @@ import {
 } from '@/components/ui/tabs';
 import { formatCurrency } from './currency-select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 export interface PaymentLinkDetails {
   id: string;
@@ -51,8 +63,13 @@ export interface PaymentLinkDetails {
   description: string;
   invoiceReference: string | null;
   customerEmail: string | null;
+  customerName?: string | null;
   customerPhone: string | null;
+  dueDate?: Date | string | null;
   expiresAt: Date | null;
+  paymentMethod?: string | null;
+  invoiceOnlyMode?: boolean;
+  hederaCheckoutMode?: string | null;
   createdAt: Date;
   updatedAt: Date;
   paymentEvents?: Array<{
@@ -97,6 +114,8 @@ export interface PaymentLinkDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onResend?: (paymentLink: PaymentLinkDetails) => void;
+  /** After manual mark paid / reopen — refresh list and detail in parent */
+  onManualSettlementComplete?: () => void | Promise<void>;
 }
 
 const getStatusBadgeVariant = (status: string) => {
@@ -121,8 +140,13 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
   open,
   onOpenChange,
   onResend,
+  onManualSettlementComplete,
 }) => {
+  const { toast } = useToast();
   const [qrCodeUrl, setQrCodeUrl] = React.useState<string | null>(null);
+  const [confirmMarkPaidOpen, setConfirmMarkPaidOpen] = React.useState(false);
+  const [confirmReopenOpen, setConfirmReopenOpen] = React.useState(false);
+  const [settlementLoading, setSettlementLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (paymentLink && open) {
@@ -152,6 +176,37 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
     }
   };
 
+  const postManualSettlement = async (action: 'mark_paid' | 'reopen') => {
+    if (!paymentLink) return;
+    setSettlementLoading(true);
+    try {
+      const res = await fetch(`/api/payment-links/${paymentLink.id}/manual-settlement`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error || 'Could not update invoice');
+      }
+      toast({
+        title: action === 'mark_paid' ? 'Payment recorded' : 'Invoice reopened',
+        description:
+          action === 'mark_paid'
+            ? 'This invoice is now marked paid. Use reopen only if that was a mistake.'
+            : 'Status set back to open. Customers can use the pay link again if still valid.',
+      });
+      setConfirmMarkPaidOpen(false);
+      setConfirmReopenOpen(false);
+      await onManualSettlementComplete?.();
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Request failed';
+      toast({ title: 'Update failed', description: message, variant: 'destructive' });
+    } finally {
+      setSettlementLoading(false);
+    }
+  };
+
   const canResend = paymentLink && 
     paymentLink.customerEmail && 
     paymentLink.status !== 'PAID' && 
@@ -159,6 +214,7 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
     paymentLink.status !== 'EXPIRED';
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -169,9 +225,24 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                 {paymentLink.shortCode}
               </DialogDescription>
             </div>
-            <Badge variant={getStatusBadgeVariant(paymentLink.status) as any}>
-              {paymentLink.status}
-            </Badge>
+            <div className="flex flex-col items-end gap-1">
+              <Badge variant={getStatusBadgeVariant(paymentLink.status) as any}>
+                {paymentLink.status}
+              </Badge>
+              <div className="flex flex-wrap gap-1 justify-end">
+                {paymentLink.invoiceOnlyMode ? (
+                  <Badge variant="outline" className="text-xs">
+                    Invoice only
+                  </Badge>
+                ) : null}
+                {paymentLink.paymentMethod === 'HEDERA' &&
+                (paymentLink.hederaCheckoutMode ?? 'INTERACTIVE') === 'MANUAL' ? (
+                  <Badge variant="outline" className="text-xs">
+                    Manual crypto instructions
+                  </Badge>
+                ) : null}
+              </div>
+            </div>
           </div>
         </DialogHeader>
 
@@ -229,6 +300,16 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                 <Separator />
 
                 <div className="grid grid-cols-2 gap-4">
+                  {paymentLink.customerName ? (
+                    <div className="flex items-start gap-2">
+                      <User className="mt-1 h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Customer name</p>
+                        <p className="text-sm">{paymentLink.customerName}</p>
+                      </div>
+                    </div>
+                  ) : null}
+
                   {paymentLink.customerEmail && (
                     <div className="flex items-start gap-2">
                       <Mail className="mt-1 h-4 w-4 text-muted-foreground" />
@@ -262,6 +343,16 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                       </p>
                     </div>
                   </div>
+
+                  {paymentLink.dueDate ? (
+                    <div className="flex items-start gap-2">
+                      <Calendar className="mt-1 h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Due date</p>
+                        <p className="text-sm">{format(new Date(paymentLink.dueDate), 'PPpp')}</p>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {paymentLink.expiresAt && (
                     <div className="flex items-start gap-2">
@@ -305,6 +396,42 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                     Resend Notification
                   </Button>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Manual payment confirmation (pilot)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  For manual crypto/bank collection or invoice-only links, record payment here when funds have actually
+                  been received. Reopen if you marked paid by mistake.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {paymentLink.status === 'OPEN' ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={settlementLoading}
+                      onClick={() => setConfirmMarkPaidOpen(true)}
+                    >
+                      Mark payment received
+                    </Button>
+                  ) : null}
+                  {paymentLink.status === 'PAID' ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={settlementLoading}
+                      onClick={() => setConfirmReopenOpen(true)}
+                    >
+                      Reopen invoice
+                    </Button>
+                  ) : null}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -565,6 +692,55 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
         </Tabs>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={confirmMarkPaidOpen} onOpenChange={setConfirmMarkPaidOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Mark payment received?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Only confirm after payment has actually cleared (manual transfer, external card, etc.). This does not
+            process a new charge in Provvypay.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={settlementLoading}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={settlementLoading}
+            onClick={(e) => {
+              e.preventDefault();
+              void postManualSettlement('mark_paid');
+            }}
+          >
+            Confirm paid
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog open={confirmReopenOpen} onOpenChange={setConfirmReopenOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Reopen this invoice?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Status will return to open so the pay link can be used again (if not expired or canceled). Use this if paid
+            status was set incorrectly.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={settlementLoading}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={settlementLoading}
+            onClick={(e) => {
+              e.preventDefault();
+              void postManualSettlement('reopen');
+            }}
+          >
+            Reopen
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 };
 

@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { syncPaymentToXero } from './sync-orchestration';
 import {
   getPendingSyncJobs,
+  getProcessableSyncJobById,
   markSyncInProgress,
   markSyncSuccess,
   markSyncFailed,
@@ -33,6 +34,10 @@ export interface ProcessorStats {
  */
 export async function processQueue(batchSize: number = 10): Promise<ProcessorStats> {
   logger.info({ batchSize }, 'Starting queue processor');
+  const maxConcurrency = Math.max(
+    1,
+    Number.parseInt(process.env.XERO_QUEUE_CONCURRENCY || '4', 10) || 4
+  );
 
   const stats: ProcessorStats = {
     processed: 0,
@@ -53,8 +58,7 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
 
     logger.info({ count: jobs.length }, 'Processing sync jobs');
 
-    // Process each job
-    for (const job of jobs) {
+    const processJob = async (job: (typeof jobs)[number]) => {
       stats.processed++;
 
       try {
@@ -141,8 +145,14 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
         });
       }
 
-      // Add small delay between jobs to avoid overwhelming APIs
-      await new Promise((resolve) => setTimeout(resolve, 500));
+    };
+
+    // Process jobs with bounded concurrency to improve throughput while protecting downstream APIs.
+    for (let i = 0; i < jobs.length; i += maxConcurrency) {
+      const batch = jobs.slice(i, i + maxConcurrency);
+      await Promise.all(batch.map(processJob));
+      // Small pause between batches to avoid provider burst limits.
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
     logger.info(
@@ -177,9 +187,8 @@ export async function processSyncById(syncId: string): Promise<{
   logger.info({ syncId }, 'Processing specific sync job');
 
   try {
-    // Get the sync record
-    const syncRecord = await getPendingSyncJobs(1000); // Get all, then filter
-    const job = syncRecord.find((s) => s.id === syncId);
+    // Get the specific sync record directly.
+    const job = await getProcessableSyncJobById(syncId);
 
     if (!job) {
       const error = 'Sync record not found or not in processable state';

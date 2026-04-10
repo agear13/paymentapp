@@ -84,19 +84,40 @@ const rolePermissions: Record<UserRole, Permission[]> = {
   ],
 }
 
+/** Maps DB `user_organizations.role` (e.g. OWNER, admin) to `UserRole`. */
+function mapDbRoleToUserRole(dbRole: string): UserRole | null {
+  const normalized = dbRole.trim().toUpperCase();
+  const map: Record<string, UserRole> = {
+    OWNER: UserRole.OWNER,
+    ADMIN: UserRole.ADMIN,
+    MEMBER: UserRole.MEMBER,
+    VIEWER: UserRole.VIEWER,
+  };
+  return map[normalized] ?? null;
+}
+
 /**
- * Get user's role in an organization
+ * Get user's role in an organization (from `user_organizations`).
  */
 export async function getUserRole(
   userId: string,
   organizationId: string
 ): Promise<UserRole | null> {
-  // This would typically query a user_organizations table
-  // For now, we'll use user metadata from Supabase
-  // You'll need to implement this based on your actual data structure
-  
-  // Placeholder implementation
-  return UserRole.OWNER
+  const row = await prisma.user_organizations.findUnique({
+    where: {
+      user_id_organization_id: {
+        user_id: userId,
+        organization_id: organizationId,
+      },
+    },
+    select: { role: true },
+  });
+
+  if (!row) {
+    return null;
+  }
+
+  return mapDbRoleToUserRole(row.role);
 }
 
 /**
@@ -179,14 +200,17 @@ export async function canAccessOrganization(
   organizationId: string
 ): Promise<boolean> {
   try {
-    const organization = await prisma.organizations.findFirst({
+    const membership = await prisma.user_organizations.findUnique({
       where: {
-        id: organizationId,
-        // Add user membership check here when user_organizations table is implemented
+        user_id_organization_id: {
+          user_id: userId,
+          organization_id: organizationId,
+        },
       },
-    })
+      select: { id: true },
+    });
 
-    return organization !== null
+    return membership !== null;
   } catch (error) {
     console.error('Error checking organization access:', error)
     return false
