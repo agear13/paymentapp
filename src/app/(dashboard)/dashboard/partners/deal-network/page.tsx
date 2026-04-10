@@ -152,10 +152,12 @@ export default function DealNetworkPage() {
   const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(null);
   const [removeParticipantTargetId, setRemoveParticipantTargetId] = React.useState<string | null>(null);
   const [participants, setParticipants] = React.useState<DemoParticipant[]>([]);
-  const [payoutPaidConfirmParticipantId, setPayoutPaidConfirmParticipantId] = React.useState<string | null>(
-    null
-  );
-  const [payoutPaidConfirmNote, setPayoutPaidConfirmNote] = React.useState('');
+  const [payoutStatusChangePending, setPayoutStatusChangePending] = React.useState<{
+    participantId: string;
+    fromStatus: ParticipantPayoutSettlementStatus;
+    toStatus: ParticipantPayoutSettlementStatus;
+  } | null>(null);
+  const [payoutStatusChangeNote, setPayoutStatusChangeNote] = React.useState('');
 
   const activePipelineDeals = React.useMemo(
     () => deals.filter((d) => !d.archived),
@@ -278,10 +280,9 @@ export default function DealNetworkPage() {
             payoutSettlementStatus: status,
             payoutPaidAt:
               status === 'Paid' ? options?.paidAt ?? new Date().toISOString() : undefined,
+            // Note always comes from the latest status-change dialog; blank clears prior text.
             payoutStatusNote:
-              options?.note !== undefined
-                ? options.note.trim() || undefined
-                : p.payoutStatusNote,
+              options?.note !== undefined ? options.note.trim() || undefined : p.payoutStatusNote,
           };
         })
       );
@@ -294,20 +295,21 @@ export default function DealNetworkPage() {
       if (!activeDeal) return;
       const next = value as ParticipantPayoutSettlementStatus;
       const current = effectiveParticipantPayoutStatus(p, activeDeal);
-      if (next === 'Paid' && current !== 'Paid') {
-        setPayoutPaidConfirmParticipantId(p.id);
-        setPayoutPaidConfirmNote(p.payoutStatusNote ?? '');
-        return;
-      }
-      applyParticipantPayoutStatus(p.id, next);
+      if (next === current) return;
+      setPayoutStatusChangePending({
+        participantId: p.id,
+        fromStatus: current,
+        toStatus: next,
+      });
+      setPayoutStatusChangeNote('');
     },
-    [activeDeal, applyParticipantPayoutStatus]
+    [activeDeal]
   );
 
-  const payoutPaidConfirmParticipant = React.useMemo(() => {
-    if (!payoutPaidConfirmParticipantId) return null;
-    return participants.find((x) => x.id === payoutPaidConfirmParticipantId) ?? null;
-  }, [participants, payoutPaidConfirmParticipantId]);
+  const payoutStatusChangeParticipant = React.useMemo(() => {
+    if (!payoutStatusChangePending) return null;
+    return participants.find((x) => x.id === payoutStatusChangePending.participantId) ?? null;
+  }, [participants, payoutStatusChangePending]);
 
   const syncInternalRoleParticipants = React.useCallback(
     (existingParticipants: DemoParticipant[], dealsToSync: RecentDeal[]) => {
@@ -986,7 +988,10 @@ export default function DealNetworkPage() {
                               </SelectContent>
                             </Select>
                             {p.payoutStatusNote ? (
-                              <p className="text-[10px] text-muted-foreground leading-tight">{p.payoutStatusNote}</p>
+                              <div className="space-y-0.5">
+                                <p className="text-[10px] font-medium text-muted-foreground">Status note</p>
+                                <p className="text-[10px] text-muted-foreground leading-tight">{p.payoutStatusNote}</p>
+                              </div>
                             ) : null}
                           </div>
                         ) : (
@@ -1517,34 +1522,47 @@ export default function DealNetworkPage() {
       </AlertDialog>
 
       <AlertDialog
-        open={payoutPaidConfirmParticipantId !== null}
+        open={payoutStatusChangePending !== null}
         onOpenChange={(open) => {
           if (!open) {
-            setPayoutPaidConfirmParticipantId(null);
-            setPayoutPaidConfirmNote('');
+            setPayoutStatusChangePending(null);
+            setPayoutStatusChangeNote('');
           }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mark this payout as paid?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This should only be used once settlement has actually occurred.
-              {payoutPaidConfirmParticipant ? (
-                <span className="block mt-2 font-medium text-foreground">
-                  {payoutPaidConfirmParticipant.name} · {payoutPaidConfirmParticipant.role}
-                </span>
-              ) : null}
+            <AlertDialogTitle>Confirm payout status change</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  <span className="font-medium text-foreground">Current:</span> {payoutStatusChangePending?.fromStatus}{' '}
+                  <span className="font-medium text-foreground">→ New:</span> {payoutStatusChangePending?.toStatus}
+                </p>
+                {payoutStatusChangePending?.toStatus === 'Paid' ? (
+                  <p>
+                    Marking as Paid should only be used once settlement has actually occurred.
+                  </p>
+                ) : null}
+                {payoutStatusChangeParticipant ? (
+                  <p className="font-medium text-foreground">
+                    {payoutStatusChangeParticipant.name} · {payoutStatusChangeParticipant.role}
+                  </p>
+                ) : null}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-2">
             <Label htmlFor="payout-status-note" className="text-sm">
-              Optional note
+              Status note <span className="font-normal text-muted-foreground">(optional)</span>
             </Label>
+            <p className="text-xs text-muted-foreground">
+              Saved with this change only. Leave blank to clear any previous note for this payout line.
+            </p>
             <Input
               id="payout-status-note"
-              value={payoutPaidConfirmNote}
-              onChange={(e) => setPayoutPaidConfirmNote(e.target.value)}
+              value={payoutStatusChangeNote}
+              onChange={(e) => setPayoutStatusChangeNote(e.target.value)}
               placeholder="e.g. reference, batch, or correction"
             />
           </div>
@@ -1552,17 +1570,17 @@ export default function DealNetworkPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (payoutPaidConfirmParticipantId) {
-                  applyParticipantPayoutStatus(payoutPaidConfirmParticipantId, 'Paid', {
-                    paidAt: new Date().toISOString(),
-                    note: payoutPaidConfirmNote,
-                  });
-                }
-                setPayoutPaidConfirmParticipantId(null);
-                setPayoutPaidConfirmNote('');
+                const pending = payoutStatusChangePending;
+                if (!pending) return;
+                applyParticipantPayoutStatus(pending.participantId, pending.toStatus, {
+                  paidAt: pending.toStatus === 'Paid' ? new Date().toISOString() : undefined,
+                  note: payoutStatusChangeNote,
+                });
+                setPayoutStatusChangePending(null);
+                setPayoutStatusChangeNote('');
               }}
             >
-              Mark paid
+              Confirm change
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
