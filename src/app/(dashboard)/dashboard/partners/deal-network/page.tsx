@@ -152,6 +152,10 @@ export default function DealNetworkPage() {
   const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(null);
   const [removeParticipantTargetId, setRemoveParticipantTargetId] = React.useState<string | null>(null);
   const [participants, setParticipants] = React.useState<DemoParticipant[]>([]);
+  const [payoutPaidConfirmParticipantId, setPayoutPaidConfirmParticipantId] = React.useState<string | null>(
+    null
+  );
+  const [payoutPaidConfirmNote, setPayoutPaidConfirmNote] = React.useState('');
 
   const activePipelineDeals = React.useMemo(
     () => deals.filter((d) => !d.archived),
