@@ -137,6 +137,7 @@ export async function GET(
     const allowsStripe = !pm || pm === 'STRIPE';
     const allowsHedera = !pm || pm === 'HEDERA';
     const allowsWise = !pm || pm === 'WISE';
+    const allowsCrypto = !invoiceOnly && pm === 'CRYPTO';
 
     const globalWiseEnabled = config.features.wisePayments;
     const linkAllowsWise = allowsWise && (!paymentLink.payment_method || paymentLink.payment_method === 'WISE');
@@ -150,6 +151,7 @@ export async function GET(
       hedera:
         !invoiceOnly && allowsHedera && !!merchantSettings?.hedera_account_id,
       wise: !invoiceOnly && allowsWise && wiseAvailable,
+      crypto: allowsCrypto,
     };
 
     // Select best FX snapshot:
@@ -236,6 +238,11 @@ export async function GET(
         invoiceOnlyMode: invoiceOnly,
         hederaCheckoutMode: paymentLink.hedera_checkout_mode ?? null,
         hederaWalletAddress: merchantSettings?.hedera_account_id ?? null,
+        cryptoNetwork: paymentLink.crypto_network ?? null,
+        cryptoAddress: paymentLink.crypto_address ?? null,
+        cryptoCurrency: paymentLink.crypto_currency ?? null,
+        cryptoMemo: paymentLink.crypto_memo ?? null,
+        cryptoInstructions: paymentLink.crypto_instructions ?? null,
         fxSnapshot,
         availableFxSnapshots,
         lastEvent: paymentLink.payment_events?.[0] || null,

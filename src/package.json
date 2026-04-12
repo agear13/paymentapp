@@ -37,7 +37,8 @@
     "cron:fx-rates": "node cron/fx-rates.js",
     "cron:reconcile": "node cron/reconciliation.js",
     "test:merchant": "tsx scripts/test-merchant-endpoint.ts",
-    "setup:merchant": "tsx scripts/setup-merchant.ts"
+    "setup:merchant": "tsx scripts/setup-merchant.ts",
+    "cleanup:wise-merchant-config": "tsx scripts/cleanup/remove-wise-config.ts"
   },
   "overrides": {
     "@walletconnect/core": "2.17.1",

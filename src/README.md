@@ -51,23 +51,18 @@ WISE_API_TOKEN=your-wise-api-token
 # Optional: Global Wise profile ID (per-merchant wise_profile_id is preferred)
 WISE_PROFILE_ID=your-profile-id
 
-# Default Wise profile ID for NEW merchant settings (auto-enables Wise for new orgs)
-# Falls back to WISE_PROFILE_ID if not set
+# Optional default profile hint for server-side tooling (not auto-applied to merchants)
 DEFAULT_WISE_PROFILE_ID=84420198
 ```
 
-**Auto-enable Wise for new orgs (beta):**
-- New merchant settings are created with `wise_enabled = true` by default
-- `wise_currency` defaults to the merchant's `default_currency` (or "AUD")
-- `wise_profile_id` is set from `DEFAULT_WISE_PROFILE_ID` (or `WISE_PROFILE_ID`)
-- If no profile ID is configured, Wise won't appear on public pay pages (DEV warning logged)
-- Existing orgs are NOT affected - only new merchant settings get these defaults
+**Per-merchant Wise (Payment Links):**
+- New merchant settings are created with `wise_enabled = false` and no profile until the merchant (or an explicit API call with `wiseEnabled: true`) enables Wise.
+- Environment variables do **not** auto-populate `merchant_settings.wise_profile_id` or enable Wise for new orgs.
+- Merchants enable Wise in **Merchant settings** (or integrations) and provide a profile id and optional Wise currency.
 
-**Per-merchant configuration (manual override):**
-- Each merchant can override Wise settings in their merchant settings
-- Set `wise_enabled = false` to disable Wise for a specific merchant
-- Set a custom `wise_profile_id` to use a different Wise account
-- Set `wise_currency` for the default payout currency
+**Per-merchant configuration:**
+- Set `wise_enabled` and `wise_profile_id` in merchant settings to use Wise for that org
+- Set `wise_currency` for the default payout currency when Wise is enabled
 
 When properly configured, customers will see real bank details (IBAN, account number, BIC/SWIFT) and a unique payment reference when selecting Wise as a payment method.
 

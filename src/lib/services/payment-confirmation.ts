@@ -20,8 +20,9 @@ import { getFxSnapshotService } from '@/lib/fx/fx-snapshot-service';
 
 export interface ConfirmPaymentParams {
   paymentLinkId: string;
-  provider: 'stripe' | 'hedera' | 'wise';
-  providerRef: string; // Stripe event_id, Hedera tx_id, or Wise transfer_id/event_id
+  provider: 'stripe' | 'hedera' | 'wise' | 'crypto';
+  /** Stripe event_id, Hedera tx_id, Wise transfer_id/event_id, or crypto_payment_confirmations.id */
+  providerRef: string;
   paymentIntentId?: string; // For Stripe
   checkoutSessionId?: string; // For Stripe
   transactionId?: string; // For Hedera or Wise transfer id
@@ -69,8 +70,14 @@ export async function confirmPayment(
       : providerRef;
 
   // Generate or use provided correlation ID (from normalized ref)
-  const correlationId = params.correlationId || 
-    generateCorrelationId(provider, normalizedProviderRef);
+  const correlationId =
+    params.correlationId ||
+    (provider === 'crypto'
+      ? `crypto_confirm:${providerRef}`
+      : generateCorrelationId(
+          provider as Parameters<typeof generateCorrelationId>[0],
+          normalizedProviderRef
+        ));
 
   log.info({
     correlationId,
@@ -88,7 +95,9 @@ export async function confirmPayment(
         ? await checkStripeIdempotency(providerRef)
         : provider === 'wise'
           ? await checkWiseIdempotency(normalizedProviderRef)
-          : await checkHederaIdempotency(normalizedProviderRef, providerRef);
+          : provider === 'crypto'
+            ? await checkCryptoIdempotency(providerRef)
+            : await checkHederaIdempotency(normalizedProviderRef, providerRef);
 
     if (idempotencyCheck.exists) {
       log.info({
@@ -110,9 +119,17 @@ export async function confirmPayment(
             paymentEventId: idempotencyCheck.eventId,
             grossAmount: amountReceived,
             currency: currencyReceived,
-            provider: provider === 'hedera' ? 'hedera' : 'stripe',
+            provider:
+              provider === 'hedera'
+                ? 'hedera'
+                : provider === 'wise'
+                  ? 'wise'
+                  : provider === 'crypto'
+                    ? 'manual'
+                    : 'stripe',
             ...(provider === 'stripe' && { stripePaymentIntentId: paymentIntentId }),
             ...(provider === 'hedera' && { hederaTransactionId: normalizedProviderRef }),
+            ...(provider === 'wise' && { wiseTransferId: transactionId || normalizedProviderRef }),
           });
         } catch {
           // Ignore - already processed path
@@ -162,6 +179,22 @@ export async function confirmPayment(
         );
       }
 
+      if (provider === 'crypto') {
+        const cryptoConf = await tx.crypto_payment_confirmations.findFirst({
+          where: {
+            id: providerRef,
+            payment_link_id: paymentLinkId,
+            status: 'PENDING',
+          },
+        });
+        if (!cryptoConf) {
+          throw new Error('Crypto payment confirmation not found or already reviewed');
+        }
+        if (paymentLink.payment_method !== 'CRYPTO') {
+          throw new Error('Payment link is not configured for manual crypto');
+        }
+      }
+
       // 2. Update payment link to PAID (no paid_at - derived from payment_events)
       const updateData = { status: 'PAID' as const, updated_at: new Date() };
       assertPaymentLinksUpdateDataValid(updateData);
@@ -208,11 +241,26 @@ export async function confirmPayment(
           ...paymentEventData.metadata,
           wise_event_id: providerRef,
         };
+      } else if (provider === 'crypto') {
+        paymentEventData.metadata = {
+          ...paymentEventData.metadata,
+          crypto_confirmation_id: providerRef,
+        };
       }
 
       const paymentEvent = await tx.payment_events.create({
         data: paymentEventData,
       });
+
+      if (provider === 'crypto') {
+        await tx.crypto_payment_confirmations.update({
+          where: { id: providerRef },
+          data: {
+            status: 'APPROVED',
+            reviewed_at: new Date(),
+          },
+        });
+      }
 
       log.info({
         correlationId,
@@ -227,7 +275,9 @@ export async function confirmPayment(
           currency: paymentLink.currency,
         });
 
-        if (provider === 'stripe') {
+        if (provider === 'crypto') {
+          // Manual crypto: no automated Stripe/Hedera/Wise ledger rail.
+        } else if (provider === 'stripe') {
           const { calculateStripeFee } = await import('@/lib/ledger/posting-rules/stripe');
           const amountInCents = Math.round(amountReceived * 100);
           const calculatedFee = calculateStripeFee(amountInCents, currencyReceived.toLowerCase());
@@ -420,7 +470,14 @@ export async function confirmPayment(
           paymentEventId: result.paymentEventId,
           grossAmount: amountReceived,
           currency: currencyReceived,
-          provider: provider === 'hedera' ? 'hedera' : provider === 'wise' ? 'wise' : 'stripe',
+          provider:
+            provider === 'hedera'
+              ? 'hedera'
+              : provider === 'wise'
+                ? 'wise'
+                : provider === 'crypto'
+                  ? 'manual'
+                  : 'stripe',
           ...(provider === 'stripe' && { stripePaymentIntentId: paymentIntentId }),
           ...(provider === 'hedera' && { hederaTransactionId: normalizedProviderRef }),
           ...(provider === 'wise' && { wiseTransferId: transactionId || normalizedProviderRef }),
@@ -513,6 +570,19 @@ async function checkWiseIdempotency(transferIdOrEventId: string) {
         { wise_transfer_id: transferIdOrEventId },
         { correlation_id: transferIdOrEventId },
       ],
+    },
+  });
+  return { exists: !!existing, eventId: existing?.id };
+}
+
+/**
+ * Manual crypto: idempotent by confirmation row id (correlation_id crypto_confirm:{uuid})
+ */
+async function checkCryptoIdempotency(confirmationId: string) {
+  const existing = await prisma.payment_events.findFirst({
+    where: {
+      correlation_id: `crypto_confirm:${confirmationId}`,
+      event_type: 'PAYMENT_CONFIRMED',
     },
   });
   return { exists: !!existing, eventId: existing?.id };

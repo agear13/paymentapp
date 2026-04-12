@@ -79,6 +79,11 @@ function transformPaymentLink(link: any) {
     xeroInvoiceNumber: link.xero_invoice_number ?? null,
     invoiceOnlyMode: link.invoice_only_mode ?? false,
     hederaCheckoutMode: link.hedera_checkout_mode ?? null,
+    cryptoNetwork: link.crypto_network ?? null,
+    cryptoAddress: link.crypto_address ?? null,
+    cryptoCurrency: link.crypto_currency ?? null,
+    cryptoMemo: link.crypto_memo ?? null,
+    cryptoInstructions: link.crypto_instructions ?? null,
     createdAt: link.created_at,
     updatedAt: link.updated_at,
     wiseStatus: link.wise_status ?? null,
@@ -317,6 +322,62 @@ export async function PATCH(
           : null
         : currentLink.expires_at;
 
+    const trimOrNull = (v: string | null | undefined): string | null => {
+      if (v == null) return null;
+      const t = v.trim();
+      return t.length ? t : null;
+    };
+
+    let mergedCryptoNetwork = currentLink.crypto_network;
+    let mergedCryptoAddress = currentLink.crypto_address;
+    let mergedCryptoCurrency = currentLink.crypto_currency;
+    let mergedCryptoMemo = currentLink.crypto_memo;
+    let mergedCryptoInstructions = currentLink.crypto_instructions;
+
+    if (invoiceOnly || paymentMethod !== 'CRYPTO') {
+      mergedCryptoNetwork = null;
+      mergedCryptoAddress = null;
+      mergedCryptoCurrency = null;
+      mergedCryptoMemo = null;
+      mergedCryptoInstructions = null;
+    } else {
+      mergedCryptoNetwork =
+        patch.cryptoNetwork !== undefined
+          ? trimOrNull(patch.cryptoNetwork as string | null)
+          : mergedCryptoNetwork;
+      mergedCryptoAddress =
+        patch.cryptoAddress !== undefined
+          ? trimOrNull(patch.cryptoAddress as string | null)
+          : mergedCryptoAddress;
+      mergedCryptoCurrency =
+        patch.cryptoCurrency !== undefined
+          ? trimOrNull(patch.cryptoCurrency as string | null)
+          : mergedCryptoCurrency;
+      mergedCryptoMemo =
+        patch.cryptoMemo !== undefined
+          ? patch.cryptoMemo === null
+            ? null
+            : trimOrNull(patch.cryptoMemo as string)
+          : mergedCryptoMemo;
+      mergedCryptoInstructions =
+        patch.cryptoInstructions !== undefined
+          ? patch.cryptoInstructions === null
+            ? null
+            : trimOrNull(patch.cryptoInstructions as string)
+          : mergedCryptoInstructions;
+    }
+
+    if (!invoiceOnly && paymentMethod === 'CRYPTO') {
+      if (!mergedCryptoNetwork || !mergedCryptoAddress || !mergedCryptoCurrency) {
+        return NextResponse.json(
+          {
+            error: 'Network, wallet address, and currency are required for crypto payments',
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     if (currentLink.wise_transfer_id) {
       const pmSame =
         (paymentMethod ?? null) === (currentLink.payment_method ?? null);
@@ -359,6 +420,11 @@ export async function PATCH(
       invoice_only_mode: invoiceOnly,
       payment_method: paymentMethod,
       hedera_checkout_mode: hederaCheckoutMode,
+      crypto_network: mergedCryptoNetwork,
+      crypto_address: mergedCryptoAddress,
+      crypto_currency: mergedCryptoCurrency,
+      crypto_memo: mergedCryptoMemo,
+      crypto_instructions: mergedCryptoInstructions,
       updated_at: new Date(),
     };
 

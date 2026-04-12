@@ -54,7 +54,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface PaymentMethodOption {
-  value: 'STRIPE' | 'HEDERA' | 'WISE';
+  value: 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO';
   label: string;
   available: boolean;
   unavailableReason?: string;
@@ -71,8 +71,13 @@ interface MerchantSettings {
 const createPaymentLinkFormSchema = z
   .object({
   collectionMode: z.enum(['payment_request', 'invoice_only']),
-  paymentMethod: z.enum(['STRIPE', 'HEDERA', 'WISE']).optional(),
+  paymentMethod: z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO']).optional(),
   hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']).optional(),
+  cryptoNetwork: z.string().optional(),
+  cryptoAddress: z.string().optional(),
+  cryptoCurrency: z.string().optional(),
+  cryptoMemo: z.string().optional(),
+  cryptoInstructions: z.string().optional(),
   amount: z.coerce
     .number({
       invalid_type_error: 'Enter an amount to invoice.',
@@ -127,6 +132,20 @@ const createPaymentLinkFormSchema = z
       return d.hederaCheckoutMode === 'INTERACTIVE' || d.hederaCheckoutMode === 'MANUAL';
     },
     { message: 'Select crypto checkout style', path: ['hederaCheckoutMode'] }
+  )
+  .refine(
+    (d) => {
+      if (d.collectionMode === 'invoice_only' || d.paymentMethod !== 'CRYPTO') return true;
+      return (
+        !!d.cryptoNetwork?.trim() &&
+        !!d.cryptoAddress?.trim() &&
+        !!d.cryptoCurrency?.trim()
+      );
+    },
+    {
+      message: 'Network, wallet address, and asset are required for crypto payment requests',
+      path: ['cryptoNetwork'],
+    }
   );
 
 type CreatePaymentLinkFormValues = z.infer<typeof createPaymentLinkFormSchema>;
@@ -147,6 +166,11 @@ export interface EditPaymentLinkSeed {
   paymentMethod?: string | null;
   hederaCheckoutMode?: string | null;
   wiseTransferId?: string | null;
+  cryptoNetwork?: string | null;
+  cryptoAddress?: string | null;
+  cryptoCurrency?: string | null;
+  cryptoMemo?: string | null;
+  cryptoInstructions?: string | null;
 }
 
 export interface CreatePaymentLinkDialogProps {
@@ -259,6 +283,11 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               ? 'Wise not fully configured'
               : undefined,
       },
+      {
+        value: 'CRYPTO',
+        label: 'Crypto (any wallet — manual instructions)',
+        available: true,
+      },
     ];
   }, [merchantSettings?.wiseEnabled, railSetup.wiseConfigured, railSetup.wiseIncomplete]);
 
@@ -268,6 +297,11 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       collectionMode: 'payment_request',
       paymentMethod: 'STRIPE',
       hederaCheckoutMode: 'INTERACTIVE',
+      cryptoNetwork: '',
+      cryptoAddress: '',
+      cryptoCurrency: '',
+      cryptoMemo: '',
+      cryptoInstructions: '',
       amount: undefined,
       currency: defaultCurrency,
       description: '',
@@ -303,6 +337,11 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       collectionMode: 'payment_request',
       paymentMethod: 'STRIPE',
       hederaCheckoutMode: 'INTERACTIVE',
+      cryptoNetwork: '',
+      cryptoAddress: '',
+      cryptoCurrency: '',
+      cryptoMemo: '',
+      cryptoInstructions: '',
       amount: undefined,
       currency: defaultCurrency,
       description: '',
@@ -327,9 +366,14 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       collectionMode: invoiceOnly ? 'invoice_only' : 'payment_request',
       paymentMethod: invoiceOnly
         ? undefined
-        : ((editPaymentLink.paymentMethod as 'STRIPE' | 'HEDERA' | 'WISE') || 'STRIPE'),
+        : ((editPaymentLink.paymentMethod as 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO') || 'STRIPE'),
       hederaCheckoutMode:
         (editPaymentLink.hederaCheckoutMode as 'INTERACTIVE' | 'MANUAL') || 'INTERACTIVE',
+      cryptoNetwork: editPaymentLink.cryptoNetwork ?? '',
+      cryptoAddress: editPaymentLink.cryptoAddress ?? '',
+      cryptoCurrency: editPaymentLink.cryptoCurrency ?? '',
+      cryptoMemo: editPaymentLink.cryptoMemo ?? '',
+      cryptoInstructions: editPaymentLink.cryptoInstructions ?? '',
       amount: editPaymentLink.amount,
       currency: editPaymentLink.currency,
       description: editPaymentLink.description,
@@ -369,12 +413,35 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           expiresAt: data.expiresAt?.toISOString() ?? null,
           invoiceOnlyMode: invoiceOnly,
           ...(invoiceOnly
-            ? { paymentMethod: null, hederaCheckoutMode: null }
+            ? {
+                paymentMethod: null,
+                hederaCheckoutMode: null,
+                cryptoNetwork: null,
+                cryptoAddress: null,
+                cryptoCurrency: null,
+                cryptoMemo: null,
+                cryptoInstructions: null,
+              }
             : {
                 paymentMethod: effectivePaymentMethod,
                 ...(data.paymentMethod === 'HEDERA'
                   ? { hederaCheckoutMode: data.hederaCheckoutMode }
                   : { hederaCheckoutMode: null }),
+                ...(data.paymentMethod === 'CRYPTO'
+                  ? {
+                      cryptoNetwork: data.cryptoNetwork?.trim(),
+                      cryptoAddress: data.cryptoAddress?.trim(),
+                      cryptoCurrency: data.cryptoCurrency?.trim(),
+                      cryptoMemo: data.cryptoMemo?.trim() || null,
+                      cryptoInstructions: data.cryptoInstructions?.trim() || null,
+                    }
+                  : {
+                      cryptoNetwork: null,
+                      cryptoAddress: null,
+                      cryptoCurrency: null,
+                      cryptoMemo: null,
+                      cryptoInstructions: null,
+                    }),
               }),
         }),
       });
@@ -440,6 +507,15 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                 ...(data.paymentMethod === 'HEDERA'
                   ? { hederaCheckoutMode: data.hederaCheckoutMode }
                   : {}),
+                ...(data.paymentMethod === 'CRYPTO'
+                  ? {
+                      cryptoNetwork: data.cryptoNetwork?.trim(),
+                      cryptoAddress: data.cryptoAddress?.trim(),
+                      cryptoCurrency: data.cryptoCurrency?.trim(),
+                      cryptoMemo: data.cryptoMemo?.trim() || undefined,
+                      cryptoInstructions: data.cryptoInstructions?.trim() || undefined,
+                    }
+                  : {}),
               }),
         }),
       });
@@ -455,6 +531,11 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         collectionMode: 'payment_request',
         paymentMethod: 'STRIPE',
         hederaCheckoutMode: 'INTERACTIVE',
+        cryptoNetwork: '',
+        cryptoAddress: '',
+        cryptoCurrency: '',
+        cryptoMemo: '',
+        cryptoInstructions: '',
         amount: undefined,
         currency: defaultCurrency,
         description: '',
@@ -497,12 +578,16 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
       const setup = computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings));
 
+      const pm = data.paymentMethod;
+      if (pm === 'CRYPTO') {
+        return true;
+      }
+
       if (!setup.anyRailConfigured) {
         setGuardrail({ kind: 'no_rails', setup });
         return false;
       }
 
-      const pm = data.paymentMethod;
       if (pm === 'STRIPE' && !setup.stripeConfigured) {
         setGuardrail({ kind: 'stripe', setup });
         return false;
@@ -543,8 +628,14 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     form.setValue('collectionMode', 'invoice_only');
     form.clearErrors('paymentMethod');
     form.clearErrors('hederaCheckoutMode');
+    form.clearErrors('cryptoNetwork');
     form.clearErrors('root');
     form.setValue('paymentMethod', undefined);
+    form.setValue('cryptoNetwork', '');
+    form.setValue('cryptoAddress', '');
+    form.setValue('cryptoCurrency', '');
+    form.setValue('cryptoMemo', '');
+    form.setValue('cryptoInstructions', '');
     setGuardrail(null);
   }, [form]);
 
@@ -660,8 +751,8 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                       value={field.value ?? 'STRIPE'}
                       disabled={wiseTransferLocked}
                       onChange={(e) => {
-                        const selectedValue = e.target.value as 'STRIPE' | 'HEDERA' | 'WISE';
-                        const option = paymentMethodOptions.find(opt => opt.value === selectedValue);
+                        const selectedValue = e.target.value as 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO';
+                        const option = paymentMethodOptions.find((opt) => opt.value === selectedValue);
                         if (option?.available) {
                           field.onChange(selectedValue);
                         }
@@ -728,6 +819,102 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                   </FormItem>
                 )}
               />
+            ) : null}
+
+            {collectionMode === 'payment_request' && form.watch('paymentMethod') === 'CRYPTO' ? (
+              <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+                <p className="text-sm text-muted-foreground">
+                  Enter the wallet your customer should pay. Nothing is auto-filled; you specify network, address, and
+                  asset.
+                </p>
+                <FormField
+                  control={form.control}
+                  name="cryptoNetwork"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Network *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="e.g. Ethereum, Arbitrum One"
+                          list="merchant-crypto-networks"
+                          disabled={wiseTransferLocked}
+                        />
+                      </FormControl>
+                      <datalist id="merchant-crypto-networks">
+                        <option value="Bitcoin" />
+                        <option value="Ethereum" />
+                        <option value="Solana" />
+                        <option value="Polygon" />
+                        <option value="Arbitrum" />
+                        <option value="Base" />
+                        <option value="BSC / BNB Chain" />
+                        <option value="Hedera" />
+                      </datalist>
+                      <FormDescription>Chain or network name (customers must match this exactly)</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cryptoAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Wallet address *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Receiving address" disabled={wiseTransferLocked} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cryptoCurrency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Asset / currency *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="e.g. USDC, ETH, BTC" disabled={wiseTransferLocked} />
+                      </FormControl>
+                      <FormDescription>Token or asset the customer should send</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cryptoMemo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Memo / tag (optional)</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Destination tag, memo, etc." disabled={wiseTransferLocked} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cryptoInstructions"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Additional instructions (optional)</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          rows={3}
+                          placeholder="Any extra steps for your customer"
+                          disabled={wiseTransferLocked}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             ) : null}
 
             {/* Amount and Currency */}

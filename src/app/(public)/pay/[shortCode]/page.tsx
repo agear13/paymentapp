@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { PaymentPageContent } from '@/components/public/payment-page-content';
+import { CryptoPublicPaymentContent } from '@/components/public/crypto-public-payment-content';
 import { InvoiceOnlyPageContent } from '@/components/public/invoice-only-page-content';
 import { PaymentLinkExpired } from '@/components/public/payment-link-expired';
 import { PaymentLinkCanceled } from '@/components/public/payment-link-canceled';
@@ -38,8 +39,14 @@ interface PaymentLinkData {
     stripe: boolean;
     hedera: boolean;
     wise?: boolean;
+    crypto?: boolean;
   };
   paymentMethod?: string | null;
+  cryptoNetwork?: string | null;
+  cryptoAddress?: string | null;
+  cryptoCurrency?: string | null;
+  cryptoMemo?: string | null;
+  cryptoInstructions?: string | null;
   wiseTransferId?: string | null;
   wiseStatus?: string | null;
   invoiceOnlyMode?: boolean;
@@ -188,6 +195,20 @@ export default function PayPage() {
   // Open state — invoice-only (no checkout UI)
   if (paymentLink.invoiceOnlyMode === true) {
     return <InvoiceOnlyPageContent paymentLink={paymentLink} />;
+  }
+
+  // Open state — manual crypto (any wallet): instructions + confirmation only
+  if (paymentLink.paymentMethod === 'CRYPTO') {
+    return (
+      <>
+        <CryptoPublicPaymentContent shortCode={shortCode} paymentLink={paymentLink} />
+        <PaymentStatusMonitor
+          paymentLinkId={paymentLink.id}
+          shortCode={shortCode}
+          initialStatus={paymentLink.status}
+        />
+      </>
+    );
   }
 
   // Open state - show payment page

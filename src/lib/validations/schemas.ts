@@ -27,7 +27,7 @@ export const PaymentEventTypeSchema = z.enum([
   'CANCELED',
 ]);
 
-export const PaymentMethodSchema = z.enum(['STRIPE', 'HEDERA', 'WISE']);
+export const PaymentMethodSchema = z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO']);
 
 export const FxSnapshotTypeSchema = z.enum(['CREATION', 'SETTLEMENT']);
 
@@ -237,6 +237,12 @@ export const CreatePaymentLinkSchema = z.object({
   invoiceOnlyMode: z.boolean().optional(),
   /** When payment_method = HEDERA */
   hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']).optional(),
+  /** When payment_method = CRYPTO — manual wallet instructions (no auto-fill) */
+  cryptoNetwork: z.string().min(1).max(255).optional(),
+  cryptoAddress: z.string().min(1).max(512).optional(),
+  cryptoCurrency: z.string().min(1).max(64).optional(),
+  cryptoMemo: z.string().max(512).optional(),
+  cryptoInstructions: z.string().max(8000).optional(),
 })
   .refine(
     (d) => {
@@ -246,6 +252,20 @@ export const CreatePaymentLinkSchema = z.object({
     {
       message: 'Payment method is required when not in invoice-only mode',
       path: ['paymentMethod'],
+    }
+  )
+  .refine(
+    (d) => {
+      if (d.invoiceOnlyMode === true || d.paymentMethod !== 'CRYPTO') return true;
+      return (
+        !!d.cryptoNetwork?.trim() &&
+        !!d.cryptoAddress?.trim() &&
+        !!d.cryptoCurrency?.trim()
+      );
+    },
+    {
+      message: 'Network, wallet address, and currency are required for crypto payments',
+      path: ['cryptoNetwork'],
     }
   );
 
@@ -275,8 +295,26 @@ export const UpdatePaymentLinkSchema = z
     invoiceOnlyMode: z.boolean().optional(),
     paymentMethod: PaymentMethodSchema.nullable().optional(),
     hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']).nullable().optional(),
+    cryptoNetwork: z.string().min(1).max(255).nullable().optional(),
+    cryptoAddress: z.string().min(1).max(512).nullable().optional(),
+    cryptoCurrency: z.string().min(1).max(64).nullable().optional(),
+    cryptoMemo: z.string().max(512).nullable().optional(),
+    cryptoInstructions: z.string().max(8000).nullable().optional(),
   })
   .strict();
+
+/** Payer-submitted manual crypto payment notice (public, no auth). */
+export const PublicCryptoConfirmationSubmitSchema = z.object({
+  payerNetwork: z.string().min(1).max(255),
+  payerAmountSent: z.string().min(1).max(64),
+  payerWalletAddress: z.string().min(1).max(512),
+  payerTxHash: z.string().max(255).optional().nullable(),
+});
+
+/** Merchant approve/reject of a pending crypto confirmation. */
+export const CryptoConfirmationReviewSchema = z.object({
+  action: z.enum(['approve', 'reject']),
+});
 
 // ============================================================================
 // PAYMENT EVENT SCHEMAS

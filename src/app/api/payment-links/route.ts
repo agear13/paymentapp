@@ -74,6 +74,11 @@ function transformPaymentLink(link: Record<string, unknown>) {
     xeroInvoiceNumber: link.xero_invoice_number,
     invoiceOnlyMode: (link as { invoice_only_mode?: boolean }).invoice_only_mode ?? false,
     hederaCheckoutMode: (link as { hedera_checkout_mode?: string | null }).hedera_checkout_mode ?? null,
+    cryptoNetwork: (link as { crypto_network?: string | null }).crypto_network ?? null,
+    cryptoAddress: (link as { crypto_address?: string | null }).crypto_address ?? null,
+    cryptoCurrency: (link as { crypto_currency?: string | null }).crypto_currency ?? null,
+    cryptoMemo: (link as { crypto_memo?: string | null }).crypto_memo ?? null,
+    cryptoInstructions: (link as { crypto_instructions?: string | null }).crypto_instructions ?? null,
     wiseStatus: link.wise_status ?? null,
     wiseTransferId: link.wise_transfer_id ?? null,
     createdAt: link.created_at,
@@ -309,6 +314,8 @@ export async function POST(request: NextRequest) {
           ? validatedData.hederaCheckoutMode ?? 'INTERACTIVE'
           : null;
 
+      const isCrypto = !invoiceOnly && resolvedPaymentMethod === 'CRYPTO';
+
       const link = await tx.payment_links.create({
         data: {
           id: linkId,
@@ -327,6 +334,11 @@ export async function POST(request: NextRequest) {
           expires_at: validatedData.expiresAt ? new Date(validatedData.expiresAt as string) : null,
           invoice_only_mode: invoiceOnly,
           hedera_checkout_mode: hederaCheckoutMode,
+          crypto_network: isCrypto ? (validatedData.cryptoNetwork?.trim() ?? null) : null,
+          crypto_address: isCrypto ? (validatedData.cryptoAddress?.trim() ?? null) : null,
+          crypto_currency: isCrypto ? (validatedData.cryptoCurrency?.trim() ?? null) : null,
+          crypto_memo: isCrypto ? (validatedData.cryptoMemo?.trim() || null) : null,
+          crypto_instructions: isCrypto ? (validatedData.cryptoInstructions?.trim() || null) : null,
           created_at: now,
           updated_at: now,
           wise_status: wiseContext ? 'INSTRUCTIONS_READY' : null,

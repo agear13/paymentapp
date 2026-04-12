@@ -67,12 +67,17 @@ export interface PaymentLink {
   dueDate: Date | string | null;
   expiresAt: Date | string | null;
   xeroInvoiceNumber: string | null;
-  /** STRIPE | HEDERA | WISE when restricted; omitted on invoice-only links */
+  /** STRIPE | HEDERA | WISE | CRYPTO when restricted; omitted on invoice-only links */
   paymentMethod?: string | null;
   invoiceOnlyMode?: boolean;
   hederaCheckoutMode?: string | null;
   /** When set, amount/currency/payment rails are locked server-side (Wise transfer in flight). */
   wiseTransferId?: string | null;
+  cryptoNetwork?: string | null;
+  cryptoAddress?: string | null;
+  cryptoCurrency?: string | null;
+  cryptoMemo?: string | null;
+  cryptoInstructions?: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
   paymentEvents?: any[];

@@ -37,6 +37,7 @@ import { exportToCSV, type ExportColumn } from '@/lib/export-csv';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/components/payment-links/currency-select';
 import { PaymentLinksOnboardingAssistant } from '@/components/payment-links-onboarding/payment-links-onboarding-assistant';
+import { PendingCryptoConfirmations } from '@/components/payment-links/pending-crypto-confirmations';
 
 export default function PaymentLinksPage() {
   const { toast } = useToast();
@@ -452,6 +453,10 @@ export default function PaymentLinksPage() {
         onReset={handleResetFilters}
       />
 
+      {organizationId ? (
+        <PendingCryptoConfirmations organizationId={organizationId} onChanged={fetchPaymentLinks} />
+      ) : null}
+
       {/* Invoices Table */}
       <Card>
         <CardHeader>
@@ -521,6 +526,11 @@ export default function PaymentLinksPage() {
             paymentMethod: linkToEdit.paymentMethod,
             hederaCheckoutMode: linkToEdit.hederaCheckoutMode,
             wiseTransferId: linkToEdit.wiseTransferId,
+            cryptoNetwork: linkToEdit.cryptoNetwork ?? null,
+            cryptoAddress: linkToEdit.cryptoAddress ?? null,
+            cryptoCurrency: linkToEdit.cryptoCurrency ?? null,
+            cryptoMemo: linkToEdit.cryptoMemo ?? null,
+            cryptoInstructions: linkToEdit.cryptoInstructions ?? null,
           }}
           open={editDialogOpen}
           onOpenChange={(o) => {

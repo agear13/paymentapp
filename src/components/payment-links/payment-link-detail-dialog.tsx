@@ -73,6 +73,11 @@ export interface PaymentLinkDetails {
   invoiceOnlyMode?: boolean;
   hederaCheckoutMode?: string | null;
   wiseTransferId?: string | null;
+  cryptoNetwork?: string | null;
+  cryptoAddress?: string | null;
+  cryptoCurrency?: string | null;
+  cryptoMemo?: string | null;
+  cryptoInstructions?: string | null;
   createdAt: Date;
   updatedAt: Date;
   paymentEvents?: Array<{
@@ -259,10 +264,15 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                     Invoice only
                   </Badge>
                 ) : null}
+                {paymentLink.paymentMethod === 'CRYPTO' ? (
+                  <Badge variant="outline" className="text-xs">
+                    Manual crypto (any wallet)
+                  </Badge>
+                ) : null}
                 {paymentLink.paymentMethod === 'HEDERA' &&
                 (paymentLink.hederaCheckoutMode ?? 'INTERACTIVE') === 'MANUAL' ? (
                   <Badge variant="outline" className="text-xs">
-                    Manual crypto instructions
+                    Hedera manual instructions
                   </Badge>
                 ) : null}
               </div>
@@ -327,6 +337,52 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                     {paymentLink.description}
                   </p>
                 </div>
+
+                {paymentLink.paymentMethod === 'CRYPTO' &&
+                (paymentLink.cryptoNetwork ||
+                  paymentLink.cryptoAddress ||
+                  paymentLink.cryptoCurrency) ? (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Crypto payment instructions</p>
+                      <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                        {paymentLink.cryptoNetwork ? (
+                          <div>
+                            <dt className="text-muted-foreground">Network</dt>
+                            <dd className="break-all">{paymentLink.cryptoNetwork}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.cryptoCurrency ? (
+                          <div>
+                            <dt className="text-muted-foreground">Asset</dt>
+                            <dd>{paymentLink.cryptoCurrency}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.cryptoAddress ? (
+                          <div className="sm:col-span-2">
+                            <dt className="text-muted-foreground">Wallet address</dt>
+                            <dd className="font-mono text-xs break-all">{paymentLink.cryptoAddress}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.cryptoMemo ? (
+                          <div className="sm:col-span-2">
+                            <dt className="text-muted-foreground">Memo / tag</dt>
+                            <dd className="break-all">{paymentLink.cryptoMemo}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.cryptoInstructions ? (
+                          <div className="sm:col-span-2">
+                            <dt className="text-muted-foreground">Instructions</dt>
+                            <dd className="whitespace-pre-wrap text-muted-foreground">
+                              {paymentLink.cryptoInstructions}
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    </div>
+                  </>
+                ) : null}
 
                 <Separator />
 

@@ -223,7 +223,7 @@ model payment_links {
   organization_id   String            @db.Uuid
   short_code        String            @unique @db.VarChar(8)
   status            PaymentLinkStatus @default(DRAFT)
-  payment_method    PaymentMethod? // STRIPE | HEDERA | WISE (null = legacy, all methods)
+  payment_method    PaymentMethod? // STRIPE | HEDERA | WISE | CRYPTO (null = legacy, all methods)
   amount            Decimal           @db.Decimal(18, 2)
   currency          String            @db.Char(3)
   description       String
@@ -255,6 +255,13 @@ model payment_links {
   /// When payment_method = HEDERA: INTERACTIVE (wallet connect) vs MANUAL (copy wallet instructions)
   hedera_checkout_mode String? @db.VarChar(32)
 
+  /// When payment_method = CRYPTO: manual wallet instructions (any chain)
+  crypto_network       String? @db.VarChar(255)
+  crypto_address       String? @db.VarChar(512)
+  crypto_currency      String? @db.VarChar(64)
+  crypto_memo          String? @db.VarChar(512)
+  crypto_instructions  String? @db.Text
+
   created_at              DateTime                  @default(now()) @db.Timestamptz(6)
   updated_at              DateTime                  @db.Timestamptz(6)
   fx_snapshots            fx_snapshots[]
@@ -264,11 +271,29 @@ model payment_links {
   xero_syncs              xero_syncs[]
   multi_currency_invoices multi_currency_invoices[]
   commission_obligations  commission_obligations[]
+  crypto_payment_confirmations crypto_payment_confirmations[]
 
   @@index([organization_id, status])
   @@index([due_date])
   @@index([expires_at])
   @@index([payment_method])
+}
+
+/// Payer-submitted “I sent crypto” — merchant approves or rejects before marking PAID
+model crypto_payment_confirmations {
+  id                     String                         @id @default(uuid()) @db.Uuid
+  payment_link_id        String                         @db.Uuid
+  status                 CryptoPaymentConfirmationStatus @default(PENDING)
+  payer_network          String                         @db.VarChar(255)
+  payer_amount_sent      String                         @db.VarChar(64)
+  payer_wallet_address   String                         @db.VarChar(512)
+  payer_tx_hash          String?                        @db.VarChar(255)
+  created_at             DateTime                       @default(now()) @db.Timestamptz(6)
+  reviewed_at            DateTime?                      @db.Timestamptz(6)
+  payment_links          payment_links                  @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+
+  @@index([payment_link_id, status])
+  @@index([status, created_at])
 }
 
 model xero_connections {
@@ -412,6 +437,14 @@ enum PaymentMethod {
   STRIPE
   HEDERA
   WISE
+  /// Manual crypto: merchant supplies network, wallet, asset; payer confirms; merchant approves
+  CRYPTO
+}
+
+enum CryptoPaymentConfirmationStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum PaymentToken {

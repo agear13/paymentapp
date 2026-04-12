@@ -54,6 +54,7 @@ export function computePaymentLinkRailSetup(
   }
 
   const stripeConfigured = nonEmpty(merchant.stripe_account_id);
+  /** Wise counts as configured only when explicitly enabled and a profile id is stored (never env-only). */
   const wiseConfigured = merchant.wise_enabled === true && nonEmpty(merchant.wise_profile_id);
   const wiseIncomplete = merchant.wise_enabled === true && !nonEmpty(merchant.wise_profile_id);
   const hederaConfigured = nonEmpty(merchant.hedera_account_id);
