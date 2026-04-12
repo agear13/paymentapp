@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '@/lib/server/prisma';
+import { computePaymentLinkRailSetup } from '@/lib/payment-links/setup-status';
 
 export type MerchantSetupStepStatus = 'complete' | 'incomplete' | 'attention';
 
@@ -37,21 +38,9 @@ export type MerchantSetupStatusResult = {
   nextRecommendedAction: MerchantSetupNextAction | null;
 };
 
-function hasAnyConfiguredRail(merchant: {
-  stripe_account_id: string | null;
-  hedera_account_id: string | null;
-  wise_enabled: boolean;
-  wise_profile_id: string | null;
-} | null): boolean {
-  if (!merchant) return false;
-  const stripe = !!merchant.stripe_account_id?.trim();
-  const wise = merchant.wise_enabled && !!merchant.wise_profile_id?.trim();
-  const hedera = !!merchant.hedera_account_id?.trim();
-  return stripe || wise || hedera;
-}
-
 /**
  * Loads merchant settings and payment link counts, returns structured onboarding status.
+ * Rail flags come from {@link computePaymentLinkRailSetup} (shared with Payment Links guardrails).
  */
 export async function getMerchantSetupStatus(organizationId: string): Promise<MerchantSetupStatusResult> {
   const [merchant, paymentLinkCount] = await Promise.all([
@@ -69,11 +58,11 @@ export async function getMerchantSetupStatus(organizationId: string): Promise<Me
     }),
   ]);
 
-  const hasStripe = !!merchant?.stripe_account_id?.trim();
-  const hasWise =
-    !!merchant?.wise_enabled && !!merchant?.wise_profile_id?.trim();
-  const hasHedera = !!merchant?.hedera_account_id?.trim();
-  const hasRail = hasAnyConfiguredRail(merchant);
+  const setup = computePaymentLinkRailSetup(merchant);
+  const hasRail = setup.anyRailConfigured;
+  const hasStripe = setup.stripeConfigured;
+  const hasWise = setup.wiseConfigured;
+  const hasHedera = setup.hederaConfigured;
   const hasFirstInvoice = paymentLinkCount > 0;
 
   const steps: MerchantSetupStep[] = [];
@@ -107,7 +96,7 @@ export async function getMerchantSetupStatus(organizationId: string): Promise<Me
   if (hasWise) {
     wiseStepStatus = 'complete';
     wiseDescription = 'Wise is enabled and a profile is on file.';
-  } else if (merchant?.wise_enabled && !merchant?.wise_profile_id?.trim()) {
+  } else if (setup.wiseIncomplete) {
     wiseStepStatus = 'attention';
     wiseDescription =
       'Wise is toggled on but no profile ID is set — finish Wise setup in merchant settings.';

@@ -8,6 +8,7 @@ import { getUserOrganization } from '@/lib/auth/get-org';
 import { prisma } from '@/lib/server/prisma';
 import { redirect } from 'next/navigation';
 import { TransactionsTable } from '@/components/dashboard/transactions-table';
+import { PaymentLinksTransactionsEmpty } from '@/components/payment-links/payment-links-empty-guidance';
 
 export default async function TransactionsPage() {
   // Get current user's organization with proper data isolation
@@ -85,9 +86,7 @@ export default async function TransactionsPage() {
               {allEvents.length > 0 ? (
                 <TransactionsTable events={allEvents} />
               ) : (
-                <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
-                  No transactions yet.
-                </div>
+                <PaymentLinksTransactionsEmpty />
               )}
             </CardContent>
           </Card>
@@ -104,6 +103,8 @@ export default async function TransactionsPage() {
             <CardContent>
               {stripeEvents.length > 0 ? (
                 <TransactionsTable events={stripeEvents} />
+              ) : allEvents.length === 0 ? (
+                <PaymentLinksTransactionsEmpty />
               ) : (
                 <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
                   No Stripe transactions yet.
@@ -124,6 +125,8 @@ export default async function TransactionsPage() {
             <CardContent>
               {hederaEvents.length > 0 ? (
                 <TransactionsTable events={hederaEvents} />
+              ) : allEvents.length === 0 ? (
+                <PaymentLinksTransactionsEmpty />
               ) : (
                 <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
                   No Hedera transactions yet.

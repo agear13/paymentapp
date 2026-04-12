@@ -10,7 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { CalendarIcon, Loader2, AlertCircle, Settings } from 'lucide-react';
+import { CalendarIcon, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -39,11 +39,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { CurrencySelect } from './currency-select';
 import { cn } from '@/lib/utils';
-import Link from 'next/link';
+import {
+  computePaymentLinkRailSetup,
+  pickAlternativePaymentMethod,
+  toPaymentLinkRailSnapshot,
+  type PaymentLinkRailSetupStatus,
+} from '@/lib/payment-links/setup-status';
+import { PaymentLinksGuardrailModal } from '@/components/payment-links-onboarding/payment-links-guardrail-modal';
+import type { PaymentLinksGuardrailKind } from '@/components/payment-links-onboarding/payment-links-guardrail-modal';
 
 interface PaymentMethodOption {
   value: 'STRIPE' | 'HEDERA' | 'WISE';
@@ -146,6 +152,11 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [descriptionLength, setDescriptionLength] = React.useState(0);
   const [merchantSettings, setMerchantSettings] = React.useState<MerchantSettings | null>(null);
+  const [merchantSettingsLoaded, setMerchantSettingsLoaded] = React.useState(false);
+  const [guardrail, setGuardrail] = React.useState<{
+    kind: PaymentLinksGuardrailKind;
+    setup: PaymentLinkRailSetupStatus;
+  } | null>(null);
 
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -155,7 +166,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   React.useEffect(() => {
     async function fetchMerchantSettings() {
       if (!organizationId || !open) return;
-      
+      setMerchantSettingsLoaded(false);
       try {
         const response = await fetch(`/api/merchant-settings?organizationId=${organizationId}`);
         if (response.ok) {
@@ -168,45 +179,59 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               wiseEnabled: settings.wise_enabled,
               wiseProfileId: settings.wise_profile_id,
             });
+          } else {
+            setMerchantSettings(null);
           }
+        } else {
+          setMerchantSettings(null);
         }
       } catch (error) {
         console.error('Failed to fetch merchant settings:', error);
+        setMerchantSettings(null);
+      } finally {
+        setMerchantSettingsLoaded(true);
       }
     }
 
     fetchMerchantSettings();
   }, [organizationId, open]);
 
-  // Compute available payment methods based on merchant settings
+  React.useEffect(() => {
+    if (!open) setGuardrail(null);
+  }, [open]);
+
+  const railSetup = React.useMemo(
+    () => computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings)),
+    [merchantSettings]
+  );
+
+  // Compute available payment methods — Wise availability follows shared rail setup only
   const paymentMethodOptions = React.useMemo((): PaymentMethodOption[] => {
-    const wiseConfigured = merchantSettings?.wiseEnabled && merchantSettings?.wiseProfileId;
-    
     return [
-      { 
-        value: 'STRIPE', 
-        label: 'Credit / Debit card (Stripe)', 
-        available: true 
+      {
+        value: 'STRIPE',
+        label: 'Credit / Debit card (Stripe)',
+        available: true,
       },
-      { 
-        value: 'HEDERA', 
-        label: 'Crypto (Hashpack)', 
-        available: true 
+      {
+        value: 'HEDERA',
+        label: 'Crypto (Hashpack)',
+        available: true,
       },
-      { 
-        value: 'WISE', 
-        label: 'Bank transfer (Wise)', 
-        available: !!wiseConfigured,
-        unavailableReason: !merchantSettings?.wiseEnabled 
-          ? 'Wise payments not enabled' 
-          : !merchantSettings?.wiseProfileId 
+      {
+        value: 'WISE',
+        label: 'Bank transfer (Wise)',
+        available: railSetup.wiseConfigured,
+        unavailableReason: !merchantSettings?.wiseEnabled
+          ? 'Wise payments not enabled'
+          : railSetup.wiseIncomplete
             ? 'Wise Profile ID not configured'
-            : undefined
+            : !railSetup.wiseConfigured
+              ? 'Wise not fully configured'
+              : undefined,
       },
     ];
-  }, [merchantSettings]);
-
-  const wiseConfigured = merchantSettings?.wiseEnabled && merchantSettings?.wiseProfileId;
+  }, [merchantSettings?.wiseEnabled, railSetup.wiseConfigured, railSetup.wiseIncomplete]);
 
   const form = useForm<CreatePaymentLinkFormValues>({
     resolver: zodResolver(createPaymentLinkFormSchema),
@@ -264,20 +289,12 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     }
   }, [defaultValues, open, form, defaultCurrency]);
 
-  const handleSubmit = async (data: CreatePaymentLinkFormValues) => {
+  const performCreate = async (data: CreatePaymentLinkFormValues) => {
     const invoiceOnly = data.collectionMode === 'invoice_only';
     const effectivePaymentMethod = invoiceOnly ? undefined : data.paymentMethod;
 
-    // Block submission if Wise is selected but not configured
-    if (!invoiceOnly && data.paymentMethod === 'WISE' && !wiseConfigured) {
-      form.setError('root', {
-        type: 'manual',
-        message: 'Wise payments are not configured. Please set up Wise in Merchant Settings first.',
-      });
-      return;
-    }
-
     setIsSubmitting(true);
+    form.clearErrors('root');
 
     try {
       const response = await fetch('/api/payment-links', {
@@ -315,7 +332,6 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
       const result = await response.json();
 
-      // Reset form and close dialog (include mode fields so validation state stays consistent)
       form.reset({
         collectionMode: 'payment_request',
         paymentMethod: 'STRIPE',
@@ -333,19 +349,86 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       setDescriptionLength(0);
       setOpen(false);
 
-      // Call success callback
       if (onSuccess) {
         onSuccess(result.data);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create invoice. Please try again.';
       form.setError('root', {
         type: 'manual',
-        message: error.message || 'Failed to create invoice. Please try again.',
+        message,
       });
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const handleSubmit = async (data: CreatePaymentLinkFormValues) => {
+    form.clearErrors('root');
+    const invoiceOnly = data.collectionMode === 'invoice_only';
+
+    if (invoiceOnly) {
+      await performCreate(data);
+      return;
+    }
+
+    if (!merchantSettingsLoaded) {
+      form.setError('root', {
+        type: 'manual',
+        message: 'Merchant settings are still loading. Please wait a moment and try again.',
+      });
+      return;
+    }
+
+    const setup = computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings));
+
+    if (!setup.anyRailConfigured) {
+      setGuardrail({ kind: 'no_rails', setup });
+      return;
+    }
+
+    const pm = data.paymentMethod;
+    if (pm === 'STRIPE' && !setup.stripeConfigured) {
+      setGuardrail({ kind: 'stripe', setup });
+      return;
+    }
+    if (pm === 'WISE' && (!setup.wiseConfigured || setup.wiseIncomplete)) {
+      setGuardrail({ kind: 'wise', setup });
+      return;
+    }
+    if (pm === 'HEDERA' && !setup.hederaConfigured) {
+      setGuardrail({ kind: 'hedera', setup });
+      return;
+    }
+
+    await performCreate(data);
+  };
+
+  const handleGuardrailSwitchToInvoiceOnly = React.useCallback(() => {
+    form.setValue('collectionMode', 'invoice_only');
+    form.clearErrors('paymentMethod');
+    form.clearErrors('hederaCheckoutMode');
+    form.clearErrors('root');
+    form.setValue('paymentMethod', undefined);
+    setGuardrail(null);
+  }, [form]);
+
+  const handleGuardrailChooseAnother = React.useCallback(() => {
+    const pm = form.getValues('paymentMethod');
+    if (!pm) return;
+    const snapshot = toPaymentLinkRailSnapshot(merchantSettings);
+    const setup = computePaymentLinkRailSetup(snapshot);
+    const alt = pickAlternativePaymentMethod(setup, pm);
+    if (alt) {
+      form.setValue('paymentMethod', alt);
+      if (alt === 'HEDERA') {
+        const mode = form.getValues('hederaCheckoutMode');
+        if (!mode) form.setValue('hederaCheckoutMode', 'INTERACTIVE');
+      }
+    }
+    form.clearErrors('root');
+    setGuardrail(null);
+  }, [form, merchantSettings]);
 
   // Handle validation errors - focus first invalid field
   const onInvalidSubmit = (errors: any) => {
@@ -355,7 +438,10 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     }
   };
 
+  const selectedPaymentMethod = form.watch('paymentMethod');
+
   return (
+    <>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger || <Button>Create Payment Link</Button>}
@@ -491,25 +577,6 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                 )}
               />
             ) : null}
-
-            {/* Wise not configured warning */}
-            {collectionMode === 'payment_request' &&
-            form.watch('paymentMethod') === 'WISE' && !wiseConfigured && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="flex items-center justify-between">
-                  <span>
-                    Wise payments are not fully configured. Please set up Wise in Merchant Settings first.
-                  </span>
-                  <Link href="/dashboard/settings/merchant">
-                    <Button variant="outline" size="sm" className="ml-2">
-                      <Settings className="h-4 w-4 mr-1" />
-                      Configure
-                    </Button>
-                  </Link>
-                </AlertDescription>
-              </Alert>
-            )}
 
             {/* Amount and Currency */}
             <div className="grid grid-cols-2 gap-4">
@@ -801,7 +868,18 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={
+                  isSubmitting ||
+                  (collectionMode === 'payment_request' && !merchantSettingsLoaded)
+                }
+                title={
+                  collectionMode === 'payment_request' && !merchantSettingsLoaded
+                    ? 'Loading merchant settings…'
+                    : undefined
+                }
+              >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create Invoice
               </Button>
@@ -810,6 +888,23 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         </Form>
       </DialogContent>
     </Dialog>
+
+    <PaymentLinksGuardrailModal
+      open={!!guardrail}
+      onOpenChange={(o) => {
+        if (!o) setGuardrail(null);
+      }}
+      kind={guardrail?.kind ?? null}
+      setup={guardrail?.setup ?? railSetup}
+      onSwitchToInvoiceOnly={handleGuardrailSwitchToInvoiceOnly}
+      onChooseAnotherPaymentMethod={handleGuardrailChooseAnother}
+      alternativeAvailable={
+        guardrail && selectedPaymentMethod
+          ? pickAlternativePaymentMethod(guardrail.setup, selectedPaymentMethod) !== null
+          : false
+      }
+    />
+    </>
   );
 };
 

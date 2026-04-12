@@ -10,6 +10,7 @@ import { redirect } from 'next/navigation';
 import { ChartOfAccounts } from '@/components/dashboard/ledger/chart-of-accounts';
 import { LedgerEntriesTable } from '@/components/dashboard/ledger/ledger-entries-table';
 import { LedgerBalanceReport } from '@/components/dashboard/reports/ledger-balance-report';
+import { PaymentLinksLedgerEntriesEmpty } from '@/components/payment-links/payment-links-empty-guidance';
 
 export default async function LedgerPage() {
   // Get current user's organization with proper data isolation
@@ -93,9 +94,7 @@ export default async function LedgerPage() {
               {entries.length > 0 ? (
                 <LedgerEntriesTable entries={entries} />
               ) : (
-                <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-                  No ledger entries yet.
-                </div>
+                <PaymentLinksLedgerEntriesEmpty />
               )}
             </CardContent>
           </Card>
