@@ -6,10 +6,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import { requireAuth } from '@/lib/auth/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
+import { getMerchantWiseConfig } from '@/lib/payments/wise';
+import { assertPaymentLinksUpdateDataValid } from '@/lib/payments/payment-links-update-guard';
 
 // Helper to transform snake_case DB fields to camelCase for frontend
 function transformPaymentLink(link: any) {
@@ -73,6 +76,7 @@ function transformPaymentLink(link: any) {
     customerPhone: link.customer_phone,
     dueDate: link.due_date ?? null,
     expiresAt: link.expires_at,
+    xeroInvoiceNumber: link.xero_invoice_number ?? null,
     invoiceOnlyMode: link.invoice_only_mode ?? false,
     hederaCheckoutMode: link.hedera_checkout_mode ?? null,
     createdAt: link.created_at,
@@ -182,7 +186,7 @@ export async function GET(
 
 /**
  * PATCH /api/payment-links/[id]
- * Update payment link (only allowed in DRAFT status)
+ * Update payment link fields for DRAFT or OPEN (unpaid) invoices. Short code is never changed.
  */
 export async function PATCH(
   request: NextRequest,
@@ -209,14 +213,8 @@ export async function PATCH(
 
     const { id } = params;
 
-    // Get current payment link
     const currentLink = await prisma.payment_links.findUnique({
       where: { id },
-      select: {
-        id: true,
-        organization_id: true,
-        status: true,
-      },
     });
 
     if (!currentLink) {
@@ -226,7 +224,6 @@ export async function PATCH(
       );
     }
 
-    // Check permission
     const canEdit = await checkUserPermission(
       user.id,
       currentLink.organization_id,
@@ -239,7 +236,6 @@ export async function PATCH(
       );
     }
 
-    // Check if editable
     if (!isPaymentLinkEditable(currentLink.status)) {
       return NextResponse.json(
         { error: 'Payment link cannot be edited in current status' },
@@ -247,24 +243,145 @@ export async function PATCH(
       );
     }
 
-    // Parse and validate body
     const body = await request.json();
-    const validatedData = UpdatePaymentLinkSchema.parse(body);
+    const patch = UpdatePaymentLinkSchema.parse(body);
 
-    // Update payment link
+    const invoiceOnly =
+      patch.invoiceOnlyMode !== undefined
+        ? patch.invoiceOnlyMode
+        : currentLink.invoice_only_mode;
+
+    let paymentMethod = currentLink.payment_method;
+    if (invoiceOnly) {
+      paymentMethod = null;
+    } else if (patch.paymentMethod !== undefined) {
+      paymentMethod = patch.paymentMethod;
+    }
+
+    if (!invoiceOnly && !paymentMethod) {
+      return NextResponse.json(
+        { error: 'Payment method is required when not in invoice-only mode' },
+        { status: 400 }
+      );
+    }
+
+    let hederaCheckoutMode: string | null = currentLink.hedera_checkout_mode;
+    if (invoiceOnly || paymentMethod !== 'HEDERA') {
+      hederaCheckoutMode = null;
+    } else if (patch.hederaCheckoutMode !== undefined) {
+      hederaCheckoutMode = patch.hederaCheckoutMode;
+    } else if (!hederaCheckoutMode) {
+      hederaCheckoutMode = 'INTERACTIVE';
+    }
+
+    if (
+      !invoiceOnly &&
+      paymentMethod === 'HEDERA' &&
+      (hederaCheckoutMode !== 'INTERACTIVE' && hederaCheckoutMode !== 'MANUAL')
+    ) {
+      return NextResponse.json(
+        { error: 'Crypto checkout style is required for Hedera payment links' },
+        { status: 400 }
+      );
+    }
+
+    const mergedAmount =
+      patch.amount !== undefined ? patch.amount : Number(currentLink.amount);
+    const mergedCurrency = patch.currency ?? currentLink.currency;
+    const mergedDescription =
+      patch.description !== undefined ? patch.description : currentLink.description;
+    const mergedInvoiceRef =
+      patch.invoiceReference !== undefined
+        ? patch.invoiceReference
+        : currentLink.invoice_reference;
+    const mergedCustomerEmail =
+      patch.customerEmail !== undefined
+        ? patch.customerEmail
+        : currentLink.customer_email;
+    const mergedCustomerName =
+      patch.customerName !== undefined ? patch.customerName : currentLink.customer_name;
+    const mergedCustomerPhone =
+      patch.customerPhone !== undefined
+        ? patch.customerPhone
+        : currentLink.customer_phone;
+    const mergedDueDate =
+      patch.dueDate !== undefined
+        ? patch.dueDate
+          ? new Date(patch.dueDate as string | Date)
+          : null
+        : currentLink.due_date;
+    const mergedExpiresAt =
+      patch.expiresAt !== undefined
+        ? patch.expiresAt
+          ? new Date(patch.expiresAt as string | Date)
+          : null
+        : currentLink.expires_at;
+
+    if (currentLink.wise_transfer_id) {
+      const pmSame =
+        (paymentMethod ?? null) === (currentLink.payment_method ?? null);
+      const invoiceOnlySame = invoiceOnly === currentLink.invoice_only_mode;
+      if (
+        mergedAmount !== Number(currentLink.amount) ||
+        mergedCurrency !== currentLink.currency ||
+        !pmSame ||
+        !invoiceOnlySame
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              'Cannot change amount, currency, invoice type, or payment method while a Wise bank transfer is in progress for this invoice.',
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (!invoiceOnly && paymentMethod === 'WISE') {
+      try {
+        await getMerchantWiseConfig(currentLink.organization_id, mergedCurrency);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Wise configuration invalid';
+        return NextResponse.json({ error: message, code: 'WISE_CONFIG_ERROR' }, { status: 400 });
+      }
+    }
+
+    const prismaData: Prisma.payment_linksUpdateInput = {
+      amount: new Prisma.Decimal(mergedAmount.toFixed(2)),
+      currency: mergedCurrency,
+      description: mergedDescription,
+      invoice_reference: mergedInvoiceRef,
+      customer_email: mergedCustomerEmail,
+      customer_name: mergedCustomerName,
+      customer_phone: mergedCustomerPhone,
+      due_date: mergedDueDate,
+      expires_at: mergedExpiresAt,
+      invoice_only_mode: invoiceOnly,
+      payment_method: paymentMethod,
+      hedera_checkout_mode: hederaCheckoutMode,
+      updated_at: new Date(),
+    };
+
+    if (currentLink.payment_method === 'WISE' && paymentMethod !== 'WISE') {
+      prismaData.wise_quote_id = null;
+      prismaData.wise_transfer_id = null;
+      prismaData.wise_status = null;
+      prismaData.wise_received_amount = null;
+      prismaData.wise_received_currency = null;
+    }
+
+    if (!invoiceOnly && paymentMethod === 'WISE' && currentLink.payment_method !== 'WISE') {
+      prismaData.wise_status = 'INSTRUCTIONS_READY';
+    }
+
+    assertPaymentLinksUpdateDataValid(prismaData as Record<string, unknown>);
+
     const updatedLink = await prisma.$transaction(async (tx) => {
       const updated = await tx.payment_links.update({
         where: { id },
-        data: {
-          ...validatedData,
-          expires_at: validatedData.expiresAt
-            ? new Date(validatedData.expiresAt as any)
-            : undefined,
-          updated_at: new Date(),
-        },
+        data: prismaData,
       });
 
-      // Create audit log
       await tx.audit_logs.create({
         data: {
           organization_id: currentLink.organization_id,
@@ -272,7 +389,7 @@ export async function PATCH(
           entity_type: 'PaymentLink',
           entity_id: id,
           action: 'UPDATE',
-          new_values: validatedData,
+          new_values: patch as object,
         },
       });
 
@@ -280,7 +397,7 @@ export async function PATCH(
     });
 
     loggers.api.info(
-      { paymentLinkId: id, updates: validatedData },
+      { paymentLinkId: id, patch },
       'Payment link updated'
     );
 

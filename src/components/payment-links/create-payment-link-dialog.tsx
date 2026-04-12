@@ -50,6 +50,8 @@ import {
 } from '@/lib/payment-links/setup-status';
 import { PaymentLinksGuardrailModal } from '@/components/payment-links-onboarding/payment-links-guardrail-modal';
 import type { PaymentLinksGuardrailKind } from '@/components/payment-links-onboarding/payment-links-guardrail-modal';
+import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface PaymentMethodOption {
   value: 'STRIPE' | 'HEDERA' | 'WISE';
@@ -129,6 +131,24 @@ const createPaymentLinkFormSchema = z
 
 type CreatePaymentLinkFormValues = z.infer<typeof createPaymentLinkFormSchema>;
 
+/** Values needed to prefill edit mode (same record as list/detail API). */
+export interface EditPaymentLinkSeed {
+  id: string;
+  amount: number;
+  currency: string;
+  description: string;
+  invoiceReference: string | null;
+  customerEmail: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  dueDate: Date | string | null;
+  expiresAt: Date | string | null;
+  invoiceOnlyMode?: boolean;
+  paymentMethod?: string | null;
+  hederaCheckoutMode?: string | null;
+  wiseTransferId?: string | null;
+}
+
 export interface CreatePaymentLinkDialogProps {
   organizationId: string;
   defaultCurrency?: string;
@@ -137,6 +157,8 @@ export interface CreatePaymentLinkDialogProps {
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  mode?: 'create' | 'edit';
+  editPaymentLink?: EditPaymentLinkSeed | null;
 }
 
 export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = ({
@@ -147,7 +169,10 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   trigger,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
+  mode = 'create',
+  editPaymentLink = null,
 }) => {
+  const { toast } = useToast();
   const [internalOpen, setInternalOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [descriptionLength, setDescriptionLength] = React.useState(0);
@@ -161,6 +186,10 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
+  const isOpenControlled = controlledOpen !== undefined;
+  const showTrigger = !isOpenControlled || trigger != null;
+  const wiseTransferLocked =
+    mode === 'edit' && Boolean(editPaymentLink?.wiseTransferId);
 
   // Fetch merchant settings when dialog opens
   React.useEffect(() => {
@@ -267,27 +296,117 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     }
   }, [collectionMode, form]);
 
-  // Update form when defaultValues change
+  // Update form when defaultValues change (create / duplicate — not edit mode)
   React.useEffect(() => {
-    if (defaultValues && open) {
-      form.reset({
-        collectionMode: 'payment_request',
-        paymentMethod: 'STRIPE',
-        hederaCheckoutMode: 'INTERACTIVE',
-        amount: undefined,
-        currency: defaultCurrency,
-        description: '',
-        invoiceReference: '',
-        customerEmail: '',
-        customerName: '',
-        customerPhone: '',
-        dueDate: undefined,
-        expiresAt: undefined,
-        ...defaultValues,
+    if (mode === 'edit' || !defaultValues || !open) return;
+    form.reset({
+      collectionMode: 'payment_request',
+      paymentMethod: 'STRIPE',
+      hederaCheckoutMode: 'INTERACTIVE',
+      amount: undefined,
+      currency: defaultCurrency,
+      description: '',
+      invoiceReference: '',
+      customerEmail: '',
+      customerName: '',
+      customerPhone: '',
+      dueDate: undefined,
+      expiresAt: undefined,
+      ...defaultValues,
+    });
+    setDescriptionLength(defaultValues.description?.length || 0);
+  }, [defaultValues, open, form, defaultCurrency, mode]);
+
+  // Prefill edit mode from existing invoice (same record; PATCH only)
+  React.useEffect(() => {
+    if (mode !== 'edit' || !editPaymentLink || !open) return;
+    const due = editPaymentLink.dueDate ? new Date(editPaymentLink.dueDate) : undefined;
+    const exp = editPaymentLink.expiresAt ? new Date(editPaymentLink.expiresAt) : undefined;
+    const invoiceOnly = Boolean(editPaymentLink.invoiceOnlyMode);
+    form.reset({
+      collectionMode: invoiceOnly ? 'invoice_only' : 'payment_request',
+      paymentMethod: invoiceOnly
+        ? undefined
+        : ((editPaymentLink.paymentMethod as 'STRIPE' | 'HEDERA' | 'WISE') || 'STRIPE'),
+      hederaCheckoutMode:
+        (editPaymentLink.hederaCheckoutMode as 'INTERACTIVE' | 'MANUAL') || 'INTERACTIVE',
+      amount: editPaymentLink.amount,
+      currency: editPaymentLink.currency,
+      description: editPaymentLink.description,
+      invoiceReference: editPaymentLink.invoiceReference || '',
+      customerEmail: editPaymentLink.customerEmail || '',
+      customerName: editPaymentLink.customerName || '',
+      customerPhone: editPaymentLink.customerPhone || '',
+      dueDate: due && !Number.isNaN(due.getTime()) ? due : undefined,
+      expiresAt: exp && !Number.isNaN(exp.getTime()) ? exp : undefined,
+    });
+    setDescriptionLength(editPaymentLink.description?.length || 0);
+  }, [mode, editPaymentLink?.id, open, form, editPaymentLink]);
+
+  const performUpdate = async (data: CreatePaymentLinkFormValues) => {
+    if (!editPaymentLink) return;
+    const invoiceOnly = data.collectionMode === 'invoice_only';
+    const effectivePaymentMethod = invoiceOnly ? undefined : data.paymentMethod;
+
+    setIsSubmitting(true);
+    form.clearErrors('root');
+
+    try {
+      const response = await fetch(`/api/payment-links/${editPaymentLink.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: data.amount,
+          currency: data.currency,
+          description: data.description,
+          invoiceReference: data.invoiceReference || null,
+          customerEmail: data.customerEmail || null,
+          customerName: data.customerName || null,
+          customerPhone: data.customerPhone || null,
+          dueDate: data.dueDate?.toISOString() ?? null,
+          expiresAt: data.expiresAt?.toISOString() ?? null,
+          invoiceOnlyMode: invoiceOnly,
+          ...(invoiceOnly
+            ? { paymentMethod: null, hederaCheckoutMode: null }
+            : {
+                paymentMethod: effectivePaymentMethod,
+                ...(data.paymentMethod === 'HEDERA'
+                  ? { hederaCheckoutMode: data.hederaCheckoutMode }
+                  : { hederaCheckoutMode: null }),
+              }),
+        }),
       });
-      setDescriptionLength(defaultValues.description?.length || 0);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to update invoice. Please try again.');
+      }
+
+      const result = await response.json();
+
+      toast({
+        title: 'Invoice updated',
+        description:
+          'Your changes were saved. The same pay link URL still works for this invoice.',
+      });
+      setOpen(false);
+
+      if (onSuccess) {
+        onSuccess(result.data);
+      }
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to update invoice. Please try again.';
+      form.setError('root', {
+        type: 'manual',
+        message,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [defaultValues, open, form, defaultCurrency]);
+  };
 
   const performCreate = async (data: CreatePaymentLinkFormValues) => {
     const invoiceOnly = data.collectionMode === 'invoice_only';
@@ -367,39 +486,55 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     form.clearErrors('root');
     const invoiceOnly = data.collectionMode === 'invoice_only';
 
+    const runPaymentRequestGuardrails = async (): Promise<boolean> => {
+      if (!merchantSettingsLoaded) {
+        form.setError('root', {
+          type: 'manual',
+          message: 'Merchant settings are still loading. Please wait a moment and try again.',
+        });
+        return false;
+      }
+
+      const setup = computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings));
+
+      if (!setup.anyRailConfigured) {
+        setGuardrail({ kind: 'no_rails', setup });
+        return false;
+      }
+
+      const pm = data.paymentMethod;
+      if (pm === 'STRIPE' && !setup.stripeConfigured) {
+        setGuardrail({ kind: 'stripe', setup });
+        return false;
+      }
+      if (pm === 'WISE' && (!setup.wiseConfigured || setup.wiseIncomplete)) {
+        setGuardrail({ kind: 'wise', setup });
+        return false;
+      }
+      if (pm === 'HEDERA' && !setup.hederaConfigured) {
+        setGuardrail({ kind: 'hedera', setup });
+        return false;
+      }
+
+      return true;
+    };
+
+    if (mode === 'edit') {
+      if (invoiceOnly) {
+        await performUpdate(data);
+        return;
+      }
+      if (!(await runPaymentRequestGuardrails())) return;
+      await performUpdate(data);
+      return;
+    }
+
     if (invoiceOnly) {
       await performCreate(data);
       return;
     }
 
-    if (!merchantSettingsLoaded) {
-      form.setError('root', {
-        type: 'manual',
-        message: 'Merchant settings are still loading. Please wait a moment and try again.',
-      });
-      return;
-    }
-
-    const setup = computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings));
-
-    if (!setup.anyRailConfigured) {
-      setGuardrail({ kind: 'no_rails', setup });
-      return;
-    }
-
-    const pm = data.paymentMethod;
-    if (pm === 'STRIPE' && !setup.stripeConfigured) {
-      setGuardrail({ kind: 'stripe', setup });
-      return;
-    }
-    if (pm === 'WISE' && (!setup.wiseConfigured || setup.wiseIncomplete)) {
-      setGuardrail({ kind: 'wise', setup });
-      return;
-    }
-    if (pm === 'HEDERA' && !setup.hederaConfigured) {
-      setGuardrail({ kind: 'hedera', setup });
-      return;
-    }
+    if (!(await runPaymentRequestGuardrails())) return;
 
     await performCreate(data);
   };
@@ -443,17 +578,31 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   return (
     <>
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || <Button>Create Payment Link</Button>}
-      </DialogTrigger>
+      {showTrigger ? (
+        <DialogTrigger asChild>
+          {trigger || <Button>Create Payment Link</Button>}
+        </DialogTrigger>
+      ) : null}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Invoice</DialogTitle>
+          <DialogTitle>{mode === 'edit' ? 'Edit invoice' : 'Create Invoice'}</DialogTitle>
           <DialogDescription>
-            Create a new invoice to send to your customers. Fill in the required
-            information below.
+            {mode === 'edit'
+              ? 'Update this invoice on the same record. The public short link and URL do not change; customers see your updated details.'
+              : 'Create a new invoice to send to your customers. Fill in the required information below.'}
           </DialogDescription>
         </DialogHeader>
+
+        {wiseTransferLocked ? (
+          <Alert>
+            <AlertTitle>Bank transfer in progress</AlertTitle>
+            <AlertDescription>
+              A Wise transfer is already linked to this invoice. Amount, currency, invoice type, and payment method
+              are locked until that transfer completes or is cleared. You can still edit description and customer
+              details.
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit, onInvalidSubmit)} className="space-y-6">
@@ -467,10 +616,11 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                     <RadioGroup
                       onValueChange={field.onChange}
                       value={field.value}
+                      disabled={wiseTransferLocked}
                       className="flex flex-col gap-2"
                     >
                       <div className="flex items-center space-x-2 rounded-md border p-3">
-                        <RadioGroupItem value="payment_request" id="mode-pay" />
+                        <RadioGroupItem value="payment_request" id="mode-pay" disabled={wiseTransferLocked} />
                         <label htmlFor="mode-pay" className="text-sm cursor-pointer leading-snug">
                           <span className="font-medium">Invoice with payment request</span>
                           <span className="block text-muted-foreground">
@@ -479,7 +629,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                         </label>
                       </div>
                       <div className="flex items-center space-x-2 rounded-md border p-3">
-                        <RadioGroupItem value="invoice_only" id="mode-invoice" />
+                        <RadioGroupItem value="invoice_only" id="mode-invoice" disabled={wiseTransferLocked} />
                         <label htmlFor="mode-invoice" className="text-sm cursor-pointer leading-snug">
                           <span className="font-medium">Invoice only / no payment request</span>
                           <span className="block text-muted-foreground">
@@ -508,6 +658,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                     <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       value={field.value ?? 'STRIPE'}
+                      disabled={wiseTransferLocked}
                       onChange={(e) => {
                         const selectedValue = e.target.value as 'STRIPE' | 'HEDERA' | 'WISE';
                         const option = paymentMethodOptions.find(opt => opt.value === selectedValue);
@@ -549,10 +700,11 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                       <RadioGroup
                         onValueChange={field.onChange}
                         value={field.value}
+                        disabled={wiseTransferLocked}
                         className="flex flex-col gap-2"
                       >
                         <div className="flex items-center space-x-2 rounded-md border p-3">
-                          <RadioGroupItem value="INTERACTIVE" id="hedera-int" />
+                          <RadioGroupItem value="INTERACTIVE" id="hedera-int" disabled={wiseTransferLocked} />
                           <label htmlFor="hedera-int" className="text-sm cursor-pointer leading-snug">
                             <span className="font-medium">Interactive wallet payment (HashPack)</span>
                             <span className="block text-muted-foreground">
@@ -561,7 +713,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                           </label>
                         </div>
                         <div className="flex items-center space-x-2 rounded-md border p-3">
-                          <RadioGroupItem value="MANUAL" id="hedera-manual" />
+                          <RadioGroupItem value="MANUAL" id="hedera-manual" disabled={wiseTransferLocked} />
                           <label htmlFor="hedera-manual" className="text-sm cursor-pointer leading-snug">
                             <span className="font-medium">Manual wallet instructions</span>
                             <span className="block text-muted-foreground">
@@ -593,6 +745,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                         placeholder="0.00"
                         {...field}
                         value={field.value || ''}
+                        disabled={wiseTransferLocked}
                       />
                     </FormControl>
                     <FormDescription>Payment amount</FormDescription>
@@ -611,6 +764,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                       <CurrencySelect
                         value={field.value}
                         onValueChange={field.onChange}
+                        disabled={wiseTransferLocked}
                       />
                     </FormControl>
                     <FormDescription>ISO 4217 code</FormDescription>
@@ -833,7 +987,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
             {/* Form-level Error Message */}
             {form.formState.errors.root && (
               <div className="rounded-md bg-destructive/15 border border-destructive/20 p-4 text-sm">
-                <p className="font-medium text-destructive mb-1">Unable to create invoice</p>
+                <p className="font-medium text-destructive mb-1">
+                  {mode === 'edit' ? 'Unable to save changes' : 'Unable to create invoice'}
+                </p>
                 <p className="text-destructive/90">{form.formState.errors.root.message}</p>
               </div>
             )}
@@ -852,7 +1008,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                   <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-sm">
                     <p className="font-medium text-amber-900 mb-1">Please fix the highlighted fields</p>
                     <p className="text-amber-700">
-                      Review the fields above and correct any errors to create this invoice.
+                      {mode === 'edit'
+                        ? 'Review the fields above and correct any errors to save this invoice.'
+                        : 'Review the fields above and correct any errors to create this invoice.'}
                     </p>
                   </div>
                 )
@@ -881,7 +1039,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                 }
               >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Invoice
+                {mode === 'edit' ? 'Save changes' : 'Create Invoice'}
               </Button>
             </DialogFooter>
           </form>

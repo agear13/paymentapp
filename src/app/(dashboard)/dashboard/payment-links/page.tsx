@@ -12,11 +12,13 @@ import { useOrganization } from '@/hooks/use-organization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CreatePaymentLinkDialog } from '@/components/payment-links/create-payment-link-dialog';
-import { EditPaymentLinkDialog } from '@/components/payment-links/edit-payment-link-dialog';
 import { PaymentLinksTable } from '@/components/payment-links/payment-links-table';
 import { PaymentLinksTableSkeleton } from '@/components/payment-links/payment-links-table-skeleton';
 import { PaymentLinksFilters } from '@/components/payment-links/payment-links-filters';
-import { PaymentLinkDetailDialog } from '@/components/payment-links/payment-link-detail-dialog';
+import {
+  PaymentLinkDetailDialog,
+  type PaymentLinkDetails as PaymentLinkDetailPayload,
+} from '@/components/payment-links/payment-link-detail-dialog';
 import { BulkActionsToolbar } from '@/components/payment-links/bulk-actions-toolbar';
 import type { PaymentLink, PaymentLinkDetails } from '@/components/payment-links/payment-links-table';
 import {
@@ -200,10 +202,11 @@ export default function PaymentLinksPage() {
   };
 
   const handleEditClick = (paymentLink: PaymentLink) => {
-    if (paymentLink.status !== 'DRAFT') {
+    if (paymentLink.status !== 'DRAFT' && paymentLink.status !== 'OPEN') {
       toast({
-        title: 'Cannot Edit',
-        description: 'Only DRAFT payment links can be edited',
+        title: 'Cannot edit',
+        description:
+          'Only unpaid draft and open invoices can be edited. Paid or closed invoices cannot be changed.',
         variant: 'destructive',
       });
       return;
@@ -217,6 +220,12 @@ export default function PaymentLinksPage() {
     setEditDialogOpen(false);
     setLinkToEdit(null);
   };
+
+  const handleEditFromDetail = React.useCallback((pl: PaymentLinkDetailPayload) => {
+    setDetailDialogOpen(false);
+    setLinkToEdit(pl as PaymentLink);
+    setEditDialogOpen(true);
+  }, []);
 
   const handleDuplicateClick = (paymentLink: PaymentLink) => {
     setLinkToDuplicate(paymentLink);
@@ -485,15 +494,42 @@ export default function PaymentLinksPage() {
         onOpenChange={setDetailDialogOpen}
         onResend={handleResend}
         onManualSettlementComplete={handleManualSettlementComplete}
+        onEdit={
+          selectedPaymentLink &&
+          (selectedPaymentLink.status === 'DRAFT' || selectedPaymentLink.status === 'OPEN')
+            ? handleEditFromDetail
+            : undefined
+        }
       />
 
-      {/* Edit Payment Link Dialog */}
-      <EditPaymentLinkDialog
-        paymentLink={linkToEdit}
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        onSuccess={handleEditSuccess}
-      />
+      {organizationId && linkToEdit ? (
+        <CreatePaymentLinkDialog
+          mode="edit"
+          organizationId={organizationId}
+          editPaymentLink={{
+            id: linkToEdit.id,
+            amount: Number(linkToEdit.amount),
+            currency: linkToEdit.currency,
+            description: linkToEdit.description,
+            invoiceReference: linkToEdit.invoiceReference,
+            customerEmail: linkToEdit.customerEmail,
+            customerName: linkToEdit.customerName,
+            customerPhone: linkToEdit.customerPhone,
+            dueDate: linkToEdit.dueDate,
+            expiresAt: linkToEdit.expiresAt,
+            invoiceOnlyMode: linkToEdit.invoiceOnlyMode,
+            paymentMethod: linkToEdit.paymentMethod,
+            hederaCheckoutMode: linkToEdit.hederaCheckoutMode,
+            wiseTransferId: linkToEdit.wiseTransferId,
+          }}
+          open={editDialogOpen}
+          onOpenChange={(o) => {
+            setEditDialogOpen(o);
+            if (!o) setLinkToEdit(null);
+          }}
+          onSuccess={handleEditSuccess}
+        />
+      ) : null}
 
       {/* Duplicate Payment Link Dialog */}
       {linkToDuplicate && (

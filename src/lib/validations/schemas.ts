@@ -249,23 +249,34 @@ export const CreatePaymentLinkSchema = z.object({
     }
   );
 
-export const UpdatePaymentLinkSchema = z.object({
-  status: PaymentLinkStatusSchema.optional(),
-  description: z.string().max(200).optional(),
-  customerEmail: emailSchema.nullable().optional(),
-  customerName: z.string().max(255).nullable().optional(),
-  customerPhone: phoneSchema.nullable().optional(),
-  dueDate: z
-    .string()
-    .datetime()
-    .optional()
-    .or(z.date().nullable().optional()),
-  expiresAt: z
-    .string()
-    .datetime()
-    .optional()
-    .or(z.date().nullable().optional()),
-});
+/**
+ * PATCH /api/payment-links/[id] — partial update; merge with current row is done in the route.
+ * Status changes are not accepted here (use dedicated flows).
+ */
+export const UpdatePaymentLinkSchema = z
+  .object({
+    amount: z
+      .number()
+      .positive('Amount must be positive')
+      .multipleOf(0.01, 'Amount must have at most 2 decimal places')
+      .optional(),
+    currency: currencyCodeSchema.optional(),
+    description: z
+      .string()
+      .min(1, 'Description is required')
+      .max(200, 'Description must not exceed 200 characters')
+      .optional(),
+    invoiceReference: z.string().max(255).nullable().optional(),
+    customerEmail: emailSchema.nullable().optional(),
+    customerName: z.string().max(255).nullable().optional(),
+    customerPhone: phoneSchema.nullable().optional(),
+    dueDate: z.coerce.date().nullable().optional(),
+    expiresAt: z.coerce.date().nullable().optional(),
+    invoiceOnlyMode: z.boolean().optional(),
+    paymentMethod: PaymentMethodSchema.nullable().optional(),
+    hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']).nullable().optional(),
+  })
+  .strict();
 
 // ============================================================================
 // PAYMENT EVENT SCHEMAS

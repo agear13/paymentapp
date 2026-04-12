@@ -248,7 +248,7 @@ export const batchUpdateExpiredLinks = async (): Promise<number> => {
  * @returns boolean True if editable
  */
 export const isPaymentLinkEditable = (status: PaymentLinkStatus): boolean => {
-  return status === 'DRAFT';
+  return status === 'DRAFT' || status === 'OPEN';
 };
 
 /**

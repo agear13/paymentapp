@@ -71,6 +71,8 @@ export interface PaymentLink {
   paymentMethod?: string | null;
   invoiceOnlyMode?: boolean;
   hederaCheckoutMode?: string | null;
+  /** When set, amount/currency/payment rails are locked server-side (Wise transfer in flight). */
+  wiseTransferId?: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
   paymentEvents?: any[];
@@ -345,10 +347,11 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
                         View Details
                       </DropdownMenuItem>
                     )}
-                    {paymentLink.status === 'DRAFT' && onEdit && (
+                    {(paymentLink.status === 'DRAFT' || paymentLink.status === 'OPEN') &&
+                      onEdit && (
                       <DropdownMenuItem onClick={() => onEdit(paymentLink)}>
                         <Edit className="mr-2 h-4 w-4" />
-                        Edit Link
+                        Edit
                       </DropdownMenuItem>
                     )}
                     {onDuplicate && (

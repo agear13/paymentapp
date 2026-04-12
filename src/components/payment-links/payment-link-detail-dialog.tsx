@@ -22,6 +22,7 @@ import {
   TrendingUp,
   ArrowRightLeft,
   User,
+  Edit,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -67,9 +68,11 @@ export interface PaymentLinkDetails {
   customerPhone: string | null;
   dueDate?: Date | string | null;
   expiresAt: Date | null;
+  xeroInvoiceNumber?: string | null;
   paymentMethod?: string | null;
   invoiceOnlyMode?: boolean;
   hederaCheckoutMode?: string | null;
+  wiseTransferId?: string | null;
   createdAt: Date;
   updatedAt: Date;
   paymentEvents?: Array<{
@@ -116,6 +119,8 @@ export interface PaymentLinkDetailDialogProps {
   onResend?: (paymentLink: PaymentLinkDetails) => void;
   /** After manual mark paid / reopen — refresh list and detail in parent */
   onManualSettlementComplete?: () => void | Promise<void>;
+  /** Open shared edit-invoice flow (draft / open only). */
+  onEdit?: (paymentLink: PaymentLinkDetails) => void;
 }
 
 const getStatusBadgeVariant = (status: string) => {
@@ -141,6 +146,7 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
   onOpenChange,
   onResend,
   onManualSettlementComplete,
+  onEdit,
 }) => {
   const { toast } = useToast();
   const [qrCodeUrl, setQrCodeUrl] = React.useState<string | null>(null);
@@ -213,18 +219,36 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
     paymentLink.status !== 'CANCELED' && 
     paymentLink.status !== 'EXPIRED';
 
+  const canEditInvoice =
+    paymentLink &&
+    onEdit &&
+    (paymentLink.status === 'DRAFT' || paymentLink.status === 'OPEN');
+
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <div>
               <DialogTitle>Payment Link Details</DialogTitle>
               <DialogDescription>
                 {paymentLink.shortCode}
               </DialogDescription>
             </div>
+            <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center">
+              {canEditInvoice ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => onEdit?.(paymentLink)}
+                >
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+              ) : null}
             <div className="flex flex-col items-end gap-1">
               <Badge variant={getStatusBadgeVariant(paymentLink.status) as any}>
                 {paymentLink.status}
@@ -243,8 +267,15 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                 ) : null}
               </div>
             </div>
+            </div>
           </div>
         </DialogHeader>
+
+        {paymentLink.status === 'PAID' ? (
+          <p className="text-sm text-muted-foreground -mt-2 mb-2 rounded-md border border-border bg-muted/40 px-3 py-2">
+            This invoice is paid and cannot be edited. If you need a correction, create a new invoice or contact support.
+          </p>
+        ) : null}
 
         <Tabs defaultValue="details" className="w-full">
           <TabsList className="grid w-full grid-cols-6">
