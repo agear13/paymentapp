@@ -64,7 +64,7 @@ const createPaymentLinkFormSchema = z
   .object({
   collectionMode: z.enum(['payment_request', 'invoice_only']),
   paymentMethod: z.enum(['STRIPE', 'HEDERA', 'WISE']).optional(),
-  hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']),
+  hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']).optional(),
   amount: z.coerce
     .number({
       invalid_type_error: 'Enter an amount to invoice.',
@@ -106,8 +106,19 @@ const createPaymentLinkFormSchema = z
   expiresAt: z.date().optional(),
 })
   .refine(
-    (d) => d.collectionMode === 'invoice_only' || d.paymentMethod !== undefined,
+    (d) => {
+      if (d.collectionMode === 'invoice_only') return true;
+      return d.paymentMethod != null;
+    },
     { message: 'Select a payment method', path: ['paymentMethod'] }
+  )
+  .refine(
+    (d) => {
+      if (d.collectionMode === 'invoice_only') return true;
+      if (d.paymentMethod !== 'HEDERA') return true;
+      return d.hederaCheckoutMode === 'INTERACTIVE' || d.hederaCheckoutMode === 'MANUAL';
+    },
+    { message: 'Select crypto checkout style', path: ['hederaCheckoutMode'] }
   );
 
 type CreatePaymentLinkFormValues = z.infer<typeof createPaymentLinkFormSchema>;
@@ -200,6 +211,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   const form = useForm<CreatePaymentLinkFormValues>({
     resolver: zodResolver(createPaymentLinkFormSchema),
     defaultValues: {
+      collectionMode: 'payment_request',
+      paymentMethod: 'STRIPE',
+      hederaCheckoutMode: 'INTERACTIVE',
       amount: undefined,
       currency: defaultCurrency,
       description: '',
@@ -212,6 +226,21 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       ...defaultValues,
     },
   });
+
+  const collectionMode = form.watch('collectionMode');
+
+  React.useEffect(() => {
+    if (collectionMode === 'invoice_only') {
+      form.clearErrors('paymentMethod');
+      form.clearErrors('hederaCheckoutMode');
+      form.setValue('paymentMethod', undefined);
+    } else if (collectionMode === 'payment_request') {
+      const pm = form.getValues('paymentMethod');
+      if (!pm) {
+        form.setValue('paymentMethod', 'STRIPE');
+      }
+    }
+  }, [collectionMode, form]);
 
   // Update form when defaultValues change
   React.useEffect(() => {
@@ -267,10 +296,15 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           customerPhone: data.customerPhone || undefined,
           dueDate: data.dueDate?.toISOString(),
           expiresAt: data.expiresAt?.toISOString(),
-          invoiceOnlyMode: invoiceOnly,
-          paymentMethod: effectivePaymentMethod,
-          hederaCheckoutMode:
-            !invoiceOnly && data.paymentMethod === 'HEDERA' ? data.hederaCheckoutMode : undefined,
+          ...(invoiceOnly
+            ? { invoiceOnlyMode: true }
+            : {
+                invoiceOnlyMode: false,
+                paymentMethod: effectivePaymentMethod,
+                ...(data.paymentMethod === 'HEDERA'
+                  ? { hederaCheckoutMode: data.hederaCheckoutMode }
+                  : {}),
+              }),
         }),
       });
 
@@ -281,8 +315,22 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
       const result = await response.json();
 
-      // Reset form and close dialog
-      form.reset();
+      // Reset form and close dialog (include mode fields so validation state stays consistent)
+      form.reset({
+        collectionMode: 'payment_request',
+        paymentMethod: 'STRIPE',
+        hederaCheckoutMode: 'INTERACTIVE',
+        amount: undefined,
+        currency: defaultCurrency,
+        description: '',
+        invoiceReference: '',
+        customerEmail: '',
+        customerName: '',
+        customerPhone: '',
+        dueDate: undefined,
+        expiresAt: undefined,
+      });
+      setDescriptionLength(0);
       setOpen(false);
 
       // Call success callback
@@ -362,8 +410,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
             />
 
             {/* Payment Method */}
-            {form.watch('collectionMode') === 'payment_request' ? (
+            {collectionMode === 'payment_request' ? (
             <FormField
+              shouldUnregister
               control={form.control}
               name="paymentMethod"
               render={({ field }) => (
@@ -401,9 +450,10 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
             />
             ) : null}
 
-            {form.watch('collectionMode') === 'payment_request' &&
+            {collectionMode === 'payment_request' &&
             form.watch('paymentMethod') === 'HEDERA' ? (
               <FormField
+                shouldUnregister
                 control={form.control}
                 name="hederaCheckoutMode"
                 render={({ field }) => (
@@ -443,7 +493,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
             ) : null}
 
             {/* Wise not configured warning */}
-            {form.watch('collectionMode') === 'payment_request' &&
+            {collectionMode === 'payment_request' &&
             form.watch('paymentMethod') === 'WISE' && !wiseConfigured && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -721,13 +771,26 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               </div>
             )}
             
-            {/* Validation Error Summary */}
-            {Object.keys(form.formState.errors).length > 0 && !form.formState.errors.root && (
-              <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-sm">
-                <p className="font-medium text-amber-900 mb-1">Please fix the highlighted fields</p>
-                <p className="text-amber-700">Review the fields above and correct any errors to create this invoice.</p>
-              </div>
-            )}
+            {/* Validation Error Summary (omit hidden payment fields in invoice-only mode) */}
+            {(() => {
+              const err = form.formState.errors;
+              const keys = Object.keys(err).filter((k) => k !== 'root');
+              const visibleKeys =
+                collectionMode === 'invoice_only'
+                  ? keys.filter((k) => k !== 'paymentMethod' && k !== 'hederaCheckoutMode')
+                  : keys;
+              return (
+                visibleKeys.length > 0 &&
+                !err.root && (
+                  <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-sm">
+                    <p className="font-medium text-amber-900 mb-1">Please fix the highlighted fields</p>
+                    <p className="text-amber-700">
+                      Review the fields above and correct any errors to create this invoice.
+                    </p>
+                  </div>
+                )
+              );
+            })()}
 
             <DialogFooter>
               <Button

@@ -2,13 +2,14 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Menu } from 'lucide-react';
+import { Menu, Sparkles } from 'lucide-react';
 import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
 import { Button } from '@/components/ui/button';
 import { OrganizationSwitcher } from './organization-switcher';
 import { BreadcrumbNav } from './breadcrumb-nav';
 import { NotificationCenter } from './notifications/notification-center';
 import { useSidebar } from '@/components/ui/sidebar';
+import { useProvvyCopilot } from '@/components/copilot/provvy-copilot-provider';
 
 interface AppHeaderProps {
   productProfile: DashboardProductProfile;
@@ -16,6 +17,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ productProfile }: AppHeaderProps) {
   const { toggleSidebar } = useSidebar();
+  const { toggleOpen, state: copilotState } = useProvvyCopilot();
   const isRabbitHolePilot = productProfile === 'rabbit_hole_pilot';
 
   return (
@@ -33,6 +35,18 @@ export function AppHeader({ productProfile }: AppHeaderProps) {
       <BreadcrumbNav productProfile={productProfile} />
 
       <div className="ml-auto flex items-center gap-2">
+        <Button
+          type="button"
+          variant={copilotState.isOpen ? 'secondary' : 'outline'}
+          size="sm"
+          className="gap-1.5"
+          onClick={toggleOpen}
+          aria-expanded={copilotState.isOpen}
+          aria-controls="provvy-copilot-panel"
+        >
+          <Sparkles className="size-4" aria-hidden />
+          <span className="hidden sm:inline">Copilot</span>
+        </Button>
         {isRabbitHolePilot && (
           <>
             <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
