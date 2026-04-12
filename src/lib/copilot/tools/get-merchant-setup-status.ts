@@ -3,8 +3,7 @@
  * Server-only data access — call from API routes.
  */
 
-import { prisma } from '@/lib/server/prisma';
-import { computePaymentLinkRailSetup } from '@/lib/payment-links/setup-status';
+import { loadPaymentLinksOrgContext } from '@/lib/payment-links/org-context.server';
 
 export type MerchantSetupStepStatus = 'complete' | 'incomplete' | 'attention';
 
@@ -43,22 +42,7 @@ export type MerchantSetupStatusResult = {
  * Rail flags come from {@link computePaymentLinkRailSetup} (shared with Payment Links guardrails).
  */
 export async function getMerchantSetupStatus(organizationId: string): Promise<MerchantSetupStatusResult> {
-  const [merchant, paymentLinkCount] = await Promise.all([
-    prisma.merchant_settings.findFirst({
-      where: { organization_id: organizationId },
-      select: {
-        stripe_account_id: true,
-        hedera_account_id: true,
-        wise_enabled: true,
-        wise_profile_id: true,
-      },
-    }),
-    prisma.payment_links.count({
-      where: { organization_id: organizationId },
-    }),
-  ]);
-
-  const setup = computePaymentLinkRailSetup(merchant);
+  const { railSetup: setup, paymentLinkCount } = await loadPaymentLinksOrgContext(organizationId);
   const hasRail = setup.anyRailConfigured;
   const hasStripe = setup.stripeConfigured;
   const hasWise = setup.wiseConfigured;

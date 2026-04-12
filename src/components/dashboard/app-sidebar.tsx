@@ -45,8 +45,10 @@ import {
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { usePaymentLinksNavActivation } from '@/hooks/use-payment-links-nav-activation';
 
-const navigationItems = [
+/** Core Payment Links navigation — always shown for standard/admin. */
+const paymentLinksCoreNavItems = [
   {
     title: 'Dashboard',
     href: '/dashboard',
@@ -57,6 +59,10 @@ const navigationItems = [
     href: '/dashboard/payment-links',
     icon: LinkIcon,
   },
+];
+
+/** Shown after activation (rails configured and/or at least one invoice) for standard/admin. */
+const paymentLinksAdvancedNavItems = [
   {
     title: 'Reports',
     href: '/dashboard/reports',
@@ -198,9 +204,18 @@ interface AppSidebarProps {
 export function AppSidebar({ productProfile }: AppSidebarProps) {
   const isBetaAdmin = productProfile === 'admin';
   const isRabbitHolePilot = productProfile === 'rabbit_hole_pilot';
+  const { showAdvancedMainNav } = usePaymentLinksNavActivation(productProfile);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+
+  const mainNavigationItems = React.useMemo(() => {
+    if (isRabbitHolePilot) return [];
+    if (!showAdvancedMainNav) {
+      return paymentLinksCoreNavItems;
+    }
+    return [...paymentLinksCoreNavItems, ...paymentLinksAdvancedNavItems];
+  }, [isRabbitHolePilot, showAdvancedMainNav]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [user, setUser] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
@@ -404,8 +419,11 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
           <SidebarGroupLabel>Main</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navigationItems.map((item) => {
-                const isActive = pathname === item.href;
+              {mainNavigationItems.map((item) => {
+                const isActive =
+                  item.href === '/dashboard/payment-links'
+                    ? pathname === item.href || pathname.startsWith(`${item.href}/`)
+                    : pathname === item.href;
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={isActive}>
