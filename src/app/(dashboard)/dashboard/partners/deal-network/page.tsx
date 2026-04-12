@@ -72,6 +72,8 @@ import {
   ExportPayoutsModal,
   buildExportPayoutRows,
 } from '@/components/deal-network-demo/export-payouts-modal';
+import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
+import { DealNetworkCopilotPanel } from '@/components/deal-network-copilot/deal-network-copilot-panel';
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import {
   dedupeParticipantsForDisplay,
@@ -177,6 +179,22 @@ export default function DealNetworkPage() {
   const [editOpen, setEditOpen] = React.useState(false);
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
+  const [dashboardProfile, setDashboardProfile] = React.useState<DashboardProductProfile | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/copilot/session')
+      .then((r) => r.json())
+      .then((d: { profile: DashboardProductProfile }) => {
+        if (!cancelled) setDashboardProfile(d.profile);
+      })
+      .catch(() => {
+        if (!cancelled) setDashboardProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const resolvedActiveDealId = React.useMemo(
     () => resolveActiveDealId(deals, preferredDealId),
@@ -587,7 +605,8 @@ export default function DealNetworkPage() {
   }, [pilotHydrated, deals.length]);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+      <div className="min-w-0 flex-1 space-y-6">
       {/* Header */}
       <div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
@@ -1648,6 +1667,22 @@ export default function DealNetworkPage() {
         onOpenChange={setExportOpen}
         rows={exportData.rows}
         excludedUnapprovedCount={exportData.excludedUnapprovedCount}
+      />
+      </div>
+      <DealNetworkCopilotPanel
+        profile={dashboardProfile}
+        activeDeal={
+          activeDeal
+            ? {
+                id: activeDeal.id,
+                dealName: activeDeal.dealName,
+                status: activeDeal.status,
+                paymentStatus: activeDeal.paymentStatus,
+                archived: activeDeal.archived,
+              }
+            : null
+        }
+        participants={activeParticipants}
       />
     </div>
   );

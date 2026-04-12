@@ -34,6 +34,7 @@ import { usePolling } from '@/hooks/use-polling';
 import { exportToCSV, type ExportColumn } from '@/lib/export-csv';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/components/payment-links/currency-select';
+import { PaymentLinksOnboardingAssistant } from '@/components/payment-links-onboarding/payment-links-onboarding-assistant';
 
 export default function PaymentLinksPage() {
   const { toast } = useToast();
@@ -395,7 +396,7 @@ export default function PaymentLinksPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div id="create-invoice" className="flex items-center justify-between scroll-mt-24">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Invoices</h1>
           <p className="text-muted-foreground">
@@ -432,6 +433,8 @@ export default function PaymentLinksPage() {
           />
         </div>
       </div>
+
+      {organizationId ? <PaymentLinksOnboardingAssistant organizationId={organizationId} /> : null}
 
       {/* Filters */}
       <PaymentLinksFilters
