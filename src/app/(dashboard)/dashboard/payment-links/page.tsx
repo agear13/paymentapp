@@ -76,37 +76,49 @@ export default function PaymentLinksPage() {
   // Get organization ID from context/hook
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
 
-  const fetchPaymentLinks = React.useCallback(async () => {
-    // Don't fetch if we don't have an organization ID yet
-    if (!organizationId) {
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams({
-        organizationId,
-        ...filters,
-      });
+  type FetchPaymentLinksOpts = { silent?: boolean };
 
-      const response = await fetch(`/api/payment-links?${params}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch payment links');
+  const fetchPaymentLinks = React.useCallback(
+    async (opts?: FetchPaymentLinksOpts) => {
+      const silent = opts?.silent === true;
+      if (!organizationId) {
+        if (!silent) setIsLoading(false);
+        return;
       }
+      if (!silent) {
+        setIsLoading(true);
+      }
+      try {
+        const params = new URLSearchParams({
+          organizationId,
+          ...filters,
+        });
 
-      const result = await response.json();
-      setPaymentLinks(result.data || []);
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to load invoices',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [organizationId, filters, toast]);
+        const response = await fetch(`/api/payment-links?${params}`);
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch payment links');
+        }
+
+        const result = await response.json();
+        setPaymentLinks(result.data || []);
+      } catch (error: unknown) {
+        if (!silent) {
+          const message = error instanceof Error ? error.message : 'Failed to load invoices';
+          toast({
+            title: 'Error',
+            description: message,
+            variant: 'destructive',
+          });
+        }
+      } finally {
+        if (!silent) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [organizationId, filters, toast]
+  );
 
   React.useEffect(() => {
     if (!isOrgLoading && organizationId) {
@@ -125,16 +137,16 @@ export default function PaymentLinksPage() {
     );
   }, [paymentLinks]);
 
-  // Poll for updates every 3 seconds when there are active links
+  // Poll for updates every 3 seconds when there are active links (no toast / full-page loading on failure)
   usePolling(
     () => {
-      if (!isLoading) {
-        fetchPaymentLinks();
+      if (organizationId) {
+        void fetchPaymentLinks({ silent: true });
       }
     },
     {
       interval: 3000,
-      enabled: hasActiveLinks,
+      enabled: hasActiveLinks && !!organizationId,
       runOnMount: false,
     }
   );
@@ -144,7 +156,7 @@ export default function PaymentLinksPage() {
       title: 'Success',
       description: 'Invoice created successfully',
     });
-    fetchPaymentLinks();
+    void fetchPaymentLinks({ silent: true });
   };
 
   const handleViewDetails = async (paymentLink: PaymentLink) => {
@@ -168,7 +180,7 @@ export default function PaymentLinksPage() {
   };
 
   const handleManualSettlementComplete = React.useCallback(async () => {
-    await fetchPaymentLinks();
+    await fetchPaymentLinks({ silent: true });
     const id = selectedPaymentLink?.id;
     if (!id) return;
     try {
@@ -221,7 +233,7 @@ export default function PaymentLinksPage() {
   };
 
   const handleEditSuccess = () => {
-    fetchPaymentLinks();
+    void fetchPaymentLinks({ silent: true });
     setEditDialogOpen(false);
     setLinkToEdit(null);
   };
@@ -242,7 +254,7 @@ export default function PaymentLinksPage() {
       title: 'Success',
       description: 'Invoice duplicated successfully',
     });
-    fetchPaymentLinks();
+    void fetchPaymentLinks({ silent: true });
     setDuplicateDialogOpen(false);
     setLinkToDuplicate(null);
   };
@@ -273,7 +285,7 @@ export default function PaymentLinksPage() {
       
       setCancelDialogOpen(false);
       setLinkToCancel(null);
-      fetchPaymentLinks();
+      void fetchPaymentLinks({ silent: true });
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -293,9 +305,9 @@ export default function PaymentLinksPage() {
     setFilters({});
   };
 
-  const handleRefresh = () => {
-    fetchPaymentLinks();
-  };
+  const handleRefresh = React.useCallback(() => {
+    void fetchPaymentLinks();
+  }, [fetchPaymentLinks]);
 
   const handleClearSelection = () => {
     setSelectedIds(new Set());
@@ -402,7 +414,7 @@ export default function PaymentLinksPage() {
         title: 'Bulk Cancellation Complete',
         description: `${successCount} link(s) cancelled successfully${failCount > 0 ? `, ${failCount} failed` : ''}`,
       });
-      fetchPaymentLinks();
+      void fetchPaymentLinks({ silent: true });
     } else {
       toast({
         title: 'Cancellation Failed',
@@ -463,7 +475,10 @@ export default function PaymentLinksPage() {
       />
 
       {organizationId ? (
-        <PendingCryptoConfirmations organizationId={organizationId} onChanged={fetchPaymentLinks} />
+        <PendingCryptoConfirmations
+          organizationId={organizationId}
+          onChanged={() => void fetchPaymentLinks({ silent: true })}
+        />
       ) : null}
 
       {/* Invoices Table */}

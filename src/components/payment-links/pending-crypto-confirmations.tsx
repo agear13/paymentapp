@@ -62,26 +62,33 @@ export function PendingCryptoConfirmations({
   const { toast } = useToast();
   const [rows, setRows] = React.useState<CryptoVerificationRow[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const [loadError, setLoadError] = React.useState(false);
   const [acting, setActing] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     if (!organizationId) return;
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await fetch(`/api/payment-links/crypto-confirmations?organizationId=${organizationId}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to load');
-      setRows(json.data || []);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'Failed to load crypto activity';
-      toast({ title: 'Error', description: message, variant: 'destructive' });
+      const json = (await res.json().catch(() => ({}))) as { data?: unknown; error?: string };
+      if (!res.ok) {
+        setRows([]);
+        setLoadError(true);
+        return;
+      }
+      const list = json.data;
+      setRows(Array.isArray(list) ? (list as CryptoVerificationRow[]) : []);
+    } catch {
+      setRows([]);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
-  }, [organizationId, toast]);
+  }, [organizationId]);
 
   React.useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   const act = async (id: string, action: 'mark_valid' | 'flag_investigate' | 'acknowledge') => {
@@ -106,6 +113,22 @@ export function PendingCryptoConfirmations({
   };
 
   if (!organizationId) return null;
+
+  if (loadError && rows.length === 0 && !loading) {
+    return (
+      <Card className="border-dashed">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Crypto payment activity</CardTitle>
+          <CardDescription>Could not load payer submissions right now.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (loading && rows.length === 0) {
     return (
