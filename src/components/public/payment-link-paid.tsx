@@ -104,6 +104,7 @@ export const PaymentLinkPaid: React.FC<PaymentLinkPaidProps> = ({
           {paymentLink.attachmentUrl ? (
             <div className="mb-6 text-left">
               <PublicPaymentLinkAttachment
+                payShortCode={paymentLink.shortCode}
                 attachmentUrl={paymentLink.attachmentUrl}
                 attachmentFilename={paymentLink.attachmentFilename}
                 attachmentMimeType={paymentLink.attachmentMimeType}

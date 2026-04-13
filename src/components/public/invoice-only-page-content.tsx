@@ -57,6 +57,7 @@ export function InvoiceOnlyPageContent({ paymentLink }: InvoiceOnlyPageContentPr
             />
             {paymentLink.attachmentUrl ? (
               <PublicPaymentLinkAttachment
+                payShortCode={paymentLink.shortCode}
                 attachmentUrl={paymentLink.attachmentUrl}
                 attachmentFilename={paymentLink.attachmentFilename}
                 attachmentMimeType={paymentLink.attachmentMimeType}

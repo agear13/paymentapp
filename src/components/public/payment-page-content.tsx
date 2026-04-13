@@ -38,6 +38,9 @@ interface PaymentPageContentProps {
     hederaCheckoutMode?: string | null;
     hederaWalletAddress?: string | null;
     availableFxSnapshots?: Array<{ tokenType: string }>;
+    attachmentUrl?: string | null;
+    attachmentFilename?: string | null;
+    attachmentMimeType?: string | null;
   };
   onPaymentStarted?: () => void;
 }
@@ -98,6 +101,7 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
             {paymentLink.attachmentUrl ? (
               <div className="mb-8">
                 <PublicPaymentLinkAttachment
+                  payShortCode={paymentLink.shortCode}
                   attachmentUrl={paymentLink.attachmentUrl}
                   attachmentFilename={paymentLink.attachmentFilename}
                   attachmentMimeType={paymentLink.attachmentMimeType}
