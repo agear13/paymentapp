@@ -262,6 +262,12 @@ model payment_links {
   crypto_memo          String? @db.VarChar(512)
   crypto_instructions  String? @db.Text
 
+  /// Merchant-uploaded payment instruction file (PNG/JPEG/PDF); binary on disk, metadata here
+  attachment_url         String? @db.VarChar(512)
+  attachment_filename    String? @db.VarChar(512)
+  attachment_mime_type   String? @db.VarChar(128)
+  attachment_size_bytes  Int?
+
   created_at              DateTime                  @default(now()) @db.Timestamptz(6)
   updated_at              DateTime                  @db.Timestamptz(6)
   fx_snapshots            fx_snapshots[]
@@ -279,7 +285,7 @@ model payment_links {
   @@index([payment_method])
 }
 
-/// Payer-submitted “I sent crypto” — merchant approves or rejects before marking PAID
+/// Payer-submitted “I sent crypto” + assisted verification (Payment Links manual crypto)
 model crypto_payment_confirmations {
   id                     String                         @id @default(uuid()) @db.Uuid
   payment_link_id        String                         @db.Uuid
@@ -287,7 +293,13 @@ model crypto_payment_confirmations {
   payer_network          String                         @db.VarChar(255)
   payer_amount_sent      String                         @db.VarChar(64)
   payer_wallet_address   String                         @db.VarChar(512)
+  payer_currency         String?                        @db.VarChar(64)
   payer_tx_hash          String?                        @db.VarChar(255)
+  verification_status    CryptoVerificationStatus?
+  match_confidence       MatchConfidence?
+  verification_issues    Json                           @default("[]")
+  merchant_acknowledged_at DateTime?                    @db.Timestamptz(6)
+  merchant_investigation_flag Boolean                  @default(false)
   created_at             DateTime                       @default(now()) @db.Timestamptz(6)
   reviewed_at            DateTime?                      @db.Timestamptz(6)
   payment_links          payment_links                  @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
@@ -421,11 +433,17 @@ enum PaymentEventType {
   EXPIRED
   CANCELED
   REFUND_CONFIRMED
+  /// Payer submitted manual crypto details; invoice PAID_UNVERIFIED or REQUIRES_REVIEW (Payment Links only)
+  CRYPTO_PAYMENT_SUBMITTED
 }
 
 enum PaymentLinkStatus {
   DRAFT
   OPEN
+  /// Crypto: payer submitted confirmation; automated checks run (Payment Links only)
+  PAID_UNVERIFIED
+  /// Crypto: mismatches / low confidence — merchant notified, not blocking payer UX
+  REQUIRES_REVIEW
   PAID
   PARTIALLY_REFUNDED
   REFUNDED
@@ -443,8 +461,21 @@ enum PaymentMethod {
 
 enum CryptoPaymentConfirmationStatus {
   PENDING
+  /// Recorded after payer submit + assisted verification (no merchant approval required)
+  SUBMITTED
   APPROVED
   REJECTED
+}
+
+enum CryptoVerificationStatus {
+  VERIFIED
+  FLAGGED
+}
+
+enum MatchConfidence {
+  HIGH
+  MEDIUM
+  LOW
 }
 
 enum PaymentToken {

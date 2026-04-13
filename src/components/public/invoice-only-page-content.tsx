@@ -7,6 +7,7 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { PaymentAmountDisplay } from '@/components/public/payment-amount-display';
 import { MerchantBranding } from '@/components/public/merchant-branding';
+import { PublicPaymentLinkAttachment } from '@/components/public/public-payment-link-attachment';
 
 export interface InvoiceOnlyPageContentProps {
   paymentLink: {
@@ -22,6 +23,9 @@ export interface InvoiceOnlyPageContentProps {
       name: string;
       logoUrl: string | null;
     };
+    attachmentUrl?: string | null;
+    attachmentFilename?: string | null;
+    attachmentMimeType?: string | null;
   };
 }
 
@@ -51,6 +55,13 @@ export function InvoiceOnlyPageContent({ paymentLink }: InvoiceOnlyPageContentPr
               invoiceReference={paymentLink.invoiceReference}
               dueDate={paymentLink.dueDate}
             />
+            {paymentLink.attachmentUrl ? (
+              <PublicPaymentLinkAttachment
+                attachmentUrl={paymentLink.attachmentUrl}
+                attachmentFilename={paymentLink.attachmentFilename}
+                attachmentMimeType={paymentLink.attachmentMimeType}
+              />
+            ) : null}
             {paymentLink.customerName ? (
               <p className="text-sm text-slate-700">
                 <span className="font-medium">Bill to:</span> {paymentLink.customerName}

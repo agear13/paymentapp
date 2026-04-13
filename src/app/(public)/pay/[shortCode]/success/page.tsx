@@ -59,6 +59,9 @@ export default function PaymentSuccessPage() {
     );
   }
 
+  const status = paymentData?.status as string | undefined;
+  const isCryptoSubmitted = status === 'PAID_UNVERIFIED' || status === 'REQUIRES_REVIEW';
+
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-rose-50">
@@ -93,10 +96,12 @@ export default function PaymentSuccessPage() {
           {/* Success Message */}
           <div>
             <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              Payment Successful!
+              {isCryptoSubmitted ? 'Payment submitted' : 'Payment Successful!'}
             </h1>
             <p className="text-slate-600">
-              Your payment has been processed successfully.
+              {isCryptoSubmitted
+                ? 'Your payment details were recorded and the merchant has been notified. No further action is required from you.'
+                : 'Your payment has been processed successfully.'}
             </p>
           </div>
 
@@ -147,7 +152,9 @@ export default function PaymentSuccessPage() {
           {/* Information */}
           <div className="w-full bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-900">
-              A receipt has been sent to your email address. Please keep this for your records.
+              {isCryptoSubmitted
+                ? 'If the merchant sends a receipt or confirmation, it may arrive separately.'
+                : 'A receipt has been sent to your email address. Please keep this for your records.'}
             </p>
           </div>
 

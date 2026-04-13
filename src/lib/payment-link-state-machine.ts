@@ -17,7 +17,11 @@ import { log } from '@/lib/logger';
  */
 const VALID_TRANSITIONS: Record<PaymentLinkStatus, PaymentLinkStatus[]> = {
   DRAFT: ['OPEN', 'CANCELED'],
-  OPEN: ['PAID', 'EXPIRED', 'CANCELED'],
+  OPEN: ['PAID', 'PAID_UNVERIFIED', 'REQUIRES_REVIEW', 'EXPIRED', 'CANCELED'],
+  /** Crypto: payer submitted; optional promotion to PAID or reopen. */
+  PAID_UNVERIFIED: ['PAID', 'OPEN', 'REQUIRES_REVIEW'],
+  /** Crypto: automated checks flagged — merchant may finalize to PAID or reopen. */
+  REQUIRES_REVIEW: ['PAID', 'OPEN'],
   /** Operator correction: mistaken manual / mis-recorded settlement (pilot-friendly). */
   PAID: ['OPEN'],
   PARTIALLY_REFUNDED: [],
@@ -116,6 +120,8 @@ export const transitionPaymentLinkStatus = async (
     const eventTypeMap: Record<PaymentLinkStatus, string> = {
       DRAFT: 'CREATED',
       OPEN: 'OPENED',
+      PAID_UNVERIFIED: 'CRYPTO_PAYMENT_SUBMITTED',
+      REQUIRES_REVIEW: 'CRYPTO_PAYMENT_SUBMITTED',
       PAID: 'PAYMENT_CONFIRMED',
       PARTIALLY_REFUNDED: 'REFUND_CONFIRMED',
       REFUNDED: 'REFUND_CONFIRMED',

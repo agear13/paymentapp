@@ -8,6 +8,7 @@
 import { CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { format } from 'date-fns';
+import { PublicPaymentLinkAttachment } from '@/components/public/public-payment-link-attachment';
 
 interface PaymentLinkPaidProps {
   paymentLink: {
@@ -22,11 +23,17 @@ interface PaymentLinkPaidProps {
       createdAt: string;
       paymentMethod?: string;
     };
+    attachmentUrl?: string | null;
+    attachmentFilename?: string | null;
+    attachmentMimeType?: string | null;
   };
+  /** Crypto manual flow: invoice is recorded from payer submission (may still be under merchant review). */
+  variant?: 'standard' | 'crypto_submitted';
 }
 
 export const PaymentLinkPaid: React.FC<PaymentLinkPaidProps> = ({
   paymentLink,
+  variant = 'standard',
 }) => {
   const paymentDate = paymentLink.lastEvent?.createdAt
     ? format(new Date(paymentLink.lastEvent.createdAt), 'PPp')
@@ -41,11 +48,13 @@ export const PaymentLinkPaid: React.FC<PaymentLinkPaidProps> = ({
           </div>
 
           <h1 className="text-2xl font-bold text-slate-900 mb-2">
-            Payment Completed
+            {variant === 'crypto_submitted' ? 'Payment submitted successfully' : 'Payment Completed'}
           </h1>
 
           <p className="text-slate-600 mb-6 leading-relaxed">
-            This payment has already been successfully processed.
+            {variant === 'crypto_submitted'
+              ? 'Your payment details were submitted. You do not need to wait for manual approval from the merchant.'
+              : 'This payment has already been successfully processed.'}
           </p>
 
           <div className="bg-slate-50 rounded-lg p-4 mb-6 text-left">
@@ -85,9 +94,22 @@ export const PaymentLinkPaid: React.FC<PaymentLinkPaidProps> = ({
 
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
             <p className="text-sm text-green-800">
-              <span className="font-medium">Thank you!</span> Your payment has been received and is being processed.
+              <span className="font-medium">Thank you!</span>{' '}
+              {variant === 'crypto_submitted'
+                ? 'Keep your transaction record. The merchant has been notified automatically.'
+                : 'Your payment has been received and is being processed.'}
             </p>
           </div>
+
+          {paymentLink.attachmentUrl ? (
+            <div className="mb-6 text-left">
+              <PublicPaymentLinkAttachment
+                attachmentUrl={paymentLink.attachmentUrl}
+                attachmentFilename={paymentLink.attachmentFilename}
+                attachmentMimeType={paymentLink.attachmentMimeType}
+              />
+            </div>
+          ) : null}
 
           <div className="mt-8 pt-6 border-t">
             <p className="text-xs text-slate-500">

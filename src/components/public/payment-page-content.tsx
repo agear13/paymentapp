@@ -11,6 +11,7 @@ import { PaymentAmountDisplay } from '@/components/public/payment-amount-display
 import { MerchantBranding } from '@/components/public/merchant-branding';
 import { PaymentMethodSelector } from '@/components/public/payment-method-selector';
 import { PaymentProgressIndicator } from '@/components/public/payment-progress-indicator';
+import { PublicPaymentLinkAttachment } from '@/components/public/public-payment-link-attachment';
 import { Shield, Lock } from 'lucide-react';
 
 interface PaymentPageContentProps {
@@ -93,6 +94,16 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
                 dueDate={paymentLink.dueDate}
               />
             </div>
+
+            {paymentLink.attachmentUrl ? (
+              <div className="mb-8">
+                <PublicPaymentLinkAttachment
+                  attachmentUrl={paymentLink.attachmentUrl}
+                  attachmentFilename={paymentLink.attachmentFilename}
+                  attachmentMimeType={paymentLink.attachmentMimeType}
+                />
+              </div>
+            ) : null}
 
             {/* Payment Method Selection */}
             <div className="mb-6">

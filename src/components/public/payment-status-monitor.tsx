@@ -25,7 +25,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 interface PaymentStatusMonitorProps {
   paymentLinkId: string;
   shortCode: string;
-  initialStatus?: 'OPEN' | 'PAID' | 'EXPIRED' | 'CANCELED';
+  initialStatus?: 'OPEN' | 'PAID_UNVERIFIED' | 'REQUIRES_REVIEW' | 'PAID' | 'EXPIRED' | 'CANCELED';
   onStatusChange?: (status: string) => void;
 }
 
@@ -36,6 +36,20 @@ const statusConfig = {
     bgColor: 'bg-blue-50',
     borderColor: 'border-blue-200',
     label: 'Awaiting Payment',
+  },
+  PAID_UNVERIFIED: {
+    icon: CheckCircle2,
+    color: 'text-green-500',
+    bgColor: 'bg-green-50',
+    borderColor: 'border-green-200',
+    label: 'Payment submitted',
+  },
+  REQUIRES_REVIEW: {
+    icon: CheckCircle2,
+    color: 'text-green-500',
+    bgColor: 'bg-green-50',
+    borderColor: 'border-green-200',
+    label: 'Payment submitted',
   },
   PAID: {
     icon: CheckCircle2,
@@ -86,7 +100,12 @@ export const PaymentStatusMonitor: React.FC<PaymentStatusMonitorProps> = ({
       // Redirect on final states
       // NOTE: Alternative UX could show expired state inline on /pay/[shortCode]
       // instead of navigating away. Current pattern follows same flow as success/canceled.
-      if (newStatus.currentStatus === 'PAID' && !hasShownSuccess) {
+      if (
+        (newStatus.currentStatus === 'PAID' ||
+          newStatus.currentStatus === 'PAID_UNVERIFIED' ||
+          newStatus.currentStatus === 'REQUIRES_REVIEW') &&
+        !hasShownSuccess
+      ) {
         setHasShownSuccess(true);
         setTimeout(() => {
           router.push(`/pay/${shortCode}/success`);

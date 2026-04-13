@@ -1,6 +1,6 @@
 /**
  * GET /api/payment-links/crypto-confirmations?organizationId=
- * Pending manual crypto confirmations for the merchant dashboard.
+ * Recent assisted crypto submissions (PAID_UNVERIFIED / REQUIRES_REVIEW) for the merchant dashboard.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -33,8 +33,11 @@ export async function GET(request: NextRequest) {
 
     const rows = await prisma.crypto_payment_confirmations.findMany({
       where: {
-        status: 'PENDING',
-        payment_links: { organization_id: organizationId },
+        status: 'SUBMITTED',
+        payment_links: {
+          organization_id: organizationId,
+          status: { in: ['PAID_UNVERIFIED', 'REQUIRES_REVIEW'] },
+        },
       },
       include: {
         payment_links: {
@@ -46,10 +49,14 @@ export async function GET(request: NextRequest) {
             currency: true,
             status: true,
             invoice_reference: true,
+            crypto_network: true,
+            crypto_address: true,
+            crypto_currency: true,
           },
         },
       },
       orderBy: { created_at: 'desc' },
+      take: 100,
     });
 
     const data = rows.map((r) => ({
@@ -58,7 +65,15 @@ export async function GET(request: NextRequest) {
       payerNetwork: r.payer_network,
       payerAmountSent: r.payer_amount_sent,
       payerWalletAddress: r.payer_wallet_address,
+      payerCurrency: r.payer_currency,
       payerTxHash: r.payer_tx_hash,
+      verificationStatus: r.verification_status,
+      matchConfidence: r.match_confidence,
+      verificationIssues: Array.isArray(r.verification_issues)
+        ? (r.verification_issues as string[])
+        : [],
+      merchantInvestigationFlag: r.merchant_investigation_flag,
+      merchantAcknowledgedAt: r.merchant_acknowledged_at,
       createdAt: r.created_at,
       paymentLink: {
         id: r.payment_links.id,
@@ -68,6 +83,9 @@ export async function GET(request: NextRequest) {
         currency: r.payment_links.currency,
         status: r.payment_links.status,
         invoiceReference: r.payment_links.invoice_reference,
+        cryptoNetwork: r.payment_links.crypto_network,
+        cryptoAddress: r.payment_links.crypto_address,
+        cryptoCurrency: r.payment_links.crypto_currency,
       },
     }));
 

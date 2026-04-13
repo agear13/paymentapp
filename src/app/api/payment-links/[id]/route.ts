@@ -91,6 +91,10 @@ function transformPaymentLink(link: any) {
     wiseTransferId: link.wise_transfer_id ?? null,
     wiseReceivedAmount: link.wise_received_amount ? Number(link.wise_received_amount) : null,
     wiseReceivedCurrency: link.wise_received_currency ?? null,
+    attachmentUrl: link.attachment_url ?? null,
+    attachmentFilename: link.attachment_filename ?? null,
+    attachmentMimeType: link.attachment_mime_type ?? null,
+    attachmentSizeBytes: link.attachment_size_bytes ?? null,
     paymentEvents,
     fxSnapshots,
     ledgerEntries,
@@ -99,10 +103,11 @@ function transformPaymentLink(link: any) {
 }
 import { applyRateLimit } from '@/lib/rate-limit';
 import { UpdatePaymentLinkSchema } from '@/lib/validations/schemas';
-import { 
+import {
   transitionPaymentLinkStatus,
   isPaymentLinkEditable,
 } from '@/lib/payment-link-state-machine';
+import { tryDeletePaymentLinkAttachmentFile } from '@/lib/payment-links/payment-link-attachment';
 
 /**
  * GET /api/payment-links/[id]
@@ -440,6 +445,21 @@ export async function PATCH(
       prismaData.wise_status = 'INSTRUCTIONS_READY';
     }
 
+    const previousAttachmentUrl = currentLink.attachment_url;
+    if (patch.attachment !== undefined) {
+      if (patch.attachment === null) {
+        prismaData.attachment_url = null;
+        prismaData.attachment_filename = null;
+        prismaData.attachment_mime_type = null;
+        prismaData.attachment_size_bytes = null;
+      } else {
+        prismaData.attachment_url = patch.attachment.url;
+        prismaData.attachment_filename = patch.attachment.filename;
+        prismaData.attachment_mime_type = patch.attachment.mimeType;
+        prismaData.attachment_size_bytes = patch.attachment.sizeBytes;
+      }
+    }
+
     assertPaymentLinksUpdateDataValid(prismaData as Record<string, unknown>);
 
     const updatedLink = await prisma.$transaction(async (tx) => {
@@ -461,6 +481,14 @@ export async function PATCH(
 
       return updated;
     });
+
+    if (patch.attachment !== undefined) {
+      const nextUrl =
+        patch.attachment === null ? null : patch.attachment.url;
+      if (previousAttachmentUrl && previousAttachmentUrl !== nextUrl) {
+        await tryDeletePaymentLinkAttachmentFile(previousAttachmentUrl);
+      }
+    }
 
     loggers.api.info(
       { paymentLinkId: id, patch },

@@ -56,7 +56,7 @@ const formatDate = (date: Date | string | null | undefined, formatStr: string = 
 export interface PaymentLink {
   id: string;
   shortCode: string;
-  status: 'DRAFT' | 'OPEN' | 'PAID' | 'EXPIRED' | 'CANCELED';
+  status: 'DRAFT' | 'OPEN' | 'PAID_UNVERIFIED' | 'REQUIRES_REVIEW' | 'PAID' | 'EXPIRED' | 'CANCELED';
   amount: number;
   currency: string;
   description: string;
@@ -78,6 +78,10 @@ export interface PaymentLink {
   cryptoCurrency?: string | null;
   cryptoMemo?: string | null;
   cryptoInstructions?: string | null;
+  attachmentUrl?: string | null;
+  attachmentFilename?: string | null;
+  attachmentMimeType?: string | null;
+  attachmentSizeBytes?: number | null;
   createdAt: Date | string;
   updatedAt: Date | string;
   paymentEvents?: any[];
@@ -105,7 +109,13 @@ const getEffectiveStatus = (link: PaymentLink): string => {
   const now = new Date();
   
   // If already PAID, EXPIRED, or CANCELED, return as-is
-  if (link.status === 'PAID' || link.status === 'EXPIRED' || link.status === 'CANCELED') {
+  if (
+    link.status === 'PAID' ||
+    link.status === 'PAID_UNVERIFIED' ||
+    link.status === 'REQUIRES_REVIEW' ||
+    link.status === 'EXPIRED' ||
+    link.status === 'CANCELED'
+  ) {
     return link.status;
   }
   
@@ -115,7 +125,14 @@ const getEffectiveStatus = (link: PaymentLink): string => {
   }
   
   // Check if overdue (customer due date)
-  if (link.dueDate && new Date(link.dueDate) < now && link.status !== 'PAID' && link.status !== 'CANCELED') {
+  if (
+    link.dueDate &&
+    new Date(link.dueDate) < now &&
+    link.status !== 'PAID' &&
+    link.status !== 'PAID_UNVERIFIED' &&
+    link.status !== 'REQUIRES_REVIEW' &&
+    link.status !== 'CANCELED'
+  ) {
     return 'OVERDUE';
   }
   
@@ -130,6 +147,10 @@ const getStatusBadgeVariant = (status: string) => {
       return 'default';
     case 'PAID':
       return 'success';
+    case 'PAID_UNVERIFIED':
+      return 'default';
+    case 'REQUIRES_REVIEW':
+      return 'warning';
     case 'OVERDUE':
       return 'warning';
     case 'EXPIRED':

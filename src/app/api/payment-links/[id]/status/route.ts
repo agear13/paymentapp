@@ -311,6 +311,10 @@ function generateStatusMessage(status: string, lastEvent?: any): string {
         return 'Awaiting Wise bank transfer (manual settlement confirmation for pilot)';
       }
       return 'Awaiting payment';
+    case 'PAID_UNVERIFIED':
+      return 'Crypto payment submitted — recorded on your invoice';
+    case 'REQUIRES_REVIEW':
+      return 'Crypto payment submitted — merchant review suggested';
     case 'PAID':
       const method = lastEvent?.payment_method;
       return method 

@@ -10,7 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { CalendarIcon, Loader2 } from 'lucide-react';
+import { CalendarIcon, FileText, Loader2, Paperclip, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -52,6 +52,10 @@ import { PaymentLinksGuardrailModal } from '@/components/payment-links-onboardin
 import type { PaymentLinksGuardrailKind } from '@/components/payment-links-onboarding/payment-links-guardrail-modal';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
+  isAllowedPaymentLinkAttachmentMime,
+} from '@/lib/payment-links/payment-link-attachment';
 
 interface PaymentMethodOption {
   value: 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO';
@@ -171,7 +175,18 @@ export interface EditPaymentLinkSeed {
   cryptoCurrency?: string | null;
   cryptoMemo?: string | null;
   cryptoInstructions?: string | null;
+  attachmentUrl?: string | null;
+  attachmentFilename?: string | null;
+  attachmentMimeType?: string | null;
+  attachmentSizeBytes?: number | null;
 }
+
+export type PaymentLinkAttachmentDraft = {
+  url: string;
+  filename: string;
+  mimeType: 'image/png' | 'image/jpeg' | 'image/jpg' | 'application/pdf';
+  sizeBytes: number;
+};
 
 export interface CreatePaymentLinkDialogProps {
   organizationId: string;
@@ -214,6 +229,17 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   const showTrigger = !isOpenControlled || trigger != null;
   const wiseTransferLocked =
     mode === 'edit' && Boolean(editPaymentLink?.wiseTransferId);
+
+  const attachmentFileInputRef = React.useRef<HTMLInputElement>(null);
+  const [invoiceAttachment, setInvoiceAttachment] = React.useState<PaymentLinkAttachmentDraft | null>(null);
+  const [attachmentDirty, setAttachmentDirty] = React.useState(false);
+  const [attachmentUploading, setAttachmentUploading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open || mode === 'edit') return;
+    setInvoiceAttachment(null);
+    setAttachmentDirty(false);
+  }, [open, mode]);
 
   // Fetch merchant settings when dialog opens
   React.useEffect(() => {
@@ -385,7 +411,97 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       expiresAt: exp && !Number.isNaN(exp.getTime()) ? exp : undefined,
     });
     setDescriptionLength(editPaymentLink.description?.length || 0);
+
+    if (
+      editPaymentLink.attachmentUrl &&
+      editPaymentLink.attachmentFilename &&
+      editPaymentLink.attachmentMimeType &&
+      isAllowedPaymentLinkAttachmentMime(editPaymentLink.attachmentMimeType) &&
+      editPaymentLink.attachmentSizeBytes != null
+    ) {
+      setInvoiceAttachment({
+        url: editPaymentLink.attachmentUrl,
+        filename: editPaymentLink.attachmentFilename,
+        mimeType: editPaymentLink.attachmentMimeType,
+        sizeBytes: editPaymentLink.attachmentSizeBytes,
+      });
+    } else {
+      setInvoiceAttachment(null);
+    }
+    setAttachmentDirty(false);
   }, [mode, editPaymentLink?.id, open, form, editPaymentLink]);
+
+  const validateAttachmentFileClient = (file: File): string | null => {
+    if (!isAllowedPaymentLinkAttachmentMime(file.type)) {
+      return 'Use a PNG, JPG, JPEG, or PDF file.';
+    }
+    if (file.size > PAYMENT_LINK_ATTACHMENT_MAX_BYTES) {
+      return `File is too large. Maximum size is ${PAYMENT_LINK_ATTACHMENT_MAX_BYTES / (1024 * 1024)}MB.`;
+    }
+    return null;
+  };
+
+  const handleInvoiceAttachmentInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (attachmentFileInputRef.current) attachmentFileInputRef.current.value = '';
+    if (!file) return;
+
+    const err = validateAttachmentFileClient(file);
+    if (err) {
+      toast({ title: 'Invalid file', description: err, variant: 'destructive' });
+      return;
+    }
+
+    setAttachmentUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('organizationId', organizationId);
+      if (mode === 'edit' && editPaymentLink?.id) {
+        fd.append('paymentLinkId', editPaymentLink.id);
+      }
+
+      const res = await fetch('/api/payment-links/upload-attachment', {
+        method: 'POST',
+        body: fd,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || 'Upload failed');
+      }
+      const a = json.attachment;
+      if (!a?.url || !a.filename || !a.mimeType || a.sizeBytes == null) {
+        throw new Error('Invalid upload response');
+      }
+      if (!isAllowedPaymentLinkAttachmentMime(a.mimeType)) {
+        throw new Error('Invalid file type from server');
+      }
+      setInvoiceAttachment({
+        url: a.url,
+        filename: a.filename,
+        mimeType: a.mimeType,
+        sizeBytes: a.sizeBytes,
+      });
+      setAttachmentDirty(true);
+      toast({
+        title: 'Attachment ready',
+        description:
+          mode === 'edit'
+            ? 'Save the invoice to apply this attachment to the public link.'
+            : 'Create the invoice to attach this file to the public link.',
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Upload failed';
+      toast({ title: 'Upload failed', description: message, variant: 'destructive' });
+    } finally {
+      setAttachmentUploading(false);
+    }
+  };
+
+  const clearInvoiceAttachment = () => {
+    setInvoiceAttachment(null);
+    setAttachmentDirty(true);
+  };
 
   const performUpdate = async (data: CreatePaymentLinkFormValues) => {
     if (!editPaymentLink) return;
@@ -396,6 +512,20 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     form.clearErrors('root');
 
     try {
+      const attachmentPayload =
+        attachmentDirty
+          ? invoiceAttachment
+            ? {
+                attachment: {
+                  url: invoiceAttachment.url,
+                  filename: invoiceAttachment.filename,
+                  mimeType: invoiceAttachment.mimeType,
+                  sizeBytes: invoiceAttachment.sizeBytes,
+                },
+              }
+            : { attachment: null as null }
+          : {};
+
       const response = await fetch(`/api/payment-links/${editPaymentLink.id}`, {
         method: 'PATCH',
         headers: {
@@ -412,6 +542,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           dueDate: data.dueDate?.toISOString() ?? null,
           expiresAt: data.expiresAt?.toISOString() ?? null,
           invoiceOnlyMode: invoiceOnly,
+          ...attachmentPayload,
           ...(invoiceOnly
             ? {
                 paymentMethod: null,
@@ -458,6 +589,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         description:
           'Your changes were saved. The same pay link URL still works for this invoice.',
       });
+      setAttachmentDirty(false);
       setOpen(false);
 
       if (onSuccess) {
@@ -499,6 +631,16 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           customerPhone: data.customerPhone || undefined,
           dueDate: data.dueDate?.toISOString(),
           expiresAt: data.expiresAt?.toISOString(),
+          ...(invoiceAttachment
+            ? {
+                attachment: {
+                  url: invoiceAttachment.url,
+                  filename: invoiceAttachment.filename,
+                  mimeType: invoiceAttachment.mimeType,
+                  sizeBytes: invoiceAttachment.sizeBytes,
+                },
+              }
+            : {}),
           ...(invoiceOnly
             ? { invoiceOnlyMode: true }
             : {
@@ -546,6 +688,8 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         dueDate: undefined,
         expiresAt: undefined,
       });
+      setInvoiceAttachment(null);
+      setAttachmentDirty(false);
       setDescriptionLength(0);
       setOpen(false);
 
@@ -1170,6 +1314,64 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                 To extend the life of this invoice, please edit this invoice & resend to customer.
               </div>
             )}
+
+            <div className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Paperclip className="h-4 w-4 text-muted-foreground" aria-hidden />
+                <span className="text-sm font-medium">Payment instructions attachment</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Optional PNG, JPG, or PDF (max {PAYMENT_LINK_ATTACHMENT_MAX_BYTES / (1024 * 1024)}MB). Shown on the
+                public invoice — useful for QR codes or bank transfer details.
+              </p>
+              <input
+                ref={attachmentFileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,application/pdf"
+                className="sr-only"
+                onChange={handleInvoiceAttachmentInputChange}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={attachmentUploading}
+                  onClick={() => attachmentFileInputRef.current?.click()}
+                >
+                  {attachmentUploading ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      Uploading…
+                    </>
+                  ) : invoiceAttachment ? (
+                    'Replace file'
+                  ) : (
+                    'Upload file'
+                  )}
+                </Button>
+                {invoiceAttachment ? (
+                  <>
+                    <div className="flex items-center gap-1.5 text-sm text-slate-700 min-w-0 max-w-full">
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="truncate" title={invoiceAttachment.filename}>
+                        {invoiceAttachment.filename}
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={clearInvoiceAttachment}
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Remove
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            </div>
 
             {/* Form-level Error Message */}
             {form.formState.errors.root && (

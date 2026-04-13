@@ -58,7 +58,7 @@ import { useToast } from '@/hooks/use-toast';
 export interface PaymentLinkDetails {
   id: string;
   shortCode: string;
-  status: 'DRAFT' | 'OPEN' | 'PAID' | 'EXPIRED' | 'CANCELED';
+  status: 'DRAFT' | 'OPEN' | 'PAID_UNVERIFIED' | 'REQUIRES_REVIEW' | 'PAID' | 'EXPIRED' | 'CANCELED';
   amount: number;
   currency: string;
   description: string;
@@ -78,6 +78,10 @@ export interface PaymentLinkDetails {
   cryptoCurrency?: string | null;
   cryptoMemo?: string | null;
   cryptoInstructions?: string | null;
+  attachmentUrl?: string | null;
+  attachmentFilename?: string | null;
+  attachmentMimeType?: string | null;
+  attachmentSizeBytes?: number | null;
   createdAt: Date;
   updatedAt: Date;
   paymentEvents?: Array<{
@@ -134,6 +138,10 @@ const getStatusBadgeVariant = (status: string) => {
       return 'secondary';
     case 'OPEN':
       return 'default';
+    case 'PAID_UNVERIFIED':
+      return 'default';
+    case 'REQUIRES_REVIEW':
+      return 'destructive';
     case 'PAID':
       return 'success';
     case 'EXPIRED':
@@ -218,10 +226,13 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
     }
   };
 
-  const canResend = paymentLink && 
-    paymentLink.customerEmail && 
-    paymentLink.status !== 'PAID' && 
-    paymentLink.status !== 'CANCELED' && 
+  const canResend =
+    paymentLink &&
+    paymentLink.customerEmail &&
+    paymentLink.status !== 'PAID' &&
+    paymentLink.status !== 'PAID_UNVERIFIED' &&
+    paymentLink.status !== 'REQUIRES_REVIEW' &&
+    paymentLink.status !== 'CANCELED' &&
     paymentLink.status !== 'EXPIRED';
 
   const canEditInvoice =
@@ -284,6 +295,13 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
         {paymentLink.status === 'PAID' ? (
           <p className="text-sm text-muted-foreground -mt-2 mb-2 rounded-md border border-border bg-muted/40 px-3 py-2">
             This invoice is paid and cannot be edited. If you need a correction, create a new invoice or contact support.
+          </p>
+        ) : null}
+        {paymentLink.status === 'PAID_UNVERIFIED' || paymentLink.status === 'REQUIRES_REVIEW' ? (
+          <p className="text-sm text-muted-foreground -mt-2 mb-2 rounded-md border border-border bg-muted/40 px-3 py-2">
+            A payer submitted crypto payment details; the invoice is recorded automatically. Use &quot;Crypto payment
+            activity&quot; on the list page for match confidence and optional follow-up. You can reopen here if this was
+            a mistake.
           </p>
         ) : null}
 
@@ -380,6 +398,28 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                           </div>
                         ) : null}
                       </dl>
+                    </div>
+                  </>
+                ) : null}
+
+                {paymentLink.attachmentUrl ? (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Payment instructions attachment</p>
+                      <p className="text-xs text-muted-foreground">
+                        Shown to customers on the public invoice link.
+                      </p>
+                      <Button variant="outline" size="sm" asChild>
+                        <a
+                          href={paymentLink.attachmentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          {paymentLink.attachmentFilename?.trim() || 'Open attachment'}
+                        </a>
+                      </Button>
                     </div>
                   </>
                 ) : null}
@@ -507,7 +547,9 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                       Mark payment received
                     </Button>
                   ) : null}
-                  {paymentLink.status === 'PAID' ? (
+                  {paymentLink.status === 'PAID' ||
+                  paymentLink.status === 'PAID_UNVERIFIED' ||
+                  paymentLink.status === 'REQUIRES_REVIEW' ? (
                     <Button
                       type="button"
                       variant="outline"

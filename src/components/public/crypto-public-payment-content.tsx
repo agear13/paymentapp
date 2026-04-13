@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle, Copy, Check, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { PublicPaymentLinkAttachment } from '@/components/public/public-payment-link-attachment';
 
 const COMMON_NETWORKS = [
   'Bitcoin',
@@ -49,6 +50,9 @@ export interface CryptoPublicPaymentContentProps {
     cryptoCurrency: string | null;
     cryptoMemo: string | null;
     cryptoInstructions: string | null;
+    attachmentUrl?: string | null;
+    attachmentFilename?: string | null;
+    attachmentMimeType?: string | null;
   };
 }
 
@@ -79,6 +83,9 @@ export function CryptoPublicPaymentContent({
   const [submitted, setSubmitted] = React.useState(false);
   const [payerNetwork, setPayerNetwork] = React.useState('');
   const [payerAmountSent, setPayerAmountSent] = React.useState(paymentLink.amount);
+  const [payerCurrency, setPayerCurrency] = React.useState(
+    () => paymentLink.cryptoCurrency?.trim() || paymentLink.currency || ''
+  );
   const [payerWalletAddress, setPayerWalletAddress] = React.useState('');
   const [payerTxHash, setPayerTxHash] = React.useState('');
 
@@ -98,6 +105,7 @@ export function CryptoPublicPaymentContent({
       });
       return;
     }
+    const currencyTrim = payerCurrency.trim();
     setSubmitting(true);
     try {
       const res = await fetch(`/api/public/pay/${shortCode}/crypto-confirmation`, {
@@ -107,6 +115,7 @@ export function CryptoPublicPaymentContent({
           payerNetwork: payerNetwork.trim(),
           payerAmountSent: payerAmountSent.trim(),
           payerWalletAddress: payerWalletAddress.trim(),
+          payerCurrency: currencyTrim || null,
           payerTxHash: payerTxHash.trim() || null,
         }),
       });
@@ -117,10 +126,8 @@ export function CryptoPublicPaymentContent({
       setSubmitted(true);
       setShowForm(false);
       toast({
-        title: 'Confirmation sent',
-        description:
-          json.message ||
-          'The merchant will review your payment and update this invoice.',
+        title: 'Payment submitted',
+        description: json.message || 'Payment submitted successfully.',
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Submission failed';
@@ -148,6 +155,14 @@ export function CryptoPublicPaymentContent({
               invoiceReference={paymentLink.invoiceReference}
               dueDate={paymentLink.dueDate}
             />
+
+            {paymentLink.attachmentUrl ? (
+              <PublicPaymentLinkAttachment
+                attachmentUrl={paymentLink.attachmentUrl}
+                attachmentFilename={paymentLink.attachmentFilename}
+                attachmentMimeType={paymentLink.attachmentMimeType}
+              />
+            ) : null}
 
             <Alert variant="destructive" className="border-amber-200 bg-amber-50 text-amber-950">
               <AlertTriangle className="h-4 w-4 text-amber-700" />
@@ -224,10 +239,10 @@ export function CryptoPublicPaymentContent({
             {submitted ? (
               <Alert>
                 <Check className="h-4 w-4" />
-                <AlertTitle>We’ve received your confirmation</AlertTitle>
+                <AlertTitle>Payment submitted successfully</AlertTitle>
                 <AlertDescription>
-                  The merchant will verify your payment and update this invoice. You can leave this page open; it may
-                  refresh when the invoice is marked paid.
+                  Your payment details were recorded and the merchant has been notified. You can close this page; no
+                  further action is required from you.
                 </AlertDescription>
               </Alert>
             ) : !showForm ? (
@@ -238,7 +253,7 @@ export function CryptoPublicPaymentContent({
               <form onSubmit={handleSubmit} className="space-y-4 border rounded-lg p-4 bg-white">
                 <h3 className="font-semibold text-slate-900">Confirm your payment</h3>
                 <p className="text-sm text-muted-foreground">
-                  Tell the merchant what you sent so they can match your transaction.
+                  Tell us what you sent so we can match your transaction to this invoice.
                 </p>
                 <div className="space-y-2">
                   <Label htmlFor="payerNetwork">Network you used *</Label>
@@ -265,6 +280,18 @@ export function CryptoPublicPaymentContent({
                     placeholder="e.g. 0.05 ETH"
                     required
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="payerCurrency">Asset / currency you sent</Label>
+                  <Input
+                    id="payerCurrency"
+                    value={payerCurrency}
+                    onChange={(e) => setPayerCurrency(e.target.value)}
+                    placeholder="e.g. ETH, USDC (defaults to invoice asset if left blank)"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Helps verify your payment matches the requested asset.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="payerWalletAddress">Your wallet address *</Label>

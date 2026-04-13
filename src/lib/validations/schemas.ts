@@ -4,6 +4,10 @@
  */
 
 import { z } from 'zod';
+import {
+  PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
+  isPaymentLinkAttachmentPublicUrl,
+} from '@/lib/payment-links/payment-link-attachment';
 
 // ============================================================================
 // ENUM SCHEMAS
@@ -12,6 +16,8 @@ import { z } from 'zod';
 export const PaymentLinkStatusSchema = z.enum([
   'DRAFT',
   'OPEN',
+  'PAID_UNVERIFIED',
+  'REQUIRES_REVIEW',
   'PAID',
   'EXPIRED',
   'CANCELED',
@@ -21,13 +27,33 @@ export const PaymentEventTypeSchema = z.enum([
   'CREATED',
   'OPENED',
   'PAYMENT_INITIATED',
+  'PAYMENT_PENDING',
   'PAYMENT_CONFIRMED',
   'PAYMENT_FAILED',
   'EXPIRED',
   'CANCELED',
+  'REFUND_CONFIRMED',
+  'CRYPTO_PAYMENT_SUBMITTED',
 ]);
 
 export const PaymentMethodSchema = z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO']);
+
+/** Merchant-uploaded invoice attachment (PNG, JPEG, PDF); URL must be under /uploads/payment-link-attachments/ */
+export const PaymentLinkAttachmentInputSchema = z
+  .object({
+    url: z.string().min(1).max(512),
+    filename: z.string().min(1).max(512),
+    mimeType: z.enum(['image/png', 'image/jpeg', 'image/jpg', 'application/pdf']),
+    sizeBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(PAYMENT_LINK_ATTACHMENT_MAX_BYTES),
+  })
+  .refine((d) => isPaymentLinkAttachmentPublicUrl(d.url), {
+    message: 'Invalid attachment URL',
+    path: ['url'],
+  });
 
 export const FxSnapshotTypeSchema = z.enum(['CREATION', 'SETTLEMENT']);
 
@@ -243,6 +269,8 @@ export const CreatePaymentLinkSchema = z.object({
   cryptoCurrency: z.string().min(1).max(64).optional(),
   cryptoMemo: z.string().max(512).optional(),
   cryptoInstructions: z.string().max(8000).optional(),
+  /** Optional payment instruction attachment (upload via POST /api/payment-links/upload-attachment first). */
+  attachment: PaymentLinkAttachmentInputSchema.optional(),
 })
   .refine(
     (d) => {
@@ -300,6 +328,8 @@ export const UpdatePaymentLinkSchema = z
     cryptoCurrency: z.string().min(1).max(64).nullable().optional(),
     cryptoMemo: z.string().max(512).nullable().optional(),
     cryptoInstructions: z.string().max(8000).nullable().optional(),
+    /** Set to null to remove attachment; omit to leave unchanged. */
+    attachment: PaymentLinkAttachmentInputSchema.nullable().optional(),
   })
   .strict();
 
@@ -308,12 +338,13 @@ export const PublicCryptoConfirmationSubmitSchema = z.object({
   payerNetwork: z.string().min(1).max(255),
   payerAmountSent: z.string().min(1).max(64),
   payerWalletAddress: z.string().min(1).max(512),
+  payerCurrency: z.string().min(1).max(64).optional().nullable(),
   payerTxHash: z.string().max(255).optional().nullable(),
 });
 
-/** Merchant approve/reject of a pending crypto confirmation. */
+/** Merchant optional follow-up on assisted crypto verification (no approval gate). */
 export const CryptoConfirmationReviewSchema = z.object({
-  action: z.enum(['approve', 'reject']),
+  action: z.enum(['mark_valid', 'flag_investigate', 'acknowledge']),
 });
 
 // ============================================================================

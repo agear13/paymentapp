@@ -8,7 +8,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 interface PaymentStatusData {
   id: string;
   shortCode: string;
-  currentStatus: 'DRAFT' | 'OPEN' | 'PAID' | 'EXPIRED' | 'CANCELED';
+  currentStatus:
+    | 'DRAFT'
+    | 'OPEN'
+    | 'PAID_UNVERIFIED'
+    | 'REQUIRES_REVIEW'
+    | 'PAID'
+    | 'EXPIRED'
+    | 'CANCELED';
   statusMessage: string;
   lastEventType: string | null;
   lastEventTimestamp: string | null;
@@ -237,7 +244,13 @@ export function usePaymentStatusPolling(
       }
 
       // Check if we should stop polling (terminal states)
-      const terminalStates: Array<PaymentStatusData['currentStatus']> = ['PAID', 'EXPIRED', 'CANCELED'];
+      const terminalStates: Array<PaymentStatusData['currentStatus']> = [
+        'PAID_UNVERIFIED',
+        'REQUIRES_REVIEW',
+        'PAID',
+        'EXPIRED',
+        'CANCELED',
+      ];
       if (terminalStates.includes(newStatus.currentStatus)) {
         // Clear any scheduled timer immediately
         if (timerRef.current) {

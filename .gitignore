@@ -9,6 +9,10 @@ src/env.local
 # Uploaded files
 public/uploads/logos/*
 !public/uploads/logos/.gitkeep
+src/public/uploads/logos/*
+!src/public/uploads/logos/.gitkeep
+src/public/uploads/payment-link-attachments/*
+!src/public/uploads/payment-link-attachments/.gitkeep
 
 # Secrets and configuration values
 XERO_CRON_SETUP_VALUES.txt

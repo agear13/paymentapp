@@ -28,8 +28,12 @@ export async function POST(
     }
 
     // Validate link is in a state where notification makes sense
-    if (paymentLink.status === 'PAID') {
-      return apiError('Cannot resend notification for paid link', 400);
+    if (
+      paymentLink.status === 'PAID' ||
+      paymentLink.status === 'PAID_UNVERIFIED' ||
+      paymentLink.status === 'REQUIRES_REVIEW'
+    ) {
+      return apiError('Cannot resend notification for a paid or submitted invoice', 400);
     }
 
     if (paymentLink.status === 'CANCELED') {

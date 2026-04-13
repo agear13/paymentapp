@@ -116,8 +116,12 @@ export default function PaymentLinksPage() {
 
   // Enable real-time polling when there are OPEN or DRAFT payment links
   const hasActiveLinks = React.useMemo(() => {
-    return paymentLinks.some(link => 
-      link.status === 'OPEN' || link.status === 'DRAFT'
+    return paymentLinks.some(
+      (link) =>
+        link.status === 'OPEN' ||
+        link.status === 'DRAFT' ||
+        link.status === 'PAID_UNVERIFIED' ||
+        link.status === 'REQUIRES_REVIEW'
     );
   }, [paymentLinks]);
 
@@ -353,7 +357,12 @@ export default function PaymentLinksPage() {
   const handleBulkCancel = async () => {
     const selected = paymentLinks.filter(link => selectedIds.has(link.id));
     const cancellable = selected.filter(
-      link => link.status !== 'PAID' && link.status !== 'EXPIRED' && link.status !== 'CANCELED'
+      (link) =>
+        link.status !== 'PAID' &&
+        link.status !== 'PAID_UNVERIFIED' &&
+        link.status !== 'REQUIRES_REVIEW' &&
+        link.status !== 'EXPIRED' &&
+        link.status !== 'CANCELED'
     );
 
     if (cancellable.length === 0) {
@@ -531,6 +540,10 @@ export default function PaymentLinksPage() {
             cryptoCurrency: linkToEdit.cryptoCurrency ?? null,
             cryptoMemo: linkToEdit.cryptoMemo ?? null,
             cryptoInstructions: linkToEdit.cryptoInstructions ?? null,
+            attachmentUrl: linkToEdit.attachmentUrl ?? null,
+            attachmentFilename: linkToEdit.attachmentFilename ?? null,
+            attachmentMimeType: linkToEdit.attachmentMimeType ?? null,
+            attachmentSizeBytes: linkToEdit.attachmentSizeBytes ?? null,
           }}
           open={editDialogOpen}
           onOpenChange={(o) => {

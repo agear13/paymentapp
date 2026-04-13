@@ -22,7 +22,7 @@ import { isValidShortCode } from '@/lib/short-code';
 interface PaymentLinkData {
   id: string;
   shortCode: string;
-  status: 'DRAFT' | 'OPEN' | 'PAID' | 'EXPIRED' | 'CANCELED';
+  status: 'DRAFT' | 'OPEN' | 'PAID_UNVERIFIED' | 'REQUIRES_REVIEW' | 'PAID' | 'EXPIRED' | 'CANCELED';
   amount: string;
   currency: string;
   description: string;
@@ -47,6 +47,9 @@ interface PaymentLinkData {
   cryptoCurrency?: string | null;
   cryptoMemo?: string | null;
   cryptoInstructions?: string | null;
+  attachmentUrl?: string | null;
+  attachmentFilename?: string | null;
+  attachmentMimeType?: string | null;
   wiseTransferId?: string | null;
   wiseStatus?: string | null;
   invoiceOnlyMode?: boolean;
@@ -182,9 +185,14 @@ export default function PayPage() {
     return <PaymentLinkCanceled paymentLink={paymentLink} />;
   }
 
-  // Paid state
+  // Paid state (final)
   if (paymentLink.status === 'PAID') {
     return <PaymentLinkPaid paymentLink={paymentLink} />;
+  }
+
+  // Crypto: recorded from payer submission (assisted verification — no merchant approval gate)
+  if (paymentLink.status === 'PAID_UNVERIFIED' || paymentLink.status === 'REQUIRES_REVIEW') {
+    return <PaymentLinkPaid paymentLink={paymentLink} variant="crypto_submitted" />;
   }
 
   // Draft - should not be publicly accessible
