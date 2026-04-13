@@ -457,9 +457,12 @@ export async function POST(request: NextRequest) {
       );
     });
 
+    // Same camelCase shape as GET /api/payment-links so clients always get `shortCode` for /pay/{shortCode}
+    const createdPayload = transformPaymentLink(paymentLink as unknown as Record<string, unknown>);
+
     return NextResponse.json(
       {
-        data: paymentLink,
+        data: createdPayload,
         message: 'Payment link created successfully',
       },
       { status: 201 }

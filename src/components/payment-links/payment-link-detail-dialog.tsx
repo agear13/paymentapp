@@ -54,6 +54,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { isValidShortCode } from '@/lib/short-code';
 
 export interface PaymentLinkDetails {
   id: string;
@@ -179,13 +180,33 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
 
   if (!paymentLink) return null;
 
-  const paymentUrl = `${window.location.origin}/pay/${paymentLink.shortCode}`;
+  const payCode = paymentLink.shortCode?.trim() ?? '';
+  const paymentUrl =
+    typeof window !== 'undefined' && isValidShortCode(payCode)
+      ? `${window.location.origin}/pay/${payCode}`
+      : '';
 
   const handleCopyUrl = () => {
+    if (!paymentUrl) {
+      toast({
+        title: 'Link unavailable',
+        description: 'This invoice does not have a valid public pay code.',
+        variant: 'destructive',
+      });
+      return;
+    }
     navigator.clipboard.writeText(paymentUrl);
   };
 
   const handleOpenLink = () => {
+    if (!paymentUrl) {
+      toast({
+        title: 'Link unavailable',
+        description: 'This invoice does not have a valid public pay code.',
+        variant: 'destructive',
+      });
+      return;
+    }
     window.open(paymentUrl, '_blank');
   };
 

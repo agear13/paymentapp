@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/table';
 import { formatCurrency } from './currency-select';
 import { useToast } from '@/hooks/use-toast';
+import { isValidShortCode } from '@/lib/short-code';
 
 // Helper to safely format dates
 const formatDate = (date: Date | string | null | undefined, formatStr: string = 'MMM d, yyyy'): string | null => {
@@ -201,8 +202,17 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
     onSelectionChange(newSelected);
   };
 
-  const handleCopyUrl = (shortCode: string) => {
-    const url = `${window.location.origin}/pay/${shortCode}`;
+  const handleCopyUrl = (shortCode: string | undefined | null) => {
+    const code = shortCode?.trim() ?? '';
+    if (!isValidShortCode(code)) {
+      toast({
+        title: 'Link unavailable',
+        description: 'This invoice is missing a valid pay code. Refresh the list or contact support.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const url = `${window.location.origin}/pay/${code}`;
     navigator.clipboard.writeText(url);
     toast({
       title: 'URL Copied',
@@ -210,12 +220,29 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
     });
   };
 
-  const handleOpenLink = (shortCode: string) => {
-    const url = `${window.location.origin}/pay/${shortCode}`;
+  const handleOpenLink = (shortCode: string | undefined | null) => {
+    const code = shortCode?.trim() ?? '';
+    if (!isValidShortCode(code)) {
+      toast({
+        title: 'Link unavailable',
+        description: 'This invoice is missing a valid pay code. Refresh the list and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const url = `${window.location.origin}/pay/${code}`;
     window.open(url, '_blank');
   };
 
   const handleDownloadQR = async (paymentLink: PaymentLink) => {
+    if (!isValidShortCode(paymentLink.shortCode?.trim() ?? '')) {
+      toast({
+        title: 'QR unavailable',
+        description: 'This invoice does not have a valid pay code yet. Refresh the list and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
     try {
       const response = await fetch(
         `/api/payment-links/${paymentLink.id}/qr-code?format=png&download=true`

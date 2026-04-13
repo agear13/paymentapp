@@ -76,9 +76,16 @@ export async function GET(
       },
     });
 
-    // Payment link not found
+    // Payment link not found (lookup is always by payment_links.short_code — 8-char public id)
     if (!paymentLink) {
-      loggers.api.warn({ shortCode }, 'Payment link not found');
+      loggers.api.warn(
+        {
+          shortCode,
+          length: shortCode?.length ?? 0,
+          hint: 'Ensure dashboard links use shortCode, not internal UUID, in /pay/{shortCode}',
+        },
+        'Public payment link not found'
+      );
       return NextResponse.json(
         { error: 'Payment link not found', code: 'NOT_FOUND' },
         { status: 404 }

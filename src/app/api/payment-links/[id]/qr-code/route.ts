@@ -58,9 +58,9 @@ export async function GET(
       where: { id },
       select: {
         id: true,
-        organizationId: true,
-        shortCode: true,
-        invoiceReference: true,
+        organization_id: true,
+        short_code: true,
+        invoice_reference: true,
       },
     });
 
@@ -74,7 +74,7 @@ export async function GET(
     // Check permission
     const canView = await checkUserPermission(
       user.id,
-      paymentLink.organizationId,
+      paymentLink.organization_id,
       'view_payment_links'
     );
     if (!canView) {
@@ -85,8 +85,10 @@ export async function GET(
     }
 
     // Generate QR code based on format
+    const shortCode = paymentLink.short_code;
+
     if (format === 'svg') {
-      const svg = await generateQRCodeSVG(paymentLink.shortCode, { size });
+      const svg = await generateQRCodeSVG(shortCode, { size });
       
       const headers: HeadersInit = {
         'Content-Type': 'image/svg+xml',
@@ -94,15 +96,15 @@ export async function GET(
 
       if (download) {
         const filename = getQRCodeFilename(
-          paymentLink.shortCode,
-          paymentLink.invoiceReference
+          shortCode,
+          paymentLink.invoice_reference
         ).replace('.png', '.svg');
         headers['Content-Disposition'] = `attachment; filename="${filename}"`;
       }
 
       return new NextResponse(svg, { headers });
     } else if (format === 'png') {
-      const buffer = await generateQRCodeBuffer(paymentLink.shortCode, { size });
+      const buffer = await generateQRCodeBuffer(shortCode, { size });
       
       const headers: HeadersInit = {
         'Content-Type': 'image/png',
@@ -110,8 +112,8 @@ export async function GET(
 
       if (download) {
         const filename = getQRCodeFilename(
-          paymentLink.shortCode,
-          paymentLink.invoiceReference
+          shortCode,
+          paymentLink.invoice_reference
         );
         headers['Content-Disposition'] = `attachment; filename="${filename}"`;
       }
@@ -119,17 +121,17 @@ export async function GET(
       return new NextResponse(buffer, { headers });
     } else {
       // Default: dataurl
-      const dataUrl = await generateQRCodeDataUrl(paymentLink.shortCode, { size });
+      const dataUrl = await generateQRCodeDataUrl(shortCode, { size });
 
       loggers.api.debug(
-        { paymentLinkId: id, shortCode: paymentLink.shortCode },
+        { paymentLinkId: id, shortCode },
         'Generated QR code'
       );
 
       return NextResponse.json({
         data: {
           qrCode: dataUrl,
-          shortCode: paymentLink.shortCode,
+          shortCode,
         },
       });
     }
