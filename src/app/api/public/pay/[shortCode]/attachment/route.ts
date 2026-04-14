@@ -77,7 +77,9 @@ export async function GET(
       headers: {
         'Content-Type': mime,
         'Content-Length': String(buffer.length),
-        'Cache-Control': 'private, max-age=3600',
+        'Cache-Control': 'private, no-store, no-cache, must-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
         'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${filename}"`,
       },
     });

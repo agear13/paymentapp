@@ -21,7 +21,8 @@ export function PublicPaymentLinkAttachment({
   attachmentFilename,
   attachmentMimeType,
 }: PublicPaymentLinkAttachmentProps) {
-  const serveUrl = `/api/public/pay/${encodeURIComponent(payShortCode)}/attachment`;
+  const serveUrl =
+    attachmentUrl?.trim() || `/api/public/pay/${encodeURIComponent(payShortCode)}/attachment`;
   const mime = attachmentMimeType ?? '';
   const isPdf = mime === 'application/pdf' || attachmentUrl.toLowerCase().endsWith('.pdf');
   const isImage = mime.startsWith('image/') || (!isPdf && /\.(png|jpe?g)$/i.test(attachmentUrl));
