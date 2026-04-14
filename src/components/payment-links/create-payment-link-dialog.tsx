@@ -121,6 +121,15 @@ const createPaymentLinkFormSchema = z
     .optional(),
   dueDate: z.date().optional(),
   expiresAt: z.date().optional(),
+  attachment: z
+    .object({
+      storageKey: z.string().min(1),
+      bucket: z.string().min(1),
+      filename: z.string().min(1),
+      mimeType: z.enum(['image/png', 'image/jpeg', 'image/jpg', 'application/pdf']),
+      sizeBytes: z.number().int().positive(),
+    })
+    .optional(),
 })
   .refine(
     (d) => {
@@ -234,15 +243,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     mode === 'edit' && Boolean(editPaymentLink?.wiseTransferId);
 
   const attachmentFileInputRef = React.useRef<HTMLInputElement>(null);
-  const [invoiceAttachment, setInvoiceAttachment] = React.useState<PaymentLinkAttachmentDraft | null>(null);
-  const [attachmentDirty, setAttachmentDirty] = React.useState(false);
   const [attachmentUploading, setAttachmentUploading] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!open || mode === 'edit') return;
-    setInvoiceAttachment(null);
-    setAttachmentDirty(false);
-  }, [open, mode]);
+  const initialAttachmentRef = React.useRef<PaymentLinkAttachmentDraft | null>(null);
+  const wasOpenRef = React.useRef(false);
 
   // Fetch merchant settings when dialog opens
   React.useEffect(() => {
@@ -340,11 +343,13 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       customerPhone: '',
       dueDate: undefined,
       expiresAt: undefined,
+      attachment: undefined,
       ...defaultValues,
     },
   });
 
   const collectionMode = form.watch('collectionMode');
+  const invoiceAttachment = form.watch('attachment');
 
   React.useEffect(() => {
     if (collectionMode === 'invoice_only') {
@@ -359,9 +364,58 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     }
   }, [collectionMode, form]);
 
-  // Update form when defaultValues change (create / duplicate — not edit mode)
+  // Initialize form only when dialog opens (avoid wiping in-progress edits/attachment while user is typing).
   React.useEffect(() => {
-    if (mode === 'edit' || !defaultValues || !open) return;
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!open || !justOpened) return;
+
+    if (mode === 'edit' && editPaymentLink) {
+      const due = editPaymentLink.dueDate ? new Date(editPaymentLink.dueDate) : undefined;
+      const exp = editPaymentLink.expiresAt ? new Date(editPaymentLink.expiresAt) : undefined;
+      const invoiceOnly = Boolean(editPaymentLink.invoiceOnlyMode);
+      const initialAttachment =
+        editPaymentLink.attachmentStorageKey &&
+        editPaymentLink.attachmentFilename &&
+        editPaymentLink.attachmentMimeType &&
+        isAllowedPaymentLinkAttachmentMime(editPaymentLink.attachmentMimeType) &&
+        editPaymentLink.attachmentSizeBytes != null
+          ? {
+              storageKey: editPaymentLink.attachmentStorageKey,
+              bucket: editPaymentLink.attachmentBucket || 'payment-link-attachments',
+              filename: editPaymentLink.attachmentFilename,
+              mimeType: editPaymentLink.attachmentMimeType,
+              sizeBytes: editPaymentLink.attachmentSizeBytes,
+            }
+          : undefined;
+      form.reset({
+        collectionMode: invoiceOnly ? 'invoice_only' : 'payment_request',
+        paymentMethod: invoiceOnly
+          ? undefined
+          : ((editPaymentLink.paymentMethod as 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO') || 'STRIPE'),
+        hederaCheckoutMode:
+          (editPaymentLink.hederaCheckoutMode as 'INTERACTIVE' | 'MANUAL') || 'INTERACTIVE',
+        cryptoNetwork: editPaymentLink.cryptoNetwork ?? '',
+        cryptoAddress: editPaymentLink.cryptoAddress ?? '',
+        cryptoCurrency: editPaymentLink.cryptoCurrency ?? '',
+        cryptoMemo: editPaymentLink.cryptoMemo ?? '',
+        cryptoInstructions: editPaymentLink.cryptoInstructions ?? '',
+        amount: editPaymentLink.amount,
+        currency: editPaymentLink.currency,
+        description: editPaymentLink.description,
+        invoiceReference: editPaymentLink.invoiceReference || '',
+        customerEmail: editPaymentLink.customerEmail || '',
+        customerName: editPaymentLink.customerName || '',
+        customerPhone: editPaymentLink.customerPhone || '',
+        dueDate: due && !Number.isNaN(due.getTime()) ? due : undefined,
+        expiresAt: exp && !Number.isNaN(exp.getTime()) ? exp : undefined,
+        attachment: initialAttachment,
+      });
+      initialAttachmentRef.current = initialAttachment ?? null;
+      setDescriptionLength(editPaymentLink.description?.length || 0);
+      return;
+    }
+
     form.reset({
       collectionMode: 'payment_request',
       paymentMethod: 'STRIPE',
@@ -380,60 +434,12 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       customerPhone: '',
       dueDate: undefined,
       expiresAt: undefined,
+      attachment: undefined,
       ...defaultValues,
     });
-    setDescriptionLength(defaultValues.description?.length || 0);
-  }, [defaultValues, open, form, defaultCurrency, mode]);
-
-  // Prefill edit mode from existing invoice (same record; PATCH only)
-  React.useEffect(() => {
-    if (mode !== 'edit' || !editPaymentLink || !open) return;
-    const due = editPaymentLink.dueDate ? new Date(editPaymentLink.dueDate) : undefined;
-    const exp = editPaymentLink.expiresAt ? new Date(editPaymentLink.expiresAt) : undefined;
-    const invoiceOnly = Boolean(editPaymentLink.invoiceOnlyMode);
-    form.reset({
-      collectionMode: invoiceOnly ? 'invoice_only' : 'payment_request',
-      paymentMethod: invoiceOnly
-        ? undefined
-        : ((editPaymentLink.paymentMethod as 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO') || 'STRIPE'),
-      hederaCheckoutMode:
-        (editPaymentLink.hederaCheckoutMode as 'INTERACTIVE' | 'MANUAL') || 'INTERACTIVE',
-      cryptoNetwork: editPaymentLink.cryptoNetwork ?? '',
-      cryptoAddress: editPaymentLink.cryptoAddress ?? '',
-      cryptoCurrency: editPaymentLink.cryptoCurrency ?? '',
-      cryptoMemo: editPaymentLink.cryptoMemo ?? '',
-      cryptoInstructions: editPaymentLink.cryptoInstructions ?? '',
-      amount: editPaymentLink.amount,
-      currency: editPaymentLink.currency,
-      description: editPaymentLink.description,
-      invoiceReference: editPaymentLink.invoiceReference || '',
-      customerEmail: editPaymentLink.customerEmail || '',
-      customerName: editPaymentLink.customerName || '',
-      customerPhone: editPaymentLink.customerPhone || '',
-      dueDate: due && !Number.isNaN(due.getTime()) ? due : undefined,
-      expiresAt: exp && !Number.isNaN(exp.getTime()) ? exp : undefined,
-    });
-    setDescriptionLength(editPaymentLink.description?.length || 0);
-
-    if (
-      editPaymentLink.attachmentStorageKey &&
-      editPaymentLink.attachmentFilename &&
-      editPaymentLink.attachmentMimeType &&
-      isAllowedPaymentLinkAttachmentMime(editPaymentLink.attachmentMimeType) &&
-      editPaymentLink.attachmentSizeBytes != null
-    ) {
-      setInvoiceAttachment({
-        storageKey: editPaymentLink.attachmentStorageKey,
-        bucket: editPaymentLink.attachmentBucket || 'payment-link-attachments',
-        filename: editPaymentLink.attachmentFilename,
-        mimeType: editPaymentLink.attachmentMimeType,
-        sizeBytes: editPaymentLink.attachmentSizeBytes,
-      });
-    } else {
-      setInvoiceAttachment(null);
-    }
-    setAttachmentDirty(false);
-  }, [mode, editPaymentLink?.id, open, form, editPaymentLink]);
+    initialAttachmentRef.current = null;
+    setDescriptionLength(defaultValues?.description?.length || 0);
+  }, [open, mode, editPaymentLink, defaultValues, defaultCurrency, form]);
 
   const validateAttachmentFileClient = (file: File): string | null => {
     if (!isAllowedPaymentLinkAttachmentMime(file.type)) {
@@ -480,14 +486,13 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       if (!isAllowedPaymentLinkAttachmentMime(a.mimeType)) {
         throw new Error('Invalid file type from server');
       }
-      setInvoiceAttachment({
+      form.setValue('attachment', {
         storageKey: a.storageKey,
         bucket: a.bucket,
         filename: a.filename,
         mimeType: a.mimeType,
         sizeBytes: a.sizeBytes,
-      });
-      setAttachmentDirty(true);
+      }, { shouldDirty: true, shouldTouch: true });
       toast({
         title: 'Attachment ready',
         description:
@@ -504,8 +509,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   };
 
   const clearInvoiceAttachment = () => {
-    setInvoiceAttachment(null);
-    setAttachmentDirty(true);
+    form.setValue('attachment', undefined, { shouldDirty: true, shouldTouch: true });
   };
 
   const performUpdate = async (data: CreatePaymentLinkFormValues) => {
@@ -517,20 +521,15 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     form.clearErrors('root');
 
     try {
-      const attachmentPayload =
-        attachmentDirty
-          ? invoiceAttachment
-            ? {
-                attachment: {
-                  storageKey: invoiceAttachment.storageKey,
-                  bucket: invoiceAttachment.bucket,
-                  filename: invoiceAttachment.filename,
-                  mimeType: invoiceAttachment.mimeType,
-                  sizeBytes: invoiceAttachment.sizeBytes,
-                },
-              }
-            : { attachment: null as null }
-          : {};
+      const currentAttachment = data.attachment ?? null;
+      const initialAttachment = initialAttachmentRef.current;
+      const attachmentChanged =
+        JSON.stringify(currentAttachment) !== JSON.stringify(initialAttachment);
+      const attachmentPayload = attachmentChanged
+        ? currentAttachment
+          ? { attachment: currentAttachment }
+          : { attachment: null as null }
+        : {};
 
       const response = await fetch(`/api/payment-links/${editPaymentLink.id}`, {
         method: 'PATCH',
@@ -595,7 +594,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         description:
           'Your changes were saved. The same pay link URL still works for this invoice.',
       });
-      setAttachmentDirty(false);
+      initialAttachmentRef.current = data.attachment ?? null;
       setOpen(false);
 
       if (onSuccess) {
@@ -637,15 +636,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           customerPhone: data.customerPhone || undefined,
           dueDate: data.dueDate?.toISOString(),
           expiresAt: data.expiresAt?.toISOString(),
-          ...(invoiceAttachment
+          ...(data.attachment
             ? {
-                attachment: {
-                  storageKey: invoiceAttachment.storageKey,
-                  bucket: invoiceAttachment.bucket,
-                  filename: invoiceAttachment.filename,
-                  mimeType: invoiceAttachment.mimeType,
-                  sizeBytes: invoiceAttachment.sizeBytes,
-                },
+                attachment: data.attachment,
               }
             : {}),
           ...(invoiceOnly
@@ -694,9 +687,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         customerPhone: '',
         dueDate: undefined,
         expiresAt: undefined,
+        attachment: undefined,
       });
-      setInvoiceAttachment(null);
-      setAttachmentDirty(false);
+      initialAttachmentRef.current = null;
       setDescriptionLength(0);
       setOpen(false);
 
