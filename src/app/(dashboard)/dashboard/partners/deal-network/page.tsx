@@ -605,8 +605,8 @@ export default function DealNetworkPage() {
   }, [pilotHydrated, deals.length]);
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-      <div className="min-w-0 flex-1 space-y-6">
+    <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
       {/* Header */}
       <div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
