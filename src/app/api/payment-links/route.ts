@@ -31,6 +31,8 @@ export interface FxSummary {
 
 // Helper to transform snake_case DB fields to camelCase for frontend
 function transformPaymentLink(link: Record<string, unknown>) {
+  const shortCode = String(link.short_code ?? '');
+  const hasAttachment = Boolean((link as { attachment_storage_key?: string | null }).attachment_storage_key);
   const fxSnapshots = link.fx_snapshots as Array<{
     snapshot_type: string;
     token_type: string | null;
@@ -59,7 +61,7 @@ function transformPaymentLink(link: Record<string, unknown>) {
   return {
     id: link.id,
     organizationId: link.organization_id,
-    shortCode: link.short_code,
+    shortCode,
     status: link.status,
     paymentMethod: link.payment_method ?? null,
     amount: Number(link.amount),
@@ -81,7 +83,9 @@ function transformPaymentLink(link: Record<string, unknown>) {
     cryptoInstructions: (link as { crypto_instructions?: string | null }).crypto_instructions ?? null,
     wiseStatus: link.wise_status ?? null,
     wiseTransferId: link.wise_transfer_id ?? null,
-    attachmentUrl: (link as { attachment_url?: string | null }).attachment_url ?? null,
+    attachmentUrl: hasAttachment ? `/api/public/pay/${encodeURIComponent(shortCode)}/attachment` : null,
+    attachmentStorageKey: (link as { attachment_storage_key?: string | null }).attachment_storage_key ?? null,
+    attachmentBucket: (link as { attachment_bucket?: string | null }).attachment_bucket ?? null,
     attachmentFilename: (link as { attachment_filename?: string | null }).attachment_filename ?? null,
     attachmentMimeType: (link as { attachment_mime_type?: string | null }).attachment_mime_type ?? null,
     attachmentSizeBytes: (link as { attachment_size_bytes?: number | null }).attachment_size_bytes ?? null,
@@ -343,7 +347,8 @@ export async function POST(request: NextRequest) {
           crypto_currency: isCrypto ? (validatedData.cryptoCurrency?.trim() ?? null) : null,
           crypto_memo: isCrypto ? (validatedData.cryptoMemo?.trim() || null) : null,
           crypto_instructions: isCrypto ? (validatedData.cryptoInstructions?.trim() || null) : null,
-          attachment_url: validatedData.attachment?.url ?? null,
+          attachment_storage_key: validatedData.attachment?.storageKey ?? null,
+          attachment_bucket: validatedData.attachment?.bucket ?? null,
           attachment_filename: validatedData.attachment?.filename ?? null,
           attachment_mime_type: validatedData.attachment?.mimeType ?? null,
           attachment_size_bytes: validatedData.attachment?.sizeBytes ?? null,

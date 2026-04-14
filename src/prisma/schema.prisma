@@ -262,8 +262,9 @@ model payment_links {
   crypto_memo          String? @db.VarChar(512)
   crypto_instructions  String? @db.Text
 
-  /// Merchant-uploaded payment instruction file (PNG/JPEG/PDF); binary on disk, metadata here
-  attachment_url         String? @db.VarChar(512)
+  /// Merchant-uploaded payment instruction file (PNG/JPEG/PDF); binary in Supabase Storage, metadata here
+  attachment_storage_key String? @db.VarChar(1024)
+  attachment_bucket      String? @default("payment-link-attachments") @db.VarChar(128)
   attachment_filename    String? @db.VarChar(512)
   attachment_mime_type   String? @db.VarChar(128)
   attachment_size_bytes  Int?

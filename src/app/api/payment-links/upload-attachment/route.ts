@@ -4,28 +4,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
-import { writeFile, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import {
+  buildPaymentLinkAttachmentStorageKey,
   PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
-  PAYMENT_LINK_ATTACHMENT_PUBLIC_PREFIX,
-  extensionForAttachmentMime,
+  PAYMENT_LINK_ATTACHMENT_BUCKET,
   isAllowedPaymentLinkAttachmentMime,
+  sanitizeOriginalFilename,
+  uploadPaymentLinkAttachmentToStorage,
 } from '@/lib/payment-links/payment-link-attachment';
-
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'payment-link-attachments');
-
-function sanitizeOriginalFilename(name: string): string {
-  const base = path.basename(name).replace(/[^a-zA-Z0-9._\- ]/g, '_');
-  return base.slice(0, 255) || 'attachment';
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,11 +55,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ext = extensionForAttachmentMime(mime);
-    if (!ext) {
-      return NextResponse.json({ error: 'Invalid file type.' }, { status: 400 });
-    }
-
     if (paymentLinkId) {
       const link = await prisma.payment_links.findUnique({
         where: { id: paymentLinkId },
@@ -94,20 +80,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!existsSync(UPLOAD_DIR)) {
-      await mkdir(UPLOAD_DIR, { recursive: true });
-    }
-
-    const sanitizedOrgId = organizationId.replace(/[^a-zA-Z0-9]/g, '');
-    const stamp = Date.now();
-    const shortId = randomUUID().replace(/-/g, '').slice(0, 12);
-    const filename = `${sanitizedOrgId}-${stamp}-${shortId}${ext}`;
-    const filepath = path.join(UPLOAD_DIR, filename);
-
     const bytes = await file.arrayBuffer();
-    await writeFile(filepath, Buffer.from(bytes));
+    const storageKey = buildPaymentLinkAttachmentStorageKey(organizationId, mime);
+    await uploadPaymentLinkAttachmentToStorage({
+      bucket: PAYMENT_LINK_ATTACHMENT_BUCKET,
+      storageKey,
+      bytes: Buffer.from(bytes),
+      mimeType: mime,
+    });
 
-    const publicUrl = `${PAYMENT_LINK_ATTACHMENT_PUBLIC_PREFIX}${filename}`;
     const safeOriginalName = sanitizeOriginalFilename(file.name);
 
     loggers.api.info(
@@ -115,7 +96,8 @@ export async function POST(request: NextRequest) {
         userId: auth.user.id,
         organizationId,
         paymentLinkId: paymentLinkId || null,
-        storedAs: filename,
+        bucket: PAYMENT_LINK_ATTACHMENT_BUCKET,
+        storageKey,
         sizeBytes: file.size,
         mime,
       },
@@ -125,7 +107,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       attachment: {
-        url: publicUrl,
+        storageKey,
+        bucket: PAYMENT_LINK_ATTACHMENT_BUCKET,
         filename: safeOriginalName,
         mimeType: mime,
         sizeBytes: file.size,

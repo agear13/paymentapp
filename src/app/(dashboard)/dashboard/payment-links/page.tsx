@@ -556,6 +556,8 @@ export default function PaymentLinksPage() {
             cryptoMemo: linkToEdit.cryptoMemo ?? null,
             cryptoInstructions: linkToEdit.cryptoInstructions ?? null,
             attachmentUrl: linkToEdit.attachmentUrl ?? null,
+            attachmentStorageKey: linkToEdit.attachmentStorageKey ?? null,
+            attachmentBucket: linkToEdit.attachmentBucket ?? null,
             attachmentFilename: linkToEdit.attachmentFilename ?? null,
             attachmentMimeType: linkToEdit.attachmentMimeType ?? null,
             attachmentSizeBytes: linkToEdit.attachmentSizeBytes ?? null,

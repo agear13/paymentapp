@@ -176,13 +176,16 @@ export interface EditPaymentLinkSeed {
   cryptoMemo?: string | null;
   cryptoInstructions?: string | null;
   attachmentUrl?: string | null;
+  attachmentStorageKey?: string | null;
+  attachmentBucket?: string | null;
   attachmentFilename?: string | null;
   attachmentMimeType?: string | null;
   attachmentSizeBytes?: number | null;
 }
 
 export type PaymentLinkAttachmentDraft = {
-  url: string;
+  storageKey: string;
+  bucket: string;
   filename: string;
   mimeType: 'image/png' | 'image/jpeg' | 'image/jpg' | 'application/pdf';
   sizeBytes: number;
@@ -413,14 +416,15 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     setDescriptionLength(editPaymentLink.description?.length || 0);
 
     if (
-      editPaymentLink.attachmentUrl &&
+      editPaymentLink.attachmentStorageKey &&
       editPaymentLink.attachmentFilename &&
       editPaymentLink.attachmentMimeType &&
       isAllowedPaymentLinkAttachmentMime(editPaymentLink.attachmentMimeType) &&
       editPaymentLink.attachmentSizeBytes != null
     ) {
       setInvoiceAttachment({
-        url: editPaymentLink.attachmentUrl,
+        storageKey: editPaymentLink.attachmentStorageKey,
+        bucket: editPaymentLink.attachmentBucket || 'payment-link-attachments',
         filename: editPaymentLink.attachmentFilename,
         mimeType: editPaymentLink.attachmentMimeType,
         sizeBytes: editPaymentLink.attachmentSizeBytes,
@@ -470,14 +474,15 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         throw new Error(json.error || 'Upload failed');
       }
       const a = json.attachment;
-      if (!a?.url || !a.filename || !a.mimeType || a.sizeBytes == null) {
+      if (!a?.storageKey || !a?.bucket || !a.filename || !a.mimeType || a.sizeBytes == null) {
         throw new Error('Invalid upload response');
       }
       if (!isAllowedPaymentLinkAttachmentMime(a.mimeType)) {
         throw new Error('Invalid file type from server');
       }
       setInvoiceAttachment({
-        url: a.url,
+        storageKey: a.storageKey,
+        bucket: a.bucket,
         filename: a.filename,
         mimeType: a.mimeType,
         sizeBytes: a.sizeBytes,
@@ -517,7 +522,8 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           ? invoiceAttachment
             ? {
                 attachment: {
-                  url: invoiceAttachment.url,
+                  storageKey: invoiceAttachment.storageKey,
+                  bucket: invoiceAttachment.bucket,
                   filename: invoiceAttachment.filename,
                   mimeType: invoiceAttachment.mimeType,
                   sizeBytes: invoiceAttachment.sizeBytes,
@@ -634,7 +640,8 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           ...(invoiceAttachment
             ? {
                 attachment: {
-                  url: invoiceAttachment.url,
+                  storageKey: invoiceAttachment.storageKey,
+                  bucket: invoiceAttachment.bucket,
                   filename: invoiceAttachment.filename,
                   mimeType: invoiceAttachment.mimeType,
                   sizeBytes: invoiceAttachment.sizeBytes,

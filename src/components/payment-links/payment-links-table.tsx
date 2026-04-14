@@ -80,6 +80,8 @@ export interface PaymentLink {
   cryptoMemo?: string | null;
   cryptoInstructions?: string | null;
   attachmentUrl?: string | null;
+  attachmentStorageKey?: string | null;
+  attachmentBucket?: string | null;
   attachmentFilename?: string | null;
   attachmentMimeType?: string | null;
   attachmentSizeBytes?: number | null;

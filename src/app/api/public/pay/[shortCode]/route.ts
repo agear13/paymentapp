@@ -250,7 +250,11 @@ export async function GET(
         cryptoCurrency: paymentLink.crypto_currency ?? null,
         cryptoMemo: paymentLink.crypto_memo ?? null,
         cryptoInstructions: paymentLink.crypto_instructions ?? null,
-        attachmentUrl: paymentLink.attachment_url ?? null,
+        attachmentUrl: paymentLink.attachment_storage_key
+          ? `/api/public/pay/${encodeURIComponent(paymentLink.short_code)}/attachment`
+          : null,
+        attachmentStorageKey: paymentLink.attachment_storage_key ?? null,
+        attachmentBucket: paymentLink.attachment_bucket ?? null,
         attachmentFilename: paymentLink.attachment_filename ?? null,
         attachmentMimeType: paymentLink.attachment_mime_type ?? null,
         attachmentSizeBytes: paymentLink.attachment_size_bytes ?? null,

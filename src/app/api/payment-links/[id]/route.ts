@@ -16,6 +16,7 @@ import { assertPaymentLinksUpdateDataValid } from '@/lib/payments/payment-links-
 
 // Helper to transform snake_case DB fields to camelCase for frontend
 function transformPaymentLink(link: any) {
+  const hasAttachment = Boolean(link.attachment_storage_key);
   // Transform FX snapshots to camelCase
   const fxSnapshots = link.fx_snapshots?.map((snapshot: any) => ({
     id: snapshot.id,
@@ -91,7 +92,9 @@ function transformPaymentLink(link: any) {
     wiseTransferId: link.wise_transfer_id ?? null,
     wiseReceivedAmount: link.wise_received_amount ? Number(link.wise_received_amount) : null,
     wiseReceivedCurrency: link.wise_received_currency ?? null,
-    attachmentUrl: link.attachment_url ?? null,
+    attachmentUrl: hasAttachment ? `/api/public/pay/${encodeURIComponent(link.short_code)}/attachment` : null,
+    attachmentStorageKey: link.attachment_storage_key ?? null,
+    attachmentBucket: link.attachment_bucket ?? null,
     attachmentFilename: link.attachment_filename ?? null,
     attachmentMimeType: link.attachment_mime_type ?? null,
     attachmentSizeBytes: link.attachment_size_bytes ?? null,
@@ -445,15 +448,18 @@ export async function PATCH(
       prismaData.wise_status = 'INSTRUCTIONS_READY';
     }
 
-    const previousAttachmentUrl = currentLink.attachment_url;
+    const previousAttachmentStorageKey = currentLink.attachment_storage_key;
+    const previousAttachmentBucket = currentLink.attachment_bucket;
     if (patch.attachment !== undefined) {
       if (patch.attachment === null) {
-        prismaData.attachment_url = null;
+        prismaData.attachment_storage_key = null;
+        prismaData.attachment_bucket = null;
         prismaData.attachment_filename = null;
         prismaData.attachment_mime_type = null;
         prismaData.attachment_size_bytes = null;
       } else {
-        prismaData.attachment_url = patch.attachment.url;
+        prismaData.attachment_storage_key = patch.attachment.storageKey;
+        prismaData.attachment_bucket = patch.attachment.bucket;
         prismaData.attachment_filename = patch.attachment.filename;
         prismaData.attachment_mime_type = patch.attachment.mimeType;
         prismaData.attachment_size_bytes = patch.attachment.sizeBytes;
@@ -483,10 +489,9 @@ export async function PATCH(
     });
 
     if (patch.attachment !== undefined) {
-      const nextUrl =
-        patch.attachment === null ? null : patch.attachment.url;
-      if (previousAttachmentUrl && previousAttachmentUrl !== nextUrl) {
-        await tryDeletePaymentLinkAttachmentFile(previousAttachmentUrl);
+      const nextStorageKey = patch.attachment === null ? null : patch.attachment.storageKey;
+      if (previousAttachmentStorageKey && previousAttachmentStorageKey !== nextStorageKey) {
+        await tryDeletePaymentLinkAttachmentFile(previousAttachmentStorageKey, previousAttachmentBucket);
       }
     }
 

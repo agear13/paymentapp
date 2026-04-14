@@ -5,8 +5,9 @@
 
 import { z } from 'zod';
 import {
+  isValidPaymentLinkAttachmentStorageKey,
+  PAYMENT_LINK_ATTACHMENT_BUCKET,
   PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
-  isPaymentLinkAttachmentPublicUrl,
 } from '@/lib/payment-links/payment-link-attachment';
 
 // ============================================================================
@@ -38,10 +39,11 @@ export const PaymentEventTypeSchema = z.enum([
 
 export const PaymentMethodSchema = z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO']);
 
-/** Merchant-uploaded invoice attachment (PNG, JPEG, PDF); URL must be under /uploads/payment-link-attachments/ */
+/** Merchant-uploaded invoice attachment metadata stored in Supabase Storage. */
 export const PaymentLinkAttachmentInputSchema = z
   .object({
-    url: z.string().min(1).max(512),
+    storageKey: z.string().min(1).max(1024),
+    bucket: z.string().min(1).max(128).default(PAYMENT_LINK_ATTACHMENT_BUCKET),
     filename: z.string().min(1).max(512),
     mimeType: z.enum(['image/png', 'image/jpeg', 'image/jpg', 'application/pdf']),
     sizeBytes: z
@@ -50,9 +52,9 @@ export const PaymentLinkAttachmentInputSchema = z
       .positive()
       .max(PAYMENT_LINK_ATTACHMENT_MAX_BYTES),
   })
-  .refine((d) => isPaymentLinkAttachmentPublicUrl(d.url), {
-    message: 'Invalid attachment URL',
-    path: ['url'],
+  .refine((d) => isValidPaymentLinkAttachmentStorageKey(d.storageKey), {
+    message: 'Invalid attachment storage key',
+    path: ['storageKey'],
   });
 
 export const FxSnapshotTypeSchema = z.enum(['CREATION', 'SETTLEMENT']);

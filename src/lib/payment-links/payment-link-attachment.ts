@@ -1,13 +1,12 @@
 /**
  * Payment link invoice attachments (merchant-uploaded PNG/JPEG/PDF).
- * Files live under public/uploads/payment-link-attachments/ (same pattern as logo uploads).
+ * Stored in Supabase Storage bucket (private; served only via API).
  */
 
-import { unlink } from 'fs/promises';
-import path from 'path';
-import { existsSync } from 'fs';
+import { randomUUID } from 'crypto';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-export const PAYMENT_LINK_ATTACHMENT_PUBLIC_PREFIX = '/uploads/payment-link-attachments/';
+export const PAYMENT_LINK_ATTACHMENT_BUCKET = 'payment-link-attachments';
 
 export const PAYMENT_LINK_ATTACHMENT_ALLOWED_MIME = [
   'image/png',
@@ -24,27 +23,94 @@ export function isAllowedPaymentLinkAttachmentMime(t: string): t is PaymentLinkA
 
 export const PAYMENT_LINK_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024; // 5MB
 
-export function isPaymentLinkAttachmentPublicUrl(url: string): boolean {
-  if (!url || url.length > 512) return false;
-  if (!url.startsWith(PAYMENT_LINK_ATTACHMENT_PUBLIC_PREFIX)) return false;
-  if (url.includes('..')) return false;
+export function sanitizeOriginalFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._\- ]/g, '_').slice(0, 255) || 'attachment';
+}
+
+function requiredEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) throw new Error(`Missing required environment variable: ${key}`);
+  return value;
+}
+
+function getSupabaseUrl(): string {
+  return process.env.SUPABASE_URL ?? requiredEnv('NEXT_PUBLIC_SUPABASE_URL');
+}
+
+export function createStorageAdminClient(): SupabaseClient {
+  return createClient(getSupabaseUrl(), requiredEnv('SUPABASE_SERVICE_ROLE_KEY'), {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+export function buildPaymentLinkAttachmentStorageKey(
+  organizationId: string,
+  mime: string,
+  now = Date.now()
+): string {
+  const ext = extensionForAttachmentMime(mime);
+  if (!ext) {
+    throw new Error('Invalid file type');
+  }
+  const safeOrg = organizationId.replace(/[^a-zA-Z0-9-]/g, '');
+  const randomId = randomUUID().replace(/-/g, '').slice(0, 12);
+  return `payment-links/${safeOrg}/${now}-${randomId}${ext}`;
+}
+
+export function isValidPaymentLinkAttachmentStorageKey(key: string): boolean {
+  if (!key || key.length > 1024) return false;
+  if (!key.startsWith('payment-links/')) return false;
+  if (key.includes('..')) return false;
   return true;
 }
 
-const UPLOAD_ROOT = () =>
-  path.join(process.cwd(), 'public', 'uploads', 'payment-link-attachments');
+export interface PaymentLinkAttachmentStoreInput {
+  bucket?: string | null;
+  storageKey: string;
+  bytes: Buffer;
+  mimeType: string;
+}
+
+export async function uploadPaymentLinkAttachmentToStorage({
+  bucket,
+  storageKey,
+  bytes,
+  mimeType,
+}: PaymentLinkAttachmentStoreInput): Promise<void> {
+  const resolvedBucket = bucket?.trim() || PAYMENT_LINK_ATTACHMENT_BUCKET;
+  const supabase = createStorageAdminClient();
+  const { error } = await supabase.storage.from(resolvedBucket).upload(storageKey, bytes, {
+    contentType: mimeType,
+    upsert: false,
+  });
+  if (error) throw new Error(`Attachment upload failed: ${error.message}`);
+}
+
+export async function downloadPaymentLinkAttachmentFromStorage(
+  bucket: string,
+  storageKey: string
+): Promise<Buffer> {
+  const supabase = createStorageAdminClient();
+  const { data, error } = await supabase.storage.from(bucket).download(storageKey);
+  if (error || !data) throw new Error(error?.message || 'Attachment download failed');
+  return Buffer.from(await data.arrayBuffer());
+}
 
 /**
- * Absolute filesystem path for a stored attachment, or null if URL is invalid / escapes root.
+ * Best-effort delete of a stored attachment object.
  */
-export function resolvePaymentLinkAttachmentAbsolutePath(publicUrl: string): string | null {
-  if (!isPaymentLinkAttachmentPublicUrl(publicUrl)) return null;
-  const relative = publicUrl.replace(PAYMENT_LINK_ATTACHMENT_PUBLIC_PREFIX, '').trim();
-  if (!relative || relative.includes('..')) return null;
-  const root = path.resolve(UPLOAD_ROOT());
-  const abs = path.resolve(root, relative);
-  if (!abs.startsWith(root + path.sep) && abs !== root) return null;
-  return abs;
+export async function tryDeletePaymentLinkAttachmentFile(
+  storageKey: string | null | undefined,
+  bucket: string | null | undefined
+): Promise<void> {
+  if (!storageKey || !isValidPaymentLinkAttachmentStorageKey(storageKey)) return;
+  const resolvedBucket = bucket?.trim() || PAYMENT_LINK_ATTACHMENT_BUCKET;
+  try {
+    const supabase = createStorageAdminClient();
+    await supabase.storage.from(resolvedBucket).remove([storageKey]);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function extensionForAttachmentMime(mime: string): '.png' | '.jpg' | '.pdf' | null {
@@ -58,19 +124,5 @@ export function extensionForAttachmentMime(mime: string): '.png' | '.jpg' | '.pd
       return '.pdf';
     default:
       return null;
-  }
-}
-
-/**
- * Best-effort delete of a previously stored attachment file (only under our upload dir).
- */
-export async function tryDeletePaymentLinkAttachmentFile(publicUrl: string | null | undefined): Promise<void> {
-  const abs = publicUrl ? resolvePaymentLinkAttachmentAbsolutePath(publicUrl) : null;
-  if (!abs) return;
-  if (!existsSync(abs)) return;
-  try {
-    await unlink(abs);
-  } catch {
-    /* ignore */
   }
 }
