@@ -27,6 +27,7 @@ import {
   Target,
   Layers,
   Building2,
+  FileCheck,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -97,6 +98,10 @@ const partnersItems = [
       {
         title: 'Deal Network (Demo)',
         href: '/dashboard/partners/deal-network',
+      },
+      {
+        title: 'Obligations',
+        href: '/dashboard/partners/deal-network/obligations',
       },
       {
         title: 'Referral Links',
@@ -290,6 +295,10 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
 
   if (isRabbitHolePilot) {
     const pilotHome = '/dashboard/partners/deal-network';
+    const pilotObligations = `${pilotHome}/obligations`;
+    const isObligationsView = pathname === pilotObligations;
+    const isDealNetworkSectionActive =
+      pathname === pilotHome || (pathname.startsWith(`${pilotHome}/`) && !isObligationsView);
     return (
       <Sidebar collapsible="icon">
         <SidebarHeader>
@@ -316,10 +325,18 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={pathname === pilotHome || pathname.startsWith(`${pilotHome}/`)}>
+                  <SidebarMenuButton asChild isActive={isDealNetworkSectionActive}>
                     <Link href={pilotHome}>
                       <Handshake className="size-4" />
                       <span>Deal Network</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isObligationsView}>
+                    <Link href={pilotObligations}>
+                      <FileCheck className="size-4" />
+                      <span>Obligations</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -458,7 +475,16 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                       <CollapsibleContent>
                         <SidebarMenuSub>
                           {item.items?.map((subItem) => {
-                            const isActive = pathname === subItem.href;
+                            const dealNetworkBase = '/dashboard/partners/deal-network';
+                            const obligationsHref = `${dealNetworkBase}/obligations`;
+                            const isActive =
+                              subItem.href === obligationsHref
+                                ? pathname === obligationsHref
+                                : subItem.href === dealNetworkBase
+                                  ? pathname === dealNetworkBase ||
+                                    (pathname.startsWith(`${dealNetworkBase}/`) &&
+                                      pathname !== obligationsHref)
+                                  : pathname === subItem.href;
                             return (
                               <SidebarMenuSubItem key={subItem.href}>
                                 <SidebarMenuSubButton asChild isActive={isActive}>

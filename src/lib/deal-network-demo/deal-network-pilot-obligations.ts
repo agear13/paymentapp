@@ -5,7 +5,11 @@
  */
 import 'server-only';
 
-import { Prisma, DealNetworkPilotObligationStatus } from '@prisma/client';
+import {
+  DealNetworkPilotObligationStatus,
+  PaymentEventRecordStatus,
+  Prisma,
+} from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
@@ -64,6 +68,28 @@ function roleAmountsFromDeal(deal: RecentDeal): Partial<Record<BaseParticipantSl
   };
 }
 
+/** Pilot UI / snapshot may show paid state before a payment_events row is linked. */
+function dealHasLegacyFundingSnapshot(deal: RecentDeal): boolean {
+  if (deal.paymentStatus === 'Paid') return true;
+  const s = deal.status;
+  return s === 'Paid' || s === 'Approved' || s === 'Eligible' || s === 'Reversed';
+}
+
+async function primaryFundingPaymentEventIdForDeal(dealId: string): Promise<string | null> {
+  const evt = await prisma.payment_events.findFirst({
+    where: {
+      pilot_deal_id: dealId,
+      event_type: 'PAYMENT_CONFIRMED',
+      OR: [
+        { record_status: null },
+        { record_status: { not: PaymentEventRecordStatus.VOIDED } },
+      ],
+    },
+    orderBy: [{ received_at: 'desc' }, { created_at: 'desc' }],
+  });
+  return evt?.id ?? null;
+}
+
 /**
  * Rebuilds obligation rows for one pilot deal from current DB-backed snapshot fields.
  * Deletes prior obligation rows for this deal_id + user_id only (derived cache), then inserts fresh rows.
@@ -78,6 +104,9 @@ export async function refreshDealNetworkPilotObligationsForDeal(
   const dealParticipants = participants.filter((p) => p.dealId === deal.id);
   const roleAmounts = roleAmountsFromDeal(deal);
   const currency = 'USD';
+
+  const fundingEventId = await primaryFundingPaymentEventIdForDeal(deal.id);
+  const moneyConfirmed = Boolean(fundingEventId) || dealHasLegacyFundingSnapshot(deal);
 
   const rows: Prisma.deal_network_pilot_obligationsCreateManyInput[] = [];
 
@@ -121,11 +150,13 @@ export async function refreshDealNetworkPilotObligationsForDeal(
       deal_id: deal.id,
       participant_id: p.id,
       allocation_rule_id: null,
-      payment_event_id: null,
+      payment_event_id: moneyConfirmed ? fundingEventId : null,
       obligation_type: 'PARTICIPANT',
       amount_owed: new Prisma.Decimal(resolved.total.toFixed(2)),
       currency,
-      status: payoutLineToObligationStatus(payout, deal.status),
+      status: moneyConfirmed
+        ? payoutLineToObligationStatus(payout, deal.status)
+        : DealNetworkPilotObligationStatus.UNFUNDED,
       calculation_explanation: resolved.previewLine,
       calculation_snapshot_json: snapshot as unknown as Prisma.InputJsonValue,
       due_date: null,
@@ -139,11 +170,13 @@ export async function refreshDealNetworkPilotObligationsForDeal(
       deal_id: deal.id,
       participant_id: null,
       allocation_rule_id: null,
-      payment_event_id: null,
+      payment_event_id: moneyConfirmed ? fundingEventId : null,
       obligation_type: 'PLATFORM_FEE',
       amount_owed: new Prisma.Decimal(deal.platformFee.toFixed(2)),
       currency,
-      status: dealSettlementToObligationStatus(deal.status),
+      status: moneyConfirmed
+        ? dealSettlementToObligationStatus(deal.status)
+        : DealNetworkPilotObligationStatus.UNFUNDED,
       calculation_explanation: `Platform fee from deal record: $${deal.platformFee.toLocaleString()}`,
       calculation_snapshot_json: {
         dealId: deal.id,

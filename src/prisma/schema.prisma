@@ -167,6 +167,7 @@ model organizations {
   ledger_accounts              ledger_accounts[]
   merchant_settings            merchant_settings[]
   payment_links                payment_links[]
+  payment_events               payment_events[]
   referral_links               referral_links[]
   xero_connections             xero_connections?
   notifications                notifications[]
@@ -197,25 +198,44 @@ model user_organizations {
 }
 
 model payment_events {
-  id                       String           @id @default(uuid()) @db.Uuid
-  payment_link_id          String           @db.Uuid
+  id                       String                    @id @default(uuid()) @db.Uuid
+  /// Nullable for manual / CSV-import rows that are not tied to a Payment Link row.
+  payment_link_id          String?                   @db.Uuid
+  organization_id          String?                   @db.Uuid
+  /// Deal Network pilot deal id when this event is explicitly linked to a pilot deal.
+  pilot_deal_id            String?                   @db.VarChar(255)
   event_type               PaymentEventType
   payment_method           PaymentMethod?
-  stripe_payment_intent_id String?          @db.VarChar(255)
-  stripe_event_id          String?          @db.VarChar(255)
-  hedera_transaction_id    String?          @db.VarChar(255)
-  wise_transfer_id         String?          @db.VarChar(255)
-  amount_received          Decimal?         @db.Decimal(18, 8)
-  currency_received        String?          @db.VarChar(10)
-  correlation_id           String?          @db.VarChar(255)
+  /// How this row entered the system (orthogonal to `payment_method` rail).
+  source_type              PaymentEventSourceType?
+  source_reference         String?                   @db.VarChar(512)
+  gross_amount             Decimal?                  @db.Decimal(18, 8)
+  net_amount               Decimal?                  @db.Decimal(18, 8)
+  currency_received        String?                   @db.VarChar(10)
+  received_at              DateTime?                 @db.Timestamptz(6)
+  record_status            PaymentEventRecordStatus?
+  raw_payload_json         Json?
+  stripe_payment_intent_id String?                   @db.VarChar(255)
+  stripe_event_id          String?                   @db.VarChar(255)
+  hedera_transaction_id    String?                   @db.VarChar(255)
+  wise_transfer_id         String?                   @db.VarChar(255)
+  amount_received          Decimal?                  @db.Decimal(18, 8)
+  correlation_id           String?                   @db.VarChar(255)
   metadata                 Json?
-  created_at               DateTime         @default(now()) @db.Timestamptz(6)
-  payment_links            payment_links    @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+  created_at               DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                  @updatedAt @db.Timestamptz(6)
+  payment_links            payment_links?            @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+  organizations            organizations?            @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+  pilot_deal               deal_network_pilot_deals? @relation("PilotDealPaymentEvents", fields: [pilot_deal_id], references: [id], onDelete: SetNull)
+  deal_network_pilot_obligations deal_network_pilot_obligations[]
 
   @@index([payment_link_id, correlation_id], name: "payment_events_payment_link_correlation_idx")
   @@index([payment_link_id, created_at])
   @@index([stripe_event_id])
   @@index([wise_transfer_id])
+  @@index([pilot_deal_id])
+  @@index([organization_id])
+  @@index([source_type])
 }
 
 model payment_links {
@@ -436,6 +456,23 @@ enum PaymentEventType {
   REFUND_CONFIRMED
   /// Payer submitted manual crypto details; invoice PAID_UNVERIFIED or REQUIRES_REVIEW (Payment Links only)
   CRYPTO_PAYMENT_SUBMITTED
+}
+
+/// Provenance of a payment_events row (additive; optional on legacy rows).
+enum PaymentEventSourceType {
+  PAYMENT_LINK
+  STRIPE
+  CRYPTO
+  WISE
+  MANUAL
+  CSV_IMPORT
+}
+
+/// Lifecycle for imported / manually recorded rows; optional for legacy rows.
+enum PaymentEventRecordStatus {
+  RECORDED
+  PENDING_REVIEW
+  VOIDED
 }
 
 enum PaymentLinkStatus {
@@ -842,8 +879,9 @@ model deal_network_pilot_deals {
   updated_at       DateTime @updatedAt @db.Timestamptz(6)
   deal_payload     Json
 
-  participants deal_network_pilot_participants[]
-  obligations  deal_network_pilot_obligations[]
+  participants     deal_network_pilot_participants[]
+  obligations      deal_network_pilot_obligations[]
+  pilot_payment_events payment_events[] @relation("PilotDealPaymentEvents")
 
   @@index([user_id])
 }
@@ -851,6 +889,8 @@ model deal_network_pilot_deals {
 /// Derived commission obligations for Deal Network pilot (read from deal + participant JSON; refreshed server-side).
 enum DealNetworkPilotObligationStatus {
   DRAFT
+  /// Deal / obligations exist but no funding linked to the pilot deal (see payment_events.pilot_deal_id).
+  UNFUNDED
   PENDING_APPROVAL
   APPROVED
   AVAILABLE_FOR_PAYOUT
@@ -877,8 +917,9 @@ model deal_network_pilot_obligations {
   created_at                DateTime                         @default(now()) @db.Timestamptz(6)
   updated_at                DateTime                         @updatedAt @db.Timestamptz(6)
 
-  deal        deal_network_pilot_deals         @relation(fields: [deal_id], references: [id], onDelete: Cascade)
-  participant deal_network_pilot_participants? @relation(fields: [participant_id], references: [id], onDelete: SetNull)
+  deal          deal_network_pilot_deals         @relation(fields: [deal_id], references: [id], onDelete: Cascade)
+  participant   deal_network_pilot_participants? @relation(fields: [participant_id], references: [id], onDelete: SetNull)
+  payment_event payment_events? @relation(fields: [payment_event_id], references: [id], onDelete: SetNull)
 
   @@index([user_id, deal_id])
   @@index([deal_id])

@@ -4,6 +4,10 @@
  * Ensures idempotency and atomicity
  */
 
+import {
+  PaymentEventRecordStatus,
+  PaymentEventSourceType,
+} from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { generateCorrelationId } from './correlation';
@@ -182,12 +186,26 @@ export async function confirmPayment(
       });
 
       // 3. Create payment event with idempotency fields
+      const sourceType: PaymentEventSourceType =
+        provider === 'stripe'
+          ? PaymentEventSourceType.STRIPE
+          : provider === 'hedera'
+            ? PaymentEventSourceType.CRYPTO
+            : PaymentEventSourceType.WISE;
+
       const paymentEventData: any = {
         payment_link_id: paymentLinkId,
+        organization_id: paymentLink.organization_id,
         event_type: 'PAYMENT_CONFIRMED',
         payment_method: provider.toUpperCase(),
+        source_type: sourceType,
+        source_reference: normalizedProviderRef,
+        gross_amount: amountReceived,
+        net_amount: null,
         amount_received: amountReceived,
         currency_received: currencyReceived,
+        received_at: new Date(),
+        record_status: PaymentEventRecordStatus.RECORDED,
         correlation_id: correlationId,
         metadata: {
           ...metadata,
@@ -202,6 +220,25 @@ export async function confirmPayment(
         },
         created_at: new Date(),
       };
+
+      const pilotDealIdFromMeta =
+        typeof metadata?.pilot_deal_id === 'string'
+          ? String(metadata.pilot_deal_id).trim()
+          : undefined;
+      if (pilotDealIdFromMeta) {
+        const pilotDeal = await tx.deal_network_pilot_deals.findUnique({
+          where: { id: pilotDealIdFromMeta },
+          select: { id: true },
+        });
+        if (pilotDeal?.id) {
+          paymentEventData.pilot_deal_id = pilotDeal.id;
+        } else {
+          log.warn(
+            { correlationId, pilotDealIdFromMeta },
+            'Ignoring metadata pilot_deal_id (no matching deal_network_pilot_deals row)'
+          );
+        }
+      }
 
       if (provider === 'stripe') {
         paymentEventData.stripe_event_id = providerRef;
