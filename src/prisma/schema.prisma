@@ -843,8 +843,47 @@ model deal_network_pilot_deals {
   deal_payload     Json
 
   participants deal_network_pilot_participants[]
+  obligations  deal_network_pilot_obligations[]
 
   @@index([user_id])
+}
+
+/// Derived commission obligations for Deal Network pilot (read from deal + participant JSON; refreshed server-side).
+enum DealNetworkPilotObligationStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  AVAILABLE_FOR_PAYOUT
+  PAID
+  REJECTED
+  REVERSED
+}
+
+model deal_network_pilot_obligations {
+  id                        String                           @id @default(uuid()) @db.Uuid
+  user_id                   String                           @db.VarChar(255)
+  organization_id           String?                          @db.Uuid
+  deal_id                   String                           @db.VarChar(255)
+  participant_id            String?                          @db.VarChar(255)
+  allocation_rule_id        String?                          @db.Uuid
+  payment_event_id          String?                          @db.Uuid
+  obligation_type           String                           @db.VarChar(64)
+  amount_owed               Decimal                          @db.Decimal(18, 2)
+  currency                  String                           @default("USD") @db.Char(3)
+  status                    DealNetworkPilotObligationStatus @default(DRAFT)
+  calculation_explanation String                           @db.Text
+  calculation_snapshot_json Json
+  due_date                  DateTime?                        @db.Timestamptz(6)
+  created_at                DateTime                         @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                         @updatedAt @db.Timestamptz(6)
+
+  deal        deal_network_pilot_deals         @relation(fields: [deal_id], references: [id], onDelete: Cascade)
+  participant deal_network_pilot_participants? @relation(fields: [participant_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, deal_id])
+  @@index([deal_id])
+  @@index([participant_id])
+  @@index([status])
 }
 
 model deal_network_pilot_participants {
@@ -862,7 +901,8 @@ model deal_network_pilot_participants {
   updated_at           DateTime @updatedAt @db.Timestamptz(6)
   participant_payload  Json
 
-  deal deal_network_pilot_deals @relation(fields: [deal_id], references: [id], onDelete: Cascade)
+  deal         deal_network_pilot_deals          @relation(fields: [deal_id], references: [id], onDelete: Cascade)
+  obligations  deal_network_pilot_obligations[]
 
   @@index([deal_id])
 }

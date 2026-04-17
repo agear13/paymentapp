@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { approveParticipantByInviteToken } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import { refreshDealNetworkPilotObligationsForUser } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
+import { prisma } from '@/lib/server/prisma';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +30,13 @@ export async function POST(
         { error: 'Invite link is inactive (participant removed)' },
         { status: 404 }
       );
+    }
+    const owner = await prisma.deal_network_pilot_deals.findUnique({
+      where: { id: result.deal.id },
+      select: { user_id: true },
+    });
+    if (owner?.user_id) {
+      await refreshDealNetworkPilotObligationsForUser(owner.user_id);
     }
     return NextResponse.json(result);
   } catch (e) {
