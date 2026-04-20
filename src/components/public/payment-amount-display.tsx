@@ -13,6 +13,7 @@ interface PaymentAmountDisplayProps {
   currency: string;
   description: string;
   invoiceReference: string | null;
+  invoiceDate?: string | null;
   dueDate?: string | null;
 }
 
@@ -21,6 +22,7 @@ export const PaymentAmountDisplay: React.FC<PaymentAmountDisplayProps> = ({
   currency,
   description,
   invoiceReference,
+  invoiceDate,
   dueDate,
 }) => {
   // Format amount with proper decimals
@@ -28,6 +30,7 @@ export const PaymentAmountDisplay: React.FC<PaymentAmountDisplayProps> = ({
   
   // Format due date
   const formattedDueDate = dueDate ? format(new Date(dueDate), 'PPP') : null;
+  const formattedInvoiceDate = invoiceDate ? format(new Date(invoiceDate), 'PPP') : null;
 
   return (
     <div className="text-center">
@@ -51,6 +54,15 @@ export const PaymentAmountDisplay: React.FC<PaymentAmountDisplayProps> = ({
               <div>
                 <p className="text-xs text-slate-500">Due Date</p>
                 <p className="text-sm text-slate-900">{formattedDueDate}</p>
+              </div>
+            </div>
+          )}
+          {invoiceDate && (
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+              <Calendar className="w-4 h-4 text-slate-400" />
+              <div>
+                <p className="text-xs text-slate-500">Invoice Date</p>
+                <p className="text-sm text-slate-900">{formattedInvoiceDate}</p>
               </div>
             </div>
           )}

@@ -242,8 +242,7 @@ export function CryptoPublicPaymentContent({
                 <Check className="h-4 w-4" />
                 <AlertTitle>Payment submitted successfully</AlertTitle>
                 <AlertDescription>
-                  Your payment details were recorded and the merchant has been notified. You can close this page; no
-                  further action is required from you.
+                  Payment submitted successfully. The merchant will verify your payment shortly.
                 </AlertDescription>
               </Alert>
             ) : !showForm ? (

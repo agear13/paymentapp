@@ -28,7 +28,7 @@ interface PaymentLinkPaidProps {
     attachmentMimeType?: string | null;
   };
   /** Crypto manual flow: invoice is recorded from payer submission (may still be under merchant review). */
-  variant?: 'standard' | 'crypto_submitted';
+  variant?: 'standard' | 'crypto_submitted' | 'manual_submitted';
 }
 
 export const PaymentLinkPaid: React.FC<PaymentLinkPaidProps> = ({
@@ -48,12 +48,14 @@ export const PaymentLinkPaid: React.FC<PaymentLinkPaidProps> = ({
           </div>
 
           <h1 className="text-2xl font-bold text-slate-900 mb-2">
-            {variant === 'crypto_submitted' ? 'Payment submitted successfully' : 'Payment Completed'}
+            {variant === 'crypto_submitted' || variant === 'manual_submitted'
+              ? 'Payment submitted successfully'
+              : 'Payment Completed'}
           </h1>
 
           <p className="text-slate-600 mb-6 leading-relaxed">
-            {variant === 'crypto_submitted'
-              ? 'Your payment details were submitted. You do not need to wait for manual approval from the merchant.'
+            {variant === 'crypto_submitted' || variant === 'manual_submitted'
+              ? 'Your payment details were submitted. The merchant will verify your transfer shortly.'
               : 'This payment has already been successfully processed.'}
           </p>
 
@@ -95,7 +97,7 @@ export const PaymentLinkPaid: React.FC<PaymentLinkPaidProps> = ({
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
             <p className="text-sm text-green-800">
               <span className="font-medium">Thank you!</span>{' '}
-              {variant === 'crypto_submitted'
+              {variant === 'crypto_submitted' || variant === 'manual_submitted'
                 ? 'Keep your transaction record. The merchant has been notified automatically.'
                 : 'Your payment has been received and is being processed.'}
             </p>

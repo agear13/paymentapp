@@ -4,6 +4,7 @@
  */
 
 import type { CryptoVerificationStatus, MatchConfidence } from '@prisma/client';
+import { finalizeVerification } from '@/lib/payments/manual-confirmation-verification';
 
 export type CryptoVerificationResult = {
   verification_status: CryptoVerificationStatus;
@@ -125,15 +126,6 @@ function currenciesMatch(requested: string | undefined, payerCurrency: string | 
   return false;
 }
 
-function normalizeAddress(s: string): string {
-  return s.trim().toLowerCase();
-}
-
-function addressesMatch(requested: string | undefined, payerDest: string): boolean {
-  if (!requested?.trim()) return false;
-  return normalizeAddress(requested) === normalizeAddress(payerDest);
-}
-
 /** Parse first decimal number from a string like "0.5 ETH" or "100.00". */
 function parseFirstNumber(s: string): number | null {
   const m = s.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
@@ -175,7 +167,6 @@ export function buildExplorerUrl(merchantNetwork: string, txHash: string): strin
 
 export function verifyCryptoConfirmationInput(params: {
   merchantNetwork: string | null | undefined;
-  merchantAddress: string | null | undefined;
   merchantCryptoCurrency: string | null | undefined;
   invoiceAmount: number;
   invoiceCurrency: string;
@@ -189,7 +180,6 @@ export function verifyCryptoConfirmationInput(params: {
   let hard = 0;
 
   const net = params.merchantNetwork?.trim() || '';
-  const addr = params.merchantAddress?.trim() || '';
   const cur = params.merchantCryptoCurrency?.trim() || '';
 
   const txCheck = validateTxHashFormat(params.payerTxHash, net);
@@ -216,10 +206,8 @@ export function verifyCryptoConfirmationInput(params: {
     hard += 1;
   }
 
-  if (addr && !addressesMatch(addr, params.payerWalletAddress)) {
-    issues.push(
-      `Wallet address does not match the receiving address on the invoice (payer may have sent to a different address)`
-    );
+  if (!params.payerWalletAddress?.trim()) {
+    issues.push('Payer wallet/source address missing');
     hard += 1;
   }
 
@@ -237,24 +225,9 @@ export function verifyCryptoConfirmationInput(params: {
     }
   }
 
-  const verification_status: CryptoVerificationStatus = hard > 0 ? 'FLAGGED' : 'VERIFIED';
-
-  let match_confidence: MatchConfidence;
-  if (issues.length === 0) {
-    match_confidence = 'HIGH';
-  } else if (hard > 0 || issues.length >= 3) {
-    match_confidence = 'LOW';
-  } else {
-    match_confidence = 'MEDIUM';
+  const finalized = finalizeVerification(issues, hard);
+  if (finalized.match_confidence === 'LOW' && hard === 0) {
+    finalized.verification_issues.push('Overall confidence is low — manual review recommended');
   }
-
-  if (match_confidence === 'LOW' && hard === 0) {
-    issues.push('Overall confidence is low — manual review recommended');
-  }
-
-  return {
-    verification_status,
-    match_confidence,
-    verification_issues: issues,
-  };
+  return finalized;
 }

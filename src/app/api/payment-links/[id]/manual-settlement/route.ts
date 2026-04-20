@@ -32,7 +32,13 @@ export async function POST(
     const { id } = await params;
     const link = await prisma.payment_links.findUnique({
       where: { id },
-      select: { id: true, organization_id: true, status: true },
+      select: {
+        id: true,
+        organization_id: true,
+        status: true,
+        wise_transfer_id: true,
+        wise_received_amount: true,
+      },
     });
 
     if (!link) {
@@ -47,6 +53,36 @@ export async function POST(
     const json = await request.json();
     const { action } = bodySchema.parse(json);
 
+    const settlementEvidence = await prisma.payment_events.findMany({
+      where: { payment_link_id: link.id },
+      select: {
+        event_type: true,
+        amount_received: true,
+        stripe_payment_intent_id: true,
+        hedera_transaction_id: true,
+        wise_transfer_id: true,
+        source_reference: true,
+        source_type: true,
+      },
+      take: 20,
+      orderBy: { created_at: 'desc' },
+    });
+
+    const hasExternalSettlementEvidence =
+      Boolean(link.wise_transfer_id) ||
+      Boolean(link.wise_received_amount) ||
+      settlementEvidence.some((event) => {
+        if (event.event_type === 'REFUND_CONFIRMED') return true;
+        if (event.amount_received != null && Number(event.amount_received) > 0) return true;
+        return Boolean(
+          event.stripe_payment_intent_id ||
+            event.hedera_transaction_id ||
+            event.wise_transfer_id ||
+            event.source_reference ||
+            event.source_type
+        );
+      });
+
     if (action === 'mark_paid') {
       if (link.status !== 'OPEN') {
         return NextResponse.json(
@@ -59,6 +95,15 @@ export async function POST(
       if (link.status !== 'PAID') {
         return NextResponse.json(
           { error: 'Only paid invoices can be reopened for correction' },
+          { status: 400 }
+        );
+      }
+      if (hasExternalSettlementEvidence) {
+        return NextResponse.json(
+          {
+            error:
+              'Reopen blocked: this invoice has recorded settlement evidence. Use a refund/reversal workflow instead.',
+          },
           { status: 400 }
         );
       }

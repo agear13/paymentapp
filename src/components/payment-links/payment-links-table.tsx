@@ -17,6 +17,7 @@ import {
   Download,
   Edit,
   Files,
+  Trash2,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -65,6 +66,7 @@ export interface PaymentLink {
   customerEmail: string | null;
   customerName: string | null;
   customerPhone: string | null;
+  invoiceDate?: Date | string | null;
   dueDate: Date | string | null;
   expiresAt: Date | string | null;
   xeroInvoiceNumber: string | null;
@@ -79,6 +81,17 @@ export interface PaymentLink {
   cryptoCurrency?: string | null;
   cryptoMemo?: string | null;
   cryptoInstructions?: string | null;
+  manualBankRecipientName?: string | null;
+  manualBankCurrency?: string | null;
+  manualBankDestinationType?: string | null;
+  manualBankBankName?: string | null;
+  manualBankAccountNumber?: string | null;
+  manualBankIban?: string | null;
+  manualBankSwiftBic?: string | null;
+  manualBankRoutingSortCode?: string | null;
+  manualBankWiseReference?: string | null;
+  manualBankRevolutHandle?: string | null;
+  manualBankInstructions?: string | null;
   attachmentUrl?: string | null;
   attachmentStorageKey?: string | null;
   attachmentBucket?: string | null;
@@ -102,6 +115,7 @@ export interface PaymentLinksTableProps {
   onEdit?: (paymentLink: PaymentLink) => void;
   onDuplicate?: (paymentLink: PaymentLink) => void;
   onCancel?: (paymentLink: PaymentLink) => void;
+  onDelete?: (paymentLink: PaymentLink) => void;
   onRefresh?: () => void;
   selectedIds?: Set<string>;
   onSelectionChange?: (selectedIds: Set<string>) => void;
@@ -165,12 +179,34 @@ const getStatusBadgeVariant = (status: string) => {
   }
 };
 
+const getStatusDescription = (status: string): string => {
+  switch (status) {
+    case 'OPEN':
+      return 'Awaiting payment';
+    case 'PAID_UNVERIFIED':
+      return 'Payment submitted - not yet verified';
+    case 'REQUIRES_REVIEW':
+      return 'Payment needs review (mismatch detected)';
+    case 'PAID':
+      return 'Payment confirmed';
+    case 'OVERDUE':
+      return 'Past due date, still unpaid';
+    case 'CANCELED':
+      return 'Invoice canceled';
+    case 'EXPIRED':
+      return 'Invoice expired';
+    default:
+      return '';
+  }
+};
+
 export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
   paymentLinks,
   onViewDetails,
   onEdit,
   onDuplicate,
   onCancel,
+  onDelete,
   onRefresh,
   selectedIds = new Set(),
   onSelectionChange,
@@ -315,7 +351,7 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
             <TableHead>Invoice Ref</TableHead>
             <TableHead>Customer</TableHead>
             <TableHead>Due Date</TableHead>
-            <TableHead>Created</TableHead>
+            <TableHead>Invoice Date</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -336,9 +372,14 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
                 </TableCell>
               )}
               <TableCell>
-                <Badge variant={getStatusBadgeVariant(effectiveStatus) as any}>
-                  {effectiveStatus}
-                </Badge>
+                <div className="space-y-1">
+                  <Badge variant={getStatusBadgeVariant(effectiveStatus) as any}>
+                    {effectiveStatus}
+                  </Badge>
+                  {getStatusDescription(effectiveStatus) ? (
+                    <p className="text-[11px] text-muted-foreground">{getStatusDescription(effectiveStatus)}</p>
+                  ) : null}
+                </div>
               </TableCell>
               <TableCell className="font-medium">
                 {formatCurrency(
@@ -365,7 +406,7 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
                 )}
               </TableCell>
               <TableCell>
-                {formatDate(paymentLink.createdAt) || (
+                {formatDate(paymentLink.invoiceDate || paymentLink.createdAt) || (
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
@@ -426,6 +467,21 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
                           >
                             <XCircle className="mr-2 h-4 w-4" />
                             Cancel Link
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    {(paymentLink.status === 'DRAFT' ||
+                      paymentLink.status === 'OPEN' ||
+                      paymentLink.status === 'CANCELED') &&
+                      onDelete && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => onDelete(paymentLink)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Invoice
                           </DropdownMenuItem>
                         </>
                       )}

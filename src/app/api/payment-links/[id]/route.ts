@@ -72,6 +72,7 @@ function transformPaymentLink(link: any) {
     currency: link.currency,
     description: link.description,
     invoiceReference: link.invoice_reference,
+    invoiceDate: link.invoice_date ?? null,
     customerEmail: link.customer_email,
     customerName: link.customer_name ?? null,
     customerPhone: link.customer_phone,
@@ -85,6 +86,17 @@ function transformPaymentLink(link: any) {
     cryptoCurrency: link.crypto_currency ?? null,
     cryptoMemo: link.crypto_memo ?? null,
     cryptoInstructions: link.crypto_instructions ?? null,
+    manualBankRecipientName: link.manual_bank_recipient_name ?? null,
+    manualBankCurrency: link.manual_bank_currency ?? null,
+    manualBankDestinationType: link.manual_bank_destination_type ?? null,
+    manualBankBankName: link.manual_bank_bank_name ?? null,
+    manualBankAccountNumber: link.manual_bank_account_number ?? null,
+    manualBankIban: link.manual_bank_iban ?? null,
+    manualBankSwiftBic: link.manual_bank_swift_bic ?? null,
+    manualBankRoutingSortCode: link.manual_bank_routing_sort_code ?? null,
+    manualBankWiseReference: link.manual_bank_wise_reference ?? null,
+    manualBankRevolutHandle: link.manual_bank_revolut_handle ?? null,
+    manualBankInstructions: link.manual_bank_instructions ?? null,
     createdAt: link.created_at,
     updatedAt: link.updated_at,
     wiseStatus: link.wise_status ?? null,
@@ -109,6 +121,7 @@ import { UpdatePaymentLinkSchema } from '@/lib/validations/schemas';
 import {
   transitionPaymentLinkStatus,
   isPaymentLinkEditable,
+  isPaymentLinkCancelable,
 } from '@/lib/payment-link-state-machine';
 import { tryDeletePaymentLinkAttachmentFile } from '@/lib/payment-links/payment-link-attachment';
 
@@ -323,6 +336,12 @@ export async function PATCH(
           ? new Date(patch.dueDate as string | Date)
           : null
         : currentLink.due_date;
+    const mergedInvoiceDate =
+      patch.invoiceDate !== undefined
+        ? patch.invoiceDate
+          ? new Date(patch.invoiceDate as string | Date)
+          : null
+        : currentLink.invoice_date;
     const mergedExpiresAt =
       patch.expiresAt !== undefined
         ? patch.expiresAt
@@ -341,6 +360,17 @@ export async function PATCH(
     let mergedCryptoCurrency = currentLink.crypto_currency;
     let mergedCryptoMemo = currentLink.crypto_memo;
     let mergedCryptoInstructions = currentLink.crypto_instructions;
+    let mergedManualBankRecipientName = currentLink.manual_bank_recipient_name;
+    let mergedManualBankCurrency = currentLink.manual_bank_currency;
+    let mergedManualBankDestinationType = currentLink.manual_bank_destination_type;
+    let mergedManualBankBankName = currentLink.manual_bank_bank_name;
+    let mergedManualBankAccountNumber = currentLink.manual_bank_account_number;
+    let mergedManualBankIban = currentLink.manual_bank_iban;
+    let mergedManualBankSwiftBic = currentLink.manual_bank_swift_bic;
+    let mergedManualBankRoutingSortCode = currentLink.manual_bank_routing_sort_code;
+    let mergedManualBankWiseReference = currentLink.manual_bank_wise_reference;
+    let mergedManualBankRevolutHandle = currentLink.manual_bank_revolut_handle;
+    let mergedManualBankInstructions = currentLink.manual_bank_instructions;
 
     if (invoiceOnly || paymentMethod !== 'CRYPTO') {
       mergedCryptoNetwork = null;
@@ -386,6 +416,77 @@ export async function PATCH(
       }
     }
 
+    if (invoiceOnly || paymentMethod !== 'MANUAL_BANK') {
+      mergedManualBankRecipientName = null;
+      mergedManualBankCurrency = null;
+      mergedManualBankDestinationType = null;
+      mergedManualBankBankName = null;
+      mergedManualBankAccountNumber = null;
+      mergedManualBankIban = null;
+      mergedManualBankSwiftBic = null;
+      mergedManualBankRoutingSortCode = null;
+      mergedManualBankWiseReference = null;
+      mergedManualBankRevolutHandle = null;
+      mergedManualBankInstructions = null;
+    } else {
+      mergedManualBankRecipientName =
+        patch.manualBankRecipientName !== undefined
+          ? trimOrNull(patch.manualBankRecipientName as string | null)
+          : mergedManualBankRecipientName;
+      mergedManualBankCurrency =
+        patch.manualBankCurrency !== undefined
+          ? trimOrNull(patch.manualBankCurrency as string | null)
+          : mergedManualBankCurrency;
+      mergedManualBankDestinationType =
+        patch.manualBankDestinationType !== undefined
+          ? trimOrNull(patch.manualBankDestinationType as string | null)
+          : mergedManualBankDestinationType;
+      mergedManualBankBankName =
+        patch.manualBankBankName !== undefined
+          ? trimOrNull(patch.manualBankBankName as string | null)
+          : mergedManualBankBankName;
+      mergedManualBankAccountNumber =
+        patch.manualBankAccountNumber !== undefined
+          ? trimOrNull(patch.manualBankAccountNumber as string | null)
+          : mergedManualBankAccountNumber;
+      mergedManualBankIban =
+        patch.manualBankIban !== undefined
+          ? trimOrNull(patch.manualBankIban as string | null)
+          : mergedManualBankIban;
+      mergedManualBankSwiftBic =
+        patch.manualBankSwiftBic !== undefined
+          ? trimOrNull(patch.manualBankSwiftBic as string | null)
+          : mergedManualBankSwiftBic;
+      mergedManualBankRoutingSortCode =
+        patch.manualBankRoutingSortCode !== undefined
+          ? trimOrNull(patch.manualBankRoutingSortCode as string | null)
+          : mergedManualBankRoutingSortCode;
+      mergedManualBankWiseReference =
+        patch.manualBankWiseReference !== undefined
+          ? trimOrNull(patch.manualBankWiseReference as string | null)
+          : mergedManualBankWiseReference;
+      mergedManualBankRevolutHandle =
+        patch.manualBankRevolutHandle !== undefined
+          ? trimOrNull(patch.manualBankRevolutHandle as string | null)
+          : mergedManualBankRevolutHandle;
+      mergedManualBankInstructions =
+        patch.manualBankInstructions !== undefined
+          ? trimOrNull(patch.manualBankInstructions as string | null)
+          : mergedManualBankInstructions;
+    }
+
+    if (!invoiceOnly && paymentMethod === 'MANUAL_BANK') {
+      if (!mergedManualBankRecipientName || !mergedManualBankCurrency || !mergedManualBankDestinationType) {
+        return NextResponse.json(
+          {
+            error:
+              'Recipient name, destination type, and payment currency are required for manual bank transfer',
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     if (currentLink.wise_transfer_id) {
       const pmSame =
         (paymentMethod ?? null) === (currentLink.payment_method ?? null);
@@ -415,7 +516,7 @@ export async function PATCH(
       }
     }
 
-    const prismaData: Prisma.payment_linksUpdateInput = {
+    const prismaData: Record<string, unknown> = {
       amount: new Prisma.Decimal(mergedAmount.toFixed(2)),
       currency: mergedCurrency,
       description: mergedDescription,
@@ -423,6 +524,7 @@ export async function PATCH(
       customer_email: mergedCustomerEmail,
       customer_name: mergedCustomerName,
       customer_phone: mergedCustomerPhone,
+      invoice_date: mergedInvoiceDate,
       due_date: mergedDueDate,
       expires_at: mergedExpiresAt,
       invoice_only_mode: invoiceOnly,
@@ -433,6 +535,17 @@ export async function PATCH(
       crypto_currency: mergedCryptoCurrency,
       crypto_memo: mergedCryptoMemo,
       crypto_instructions: mergedCryptoInstructions,
+      manual_bank_recipient_name: mergedManualBankRecipientName,
+      manual_bank_currency: mergedManualBankCurrency,
+      manual_bank_destination_type: mergedManualBankDestinationType,
+      manual_bank_bank_name: mergedManualBankBankName,
+      manual_bank_account_number: mergedManualBankAccountNumber,
+      manual_bank_iban: mergedManualBankIban,
+      manual_bank_swift_bic: mergedManualBankSwiftBic,
+      manual_bank_routing_sort_code: mergedManualBankRoutingSortCode,
+      manual_bank_wise_reference: mergedManualBankWiseReference,
+      manual_bank_revolut_handle: mergedManualBankRevolutHandle,
+      manual_bank_instructions: mergedManualBankInstructions,
       updated_at: new Date(),
     };
 
@@ -466,12 +579,12 @@ export async function PATCH(
       }
     }
 
-    assertPaymentLinksUpdateDataValid(prismaData as Record<string, unknown>);
+    assertPaymentLinksUpdateDataValid(prismaData);
 
     const updatedLink = await prisma.$transaction(async (tx) => {
       const updated = await tx.payment_links.update({
         where: { id },
-        data: prismaData,
+        data: prismaData as any,
       });
 
       await tx.audit_logs.create({
@@ -583,6 +696,18 @@ export async function DELETE(
       );
     }
 
+    if (!isPaymentLinkCancelable(currentLink.status)) {
+      return NextResponse.json(
+        {
+          error:
+            currentLink.status === 'PAID'
+              ? 'Paid invoices cannot be canceled. Reopen only if this was marked paid by mistake and no external settlement exists.'
+              : `Only draft or open invoices can be canceled (current status: ${currentLink.status}).`,
+        },
+        { status: 400 }
+      );
+    }
+
     // Transition to CANCELED status
     const canceledLink = await transitionPaymentLinkStatus(
       id,
@@ -600,13 +725,19 @@ export async function DELETE(
       message: 'Payment link canceled successfully',
     });
   } catch (error: any) {
+    const message = error?.message || 'Internal server error';
+    const isTransitionError = typeof message === 'string' && message.includes('Invalid state transition');
     loggers.api.error(
-      { error: error.message, paymentLinkId: params.id },
+      { error: message, paymentLinkId: params.id },
       'Failed to cancel payment link'
     );
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
+      {
+        error: isTransitionError
+          ? 'Cancel is only available for draft/open invoices that have not reached a terminal settlement state.'
+          : message,
+      },
+      { status: isTransitionError ? 400 : 500 }
     );
   }
 }

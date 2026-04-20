@@ -9,6 +9,7 @@ import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { verifyCryptoConfirmationInput } from '@/lib/payments/crypto-confirmation-verification';
 import type { PaymentLinkStatus } from '@prisma/client';
+import { statusAfterManualConfirmationVerification } from '@/lib/payments/payment-confirmation-lifecycle';
 
 export type SubmitCryptoConfirmationParams = {
   paymentLinkId: string;
@@ -27,16 +28,6 @@ export type SubmitCryptoConfirmationResult = {
   match_confidence: string;
   verification_issues: string[];
 };
-
-function pickInvoiceStatus(v: {
-  verification_status: string;
-  match_confidence: string;
-}): 'PAID_UNVERIFIED' | 'REQUIRES_REVIEW' {
-  if (v.verification_status === 'FLAGGED' || v.match_confidence === 'LOW') {
-    return 'REQUIRES_REVIEW';
-  }
-  return 'PAID_UNVERIFIED';
-}
 
 export async function submitCryptoPaymentConfirmation(
   params: SubmitCryptoConfirmationParams
@@ -60,7 +51,6 @@ export async function submitCryptoPaymentConfirmation(
 
     const fullVerification = verifyCryptoConfirmationInput({
       merchantNetwork: link.crypto_network,
-      merchantAddress: link.crypto_address,
       merchantCryptoCurrency: link.crypto_currency,
       invoiceAmount: Number(link.amount),
       invoiceCurrency: link.currency,
@@ -71,7 +61,7 @@ export async function submitCryptoPaymentConfirmation(
       payerTxHash: params.payerTxHash,
     });
 
-    const nextStatus = pickInvoiceStatus({
+    const nextStatus = statusAfterManualConfirmationVerification({
       verification_status: fullVerification.verification_status,
       match_confidence: fullVerification.match_confidence,
     });
@@ -97,10 +87,19 @@ export async function submitCryptoPaymentConfirmation(
     await tx.payment_links.update({
       where: { id: link.id },
       data: {
-        status: nextStatus,
+        status: 'PAID_UNVERIFIED',
         updated_at: new Date(),
       },
     });
+    if (nextStatus === 'REQUIRES_REVIEW') {
+      await tx.payment_links.update({
+        where: { id: link.id },
+        data: {
+          status: 'REQUIRES_REVIEW',
+          updated_at: new Date(),
+        },
+      });
+    }
 
     const correlationId = `crypto_submit:${confirmationId}`;
 

@@ -67,6 +67,7 @@ export interface PaymentLinkDetails {
   customerEmail: string | null;
   customerName?: string | null;
   customerPhone: string | null;
+  invoiceDate?: Date | string | null;
   dueDate?: Date | string | null;
   expiresAt: Date | null;
   xeroInvoiceNumber?: string | null;
@@ -79,6 +80,17 @@ export interface PaymentLinkDetails {
   cryptoCurrency?: string | null;
   cryptoMemo?: string | null;
   cryptoInstructions?: string | null;
+  manualBankRecipientName?: string | null;
+  manualBankCurrency?: string | null;
+  manualBankDestinationType?: string | null;
+  manualBankBankName?: string | null;
+  manualBankAccountNumber?: string | null;
+  manualBankIban?: string | null;
+  manualBankSwiftBic?: string | null;
+  manualBankRoutingSortCode?: string | null;
+  manualBankWiseReference?: string | null;
+  manualBankRevolutHandle?: string | null;
+  manualBankInstructions?: string | null;
   attachmentUrl?: string | null;
   attachmentFilename?: string | null;
   attachmentMimeType?: string | null;
@@ -90,6 +102,7 @@ export interface PaymentLinkDetails {
     eventType: string;
     paymentMethod: string | null;
     createdAt: Date;
+    metadata?: Record<string, unknown> | null;
   }>;
   fxSnapshots?: Array<{
     id: string;
@@ -151,6 +164,25 @@ const getStatusBadgeVariant = (status: string) => {
       return 'destructive';
     default:
       return 'secondary';
+  }
+};
+
+const getStatusDescription = (status: string): string => {
+  switch (status) {
+    case 'OPEN':
+      return 'Awaiting payment';
+    case 'PAID_UNVERIFIED':
+      return 'Payment submitted - not yet verified';
+    case 'REQUIRES_REVIEW':
+      return 'Payment needs review (mismatch detected)';
+    case 'PAID':
+      return 'Payment confirmed';
+    case 'CANCELED':
+      return 'Invoice canceled';
+    case 'EXPIRED':
+      return 'Invoice expired';
+    default:
+      return '';
   }
 };
 
@@ -290,6 +322,9 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
               <Badge variant={getStatusBadgeVariant(paymentLink.status) as any}>
                 {paymentLink.status}
               </Badge>
+              {getStatusDescription(paymentLink.status) ? (
+                <p className="text-xs text-muted-foreground text-right">{getStatusDescription(paymentLink.status)}</p>
+              ) : null}
               <div className="flex flex-wrap gap-1 justify-end">
                 {paymentLink.invoiceOnlyMode ? (
                   <Badge variant="outline" className="text-xs">
@@ -299,6 +334,11 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                 {paymentLink.paymentMethod === 'CRYPTO' ? (
                   <Badge variant="outline" className="text-xs">
                     Manual crypto (any wallet)
+                  </Badge>
+                ) : null}
+                {paymentLink.paymentMethod === 'MANUAL_BANK' ? (
+                  <Badge variant="outline" className="text-xs">
+                    Manual bank instructions
                   </Badge>
                 ) : null}
                 {paymentLink.paymentMethod === 'HEDERA' &&
@@ -320,11 +360,31 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
         ) : null}
         {paymentLink.status === 'PAID_UNVERIFIED' || paymentLink.status === 'REQUIRES_REVIEW' ? (
           <p className="text-sm text-muted-foreground -mt-2 mb-2 rounded-md border border-border bg-muted/40 px-3 py-2">
-            A payer submitted crypto payment details; the invoice is recorded automatically. Use &quot;Crypto payment
-            activity&quot; on the list page for match confidence and optional follow-up. You can reopen here if this was
-            a mistake.
+            A payer submitted payment details; the invoice is recorded automatically. Use payment activity on the list
+            page for follow-up. You can reopen here if this was a mistake.
           </p>
         ) : null}
+        {(() => {
+          const latestVerificationIssues =
+            paymentLink.paymentEvents
+              ?.filter((e) => e.metadata && typeof e.metadata === 'object')
+              .flatMap((e) => {
+                const md = e.metadata as Record<string, unknown>;
+                const issues = md.verification_issues;
+                return Array.isArray(issues) ? issues.filter((x): x is string => typeof x === 'string') : [];
+              }) ?? [];
+          if (latestVerificationIssues.length === 0) return null;
+          return (
+            <div className="text-sm -mt-1 mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="font-medium text-amber-900">Verification issues</p>
+              <ul className="list-disc pl-5 mt-1 text-amber-900/90 text-xs space-y-0.5">
+                {latestVerificationIssues.slice(0, 5).map((issue, i) => (
+                  <li key={i}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          );
+        })()}
 
         <Tabs defaultValue="details" className="w-full">
           <TabsList className="grid w-full grid-cols-6">
@@ -423,6 +483,88 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                   </>
                 ) : null}
 
+                {paymentLink.paymentMethod === 'MANUAL_BANK' &&
+                (paymentLink.manualBankRecipientName ||
+                  paymentLink.manualBankCurrency ||
+                  paymentLink.manualBankDestinationType) ? (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Manual bank transfer instructions</p>
+                      <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                        {paymentLink.manualBankRecipientName ? (
+                          <div>
+                            <dt className="text-muted-foreground">Recipient</dt>
+                            <dd>{paymentLink.manualBankRecipientName}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.manualBankDestinationType ? (
+                          <div>
+                            <dt className="text-muted-foreground">Destination type</dt>
+                            <dd>{paymentLink.manualBankDestinationType}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.manualBankCurrency ? (
+                          <div>
+                            <dt className="text-muted-foreground">Transfer currency</dt>
+                            <dd>{paymentLink.manualBankCurrency}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.manualBankBankName ? (
+                          <div>
+                            <dt className="text-muted-foreground">Bank name</dt>
+                            <dd>{paymentLink.manualBankBankName}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.manualBankAccountNumber ? (
+                          <div>
+                            <dt className="text-muted-foreground">Account number</dt>
+                            <dd className="font-mono text-xs break-all">{paymentLink.manualBankAccountNumber}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.manualBankIban ? (
+                          <div>
+                            <dt className="text-muted-foreground">IBAN</dt>
+                            <dd className="font-mono text-xs break-all">{paymentLink.manualBankIban}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.manualBankSwiftBic ? (
+                          <div>
+                            <dt className="text-muted-foreground">SWIFT / BIC</dt>
+                            <dd className="font-mono text-xs break-all">{paymentLink.manualBankSwiftBic}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.manualBankRoutingSortCode ? (
+                          <div>
+                            <dt className="text-muted-foreground">Routing / sort code</dt>
+                            <dd className="font-mono text-xs break-all">{paymentLink.manualBankRoutingSortCode}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.manualBankWiseReference ? (
+                          <div>
+                            <dt className="text-muted-foreground">Wise reference</dt>
+                            <dd className="break-all">{paymentLink.manualBankWiseReference}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.manualBankRevolutHandle ? (
+                          <div>
+                            <dt className="text-muted-foreground">Revolut handle</dt>
+                            <dd className="break-all">{paymentLink.manualBankRevolutHandle}</dd>
+                          </div>
+                        ) : null}
+                        {paymentLink.manualBankInstructions ? (
+                          <div className="sm:col-span-2">
+                            <dt className="text-muted-foreground">Instructions</dt>
+                            <dd className="whitespace-pre-wrap text-muted-foreground">
+                              {paymentLink.manualBankInstructions}
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    </div>
+                  </>
+                ) : null}
+
                 {paymentLink.attachmentUrl ? (
                   <>
                     <Separator />
@@ -482,6 +624,16 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                 <Separator />
 
                 <div className="grid grid-cols-2 gap-4">
+                  {paymentLink.invoiceDate ? (
+                    <div className="flex items-start gap-2">
+                      <Calendar className="mt-1 h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Invoice date</p>
+                        <p className="text-sm">{format(new Date(paymentLink.invoiceDate), 'PPpp')}</p>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="flex items-start gap-2">
                     <Calendar className="mt-1 h-4 w-4 text-muted-foreground" />
                     <div>

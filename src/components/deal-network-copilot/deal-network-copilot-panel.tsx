@@ -23,7 +23,12 @@ type DealSnapshot = {
   status: string;
   paymentStatus?: string;
   archived?: boolean;
+  paymentLink?: string;
+  paidAmount?: number;
+  paidAt?: string;
+  currentStage?: string;
 };
+type DiagnosticType = 'blockers' | 'payout_readiness' | 'funding' | 'state_consistency' | 'needs_action';
 
 function severityVariant(
   s: DealIssueItem['severity']
@@ -49,6 +54,7 @@ export function DealNetworkCopilotPanel({
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [uiState, setUiState] = React.useState<CopilotUiState>('open');
+  const [activeDiagnostic, setActiveDiagnostic] = React.useState<DiagnosticType>('blockers');
 
   const allowed = profile === 'admin' || profile === 'rabbit_hole_pilot';
 
@@ -73,7 +79,8 @@ export function DealNetworkCopilotPanel({
     }
   }, []);
 
-  const runDiagnostic = React.useCallback(async () => {
+  const runDiagnostic = React.useCallback(async (diagnosticType: DiagnosticType) => {
+    setActiveDiagnostic(diagnosticType);
     setLoading(true);
     setError(null);
     try {
@@ -83,6 +90,7 @@ export function DealNetworkCopilotPanel({
         body: JSON.stringify({
           tool: 'getDealIssues',
           input: {
+            diagnosticType,
             deal: activeDeal,
             participants: participants.map((p) => ({
               id: p.id,
@@ -106,6 +114,12 @@ export function DealNetworkCopilotPanel({
       setLoading(false);
     }
   }, [activeDeal, participants]);
+
+  React.useEffect(() => {
+    if (!result || loading) return;
+    void runDiagnostic(activeDiagnostic);
+    // Refresh current diagnostic when underlying deal/participant snapshot changes.
+  }, [activeDeal, participants, activeDiagnostic]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!allowed || profile === null) {
     return null;
@@ -171,21 +185,28 @@ export function DealNetworkCopilotPanel({
           </div>
         </CardHeader>
         <CardContent className="space-y-3 pt-0">
-          <Button
-            type="button"
-            className="w-full"
-            disabled={loading}
-            onClick={() => void runDiagnostic()}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
-                Analyzing…
-              </>
-            ) : (
-              "What's blocking this deal?"
-            )}
-          </Button>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button type="button" variant={activeDiagnostic === 'blockers' ? 'default' : 'outline'} disabled={loading} onClick={() => void runDiagnostic('blockers')}>
+              {loading && activeDiagnostic === 'blockers' ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
+              What&apos;s blocking this deal?
+            </Button>
+            <Button type="button" variant={activeDiagnostic === 'payout_readiness' ? 'default' : 'outline'} disabled={loading} onClick={() => void runDiagnostic('payout_readiness')}>
+              {loading && activeDiagnostic === 'payout_readiness' ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
+              Why isn&apos;t payout ready?
+            </Button>
+            <Button type="button" variant={activeDiagnostic === 'funding' ? 'default' : 'outline'} disabled={loading} onClick={() => void runDiagnostic('funding')}>
+              {loading && activeDiagnostic === 'funding' ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
+              Is this deal funded?
+            </Button>
+            <Button type="button" variant={activeDiagnostic === 'state_consistency' ? 'default' : 'outline'} disabled={loading} onClick={() => void runDiagnostic('state_consistency')}>
+              {loading && activeDiagnostic === 'state_consistency' ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
+              Check state consistency
+            </Button>
+            <Button type="button" className="sm:col-span-2" variant={activeDiagnostic === 'needs_action' ? 'default' : 'outline'} disabled={loading} onClick={() => void runDiagnostic('needs_action')}>
+              {loading && activeDiagnostic === 'needs_action' ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
+              What still needs action?
+            </Button>
+          </div>
 
           {error ? (
             <Alert variant="destructive">

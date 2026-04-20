@@ -254,6 +254,8 @@ model payment_links {
   expires_at        DateTime?         @db.Timestamptz(6)
 
   // Sprint 26: Invoice UX Improvements
+  /// Explicit invoice issue date (can be backdated); distinct from due_date and created_at.
+  invoice_date         DateTime? @db.Timestamptz(6)
   due_date            DateTime? @db.Timestamptz(6)
   xero_invoice_number String?   @db.VarChar(255)
 
@@ -282,6 +284,19 @@ model payment_links {
   crypto_memo          String? @db.VarChar(512)
   crypto_instructions  String? @db.Text
 
+  /// When payment_method = MANUAL_BANK: operator-defined transfer instructions.
+  manual_bank_recipient_name    String? @db.VarChar(255)
+  manual_bank_currency          String? @db.VarChar(16)
+  manual_bank_destination_type  String? @db.VarChar(64)
+  manual_bank_bank_name         String? @db.VarChar(255)
+  manual_bank_account_number    String? @db.VarChar(128)
+  manual_bank_iban              String? @db.VarChar(128)
+  manual_bank_swift_bic         String? @db.VarChar(64)
+  manual_bank_routing_sort_code String? @db.VarChar(64)
+  manual_bank_wise_reference    String? @db.VarChar(255)
+  manual_bank_revolut_handle    String? @db.VarChar(255)
+  manual_bank_instructions      String? @db.Text
+
   /// Merchant-uploaded payment instruction file (PNG/JPEG/PDF); binary in Supabase Storage, metadata here
   attachment_storage_key String? @db.VarChar(1024)
   attachment_bucket      String? @default("payment-link-attachments") @db.VarChar(128)
@@ -299,6 +314,7 @@ model payment_links {
   multi_currency_invoices multi_currency_invoices[]
   commission_obligations  commission_obligations[]
   crypto_payment_confirmations crypto_payment_confirmations[]
+  manual_bank_payment_confirmations manual_bank_payment_confirmations[]
 
   @@index([organization_id, status])
   @@index([due_date])
@@ -324,6 +340,31 @@ model crypto_payment_confirmations {
   created_at             DateTime                       @default(now()) @db.Timestamptz(6)
   reviewed_at            DateTime?                      @db.Timestamptz(6)
   payment_links          payment_links                  @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+
+  @@index([payment_link_id, status])
+  @@index([status, created_at])
+}
+
+/// Payer-submitted manual bank transfer notice (no merchant pre-approval gate).
+model manual_bank_payment_confirmations {
+  id                         String   @id @default(uuid()) @db.Uuid
+  payment_link_id            String   @db.Uuid
+  status                     CryptoPaymentConfirmationStatus @default(PENDING)
+  payer_amount_sent          String   @db.VarChar(64)
+  payer_currency             String?  @db.VarChar(16)
+  payer_destination          String?  @db.VarChar(255)
+  payer_payment_method_used  String?  @db.VarChar(128)
+  payer_reference            String?  @db.VarChar(255)
+  payer_proof_details        String?  @db.Text
+  payer_note                 String?  @db.Text
+  verification_status        CryptoVerificationStatus?
+  match_confidence           MatchConfidence?
+  verification_issues        Json     @default("[]")
+  merchant_acknowledged_at   DateTime? @db.Timestamptz(6)
+  merchant_investigation_flag Boolean @default(false)
+  created_at                 DateTime @default(now()) @db.Timestamptz(6)
+  reviewed_at                DateTime? @db.Timestamptz(6)
+  payment_links              payment_links @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
 
   @@index([payment_link_id, status])
   @@index([status, created_at])
@@ -495,6 +536,8 @@ enum PaymentMethod {
   WISE
   /// Manual crypto: merchant supplies network, wallet, asset; payer confirms; merchant approves
   CRYPTO
+  /// Manual bank transfer instructions (bank/Wise/Revolut/other), payer confirms submitted transfer.
+  MANUAL_BANK
 }
 
 enum CryptoPaymentConfirmationStatus {

@@ -68,6 +68,7 @@ function transformPaymentLink(link: Record<string, unknown>) {
     currency: link.currency,
     description: link.description,
     invoiceReference: link.invoice_reference,
+    invoiceDate: link.invoice_date ?? null,
     customerEmail: link.customer_email,
     customerName: link.customer_name,
     customerPhone: link.customer_phone,
@@ -81,6 +82,26 @@ function transformPaymentLink(link: Record<string, unknown>) {
     cryptoCurrency: (link as { crypto_currency?: string | null }).crypto_currency ?? null,
     cryptoMemo: (link as { crypto_memo?: string | null }).crypto_memo ?? null,
     cryptoInstructions: (link as { crypto_instructions?: string | null }).crypto_instructions ?? null,
+    manualBankRecipientName:
+      (link as { manual_bank_recipient_name?: string | null }).manual_bank_recipient_name ?? null,
+    manualBankCurrency:
+      (link as { manual_bank_currency?: string | null }).manual_bank_currency ?? null,
+    manualBankDestinationType:
+      (link as { manual_bank_destination_type?: string | null }).manual_bank_destination_type ?? null,
+    manualBankBankName: (link as { manual_bank_bank_name?: string | null }).manual_bank_bank_name ?? null,
+    manualBankAccountNumber:
+      (link as { manual_bank_account_number?: string | null }).manual_bank_account_number ?? null,
+    manualBankIban: (link as { manual_bank_iban?: string | null }).manual_bank_iban ?? null,
+    manualBankSwiftBic:
+      (link as { manual_bank_swift_bic?: string | null }).manual_bank_swift_bic ?? null,
+    manualBankRoutingSortCode:
+      (link as { manual_bank_routing_sort_code?: string | null }).manual_bank_routing_sort_code ?? null,
+    manualBankWiseReference:
+      (link as { manual_bank_wise_reference?: string | null }).manual_bank_wise_reference ?? null,
+    manualBankRevolutHandle:
+      (link as { manual_bank_revolut_handle?: string | null }).manual_bank_revolut_handle ?? null,
+    manualBankInstructions:
+      (link as { manual_bank_instructions?: string | null }).manual_bank_instructions ?? null,
     wiseStatus: link.wise_status ?? null,
     wiseTransferId: link.wise_transfer_id ?? null,
     attachmentUrl: hasAttachment ? `/api/public/pay/${encodeURIComponent(shortCode)}/attachment` : null,
@@ -323,9 +344,9 @@ export async function POST(request: NextRequest) {
           : null;
 
       const isCrypto = !invoiceOnly && resolvedPaymentMethod === 'CRYPTO';
+      const isManualBank = !invoiceOnly && resolvedPaymentMethod === 'MANUAL_BANK';
 
-      const link = await tx.payment_links.create({
-        data: {
+      const linkCreateData: Record<string, unknown> = {
           id: linkId,
           organization_id: dbOrgId,
           short_code: shortCode,
@@ -335,6 +356,9 @@ export async function POST(request: NextRequest) {
           currency: validatedData.currency,
           description: validatedData.description,
           invoice_reference: validatedData.invoiceReference || null,
+          invoice_date: validatedData.invoiceDate
+            ? new Date(validatedData.invoiceDate as string)
+            : now,
           customer_email: validatedData.customerEmail || null,
           customer_name: validatedData.customerName || null,
           customer_phone: validatedData.customerPhone || null,
@@ -347,6 +371,33 @@ export async function POST(request: NextRequest) {
           crypto_currency: isCrypto ? (validatedData.cryptoCurrency?.trim() ?? null) : null,
           crypto_memo: isCrypto ? (validatedData.cryptoMemo?.trim() || null) : null,
           crypto_instructions: isCrypto ? (validatedData.cryptoInstructions?.trim() || null) : null,
+          manual_bank_recipient_name: isManualBank
+            ? validatedData.manualBankRecipientName?.trim() ?? null
+            : null,
+          manual_bank_currency: isManualBank
+            ? validatedData.manualBankCurrency?.trim() ?? null
+            : null,
+          manual_bank_destination_type: isManualBank
+            ? validatedData.manualBankDestinationType?.trim() ?? null
+            : null,
+          manual_bank_bank_name: isManualBank ? validatedData.manualBankBankName?.trim() || null : null,
+          manual_bank_account_number: isManualBank
+            ? validatedData.manualBankAccountNumber?.trim() || null
+            : null,
+          manual_bank_iban: isManualBank ? validatedData.manualBankIban?.trim() || null : null,
+          manual_bank_swift_bic: isManualBank ? validatedData.manualBankSwiftBic?.trim() || null : null,
+          manual_bank_routing_sort_code: isManualBank
+            ? validatedData.manualBankRoutingSortCode?.trim() || null
+            : null,
+          manual_bank_wise_reference: isManualBank
+            ? validatedData.manualBankWiseReference?.trim() || null
+            : null,
+          manual_bank_revolut_handle: isManualBank
+            ? validatedData.manualBankRevolutHandle?.trim() || null
+            : null,
+          manual_bank_instructions: isManualBank
+            ? validatedData.manualBankInstructions?.trim() || null
+            : null,
           attachment_storage_key: validatedData.attachment?.storageKey ?? null,
           attachment_bucket: validatedData.attachment?.bucket ?? null,
           attachment_filename: validatedData.attachment?.filename ?? null,
@@ -355,7 +406,10 @@ export async function POST(request: NextRequest) {
           created_at: now,
           updated_at: now,
           wise_status: wiseContext ? 'INSTRUCTIONS_READY' : null,
-        },
+      };
+
+      const link = await tx.payment_links.create({
+        data: linkCreateData as any,
       });
 
       // Create initial payment event

@@ -38,6 +38,7 @@ import { format } from 'date-fns';
 import { formatCurrency } from '@/components/payment-links/currency-select';
 import { PaymentLinksOnboardingAssistant } from '@/components/payment-links-onboarding/payment-links-onboarding-assistant';
 import { PendingCryptoConfirmations } from '@/components/payment-links/pending-crypto-confirmations';
+import { PendingManualBankConfirmations } from '@/components/payment-links/pending-manual-bank-confirmations';
 
 export default function PaymentLinksPage() {
   const { toast } = useToast();
@@ -72,6 +73,9 @@ export default function PaymentLinksPage() {
   const [linkToCancel, setLinkToCancel] = React.useState<PaymentLink | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
   const [isCanceling, setIsCanceling] = React.useState(false);
+  const [linkToDelete, setLinkToDelete] = React.useState<PaymentLink | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   // Get organization ID from context/hook
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
@@ -297,6 +301,44 @@ export default function PaymentLinksPage() {
     }
   };
 
+  const handleDeleteClick = (paymentLink: PaymentLink) => {
+    setLinkToDelete(paymentLink);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!linkToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/payment-links/${linkToDelete.id}/delete`, {
+        method: 'POST',
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to delete invoice');
+      }
+
+      toast({
+        title: 'Invoice deleted',
+        description: 'The invoice was removed from your workspace.',
+      });
+      setDeleteDialogOpen(false);
+      setLinkToDelete(null);
+      void fetchPaymentLinks({ silent: true });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete invoice';
+      toast({
+        title: 'Delete blocked',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleFiltersChange = (newFilters: any) => {
     setFilters(newFilters);
   };
@@ -340,6 +382,11 @@ export default function PaymentLinksPage() {
       { key: 'invoiceReference', header: 'Invoice Reference' },
       { key: 'customerEmail', header: 'Customer Email' },
       { key: 'customerPhone', header: 'Customer Phone' },
+      {
+        key: 'invoiceDate',
+        header: 'Invoice Date',
+        format: (value) => (value ? format(new Date(value), 'yyyy-MM-dd') : ''),
+      },
       { 
         key: 'createdAt', 
         header: 'Created At',
@@ -480,6 +527,12 @@ export default function PaymentLinksPage() {
           onChanged={() => void fetchPaymentLinks({ silent: true })}
         />
       ) : null}
+      {organizationId ? (
+        <PendingManualBankConfirmations
+          organizationId={organizationId}
+          onChanged={() => void fetchPaymentLinks({ silent: true })}
+        />
+      ) : null}
 
       {/* Invoices Table */}
       <Card>
@@ -508,6 +561,7 @@ export default function PaymentLinksPage() {
               onEdit={handleEditClick}
               onDuplicate={handleDuplicateClick}
               onCancel={handleCancelClick}
+              onDelete={handleDeleteClick}
               onRefresh={handleRefresh}
               selectedIds={selectedIds}
               onSelectionChange={setSelectedIds}
@@ -544,6 +598,7 @@ export default function PaymentLinksPage() {
             customerEmail: linkToEdit.customerEmail,
             customerName: linkToEdit.customerName,
             customerPhone: linkToEdit.customerPhone,
+            invoiceDate: linkToEdit.invoiceDate ?? null,
             dueDate: linkToEdit.dueDate,
             expiresAt: linkToEdit.expiresAt,
             invoiceOnlyMode: linkToEdit.invoiceOnlyMode,
@@ -555,6 +610,17 @@ export default function PaymentLinksPage() {
             cryptoCurrency: linkToEdit.cryptoCurrency ?? null,
             cryptoMemo: linkToEdit.cryptoMemo ?? null,
             cryptoInstructions: linkToEdit.cryptoInstructions ?? null,
+            manualBankRecipientName: linkToEdit.manualBankRecipientName ?? null,
+            manualBankCurrency: linkToEdit.manualBankCurrency ?? null,
+            manualBankDestinationType: linkToEdit.manualBankDestinationType ?? null,
+            manualBankBankName: linkToEdit.manualBankBankName ?? null,
+            manualBankAccountNumber: linkToEdit.manualBankAccountNumber ?? null,
+            manualBankIban: linkToEdit.manualBankIban ?? null,
+            manualBankSwiftBic: linkToEdit.manualBankSwiftBic ?? null,
+            manualBankRoutingSortCode: linkToEdit.manualBankRoutingSortCode ?? null,
+            manualBankWiseReference: linkToEdit.manualBankWiseReference ?? null,
+            manualBankRevolutHandle: linkToEdit.manualBankRevolutHandle ?? null,
+            manualBankInstructions: linkToEdit.manualBankInstructions ?? null,
             attachmentUrl: linkToEdit.attachmentUrl ?? null,
             attachmentStorageKey: linkToEdit.attachmentStorageKey ?? null,
             attachmentBucket: linkToEdit.attachmentBucket ?? null,
@@ -582,7 +648,11 @@ export default function PaymentLinksPage() {
             description: `${linkToDuplicate.description} (Copy)`,
             invoiceReference: linkToDuplicate.invoiceReference || '',
             customerEmail: linkToDuplicate.customerEmail || '',
+            customerName: linkToDuplicate.customerName || '',
             customerPhone: linkToDuplicate.customerPhone || '',
+            invoiceDate: linkToDuplicate.invoiceDate
+              ? new Date(linkToDuplicate.invoiceDate as string | Date)
+              : new Date(),
           }}
           open={duplicateDialogOpen}
           onOpenChange={setDuplicateDialogOpen}
@@ -616,6 +686,28 @@ export default function PaymentLinksPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isCanceling ? 'Canceling...' : 'Yes, Cancel Link'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete invoice permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the invoice record from your list. Deletion is blocked when payment or
+              settlement evidence exists.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Invoice'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

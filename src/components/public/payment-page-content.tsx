@@ -22,6 +22,7 @@ interface PaymentPageContentProps {
     currency: string;
     description: string;
     invoiceReference: string | null;
+    invoiceDate?: string | null;
     customerName: string | null;
     dueDate: string | null;
     expiresAt: string | null;
@@ -94,6 +95,7 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
                 currency={paymentLink.currency}
                 description={paymentLink.description}
                 invoiceReference={paymentLink.invoiceReference}
+                invoiceDate={paymentLink.invoiceDate}
                 dueDate={paymentLink.dueDate}
               />
             </div>

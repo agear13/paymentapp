@@ -37,7 +37,7 @@ export const PaymentEventTypeSchema = z.enum([
   'CRYPTO_PAYMENT_SUBMITTED',
 ]);
 
-export const PaymentMethodSchema = z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO']);
+export const PaymentMethodSchema = z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO', 'MANUAL_BANK']);
 
 /** Merchant-uploaded invoice attachment metadata stored in Supabase Storage. */
 export const PaymentLinkAttachmentInputSchema = z
@@ -211,6 +211,7 @@ export const PaymentLinkSchema = z.object({
   currency: currencyCodeSchema,
   description: z.string().max(200, 'Description must not exceed 200 characters'),
   invoiceReference: invoiceReferenceSchema.nullable(),
+  invoiceDate: z.date().nullable().optional(),
   customerEmail: emailSchema.nullable(),
   customerPhone: phoneSchema.nullable(),
   expiresAt: z.date().nullable(),
@@ -250,6 +251,11 @@ export const CreatePaymentLinkSchema = z.object({
   customerPhone: phoneSchema
     .or(z.literal(''))
     .transform((val) => val && val.trim() ? val : undefined),
+  invoiceDate: z
+    .string()
+    .datetime('Invalid datetime format')
+    .optional()
+    .or(z.date().optional()),
   dueDate: z
     .string()
     .datetime('Invalid datetime format')
@@ -271,6 +277,18 @@ export const CreatePaymentLinkSchema = z.object({
   cryptoCurrency: z.string().min(1).max(64).optional(),
   cryptoMemo: z.string().max(512).optional(),
   cryptoInstructions: z.string().max(8000).optional(),
+  /** When payment_method = MANUAL_BANK — flexible international transfer details. */
+  manualBankRecipientName: z.string().min(1).max(255).optional(),
+  manualBankCurrency: z.string().min(1).max(16).optional(),
+  manualBankDestinationType: z.string().min(1).max(64).optional(),
+  manualBankBankName: z.string().max(255).optional(),
+  manualBankAccountNumber: z.string().max(128).optional(),
+  manualBankIban: z.string().max(128).optional(),
+  manualBankSwiftBic: z.string().max(64).optional(),
+  manualBankRoutingSortCode: z.string().max(64).optional(),
+  manualBankWiseReference: z.string().max(255).optional(),
+  manualBankRevolutHandle: z.string().max(255).optional(),
+  manualBankInstructions: z.string().max(8000).optional(),
   /** Optional payment instruction attachment (upload via POST /api/payment-links/upload-attachment first). */
   attachment: PaymentLinkAttachmentInputSchema.optional(),
 })
@@ -297,6 +315,20 @@ export const CreatePaymentLinkSchema = z.object({
       message: 'Network, wallet address, and currency are required for crypto payments',
       path: ['cryptoNetwork'],
     }
+  )
+  .refine(
+    (d) => {
+      if (d.invoiceOnlyMode === true || d.paymentMethod !== 'MANUAL_BANK') return true;
+      return (
+        !!d.manualBankRecipientName?.trim() &&
+        !!d.manualBankCurrency?.trim() &&
+        !!d.manualBankDestinationType?.trim()
+      );
+    },
+    {
+      message: 'Recipient name, destination type, and payment currency are required for manual bank transfer',
+      path: ['manualBankRecipientName'],
+    }
   );
 
 /**
@@ -320,6 +352,7 @@ export const UpdatePaymentLinkSchema = z
     customerEmail: emailSchema.nullable().optional(),
     customerName: z.string().max(255).nullable().optional(),
     customerPhone: phoneSchema.nullable().optional(),
+    invoiceDate: z.coerce.date().nullable().optional(),
     dueDate: z.coerce.date().nullable().optional(),
     expiresAt: z.coerce.date().nullable().optional(),
     invoiceOnlyMode: z.boolean().optional(),
@@ -330,6 +363,17 @@ export const UpdatePaymentLinkSchema = z
     cryptoCurrency: z.string().min(1).max(64).nullable().optional(),
     cryptoMemo: z.string().max(512).nullable().optional(),
     cryptoInstructions: z.string().max(8000).nullable().optional(),
+    manualBankRecipientName: z.string().min(1).max(255).nullable().optional(),
+    manualBankCurrency: z.string().min(1).max(16).nullable().optional(),
+    manualBankDestinationType: z.string().min(1).max(64).nullable().optional(),
+    manualBankBankName: z.string().max(255).nullable().optional(),
+    manualBankAccountNumber: z.string().max(128).nullable().optional(),
+    manualBankIban: z.string().max(128).nullable().optional(),
+    manualBankSwiftBic: z.string().max(64).nullable().optional(),
+    manualBankRoutingSortCode: z.string().max(64).nullable().optional(),
+    manualBankWiseReference: z.string().max(255).nullable().optional(),
+    manualBankRevolutHandle: z.string().max(255).nullable().optional(),
+    manualBankInstructions: z.string().max(8000).nullable().optional(),
     /** Set to null to remove attachment; omit to leave unchanged. */
     attachment: PaymentLinkAttachmentInputSchema.nullable().optional(),
   })
@@ -342,6 +386,17 @@ export const PublicCryptoConfirmationSubmitSchema = z.object({
   payerWalletAddress: z.string().min(1).max(512),
   payerCurrency: z.string().min(1).max(64).optional().nullable(),
   payerTxHash: z.string().max(255).optional().nullable(),
+});
+
+/** Payer-submitted manual bank transfer notice (public, no auth). */
+export const PublicManualBankConfirmationSubmitSchema = z.object({
+  payerAmountSent: z.string().min(1).max(64),
+  payerCurrency: z.string().max(16).optional().nullable(),
+  payerDestination: z.string().max(255).optional().nullable(),
+  payerPaymentMethodUsed: z.string().max(128).optional().nullable(),
+  payerReference: z.string().max(255).optional().nullable(),
+  payerProofDetails: z.string().max(8000).optional().nullable(),
+  payerNote: z.string().max(8000).optional().nullable(),
 });
 
 /** Merchant optional follow-up on assisted crypto verification (no approval gate). */

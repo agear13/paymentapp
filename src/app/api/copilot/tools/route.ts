@@ -20,11 +20,18 @@ const DealSchema = z.object({
   status: z.string(),
   paymentStatus: z.string().optional(),
   archived: z.boolean().optional(),
+  paymentLink: z.string().optional(),
+  paidAmount: z.number().optional(),
+  paidAt: z.string().optional(),
+  currentStage: z.string().optional(),
 });
 
 const GetDealIssuesBodySchema = z.object({
   tool: z.literal('getDealIssues'),
   input: z.object({
+    diagnosticType: z
+      .enum(['blockers', 'payout_readiness', 'funding', 'state_consistency', 'needs_action'])
+      .optional(),
     deal: DealSchema.nullable(),
     participants: z.array(ParticipantSchema),
   }),

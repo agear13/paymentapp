@@ -11,6 +11,7 @@ import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { PaymentPageContent } from '@/components/public/payment-page-content';
 import { CryptoPublicPaymentContent } from '@/components/public/crypto-public-payment-content';
+import { ManualBankPublicPaymentContent } from '@/components/public/manual-bank-public-payment-content';
 import { InvoiceOnlyPageContent } from '@/components/public/invoice-only-page-content';
 import { PaymentLinkExpired } from '@/components/public/payment-link-expired';
 import { PaymentLinkCanceled } from '@/components/public/payment-link-canceled';
@@ -27,6 +28,7 @@ interface PaymentLinkData {
   currency: string;
   description: string;
   invoiceReference: string | null;
+  invoiceDate?: string | null;
   customerName: string | null;
   dueDate: string | null;
   expiresAt: string | null;
@@ -40,6 +42,7 @@ interface PaymentLinkData {
     hedera: boolean;
     wise?: boolean;
     crypto?: boolean;
+    manualBank?: boolean;
   };
   paymentMethod?: string | null;
   cryptoNetwork?: string | null;
@@ -47,6 +50,17 @@ interface PaymentLinkData {
   cryptoCurrency?: string | null;
   cryptoMemo?: string | null;
   cryptoInstructions?: string | null;
+  manualBankRecipientName?: string | null;
+  manualBankCurrency?: string | null;
+  manualBankDestinationType?: string | null;
+  manualBankBankName?: string | null;
+  manualBankAccountNumber?: string | null;
+  manualBankIban?: string | null;
+  manualBankSwiftBic?: string | null;
+  manualBankRoutingSortCode?: string | null;
+  manualBankWiseReference?: string | null;
+  manualBankRevolutHandle?: string | null;
+  manualBankInstructions?: string | null;
   attachmentUrl?: string | null;
   attachmentFilename?: string | null;
   attachmentMimeType?: string | null;
@@ -190,9 +204,14 @@ export default function PayPage() {
     return <PaymentLinkPaid paymentLink={paymentLink} />;
   }
 
-  // Crypto: recorded from payer submission (assisted verification — no merchant approval gate)
+  // Manual transfer submit: recorded from payer submission (verify-after-send; no merchant approval gate)
   if (paymentLink.status === 'PAID_UNVERIFIED' || paymentLink.status === 'REQUIRES_REVIEW') {
-    return <PaymentLinkPaid paymentLink={paymentLink} variant="crypto_submitted" />;
+    return (
+      <PaymentLinkPaid
+        paymentLink={paymentLink}
+        variant={paymentLink.paymentMethod === 'MANUAL_BANK' ? 'manual_submitted' : 'crypto_submitted'}
+      />
+    );
   }
 
   // Draft - should not be publicly accessible
@@ -210,6 +229,20 @@ export default function PayPage() {
     return (
       <>
         <CryptoPublicPaymentContent shortCode={shortCode} paymentLink={paymentLink} />
+        <PaymentStatusMonitor
+          paymentLinkId={paymentLink.id}
+          shortCode={shortCode}
+          initialStatus={paymentLink.status}
+        />
+      </>
+    );
+  }
+
+  // Open state — manual bank transfer: instructions + confirmation only
+  if (paymentLink.paymentMethod === 'MANUAL_BANK') {
+    return (
+      <>
+        <ManualBankPublicPaymentContent shortCode={shortCode} paymentLink={paymentLink} />
         <PaymentStatusMonitor
           paymentLinkId={paymentLink.id}
           shortCode={shortCode}

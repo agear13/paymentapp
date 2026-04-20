@@ -145,6 +145,7 @@ export async function GET(
     const allowsHedera = !pm || pm === 'HEDERA';
     const allowsWise = !pm || pm === 'WISE';
     const allowsCrypto = !invoiceOnly && pm === 'CRYPTO';
+    const allowsManualBank = !invoiceOnly && pm === 'MANUAL_BANK';
 
     const globalWiseEnabled = config.features.wisePayments;
     const linkAllowsWise = allowsWise && (!paymentLink.payment_method || paymentLink.payment_method === 'WISE');
@@ -159,6 +160,7 @@ export async function GET(
         !invoiceOnly && allowsHedera && !!merchantSettings?.hedera_account_id,
       wise: !invoiceOnly && allowsWise && wiseAvailable,
       crypto: allowsCrypto,
+      manualBank: allowsManualBank,
     };
 
     // Select best FX snapshot:
@@ -231,6 +233,7 @@ export async function GET(
         currency: paymentLink.currency,
         description: paymentLink.description,
         invoiceReference: paymentLink.invoice_reference,
+        invoiceDate: paymentLink.invoice_date ?? null,
         customerName: paymentLink.customer_name,
         dueDate: paymentLink.due_date,
         expiresAt: paymentLink.expires_at,
@@ -250,6 +253,17 @@ export async function GET(
         cryptoCurrency: paymentLink.crypto_currency ?? null,
         cryptoMemo: paymentLink.crypto_memo ?? null,
         cryptoInstructions: paymentLink.crypto_instructions ?? null,
+        manualBankRecipientName: paymentLink.manual_bank_recipient_name ?? null,
+        manualBankCurrency: paymentLink.manual_bank_currency ?? null,
+        manualBankDestinationType: paymentLink.manual_bank_destination_type ?? null,
+        manualBankBankName: paymentLink.manual_bank_bank_name ?? null,
+        manualBankAccountNumber: paymentLink.manual_bank_account_number ?? null,
+        manualBankIban: paymentLink.manual_bank_iban ?? null,
+        manualBankSwiftBic: paymentLink.manual_bank_swift_bic ?? null,
+        manualBankRoutingSortCode: paymentLink.manual_bank_routing_sort_code ?? null,
+        manualBankWiseReference: paymentLink.manual_bank_wise_reference ?? null,
+        manualBankRevolutHandle: paymentLink.manual_bank_revolut_handle ?? null,
+        manualBankInstructions: paymentLink.manual_bank_instructions ?? null,
         attachmentUrl: paymentLink.attachment_storage_key
           ? `/api/public/pay/${encodeURIComponent(paymentLink.short_code)}/attachment?v=${encodeURIComponent(
               paymentLink.updated_at.toISOString()

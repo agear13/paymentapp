@@ -42,11 +42,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
-  dealNetworkSummary,
-  recentDeals as recentDealsSeed,
   attributionBreakdown,
-  topEarners as topEarnersSeed,
-  payoutRails,
 } from '@/lib/data/mock-deal-network';
 import type { DealStatus, RecentDeal, TopEarner } from '@/lib/data/mock-deal-network';
 import {
@@ -134,17 +130,6 @@ function getPaymentVariant(
   return status === 'Paid' ? 'success' : 'outline';
 }
 
-function bumpEarnersOnPaid(prev: TopEarner[], commissionTotal: number): TopEarner[] {
-  return prev.map((e) => {
-    if (e.name !== 'Charlie') return e;
-    return {
-      ...e,
-      amount: e.amount + Math.min(5000, Math.round(commissionTotal * 0.1)),
-      type: 'paid' as const,
-    };
-  });
-}
-
 export default function DealNetworkPage() {
   const [pilotHydrated, setPilotHydrated] = React.useState(false);
   const [deals, setDeals] = React.useState<RecentDeal[]>([]);
@@ -152,6 +137,7 @@ export default function DealNetworkPage() {
   const [preferredDealId, setPreferredDealId] = React.useState('');
   const [showArchived, setShowArchived] = React.useState(false);
   const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(null);
+  const [resetWorkspaceOpen, setResetWorkspaceOpen] = React.useState(false);
   const [removeParticipantTargetId, setRemoveParticipantTargetId] = React.useState<string | null>(null);
   const [participants, setParticipants] = React.useState<DemoParticipant[]>([]);
   const [payoutStatusChangePending, setPayoutStatusChangePending] = React.useState<{
@@ -173,8 +159,6 @@ export default function DealNetworkPage() {
     () => buildFunnelFromDeals(activePipelineDeals),
     [activePipelineDeals]
   );
-  const [topEarnersState, setTopEarnersState] = React.useState<TopEarner[]>(() => [...topEarnersSeed]);
-
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [inviteOpen, setInviteOpen] = React.useState(false);
@@ -209,7 +193,6 @@ export default function DealNetworkPage() {
 
   const featured = React.useMemo(() => {
     if (activeDeal) return recentDealToFeatured(activeDeal);
-    if (!pilotHydrated) return recentDealToFeatured(recentDealsSeed[0]);
     return recentDealToFeatured({
       id: '__placeholder__',
       dealName: 'No deal yet',
@@ -278,6 +261,69 @@ export default function DealNetworkPage() {
     () => computePipelineMetrics(activePipelineDeals),
     [activePipelineDeals]
   );
+  const liveSummary = React.useMemo(() => {
+    const totalDealValue = activePipelineDeals.reduce((sum, d) => sum + Math.max(0, d.value), 0);
+    const totalCommission = activePipelineDeals.reduce(
+      (sum, d) => sum + Math.max(0, (d.introducerAmount ?? 0) + (d.closerAmount ?? 0) + (d.platformFee ?? 0)),
+      0
+    );
+    const contractsSigned = activePipelineDeals.filter(
+      (d) => d.status === 'Approved' || d.status === 'Paid' || d.paymentStatus === 'Paid'
+    ).length;
+    const referralRevenueGenerated = activePipelineDeals
+      .filter((d) => d.status === 'Paid' || d.paymentStatus === 'Paid')
+      .reduce((sum, d) => sum + Math.max(0, d.value), 0);
+    const activePartners = new Set(
+      activePipelineDeals.map((d) => d.partner.trim()).filter((p) => p.length > 0)
+    ).size;
+    const avgCommissionRate = totalDealValue > 0 ? (totalCommission / totalDealValue) * 100 : 0;
+    return {
+      totalDealValue,
+      contractsSigned,
+      referralRevenueGenerated,
+      activePartners,
+      avgCommissionRate,
+    };
+  }, [activePipelineDeals]);
+  const topEarnersState = React.useMemo<TopEarner[]>(() => {
+    const totals = new Map<string, { paid: number; pending: number }>();
+    for (const p of participants) {
+      if (!p.dealId) continue;
+      const deal = deals.find((d) => d.id === p.dealId);
+      if (!deal || deal.archived) continue;
+      const payout = resolveParticipantCommissionUsd(
+        {
+          commissionKind: p.commissionKind,
+          commissionValue: p.commissionValue,
+          baseParticipant: p.baseParticipant,
+          formulaExpression: p.formulaExpression,
+        },
+        deal.value,
+        {
+          Introducer: deal.introducerAmount,
+          Closer: deal.closerAmount,
+          Platform: deal.platformFee,
+        }
+      ).total;
+      if (payout <= 0) continue;
+      const key = p.name.trim() || 'Unknown';
+      const current = totals.get(key) ?? { paid: 0, pending: 0 };
+      if (effectiveParticipantPayoutStatus(p, deal) === 'Paid') {
+        current.paid += payout;
+      } else {
+        current.pending += payout;
+      }
+      totals.set(key, current);
+    }
+    return [...totals.entries()]
+      .map(([name, v]) => ({
+        name,
+        amount: Math.round(v.paid + v.pending),
+        type: v.paid >= v.pending ? ('paid' as const) : ('pending' as const),
+      }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 6);
+  }, [deals, participants]);
 
   const exportData = React.useMemo(
     () => buildExportPayoutRows(activePipelineDeals, participants),
@@ -409,6 +455,18 @@ export default function DealNetworkPage() {
     },
     []
   );
+  const refreshPilotObligations = React.useCallback(async (dealId?: string) => {
+    try {
+      await fetch('/api/deal-network-pilot/obligations/refresh', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dealId ? { dealId } : {}),
+      });
+    } catch {
+      // Non-blocking pilot refresh; obligations page can still be manually refreshed.
+    }
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -447,10 +505,7 @@ export default function DealNetworkPage() {
 
   React.useEffect(() => {
     if (!pilotHydrated) return;
-    const t = setTimeout(() => {
-      void persistPilotSnapshot({ deals, participants });
-    }, 600);
-    return () => clearTimeout(t);
+    void persistPilotSnapshot({ deals, participants });
   }, [deals, participants, pilotHydrated]);
 
   const handleCreateDeal = React.useCallback((deal: RecentDeal) => {
@@ -464,7 +519,8 @@ export default function DealNetworkPage() {
     persistPreferredDealIdToSession(deal.id);
 
     setParticipants((prev) => syncInternalRoleParticipants(prev, [deal]));
-  }, [syncInternalRoleParticipants]);
+    void refreshPilotObligations(deal.id);
+  }, [syncInternalRoleParticipants, refreshPilotObligations]);
 
   const handleInviteParticipant = React.useCallback(
     async (p: DemoParticipant, duplicateAction: 'use_existing' | 'create_duplicate_anyway') => {
@@ -515,11 +571,20 @@ export default function DealNetworkPage() {
     setDeals((prev) => prev.filter((d) => d.id !== id));
     setParticipants((prev) => prev.filter((p) => p.dealId !== id));
     setPreferredDealId((cur) => (cur === id ? '' : cur));
-  }, []);
+    void refreshPilotObligations();
+  }, [refreshPilotObligations]);
 
   const runRemoveParticipant = React.useCallback((id: string) => {
     setParticipants((prev) => prev.filter((p) => p.id !== id));
     setRemoveParticipantTargetId(null);
+  }, []);
+
+  const resetPilotWorkspace = React.useCallback(() => {
+    setDeals([]);
+    setParticipants([]);
+    setPreferredDealId('');
+    persistPreferredDealIdToSession('');
+    setShowArchived(false);
   }, []);
 
   const restoreDealById = React.useCallback((id: string) => {
@@ -547,14 +612,13 @@ export default function DealNetworkPage() {
 
   const markContractPaid = React.useCallback(() => {
     if (!activeDeal) return;
-    if (activeDeal.status !== 'Pending' && activeDeal.status !== 'Eligible') return;
+    if (activeDeal.paymentStatus === 'Paid') return;
     const paidAt = new Date().toISOString();
     setDeals((prev) =>
       prev.map((d) =>
         d.id === activeDeal.id
           ? {
               ...d,
-              status: 'Approved',
               paymentStatus: 'Paid',
               paidAt,
               lastUpdated: paidAt,
@@ -562,7 +626,8 @@ export default function DealNetworkPage() {
           : d
       )
     );
-  }, [activeDeal]);
+    void refreshPilotObligations(activeDeal.id);
+  }, [activeDeal, refreshPilotObligations]);
 
   const advanceDealStatus = React.useCallback((dealId: string) => {
     setDeals((prev) => {
@@ -570,19 +635,62 @@ export default function DealNetworkPage() {
       if (!d) return prev;
       const next = getNextSettlementStatus(d.status);
       if (next === d.status) return prev;
-      if (next === 'Paid' && d.status !== 'Paid') {
-        const total = getDealCommissionTotal(d);
-        if (total != null) {
-          setTopEarnersState((te) => bumpEarnersOnPaid(te, total));
-        }
-      }
       return prev.map((row) =>
         row.id === dealId
-          ? { ...row, status: next, lastUpdated: new Date().toISOString() }
+          ? {
+              ...row,
+              status: next,
+              paymentStatus: next === 'Paid' ? 'Paid' : row.paymentStatus,
+              paidAt: next === 'Paid' ? row.paidAt ?? new Date().toISOString() : row.paidAt,
+              lastUpdated: new Date().toISOString(),
+            }
           : row
       );
     });
-  }, []);
+    void refreshPilotObligations(dealId);
+  }, [refreshPilotObligations]);
+  const setActiveDealSettlementStatus = React.useCallback(
+    (next: DealStatus) => {
+      if (!activeDeal) return;
+      const now = new Date().toISOString();
+      setDeals((prev) =>
+        prev.map((d) =>
+          d.id === activeDeal.id
+            ? {
+                ...d,
+                status: next,
+                paymentStatus: next === 'Paid' ? 'Paid' : d.paymentStatus,
+                paidAt: next === 'Paid' ? d.paidAt ?? now : d.paidAt,
+                lastUpdated: now,
+              }
+            : d
+        )
+      );
+      void refreshPilotObligations(activeDeal.id);
+    },
+    [activeDeal, refreshPilotObligations]
+  );
+  const setActiveDealPaymentStatus = React.useCallback(
+    (next: 'Not Paid' | 'Paid') => {
+      if (!activeDeal) return;
+      const now = new Date().toISOString();
+      setDeals((prev) =>
+        prev.map((d) =>
+          d.id === activeDeal.id
+            ? {
+                ...d,
+                paymentStatus: next,
+                paidAt: next === 'Paid' ? d.paidAt ?? now : undefined,
+                status: next === 'Not Paid' && d.status === 'Paid' ? 'Approved' : d.status,
+                lastUpdated: now,
+              }
+            : d
+        )
+      );
+      void refreshPilotObligations(activeDeal.id);
+    },
+    [activeDeal, refreshPilotObligations]
+  );
 
   const selectDeal = React.useCallback((dealId: string) => {
     setPreferredDealId(dealId);
@@ -612,11 +720,14 @@ export default function DealNetworkPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold tracking-tight">Commission Operations</h1>
-            <Badge variant="secondary">Demo</Badge>
+            <Badge variant="secondary">Pilot</Badge>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Button type="button" variant="outline" size="sm" asChild>
               <Link href="/dashboard/payment-links">Invoice dashboard</Link>
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setResetWorkspaceOpen(true)}>
+              Reset pilot data
             </Button>
             <Button
               type="button"
@@ -642,7 +753,7 @@ export default function DealNetworkPage() {
           <AlertTitle className="text-amber-900 dark:text-amber-100">Governance & controls</AlertTitle>
           <AlertDescription className="text-amber-900/90 dark:text-amber-100/90">
             <span className="font-medium">Admin approval required before payout release.</span>{' '}
-            Settlement advances as Pending → Eligible → Approved → Paid; only approved payouts can move to Paid in this demo.
+            Settlement advances as Pending → Eligible → Approved → Paid; only approved payouts can move to Paid.
           </AlertDescription>
         </Alert>
       </div>
@@ -853,6 +964,44 @@ export default function DealNetworkPage() {
           <div className="rounded-lg border bg-background/60 p-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Payment</p>
             <div className="space-y-2">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Settlement state</span>
+                  <Select
+                    value={activeDeal?.status ?? 'Pending'}
+                    onValueChange={(v) => setActiveDealSettlementStatus(v as DealStatus)}
+                    disabled={!activeDeal}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                      <SelectItem value="Eligible">Eligible</SelectItem>
+                      <SelectItem value="Approved">Approved</SelectItem>
+                      <SelectItem value="Paid">Paid</SelectItem>
+                      <SelectItem value="In Review">In Review</SelectItem>
+                      <SelectItem value="Reversed">Reversed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Counterparty payment</span>
+                  <Select
+                    value={activeDeal?.paymentStatus ?? 'Not Paid'}
+                    onValueChange={(v) => setActiveDealPaymentStatus(v as 'Not Paid' | 'Paid')}
+                    disabled={!activeDeal}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Not Paid">Not Paid</SelectItem>
+                      <SelectItem value="Paid">Paid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Payment status</span>
                 <Badge variant={getPaymentVariant(activeDeal?.paymentStatus ?? 'Not Paid')}>
@@ -935,7 +1084,7 @@ export default function DealNetworkPage() {
                       key={p.id}
                       className="cursor-pointer hover:bg-muted/60"
                       onClick={() => toggleParticipant(p.id)}
-                      title="Manual fallback toggle for demo"
+                      title="Toggle participant approval status"
                     >
                       <TableCell className="font-medium text-muted-foreground text-sm">
                         {p.dealName ?? activeDeal?.dealName ?? featured.name}
@@ -1130,7 +1279,7 @@ export default function DealNetworkPage() {
       <div id="deal-network-summary" className="scroll-mt-6">
         <h2 className="text-lg font-semibold tracking-tight mb-1">Network summary</h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Open deals, commissions pending, and commissions paid reflect the live demo pipeline below.
+          KPIs reflect your live pilot pipeline only. If there are no deals yet, metrics stay at zero.
         </p>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <Card>
@@ -1140,7 +1289,7 @@ export default function DealNetworkPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ${(dealNetworkSummary.totalDealsGenerated / 1_000_000).toFixed(1)}M
+                {formatUsdCompact(liveSummary.totalDealValue)}
               </div>
               <p className="text-xs text-muted-foreground">Cumulative attributed deal value</p>
             </CardContent>
@@ -1152,7 +1301,7 @@ export default function DealNetworkPage() {
               <FileSignature className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dealNetworkSummary.contractsSigned}</div>
+              <div className="text-2xl font-bold">{liveSummary.contractsSigned}</div>
               <p className="text-xs text-muted-foreground">Contract-driven deals</p>
             </CardContent>
           </Card>
@@ -1186,7 +1335,7 @@ export default function DealNetworkPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ${(dealNetworkSummary.referralRevenueGenerated / 1000).toFixed(0)}k
+                {formatUsdCompact(liveSummary.referralRevenueGenerated)}
               </div>
               <p className="text-xs text-muted-foreground">From referral-attributed deals</p>
             </CardContent>
@@ -1198,7 +1347,7 @@ export default function DealNetworkPage() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dealNetworkSummary.activePartners}</div>
+              <div className="text-2xl font-bold">{liveSummary.activePartners}</div>
               <p className="text-xs text-muted-foreground">In deal network</p>
             </CardContent>
           </Card>
@@ -1220,7 +1369,7 @@ export default function DealNetworkPage() {
               <Percent className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dealNetworkSummary.avgCommissionRate}%</div>
+              <div className="text-2xl font-bold">{liveSummary.avgCommissionRate.toFixed(1)}%</div>
               <p className="text-xs text-muted-foreground">Blended rate</p>
             </CardContent>
           </Card>
@@ -1389,6 +1538,13 @@ export default function DealNetworkPage() {
                   </TableCell>
                 </TableRow>
               ))}
+              {activePipelineDeals.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={13} className="text-center text-sm text-muted-foreground py-8">
+                    No pilot deals yet. Create your first deal to populate the pipeline and KPI cards.
+                  </TableCell>
+                </TableRow>
+              ) : null}
             </TableBody>
           </Table>
 
@@ -1469,50 +1625,64 @@ export default function DealNetworkPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Top earners (demo)</CardTitle>
+            <CardTitle className="text-base">Top earners</CardTitle>
             <CardDescription>
-              Partner totals: how much is already paid vs still pending. For illustration.
+              Participant totals from your current pilot deals (paid vs pending payout status).
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {topEarnersState.map((earner) => (
-                <div key={earner.name} className="flex items-center justify-between">
-                  <span className="font-medium">{earner.name}</span>
-                  <span className="text-sm">
-                    ${(earner.amount / 1000).toFixed(0)}k{' '}
-                    <Badge variant={earner.type === 'paid' ? 'success' : 'warning'} className="text-xs">
-                      {earner.type}
-                    </Badge>
-                  </span>
-                </div>
-              ))}
-            </div>
+            {topEarnersState.length > 0 ? (
+              <div className="space-y-3">
+                {topEarnersState.map((earner) => (
+                  <div key={earner.name} className="flex items-center justify-between">
+                    <span className="font-medium">{earner.name}</span>
+                    <span className="text-sm">
+                      {formatUsdCompact(earner.amount)}{' '}
+                      <Badge variant={earner.type === 'paid' ? 'success' : 'warning'} className="text-xs">
+                        {earner.type}
+                      </Badge>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No participant earnings yet.</p>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Payout rail snapshot</CardTitle>
+            <CardTitle className="text-base">Payout status snapshot</CardTitle>
             <CardDescription>
-              How partners get paid: bank, USDC, wallet, or Stripe. Counts and last use per rail.
+              Participant payout lines by current status, scoped to your active pilot deals.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {payoutRails.map((rail) => (
-                <div key={rail.method} className="flex items-center justify-between">
-                  <span className="text-sm font-medium flex items-center gap-2">
-                    <Banknote className="h-3.5 w-3 text-muted-foreground" />
-                    {rail.method}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    {rail.count} partners · Last{' '}
-                    {new Date(rail.lastUsed).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </span>
-                </div>
-              ))}
-            </div>
+            {activeDeal && activeParticipants.length > 0 ? (
+              <div className="space-y-3">
+                {(['Pending', 'Eligible', 'Approved', 'Paid'] as ParticipantPayoutSettlementStatus[]).map((status) => {
+                  const count = activeParticipants.filter(
+                    (p) => effectiveParticipantPayoutStatus(p, activeDeal) === status
+                  ).length;
+                  return (
+                    <div key={status} className="flex items-center justify-between">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <Banknote className="h-3.5 w-3 text-muted-foreground" />
+                        {status}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {count} participant{count === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No payout lines yet. Invite participants on a deal to track payout status.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -1535,6 +1705,30 @@ export default function DealNetworkPage() {
               }}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={resetWorkspaceOpen} onOpenChange={setResetWorkspaceOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset pilot workspace?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This clears your deal-network pilot snapshot (deals and participants) for your account only. Existing
+              product data outside this pilot surface is not changed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                resetPilotWorkspace();
+                setResetWorkspaceOpen(false);
+              }}
+            >
+              Reset pilot data
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1679,10 +1873,21 @@ export default function DealNetworkPage() {
                 status: activeDeal.status,
                 paymentStatus: activeDeal.paymentStatus,
                 archived: activeDeal.archived,
+                paymentLink: activeDeal.paymentLink,
+                paidAmount: activeDeal.paidAmount,
+                paidAt: activeDeal.paidAt,
+                currentStage: activeDeal.currentStage,
               }
             : null
         }
-        participants={activeParticipants}
+        participants={
+          activeDeal
+            ? activeParticipants.map((p) => ({
+                ...p,
+                payoutSettlementStatus: effectiveParticipantPayoutStatus(p, activeDeal),
+              }))
+            : activeParticipants
+        }
       />
     </div>
   );

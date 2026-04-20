@@ -16,6 +16,7 @@ export interface InvoiceOnlyPageContentProps {
     currency: string;
     description: string;
     invoiceReference: string | null;
+    invoiceDate?: string | null;
     customerName: string | null;
     dueDate: string | null;
     expiresAt: string | null;
@@ -53,6 +54,7 @@ export function InvoiceOnlyPageContent({ paymentLink }: InvoiceOnlyPageContentPr
               currency={paymentLink.currency}
               description={paymentLink.description}
               invoiceReference={paymentLink.invoiceReference}
+              invoiceDate={paymentLink.invoiceDate}
               dueDate={paymentLink.dueDate}
             />
             {paymentLink.attachmentUrl ? (

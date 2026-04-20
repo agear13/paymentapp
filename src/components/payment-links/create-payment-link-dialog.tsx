@@ -58,7 +58,7 @@ import {
 } from '@/lib/payment-links/payment-link-attachment';
 
 interface PaymentMethodOption {
-  value: 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO';
+  value: 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO' | 'MANUAL_BANK';
   label: string;
   available: boolean;
   unavailableReason?: string;
@@ -75,13 +75,24 @@ interface MerchantSettings {
 const createPaymentLinkFormSchema = z
   .object({
   collectionMode: z.enum(['payment_request', 'invoice_only']),
-  paymentMethod: z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO']).optional(),
+  paymentMethod: z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO', 'MANUAL_BANK']).optional(),
   hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']).optional(),
   cryptoNetwork: z.string().optional(),
   cryptoAddress: z.string().optional(),
   cryptoCurrency: z.string().optional(),
   cryptoMemo: z.string().optional(),
   cryptoInstructions: z.string().optional(),
+  manualBankRecipientName: z.string().optional(),
+  manualBankCurrency: z.string().optional(),
+  manualBankDestinationType: z.string().optional(),
+  manualBankBankName: z.string().optional(),
+  manualBankAccountNumber: z.string().optional(),
+  manualBankIban: z.string().optional(),
+  manualBankSwiftBic: z.string().optional(),
+  manualBankRoutingSortCode: z.string().optional(),
+  manualBankWiseReference: z.string().optional(),
+  manualBankRevolutHandle: z.string().optional(),
+  manualBankInstructions: z.string().optional(),
   amount: z.coerce
     .number({
       invalid_type_error: 'Enter an amount to invoice.',
@@ -119,6 +130,7 @@ const createPaymentLinkFormSchema = z
       'Enter a valid phone number in international format (e.g., +61412345678).'
     )
     .optional(),
+  invoiceDate: z.date().optional(),
   dueDate: z.date().optional(),
   expiresAt: z.date().optional(),
   attachment: z
@@ -159,6 +171,20 @@ const createPaymentLinkFormSchema = z
       message: 'Network, wallet address, and asset are required for crypto payment requests',
       path: ['cryptoNetwork'],
     }
+  )
+  .refine(
+    (d) => {
+      if (d.collectionMode === 'invoice_only' || d.paymentMethod !== 'MANUAL_BANK') return true;
+      return (
+        !!d.manualBankRecipientName?.trim() &&
+        !!d.manualBankCurrency?.trim() &&
+        !!d.manualBankDestinationType?.trim()
+      );
+    },
+    {
+      message: 'Recipient name, destination type, and payment currency are required for manual bank transfer',
+      path: ['manualBankRecipientName'],
+    }
   );
 
 type CreatePaymentLinkFormValues = z.infer<typeof createPaymentLinkFormSchema>;
@@ -173,6 +199,7 @@ export interface EditPaymentLinkSeed {
   customerEmail: string | null;
   customerName: string | null;
   customerPhone: string | null;
+  invoiceDate: Date | string | null;
   dueDate: Date | string | null;
   expiresAt: Date | string | null;
   invoiceOnlyMode?: boolean;
@@ -184,6 +211,17 @@ export interface EditPaymentLinkSeed {
   cryptoCurrency?: string | null;
   cryptoMemo?: string | null;
   cryptoInstructions?: string | null;
+  manualBankRecipientName?: string | null;
+  manualBankCurrency?: string | null;
+  manualBankDestinationType?: string | null;
+  manualBankBankName?: string | null;
+  manualBankAccountNumber?: string | null;
+  manualBankIban?: string | null;
+  manualBankSwiftBic?: string | null;
+  manualBankRoutingSortCode?: string | null;
+  manualBankWiseReference?: string | null;
+  manualBankRevolutHandle?: string | null;
+  manualBankInstructions?: string | null;
   attachmentUrl?: string | null;
   attachmentStorageKey?: string | null;
   attachmentBucket?: string | null;
@@ -320,6 +358,11 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         label: 'Crypto (any wallet — manual instructions)',
         available: true,
       },
+      {
+        value: 'MANUAL_BANK',
+        label: 'Manual bank transfer (bank / Wise / Revolut / other)',
+        available: true,
+      },
     ];
   }, [merchantSettings?.wiseEnabled, railSetup.wiseConfigured, railSetup.wiseIncomplete]);
 
@@ -334,6 +377,17 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       cryptoCurrency: '',
       cryptoMemo: '',
       cryptoInstructions: '',
+      manualBankRecipientName: '',
+      manualBankCurrency: '',
+      manualBankDestinationType: '',
+      manualBankBankName: '',
+      manualBankAccountNumber: '',
+      manualBankIban: '',
+      manualBankSwiftBic: '',
+      manualBankRoutingSortCode: '',
+      manualBankWiseReference: '',
+      manualBankRevolutHandle: '',
+      manualBankInstructions: '',
       amount: undefined,
       currency: defaultCurrency,
       description: '',
@@ -341,6 +395,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       customerEmail: '',
       customerName: '',
       customerPhone: '',
+      invoiceDate: new Date(),
       dueDate: undefined,
       expiresAt: undefined,
       attachment: undefined,
@@ -355,6 +410,8 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     if (collectionMode === 'invoice_only') {
       form.clearErrors('paymentMethod');
       form.clearErrors('hederaCheckoutMode');
+      form.clearErrors('cryptoNetwork');
+      form.clearErrors('manualBankRecipientName');
       form.setValue('paymentMethod', undefined);
     } else if (collectionMode === 'payment_request') {
       const pm = form.getValues('paymentMethod');
@@ -373,6 +430,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     if (mode === 'edit' && editPaymentLink) {
       const due = editPaymentLink.dueDate ? new Date(editPaymentLink.dueDate) : undefined;
       const exp = editPaymentLink.expiresAt ? new Date(editPaymentLink.expiresAt) : undefined;
+      const invDate = editPaymentLink.invoiceDate
+        ? new Date(editPaymentLink.invoiceDate)
+        : new Date();
       const invoiceOnly = Boolean(editPaymentLink.invoiceOnlyMode);
       const initialAttachment =
         editPaymentLink.attachmentStorageKey &&
@@ -392,7 +452,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         collectionMode: invoiceOnly ? 'invoice_only' : 'payment_request',
         paymentMethod: invoiceOnly
           ? undefined
-          : ((editPaymentLink.paymentMethod as 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO') || 'STRIPE'),
+          : ((editPaymentLink.paymentMethod as 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO' | 'MANUAL_BANK') || 'STRIPE'),
         hederaCheckoutMode:
           (editPaymentLink.hederaCheckoutMode as 'INTERACTIVE' | 'MANUAL') || 'INTERACTIVE',
         cryptoNetwork: editPaymentLink.cryptoNetwork ?? '',
@@ -400,6 +460,17 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         cryptoCurrency: editPaymentLink.cryptoCurrency ?? '',
         cryptoMemo: editPaymentLink.cryptoMemo ?? '',
         cryptoInstructions: editPaymentLink.cryptoInstructions ?? '',
+        manualBankRecipientName: editPaymentLink.manualBankRecipientName ?? '',
+        manualBankCurrency: editPaymentLink.manualBankCurrency ?? '',
+        manualBankDestinationType: editPaymentLink.manualBankDestinationType ?? '',
+        manualBankBankName: editPaymentLink.manualBankBankName ?? '',
+        manualBankAccountNumber: editPaymentLink.manualBankAccountNumber ?? '',
+        manualBankIban: editPaymentLink.manualBankIban ?? '',
+        manualBankSwiftBic: editPaymentLink.manualBankSwiftBic ?? '',
+        manualBankRoutingSortCode: editPaymentLink.manualBankRoutingSortCode ?? '',
+        manualBankWiseReference: editPaymentLink.manualBankWiseReference ?? '',
+        manualBankRevolutHandle: editPaymentLink.manualBankRevolutHandle ?? '',
+        manualBankInstructions: editPaymentLink.manualBankInstructions ?? '',
         amount: editPaymentLink.amount,
         currency: editPaymentLink.currency,
         description: editPaymentLink.description,
@@ -407,6 +478,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         customerEmail: editPaymentLink.customerEmail || '',
         customerName: editPaymentLink.customerName || '',
         customerPhone: editPaymentLink.customerPhone || '',
+        invoiceDate: !Number.isNaN(invDate.getTime()) ? invDate : new Date(),
         dueDate: due && !Number.isNaN(due.getTime()) ? due : undefined,
         expiresAt: exp && !Number.isNaN(exp.getTime()) ? exp : undefined,
         attachment: initialAttachment,
@@ -425,6 +497,17 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       cryptoCurrency: '',
       cryptoMemo: '',
       cryptoInstructions: '',
+      manualBankRecipientName: '',
+      manualBankCurrency: '',
+      manualBankDestinationType: '',
+      manualBankBankName: '',
+      manualBankAccountNumber: '',
+      manualBankIban: '',
+      manualBankSwiftBic: '',
+      manualBankRoutingSortCode: '',
+      manualBankWiseReference: '',
+      manualBankRevolutHandle: '',
+      manualBankInstructions: '',
       amount: undefined,
       currency: defaultCurrency,
       description: '',
@@ -432,6 +515,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       customerEmail: '',
       customerName: '',
       customerPhone: '',
+      invoiceDate: new Date(),
       dueDate: undefined,
       expiresAt: undefined,
       attachment: undefined,
@@ -544,6 +628,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           customerEmail: data.customerEmail || null,
           customerName: data.customerName || null,
           customerPhone: data.customerPhone || null,
+          invoiceDate: data.invoiceDate?.toISOString() ?? null,
           dueDate: data.dueDate?.toISOString() ?? null,
           expiresAt: data.expiresAt?.toISOString() ?? null,
           invoiceOnlyMode: invoiceOnly,
@@ -577,6 +662,33 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                       cryptoCurrency: null,
                       cryptoMemo: null,
                       cryptoInstructions: null,
+                    }),
+                ...(data.paymentMethod === 'MANUAL_BANK'
+                  ? {
+                      manualBankRecipientName: data.manualBankRecipientName?.trim(),
+                      manualBankCurrency: data.manualBankCurrency?.trim(),
+                      manualBankDestinationType: data.manualBankDestinationType?.trim(),
+                      manualBankBankName: data.manualBankBankName?.trim() || null,
+                      manualBankAccountNumber: data.manualBankAccountNumber?.trim() || null,
+                      manualBankIban: data.manualBankIban?.trim() || null,
+                      manualBankSwiftBic: data.manualBankSwiftBic?.trim() || null,
+                      manualBankRoutingSortCode: data.manualBankRoutingSortCode?.trim() || null,
+                      manualBankWiseReference: data.manualBankWiseReference?.trim() || null,
+                      manualBankRevolutHandle: data.manualBankRevolutHandle?.trim() || null,
+                      manualBankInstructions: data.manualBankInstructions?.trim() || null,
+                    }
+                  : {
+                      manualBankRecipientName: null,
+                      manualBankCurrency: null,
+                      manualBankDestinationType: null,
+                      manualBankBankName: null,
+                      manualBankAccountNumber: null,
+                      manualBankIban: null,
+                      manualBankSwiftBic: null,
+                      manualBankRoutingSortCode: null,
+                      manualBankWiseReference: null,
+                      manualBankRevolutHandle: null,
+                      manualBankInstructions: null,
                     }),
               }),
         }),
@@ -634,6 +746,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           customerEmail: data.customerEmail || undefined,
           customerName: data.customerName || undefined,
           customerPhone: data.customerPhone || undefined,
+          invoiceDate: data.invoiceDate?.toISOString(),
           dueDate: data.dueDate?.toISOString(),
           expiresAt: data.expiresAt?.toISOString(),
           ...(data.attachment
@@ -658,6 +771,21 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                       cryptoInstructions: data.cryptoInstructions?.trim() || undefined,
                     }
                   : {}),
+                ...(data.paymentMethod === 'MANUAL_BANK'
+                  ? {
+                      manualBankRecipientName: data.manualBankRecipientName?.trim(),
+                      manualBankCurrency: data.manualBankCurrency?.trim(),
+                      manualBankDestinationType: data.manualBankDestinationType?.trim(),
+                      manualBankBankName: data.manualBankBankName?.trim() || undefined,
+                      manualBankAccountNumber: data.manualBankAccountNumber?.trim() || undefined,
+                      manualBankIban: data.manualBankIban?.trim() || undefined,
+                      manualBankSwiftBic: data.manualBankSwiftBic?.trim() || undefined,
+                      manualBankRoutingSortCode: data.manualBankRoutingSortCode?.trim() || undefined,
+                      manualBankWiseReference: data.manualBankWiseReference?.trim() || undefined,
+                      manualBankRevolutHandle: data.manualBankRevolutHandle?.trim() || undefined,
+                      manualBankInstructions: data.manualBankInstructions?.trim() || undefined,
+                    }
+                  : {}),
               }),
         }),
       });
@@ -678,6 +806,17 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         cryptoCurrency: '',
         cryptoMemo: '',
         cryptoInstructions: '',
+        manualBankRecipientName: '',
+        manualBankCurrency: '',
+        manualBankDestinationType: '',
+        manualBankBankName: '',
+        manualBankAccountNumber: '',
+        manualBankIban: '',
+        manualBankSwiftBic: '',
+        manualBankRoutingSortCode: '',
+        manualBankWiseReference: '',
+        manualBankRevolutHandle: '',
+        manualBankInstructions: '',
         amount: undefined,
         currency: defaultCurrency,
         description: '',
@@ -685,6 +824,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         customerEmail: '',
         customerName: '',
         customerPhone: '',
+        invoiceDate: new Date(),
         dueDate: undefined,
         expiresAt: undefined,
         attachment: undefined,
@@ -723,7 +863,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       const setup = computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings));
 
       const pm = data.paymentMethod;
-      if (pm === 'CRYPTO') {
+      if (pm === 'CRYPTO' || pm === 'MANUAL_BANK') {
         return true;
       }
 
@@ -780,6 +920,17 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     form.setValue('cryptoCurrency', '');
     form.setValue('cryptoMemo', '');
     form.setValue('cryptoInstructions', '');
+    form.setValue('manualBankRecipientName', '');
+    form.setValue('manualBankCurrency', '');
+    form.setValue('manualBankDestinationType', '');
+    form.setValue('manualBankBankName', '');
+    form.setValue('manualBankAccountNumber', '');
+    form.setValue('manualBankIban', '');
+    form.setValue('manualBankSwiftBic', '');
+    form.setValue('manualBankRoutingSortCode', '');
+    form.setValue('manualBankWiseReference', '');
+    form.setValue('manualBankRevolutHandle', '');
+    form.setValue('manualBankInstructions', '');
     setGuardrail(null);
   }, [form]);
 
@@ -895,7 +1046,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                       value={field.value ?? 'STRIPE'}
                       disabled={wiseTransferLocked}
                       onChange={(e) => {
-                        const selectedValue = e.target.value as 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO';
+                        const selectedValue = e.target.value as 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO' | 'MANUAL_BANK';
                         const option = paymentMethodOptions.find((opt) => opt.value === selectedValue);
                         if (option?.available) {
                           field.onChange(selectedValue);
@@ -1052,6 +1203,165 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                           rows={3}
                           placeholder="Any extra steps for your customer"
                           disabled={wiseTransferLocked}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            ) : null}
+
+            {collectionMode === 'payment_request' && form.watch('paymentMethod') === 'MANUAL_BANK' ? (
+              <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+                <p className="text-sm text-muted-foreground">
+                  Provide recipient and transfer details for manual bank / Wise / Revolut / international transfers.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="manualBankRecipientName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Recipient name *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Account holder / recipient" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="manualBankCurrency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Transfer currency *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="e.g. USD, EUR, GBP" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="manualBankDestinationType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Destination type *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="bank / Wise / Revolut / other" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="manualBankBankName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Bank name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Optional" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="manualBankAccountNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Account number</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Optional" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="manualBankIban"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>IBAN</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Optional" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="manualBankSwiftBic"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>SWIFT / BIC</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Optional" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="manualBankRoutingSortCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Routing / sort code</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Optional" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="manualBankWiseReference"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Wise email / profile reference</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Optional" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="manualBankRevolutHandle"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Revolut tag / handle</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Optional" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <FormField
+                  control={form.control}
+                  name="manualBankInstructions"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Additional transfer instructions</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          rows={3}
+                          placeholder="Any extra payer guidance (beneficiary address, intermediary bank, etc.)"
                         />
                       </FormControl>
                       <FormMessage />
@@ -1218,8 +1528,46 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               />
             </div>
 
-            {/* Due Date and Expiry Date */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Invoice Date, Due Date and Expiry Date */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="invoiceDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Invoice Date</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              'w-full pl-3 text-left font-normal',
+                              !field.value && 'text-muted-foreground'
+                            )}
+                          >
+                            {field.value ? format(field.value, 'PPP') : <span>Pick invoice date</span>}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormDescription>
+                      Issue date for accounting records (can be backdated)
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="dueDate"
