@@ -85,6 +85,7 @@ export const transitionPaymentLinkStatus = async (
       organization_id: true,
       short_code: true,
       invoice_reference: true,
+      pilot_deal_id: true,
     },
   });
 
@@ -133,6 +134,7 @@ export const transitionPaymentLinkStatus = async (
       data: {
         payment_link_id: paymentLinkId,
         event_type: eventTypeMap[newStatus] as any,
+        pilot_deal_id: paymentLink.pilot_deal_id ?? undefined,
         metadata: {
           previousStatus: paymentLink.status,
           newStatus,

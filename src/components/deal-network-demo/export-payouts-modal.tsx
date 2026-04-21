@@ -20,7 +20,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { DealStatus, RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
+import {
+  resolveParticipantCommissionUsd,
+  computeJointTotalsByDealId,
+} from '@/lib/deal-network-demo/commission-structure';
 import {
   coerceDealStatusToPayout,
   effectiveParticipantPayoutStatus,
@@ -315,6 +318,8 @@ export function buildExportPayoutRows(
     }
   }
 
+  const jointByDealId = computeJointTotalsByDealId(activeDeals, participants);
+
   const seenParticipantLine = new Set<string>();
   for (const p of participants) {
     const deal =
@@ -339,11 +344,13 @@ export function buildExportPayoutRows(
         : undefined;
     const contractPaidStatus = dealIsPaid ? 'Contract Paid' : 'Contract Unpaid';
 
+    const joint = jointByDealId.get(deal.id);
     const resolved = resolveParticipantCommissionUsd(
       {
         commissionKind: p.commissionKind,
         commissionValue: p.commissionValue,
         baseParticipant: p.baseParticipant,
+        commissionBaseParticipantId: p.commissionBaseParticipantId,
         formulaExpression: p.formulaExpression,
       },
       deal.value,
@@ -351,7 +358,14 @@ export function buildExportPayoutRows(
         Introducer: deal.introducerAmount,
         Closer: deal.closerAmount,
         Platform: deal.platformFee,
-      }
+      },
+      joint
+        ? {
+            participantTotals: joint.totals,
+            participantLabels: joint.labels,
+            resolvingParticipantId: p.id,
+          }
+        : undefined
     );
 
     out.push({

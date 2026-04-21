@@ -26,6 +26,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import {
   isBetaAdminEmail,
   isRabbitHolePilotEmail,
+  isStraitExperiencesPilotEmail,
 } from '@/lib/auth/admin-shared';
 
 /**
@@ -91,6 +92,25 @@ function isRabbitHolePilotSessionUser(email: string | null): boolean {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   return emails.includes(email.trim().toLowerCase());
+}
+
+/** Strait / project-coordination pilot (same Deal Network path carve-out as Rabbit Hole in beta lockdown). */
+function isStraitExperiencesPilotSessionUser(email: string | null): boolean {
+  if (!email) return false;
+  if (isBetaAdminEmail(email)) return false;
+  if (isRabbitHolePilotSessionUser(email)) return false;
+  if (isStraitExperiencesPilotEmail(email)) return true;
+  const raw = process.env.STRAIT_EXPERIENCES_PILOT_EMAILS;
+  if (!raw) return false;
+  const emails = raw
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return emails.includes(email.trim().toLowerCase());
+}
+
+function isDealNetworkMinimalPilotSessionUser(email: string | null): boolean {
+  return isRabbitHolePilotSessionUser(email) || isStraitExperiencesPilotSessionUser(email);
 }
 
 /**
@@ -243,12 +263,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Rabbit Hole pilot: deal network + invoices + /dashboard hub only
+  // Rabbit Hole + Strait pilots: deal network + invoices + /dashboard hub only (same allowed set)
   if (
     hasSession &&
     isDashboardRoute &&
     email &&
-    isRabbitHolePilotSessionUser(email)
+    isDealNetworkMinimalPilotSessionUser(email)
   ) {
     if (!isRabbitHolePilotAllowedPath(pathname)) {
       if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=redirect_pilot_to_deal_network'); }
@@ -267,7 +287,7 @@ export async function middleware(request: NextRequest) {
   if (betaLockdownEnabled && restricted) {
     const pilotOnDealNetwork =
       email !== null &&
-      isRabbitHolePilotSessionUser(email) &&
+      isDealNetworkMinimalPilotSessionUser(email) &&
       isRabbitHoleDealNetworkPath(pathname);
 
     if (pilotOnDealNetwork) {

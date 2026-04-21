@@ -13,7 +13,17 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import {
   COMMISSION_STRUCTURE_OPTIONS,
   resolveParticipantCommissionUsd,
+  computeParticipantCommissionTotalsForDeal,
+  demoParticipantToPilotRow,
 } from '@/lib/deal-network-demo/commission-structure';
+
+function roleAmountsFromDeal(deal: RecentDeal) {
+  return {
+    Introducer: deal.introducerAmount,
+    Closer: deal.closerAmount,
+    Platform: deal.platformFee,
+  };
+}
 
 export default function DealInviteApprovalPage() {
   const params = useParams<{ token: string }>();
@@ -21,6 +31,7 @@ export default function DealInviteApprovalPage() {
 
   const [deal, setDeal] = React.useState<RecentDeal | null>(null);
   const [participant, setParticipant] = React.useState<DemoParticipant | null>(null);
+  const [dealParticipants, setDealParticipants] = React.useState<DemoParticipant[]>([]);
   const [note, setNote] = React.useState('');
   const [approved, setApproved] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -41,12 +52,17 @@ export default function DealInviteApprovalPage() {
           const err = await res.json().catch(() => ({}));
           throw new Error((err as { error?: string }).error || 'Invite not found');
         }
-        return res.json() as Promise<{ deal: RecentDeal; participant: DemoParticipant }>;
+        return res.json() as Promise<{
+          deal: RecentDeal;
+          participant: DemoParticipant;
+          dealParticipants?: DemoParticipant[];
+        }>;
       })
       .then((data) => {
         if (cancelled) return;
         setDeal(data.deal);
         setParticipant(data.participant);
+        setDealParticipants(data.dealParticipants ?? []);
         setApproved(data.participant.approvalStatus === 'Approved');
         setNote(data.participant.approvalNote ?? '');
       })
@@ -73,9 +89,14 @@ export default function DealInviteApprovalPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || 'Approval failed');
       }
-      const data = (await res.json()) as { deal: RecentDeal; participant: DemoParticipant };
+      const data = (await res.json()) as {
+        deal: RecentDeal;
+        participant: DemoParticipant;
+        dealParticipants?: DemoParticipant[];
+      };
       setParticipant(data.participant);
       setDeal(data.deal);
+      setDealParticipants(data.dealParticipants ?? []);
       setApproved(true);
       toast.success('Agreement approved');
     } catch (e: unknown) {
@@ -83,6 +104,32 @@ export default function DealInviteApprovalPage() {
       toast.error(msg);
     }
   }
+
+  const rolePayout = React.useMemo(() => {
+    if (deal == null || !participant) return null;
+    const rows = dealParticipants.map(demoParticipantToPilotRow);
+    const joint = computeParticipantCommissionTotalsForDeal(
+      deal.value,
+      roleAmountsFromDeal(deal),
+      rows.length > 0 ? rows : [demoParticipantToPilotRow(participant)]
+    );
+    return resolveParticipantCommissionUsd(
+      {
+        commissionKind: participant.commissionKind,
+        commissionValue: participant.commissionValue,
+        baseParticipant: participant.baseParticipant,
+        commissionBaseParticipantId: participant.commissionBaseParticipantId,
+        formulaExpression: participant.formulaExpression,
+      },
+      deal.value,
+      roleAmountsFromDeal(deal),
+      {
+        participantTotals: joint.totals,
+        participantLabels: joint.labels,
+        resolvingParticipantId: participant.id,
+      }
+    );
+  }, [deal, participant, dealParticipants]);
 
   if (loading) {
     return (
@@ -116,29 +163,11 @@ export default function DealInviteApprovalPage() {
     COMMISSION_STRUCTURE_OPTIONS.find((o) => o.value === participant.commissionKind)?.label ??
     participant.commissionKind;
 
-  const rolePayout =
-    deal == null
-      ? null
-      : resolveParticipantCommissionUsd(
-          {
-            commissionKind: participant.commissionKind,
-            commissionValue: participant.commissionValue,
-            baseParticipant: participant.baseParticipant,
-            formulaExpression: participant.formulaExpression,
-          },
-          deal.value,
-          {
-            Introducer: deal.introducerAmount,
-            Closer: deal.closerAmount,
-            Platform: deal.platformFee,
-          }
-        );
-
   return (
     <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
       <Card className="w-full max-w-2xl">
         <CardHeader>
-          <CardTitle>Role &amp; commission agreement</CardTitle>
+          <CardTitle>Role & commission agreement</CardTitle>
           <CardDescription>
             Review the role, payout terms, and commission for this Rabbit Hole pilot invite. Approving
             confirms you acknowledge this lightweight agreement record (demo only, not a legal contract).

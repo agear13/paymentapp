@@ -110,6 +110,7 @@ function transformPaymentLink(link: any) {
     attachmentFilename: link.attachment_filename ?? null,
     attachmentMimeType: link.attachment_mime_type ?? null,
     attachmentSizeBytes: link.attachment_size_bytes ?? null,
+    pilotDealId: link.pilot_deal_id ?? null,
     paymentEvents,
     fxSnapshots,
     ledgerEntries,
@@ -124,6 +125,8 @@ import {
   isPaymentLinkCancelable,
 } from '@/lib/payment-link-state-machine';
 import { tryDeletePaymentLinkAttachmentFile } from '@/lib/payment-links/payment-link-attachment';
+import { revalidatePath } from 'next/cache';
+import { assertPilotDealOwnedByUser } from '@/lib/deal-network-demo/pilot-deal-invoice-link.server';
 
 /**
  * GET /api/payment-links/[id]
@@ -190,7 +193,10 @@ export async function GET(
     );
     if (!canView) {
       return NextResponse.json(
-        { error: 'Forbidden - Insufficient permissions' },
+        {
+          error:
+            'You do not have permission to view this invoice, or it belongs to another organization.',
+        },
         { status: 403 }
       );
     }
@@ -257,9 +263,63 @@ export async function PATCH(
     );
     if (!canEdit) {
       return NextResponse.json(
-        { error: 'Forbidden - Insufficient permissions' },
+        {
+          error:
+            'You do not have permission to edit invoices. Ask an organization owner or admin.',
+        },
         { status: 403 }
       );
+    }
+
+    const body = await request.json();
+    const patch = UpdatePaymentLinkSchema.parse(body);
+
+    const patchKeys = Object.keys(patch) as string[];
+    const onlyPilotDealLink =
+      patch.pilotDealId !== undefined && patchKeys.length === 1;
+
+    if (onlyPilotDealLink) {
+      try {
+        if (typeof patch.pilotDealId === 'string') {
+          await assertPilotDealOwnedByUser(user.id, patch.pilotDealId);
+        }
+      } catch {
+        return NextResponse.json(
+          { error: 'Invalid pilot project for invoice link' },
+          { status: 403 }
+        );
+      }
+
+      const updatedLink = await prisma.$transaction(async (tx) => {
+        const updated = await tx.payment_links.update({
+          where: { id },
+          data: {
+            pilot_deal_id: patch.pilotDealId ?? null,
+            updated_at: new Date(),
+          } as any,
+        });
+
+        await tx.audit_logs.create({
+          data: {
+            organization_id: currentLink.organization_id,
+            user_id: user.id,
+            entity_type: 'PaymentLink',
+            entity_id: id,
+            action: 'UPDATE',
+            new_values: { pilotDealId: patch.pilotDealId } as object,
+          },
+        });
+
+        return updated;
+      });
+
+      revalidatePath(`/pay/${updatedLink.short_code}`);
+      revalidatePath('/dashboard/payment-links');
+
+      return NextResponse.json({
+        data: transformPaymentLink(updatedLink),
+        message: 'Invoice project link updated',
+      });
     }
 
     if (!isPaymentLinkEditable(currentLink.status)) {
@@ -268,9 +328,6 @@ export async function PATCH(
         { status: 400 }
       );
     }
-
-    const body = await request.json();
-    const patch = UpdatePaymentLinkSchema.parse(body);
 
     const invoiceOnly =
       patch.invoiceOnlyMode !== undefined
@@ -579,6 +636,20 @@ export async function PATCH(
       }
     }
 
+    if (patch.pilotDealId !== undefined) {
+      try {
+        if (typeof patch.pilotDealId === 'string') {
+          await assertPilotDealOwnedByUser(user.id, patch.pilotDealId);
+        }
+      } catch {
+        return NextResponse.json(
+          { error: 'Invalid pilot project for invoice link' },
+          { status: 403 }
+        );
+      }
+      prismaData.pilot_deal_id = patch.pilotDealId;
+    }
+
     assertPaymentLinksUpdateDataValid(prismaData);
 
     const updatedLink = await prisma.$transaction(async (tx) => {
@@ -612,6 +683,9 @@ export async function PATCH(
       { paymentLinkId: id, patch },
       'Payment link updated'
     );
+
+    revalidatePath(`/pay/${updatedLink.short_code}`);
+    revalidatePath('/dashboard/payment-links');
 
     return NextResponse.json({
       data: transformPaymentLink(updatedLink),
@@ -673,6 +747,7 @@ export async function DELETE(
         id: true,
         organization_id: true,
         status: true,
+        short_code: true,
       },
     });
 
@@ -691,7 +766,10 @@ export async function DELETE(
     );
     if (!canCancel) {
       return NextResponse.json(
-        { error: 'Forbidden - Insufficient permissions' },
+        {
+          error:
+            'You do not have permission to cancel invoices. Ask an organization owner or admin.',
+        },
         { status: 403 }
       );
     }
@@ -719,6 +797,9 @@ export async function DELETE(
       { paymentLinkId: id, userId: user.id },
       'Payment link canceled'
     );
+
+    revalidatePath(`/pay/${currentLink.short_code}`);
+    revalidatePath('/dashboard/payment-links');
 
     return NextResponse.json({
       data: transformPaymentLink(canceledLink),

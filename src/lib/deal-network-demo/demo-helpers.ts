@@ -65,7 +65,23 @@ function coerceDealNumeric(value: unknown, fallback = 0): number {
 }
 
 /** Map pipeline row → featured/detail card shape (single source of truth: RecentDeal). */
-export function recentDealToFeatured(deal: RecentDeal): FeaturedDeal {
+export function recentDealToFeatured(
+  deal: RecentDeal,
+  options?: { projectMode?: boolean }
+): FeaturedDeal {
+  if (options?.projectMode) {
+    return {
+      id: deal.id,
+      name: deal.dealName,
+      dealValue: coerceDealNumeric(deal.value, 0),
+      status: deal.status,
+      introducer: '',
+      closer: '',
+      partner: deal.partner,
+      payoutTrigger: deal.payoutTrigger ?? 'Manual',
+      commissionSplits: [],
+    };
+  }
   return {
     id: deal.id,
     name: deal.dealName,

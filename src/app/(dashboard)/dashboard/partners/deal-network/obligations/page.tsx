@@ -47,6 +47,11 @@ import {
   FileWarning,
 } from 'lucide-react';
 import type { DealNetworkPilotObligationStatus } from '@prisma/client';
+import type { PilotParticipantOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
+import {
+  isApprovedButNotOnboarded,
+  isOnboardingComplete,
+} from '@/lib/deal-network-demo/participant-onboarding';
 
 type ObligationRow = {
   id: string;
@@ -59,7 +64,14 @@ type ObligationRow = {
   calculation_explanation: string;
   payment_event_id: string | null;
   deal: { id: string; name: string; partner: string } | null;
-  participant: { id: string; name: string; role: string; email: string | null } | null;
+  participant: {
+    id: string;
+    name: string;
+    role: string;
+    email: string | null;
+    approvalStatus?: string;
+    onboardingStatus?: PilotParticipantOnboardingStatus;
+  } | null;
   payment_event: {
     id: string;
     source_type: string | null;
@@ -74,6 +86,7 @@ type ObligationRow = {
 
 const STATUS_OPTIONS: DealNetworkPilotObligationStatus[] = [
   'UNFUNDED',
+  'PARTIALLY_FUNDED',
   'DRAFT',
   'PENDING_APPROVAL',
   'APPROVED',
@@ -86,6 +99,7 @@ const STATUS_OPTIONS: DealNetworkPilotObligationStatus[] = [
 /** Statuses that typically require operator follow-up (authoritative enum values only). */
 const NEEDS_ACTION_STATUSES = new Set<DealNetworkPilotObligationStatus>([
   'UNFUNDED',
+  'PARTIALLY_FUNDED',
   'PENDING_APPROVAL',
   'AVAILABLE_FOR_PAYOUT',
 ]);
@@ -120,6 +134,8 @@ function statusBadgeVariant(
   switch (s) {
     case 'UNFUNDED':
       return 'warning';
+    case 'PARTIALLY_FUNDED':
+      return 'warning';
     case 'PENDING_APPROVAL':
       return 'info';
     case 'AVAILABLE_FOR_PAYOUT':
@@ -141,6 +157,8 @@ function statusRowAccent(s: DealNetworkPilotObligationStatus): string {
   switch (s) {
     case 'UNFUNDED':
       return 'border-l-4 border-l-amber-500 bg-amber-50/40 dark:bg-amber-950/25';
+    case 'PARTIALLY_FUNDED':
+      return 'border-l-4 border-l-amber-600 bg-amber-50/50 dark:bg-amber-950/30';
     case 'PENDING_APPROVAL':
       return 'border-l-4 border-l-sky-600 bg-sky-50/35 dark:bg-sky-950/25';
     case 'AVAILABLE_FOR_PAYOUT':
@@ -158,7 +176,7 @@ function statusRowAccent(s: DealNetworkPilotObligationStatus): string {
 function StatusBadge({ status }: { status: DealNetworkPilotObligationStatus }) {
   const variant = statusBadgeVariant(status);
   const icon =
-    status === 'UNFUNDED' ? (
+    status === 'UNFUNDED' || status === 'PARTIALLY_FUNDED' ? (
       <AlertTriangle className="size-3 shrink-0" aria-hidden />
     ) : status === 'PENDING_APPROVAL' ? (
       <Clock className="size-3 shrink-0" aria-hidden />
@@ -196,6 +214,7 @@ function computeKpis(rows: ObligationRow[]) {
   let totalPaid = 0;
   let totalOutstanding = 0;
   let totalUnfunded = 0;
+  let totalPartiallyFunded = 0;
   let availableForPayoutCount = 0;
   let availableForPayoutAmount = 0;
   const currencies = new Set<string>();
@@ -209,6 +228,9 @@ function computeKpis(rows: ObligationRow[]) {
     totalOutstanding += outstanding;
     if (r.status === 'UNFUNDED') {
       totalUnfunded += owed;
+    }
+    if (r.status === 'PARTIALLY_FUNDED') {
+      totalPartiallyFunded += owed;
     }
     if (r.status === 'AVAILABLE_FOR_PAYOUT') {
       availableForPayoutCount += 1;
@@ -224,6 +246,7 @@ function computeKpis(rows: ObligationRow[]) {
     totalPaid,
     totalOutstanding,
     totalUnfunded,
+    totalPartiallyFunded,
     availableForPayoutCount,
     availableForPayoutAmount,
     singleCurrency,
@@ -316,6 +339,22 @@ export default function DealNetworkObligationsPage() {
     [allRows]
   );
 
+  const onboardingPayoutGateBlocked = React.useMemo(
+    () =>
+      allRows.some(
+        (r) =>
+          r.obligation_type !== 'PLATFORM_FEE' &&
+          r.participant != null &&
+          isApprovedButNotOnboarded({
+            id: r.participant.id,
+            approvalStatus:
+              r.participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
+            onboardingStatus: r.participant.onboardingStatus,
+          })
+      ),
+    [allRows]
+  );
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -342,6 +381,19 @@ export default function DealNetworkObligationsPage() {
         <Alert variant="destructive">
           <AlertTitle>Unable to load</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {!loading && onboardingPayoutGateBlocked ? (
+        <Alert className="border-amber-300/90 bg-amber-50/90 dark:border-amber-800/80 dark:bg-amber-950/40">
+          <AlertTriangle className="h-4 w-4 text-amber-800 dark:text-amber-400" aria-hidden />
+          <AlertTitle className="text-amber-950 dark:text-amber-100">
+            Payout cannot be executed until onboarding is complete
+          </AlertTitle>
+          <AlertDescription className="text-amber-900/95 dark:text-amber-100/90">
+            At least one obligation line has an <strong>approved</strong> participant who has not finished{' '}
+            <strong>onboarding</strong>. Use Deal Network to mark onboarding complete before paying out.
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -388,6 +440,11 @@ export default function DealNetworkObligationsPage() {
             <p className="text-[11px] leading-snug text-amber-900/80 dark:text-amber-200/80">
               Sum of lines in <strong>Unfunded</strong> status
             </p>
+            {!loading && kpi.totalPartiallyFunded > 0 ? (
+              <p className="text-[11px] leading-snug text-amber-900/85 dark:text-amber-200/85">
+                Partially funded lines: {formatKpiAmount(kpi.totalPartiallyFunded)}
+              </p>
+            ) : null}
           </CardHeader>
         </Card>
         <Card className="border-emerald-200/80 bg-emerald-50/40 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/20">
@@ -431,8 +488,9 @@ export default function DealNetworkObligationsPage() {
                 Needs action
               </Label>
               <p className="text-muted-foreground max-w-xl text-xs leading-relaxed">
-                Surfaces lines in <strong>Unfunded</strong>, <strong>Pending approval</strong>, or{' '}
-                <strong>Available for payout</strong> ({needsActionCount} across all loaded rows). Excludes
+                Surfaces lines in <strong>Unfunded</strong>, <strong>Partially funded</strong>,{' '}
+                <strong>Pending approval</strong>, or <strong>Available for payout</strong> ({needsActionCount}{' '}
+                across all loaded rows). Excludes
                 Paid, Rejected, and Reversed.
               </p>
             </div>
@@ -516,6 +574,7 @@ export default function DealNetworkObligationsPage() {
               <TableRow>
                 <TableHead>Deal</TableHead>
                 <TableHead>Participant</TableHead>
+                <TableHead>Readiness</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead className="text-right">Owed</TableHead>
                 <TableHead className="text-right">Paid</TableHead>
@@ -528,7 +587,7 @@ export default function DealNetworkObligationsPage() {
             <TableBody>
               {!loading && rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground py-10 text-center text-sm">
+                  <TableCell colSpan={10} className="text-muted-foreground py-10 text-center text-sm">
                     No rows match the current filters — or no obligations have been generated yet.
                   </TableCell>
                 </TableRow>
@@ -540,6 +599,19 @@ export default function DealNetworkObligationsPage() {
                   const participantLabel =
                     row.participant?.name ??
                     (row.obligation_type === 'PLATFORM_FEE' ? 'Platform' : '—');
+                  const participantApprovedNotOnboarded =
+                    row.participant &&
+                    row.obligation_type !== 'PLATFORM_FEE' &&
+                    isApprovedButNotOnboarded({
+                      id: row.participant.id,
+                      approvalStatus:
+                        row.participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
+                      onboardingStatus: row.participant.onboardingStatus,
+                    });
+                  const onboardingDone =
+                    row.participant?.onboardingStatus != null
+                      ? isOnboardingComplete(row.participant.onboardingStatus)
+                      : true;
                   const roleLabel =
                     row.participant?.role ??
                     (row.obligation_type === 'PLATFORM_FEE' ? 'Platform fee' : '—');
@@ -562,6 +634,21 @@ export default function DealNetworkObligationsPage() {
                         <div className="truncate" title={participantLabel}>
                           {participantLabel}
                         </div>
+                      </TableCell>
+                      <TableCell className="max-w-[160px] text-xs">
+                        {row.obligation_type === 'PLATFORM_FEE' ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : participantApprovedNotOnboarded ? (
+                          <span className="font-medium text-amber-800 dark:text-amber-300">
+                            Approved (not onboarded)
+                          </span>
+                        ) : row.participant ? (
+                          <span className={onboardingDone ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}>
+                            {onboardingDone ? 'Onboarding complete' : 'Pending onboarding'}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="max-w-[140px] truncate text-sm" title={roleLabel}>
                         {roleLabel}

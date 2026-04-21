@@ -10,6 +10,8 @@ import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { transitionPaymentLinkStatus } from '@/lib/payment-link-state-machine';
+import { paymentEventBlocksReopenAfterPaid } from '@/lib/payments/payment-link-external-evidence';
+import { revalidatePath } from 'next/cache';
 
 const bodySchema = z.object({
   action: z.enum(['mark_paid', 'reopen']),
@@ -36,6 +38,7 @@ export async function POST(
         id: true,
         organization_id: true,
         status: true,
+        short_code: true,
         wise_transfer_id: true,
         wise_received_amount: true,
       },
@@ -47,7 +50,13 @@ export async function POST(
 
     const canEdit = await checkUserPermission(user.id, link.organization_id, 'edit_payment_links');
     if (!canEdit) {
-      return NextResponse.json({ error: 'Forbidden - Insufficient permissions' }, { status: 403 });
+      return NextResponse.json(
+        {
+          error:
+            'You do not have permission to record manual payments or reopen invoices. Ask an organization owner or admin.',
+        },
+        { status: 403 }
+      );
     }
 
     const json = await request.json();
@@ -71,17 +80,7 @@ export async function POST(
     const hasExternalSettlementEvidence =
       Boolean(link.wise_transfer_id) ||
       Boolean(link.wise_received_amount) ||
-      settlementEvidence.some((event) => {
-        if (event.event_type === 'REFUND_CONFIRMED') return true;
-        if (event.amount_received != null && Number(event.amount_received) > 0) return true;
-        return Boolean(
-          event.stripe_payment_intent_id ||
-            event.hedera_transaction_id ||
-            event.wise_transfer_id ||
-            event.source_reference ||
-            event.source_type
-        );
-      });
+      settlementEvidence.some((event) => paymentEventBlocksReopenAfterPaid(event));
 
     if (action === 'mark_paid') {
       if (link.status !== 'OPEN') {
@@ -92,9 +91,15 @@ export async function POST(
       }
       await transitionPaymentLinkStatus(link.id, 'PAID', user.id);
     } else {
-      if (link.status !== 'PAID') {
+      if (
+        link.status !== 'PAID' &&
+        link.status !== 'PAID_UNVERIFIED' &&
+        link.status !== 'REQUIRES_REVIEW'
+      ) {
         return NextResponse.json(
-          { error: 'Only paid invoices can be reopened for correction' },
+          {
+            error: `Only invoices that are paid or awaiting verification can be reopened (current status: ${link.status}).`,
+          },
           { status: 400 }
         );
       }
@@ -102,7 +107,8 @@ export async function POST(
         return NextResponse.json(
           {
             error:
-              'Reopen blocked: this invoice has recorded settlement evidence. Use a refund/reversal workflow instead.',
+              'Cannot reopen: this invoice has recorded payment or settlement evidence (card, bank, chain, or confirmed amounts). Use your processor’s refund or reversal flow instead.',
+            code: 'REOPEN_BLOCKED_EVIDENCE',
           },
           { status: 400 }
         );
@@ -111,6 +117,9 @@ export async function POST(
     }
 
     loggers.api.info({ paymentLinkId: id, action, userId: user.id }, 'Manual invoice settlement');
+
+    revalidatePath(`/pay/${link.short_code}`);
+    revalidatePath('/dashboard/payment-links');
 
     return NextResponse.json({ success: true });
   } catch (e: unknown) {

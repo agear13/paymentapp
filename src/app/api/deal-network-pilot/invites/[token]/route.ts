@@ -4,6 +4,7 @@ import {
   markParticipantInviteOpened,
   participantRowToDemo,
   getParticipantByInviteToken,
+  getPilotParticipantsForDeal,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +32,8 @@ export async function GET(
 
     const deal = dealRowToRecentDeal(row.deal);
     const participant = { ...participantRowToDemo(row), inviteStatus: 'Opened' as const };
-    return NextResponse.json({ deal, participant });
+    const dealParticipants = await getPilotParticipantsForDeal(row.deal_id);
+    return NextResponse.json({ deal, participant, dealParticipants });
   } catch (e) {
     console.error('[deal-network-pilot/invites GET]', e);
     return NextResponse.json({ error: 'Failed to load invite' }, { status: 500 });

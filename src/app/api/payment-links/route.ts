@@ -20,6 +20,7 @@ import { generateUniqueShortCode } from '@/lib/server/short-code';
 import { generateQRCodeDataUrl } from '@/lib/qr-code';
 import { getFxService, type Currency } from '@/lib/fx';
 import { buildWisePaymentContext, getMerchantWiseConfig } from '@/lib/payments/wise';
+import { assertPilotDealOwnedByUser } from '@/lib/deal-network-demo/pilot-deal-invoice-link.server';
 
 /** FX summary for list view (lightweight) */
 export interface FxSummary {
@@ -114,6 +115,7 @@ function transformPaymentLink(link: Record<string, unknown>) {
     updatedAt: link.updated_at,
     paymentEvents: link.payment_events,
     fxSummary,
+    pilotDealId: (link as { pilot_deal_id?: string | null }).pilot_deal_id ?? null,
   };
 }
 
@@ -308,6 +310,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let pilotDealIdToStore: string | null = null;
+    if (validatedData.pilotDealId) {
+      try {
+        await assertPilotDealOwnedByUser(user.id, validatedData.pilotDealId);
+        pilotDealIdToStore = validatedData.pilotDealId;
+      } catch {
+        return NextResponse.json(
+          { error: 'Invalid pilot project for invoice link' },
+          { status: 403 }
+        );
+      }
+    }
+
     const dbOrgId = organizationId;
 
     // Generate unique short code
@@ -406,6 +421,7 @@ export async function POST(request: NextRequest) {
           created_at: now,
           updated_at: now,
           wise_status: wiseContext ? 'INSTRUCTIONS_READY' : null,
+          pilot_deal_id: pilotDealIdToStore,
       };
 
       const link = await tx.payment_links.create({
@@ -418,6 +434,7 @@ export async function POST(request: NextRequest) {
           id: randomUUID(),
           payment_link_id: link.id,
           event_type: 'CREATED',
+          pilot_deal_id: pilotDealIdToStore,
           metadata: {
             createdBy: user.id,
           },
@@ -432,6 +449,7 @@ export async function POST(request: NextRequest) {
             payment_link_id: link.id,
             event_type: 'PAYMENT_INITIATED',
             payment_method: 'WISE',
+            pilot_deal_id: pilotDealIdToStore,
             metadata: wiseContext.metadata as object,
             created_at: now,
           },

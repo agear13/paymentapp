@@ -27,6 +27,8 @@ type DealSnapshot = {
   paidAmount?: number;
   paidAt?: string;
   currentStage?: string;
+  /** Strait project mode: one-line funding summary from linked invoices (UI only). */
+  projectFundingLine?: string;
 };
 type DiagnosticType = 'blockers' | 'payout_readiness' | 'funding' | 'state_consistency' | 'needs_action';
 
@@ -185,6 +187,11 @@ export function DealNetworkCopilotPanel({
           </div>
         </CardHeader>
         <CardContent className="space-y-3 pt-0">
+          {activeDeal?.projectFundingLine ? (
+            <p className="text-xs text-muted-foreground rounded-md border bg-muted/30 px-2 py-1.5">
+              {activeDeal.projectFundingLine}
+            </p>
+          ) : null}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Button type="button" variant={activeDiagnostic === 'blockers' ? 'default' : 'outline'} disabled={loading} onClick={() => void runDiagnostic('blockers')}>
               {loading && activeDiagnostic === 'blockers' ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}

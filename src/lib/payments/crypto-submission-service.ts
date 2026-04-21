@@ -109,6 +109,7 @@ export async function submitCryptoPaymentConfirmation(
         payment_link_id: link.id,
         event_type: 'CRYPTO_PAYMENT_SUBMITTED',
         payment_method: 'CRYPTO',
+        pilot_deal_id: link.pilot_deal_id ?? undefined,
         amount_received: link.amount,
         currency_received: link.currency,
         correlation_id: correlationId,

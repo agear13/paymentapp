@@ -240,6 +240,14 @@ export async function confirmPayment(
         }
       }
 
+      const linkPilotDealId =
+        typeof (paymentLink as { pilot_deal_id?: string | null }).pilot_deal_id === 'string'
+          ? String((paymentLink as { pilot_deal_id?: string | null }).pilot_deal_id).trim()
+          : '';
+      if (!paymentEventData.pilot_deal_id && linkPilotDealId) {
+        paymentEventData.pilot_deal_id = linkPilotDealId;
+      }
+
       if (provider === 'stripe') {
         paymentEventData.stripe_event_id = providerRef;
         paymentEventData.stripe_payment_intent_id = paymentIntentId;

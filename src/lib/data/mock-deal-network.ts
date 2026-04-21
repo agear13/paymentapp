@@ -117,6 +117,10 @@ export interface RecentDeal {
   nextStep?: string;
   /** Latest note / summary */
   latestUpdate?: string;
+  /** Project mode: optional long description (kept separate from referral “latest update”). */
+  projectDescription?: string;
+  /** Project mode: display currency for value labels (numeric `value` unchanged). */
+  projectValueCurrency?: 'AUD' | 'USD';
   lastContactedAt?: string;
   /** Manual timeline entries */
   activityLog?: DealActivityEntry[];

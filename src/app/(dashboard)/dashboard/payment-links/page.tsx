@@ -236,11 +236,24 @@ export default function PaymentLinksPage() {
     setEditDialogOpen(true);
   };
 
-  const handleEditSuccess = () => {
-    void fetchPaymentLinks({ silent: true });
+  const handleEditSuccess = React.useCallback(async () => {
+    const editedId = linkToEdit?.id;
+    const shouldRefreshDetail = Boolean(editedId && selectedPaymentLink?.id === editedId);
     setEditDialogOpen(false);
     setLinkToEdit(null);
-  };
+    await fetchPaymentLinks({ silent: true });
+    if (shouldRefreshDetail && editedId) {
+      try {
+        const res = await fetch(`/api/payment-links/${editedId}`);
+        if (res.ok) {
+          const result = await res.json();
+          setSelectedPaymentLink(result.data);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [fetchPaymentLinks, linkToEdit?.id, selectedPaymentLink?.id]);
 
   const handleEditFromDetail = React.useCallback((pl: PaymentLinkDetailPayload) => {
     setDetailDialogOpen(false);
@@ -271,15 +284,20 @@ export default function PaymentLinksPage() {
   const handleCancelConfirm = async () => {
     if (!linkToCancel) return;
 
+    const canceledId = linkToCancel.id;
     setIsCanceling(true);
     try {
-      const response = await fetch(`/api/payment-links/${linkToCancel.id}`, {
+      const response = await fetch(`/api/payment-links/${canceledId}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to cancel payment link');
+        const error = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof error.error === 'string' && error.error.trim()
+            ? error.error.trim()
+            : 'Failed to cancel payment link'
+        );
       }
 
       toast({
@@ -290,6 +308,18 @@ export default function PaymentLinksPage() {
       setCancelDialogOpen(false);
       setLinkToCancel(null);
       void fetchPaymentLinks({ silent: true });
+      setSelectedPaymentLink((prev) => {
+        if (prev?.id === canceledId) {
+          setDetailDialogOpen(false);
+          return null;
+        }
+        return prev;
+      });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(canceledId);
+        return next;
+      });
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -309,15 +339,20 @@ export default function PaymentLinksPage() {
   const handleDeleteConfirm = async () => {
     if (!linkToDelete) return;
 
+    const deletedId = linkToDelete.id;
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/payment-links/${linkToDelete.id}/delete`, {
+      const response = await fetch(`/api/payment-links/${deletedId}/delete`, {
         method: 'POST',
       });
 
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload.error || 'Failed to delete invoice');
+        throw new Error(
+          typeof payload.error === 'string' && payload.error.trim()
+            ? payload.error.trim()
+            : 'Failed to delete invoice'
+        );
       }
 
       toast({
@@ -327,6 +362,18 @@ export default function PaymentLinksPage() {
       setDeleteDialogOpen(false);
       setLinkToDelete(null);
       void fetchPaymentLinks({ silent: true });
+      setSelectedPaymentLink((prev) => {
+        if (prev?.id === deletedId) {
+          setDetailDialogOpen(false);
+          return null;
+        }
+        return prev;
+      });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deletedId);
+        return next;
+      });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to delete invoice';
       toast({

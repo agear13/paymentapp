@@ -43,6 +43,7 @@ import {
   type RhCompany,
   type RhContact,
 } from '@/lib/data/mock-rabbit-hole-network';
+import { CreateDealModalProject } from '@/components/deal-network-demo/create-deal-modal-project';
 
 const PAYOUT_TRIGGER_MANUAL = 'Manual' as const;
 
@@ -75,9 +76,15 @@ export interface CreateDealModalProps {
   onOpenChange: (open: boolean) => void;
   onCreate: (deal: RecentDeal) => void;
   editDeal?: RecentDeal | null;
+  experienceMode?: 'referral' | 'project';
 }
 
-export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: CreateDealModalProps) {
+function CreateDealModalReferral({
+  open,
+  onOpenChange,
+  onCreate,
+  editDeal,
+}: Omit<CreateDealModalProps, 'experienceMode'>) {
   const [dealName, setDealName] = React.useState('');
   const [companyId, setCompanyId] = React.useState<string>('');
   const [contactId, setContactId] = React.useState<string>('');
@@ -854,7 +861,7 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
                   <Input
                     type="number"
                     min={0}
-                    step={state.kind === 'fixed_amount' ? 1 : 0.5}
+                    step={state.kind === 'fixed_amount' ? 'any' : 0.5}
                     value={state.value}
                     onChange={(e) => setState((prev) => ({ ...prev, value: e.target.value }))}
                     placeholder={state.kind === 'fixed_amount' ? 'USD amount' : 'Percent'}
@@ -1161,4 +1168,12 @@ export function CreateDealModal({ open, onOpenChange, onCreate, editDeal }: Crea
       </DialogContent>
     </Dialog>
   );
+}
+
+export function CreateDealModal(props: CreateDealModalProps) {
+  const { experienceMode = 'referral', ...rest } = props;
+  if (experienceMode === 'project') {
+    return <CreateDealModalProject {...rest} />;
+  }
+  return <CreateDealModalReferral {...rest} />;
 }

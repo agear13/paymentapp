@@ -17,6 +17,8 @@ interface AppHeaderProps {
 export function AppHeader({ productProfile }: AppHeaderProps) {
   const { toggleSidebar } = useSidebar();
   const isRabbitHolePilot = productProfile === 'rabbit_hole_pilot';
+  const isStraitExperiencesPilot = productProfile === 'strait_experiences_pilot';
+  const isMinimalDealNetworkShell = isRabbitHolePilot || isStraitExperiencesPilot;
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-background px-6">
@@ -33,7 +35,7 @@ export function AppHeader({ productProfile }: AppHeaderProps) {
       <BreadcrumbNav productProfile={productProfile} />
 
       <div className="ml-auto flex items-center gap-2">
-        {isRabbitHolePilot && (
+        {isMinimalDealNetworkShell && (
           <>
             <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
               <Link href="/dashboard/payment-links">Invoice dashboard</Link>
@@ -43,7 +45,7 @@ export function AppHeader({ productProfile }: AppHeaderProps) {
             </Button>
           </>
         )}
-        {!isRabbitHolePilot && (
+        {!isMinimalDealNetworkShell && (
           <>
             <NotificationCenter />
             <OrganizationSwitcher />

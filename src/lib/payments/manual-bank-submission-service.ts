@@ -102,6 +102,7 @@ export async function submitManualBankPaymentConfirmation(
         payment_link_id: link.id,
         event_type: 'PAYMENT_INITIATED',
         payment_method: 'MANUAL_BANK',
+        pilot_deal_id: link.pilot_deal_id ?? undefined,
         amount_received: link.amount,
         currency_received: link.currency,
         source_type: 'MANUAL',

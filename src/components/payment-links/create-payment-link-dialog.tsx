@@ -242,6 +242,8 @@ export interface CreatePaymentLinkDialogProps {
   organizationId: string;
   defaultCurrency?: string;
   defaultValues?: Partial<CreatePaymentLinkFormValues>;
+  /** Deal Network Strait: stored on payment_links.pilot_deal_id when creating from a project. */
+  pilotDealId?: string | null;
   onSuccess?: (paymentLink: any) => void;
   trigger?: React.ReactNode;
   open?: boolean;
@@ -254,6 +256,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   organizationId,
   defaultCurrency = 'USD',
   defaultValues,
+  pilotDealId = null,
   onSuccess,
   trigger,
   open: controlledOpen,
@@ -749,6 +752,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           invoiceDate: data.invoiceDate?.toISOString(),
           dueDate: data.dueDate?.toISOString(),
           expiresAt: data.expiresAt?.toISOString(),
+          ...(pilotDealId ? { pilotDealId } : {}),
           ...(data.attachment
             ? {
                 attachment: data.attachment,

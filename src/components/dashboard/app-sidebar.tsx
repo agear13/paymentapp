@@ -96,7 +96,7 @@ const partnersItems = [
         href: '/dashboard/partners/dashboard',
       },
       {
-        title: 'Deal Network (Demo)',
+        title: 'Projects',
         href: '/dashboard/partners/deal-network',
       },
       {
@@ -209,18 +209,19 @@ interface AppSidebarProps {
 export function AppSidebar({ productProfile }: AppSidebarProps) {
   const isBetaAdmin = productProfile === 'admin';
   const isRabbitHolePilot = productProfile === 'rabbit_hole_pilot';
+  const isStraitExperiencesPilot = productProfile === 'strait_experiences_pilot';
   const { showAdvancedMainNav } = usePaymentLinksNavActivation(productProfile);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
 
   const mainNavigationItems = React.useMemo(() => {
-    if (isRabbitHolePilot) return [];
+    if (isRabbitHolePilot || isStraitExperiencesPilot) return [];
     if (!showAdvancedMainNav) {
       return paymentLinksCoreNavItems;
     }
     return [...paymentLinksCoreNavItems, ...paymentLinksAdvancedNavItems];
-  }, [isRabbitHolePilot, showAdvancedMainNav]);
+  }, [isRabbitHolePilot, isStraitExperiencesPilot, showAdvancedMainNav]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [user, setUser] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
@@ -329,6 +330,123 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                     <Link href={pilotHome}>
                       <Handshake className="size-4" />
                       <span>Deal Network</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isObligationsView}>
+                    <Link href={pilotObligations}>
+                      <FileCheck className="size-4" />
+                      <span>Obligations</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === '/dashboard/payment-links' || pathname.startsWith('/dashboard/payment-links/')}
+                  >
+                    <Link href="/dashboard/payment-links">
+                      <LinkIcon className="size-4" />
+                      <span>Invoices</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === '/dashboard/settings/merchant' || pathname.startsWith('/dashboard/settings/merchant/')}
+                  >
+                    <Link href="/dashboard/settings/merchant">
+                      <Building2 className="size-4" />
+                      <span>Merchant Settings</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              {loading ? (
+                <SidebarMenuButton disabled>
+                  <Avatar className="size-6">
+                    <AvatarFallback>...</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">Loading...</span>
+                    <span className="truncate text-xs text-muted-foreground">Please wait</span>
+                  </div>
+                </SidebarMenuButton>
+              ) : user ? (
+                <SidebarMenuButton onClick={handleSignOut} disabled={loading}>
+                  <Avatar className="size-6">
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">{displayName}</span>
+                    <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                  </div>
+                  <LogOut className="size-4 ml-auto" />
+                </SidebarMenuButton>
+              ) : (
+                <SidebarMenuButton onClick={handleSignIn}>
+                  <Avatar className="size-6">
+                    <AvatarFallback>?</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">Sign In</span>
+                    <span className="truncate text-xs text-muted-foreground">Click to login</span>
+                  </div>
+                  <ChevronRight className="size-4 ml-auto" />
+                </SidebarMenuButton>
+              )}
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      </Sidebar>
+    );
+  }
+
+  if (isStraitExperiencesPilot) {
+    const pilotHome = '/dashboard/partners/deal-network';
+    const pilotObligations = `${pilotHome}/obligations`;
+    const isObligationsView = pathname === pilotObligations;
+    const isDealNetworkSectionActive =
+      pathname === pilotHome || (pathname.startsWith(`${pilotHome}/`) && !isObligationsView);
+    return (
+      <Sidebar collapsible="icon">
+        <SidebarHeader>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" asChild>
+                <Link href={pilotHome}>
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                    <span className="text-lg font-bold">P</span>
+                  </div>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">Projects</span>
+                    <span className="truncate text-xs text-muted-foreground">Payout coordination</span>
+                  </div>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
+
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isDealNetworkSectionActive}>
+                    <Link href={pilotHome}>
+                      <Handshake className="size-4" />
+                      <span>Projects</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

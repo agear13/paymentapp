@@ -4,18 +4,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/auth/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { loggers } from '@/lib/logger';
 import { tryDeletePaymentLinkAttachmentFile } from '@/lib/payment-links/payment-link-attachment';
-
-const IRREVERSIBLE_EVENT_TYPES = new Set([
-  'PAYMENT_CONFIRMED',
-  'REFUND_CONFIRMED',
-  'CRYPTO_PAYMENT_SUBMITTED',
-]);
+import { paymentEventBlocksHardDelete } from '@/lib/payments/payment-link-external-evidence';
 
 export async function POST(
   request: NextRequest,
@@ -51,10 +47,13 @@ export async function POST(
       return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
     }
 
-    const canDelete = await checkUserPermission(user.id, link.organization_id, 'cancel_payment_links');
+    const canDelete = await checkUserPermission(user.id, link.organization_id, 'delete_payment_links');
     if (!canDelete) {
       return NextResponse.json(
-        { error: 'Forbidden - Insufficient permissions' },
+        {
+          error:
+            'You do not have permission to permanently delete invoices. Ask an organization owner or admin.',
+        },
         { status: 403 }
       );
     }
@@ -93,23 +92,14 @@ export async function POST(
     const hasIrreversibleActivity =
       Boolean(link.wise_transfer_id) ||
       Boolean(link.wise_received_amount) ||
-      paymentActivity.some((e) => {
-        if (IRREVERSIBLE_EVENT_TYPES.has(e.event_type)) return true;
-        if (e.amount_received != null && Number(e.amount_received) > 0) return true;
-        return Boolean(
-          e.stripe_payment_intent_id ||
-            e.hedera_transaction_id ||
-            e.wise_transfer_id ||
-            e.source_reference ||
-            e.source_type
-        );
-      });
+      paymentActivity.some((e) => paymentEventBlocksHardDelete(e));
 
     if (link.status !== 'DRAFT' && hasIrreversibleActivity) {
       return NextResponse.json(
         {
           error:
-            'Deletion blocked: this invoice has payment activity or settlement evidence. Cancel or reopen instead of deleting.',
+            'Cannot delete because payment or settlement evidence exists on this invoice. Cancel the invoice instead, or reopen it if it was marked paid by mistake.',
+          code: 'DELETE_BLOCKED_EVIDENCE',
         },
         { status: 400 }
       );
@@ -143,6 +133,9 @@ export async function POST(
       { paymentLinkId: link.id, shortCode: link.short_code, userId: user.id },
       'Payment link deleted'
     );
+
+    revalidatePath(`/pay/${link.short_code}`);
+    revalidatePath('/dashboard/payment-links');
 
     return NextResponse.json({ success: true, message: 'Invoice deleted successfully' });
   } catch (error: any) {

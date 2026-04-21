@@ -4,14 +4,14 @@ import { getDashboardProductProfile } from '@/lib/auth/dashboard-product.server'
 
 export default async function MerchantSettingsPage() {
   const profile = await getDashboardProductProfile();
-  const isPilot = profile === 'rabbit_hole_pilot';
+  const isPilot = profile === 'rabbit_hole_pilot' || profile === 'strait_experiences_pilot';
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Merchant Settings</h1>
         <p className="text-muted-foreground">
           {isPilot
-            ? 'Configure payment settings for invoice collection in the Rabbit Hole pilot.'
+            ? 'Configure payment settings for invoice collection in your pilot workspace.'
             : 'Configure your payment processing and integration settings.'}
         </p>
       </div>
@@ -21,7 +21,7 @@ export default async function MerchantSettingsPage() {
           <CardTitle>Payment Configuration</CardTitle>
           <CardDescription>
             {isPilot
-              ? 'Set up Stripe, Wise, and HashPack details used for pilot invoice workflows.'
+              ? 'Set up Stripe, Wise, and HashPack details used for pilot invoice workflows (simplified shell).'
               : 'Set up your payment accounts and default preferences.'}
           </CardDescription>
         </CardHeader>

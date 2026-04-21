@@ -33,14 +33,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  COMMISSION_STRUCTURE_OPTIONS,
   BASE_PARTICIPANT_OPTIONS,
+  COMMISSION_STRUCTURE_OPTIONS,
   type BaseParticipantSlot,
   type CommissionStructureKind,
   resolveCommissionWithValidation,
+  computeParticipantCommissionTotalsForDeal,
+  type PilotParticipantCommissionRow,
 } from '@/lib/deal-network-demo/commission-structure';
 import { normParticipantName } from '@/lib/deal-network-demo/participant-merge';
 import type { ParticipantPayoutSettlementStatus } from '@/lib/deal-network-demo/participant-payout-status';
+import type { PilotParticipantOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 
 export type DemoParticipantRole = 'Introducer' | 'Connector' | 'Closer' | 'Contributor';
 
@@ -54,10 +57,14 @@ export interface DemoParticipant {
   /** Meaning depends on kind: % of deal, fixed USD, % of base participant, or ignored for formula */
   commissionValue: number;
   baseParticipant?: BaseParticipantSlot;
+  /** When commissionKind is pct_of_participant: base allocation comes from this invitee row id. */
+  commissionBaseParticipantId?: string;
   formulaExpression?: string;
   status: 'Pending' | 'Confirmed';
   inviteStatus: 'Invited' | 'Opened';
   approvalStatus: 'Pending approval' | 'Approved';
+  /** KYC / payout profile readiness — payout must not execute until COMPLETE. */
+  onboardingStatus?: PilotParticipantOnboardingStatus;
   approvedAt?: string;
   approvalNote?: string;
   inviteToken: string;
@@ -86,6 +93,10 @@ export interface DemoParticipant {
   /** When payout line is Paid, optional timestamp (pilot). */
   payoutPaidAt?: string;
   payoutStatusNote?: string;
+  /** Project coordination mode */
+  payoutDueDate?: string;
+  participantNotes?: string;
+  companyName?: string;
 }
 
 export interface InviteParticipantModalProps {
@@ -99,6 +110,25 @@ export interface InviteParticipantModalProps {
   /** Featured deal value for commission previews */
   featuredDealValue: number;
   featuredRoleAmounts?: Partial<Record<BaseParticipantSlot, number>>;
+  /** Referral/Rabbit Hole pilot (default) vs project coordination UI. */
+  experienceMode?: 'referral' | 'project';
+  /** Invitees on this deal eligible as %-of-participant base (excludes internal deal-role rows). */
+  commissionBaseParticipantOptions?: { id: string; name: string; companyName?: string }[];
+}
+
+const INVITE_PREVIEW_PARTICIPANT_ID = '__invite_preview__';
+
+function demoParticipantToPilotRow(p: DemoParticipant): PilotParticipantCommissionRow {
+  return {
+    id: p.id,
+    name: p.name,
+    companyName: p.companyName,
+    commissionKind: p.commissionKind,
+    commissionValue: p.commissionValue,
+    baseParticipant: p.baseParticipant,
+    commissionBaseParticipantId: p.commissionBaseParticipantId,
+    formulaExpression: p.formulaExpression,
+  };
 }
 
 export function InviteParticipantModal({
@@ -108,19 +138,34 @@ export function InviteParticipantModal({
   existingParticipantsForDuplicateCheck,
   featuredDealValue,
   featuredRoleAmounts,
+  experienceMode = 'referral',
+  commissionBaseParticipantOptions = [],
 }: InviteParticipantModalProps) {
+  const isProjectMode = experienceMode === 'project';
+  /** Strait / project: simplify invite UX; engine still supports all kinds for existing rows. */
+  const commissionStructureSelectOptions = React.useMemo(
+    () =>
+      isProjectMode
+        ? COMMISSION_STRUCTURE_OPTIONS.filter((o) => o.value !== 'pct_of_participant')
+        : COMMISSION_STRUCTURE_OPTIONS,
+    [isProjectMode]
+  );
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [role, setRole] = React.useState<DemoParticipantRole>('Connector');
   const [commissionKind, setCommissionKind] = React.useState<CommissionStructureKind>('pct_deal_value');
   const [commissionValue, setCommissionValue] = React.useState('10');
-  const [baseParticipant, setBaseParticipant] = React.useState<BaseParticipantSlot>('Closer');
+  const [baseParticipant, setBaseParticipant] = React.useState<BaseParticipantSlot>('Introducer');
+  const [commissionBaseParticipantId, setCommissionBaseParticipantId] = React.useState('');
   const [formulaExpression, setFormulaExpression] = React.useState('');
   const [roleDetails, setRoleDetails] = React.useState('');
   const [payoutCondition, setPayoutCondition] = React.useState('');
   const [agreementNotes, setAgreementNotes] = React.useState('');
   const [attachmentUrl, setAttachmentUrl] = React.useState('');
   const [attachmentLabel, setAttachmentLabel] = React.useState('');
+  const [payoutDueDate, setPayoutDueDate] = React.useState('');
+  const [participantNotes, setParticipantNotes] = React.useState('');
+  const [companyName, setCompanyName] = React.useState('');
   const [successLink, setSuccessLink] = React.useState<string | null>(null);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = React.useState(false);
@@ -138,33 +183,69 @@ export function InviteParticipantModal({
     if (!open) return;
     setName('');
     setEmail('');
-    setRole('Connector');
-    setCommissionKind('pct_deal_value');
-    setCommissionValue('10');
-    setBaseParticipant('Closer');
     setFormulaExpression('');
     setRoleDetails('');
     setPayoutCondition('');
     setAgreementNotes('');
     setAttachmentUrl('');
     setAttachmentLabel('');
+    setPayoutDueDate('');
+    setParticipantNotes('');
+    setCompanyName('');
     setSuccessLink(null);
     setSubmitError(null);
     setDuplicateDialogOpen(false);
     setPendingDuplicateParticipant(null);
     setDuplicateCandidates([]);
     setDuplicateSubmitting(false);
-  }, [open]);
+    setCommissionBaseParticipantId('');
+    if (isProjectMode) {
+      setRole('Contributor');
+      setCommissionKind('fixed_amount');
+      setCommissionValue('0');
+      setBaseParticipant('Closer');
+    } else {
+      setRole('Connector');
+      setCommissionKind('pct_deal_value');
+      setCommissionValue('10');
+      setBaseParticipant('Introducer');
+    }
+  }, [open, isProjectMode]);
+
+  React.useEffect(() => {
+    if (!open || !isProjectMode) return;
+    if (commissionKind !== 'pct_of_participant') return;
+    setCommissionKind('fixed_amount');
+  }, [open, isProjectMode, commissionKind]);
 
   const isInviteDirty = React.useMemo(() => {
     if (successLink) return false;
+    if (isProjectMode) {
+      return (
+        name.trim() !== '' ||
+        email.trim() !== '' ||
+        role !== 'Contributor' ||
+        commissionKind !== 'fixed_amount' ||
+        commissionValue !== '0' ||
+        baseParticipant !== 'Closer' ||
+        formulaExpression.trim() !== '' ||
+        roleDetails.trim() !== '' ||
+        payoutCondition.trim() !== '' ||
+        agreementNotes.trim() !== '' ||
+        attachmentUrl.trim() !== '' ||
+        attachmentLabel.trim() !== '' ||
+        payoutDueDate.trim() !== '' ||
+        participantNotes.trim() !== '' ||
+        companyName.trim() !== ''
+      );
+    }
     return (
       name.trim() !== '' ||
       email.trim() !== '' ||
       role !== 'Connector' ||
       commissionKind !== 'pct_deal_value' ||
       commissionValue !== '10' ||
-      baseParticipant !== 'Closer' ||
+      baseParticipant !== 'Introducer' ||
       formulaExpression.trim() !== '' ||
       roleDetails.trim() !== '' ||
       payoutCondition.trim() !== '' ||
@@ -174,18 +255,24 @@ export function InviteParticipantModal({
     );
   }, [
     successLink,
+    isProjectMode,
     name,
     email,
     role,
     commissionKind,
     commissionValue,
     baseParticipant,
+    commissionBaseParticipantId,
+    commissionBaseParticipantOptions,
     formulaExpression,
     roleDetails,
     payoutCondition,
     agreementNotes,
     attachmentUrl,
     attachmentLabel,
+    payoutDueDate,
+    participantNotes,
+    companyName,
   ]);
 
   function requestClose() {
@@ -204,26 +291,172 @@ export function InviteParticipantModal({
 
   const preview = React.useMemo(() => {
     const v = featuredDealValue > 0 ? featuredDealValue : 100_000;
+    const existingRows = existingParticipantsForDuplicateCheck.map(demoParticipantToPilotRow);
+    const useParticipantCommissionBase =
+      isProjectMode &&
+      commissionKind === 'pct_of_participant' &&
+      commissionBaseParticipantOptions.length > 0;
+    const trimmedCommissionBaseId = commissionBaseParticipantId.trim();
+    const previewCommissionBaseParticipantId =
+      useParticipantCommissionBase && trimmedCommissionBaseId
+        ? trimmedCommissionBaseId
+        : undefined;
+    const previewBaseParticipant: BaseParticipantSlot | undefined =
+      commissionKind === 'pct_of_participant'
+        ? previewCommissionBaseParticipantId
+          ? undefined
+          : baseParticipant
+        : baseParticipant;
+    const draftRow: PilotParticipantCommissionRow = {
+      id: INVITE_PREVIEW_PARTICIPANT_ID,
+      name: name.trim() || 'New participant',
+      companyName: companyName.trim() || undefined,
+      commissionKind,
+      commissionValue: parseFloat(commissionValue) || 0,
+      baseParticipant: previewBaseParticipant,
+      commissionBaseParticipantId: previewCommissionBaseParticipantId,
+      formulaExpression: formulaExpression.trim() || undefined,
+    };
+    const joint = computeParticipantCommissionTotalsForDeal(v, featuredRoleAmounts, [
+      ...existingRows,
+      draftRow,
+    ]);
     return resolveCommissionWithValidation(
       {
         commissionKind,
-        commissionValue: parseFloat(commissionValue) || 0,
-        baseParticipant,
-        formulaExpression,
+        commissionValue: draftRow.commissionValue,
+        baseParticipant: previewBaseParticipant,
+        commissionBaseParticipantId: previewCommissionBaseParticipantId,
+        formulaExpression: draftRow.formulaExpression,
       },
-      { dealValue: v, roleAmounts: featuredRoleAmounts }
+      {
+        dealValue: v,
+        roleAmounts: featuredRoleAmounts,
+        participantBaseTotals: joint.totals,
+        participantLabels: joint.labels,
+        resolvingParticipantId: INVITE_PREVIEW_PARTICIPANT_ID,
+      }
     );
-  }, [commissionKind, commissionValue, baseParticipant, formulaExpression, featuredDealValue, featuredRoleAmounts]);
+  }, [
+    isProjectMode,
+    commissionKind,
+    commissionValue,
+    baseParticipant,
+    commissionBaseParticipantId,
+    formulaExpression,
+    featuredDealValue,
+    featuredRoleAmounts,
+    existingParticipantsForDuplicateCheck,
+    commissionBaseParticipantOptions,
+    name,
+    companyName,
+  ]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+
+    if (isProjectMode) {
+      if (
+        commissionKind === 'pct_of_participant' &&
+        commissionBaseParticipantOptions.length > 0 &&
+        !commissionBaseParticipantId.trim()
+      ) {
+        setSubmitError('Choose a participant to base this percentage on.');
+        return;
+      }
+      if (!preview.valid) {
+        setSubmitError(preview.error ?? 'Invalid payout setup. Please fix the inputs.');
+        return;
+      }
+      const num = parseFloat(commissionValue);
+      const commissionNum =
+        commissionKind === 'formula_advanced'
+          ? num
+          : Number.isFinite(num) && num >= 0
+            ? num
+            : 0;
+      setSubmitError(null);
+      const token = makeToken();
+      const trimmedUrl = attachmentUrl.trim();
+      const participant: DemoParticipant = {
+        id: `part-${Date.now()}`,
+        name: name.trim(),
+        email: email.trim(),
+        role,
+        commissionKind,
+        commissionValue: commissionKind === 'formula_advanced' ? commissionNum : commissionNum,
+        baseParticipant:
+          commissionKind === 'pct_of_participant' &&
+          (!isProjectMode || !commissionBaseParticipantId.trim())
+            ? baseParticipant
+            : undefined,
+        commissionBaseParticipantId:
+          isProjectMode &&
+          commissionKind === 'pct_of_participant' &&
+          commissionBaseParticipantId.trim()
+            ? commissionBaseParticipantId.trim()
+            : undefined,
+        formulaExpression: commissionKind === 'formula_advanced' ? formulaExpression.trim() : undefined,
+        status: 'Pending',
+        inviteStatus: 'Invited',
+        approvalStatus: 'Pending approval',
+        onboardingStatus: 'NOT_STARTED',
+        inviteToken: token,
+        roleDetails: roleDetails.trim() || undefined,
+        payoutCondition: payoutCondition.trim() || undefined,
+        agreementNotes: agreementNotes.trim() || undefined,
+        attachmentUrl: trimmedUrl || undefined,
+        attachmentLabel: attachmentLabel.trim() || undefined,
+        payoutDueDate: payoutDueDate.trim() || undefined,
+        participantNotes: participantNotes.trim() || undefined,
+        companyName: companyName.trim() || undefined,
+      };
+      const incomingNameKey = normParticipantName(participant.name);
+      const existingDupes = existingParticipantsForDuplicateCheck.filter(
+        (p) =>
+          p.role === participant.role &&
+          normParticipantName(p.name) === incomingNameKey
+      );
+      if (existingDupes.length > 0) {
+        setDuplicateCandidates(existingDupes);
+        setPendingDuplicateParticipant(participant);
+        setDuplicateDialogOpen(true);
+        return;
+      }
+      void (async () => {
+        try {
+          setSubmitError(null);
+          const shared = await onInvite(participant, 'create_duplicate_anyway');
+          const origin = typeof window !== 'undefined' ? window.location.origin : '';
+          const inviteLink =
+            shared.inviteLink ??
+            (origin ? `${origin}/deal-invites/${shared.inviteToken}` : '');
+          setSuccessLink(inviteLink);
+          toast.success('Participant invited');
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Failed to invite participant';
+          setSubmitError(msg);
+        }
+      })();
+      return;
+    }
+
     if (!roleDetails.trim() || !payoutCondition.trim()) {
       setSubmitError('Role details and payout condition are required for the agreement record.');
       return;
     }
     const num = parseFloat(commissionValue);
     if (commissionKind !== 'formula_advanced' && (Number.isNaN(num) || num < 0)) return;
+    if (
+      isProjectMode &&
+      commissionKind === 'pct_of_participant' &&
+      commissionBaseParticipantOptions.length > 0 &&
+      !commissionBaseParticipantId.trim()
+    ) {
+      setSubmitError('Choose a participant to base this percentage on.');
+      return;
+    }
     if (!preview.valid || preview.total <= 0) {
       setSubmitError(preview.error ?? 'Invalid commission setup. Please fix the inputs.');
       return;
@@ -240,11 +473,21 @@ export function InviteParticipantModal({
       commissionKind,
       commissionValue: commissionKind === 'formula_advanced' ? num : num,
       baseParticipant:
-        commissionKind === 'pct_of_participant' ? baseParticipant : undefined,
+        commissionKind === 'pct_of_participant' &&
+        (!isProjectMode || !commissionBaseParticipantId.trim())
+          ? baseParticipant
+          : undefined,
+      commissionBaseParticipantId:
+        isProjectMode &&
+        commissionKind === 'pct_of_participant' &&
+        commissionBaseParticipantId.trim()
+          ? commissionBaseParticipantId.trim()
+          : undefined,
       formulaExpression: commissionKind === 'formula_advanced' ? formulaExpression.trim() : undefined,
       status: 'Pending',
       inviteStatus: 'Invited',
       approvalStatus: 'Pending approval',
+      onboardingStatus: 'NOT_STARTED',
       inviteToken: token,
       roleDetails: roleDetails.trim(),
       payoutCondition: payoutCondition.trim(),
@@ -323,7 +566,9 @@ export function InviteParticipantModal({
           <DialogDescription>
             {successLink
               ? 'Share this link so they can review and approve their participation (demo).'
-              : 'Add a participant to the featured deal. Commission can follow flexible structures (demo).'}
+              : isProjectMode
+                ? 'Add a participant to the active project. Payout details can stay high-level until funding is linked.'
+                : 'Add a participant to the featured deal. Commission can follow flexible structures (demo).'}
           </DialogDescription>
         </DialogHeader>
 
@@ -376,86 +621,154 @@ export function InviteParticipantModal({
                 autoComplete="off"
               />
             </div>
+            {isProjectMode ? (
+              <div className="space-y-2">
+                <Label htmlFor="inv-co">Company (optional)</Label>
+                <Input
+                  id="inv-co"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Trading or legal name"
+                  autoComplete="organization"
+                />
+              </div>
+            ) : null}
             <div className="space-y-2">
-              <Label>Role</Label>
+              <Label>{isProjectMode ? 'Role (optional)' : 'Role'}</Label>
               <Select value={role} onValueChange={(v) => setRole(v as DemoParticipantRole)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Introducer">Introducer</SelectItem>
-                  <SelectItem value="Connector">Connector</SelectItem>
-                  <SelectItem value="Closer">Closer</SelectItem>
-                  <SelectItem value="Contributor">Contributor</SelectItem>
+                  {isProjectMode ? (
+                    <>
+                      <SelectItem value="Contributor">Participant</SelectItem>
+                      <SelectItem value="Connector">Coordinator</SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="Introducer">Introducer</SelectItem>
+                      <SelectItem value="Connector">Connector</SelectItem>
+                      <SelectItem value="Closer">Closer</SelectItem>
+                      <SelectItem value="Contributor">Contributor</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
-              <div>
-                <p className="text-sm font-medium">Agreement details</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Shown on the invite approval page as a lightweight role and payout context (pilot demo).
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="inv-role-details">Role details / scope of work</Label>
-                <Textarea
-                  id="inv-role-details"
-                  value={roleDetails}
-                  onChange={(e) => setRoleDetails(e.target.value)}
-                  placeholder="What this person is responsible for and how it ties to the deal."
-                  rows={4}
-                  required
-                  className="min-h-[88px] resize-y"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="inv-payout-condition">Payout condition</Label>
-                <Textarea
-                  id="inv-payout-condition"
-                  value={payoutCondition}
-                  onChange={(e) => setPayoutCondition(e.target.value)}
-                  placeholder="e.g. When deal closes and payment is received; subject to partner approval."
-                  rows={3}
-                  required
-                  className="min-h-[72px] resize-y"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="inv-agreement-notes">Notes (optional)</Label>
-                <Textarea
-                  id="inv-agreement-notes"
-                  value={agreementNotes}
-                  onChange={(e) => setAgreementNotes(e.target.value)}
-                  placeholder="Any extra context for the participant."
-                  rows={2}
-                  className="resize-y"
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="inv-attachment-url">Attachment / reference (URL, optional)</Label>
+            {isProjectMode ? (
+              <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
+                <p className="text-sm font-medium">Participant details</p>
+                <div className="space-y-2">
+                  <Label htmlFor="inv-due">Payout due date (optional)</Label>
                   <Input
-                    id="inv-attachment-url"
-                    type="url"
-                    inputMode="url"
-                    value={attachmentUrl}
-                    onChange={(e) => setAttachmentUrl(e.target.value)}
-                    placeholder="https://…"
+                    id="inv-due"
+                    type="date"
+                    value={payoutDueDate}
+                    onChange={(e) => setPayoutDueDate(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="inv-attachment-label">Link label (optional)</Label>
-                  <Input
-                    id="inv-attachment-label"
-                    value={attachmentLabel}
-                    onChange={(e) => setAttachmentLabel(e.target.value)}
-                    placeholder="e.g. SOW excerpt, rate card"
+                <div className="space-y-2">
+                  <Label htmlFor="inv-pnotes">Notes (optional)</Label>
+                  <Textarea
+                    id="inv-pnotes"
+                    value={participantNotes}
+                    onChange={(e) => setParticipantNotes(e.target.value)}
+                    placeholder="Internal notes — milestones, contractor context, or payment expectations."
+                    rows={3}
+                    className="resize-y"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inv-role-details-p">Scope (optional)</Label>
+                  <Textarea
+                    id="inv-role-details-p"
+                    value={roleDetails}
+                    onChange={(e) => setRoleDetails(e.target.value)}
+                    placeholder="What this participant is delivering, if you want it recorded."
+                    rows={2}
+                    className="resize-y"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inv-payout-condition-p">Payout condition (optional)</Label>
+                  <Textarea
+                    id="inv-payout-condition-p"
+                    value={payoutCondition}
+                    onChange={(e) => setPayoutCondition(e.target.value)}
+                    placeholder="e.g. After client payment clears; on invoice approval."
+                    rows={2}
+                    className="resize-y"
                   />
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
+                <div>
+                  <p className="text-sm font-medium">Agreement details</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Shown on the invite approval page as a lightweight role and payout context (pilot demo).
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inv-role-details">Role details / scope of work</Label>
+                  <Textarea
+                    id="inv-role-details"
+                    value={roleDetails}
+                    onChange={(e) => setRoleDetails(e.target.value)}
+                    placeholder="What this person is responsible for and how it ties to the deal."
+                    rows={4}
+                    required
+                    className="min-h-[88px] resize-y"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inv-payout-condition">Payout condition</Label>
+                  <Textarea
+                    id="inv-payout-condition"
+                    value={payoutCondition}
+                    onChange={(e) => setPayoutCondition(e.target.value)}
+                    placeholder="e.g. When deal closes and payment is received; subject to partner approval."
+                    rows={3}
+                    required
+                    className="min-h-[72px] resize-y"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inv-agreement-notes">Notes (optional)</Label>
+                  <Textarea
+                    id="inv-agreement-notes"
+                    value={agreementNotes}
+                    onChange={(e) => setAgreementNotes(e.target.value)}
+                    placeholder="Any extra context for the participant."
+                    rows={2}
+                    className="resize-y"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="inv-attachment-url">Attachment / reference (URL, optional)</Label>
+                    <Input
+                      id="inv-attachment-url"
+                      type="url"
+                      inputMode="url"
+                      value={attachmentUrl}
+                      onChange={(e) => setAttachmentUrl(e.target.value)}
+                      placeholder="https://…"
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="inv-attachment-label">Link label (optional)</Label>
+                    <Input
+                      id="inv-attachment-label"
+                      value={attachmentLabel}
+                      onChange={(e) => setAttachmentLabel(e.target.value)}
+                      placeholder="e.g. SOW excerpt, rate card"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
               <div className="space-y-2">
@@ -468,7 +781,7 @@ export function InviteParticipantModal({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {COMMISSION_STRUCTURE_OPTIONS.map((o) => (
+                    {commissionStructureSelectOptions.map((o) => (
                       <SelectItem key={o.value} value={o.value}>
                         {o.label}
                       </SelectItem>
@@ -479,7 +792,9 @@ export function InviteParticipantModal({
 
               {commissionKind === 'pct_deal_value' ? (
                 <div className="space-y-2">
-                  <Label htmlFor="inv-pct-deal">Percentage of deal value</Label>
+                  <Label htmlFor="inv-pct-deal">
+                    {isProjectMode ? 'Percentage of project value' : 'Percentage of deal value'}
+                  </Label>
                   <Input
                     id="inv-pct-deal"
                     type="number"
@@ -494,12 +809,14 @@ export function InviteParticipantModal({
 
               {commissionKind === 'fixed_amount' ? (
                 <div className="space-y-2">
-                  <Label htmlFor="inv-fixed">Fixed amount (USD)</Label>
+                  <Label htmlFor="inv-fixed">
+                    {isProjectMode ? 'Fixed payout amount (AUD)' : 'Fixed amount (USD)'}
+                  </Label>
                   <Input
                     id="inv-fixed"
                     type="number"
                     min={0}
-                    step={100}
+                    step="any"
                     value={commissionValue}
                     onChange={(e) => setCommissionValue(e.target.value)}
                     required
@@ -510,22 +827,48 @@ export function InviteParticipantModal({
               {commissionKind === 'pct_of_participant' ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Base participant</Label>
-                    <Select
-                      value={baseParticipant}
-                      onValueChange={(v) => setBaseParticipant(v as BaseParticipantSlot)}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BASE_PARTICIPANT_OPTIONS.map((o) => (
-                          <SelectItem key={o.value} value={o.value}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>{isProjectMode ? 'Base participant' : 'Deal role pool'}</Label>
+                    {isProjectMode ? (
+                      commissionBaseParticipantOptions.length === 0 ? (
+                        <p className="text-sm text-muted-foreground rounded-md border bg-muted/30 p-2">
+                          Add at least one other participant to this deal before using percentage-of-participant.
+                        </p>
+                      ) : (
+                        <Select
+                          value={commissionBaseParticipantId}
+                          onValueChange={(v) => setCommissionBaseParticipantId(v)}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select participant" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {commissionBaseParticipantOptions.map((o) => (
+                              <SelectItem key={o.id} value={o.id}>
+                                {o.companyName?.trim()
+                                  ? `${o.name.trim()} (${o.companyName.trim()})`
+                                  : o.name.trim()}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )
+                    ) : (
+                      <Select
+                        value={baseParticipant}
+                        onValueChange={(v) => setBaseParticipant(v as BaseParticipantSlot)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {BASE_PARTICIPANT_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="inv-pct-base">Percentage of base</Label>
@@ -533,7 +876,7 @@ export function InviteParticipantModal({
                       id="inv-pct-base"
                       type="number"
                       min={0}
-                      step={0.5}
+                      step="any"
                       value={commissionValue}
                       onChange={(e) => setCommissionValue(e.target.value)}
                       required
@@ -564,7 +907,8 @@ export function InviteParticipantModal({
                 </p>
                 <p className="text-foreground">{preview.previewLine}</p>
                 <p className="mt-1 font-semibold tabular-nums">
-                  Resolved (demo): ${preview.total.toLocaleString()}
+                  Resolved (demo):{' '}
+                  {isProjectMode ? `$${preview.total.toLocaleString()} AUD` : `$${preview.total.toLocaleString()}`}
                 </p>
                 {preview.error ? (
                   <p className="mt-1 text-xs text-destructive">{preview.error}</p>
@@ -577,7 +921,12 @@ export function InviteParticipantModal({
               <Button type="button" variant="outline" onClick={requestClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={!preview.valid || preview.total <= 0}>
+              <Button
+                type="submit"
+                disabled={
+                  isProjectMode ? !preview.valid : !preview.valid || preview.total <= 0
+                }
+              >
                 Invite Participant
               </Button>
             </DialogFooter>

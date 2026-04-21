@@ -4,7 +4,7 @@
  *
  * The returned `toast` function is stable across renders so it is safe to omit from
  * useCallback/useEffect dependency arrays (unstable toast caused infinite refetch loops).
- */
+  */
 
 import * as React from 'react';
 import { toast as sonnerToast } from 'sonner';

@@ -38,6 +38,7 @@ import {
   Eye,
   Archive,
   Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -58,7 +59,10 @@ import {
   resolvePreviewDeal,
 } from '@/lib/deal-network-demo/active-deal-resolution';
 import { computePipelineMetrics, formatUsdCompact } from '@/lib/deal-network-demo/pipeline-metrics';
-import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
+import {
+  resolveParticipantCommissionUsd,
+  computeJointTotalsByDealId,
+} from '@/lib/deal-network-demo/commission-structure';
 import { CreateDealModal } from '@/components/deal-network-demo/create-deal-modal';
 import {
   InviteParticipantModal,
@@ -68,8 +72,8 @@ import {
   ExportPayoutsModal,
   buildExportPayoutRows,
 } from '@/components/deal-network-demo/export-payouts-modal';
-import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
 import { DealNetworkCopilotPanel } from '@/components/deal-network-copilot/deal-network-copilot-panel';
+import { useDealNetworkExperience } from '@/components/deal-network-demo/deal-network-experience-provider';
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import {
   dedupeParticipantsForDisplay,
@@ -102,6 +106,17 @@ import {
   effectiveParticipantPayoutStatus,
   type ParticipantPayoutSettlementStatus,
 } from '@/lib/deal-network-demo/participant-payout-status';
+import {
+  effectiveOnboardingStatus,
+  isApprovedButNotOnboarded,
+  onboardingStatusLabel,
+  isPilotInternalParticipantId,
+  type PilotParticipantOnboardingStatus,
+} from '@/lib/deal-network-demo/participant-onboarding';
+import { useOrganization } from '@/hooks/use-organization';
+import { useToast } from '@/hooks/use-toast';
+import { CreatePaymentLinkDialog } from '@/components/payment-links/create-payment-link-dialog';
+import { Progress } from '@/components/ui/progress';
 
 function getStatusVariant(
   status: DealStatus
@@ -130,7 +145,40 @@ function getPaymentVariant(
   return status === 'Paid' ? 'success' : 'outline';
 }
 
+function formatDealCurrency(amount: number, deal?: RecentDeal | null): string {
+  if (deal?.projectValueCurrency === 'AUD') {
+    return `$${amount.toLocaleString('en-AU')} AUD`;
+  }
+  return `$${amount.toLocaleString()}`;
+}
+
+type ProjectFundingSummaryResponse = {
+  straitProject: boolean;
+  fundedTotal: number;
+  owedTotal: number;
+  projectFundingStatus: 'UNFUNDED' | 'PARTIALLY_FUNDED' | 'FUNDED';
+  linkedInvoiceCount: number;
+};
+
+function projectFundingStatusBadgeVariant(
+  s: ProjectFundingSummaryResponse['projectFundingStatus']
+): 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'info' | 'outline' {
+  if (s === 'FUNDED') return 'success';
+  if (s === 'PARTIALLY_FUNDED') return 'warning';
+  return 'outline';
+}
+
+function projectFundingStatusLabel(s: ProjectFundingSummaryResponse['projectFundingStatus']): string {
+  if (s === 'FUNDED') return 'Funded';
+  if (s === 'PARTIALLY_FUNDED') return 'Partially funded';
+  return 'Unfunded';
+}
+
 export default function DealNetworkPage() {
+  const { toast } = useToast();
+  const { organizationId } = useOrganization();
+  const { profile: dashboardProfile, dealNetworkExperienceMode } = useDealNetworkExperience();
+  const isProjectMode = dealNetworkExperienceMode === 'project';
   const [pilotHydrated, setPilotHydrated] = React.useState(false);
   const [deals, setDeals] = React.useState<RecentDeal[]>([]);
   /** User preference + session-restored id; may be invalid until synced with `deals`. */
@@ -163,22 +211,12 @@ export default function DealNetworkPage() {
   const [editOpen, setEditOpen] = React.useState(false);
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
-  const [dashboardProfile, setDashboardProfile] = React.useState<DashboardProductProfile | null>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    void fetch('/api/copilot/session')
-      .then((r) => r.json())
-      .then((d: { profile: DashboardProductProfile }) => {
-        if (!cancelled) setDashboardProfile(d.profile);
-      })
-      .catch(() => {
-        if (!cancelled) setDashboardProfile(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [projectInvoiceOpen, setProjectInvoiceOpen] = React.useState(false);
+  const [attachInvoiceInput, setAttachInvoiceInput] = React.useState('');
+  const [attachInvoiceBusy, setAttachInvoiceBusy] = React.useState(false);
+  const [projectFundingSummary, setProjectFundingSummary] =
+    React.useState<ProjectFundingSummaryResponse | null>(null);
+  const [fundingFetchSeq, setFundingFetchSeq] = React.useState(0);
 
   const resolvedActiveDealId = React.useMemo(
     () => resolveActiveDealId(deals, preferredDealId),
@@ -192,19 +230,23 @@ export default function DealNetworkPage() {
   );
 
   const featured = React.useMemo(() => {
-    if (activeDeal) return recentDealToFeatured(activeDeal);
-    return recentDealToFeatured({
-      id: '__placeholder__',
-      dealName: 'No deal yet',
-      partner: '—',
-      value: 0,
-      introducer: '',
-      closer: '',
-      status: 'Pending',
-      lastUpdated: new Date().toISOString(),
-      paymentStatus: 'Not Paid',
-    });
-  }, [activeDeal, pilotHydrated]);
+    const pm = { projectMode: isProjectMode } as const;
+    if (activeDeal) return recentDealToFeatured(activeDeal, pm);
+    return recentDealToFeatured(
+      {
+        id: '__placeholder__',
+        dealName: isProjectMode ? 'No project yet' : 'No deal yet',
+        partner: '—',
+        value: 0,
+        introducer: '',
+        closer: '',
+        status: 'Pending',
+        lastUpdated: new Date().toISOString(),
+        paymentStatus: 'Not Paid',
+      },
+      pm
+    );
+  }, [activeDeal, pilotHydrated, isProjectMode]);
 
   const activeParticipants = React.useMemo(() => {
     const raw = participants.filter(
@@ -213,8 +255,15 @@ export default function DealNetworkPage() {
         (p.dealId == null && p.dealName === activeDeal?.dealName)
     );
     if (!activeDeal) return [];
-    return dedupeParticipantsForDisplay(raw);
-  }, [participants, activeDeal]);
+    const deduped = dedupeParticipantsForDisplay(raw);
+    if (!isProjectMode) return deduped;
+    return deduped.filter((p) => !p.id.startsWith('internal-'));
+  }, [participants, activeDeal, isProjectMode]);
+
+  const onboardingPayoutGateBlocked = React.useMemo(
+    () => activeParticipants.some((p) => isApprovedButNotOnboarded(p)),
+    [activeParticipants]
+  );
 
   const participantsForActiveDealForInviteCheck = React.useMemo(() => {
     if (!activeDeal) return [];
@@ -238,6 +287,22 @@ export default function DealNetworkPage() {
     }
     return dups;
   }, [activeParticipants, activeDeal]);
+
+  /** Joint %-of-participant resolution per deal (matches obligations / export). */
+  const pilotJointByDealId = React.useMemo(
+    () => computeJointTotalsByDealId(deals, participants),
+    [deals, participants]
+  );
+
+  const commissionBaseParticipantOptions = React.useMemo(
+    () =>
+      activeParticipants.map((p) => ({
+        id: p.id,
+        name: p.name,
+        companyName: p.companyName,
+      })),
+    [activeParticipants]
+  );
 
   const removeTargetParticipant = React.useMemo(() => {
     if (!removeParticipantTargetId) return null;
@@ -291,11 +356,13 @@ export default function DealNetworkPage() {
       if (!p.dealId) continue;
       const deal = deals.find((d) => d.id === p.dealId);
       if (!deal || deal.archived) continue;
+      const joint = pilotJointByDealId.get(p.dealId);
       const payout = resolveParticipantCommissionUsd(
         {
           commissionKind: p.commissionKind,
           commissionValue: p.commissionValue,
           baseParticipant: p.baseParticipant,
+          commissionBaseParticipantId: p.commissionBaseParticipantId,
           formulaExpression: p.formulaExpression,
         },
         deal.value,
@@ -303,7 +370,14 @@ export default function DealNetworkPage() {
           Introducer: deal.introducerAmount,
           Closer: deal.closerAmount,
           Platform: deal.platformFee,
-        }
+        },
+        joint
+          ? {
+              participantTotals: joint.totals,
+              participantLabels: joint.labels,
+              resolvingParticipantId: p.id,
+            }
+          : undefined
       ).total;
       if (payout <= 0) continue;
       const key = p.name.trim() || 'Unknown';
@@ -323,7 +397,7 @@ export default function DealNetworkPage() {
       }))
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 6);
-  }, [deals, participants]);
+  }, [deals, participants, pilotJointByDealId]);
 
   const exportData = React.useMemo(
     () => buildExportPayoutRows(activePipelineDeals, participants),
@@ -437,6 +511,7 @@ export default function DealNetworkPage() {
           payoutSettlementStatus: prev?.payoutSettlementStatus,
           payoutPaidAt: prev?.payoutPaidAt,
           payoutStatusNote: prev?.payoutStatusNote,
+          onboardingStatus: prev?.onboardingStatus ?? 'COMPLETE',
         };
 
         if (idx >= 0) {
@@ -467,6 +542,95 @@ export default function DealNetworkPage() {
       // Non-blocking pilot refresh; obligations page can still be manually refreshed.
     }
   }, []);
+
+  const bumpFundingFetch = React.useCallback(() => {
+    setFundingFetchSeq((n) => n + 1);
+  }, []);
+
+  const attachInvoiceToProject = React.useCallback(async () => {
+    if (!activeDeal?.id || activeDeal.id === '__placeholder__') return;
+    const raw = attachInvoiceInput.trim();
+    if (!raw) {
+      toast({ title: 'Paste an invoice link or ID', variant: 'destructive' });
+      return;
+    }
+    setAttachInvoiceBusy(true);
+    try {
+      const r = await fetch(
+        `/api/deal-network-pilot/deals/${encodeURIComponent(activeDeal.id)}/attach-invoice`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentUrlOrCode: raw }),
+        }
+      );
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body.error || 'Could not attach invoice');
+      }
+      toast({ title: 'Invoice linked to project' });
+      setAttachInvoiceInput('');
+      void refreshPilotObligations(activeDeal.id);
+      bumpFundingFetch();
+    } catch (e) {
+      toast({
+        title: 'Attach failed',
+        description: e instanceof Error ? e.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setAttachInvoiceBusy(false);
+    }
+  }, [
+    activeDeal?.id,
+    attachInvoiceInput,
+    bumpFundingFetch,
+    refreshPilotObligations,
+    toast,
+  ]);
+
+  const projectFundingCopilotLine = React.useMemo(() => {
+    if (
+      !isProjectMode ||
+      activeDeal?.projectValueCurrency !== 'AUD' ||
+      !projectFundingSummary?.straitProject
+    ) {
+      return undefined;
+    }
+    const { fundedTotal, owedTotal, projectFundingStatus, linkedInvoiceCount } =
+      projectFundingSummary;
+    return `${projectFundingStatusLabel(projectFundingStatus)} — ${formatDealCurrency(fundedTotal, activeDeal)} of ${formatDealCurrency(owedTotal, activeDeal)} on linked invoices · ${linkedInvoiceCount} linked`;
+  }, [isProjectMode, activeDeal, projectFundingSummary]);
+
+  React.useEffect(() => {
+    if (
+      !isProjectMode ||
+      !pilotHydrated ||
+      !activeDeal?.id ||
+      activeDeal.id === '__placeholder__'
+    ) {
+      setProjectFundingSummary(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch(
+          `/api/deal-network-pilot/deals/${encodeURIComponent(activeDeal.id)}/funding-summary`,
+          { credentials: 'include' }
+        );
+        if (!r.ok || cancelled) return;
+        const data = (await r.json()) as ProjectFundingSummaryResponse;
+        if (!cancelled) setProjectFundingSummary(data);
+      } catch {
+        if (!cancelled) setProjectFundingSummary(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isProjectMode, pilotHydrated, activeDeal?.id, fundingFetchSeq]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -610,6 +774,18 @@ export default function DealNetworkPage() {
     );
   }, []);
 
+  const setParticipantOnboardingStatus = React.useCallback(
+    (participantId: string, onboardingStatus: PilotParticipantOnboardingStatus) => {
+      setParticipants((prev) =>
+        prev.map((p) => (p.id === participantId ? { ...p, onboardingStatus } : p))
+      );
+      if (activeDeal?.id && activeDeal.id !== '__placeholder__') {
+        void refreshPilotObligations(activeDeal.id);
+      }
+    },
+    [activeDeal?.id, refreshPilotObligations]
+  );
+
   const markContractPaid = React.useCallback(() => {
     if (!activeDeal) return;
     if (activeDeal.paymentStatus === 'Paid') return;
@@ -719,15 +895,17 @@ export default function DealNetworkPage() {
       <div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">Commission Operations</h1>
-            <Badge variant="secondary">Pilot</Badge>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {isProjectMode ? 'Projects' : 'Commission Operations'}
+            </h1>
+            <Badge variant="secondary">{isProjectMode ? 'Projects' : 'Pilot'}</Badge>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Button type="button" variant="outline" size="sm" asChild>
               <Link href="/dashboard/payment-links">Invoice dashboard</Link>
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => setResetWorkspaceOpen(true)}>
-              Reset pilot data
+              {isProjectMode ? 'Reset workspace' : 'Reset pilot data'}
             </Button>
             <Button
               type="button"
@@ -738,15 +916,19 @@ export default function DealNetworkPage() {
               }}
             >
               <Plus className="h-4 w-4 mr-1" />
-              Create Deal
+              {isProjectMode ? 'Create project' : 'Create Deal'}
             </Button>
           </div>
         </div>
         <p className="text-sm font-medium text-foreground mb-1">
-          Attribution, commission entitlements, and payout state across your deal network—in one place.
+          {isProjectMode
+            ? 'Coordinate contractor payouts, optional funding links, and participant status in one place.'
+            : 'Attribution, commission entitlements, and payout state across your deal network—in one place.'}
         </p>
         <p className="text-muted-foreground text-sm">
-          Multi-party deal tracking and payout transparency for high-trust networks. Provvypay powers BD and referral commission ops end-to-end.
+          {isProjectMode
+            ? 'Project-based payout coordination for real-world delivery and contractor workflows.'
+            : 'Multi-party deal tracking and payout transparency for high-trust networks. Provvypay powers BD and referral commission ops end-to-end.'}
         </p>
         <Alert className="mt-4 border-amber-200/80 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900/50">
           <Shield className="text-amber-700 dark:text-amber-500" aria-hidden />
@@ -768,15 +950,26 @@ export default function DealNetworkPage() {
             <div>
               <div className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" aria-hidden />
-                <CardTitle className="text-xl">Active deal</CardTitle>
+                <CardTitle className="text-xl">{isProjectMode ? 'Active project' : 'Active deal'}</CardTitle>
               </div>
               <CardDescription className="mt-2">
-                Active deal from your pipeline: attribution, commission pool preview, invites, and payout actions stay scoped to this selection.
+                {isProjectMode
+                  ? 'Active project from your list: participant invites and payout actions stay scoped to this selection.'
+                  : 'Active deal from your pipeline: attribution, commission pool preview, invites, and payout actions stay scoped to this selection.'}
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Deal Status</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {isProjectMode ? 'Project status' : 'Deal Status'}
+              </span>
               <Badge variant={getStatusVariant(featured.status)}>{featured.status}</Badge>
+              {isProjectMode &&
+              activeDeal?.projectValueCurrency === 'AUD' &&
+              projectFundingSummary?.straitProject ? (
+                <Badge variant={projectFundingStatusBadgeVariant(projectFundingSummary.projectFundingStatus)}>
+                  Funding: {projectFundingStatusLabel(projectFundingSummary.projectFundingStatus)}
+                </Badge>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -795,7 +988,7 @@ export default function DealNetworkPage() {
                 disabled={!activeDeal || activeDeal.id === '__placeholder__'}
               >
                 <Pencil className="h-4 w-4 mr-1" />
-                Edit deal
+                {isProjectMode ? 'Edit project' : 'Edit deal'}
               </Button>
               <Button
                 type="button"
@@ -837,15 +1030,23 @@ export default function DealNetworkPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="rounded-lg border bg-background/60 p-4">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Deal details</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              {isProjectMode ? 'Project details' : 'Deal details'}
+            </p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Deal</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {isProjectMode ? 'Project' : 'Deal'}
+                </p>
                 <p className="font-semibold text-foreground">{featured.name}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Deal value</p>
-                <p className="font-semibold text-foreground">${featured.dealValue.toLocaleString()}</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {isProjectMode ? 'Project value' : 'Deal value'}
+                </p>
+                <p className="font-semibold text-foreground">
+                  {formatDealCurrency(featured.dealValue, activeDeal)}
+                </p>
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Payout trigger</p>
@@ -856,14 +1057,98 @@ export default function DealNetworkPage() {
                 <p className="font-semibold text-foreground">{featured.partner}</p>
               </div>
             </div>
-            {activeDeal?.rhContactLine ? (
+            {!isProjectMode && activeDeal?.rhContactLine ? (
               <div className="mt-4 pt-4 border-t border-border/60">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Contact</p>
                 <p className="font-semibold text-foreground mt-1">{activeDeal.rhContactLine}</p>
               </div>
             ) : null}
+            {isProjectMode && activeDeal?.projectDescription?.trim() ? (
+              <div className="mt-4 pt-4 border-t border-border/60">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</p>
+                <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
+                  {activeDeal.projectDescription}
+                </p>
+              </div>
+            ) : null}
+            {isProjectMode &&
+            activeDeal?.id &&
+            activeDeal.id !== '__placeholder__' &&
+            activeDeal.projectValueCurrency === 'AUD' &&
+            projectFundingSummary?.straitProject ? (
+              <div className="mt-4 pt-4 border-t border-border/60 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Invoices & funding
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={!organizationId}
+                    onClick={() => setProjectInvoiceOpen(true)}
+                  >
+                    <CreditCard className="h-4 w-4 mr-1" aria-hidden />
+                    Create invoice from project
+                  </Button>
+                </div>
+                {!organizationId ? (
+                  <p className="text-xs text-muted-foreground">
+                    Select an organization in Payment Links to create invoices from here.
+                  </p>
+                ) : null}
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+                  <div className="space-y-1">
+                    <Label htmlFor="attach-invoice-url" className="text-xs">
+                      Attach existing invoice (URL, short code, or payment link ID)
+                    </Label>
+                    <Input
+                      id="attach-invoice-url"
+                      value={attachInvoiceInput}
+                      onChange={(e) => setAttachInvoiceInput(e.target.value)}
+                      placeholder="https://…/pay/abcd12 or abcd12"
+                      disabled={attachInvoiceBusy}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={attachInvoiceBusy}
+                    onClick={() => void attachInvoiceToProject()}
+                  >
+                    {attachInvoiceBusy ? 'Linking…' : 'Attach'}
+                  </Button>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Recorded on linked invoices</span>
+                    <span className="font-medium text-foreground">
+                      {formatDealCurrency(projectFundingSummary.fundedTotal, activeDeal)} /{' '}
+                      {formatDealCurrency(projectFundingSummary.owedTotal, activeDeal)}
+                    </span>
+                  </div>
+                  <Progress
+                    value={
+                      projectFundingSummary.owedTotal > 0
+                        ? Math.min(
+                            100,
+                            (projectFundingSummary.fundedTotal / projectFundingSummary.owedTotal) * 100
+                          )
+                        : 0
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {projectFundingSummary.linkedInvoiceCount} linked invoice
+                    {projectFundingSummary.linkedInvoiceCount === 1 ? '' : 's'}. Obligations refresh when you link
+                    invoices or payments post.
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
 
+          {!isProjectMode ? (
           <div className="rounded-lg border bg-background/60 p-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Deal progress</p>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -921,7 +1206,9 @@ export default function DealNetworkPage() {
               ) : null}
             </div>
           </div>
+          ) : null}
 
+          {!isProjectMode ? (
           <div className="rounded-lg border bg-background/60 p-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Attributed roles</p>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -939,11 +1226,18 @@ export default function DealNetworkPage() {
               </div>
             </div>
           </div>
+          ) : null}
 
           <div className="rounded-lg border bg-background/60 p-4">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Commission entitlements</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              {isProjectMode ? 'Payout amounts' : 'Commission entitlements'}
+            </p>
             {featured.commissionSplits.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No commission structure defined yet.</p>
+              <p className="text-sm text-muted-foreground">
+                {isProjectMode
+                  ? 'No fixed pool lines on this project yet — use participant invites for payout splits.'
+                  : 'No commission structure defined yet.'}
+              </p>
             ) : (
               <div className="flex flex-wrap gap-3">
                 {featured.commissionSplits.map((split) => (
@@ -1017,7 +1311,7 @@ export default function DealNetworkPage() {
               ) : null}
               {typeof activeDeal?.paidAmount === 'number' ? (
                 <p className="text-sm text-muted-foreground">
-                  Amount paid: ${activeDeal.paidAmount.toLocaleString()}
+                  Amount paid: {formatDealCurrency(activeDeal.paidAmount, activeDeal)}
                 </p>
               ) : null}
               {activeDeal?.paidAt ? (
@@ -1039,20 +1333,44 @@ export default function DealNetworkPage() {
             <Alert className="border-amber-200/80 bg-amber-50/50 dark:bg-amber-950/20">
               <AlertTitle className="text-amber-900 dark:text-amber-100">Possible duplicate payout parties</AlertTitle>
               <AlertDescription className="text-amber-900/90 dark:text-amber-100/90">
-                The same name appears more than once for a role on this deal (
-                {duplicateParticipantWarnings.join('; ')}). New invites for Introducer/Closer now merge with the deal
-                role when the name matches. Use Edit deal to fix attribution, or remove stray invites from the list
-                by adjusting roles.
+                {isProjectMode ? (
+                  <>
+                    The same name appears more than once for a role on this project (
+                    {duplicateParticipantWarnings.join('; ')}). Review participant rows or merge duplicates from the
+                    invite flow.
+                  </>
+                ) : (
+                  <>
+                    The same name appears more than once for a role on this deal (
+                    {duplicateParticipantWarnings.join('; ')}). New invites for Introducer/Closer now merge with the deal
+                    role when the name matches. Use Edit deal to fix attribution, or remove stray invites from the list
+                    by adjusting roles.
+                  </>
+                )}
               </AlertDescription>
             </Alert>
           ) : null}
 
-          {(activeParticipants.length > 0 || typeof activeDeal?.platformFee === 'number') && (
+          {(activeParticipants.length > 0 ||
+            (!isProjectMode && typeof activeDeal?.platformFee === 'number')) && (
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+              {onboardingPayoutGateBlocked ? (
+                <Alert className="border-amber-300/90 bg-amber-50/90 dark:border-amber-800/80 dark:bg-amber-950/40">
+                  <AlertTriangle className="h-4 w-4 text-amber-800 dark:text-amber-400" aria-hidden />
+                  <AlertTitle className="text-amber-950 dark:text-amber-100">
+                    Payout cannot be executed until onboarding is complete
+                  </AlertTitle>
+                  <AlertDescription className="text-amber-900/95 dark:text-amber-100/90">
+                    One or more participants are <strong>approved</strong> for allocation but still need{' '}
+                    <strong>onboarding</strong> (KYC / payout profile). Finish onboarding for each line before
+                    releasing funds.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2 justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Deal payout parties
+                    {isProjectMode ? 'Project payout parties' : 'Deal payout parties'}
                   </span>
                   <Badge variant="outline" className="font-medium border-primary/40 bg-background">
                     {featured.name}
@@ -1061,18 +1379,28 @@ export default function DealNetworkPage() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Introducer/Closer roles and invited participants approve through their invite link.
+                {isProjectMode
+                  ? 'Invited participants review and approve through their invite link.'
+                  : 'Introducer/Closer roles and invited participants approve through their invite link.'}
               </p>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Deal</TableHead>
+                    <TableHead>{isProjectMode ? 'Project' : 'Deal'}</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
+                    {isProjectMode ? <TableHead>Company</TableHead> : null}
                     <TableHead>Role</TableHead>
+                    {isProjectMode ? (
+                      <>
+                        <TableHead>Payout due</TableHead>
+                        <TableHead>Notes</TableHead>
+                      </>
+                    ) : null}
                     <TableHead>Commission</TableHead>
                     <TableHead>Invite</TableHead>
                     <TableHead>Approval</TableHead>
+                    <TableHead>Onboarding</TableHead>
                     <TableHead>Payout status</TableHead>
                     <TableHead>Payout settled</TableHead>
                     <TableHead>Approved at</TableHead>
@@ -1093,17 +1421,44 @@ export default function DealNetworkPage() {
                       <TableCell className="text-muted-foreground text-sm">
                         {p.email?.trim() ? p.email : '—'}
                       </TableCell>
+                      {isProjectMode ? (
+                        <TableCell className="text-muted-foreground text-sm">
+                          {p.companyName?.trim() ? p.companyName : '—'}
+                        </TableCell>
+                      ) : null}
                       <TableCell>{p.role}</TableCell>
+                      {isProjectMode ? (
+                        <>
+                          <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
+                            {p.payoutDueDate?.trim()
+                              ? p.payoutDueDate.length >= 10
+                                ? p.payoutDueDate.slice(0, 10)
+                                : p.payoutDueDate
+                              : '—'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm max-w-[140px]">
+                            <span className="line-clamp-2" title={p.participantNotes ?? ''}>
+                              {p.participantNotes?.trim() ? p.participantNotes : '—'}
+                            </span>
+                          </TableCell>
+                        </>
+                      ) : null}
                       <TableCell>
                         {(() => {
                           if (!activeDeal) {
-                            return <span className="text-sm text-muted-foreground">No deal selected</span>;
+                            return (
+                              <span className="text-sm text-muted-foreground">
+                                {isProjectMode ? 'No project selected' : 'No deal selected'}
+                              </span>
+                            );
                           }
+                          const joint = pilotJointByDealId.get(activeDeal.id);
                           const payout = resolveParticipantCommissionUsd(
                             {
                               commissionKind: p.commissionKind,
                               commissionValue: p.commissionValue,
                               baseParticipant: p.baseParticipant,
+                              commissionBaseParticipantId: p.commissionBaseParticipantId,
                               formulaExpression: p.formulaExpression,
                             },
                             activeDeal.value,
@@ -1111,15 +1466,28 @@ export default function DealNetworkPage() {
                               Introducer: activeDeal.introducerAmount,
                               Closer: activeDeal.closerAmount,
                               Platform: activeDeal.platformFee,
-                            }
+                            },
+                            joint
+                              ? {
+                                  participantTotals: joint.totals,
+                                  participantLabels: joint.labels,
+                                  resolvingParticipantId: p.id,
+                                }
+                              : undefined
                           );
                           if (payout.total <= 0) {
-                            return <span className="text-sm text-muted-foreground">No commission structure defined</span>;
+                            return (
+                              <span className="text-sm text-muted-foreground">
+                                {isProjectMode ? 'No payout amount set' : 'No commission structure defined'}
+                              </span>
+                            );
                           }
                           return (
                             <div className="space-y-0.5">
                               <span className="text-xs text-muted-foreground block">{payout.previewLine}</span>
-                              <span className="font-medium tabular-nums">${payout.total.toLocaleString()}</span>
+                              <span className="font-medium tabular-nums">
+                                {formatDealCurrency(payout.total, activeDeal)}
+                              </span>
                             </div>
                           );
                         })()}
@@ -1130,9 +1498,46 @@ export default function DealNetworkPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={p.approvalStatus === 'Approved' ? 'success' : 'warning'}>
-                          {p.approvalStatus}
-                        </Badge>
+                        <div className="space-y-1">
+                          <Badge variant={p.approvalStatus === 'Approved' ? 'success' : 'warning'}>
+                            {p.approvalStatus}
+                          </Badge>
+                          {isApprovedButNotOnboarded(p) ? (
+                            <p className="text-[10px] font-medium text-amber-800 dark:text-amber-300 max-w-[140px] leading-tight">
+                              Approved (not onboarded)
+                            </p>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell
+                        className="min-w-[150px]"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {isPilotInternalParticipantId(p.id) ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : (
+                          <Select
+                            value={effectiveOnboardingStatus(p)}
+                            onValueChange={(v) =>
+                              setParticipantOnboardingStatus(p.id, v as PilotParticipantOnboardingStatus)
+                            }
+                          >
+                            <SelectTrigger className="h-8 text-xs" aria-label={`Onboarding for ${p.name}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="NOT_STARTED">Not started</SelectItem>
+                              <SelectItem value="INCOMPLETE">Incomplete</SelectItem>
+                              <SelectItem value="COMPLETE">Complete</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {!isPilotInternalParticipantId(p.id) ? (
+                          <p className="text-[10px] text-muted-foreground mt-1 leading-tight">
+                            {onboardingStatusLabel(effectiveOnboardingStatus(p))}
+                          </p>
+                        ) : null}
                       </TableCell>
                       <TableCell
                         className="min-w-[140px]"
@@ -1210,7 +1615,9 @@ export default function DealNetworkPage() {
                             size="icon"
                             className="h-7 w-7 ml-2 text-destructive hover:text-destructive"
                             title="Remove invited participant"
-                            aria-label={`Remove ${p.name} from this deal`}
+                            aria-label={
+                              isProjectMode ? `Remove ${p.name} from this project` : `Remove ${p.name} from this deal`
+                            }
                             onClick={(e) => {
                               e.stopPropagation();
                               setRemoveParticipantTargetId(p.id);
@@ -1222,7 +1629,7 @@ export default function DealNetworkPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {typeof activeDeal?.platformFee === 'number' ? (
+                  {!isProjectMode && typeof activeDeal?.platformFee === 'number' ? (
                     <TableRow className="hover:bg-muted/60">
                       <TableCell className="font-medium text-muted-foreground text-sm">
                         {activeDeal?.dealName ?? featured.name}
@@ -1277,21 +1684,29 @@ export default function DealNetworkPage() {
 
       {/* Summary KPIs — baseline + pipeline-derived where noted */}
       <div id="deal-network-summary" className="scroll-mt-6">
-        <h2 className="text-lg font-semibold tracking-tight mb-1">Network summary</h2>
+        <h2 className="text-lg font-semibold tracking-tight mb-1">
+          {isProjectMode ? 'Project summary' : 'Network summary'}
+        </h2>
         <p className="text-xs text-muted-foreground mb-3">
-          KPIs reflect your live pilot pipeline only. If there are no deals yet, metrics stay at zero.
+          {isProjectMode
+            ? 'KPIs reflect your live project list only. If there are no projects yet, metrics stay at zero.'
+            : 'KPIs reflect your live pilot pipeline only. If there are no deals yet, metrics stay at zero.'}
         </p>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total deal value</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {isProjectMode ? 'Total project value (AUD)' : 'Total deal value'}
+              </CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
                 {formatUsdCompact(liveSummary.totalDealValue)}
               </div>
-              <p className="text-xs text-muted-foreground">Cumulative attributed deal value</p>
+              <p className="text-xs text-muted-foreground">
+                {isProjectMode ? 'Cumulative project values in your list' : 'Cumulative attributed deal value'}
+              </p>
             </CardContent>
           </Card>
 
@@ -1330,31 +1745,39 @@ export default function DealNetworkPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Referral revenue generated</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {isProjectMode ? 'Paid project value' : 'Referral revenue generated'}
+              </CardTitle>
               <Handshake className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
                 {formatUsdCompact(liveSummary.referralRevenueGenerated)}
               </div>
-              <p className="text-xs text-muted-foreground">From referral-attributed deals</p>
+              <p className="text-xs text-muted-foreground">
+                {isProjectMode ? 'From paid or settled projects' : 'From referral-attributed deals'}
+              </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active partners</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {isProjectMode ? 'Active counterparties' : 'Active partners'}
+              </CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{liveSummary.activePartners}</div>
-              <p className="text-xs text-muted-foreground">In deal network</p>
+              <p className="text-xs text-muted-foreground">
+                {isProjectMode ? 'In your project list' : 'In deal network'}
+              </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Open deals</CardTitle>
+              <CardTitle className="text-sm font-medium">{isProjectMode ? 'Open projects' : 'Open deals'}</CardTitle>
               <Briefcase className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -1380,17 +1803,23 @@ export default function DealNetworkPage() {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <CardTitle>Deal pipeline</CardTitle>
+            <CardTitle>{isProjectMode ? 'Project pipeline' : 'Deal pipeline'}</CardTitle>
             <CardDescription>
-              Recent deals—enterprise partners and community or membership-style commissions. Click a row or{' '}
-              <span className="font-medium">View</span> to open it in the detail panel above. Click a settlement badge to advance{' '}
-              <span className="font-medium">Pending → Eligible → Approved → Paid</span> (admin approval step before Paid in production).
+              {isProjectMode
+                ? 'Recent projects and counterparties. Click a row or View to open it above. Click a settlement badge to advance Pending → Eligible → Approved → Paid.'
+                : 'Recent deals—enterprise partners and community or membership-style commissions. Click a row or '}
+              {!isProjectMode ? (
+                <>
+                  <span className="font-medium">View</span> to open it in the detail panel above. Click a settlement badge to advance{' '}
+                  <span className="font-medium">Pending → Eligible → Approved → Paid</span> (admin approval step before Paid in production).
+                </>
+              ) : null}
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
             <Button type="button" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4 mr-1" />
-              Create deal
+              {isProjectMode ? 'Create project' : 'Create deal'}
             </Button>
             <Button type="button" variant="outline" onClick={() => setExportOpen(true)}>
               <Download className="h-4 w-4 mr-1" />
@@ -1407,14 +1836,16 @@ export default function DealNetworkPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Deal name</TableHead>
+                <TableHead>{isProjectMode ? 'Project name' : 'Deal name'}</TableHead>
                 <TableHead>Partner</TableHead>
-                <TableHead className="text-right">Value</TableHead>
-                <TableHead>Stage</TableHead>
-                <TableHead className="max-w-[160px]">Next step</TableHead>
-                <TableHead>Introducer</TableHead>
-                <TableHead>Closer</TableHead>
-                <TableHead className="text-right">Commission</TableHead>
+                <TableHead className="text-right">{isProjectMode ? 'Value (AUD)' : 'Value'}</TableHead>
+                {!isProjectMode ? <TableHead>Stage</TableHead> : null}
+                {!isProjectMode ? (
+                  <TableHead className="max-w-[160px]">Next step</TableHead>
+                ) : null}
+                {!isProjectMode ? <TableHead>Introducer</TableHead> : null}
+                {!isProjectMode ? <TableHead>Closer</TableHead> : null}
+                <TableHead className="text-right">{isProjectMode ? 'Allocated' : 'Commission'}</TableHead>
                 <TableHead>Settlement state</TableHead>
                 <TableHead>Payment</TableHead>
                 <TableHead>Last updated</TableHead>
@@ -1443,33 +1874,38 @@ export default function DealNetworkPage() {
                   <TableCell className="font-medium">{deal.dealName}</TableCell>
                   <TableCell>
                     <span className="font-medium">{deal.partner}</span>
-                    {deal.rhContactLine ? (
+                    {!isProjectMode && deal.rhContactLine ? (
                       <span className="mt-0.5 block text-xs text-muted-foreground">{deal.rhContactLine}</span>
                     ) : null}
-                    {deal.rhGraphIntroducer &&
+                    {!isProjectMode &&
+                    deal.rhGraphIntroducer &&
                     deal.introducer.trim() !== deal.rhGraphIntroducer.trim() ? (
                       <span className="mt-1 block text-xs text-amber-700 dark:text-amber-400">
                         Introducer override — graph: {deal.rhGraphIntroducer}
                       </span>
                     ) : null}
                   </TableCell>
-                  <TableCell className="text-right">${deal.value.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-normal">
-                      {deal.currentStage ?? '—'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="max-w-[160px]">
-                    <span className="line-clamp-2 text-sm text-muted-foreground" title={deal.nextStep ?? ''}>
-                      {deal.nextStep?.trim() ? deal.nextStep : '—'}
-                    </span>
-                  </TableCell>
-                  <TableCell>{deal.introducer}</TableCell>
-                  <TableCell>{deal.closer}</TableCell>
+                  <TableCell className="text-right">{formatDealCurrency(deal.value, deal)}</TableCell>
+                  {!isProjectMode ? (
+                    <TableCell>
+                      <Badge variant="outline" className="font-normal">
+                        {deal.currentStage ?? '—'}
+                      </Badge>
+                    </TableCell>
+                  ) : null}
+                  {!isProjectMode ? (
+                    <TableCell className="max-w-[160px]">
+                      <span className="line-clamp-2 text-sm text-muted-foreground" title={deal.nextStep ?? ''}>
+                        {deal.nextStep?.trim() ? deal.nextStep : '—'}
+                      </span>
+                    </TableCell>
+                  ) : null}
+                  {!isProjectMode ? <TableCell>{deal.introducer}</TableCell> : null}
+                  {!isProjectMode ? <TableCell>{deal.closer}</TableCell> : null}
                   <TableCell className="text-right font-medium">
                     {(() => {
                       const total = getDealCommissionTotal(deal);
-                      return total == null ? '—' : `$${total.toLocaleString()}`;
+                      return total == null ? '—' : formatDealCurrency(total, deal);
                     })()}
                   </TableCell>
                   <TableCell>
@@ -1540,8 +1976,13 @@ export default function DealNetworkPage() {
               ))}
               {activePipelineDeals.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="text-center text-sm text-muted-foreground py-8">
-                    No pilot deals yet. Create your first deal to populate the pipeline and KPI cards.
+                  <TableCell
+                    colSpan={isProjectMode ? 9 : 13}
+                    className="text-center text-sm text-muted-foreground py-8"
+                  >
+                    {isProjectMode
+                      ? 'No projects yet. Create your first project to populate the pipeline and KPI cards.'
+                      : 'No pilot deals yet. Create your first deal to populate the pipeline and KPI cards.'}
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -1550,11 +1991,13 @@ export default function DealNetworkPage() {
 
           {showArchived && archivedDeals.length > 0 ? (
             <div className="mt-6 space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Archived deals</p>
+              <p className="text-sm font-medium text-muted-foreground">
+                {isProjectMode ? 'Archived projects' : 'Archived deals'}
+              </p>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Deal name</TableHead>
+                    <TableHead>{isProjectMode ? 'Project name' : 'Deal name'}</TableHead>
                     <TableHead>Partner</TableHead>
                     <TableHead className="text-right">Value</TableHead>
                     <TableHead className="w-[1%] text-right">Restore</TableHead>
@@ -1565,7 +2008,7 @@ export default function DealNetworkPage() {
                     <TableRow key={`arch-${deal.id}`}>
                       <TableCell className="font-medium">{deal.dealName}</TableCell>
                       <TableCell>{deal.partner}</TableCell>
-                      <TableCell className="text-right">${deal.value.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">{formatDealCurrency(deal.value, deal)}</TableCell>
                       <TableCell className="text-right">
                         <Button type="button" variant="outline" size="sm" onClick={() => restoreDealById(deal.id)}>
                           Restore
@@ -1586,7 +2029,9 @@ export default function DealNetworkPage() {
           <CardHeader>
             <CardTitle className="text-base">Settlement state funnel</CardTitle>
             <CardDescription>
-              Where deals sit in the payout lifecycle: pending → eligible → approved → paid. Approved is the control gate before funds release.
+              {isProjectMode
+                ? 'Where projects sit in the payout lifecycle: pending → eligible → approved → paid. Approved is the control gate before funds release.'
+                : 'Where deals sit in the payout lifecycle: pending → eligible → approved → paid. Approved is the control gate before funds release.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1594,13 +2039,16 @@ export default function DealNetworkPage() {
               {funnel.map((stage) => (
                 <div key={stage.label} className="flex items-center justify-between">
                   <span className="text-sm font-medium">{stage.label}</span>
-                  <span className="text-sm text-muted-foreground">{stage.count} deals</span>
+                  <span className="text-sm text-muted-foreground">
+                    {stage.count} {isProjectMode ? 'projects' : 'deals'}
+                  </span>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
 
+        {!isProjectMode ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Attributed roles</CardTitle>
@@ -1622,12 +2070,15 @@ export default function DealNetworkPage() {
             </div>
           </CardContent>
         </Card>
+        ) : null}
 
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Top earners</CardTitle>
             <CardDescription>
-              Participant totals from your current pilot deals (paid vs pending payout status).
+              {isProjectMode
+                ? 'Participant totals from your current projects (paid vs pending payout status).'
+                : 'Participant totals from your current pilot deals (paid vs pending payout status).'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1655,7 +2106,9 @@ export default function DealNetworkPage() {
           <CardHeader>
             <CardTitle className="text-base">Payout status snapshot</CardTitle>
             <CardDescription>
-              Participant payout lines by current status, scoped to your active pilot deals.
+              {isProjectMode
+                ? 'Participant payout lines by current status, scoped to your active projects.'
+                : 'Participant payout lines by current status, scoped to your active pilot deals.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1690,9 +2143,11 @@ export default function DealNetworkPage() {
       <AlertDialog open={deleteTargetId !== null} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this deal?</AlertDialogTitle>
+            <AlertDialogTitle>{isProjectMode ? 'Delete this project?' : 'Delete this deal?'}</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the deal and its payout party rows from your pilot workspace. This cannot be undone.
+              {isProjectMode
+                ? 'This removes the project and its payout party rows from your workspace. This cannot be undone.'
+                : 'This removes the deal and its payout party rows from your pilot workspace. This cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1713,10 +2168,11 @@ export default function DealNetworkPage() {
       <AlertDialog open={resetWorkspaceOpen} onOpenChange={setResetWorkspaceOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reset pilot workspace?</AlertDialogTitle>
+            <AlertDialogTitle>{isProjectMode ? 'Reset workspace?' : 'Reset pilot workspace?'}</AlertDialogTitle>
             <AlertDialogDescription>
-              This clears your deal-network pilot snapshot (deals and participants) for your account only. Existing
-              product data outside this pilot surface is not changed.
+              {isProjectMode
+                ? 'This clears your project snapshot (projects and participants) for your account only. Existing product data outside this surface is not changed.'
+                : 'This clears your deal-network pilot snapshot (deals and participants) for your account only. Existing product data outside this pilot surface is not changed.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1728,7 +2184,7 @@ export default function DealNetworkPage() {
                 setResetWorkspaceOpen(false);
               }}
             >
-              Reset pilot data
+              {isProjectMode ? 'Reset workspace' : 'Reset pilot data'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1837,12 +2293,18 @@ export default function DealNetworkPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <CreateDealModal open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreateDeal} />
+      <CreateDealModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreate={handleCreateDeal}
+        experienceMode={isProjectMode ? 'project' : 'referral'}
+      />
       <CreateDealModal
         open={editOpen}
         onOpenChange={setEditOpen}
         onCreate={handleCreateDeal}
         editDeal={activeDeal ?? null}
+        experienceMode={isProjectMode ? 'project' : 'referral'}
       />
       <InviteParticipantModal
         open={inviteOpen}
@@ -1855,6 +2317,8 @@ export default function DealNetworkPage() {
           Closer: activeDeal?.closerAmount,
           Platform: activeDeal?.platformFee,
         }}
+        commissionBaseParticipantOptions={commissionBaseParticipantOptions}
+        experienceMode={isProjectMode ? 'project' : 'referral'}
       />
       <ExportPayoutsModal
         open={exportOpen}
@@ -1862,6 +2326,26 @@ export default function DealNetworkPage() {
         rows={exportData.rows}
         excludedUnapprovedCount={exportData.excludedUnapprovedCount}
       />
+      {isProjectMode && organizationId && activeDeal?.id && activeDeal.id !== '__placeholder__' ? (
+        <CreatePaymentLinkDialog
+          organizationId={organizationId}
+          pilotDealId={activeDeal.id}
+          open={projectInvoiceOpen}
+          onOpenChange={setProjectInvoiceOpen}
+          defaultCurrency="AUD"
+          defaultValues={{
+            amount: activeDeal.value,
+            currency: 'AUD',
+            description: `Project: ${activeDeal.dealName}`.slice(0, 200),
+          }}
+          onSuccess={() => {
+            setProjectInvoiceOpen(false);
+            void refreshPilotObligations(activeDeal.id);
+            bumpFundingFetch();
+            toast({ title: 'Invoice created', description: 'Linked to this project.' });
+          }}
+        />
+      ) : null}
       </div>
       <DealNetworkCopilotPanel
         profile={dashboardProfile}
@@ -1877,6 +2361,7 @@ export default function DealNetworkPage() {
                 paidAmount: activeDeal.paidAmount,
                 paidAt: activeDeal.paidAt,
                 currentStage: activeDeal.currentStage,
+                projectFundingLine: projectFundingCopilotLine,
               }
             : null
         }

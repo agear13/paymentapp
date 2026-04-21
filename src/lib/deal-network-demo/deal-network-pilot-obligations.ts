@@ -5,16 +5,14 @@
  */
 import 'server-only';
 
-import {
-  DealNetworkPilotObligationStatus,
-  PaymentEventRecordStatus,
-  Prisma,
-} from '@prisma/client';
+import { DealNetworkPilotObligationStatus, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
   resolveParticipantCommissionUsd,
+  computeParticipantCommissionTotalsForDeal,
+  demoParticipantToPilotRow,
   type BaseParticipantSlot,
 } from '@/lib/deal-network-demo/commission-structure';
 import {
@@ -22,6 +20,13 @@ import {
   type ParticipantPayoutSettlementStatus,
 } from '@/lib/deal-network-demo/participant-payout-status';
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import {
+  fundingAnchorPaymentEventIdForDeal,
+  isStraitProjectDeal,
+  primaryConfirmedFundingEventIdForDeal,
+  sumPilotFundingForDeal,
+} from '@/lib/deal-network-demo/pilot-project-funding.server';
+import { effectiveOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 
 function payoutLineToObligationStatus(
   payout: ParticipantPayoutSettlementStatus,
@@ -75,21 +80,6 @@ function dealHasLegacyFundingSnapshot(deal: RecentDeal): boolean {
   return s === 'Paid' || s === 'Approved' || s === 'Eligible' || s === 'Reversed';
 }
 
-async function primaryFundingPaymentEventIdForDeal(dealId: string): Promise<string | null> {
-  const evt = await prisma.payment_events.findFirst({
-    where: {
-      pilot_deal_id: dealId,
-      event_type: 'PAYMENT_CONFIRMED',
-      OR: [
-        { record_status: null },
-        { record_status: { not: PaymentEventRecordStatus.VOIDED } },
-      ],
-    },
-    orderBy: [{ received_at: 'desc' }, { created_at: 'desc' }],
-  });
-  return evt?.id ?? null;
-}
-
 /**
  * Rebuilds obligation rows for one pilot deal from current DB-backed snapshot fields.
  * Deletes prior obligation rows for this deal_id + user_id only (derived cache), then inserts fresh rows.
@@ -105,10 +95,16 @@ export async function refreshDealNetworkPilotObligationsForDeal(
   const roleAmounts = roleAmountsFromDeal(deal);
   const currency = 'USD';
 
-  const fundingEventId = await primaryFundingPaymentEventIdForDeal(deal.id);
-  const moneyConfirmed = Boolean(fundingEventId) || dealHasLegacyFundingSnapshot(deal);
-
   const rows: Prisma.deal_network_pilot_obligationsCreateManyInput[] = [];
+
+  const pilotRows = dealParticipants.map(demoParticipantToPilotRow);
+  const joint = computeParticipantCommissionTotalsForDeal(deal.value, roleAmounts, pilotRows);
+
+  const participantLines: Array<{
+    p: (typeof dealParticipants)[0];
+    payout: ParticipantPayoutSettlementStatus;
+    resolved: ReturnType<typeof resolveParticipantCommissionUsd>;
+  }> = [];
 
   for (const p of dealParticipants) {
     const payout = effectiveParticipantPayoutStatus(p, deal);
@@ -117,13 +113,50 @@ export async function refreshDealNetworkPilotObligationsForDeal(
         commissionKind: p.commissionKind,
         commissionValue: p.commissionValue,
         baseParticipant: p.baseParticipant,
+        commissionBaseParticipantId: p.commissionBaseParticipantId,
         formulaExpression: p.formulaExpression,
       },
       deal.value,
-      roleAmounts
+      roleAmounts,
+      {
+        participantTotals: joint.totals,
+        participantLabels: joint.labels,
+        resolvingParticipantId: p.id,
+      }
     );
     if (resolved.total <= 0) continue;
+    participantLines.push({ p, payout, resolved });
+  }
 
+  let totalOwed = participantLines.reduce((s, x) => s + x.resolved.total, 0);
+  if (typeof deal.platformFee === 'number' && deal.platformFee > 0) {
+    totalOwed += deal.platformFee;
+  }
+
+  const fundingConfirmedEvtId = await primaryConfirmedFundingEventIdForDeal(deal.id);
+  const legacyMoney = Boolean(fundingConfirmedEvtId) || dealHasLegacyFundingSnapshot(deal);
+  const strait = isStraitProjectDeal(deal);
+  const fundedAmount = strait ? await sumPilotFundingForDeal(deal.id) : 0;
+  const straitFullyFunded =
+    strait && totalOwed > 0 && fundedAmount + 0.005 >= totalOwed;
+  const straitPartial =
+    strait &&
+    totalOwed > 0 &&
+    fundedAmount > 0 &&
+    fundedAmount + 0.005 < totalOwed &&
+    !legacyMoney;
+
+  const moneyConfirmed = strait ? legacyMoney || straitFullyFunded : legacyMoney;
+
+  const anchorEventId = moneyConfirmed
+    ? fundingConfirmedEvtId ?? (await fundingAnchorPaymentEventIdForDeal(deal.id))
+    : null;
+
+  const unfundedRowStatus = straitPartial
+    ? DealNetworkPilotObligationStatus.PARTIALLY_FUNDED
+    : DealNetworkPilotObligationStatus.UNFUNDED;
+
+  for (const { p, payout, resolved } of participantLines) {
     const snapshot = {
       dealId: deal.id,
       dealName: deal.dealName,
@@ -136,8 +169,10 @@ export async function refreshDealNetworkPilotObligationsForDeal(
         commissionKind: p.commissionKind,
         commissionValue: p.commissionValue,
         baseParticipant: p.baseParticipant ?? null,
+        commissionBaseParticipantId: p.commissionBaseParticipantId ?? null,
         formulaExpression: p.formulaExpression ?? null,
         approvalStatus: p.approvalStatus,
+        onboardingStatus: effectiveOnboardingStatus(p),
         payoutSettlementStatus: p.payoutSettlementStatus ?? null,
       },
       previewLine: resolved.previewLine,
@@ -150,13 +185,13 @@ export async function refreshDealNetworkPilotObligationsForDeal(
       deal_id: deal.id,
       participant_id: p.id,
       allocation_rule_id: null,
-      payment_event_id: moneyConfirmed ? fundingEventId : null,
+      payment_event_id: moneyConfirmed ? anchorEventId : null,
       obligation_type: 'PARTICIPANT',
       amount_owed: new Prisma.Decimal(resolved.total.toFixed(2)),
       currency,
       status: moneyConfirmed
         ? payoutLineToObligationStatus(payout, deal.status)
-        : DealNetworkPilotObligationStatus.UNFUNDED,
+        : unfundedRowStatus,
       calculation_explanation: resolved.previewLine,
       calculation_snapshot_json: snapshot as unknown as Prisma.InputJsonValue,
       due_date: null,
@@ -170,13 +205,13 @@ export async function refreshDealNetworkPilotObligationsForDeal(
       deal_id: deal.id,
       participant_id: null,
       allocation_rule_id: null,
-      payment_event_id: moneyConfirmed ? fundingEventId : null,
+      payment_event_id: moneyConfirmed ? anchorEventId : null,
       obligation_type: 'PLATFORM_FEE',
       amount_owed: new Prisma.Decimal(deal.platformFee.toFixed(2)),
       currency,
       status: moneyConfirmed
         ? dealSettlementToObligationStatus(deal.status)
-        : DealNetworkPilotObligationStatus.UNFUNDED,
+        : unfundedRowStatus,
       calculation_explanation: `Platform fee from deal record: $${deal.platformFee.toLocaleString()}`,
       calculation_snapshot_json: {
         dealId: deal.id,

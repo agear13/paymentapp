@@ -315,11 +315,15 @@ model payment_links {
   commission_obligations  commission_obligations[]
   crypto_payment_confirmations crypto_payment_confirmations[]
   manual_bank_payment_confirmations manual_bank_payment_confirmations[]
+  /// Deal Network pilot project (Strait) — optional invoice↔project coordination link.
+  pilot_deal_id           String?                   @db.VarChar(255)
+  pilot_deal              deal_network_pilot_deals? @relation("PilotDealPaymentLinks", fields: [pilot_deal_id], references: [id], onDelete: SetNull)
 
   @@index([organization_id, status])
   @@index([due_date])
   @@index([expires_at])
   @@index([payment_method])
+  @@index([pilot_deal_id])
 }
 
 /// Payer-submitted “I sent crypto” + assisted verification (Payment Links manual crypto)
@@ -925,6 +929,7 @@ model deal_network_pilot_deals {
   participants     deal_network_pilot_participants[]
   obligations      deal_network_pilot_obligations[]
   pilot_payment_events payment_events[] @relation("PilotDealPaymentEvents")
+  linked_payment_links payment_links[] @relation("PilotDealPaymentLinks")
 
   @@index([user_id])
 }
@@ -934,6 +939,8 @@ enum DealNetworkPilotObligationStatus {
   DRAFT
   /// Deal / obligations exist but no funding linked to the pilot deal (see payment_events.pilot_deal_id).
   UNFUNDED
+  /// Strait project: some pilot-linked payment activity recorded but obligations not fully covered yet.
+  PARTIALLY_FUNDED
   PENDING_APPROVAL
   APPROVED
   AVAILABLE_FOR_PAYOUT

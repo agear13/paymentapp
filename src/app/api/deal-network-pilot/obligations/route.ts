@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { DealNetworkPilotObligationStatus } from '@prisma/client';
 import { requireAuth } from '@/lib/auth/middleware';
 import { prisma } from '@/lib/server/prisma';
+import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import { effectiveOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
           select: { id: true, name: true, partner: true },
         },
         participant: {
-          select: { id: true, name: true, role: true, email: true },
+          select: { id: true, name: true, role: true, email: true, participant_payload: true },
         },
         payment_event: {
           select: {
@@ -57,7 +59,27 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json({ data: rows });
+    const data = rows.map((row) => {
+      const { participant, ...rest } = row;
+      const payload = participant?.participant_payload as Partial<DemoParticipant> | null | undefined;
+      const participantOut =
+        participant == null
+          ? null
+          : {
+              id: participant.id,
+              name: participant.name,
+              role: participant.role,
+              email: participant.email,
+              approvalStatus: payload?.approvalStatus ?? 'Pending approval',
+              onboardingStatus: effectiveOnboardingStatus({
+                id: participant.id,
+                onboardingStatus: payload?.onboardingStatus,
+              }),
+            };
+      return { ...rest, participant: participantOut };
+    });
+
+    return NextResponse.json({ data });
   } catch (e: unknown) {
     const err = e as { statusCode?: number; message?: string };
     if (err.statusCode === 401) {

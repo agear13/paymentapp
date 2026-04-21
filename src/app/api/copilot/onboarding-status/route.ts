@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     const profile = await getDashboardProductProfile();
 
-    if (profile === 'rabbit_hole_pilot') {
+    if (profile === 'rabbit_hole_pilot' || profile === 'strait_experiences_pilot') {
       const hidden: MerchantSetupStatusResult = {
         organizationId,
         overallStatus: 'ready',

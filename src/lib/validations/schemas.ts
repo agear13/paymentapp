@@ -291,6 +291,8 @@ export const CreatePaymentLinkSchema = z.object({
   manualBankInstructions: z.string().max(8000).optional(),
   /** Optional payment instruction attachment (upload via POST /api/payment-links/upload-attachment first). */
   attachment: PaymentLinkAttachmentInputSchema.optional(),
+  /** Deal Network pilot: link invoice to a Strait project (deal_network_pilot_deals.id). */
+  pilotDealId: uuidSchema.optional(),
 })
   .refine(
     (d) => {
@@ -376,6 +378,8 @@ export const UpdatePaymentLinkSchema = z
     manualBankInstructions: z.string().max(8000).nullable().optional(),
     /** Set to null to remove attachment; omit to leave unchanged. */
     attachment: PaymentLinkAttachmentInputSchema.nullable().optional(),
+    /** Deal Network pilot: link invoice to Strait project; null clears. */
+    pilotDealId: uuidSchema.nullable().optional(),
   })
   .strict();
 

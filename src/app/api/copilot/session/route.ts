@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDashboardProductProfile } from '@/lib/auth/dashboard-product.server';
+import { dealNetworkExperienceFromProductProfile } from '@/lib/deal-network-demo/deal-network-experience';
 
 /**
  * GET /api/copilot/session
@@ -7,5 +8,6 @@ import { getDashboardProductProfile } from '@/lib/auth/dashboard-product.server'
  */
 export async function GET() {
   const profile = await getDashboardProductProfile();
-  return NextResponse.json({ profile });
+  const dealNetworkExperienceMode = dealNetworkExperienceFromProductProfile(profile);
+  return NextResponse.json({ profile, dealNetworkExperienceMode });
 }

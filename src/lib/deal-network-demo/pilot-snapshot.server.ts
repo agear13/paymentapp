@@ -152,6 +152,14 @@ export async function getParticipantByInviteToken(token: string) {
   });
 }
 
+/** All pilot participant rows for a deal (for joint commission resolution on invite / obligations). */
+export async function getPilotParticipantsForDeal(dealId: string): Promise<DemoParticipant[]> {
+  const rows = await prisma.deal_network_pilot_participants.findMany({
+    where: { deal_id: dealId },
+  });
+  return rows.map(participantRowToDemo);
+}
+
 export async function markParticipantInviteOpened(token: string): Promise<void> {
   const row = await prisma.deal_network_pilot_participants.findUnique({
     where: { invite_token: token },

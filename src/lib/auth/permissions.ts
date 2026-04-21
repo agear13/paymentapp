@@ -151,6 +151,8 @@ export async function checkUserPermission(
       'create_payment_links': Permission.PAYMENT_LINK_CREATE,
       'view_payment_links': Permission.PAYMENT_LINK_VIEW,
       'edit_payment_links': Permission.PAYMENT_LINK_EDIT,
+      /** Soft-cancel (status → CANCELED); same privilege tier as editing drafts/open invoices. */
+      'cancel_payment_links': Permission.PAYMENT_LINK_EDIT,
       'delete_payment_links': Permission.PAYMENT_LINK_DELETE,
       'manage_settings': Permission.SETTINGS_MANAGE,
       'view_settings': Permission.SETTINGS_VIEW,

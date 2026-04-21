@@ -257,9 +257,15 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
-      const body = await res.json().catch(() => ({}));
+      const body = (await res.json().catch(() => ({}))) as { error?: string; details?: unknown };
       if (!res.ok) {
-        throw new Error(body.error || 'Could not update invoice');
+        const errMsg =
+          typeof body.error === 'string' && body.error.trim()
+            ? body.error.trim()
+            : res.status === 403
+              ? 'You do not have permission for this action.'
+              : 'Could not update invoice';
+        throw new Error(errMsg);
       }
       toast({
         title: action === 'mark_paid' ? 'Payment recorded' : 'Invoice reopened',
@@ -273,7 +279,11 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
       await onManualSettlementComplete?.();
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Request failed';
-      toast({ title: 'Update failed', description: message, variant: 'destructive' });
+      toast({
+        title: action === 'reopen' ? 'Could not reopen invoice' : 'Could not record payment',
+        description: message,
+        variant: 'destructive',
+      });
     } finally {
       setSettlementLoading(false);
     }

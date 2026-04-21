@@ -17,7 +17,7 @@ export default async function PartnersLayout({
     return <>{children}</>;
   }
 
-  if (profile === 'rabbit_hole_pilot') {
+  if (profile === 'rabbit_hole_pilot' || profile === 'strait_experiences_pilot') {
     const headersList = await headers();
     const pathname = headersList.get('x-pathname') ?? '';
     const allowed =

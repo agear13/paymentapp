@@ -37,7 +37,12 @@ export function isBetaAdminEmail(email?: string | null): boolean {
 /**
  * Product surface shown in the dashboard shell (computed server-side).
  */
-export type DashboardProductProfile = 'admin' | 'standard' | 'rabbit_hole_pilot';
+export type DashboardProductProfile =
+  | 'admin'
+  | 'standard'
+  | 'rabbit_hole_pilot'
+  /** Project-style payout coordination pilot (Deal Network only); not referral/Rabbit Hole UI. */
+  | 'strait_experiences_pilot';
 
 /**
  * Rabbit Hole Deal Network pilot — allowlist (case-insensitive).
@@ -53,6 +58,20 @@ export function isRabbitHolePilotEmail(email?: string | null): boolean {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
   const list = RABBIT_HOLE_PILOT_EMAILS as readonly string[];
+  return list.some((e) => e.toLowerCase() === normalized);
+}
+
+/**
+ * Strait / project-coordination pilot — allowlist (case-insensitive).
+ * Also supported: STRAIT_EXPERIENCES_PILOT_EMAILS (comma-separated) in env (e.g. on Render).
+ * Rabbit Hole pilot emails never resolve to this profile (see dashboard-product.server.ts order).
+ */
+export const STRAIT_EXPERIENCES_PILOT_EMAILS = [] as const;
+
+export function isStraitExperiencesPilotEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  const list = STRAIT_EXPERIENCES_PILOT_EMAILS as readonly string[];
   return list.some((e) => e.toLowerCase() === normalized);
 }
 
