@@ -5,10 +5,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { applyRateLimit } from '@/lib/rate-limit';
+import { z } from 'zod';
+import { prisma } from '@/lib/server/prisma';
 import {
-  SendInvoiceBodySchema,
   sendInvoiceForPaymentLink,
 } from '@/lib/payment-links/send-invoice-service';
+
+const ResendBodySchema = z.object({
+  email: z.string().email('Enter a valid client email address.').optional(),
+});
 
 export async function POST(
   request: NextRequest,
@@ -25,8 +30,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const parsed = SendInvoiceBodySchema.safeParse(body);
+    const body = await request.json().catch(() => ({}));
+    const parsed = ResendBodySchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: parsed.error.issues[0]?.message || 'Invalid email' },
@@ -34,10 +39,25 @@ export async function POST(
       );
     }
 
+    let email = parsed.data.email?.trim() || '';
+    if (!email) {
+      const link = await prisma.payment_links.findUnique({
+        where: { id: params.id },
+        select: { last_sent_to_email: true },
+      });
+      email = link?.last_sent_to_email?.trim() || '';
+    }
+    if (!email) {
+      return NextResponse.json(
+        { error: 'No email provided and no previous recipient available' },
+        { status: 400 }
+      );
+    }
+
     const result = await sendInvoiceForPaymentLink({
       paymentLinkId: params.id,
       userId: user.id,
-      email: parsed.data.email,
+      email,
       origin: request.nextUrl.origin,
     });
 
