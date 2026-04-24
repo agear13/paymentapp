@@ -111,6 +111,8 @@ function transformPaymentLink(link: Record<string, unknown>) {
     attachmentFilename: (link as { attachment_filename?: string | null }).attachment_filename ?? null,
     attachmentMimeType: (link as { attachment_mime_type?: string | null }).attachment_mime_type ?? null,
     attachmentSizeBytes: (link as { attachment_size_bytes?: number | null }).attachment_size_bytes ?? null,
+    lastSentAt: (link as { last_sent_at?: Date | string | null }).last_sent_at ?? null,
+    lastSentToEmail: (link as { last_sent_to_email?: string | null }).last_sent_to_email ?? null,
     createdAt: link.created_at,
     updatedAt: link.updated_at,
     paymentEvents: link.payment_events,

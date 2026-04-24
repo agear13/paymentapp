@@ -185,7 +185,7 @@ export default function PaymentLinksPage() {
   const handleCreateSuccess = (newPaymentLink: any) => {
     toast({
       title: 'Invoice created',
-      description: 'Invoice is ready to share. It is not emailed automatically.',
+      description: 'Invoice is ready. Share manually, or send by email when selected.',
     });
     setNewlyCreatedLink({
       id: String(newPaymentLink?.id ?? ''),
@@ -269,10 +269,12 @@ export default function PaymentLinksPage() {
     [fetchPaymentLinks, handleManualSettlementComplete, selectedPaymentLink?.id, toast]
   );
 
-  const handleResend = async (paymentLink: PaymentLinkDetailPayload) => {
+  const handleResend = async (paymentLink: PaymentLinkDetailPayload, email: string) => {
     try {
       const response = await fetch(`/api/payment-links/${paymentLink.id}/resend`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       });
 
       if (!response.ok) {
@@ -281,13 +283,14 @@ export default function PaymentLinksPage() {
       }
 
       toast({
-        title: 'Reminder recorded',
-        description: `No automatic email was sent. Share the invoice link with ${paymentLink.customerEmail}.`,
+        title: 'Invoice sent',
+        description: `Invoice sent to ${email}.`,
       });
+      await handleManualSettlementComplete();
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to send notification',
+        title: 'Could not send invoice',
+        description: error.message || 'Could not send invoice',
         variant: 'destructive',
       });
     }
@@ -644,7 +647,7 @@ export default function PaymentLinksPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Invoice ready to share</CardTitle>
             <CardDescription>
-              This invoice was created successfully. Delivery is manual right now, so share the link directly.
+              This invoice was created successfully. Share the link directly, or use Send Invoice actions.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

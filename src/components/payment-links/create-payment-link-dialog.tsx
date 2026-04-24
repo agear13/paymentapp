@@ -142,6 +142,12 @@ const createPaymentLinkFormSchema = z
       sizeBytes: z.number().int().positive(),
     })
     .optional(),
+  sendViaEmail: z.boolean().optional(),
+  sendEmail: z
+    .string()
+    .transform((val) => val?.trim() || '')
+    .refine((val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), 'Enter a valid email address.')
+    .optional(),
 })
   .refine(
     (d) => {
@@ -184,6 +190,16 @@ const createPaymentLinkFormSchema = z
     {
       message: 'Recipient name, destination type, and payment currency are required for manual bank transfer',
       path: ['manualBankRecipientName'],
+    }
+  )
+  .refine(
+    (d) => {
+      if (d.sendViaEmail !== true) return true;
+      return Boolean(d.sendEmail?.trim());
+    },
+    {
+      message: 'Enter a client email to send this invoice.',
+      path: ['sendEmail'],
     }
   );
 
@@ -402,6 +418,8 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       dueDate: undefined,
       expiresAt: undefined,
       attachment: undefined,
+      sendViaEmail: false,
+      sendEmail: '',
       ...defaultValues,
     },
   });
@@ -485,6 +503,8 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         dueDate: due && !Number.isNaN(due.getTime()) ? due : undefined,
         expiresAt: exp && !Number.isNaN(exp.getTime()) ? exp : undefined,
         attachment: initialAttachment,
+        sendViaEmail: false,
+        sendEmail: '',
       });
       initialAttachmentRef.current = initialAttachment ?? null;
       setDescriptionLength(editPaymentLink.description?.length || 0);
@@ -522,6 +542,8 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       dueDate: undefined,
       expiresAt: undefined,
       attachment: undefined,
+      sendViaEmail: false,
+      sendEmail: '',
       ...defaultValues,
     });
     initialAttachmentRef.current = null;
@@ -801,6 +823,18 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
       const result = await response.json();
 
+      if (data.sendViaEmail && data.sendEmail?.trim()) {
+        const sendResponse = await fetch(`/api/payment-links/${result.data.id}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: data.sendEmail.trim() }),
+        });
+        const sendBody = await sendResponse.json().catch(() => ({}));
+        if (!sendResponse.ok) {
+          throw new Error(sendBody.error || 'Invoice created, but email send failed.');
+        }
+      }
+
       form.reset({
         collectionMode: 'payment_request',
         paymentMethod: 'STRIPE',
@@ -832,6 +866,8 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         dueDate: undefined,
         expiresAt: undefined,
         attachment: undefined,
+        sendViaEmail: false,
+        sendEmail: '',
       });
       initialAttachmentRef.current = null;
       setDescriptionLength(0);
@@ -1418,6 +1454,53 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                 )}
               />
             </div>
+
+            {mode === 'create' ? (
+              <div className="rounded-lg border p-4 space-y-3">
+                <FormField
+                  control={form.control}
+                  name="sendViaEmail"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between">
+                      <div>
+                        <FormLabel>Send invoice via email</FormLabel>
+                        <FormDescription>
+                          Optional. Invoices are not auto-sent unless you enable this.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={Boolean(field.value)}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                {form.watch('sendViaEmail') ? (
+                  <FormField
+                    control={form.control}
+                    name="sendEmail"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Client email</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="email"
+                            placeholder="client@example.com"
+                            {...field}
+                            value={field.value || ''}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
+              </div>
+            ) : null}
 
             {/* Description */}
             <FormField

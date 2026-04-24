@@ -110,6 +110,8 @@ function transformPaymentLink(link: any) {
     attachmentFilename: link.attachment_filename ?? null,
     attachmentMimeType: link.attachment_mime_type ?? null,
     attachmentSizeBytes: link.attachment_size_bytes ?? null,
+    lastSentAt: link.last_sent_at ?? null,
+    lastSentToEmail: link.last_sent_to_email ?? null,
     pilotDealId: link.pilot_deal_id ?? null,
     paymentEvents,
     fxSnapshots,

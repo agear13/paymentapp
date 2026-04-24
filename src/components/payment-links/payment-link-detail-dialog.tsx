@@ -95,6 +95,8 @@ export interface PaymentLinkDetails {
   attachmentFilename?: string | null;
   attachmentMimeType?: string | null;
   attachmentSizeBytes?: number | null;
+  lastSentAt?: Date | string | null;
+  lastSentToEmail?: string | null;
   createdAt: Date;
   updatedAt: Date;
   paymentEvents?: Array<{
@@ -139,7 +141,7 @@ export interface PaymentLinkDetailDialogProps {
   paymentLink: PaymentLinkDetails | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onResend?: (paymentLink: PaymentLinkDetails) => void;
+  onResend?: (paymentLink: PaymentLinkDetails, email: string) => void | Promise<void>;
   onMarkAsPaid?: (paymentLink: PaymentLinkDetails) => void | Promise<void>;
   /** After manual mark paid / reopen — refresh list and detail in parent */
   onManualSettlementComplete?: () => void | Promise<void>;
@@ -201,9 +203,12 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
   const [confirmMarkPaidOpen, setConfirmMarkPaidOpen] = React.useState(false);
   const [confirmReopenOpen, setConfirmReopenOpen] = React.useState(false);
   const [settlementLoading, setSettlementLoading] = React.useState(false);
+  const [sendEmail, setSendEmail] = React.useState('');
+  const [sendLoading, setSendLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (paymentLink && open) {
+      setSendEmail(paymentLink.customerEmail?.trim() || paymentLink.lastSentToEmail?.trim() || '');
       // Load QR code
       fetch(`/api/payment-links/${paymentLink.id}/qr-code`)
         .then((res) => res.json())
@@ -244,9 +249,22 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
     window.open(paymentUrl, '_blank');
   };
 
-  const handleResend = () => {
-    if (onResend && paymentLink) {
-      onResend(paymentLink);
+  const handleResend = async () => {
+    const email = sendEmail.trim();
+    if (!onResend || !paymentLink) return;
+    if (!email) {
+      toast({
+        title: 'Could not send invoice',
+        description: 'Enter a client email first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setSendLoading(true);
+    try {
+      await onResend(paymentLink, email);
+    } finally {
+      setSendLoading(false);
     }
   };
 
@@ -295,12 +313,9 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
 
   const canResend =
     paymentLink &&
-    paymentLink.customerEmail &&
-    paymentLink.status !== 'PAID' &&
-    paymentLink.status !== 'PAID_UNVERIFIED' &&
-    paymentLink.status !== 'REQUIRES_REVIEW' &&
-    paymentLink.status !== 'CANCELED' &&
-    paymentLink.status !== 'EXPIRED';
+    (paymentLink.status === 'DRAFT' ||
+      paymentLink.status === 'OPEN' ||
+      paymentLink.status === 'PAID_UNVERIFIED');
 
   const canEditInvoice =
     paymentLink &&
@@ -697,9 +712,12 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Payment Link</CardTitle>
+                <CardTitle className="text-base">Share Invoice</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Invoice links are not sent automatically. Share manually or send an email from here.
+                </p>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 rounded bg-muted px-3 py-2 text-sm">
                     {paymentUrl}
@@ -711,17 +729,49 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                 </div>
-                {canResend && (
-                  <Button 
-                    size="sm" 
-                    variant="default" 
-                    onClick={handleResend}
-                    className="w-full"
-                  >
-                    <Send className="mr-2 h-4 w-4" />
-                    Log reminder sent (manual share)
-                  </Button>
-                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Send Invoice</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium" htmlFor="invoice-send-email">
+                    Client email
+                  </label>
+                  <input
+                    id="invoice-send-email"
+                    type="email"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="client@example.com"
+                    value={sendEmail}
+                    onChange={(e) => setSendEmail(e.target.value)}
+                    disabled={sendLoading}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => void handleResend()}
+                  disabled={!canResend || sendLoading}
+                  className="w-full"
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  {sendLoading ? 'Sending invoice...' : 'Send invoice'}
+                </Button>
+                {!canResend ? (
+                  <p className="text-xs text-muted-foreground">
+                    Invoices can be sent only in draft, open, or unpaid-submitted states.
+                  </p>
+                ) : null}
+                {paymentLink.lastSentAt ? (
+                  <p className="text-xs text-muted-foreground">
+                    Last sent to {paymentLink.lastSentToEmail || 'client'} at{' '}
+                    {format(new Date(paymentLink.lastSentAt), 'PPpp')}
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
 

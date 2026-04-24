@@ -1,7 +1,3 @@
-/**
- * Payment Link Resend API
- * POST /api/payment-links/[id]/resend - send invoice to an email.
- */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { applyRateLimit } from '@/lib/rate-limit';
@@ -47,7 +43,8 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to resend invoice';
+    const message = error instanceof Error ? error.message : 'Could not send invoice';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

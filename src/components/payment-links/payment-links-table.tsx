@@ -99,6 +99,8 @@ export interface PaymentLink {
   attachmentFilename?: string | null;
   attachmentMimeType?: string | null;
   attachmentSizeBytes?: number | null;
+  lastSentAt?: Date | string | null;
+  lastSentToEmail?: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
   paymentEvents?: any[];
