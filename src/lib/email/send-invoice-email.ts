@@ -43,6 +43,9 @@ export async function sendInvoiceEmail({
   paymentUrl,
   merchantName,
 }: SendInvoiceEmailArgs): Promise<{ success: boolean; error?: string; providerMessageId?: string }> {
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL || 'Provvypay <onboarding@resend.dev>';
+
   const safeMerchant = escapeHtml(merchantName || 'Provvypay');
   const safeDescription = escapeHtml(invoice.description || 'Invoice payment');
   const safeRef = invoice.invoiceReference ? escapeHtml(invoice.invoiceReference) : null;
@@ -76,8 +79,11 @@ export async function sendInvoiceEmail({
     </div>
   `;
 
+  console.log('Sending invoice email from:', fromEmail);
+
   const response = await sendEmail({
     to: toEmail,
+    from: fromEmail,
     subject,
     html,
     text,
