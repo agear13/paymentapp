@@ -1,6 +1,7 @@
 /**
- * Payment Link Resend Notification API
- * POST /api/payment-links/[id]/resend - Resend payment link notification
+ * Payment Link Reminder Log API
+ * POST /api/payment-links/[id]/resend - records a reminder/send activity event.
+ * NOTE: This endpoint does not dispatch real email delivery yet.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -49,12 +50,8 @@ export async function POST(
       return apiError('Customer email required to send invoice. Add an email address or copy the invoice link to share it manually.', 400);
     }
 
-    // In a real implementation, you would:
-    // 1. Send email notification using your email service (SendGrid, SES, etc.)
-    // 2. Send SMS if phone number is available
-    // 3. Log the notification event
-    
-    // For now, we'll just create an event and log it
+    // Current pilot behavior: log reminder/send intent for operator tracking.
+    // Real email dispatch is not yet wired from this endpoint.
     await prisma.payment_events.create({
       data: {
         payment_link_id: id,
@@ -80,9 +77,10 @@ export async function POST(
     });
 
     return apiResponse({
-      message: 'Notification sent successfully',
+      message: 'Reminder recorded. Share the invoice link manually.',
       data: {
-        sent: true,
+        sent: false,
+        mode: 'manual_share_required',
         recipient: paymentLink.customer_email,
       },
     });

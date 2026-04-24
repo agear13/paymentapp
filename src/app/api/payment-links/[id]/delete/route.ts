@@ -47,12 +47,21 @@ export async function POST(
       return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
     }
 
-    const canDelete = await checkUserPermission(user.id, link.organization_id, 'delete_payment_links');
-    if (!canDelete) {
+    const [canDelete, canEdit] = await Promise.all([
+      checkUserPermission(user.id, link.organization_id, 'delete_payment_links'),
+      checkUserPermission(user.id, link.organization_id, 'edit_payment_links'),
+    ]);
+    /**
+     * Pilot ergonomics:
+     * - Owners/admins can delete via delete_payment_links.
+     * - Operators with edit rights can delete only when all safety checks pass below.
+     */
+    if (!canDelete && !canEdit) {
       return NextResponse.json(
         {
           error:
-            'You do not have permission to permanently delete invoices. Ask an organization owner or admin.',
+            'You do not have permission to delete invoices in this organization.',
+          code: 'DELETE_PERMISSION_DENIED',
         },
         { status: 403 }
       );

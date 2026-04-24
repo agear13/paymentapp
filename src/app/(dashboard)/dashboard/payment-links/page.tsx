@@ -20,7 +20,7 @@ import {
   type PaymentLinkDetails as PaymentLinkDetailPayload,
 } from '@/components/payment-links/payment-link-detail-dialog';
 import { BulkActionsToolbar } from '@/components/payment-links/bulk-actions-toolbar';
-import type { PaymentLink, PaymentLinkDetails } from '@/components/payment-links/payment-links-table';
+import type { PaymentLink } from '@/components/payment-links/payment-links-table';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,7 +58,7 @@ export default function PaymentLinksPage() {
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   
   // Detail dialog state
-  const [selectedPaymentLink, setSelectedPaymentLink] = React.useState<PaymentLinkDetails | null>(null);
+  const [selectedPaymentLink, setSelectedPaymentLink] = React.useState<PaymentLinkDetailPayload | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = React.useState(false);
   
   // Edit dialog state
@@ -76,6 +76,11 @@ export default function PaymentLinksPage() {
   const [linkToDelete, setLinkToDelete] = React.useState<PaymentLink | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [newlyCreatedLink, setNewlyCreatedLink] = React.useState<{
+    id: string;
+    shortCode: string;
+    customerEmail: string | null;
+  } | null>(null);
 
   // Get organization ID from context/hook
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
@@ -93,9 +98,10 @@ export default function PaymentLinksPage() {
         setIsLoading(true);
       }
       try {
-        const params = new URLSearchParams({
-          organizationId,
-          ...filters,
+        const params = new URLSearchParams({ organizationId });
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value === undefined || value === null || value === '') return;
+          params.set(key, String(value));
         });
 
         const response = await fetch(`/api/payment-links?${params}`);
@@ -155,10 +161,37 @@ export default function PaymentLinksPage() {
     }
   );
 
+  const getPublicInvoiceUrl = React.useCallback((shortCode: string) => {
+    if (typeof window === 'undefined') return '';
+    return `${window.location.origin}/pay/${encodeURIComponent(shortCode)}`;
+  }, []);
+
+  const handleCopyPublicLink = React.useCallback((shortCode: string) => {
+    const url = getPublicInvoiceUrl(shortCode);
+    if (!url) return;
+    navigator.clipboard.writeText(url);
+    toast({
+      title: 'Invoice link copied',
+      description: 'Share this link with your client.',
+    });
+  }, [getPublicInvoiceUrl, toast]);
+
+  const handleOpenPublicLink = React.useCallback((shortCode: string) => {
+    const url = getPublicInvoiceUrl(shortCode);
+    if (!url) return;
+    window.open(url, '_blank');
+  }, [getPublicInvoiceUrl]);
+
   const handleCreateSuccess = (newPaymentLink: any) => {
     toast({
-      title: 'Success',
-      description: 'Invoice created successfully',
+      title: 'Invoice created',
+      description: 'Invoice is ready to share. It is not emailed automatically.',
+    });
+    setNewlyCreatedLink({
+      id: String(newPaymentLink?.id ?? ''),
+      shortCode: String(newPaymentLink?.shortCode ?? ''),
+      customerEmail:
+        typeof newPaymentLink?.customerEmail === 'string' ? newPaymentLink.customerEmail : null,
     });
     void fetchPaymentLinks({ silent: true });
   };
@@ -198,7 +231,45 @@ export default function PaymentLinksPage() {
     }
   }, [fetchPaymentLinks, selectedPaymentLink?.id]);
 
-  const handleResend = async (paymentLink: PaymentLinkDetails) => {
+  const markInvoicePaid = React.useCallback(
+    async (paymentLink: { id: string }) => {
+      try {
+        const res = await fetch(`/api/payment-links/${paymentLink.id}/manual-settlement`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'mark_paid' }),
+        });
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          throw new Error(
+            typeof body.error === 'string' && body.error.trim()
+              ? body.error.trim()
+              : 'Could not mark invoice as paid'
+          );
+        }
+
+        toast({
+          title: 'Invoice marked as paid',
+          description: 'Manual payment has been recorded successfully.',
+        });
+        await fetchPaymentLinks({ silent: true });
+        if (selectedPaymentLink?.id === paymentLink.id) {
+          await handleManualSettlementComplete();
+        }
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : 'Could not mark invoice as paid';
+        toast({
+          title: 'Could not mark invoice as paid',
+          description: message,
+          variant: 'destructive',
+        });
+      }
+    },
+    [fetchPaymentLinks, handleManualSettlementComplete, selectedPaymentLink?.id, toast]
+  );
+
+  const handleResend = async (paymentLink: PaymentLinkDetailPayload) => {
     try {
       const response = await fetch(`/api/payment-links/${paymentLink.id}/resend`, {
         method: 'POST',
@@ -210,8 +281,8 @@ export default function PaymentLinksPage() {
       }
 
       toast({
-        title: 'Notification Sent',
-        description: `Payment link notification sent to ${paymentLink.customerEmail}`,
+        title: 'Reminder recorded',
+        description: `No automatic email was sent. Share the invoice link with ${paymentLink.customerEmail}.`,
       });
     } catch (error: any) {
       toast({
@@ -348,6 +419,11 @@ export default function PaymentLinksPage() {
 
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error(
+            'You do not have permission to delete invoices for this organization. Ask an admin to grant invoice delete access.'
+          );
+        }
         throw new Error(
           typeof payload.error === 'string' && payload.error.trim()
             ? payload.error.trim()
@@ -377,7 +453,7 @@ export default function PaymentLinksPage() {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to delete invoice';
       toast({
-        title: 'Delete blocked',
+        title: message.toLowerCase().includes('permission') ? 'Permission required' : 'Delete blocked',
         description: message,
         variant: 'destructive',
       });
@@ -545,21 +621,76 @@ export default function PaymentLinksPage() {
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
-          <CreatePaymentLinkDialog
-            organizationId={organizationId}
-            defaultCurrency="USD"
-            onSuccess={handleCreateSuccess}
-            trigger={
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Invoice
-              </Button>
-            }
-          />
+          {organizationId ? (
+            <CreatePaymentLinkDialog
+              organizationId={organizationId}
+              defaultCurrency="USD"
+              onSuccess={handleCreateSuccess}
+              trigger={
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Invoice
+                </Button>
+              }
+            />
+          ) : null}
         </div>
       </div>
 
       {organizationId ? <PaymentLinksOnboardingAssistant organizationId={organizationId} /> : null}
+
+      {newlyCreatedLink && newlyCreatedLink.shortCode ? (
+        <Card className="border-emerald-200/80 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Invoice ready to share</CardTitle>
+            <CardDescription>
+              This invoice was created successfully. Delivery is manual right now, so share the link directly.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Client email: {newlyCreatedLink.customerEmail?.trim() || 'Not provided'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => handleCopyPublicLink(newlyCreatedLink.shortCode)}
+              >
+                Copy link
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => handleOpenPublicLink(newlyCreatedLink.shortCode)}
+              >
+                Open invoice
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const target = paymentLinks.find((pl) => pl.id === newlyCreatedLink.id);
+                  if (target) void handleViewDetails(target);
+                }}
+              >
+                View details
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setNewlyCreatedLink(null)}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Filters */}
       <PaymentLinksFilters
@@ -607,6 +738,9 @@ export default function PaymentLinksPage() {
               onViewDetails={handleViewDetails}
               onEdit={handleEditClick}
               onDuplicate={handleDuplicateClick}
+              onMarkAsPaid={(paymentLink) => {
+                void markInvoicePaid({ id: paymentLink.id });
+              }}
               onCancel={handleCancelClick}
               onDelete={handleDeleteClick}
               onRefresh={handleRefresh}
@@ -622,7 +756,12 @@ export default function PaymentLinksPage() {
         paymentLink={selectedPaymentLink}
         open={detailDialogOpen}
         onOpenChange={setDetailDialogOpen}
-        onResend={handleResend}
+        onResend={(paymentLink) => {
+          void handleResend(paymentLink);
+        }}
+        onMarkAsPaid={(paymentLink) => {
+          void markInvoicePaid({ id: paymentLink.id });
+        }}
         onManualSettlementComplete={handleManualSettlementComplete}
         onEdit={
           selectedPaymentLink &&
@@ -685,7 +824,7 @@ export default function PaymentLinksPage() {
       ) : null}
 
       {/* Duplicate Payment Link Dialog */}
-      {linkToDuplicate && (
+      {organizationId && linkToDuplicate && (
         <CreatePaymentLinkDialog
           organizationId={organizationId}
           defaultCurrency={linkToDuplicate.currency}

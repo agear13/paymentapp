@@ -140,6 +140,7 @@ export interface PaymentLinkDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onResend?: (paymentLink: PaymentLinkDetails) => void;
+  onMarkAsPaid?: (paymentLink: PaymentLinkDetails) => void | Promise<void>;
   /** After manual mark paid / reopen — refresh list and detail in parent */
   onManualSettlementComplete?: () => void | Promise<void>;
   /** Open shared edit-invoice flow (draft / open only). */
@@ -191,6 +192,7 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
   open,
   onOpenChange,
   onResend,
+  onMarkAsPaid,
   onManualSettlementComplete,
   onEdit,
 }) => {
@@ -264,7 +266,9 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
             ? body.error.trim()
             : res.status === 403
               ? 'You do not have permission for this action.'
-              : 'Could not update invoice';
+              : action === 'mark_paid'
+                ? 'Could not mark invoice as paid'
+                : 'Could not reopen invoice';
         throw new Error(errMsg);
       }
       toast({
@@ -280,7 +284,7 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Request failed';
       toast({
-        title: action === 'reopen' ? 'Could not reopen invoice' : 'Could not record payment',
+        title: action === 'reopen' ? 'Could not reopen invoice' : 'Could not mark invoice as paid',
         description: message,
         variant: 'destructive',
       });
@@ -326,6 +330,18 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                 >
                   <Edit className="mr-2 h-4 w-4" />
                   Edit
+                </Button>
+              ) : null}
+              {paymentLink.status === 'OPEN' && onMarkAsPaid ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => onMarkAsPaid(paymentLink)}
+                  disabled={settlementLoading}
+                >
+                  Mark as Paid
                 </Button>
               ) : null}
             <div className="flex flex-col items-end gap-1">
@@ -703,7 +719,7 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                     className="w-full"
                   >
                     <Send className="mr-2 h-4 w-4" />
-                    Resend Notification
+                    Log reminder sent (manual share)
                   </Button>
                 )}
               </CardContent>
@@ -727,7 +743,7 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                       disabled={settlementLoading}
                       onClick={() => setConfirmMarkPaidOpen(true)}
                     >
-                      Mark payment received
+                      Mark as Paid
                     </Button>
                   ) : null}
                   {paymentLink.status === 'PAID' ||

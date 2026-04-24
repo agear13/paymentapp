@@ -18,6 +18,7 @@ import {
   Edit,
   Files,
   Trash2,
+  CircleDollarSign,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -114,6 +115,7 @@ export interface PaymentLinksTableProps {
   onViewDetails?: (paymentLink: PaymentLink) => void;
   onEdit?: (paymentLink: PaymentLink) => void;
   onDuplicate?: (paymentLink: PaymentLink) => void;
+  onMarkAsPaid?: (paymentLink: PaymentLink) => void;
   onCancel?: (paymentLink: PaymentLink) => void;
   onDelete?: (paymentLink: PaymentLink) => void;
   onRefresh?: () => void;
@@ -205,6 +207,7 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
   onViewDetails,
   onEdit,
   onDuplicate,
+  onMarkAsPaid,
   onCancel,
   onDelete,
   onRefresh,
@@ -454,6 +457,12 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
                       <DropdownMenuItem onClick={() => onDuplicate(paymentLink)}>
                         <Files className="mr-2 h-4 w-4" />
                         Duplicate Link
+                      </DropdownMenuItem>
+                    )}
+                    {paymentLink.status === 'OPEN' && onMarkAsPaid && (
+                      <DropdownMenuItem onClick={() => onMarkAsPaid(paymentLink)}>
+                        <CircleDollarSign className="mr-2 h-4 w-4" />
+                        Mark as Paid
                       </DropdownMenuItem>
                     )}
                     {paymentLink.status !== 'PAID' &&

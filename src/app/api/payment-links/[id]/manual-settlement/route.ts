@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
-import { requireAuth } from '@/lib/supabase/middleware';
+import { requireAuth } from '@/lib/auth/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { transitionPaymentLinkStatus } from '@/lib/payment-link-state-machine';
@@ -27,9 +27,10 @@ export async function POST(
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
-    const auth = await requireAuth(request);
-    if (!auth.user) return auth.response!;
-    const { user } = auth;
+    const user = await requireAuth();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const { id } = await params;
     const link = await prisma.payment_links.findUnique({
@@ -48,12 +49,15 @@ export async function POST(
       return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
     }
 
-    const canEdit = await checkUserPermission(user.id, link.organization_id, 'edit_payment_links');
-    if (!canEdit) {
+    const [canEdit, canCancel] = await Promise.all([
+      checkUserPermission(user.id, link.organization_id, 'edit_payment_links'),
+      checkUserPermission(user.id, link.organization_id, 'cancel_payment_links'),
+    ]);
+    if (!canEdit && !canCancel) {
       return NextResponse.json(
         {
           error:
-            'You do not have permission to record manual payments or reopen invoices. Ask an organization owner or admin.',
+            'You do not have permission to mark invoices as paid or reopen them. Required permission: edit invoices.',
         },
         { status: 403 }
       );
@@ -116,7 +120,7 @@ export async function POST(
       await transitionPaymentLinkStatus(link.id, 'OPEN', user.id);
     }
 
-    loggers.api.info({ paymentLinkId: id, action, userId: user.id }, 'Manual invoice settlement');
+    loggers.api.info('Manual invoice settlement');
 
     revalidatePath(`/pay/${link.short_code}`);
     revalidatePath('/dashboard/payment-links');
@@ -125,9 +129,9 @@ export async function POST(
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Internal server error';
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid request', details: e.errors }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid request', details: e.issues }, { status: 400 });
     }
-    loggers.api.error({ error: message }, 'manual-settlement failed');
+    loggers.api.error('manual-settlement failed');
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
