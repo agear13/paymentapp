@@ -88,7 +88,8 @@ export async function sendInvoiceForPaymentLink(params: {
       data: {
         id: randomUUID(),
         payment_link_id: link.id,
-        event_type: 'NOTIFICATION_SENT',
+        // Reuse an existing enum value; delivery details are captured in metadata.
+        event_type: 'CREATED',
         metadata: {
           channel: 'email',
           email: normalizedEmail,

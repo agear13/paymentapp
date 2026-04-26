@@ -127,6 +127,18 @@ async function runScenario(s: Scenario) {
   };
 }
 
+async function warmupScenario(s: Scenario): Promise<void> {
+  try {
+    await fetch(`${baseUrl}${s.path}`, {
+      method: s.method,
+      headers: s.headers,
+      body: s.body,
+    });
+  } catch {
+    // Warmup is best-effort only.
+  }
+}
+
 async function main() {
   // eslint-disable-next-line no-console
   console.error(
@@ -134,6 +146,12 @@ async function main() {
   );
 
   const output = [];
+  for (const scenario of scenarios) {
+    // Prime route/module compilation before measuring.
+    // eslint-disable-next-line no-await-in-loop
+    await warmupScenario(scenario);
+  }
+
   for (const scenario of scenarios) {
     // Keep scenarios serial to avoid mixed metrics.
     // eslint-disable-next-line no-await-in-loop

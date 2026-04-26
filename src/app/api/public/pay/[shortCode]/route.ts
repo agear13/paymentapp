@@ -5,11 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { prisma } from '@/lib/server/prisma';
-import { loggers } from '@/lib/logger';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
-import config from '@/lib/config/env';
 
 /**
  * GET /api/public/pay/[shortCode]
@@ -21,6 +18,16 @@ export async function GET(
   { params }: { params: Promise<{ shortCode: string }> }
 ) {
   try {
+    const { shortCode } = await params;
+
+    // Reject invalid format before external dependencies.
+    if (!isValidShortCode(shortCode)) {
+      return NextResponse.json(
+        { error: 'Invalid short code format', code: 'INVALID_FORMAT' },
+        { status: 400 }
+      );
+    }
+
     // Rate limiting
     const rateLimitResult = await applyRateLimit(request, 'public');
     if (!rateLimitResult.success) {
@@ -30,27 +37,12 @@ export async function GET(
       );
     }
 
-    const { shortCode } = await params;
-
-    // Validate short code format (8 characters, base64url-safe: A-Za-z0-9_-)
-    if (!isValidShortCode(shortCode)) {
-      // Dev-only logging for rejected short codes
-      if (process.env.NODE_ENV !== 'production') {
-        loggers.api.warn(
-          { 
-            pid: process.pid,
-            shortCode: shortCode || '(empty)',
-            length: shortCode?.length || 0,
-            reason: 'Invalid format - expected 8 chars matching [a-zA-Z0-9_-]'
-          },
-          'Short code validation failed'
-        );
-      }
-      return NextResponse.json(
-        { error: 'Invalid short code format', code: 'INVALID_FORMAT' },
-        { status: 400 }
-      );
-    }
+    // Lazy-load heavy server dependencies only for valid requests.
+    const [{ prisma }, { loggers }, { default: config }] = await Promise.all([
+      import('@/lib/server/prisma'),
+      import('@/lib/logger'),
+      import('@/lib/config/env'),
+    ]);
 
     // Get selected token from query params (for best snapshot selection)
     const selectedToken = request.nextUrl.searchParams.get('token')?.toUpperCase();

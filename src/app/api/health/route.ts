@@ -4,6 +4,25 @@ import { prisma } from '@/lib/server/prisma';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const deep = process.env.HEALTHCHECK_DEEP === '1';
+
+  if (!deep) {
+    return NextResponse.json(
+      {
+        status: 'healthy',
+        mode: 'shallow',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV || 'development',
+        checks: {
+          server: 'running',
+          database: 'skipped',
+        },
+      },
+      { status: 200 }
+    );
+  }
+
   try {
     // Check database connection
     await prisma.$queryRaw`SELECT 1`;

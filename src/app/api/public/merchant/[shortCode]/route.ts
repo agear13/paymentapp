@@ -6,24 +6,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { applyRateLimit } from '@/lib/rate-limit';
+import { isValidShortCode } from '@/lib/short-code';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ shortCode: string }> }
 ) {
   try {
-    const rateLimitResult = await applyRateLimit(request, 'public');
-    if (!rateLimitResult.success) {
-      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
-    }
-
-    // Next.js 15: await params
     const { shortCode } = await params;
-
-    log.info({ shortCode }, '[Merchant API] Request received');
 
     if (!shortCode) {
       log.warn('[Merchant API] Missing shortCode in request');
@@ -33,8 +25,21 @@ export async function GET(
       );
     }
 
+    if (!isValidShortCode(shortCode)) {
+      return NextResponse.json(
+        { error: 'Invalid short code format', code: 'INVALID_FORMAT' },
+        { status: 400 }
+      );
+    }
+
+    const rateLimitResult = await applyRateLimit(request, 'public');
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+    }
+
+    const { prisma } = await import('@/lib/server/prisma');
+
     // Find payment link with merchant settings
-    log.info({ shortCode }, '[Merchant API] Looking up payment link');
     const paymentLink = await prisma.payment_links.findUnique({
       where: { short_code: shortCode },
       select: {
@@ -51,11 +56,6 @@ export async function GET(
         { status: 404 }
       );
     }
-
-    log.info(
-      { shortCode, paymentLinkId: paymentLink.id, organizationId: paymentLink.organization_id },
-      '[Merchant API] Payment link found, fetching merchant settings'
-    );
 
     // Fetch merchant settings for the organization
     const merchantSettings = await prisma.merchant_settings.findFirst({
@@ -78,15 +78,6 @@ export async function GET(
         { status: 404 }
       );
     }
-
-    log.info(
-      {
-        shortCode,
-        hasHederaAccount: !!merchantSettings.hedera_account_id,
-        hasStripeAccount: !!merchantSettings.stripe_account_id,
-      },
-      '[Merchant API] Merchant settings found, returning data'
-    );
 
     return NextResponse.json({
       data: {
