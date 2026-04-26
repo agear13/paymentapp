@@ -50,6 +50,11 @@ export interface SendEmailOptions {
   text?: string
   replyTo?: string
   tags?: { name: string; value: string }[]
+  attachments?: {
+    filename: string
+    content: string
+    contentType?: string
+  }[]
 }
 
 export interface EmailResponse {
@@ -81,6 +86,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<EmailRespons
       text: options.text,
       reply_to: options.replyTo,
       tags: options.tags,
+      attachments: options.attachments,
     })
 
     if (error) {

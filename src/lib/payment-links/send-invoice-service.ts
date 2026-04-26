@@ -5,6 +5,12 @@ import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { sendInvoiceEmail } from '@/lib/email/send-invoice-email';
+import {
+  downloadPaymentLinkAttachmentFromStorage,
+  isValidPaymentLinkAttachmentStorageKey,
+  PAYMENT_LINK_ATTACHMENT_BUCKET,
+  PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
+} from '@/lib/payment-links/payment-link-attachment';
 
 export const SendInvoiceBodySchema = z.object({
   email: z.string().email('Enter a valid client email address.'),
@@ -30,6 +36,11 @@ export async function sendInvoiceForPaymentLink(params: {
       currency: true,
       description: true,
       invoice_reference: true,
+      attachment_storage_key: true,
+      attachment_bucket: true,
+      attachment_filename: true,
+      attachment_mime_type: true,
+      attachment_size_bytes: true,
       organizations: { select: { name: true } },
     },
   });
@@ -60,6 +71,53 @@ export async function sendInvoiceForPaymentLink(params: {
   }
 
   const paymentUrl = `${params.origin}/pay/${encodeURIComponent(link.short_code)}`;
+  let emailAttachment:
+    | {
+        filename: string;
+        mimeType?: string | null;
+        contentBase64: string;
+      }
+    | undefined;
+
+  const attachmentStorageKey = link.attachment_storage_key?.trim() || '';
+  if (attachmentStorageKey && isValidPaymentLinkAttachmentStorageKey(attachmentStorageKey)) {
+    const knownSize = link.attachment_size_bytes ?? 0;
+    if (knownSize > PAYMENT_LINK_ATTACHMENT_MAX_BYTES) {
+      return {
+        ok: false as const,
+        status: 400,
+        error: 'Invoice attachment is too large to send by email.',
+      };
+    }
+
+    try {
+      const bucket = link.attachment_bucket?.trim() || PAYMENT_LINK_ATTACHMENT_BUCKET;
+      const fileBuffer = await downloadPaymentLinkAttachmentFromStorage(
+        bucket,
+        attachmentStorageKey
+      );
+      if (fileBuffer.length > PAYMENT_LINK_ATTACHMENT_MAX_BYTES) {
+        return {
+          ok: false as const,
+          status: 400,
+          error: 'Invoice attachment is too large to send by email.',
+        };
+      }
+
+      emailAttachment = {
+        filename: (link.attachment_filename?.trim() || 'invoice-attachment').slice(0, 255),
+        mimeType: link.attachment_mime_type ?? undefined,
+        contentBase64: fileBuffer.toString('base64'),
+      };
+    } catch {
+      return {
+        ok: false as const,
+        status: 404,
+        error: 'Invoice attachment file unavailable. Re-upload attachment and try again.',
+      };
+    }
+  }
+
   const sendResult = await sendInvoiceEmail({
     toEmail: normalizedEmail,
     paymentUrl,
@@ -72,6 +130,7 @@ export async function sendInvoiceForPaymentLink(params: {
       description: link.description,
       invoiceReference: link.invoice_reference,
     },
+    attachment: emailAttachment,
   });
 
   if (!sendResult.success) {

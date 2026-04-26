@@ -14,6 +14,11 @@ type SendInvoiceEmailArgs = {
   };
   paymentUrl: string;
   merchantName: string;
+  attachment?: {
+    filename: string;
+    mimeType?: string | null;
+    contentBase64: string;
+  } | null;
 };
 
 function escapeHtml(input: string): string {
@@ -42,6 +47,7 @@ export async function sendInvoiceEmail({
   invoice,
   paymentUrl,
   merchantName,
+  attachment,
 }: SendInvoiceEmailArgs): Promise<{ success: boolean; error?: string; providerMessageId?: string }> {
   const fromEmail =
     process.env.RESEND_FROM_EMAIL || 'Provvypay <onboarding@resend.dev>';
@@ -92,6 +98,15 @@ export async function sendInvoiceEmail({
       { name: 'invoice_id', value: invoice.id },
       { name: 'payment_link', value: invoice.shortCode },
     ],
+    attachments: attachment
+      ? [
+          {
+            filename: attachment.filename,
+            content: attachment.contentBase64,
+            contentType: attachment.mimeType || undefined,
+          },
+        ]
+      : undefined,
   });
 
   if (!response.success) {
