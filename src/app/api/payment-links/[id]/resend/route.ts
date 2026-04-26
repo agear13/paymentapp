@@ -11,6 +11,22 @@ import {
   sendInvoiceForPaymentLink,
 } from '@/lib/payment-links/send-invoice-service';
 
+function resolvePublicOrigin(request: NextRequest): string {
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.trim();
+  const forwardedHost = request.headers.get('x-forwarded-host')?.trim();
+  if (forwardedProto && forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  const host = request.headers.get('host')?.trim();
+  if (host) {
+    const protocol = request.nextUrl.protocol || 'https:';
+    return `${protocol}//${host}`;
+  }
+
+  return process.env.NEXT_PUBLIC_APP_URL?.trim() || request.nextUrl.origin;
+}
+
 const ResendBodySchema = z.object({
   email: z.string().email('Enter a valid client email address.').optional(),
 });
@@ -58,7 +74,7 @@ export async function POST(
       paymentLinkId: params.id,
       userId: user.id,
       email,
-      origin: request.nextUrl.origin,
+      origin: resolvePublicOrigin(request),
     });
 
     if (!result.ok) {
