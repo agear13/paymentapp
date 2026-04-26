@@ -8,12 +8,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
+import { applyRateLimit } from '@/lib/rate-limit';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ shortCode: string }> }
 ) {
   try {
+    const rateLimitResult = await applyRateLimit(request, 'public');
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+    }
+
     // Next.js 15: await params
     const { shortCode } = await params;
 

@@ -273,20 +273,19 @@ export async function prewarmRateCache(currencies: string[] = ['USD', 'AUD']): P
  * Keeps cache warm by refreshing rates every 45 seconds
  */
 export function startCacheRefresh(currencies: string[] = ['USD', 'AUD']): void {
-  const { log } = require('@/lib/logger');
-  const logger = log.child({ domain: 'fx:cache-refresh' });
+  const refreshLogger = log.child({ domain: 'fx:cache-refresh' });
 
-  logger.info({ currencies }, 'Starting background cache refresh');
+  refreshLogger.info('Starting background cache refresh', { currencies });
 
   // Initial pre-warm
   prewarmRateCache(currencies).catch(error => {
-    logger.error({ error }, 'Initial cache pre-warm failed');
+    refreshLogger.error('Initial cache pre-warm failed', error);
   });
 
   // Refresh every 45 seconds (before 60s TTL expires)
   setInterval(() => {
     prewarmRateCache(currencies).catch(error => {
-      logger.error({ error }, 'Cache refresh failed');
+      refreshLogger.error('Cache refresh failed', error);
     });
   }, 45000); // 45 seconds
 }

@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getFailedSyncs } from '@/lib/xero/queue-service';
 import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 /**
  * GET /api/xero/sync/failed?organization_id=xxx&limit=50
@@ -47,7 +48,17 @@ export async function GET(request: NextRequest) {
 
     const limit = limitParam ? Math.min(parseInt(limitParam, 10), 200) : 50;
 
-    // TODO: Verify user has permission to access this organization
+    const canViewSettings = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'view_settings'
+    );
+    if (!canViewSettings) {
+      return NextResponse.json(
+        { error: 'Forbidden - insufficient organization permissions' },
+        { status: 403 }
+      );
+    }
 
     // Get failed syncs for organization
     const failedSyncs = await prisma.xero_syncs.findMany({

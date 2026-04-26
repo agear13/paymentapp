@@ -269,17 +269,17 @@ export default function PaymentLinksPage() {
     [fetchPaymentLinks, handleManualSettlementComplete, selectedPaymentLink?.id, toast]
   );
 
-  const handleResend = async (paymentLink: PaymentLinkDetailPayload, email: string) => {
+  const handleSendInvoice = async (paymentLink: PaymentLinkDetailPayload, email: string) => {
     try {
-      const response = await fetch(`/api/payment-links/${paymentLink.id}/resend`, {
+      const response = await fetch(`/api/payment-links/${paymentLink.id}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to resend notification');
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Could not send invoice');
       }
 
       toast({
@@ -293,6 +293,33 @@ export default function PaymentLinksPage() {
         description: error.message || 'Could not send invoice',
         variant: 'destructive',
       });
+      throw error;
+    }
+  };
+
+  const handleResend = async (paymentLink: PaymentLinkDetailPayload) => {
+    try {
+      const response = await fetch(`/api/payment-links/${paymentLink.id}/resend`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Could not resend invoice');
+      }
+
+      toast({
+        title: 'Invoice resent',
+        description: 'Invoice sent to the last recipient email.',
+      });
+      await handleManualSettlementComplete();
+    } catch (error: any) {
+      toast({
+        title: 'Could not send invoice',
+        description: error.message || 'Could not send invoice',
+        variant: 'destructive',
+      });
+      throw error;
     }
   };
 
@@ -759,6 +786,9 @@ export default function PaymentLinksPage() {
         paymentLink={selectedPaymentLink}
         open={detailDialogOpen}
         onOpenChange={setDetailDialogOpen}
+        onSendInvoice={(paymentLink, email) => {
+          void handleSendInvoice(paymentLink, email);
+        }}
         onResend={(paymentLink) => {
           void handleResend(paymentLink);
         }}

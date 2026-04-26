@@ -4,15 +4,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthedParticipantForProgram } from '@/lib/referrals/participant-auth';
 import { buildShareTemplates } from '@/lib/referrals/share-templates';
 
 function generateToken(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const random = crypto.randomBytes(16);
   let token = '';
   for (let i = 0; i < 16; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
+    token += chars[random[i] % chars.length];
   }
   return token;
 }

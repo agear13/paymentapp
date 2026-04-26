@@ -21,8 +21,16 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const parsed = SendInvoiceBodySchema.safeParse(body);
+    const body = await request.json().catch(() => ({}));
+    const emailRaw =
+      body && typeof body.email === 'string' ? body.email.trim() : '';
+    if (!emailRaw) {
+      return NextResponse.json(
+        { error: 'Client email is required to send invoice' },
+        { status: 400 }
+      );
+    }
+    const parsed = SendInvoiceBodySchema.safeParse({ email: emailRaw });
     if (!parsed.success) {
       return NextResponse.json(
         { error: parsed.error.issues[0]?.message || 'Invalid email' },

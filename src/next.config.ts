@@ -1,12 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // ✅ Allow builds to succeed even with ESLint warnings/errors
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
 
-  // ✅ Allow builds to succeed even with TypeScript errors
+  // Remaining strictness debt in `lib/payments/*`, `lib/payment/edge-case-handler.ts`, and Prisma JSON snapshots; tracked in SECURITY_AND_SCALE.md.
   typescript: {
     ignoreBuildErrors: true,
   },

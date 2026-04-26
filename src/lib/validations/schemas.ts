@@ -421,7 +421,7 @@ export const PaymentEventSchema = z.object({
   hederaTransactionId: hederaTransactionIdSchema.nullable(),
   amountReceived: z.number().nullable(),
   currencyReceived: currencyCodeSchema.nullable(),
-  metadata: z.record(z.any()).nullable(),
+  metadata: z.record(z.string(), z.any()).nullable(),
   createdAt: z.date(),
 });
 
@@ -433,7 +433,7 @@ export const CreatePaymentEventSchema = z.object({
   hederaTransactionId: hederaTransactionIdSchema.optional(),
   amountReceived: z.number().positive().optional(),
   currencyReceived: currencyCodeSchema.optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 // ============================================================================
@@ -553,8 +553,8 @@ export const XeroSyncSchema = z.object({
   status: XeroSyncStatusSchema,
   xeroInvoiceId: z.string().max(255).nullable(),
   xeroPaymentId: z.string().max(255).nullable(),
-  requestPayload: z.record(z.any()),
-  responsePayload: z.record(z.any()).nullable(),
+  requestPayload: z.record(z.string(), z.any()),
+  responsePayload: z.record(z.string(), z.any()).nullable(),
   errorMessage: z.string().nullable(),
   retryCount: z.number().int().min(0).max(5),
   nextRetryAt: z.date().nullable(),
@@ -565,7 +565,7 @@ export const XeroSyncSchema = z.object({
 export const CreateXeroSyncSchema = z.object({
   paymentLinkId: uuidSchema,
   syncType: XeroSyncTypeSchema,
-  requestPayload: z.record(z.any()),
+  requestPayload: z.record(z.string(), z.any()),
 });
 
 // ============================================================================
@@ -579,8 +579,8 @@ export const AuditLogSchema = z.object({
   entityType: z.string().max(100),
   entityId: uuidSchema,
   action: z.string().max(50),
-  oldValues: z.record(z.any()).nullable(),
-  newValues: z.record(z.any()).nullable(),
+  oldValues: z.record(z.string(), z.any()).nullable(),
+  newValues: z.record(z.string(), z.any()).nullable(),
   ipAddress: z.string().max(45).nullable(),
   userAgent: z.string().nullable(),
   createdAt: z.date(),
@@ -599,8 +599,8 @@ export const CreateAuditLogSchema = z.object({
     'PAYMENT_RECEIVED',
     'SYNC_ATTEMPTED',
   ]),
-  oldValues: z.record(z.any()).optional(),
-  newValues: z.record(z.any()).optional(),
+  oldValues: z.record(z.string(), z.any()).optional(),
+  newValues: z.record(z.string(), z.any()).optional(),
   ipAddress: z.string().max(45).optional(),
   userAgent: z.string().optional(),
 });

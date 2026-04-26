@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getSyncStatus } from '@/lib/xero/queue-service';
 import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 /**
  * GET /api/xero/sync/status?payment_link_id=xxx&organization_id=xxx
@@ -65,7 +66,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // TODO: Verify user has permission to access this organization
+    const canViewSettings = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'view_settings'
+    );
+    if (!canViewSettings) {
+      return NextResponse.json(
+        { error: 'Forbidden - insufficient organization permissions' },
+        { status: 403 }
+      );
+    }
 
     // Get sync status
     const syncs = await getSyncStatus(paymentLinkId);

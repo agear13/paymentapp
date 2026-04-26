@@ -11,6 +11,7 @@ import {
   searchXeroAccounts 
 } from '@/lib/xero/accounts-service';
 import { logger } from '@/lib/logger';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 export async function GET(request: NextRequest) {
   // Get organization from query params (before try block for error logging)
@@ -36,7 +37,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // TODO: Verify user has permission to access Xero accounts for this organization
+    const canViewSettings = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'view_settings'
+    );
+    if (!canViewSettings) {
+      return NextResponse.json(
+        { error: 'Forbidden - insufficient organization permissions' },
+        { status: 403 }
+      );
+    }
 
     // Optional query parameters for filtering
     const accountType = searchParams.get('type');

@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { prisma } from '@/lib/server/prisma';
 import {
   markStripeWebhookProcessing,
@@ -19,7 +20,12 @@ export async function POST(request: NextRequest) {
   const adminToken = process.env.INTERNAL_ADMIN_TOKEN;
   const headerToken = request.headers.get('x-internal-admin-token');
 
-  if (!adminToken || headerToken !== adminToken) {
+  if (!adminToken || !headerToken) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const provided = Buffer.from(headerToken);
+  const expected = Buffer.from(adminToken);
+  if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

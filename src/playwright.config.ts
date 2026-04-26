@@ -16,10 +16,15 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: `npm run dev -- -p ${e2ePort}`,
+        // Use `next dev` directly so `-p` is not swallowed by npm on Windows.
+        command: `npx next dev -p ${e2ePort}`,
         url: defaultBaseUrl,
         reuseExistingServer: !process.env.CI,
         timeout: 180_000,
+        env: {
+          ...process.env,
+          RELAX_ENV_VALIDATION: '1',
+        },
       },
   projects: [
     {

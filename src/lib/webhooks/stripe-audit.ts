@@ -50,7 +50,7 @@ export interface RecordReceivedResult {
  * Extract linkage fields from a Stripe event for audit and indexing.
  */
 export function extractStripeLinkage(event: Stripe.Event): StripeLinkage {
-  const obj = event.data?.object as Record<string, unknown> | undefined;
+  const obj = event.data?.object as unknown as Record<string, unknown> | undefined;
   const metadata =
     obj && typeof obj.metadata === 'object' && obj.metadata !== null
       ? (obj.metadata as Record<string, string>)
@@ -139,8 +139,8 @@ export async function recordStripeWebhookReceived(
         status: 'RECEIVED',
         attempt_count: 0,
         raw_body: rawBody,
-        headers: allowlistHeaders(headers),
-        parsed_event: event as unknown as Record<string, unknown>,
+        headers: allowlistHeaders(headers) as import('@prisma/client').Prisma.InputJsonValue,
+        parsed_event: event as unknown as import('@prisma/client').Prisma.InputJsonValue,
         correlation_id: correlationId,
         organization_id: linkage.organization_id,
         payment_link_id: linkage.payment_link_id,

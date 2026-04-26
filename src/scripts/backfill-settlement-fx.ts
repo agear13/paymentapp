@@ -21,7 +21,7 @@ async function backfillSettlementFx() {
     where: { status: { in: [...STATUSES] } },
     select: { id: true, currency: true, status: true },
   });
-  log.info({ count: links.length }, 'Backfill: found paid/refunded links');
+  log.info('Backfill: found paid/refunded links', { count: links.length });
   let created = 0;
   let skipped = 0;
   for (const link of links) {
@@ -56,23 +56,28 @@ async function backfillSettlementFx() {
         },
       });
       created++;
-      log.info(
-        { paymentLinkId: link.id, currency, status: link.status },
-        'Backfill: created SETTLEMENT fx snapshot'
-      );
+      log.info('Backfill: created SETTLEMENT fx snapshot', {
+        paymentLinkId: link.id,
+        currency,
+        status: link.status,
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes('unique') || message.includes('Unique constraint')) {
         skipped++;
         continue;
       }
-      log.error({ paymentLinkId: link.id, error: message }, 'Backfill: failed to create snapshot');
+      log.error('Backfill: failed to create snapshot', undefined, {
+        paymentLinkId: link.id,
+        error: message,
+      });
     }
   }
-  log.info(
-    { created, skipped, total: links.length },
-    'Backfill SETTLEMENT fx_snapshots: done'
-  );
+  log.info('Backfill SETTLEMENT fx_snapshots: done', {
+    created,
+    skipped,
+    total: links.length,
+  });
   return { created, skipped, total: links.length };
 }
 

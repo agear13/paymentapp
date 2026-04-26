@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { updateSelectedTenant } from '@/lib/xero';
 import { logger } from '@/lib/logger';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,7 +33,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Verify user has permission to update tenant for this organization
+    const canManageSettings = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'manage_settings'
+    );
+    if (!canManageSettings) {
+      return NextResponse.json(
+        { error: 'Forbidden - insufficient organization permissions' },
+        { status: 403 }
+      );
+    }
 
     // Update selected tenant
     await updateSelectedTenant(organizationId, tenantId);

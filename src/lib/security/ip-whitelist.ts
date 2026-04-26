@@ -61,7 +61,7 @@ function getClientIP(request: NextRequest): string | null {
     return cfConnectingIp;
   }
 
-  return request.ip || null;
+  return null;
 }
 
 /**
@@ -76,7 +76,7 @@ function isIPInCIDR(ip: string, cidr: string): boolean {
 
   // For CIDR ranges, you'd need to implement proper subnet matching
   // For now, return false and log warning
-  log.warn({ ip, cidr }, 'CIDR range checking not fully implemented');
+  log.warn('CIDR range checking not fully implemented', { ip, cidr });
   return false;
 }
 
@@ -126,7 +126,7 @@ export function validateWebhookIP(
   const ip = getClientIP(request);
 
   if (!ip) {
-    log.warn({ source }, 'Webhook IP validation failed: No IP address found');
+    log.warn('Webhook IP validation failed: No IP address found', { source });
     return {
       allowed: false,
       ip: null,
@@ -155,11 +155,11 @@ export function validateWebhookIP(
   }
 
   if (!allowed) {
-    log.warn({
+    log.warn('Webhook IP validation failed', {
       source,
       ip,
       reason,
-    }, 'Webhook IP validation failed');
+    });
   }
 
   return { allowed, ip, reason };
@@ -180,12 +180,12 @@ export function webhookIPMiddleware(
   const validation = validateWebhookIP(request, source);
 
   if (!validation.allowed) {
-    log.warn({
+    log.warn('Blocked webhook request from unauthorized IP', {
       source,
       ip: validation.ip,
       path: new URL(request.url).pathname,
       userAgent: request.headers.get('user-agent'),
-    }, 'Blocked webhook request from unauthorized IP');
+    });
   }
 
   return validation.allowed;
@@ -203,7 +203,7 @@ export function logWebhookAccess(
   const ip = getClientIP(request);
   const pathname = new URL(request.url).pathname;
 
-  log.info({
+  log.info(`Webhook access ${allowed && authenticated ? 'granted' : 'denied'}`, {
     source,
     ip,
     path: pathname,
@@ -212,7 +212,7 @@ export function logWebhookAccess(
     authenticated,
     userAgent: request.headers.get('user-agent'),
     timestamp: new Date().toISOString(),
-  }, `Webhook access ${allowed && authenticated ? 'granted' : 'denied'}`);
+  });
 }
 
 

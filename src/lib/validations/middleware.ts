@@ -4,8 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { ZodSchema, ZodError } from 'zod';
-import { logger } from '@/lib/logger';
+import { ZodSchema, ZodError, ZodObject, type ZodRawShape } from 'zod';
+import { log } from '@/lib/logger';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -43,12 +43,12 @@ export const validateRequestBody = async <T>(
     };
   } catch (error) {
     if (error instanceof ZodError) {
-      const errors: ValidationError[] = error.errors.map((err) => ({
+      const errors: ValidationError[] = error.issues.map((err) => ({
         field: err.path.join('.'),
         message: err.message,
       }));
       
-      logger.warn('Request body validation failed', { errors });
+      log.warn('Request body validation failed', { errors });
       
       return {
         success: false,
@@ -57,7 +57,9 @@ export const validateRequestBody = async <T>(
     }
     
     // Handle JSON parse errors
-    logger.error('Failed to parse request body', { error });
+    log.error('Failed to parse request body', error instanceof Error ? error : undefined, {
+      error: String(error),
+    });
     
     return {
       success: false,
@@ -89,12 +91,12 @@ export const validateQueryParams = <T>(
     };
   } catch (error) {
     if (error instanceof ZodError) {
-      const errors: ValidationError[] = error.errors.map((err) => ({
+      const errors: ValidationError[] = error.issues.map((err) => ({
         field: err.path.join('.'),
         message: err.message,
       }));
       
-      logger.warn('Query parameters validation failed', { errors });
+      log.warn('Query parameters validation failed', { errors });
       
       return {
         success: false,
@@ -102,7 +104,9 @@ export const validateQueryParams = <T>(
       };
     }
     
-    logger.error('Failed to validate query parameters', { error });
+    log.error('Failed to validate query parameters', error instanceof Error ? error : undefined, {
+      error: String(error),
+    });
     
     return {
       success: false,
@@ -127,12 +131,12 @@ export const validatePathParams = <T>(
     };
   } catch (error) {
     if (error instanceof ZodError) {
-      const errors: ValidationError[] = error.errors.map((err) => ({
+      const errors: ValidationError[] = error.issues.map((err) => ({
         field: err.path.join('.'),
         message: err.message,
       }));
       
-      logger.warn('Path parameters validation failed', { errors });
+      log.warn('Path parameters validation failed', { errors });
       
       return {
         success: false,
@@ -140,7 +144,9 @@ export const validatePathParams = <T>(
       };
     }
     
-    logger.error('Failed to validate path parameters', { error });
+    log.error('Failed to validate path parameters', error instanceof Error ? error : undefined, {
+      error: String(error),
+    });
     
     return {
       success: false,
@@ -253,7 +259,9 @@ export const withValidation = <TBody = unknown, TQuery = unknown, TParams = unkn
     try {
       return await handler(validatedContext);
     } catch (error) {
-      logger.error('Route handler error', { error });
+      log.error('Route handler error', error instanceof Error ? error : undefined, {
+        error: String(error),
+      });
       
       return NextResponse.json(
         {
@@ -282,11 +290,11 @@ export const safeParse = <T>(
     return { success: true, data: validatedData };
   } catch (error) {
     if (error instanceof ZodError) {
-      const errors: ValidationError[] = error.errors.map((err) => ({
+      const errors: ValidationError[] = error.issues.map((err) => ({
         field: err.path.join('.'),
         message: err.message,
       }));
-      
+
       return { success: false, errors };
     }
     
@@ -302,29 +310,29 @@ export const safeParse = <T>(
  */
 export const validatePartial = <T>(
   data: unknown,
-  schema: ZodSchema<T>
+  schema: ZodObject<ZodRawShape>
 ): ValidationResult<Partial<T>> => {
   try {
     const partialSchema = schema.partial();
     const validatedData = partialSchema.parse(data);
-    
+
     return {
       success: true,
-      data: validatedData,
+      data: validatedData as Partial<T>,
     };
   } catch (error) {
     if (error instanceof ZodError) {
-      const errors: ValidationError[] = error.errors.map((err) => ({
+      const errors: ValidationError[] = error.issues.map((err) => ({
         field: err.path.join('.'),
         message: err.message,
       }));
-      
+
       return {
         success: false,
         errors,
       };
     }
-    
+
     return {
       success: false,
       errors: [{ field: 'unknown', message: 'Validation failed' }],

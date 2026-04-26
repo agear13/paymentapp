@@ -162,7 +162,6 @@ export async function POST(request: NextRequest) {
 
     // 5. Extract and validate transfer amount
     let amountReceived = 0;
-    let actualToken = token;
 
     if (token === 'HBAR') {
       // Find HBAR transfer to merchant

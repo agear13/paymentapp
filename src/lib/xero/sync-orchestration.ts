@@ -7,6 +7,7 @@
 import { createXeroInvoice } from './invoice-service';
 import { recordXeroPayment } from './payment-service';
 import { prisma } from '@/lib/server/prisma';
+import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import type { TokenType } from '@/lib/hedera/types';
 
@@ -224,9 +225,9 @@ export async function syncPaymentToXero(
         xero_invoice_id: invoiceResult.invoiceId,
         xero_payment_id: paymentResult.paymentId,
         response_payload: {
-          invoice: invoiceResult as unknown as Record<string, unknown>,
-          payment: paymentResult as unknown as Record<string, unknown>,
-        },
+          invoice: invoiceResult as unknown as Prisma.InputJsonValue,
+          payment: paymentResult as unknown as Prisma.InputJsonValue,
+        } as Prisma.InputJsonValue,
         error_message: null, // Clear any previous errors
         next_retry_at: null, // Clear retry schedule
         updated_at: new Date(),
@@ -247,9 +248,9 @@ export async function syncPaymentToXero(
           transactionId,
         },
         response_payload: {
-          invoice: invoiceResult as unknown as Record<string, unknown>,
-          payment: paymentResult as unknown as Record<string, unknown>,
-        },
+          invoice: invoiceResult as unknown as Prisma.InputJsonValue,
+          payment: paymentResult as unknown as Prisma.InputJsonValue,
+        } as Prisma.InputJsonValue,
         retry_count: 0,
         created_at: new Date(),
         updated_at: new Date(),

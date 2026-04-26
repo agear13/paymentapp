@@ -13,6 +13,7 @@ import {
   getSyncStatus,
 } from '@/lib/xero/queue-service';
 import { logger } from '@/lib/logger';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 /**
  * GET /api/xero/sync/stats?organization_id=xxx
@@ -46,7 +47,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // TODO: Verify user has permission to access this organization
+    const canViewSettings = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'view_settings'
+    );
+    if (!canViewSettings) {
+      return NextResponse.json(
+        { error: 'Forbidden - insufficient organization permissions' },
+        { status: 403 }
+      );
+    }
 
     // Get statistics
     const stats = await getSyncStatistics(organizationId);

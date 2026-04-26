@@ -13,11 +13,16 @@
 
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
+import type { Prisma } from '@prisma/client';
 import { XeroClient } from 'xero-node';
 import { convertCurrency } from '@/lib/currency/currency-converter';
 import { getCurrency } from '@/lib/currency/currency-config';
 import { getActiveRateOverride } from '@/lib/currency/rate-management';
 import type { MultiCurrencyInvoice } from '@/lib/currency/multi-currency-line-items';
+
+function asInputJson(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
+}
 
 // ============================================================================
 // Types
@@ -80,7 +85,7 @@ export async function syncMultiCurrencyPaymentToXero(
   paymentLinkId: string,
   organizationId: string
 ): Promise<MultiCurrencySyncResult> {
-  log.info({ paymentLinkId, organizationId }, 'Starting multi-currency Xero sync');
+  log.info('Starting multi-currency Xero sync', { paymentLinkId, organizationId });
 
   try {
     // Get payment link details
@@ -105,8 +110,9 @@ export async function syncMultiCurrencyPaymentToXero(
     }
 
     // Get merchant settings for Xero account mappings
-    const merchantSettings = await prisma.merchant_settings.findUnique({
+    const merchantSettings = await prisma.merchant_settings.findFirst({
       where: { organization_id: organizationId },
+      orderBy: { created_at: 'desc' },
     });
 
     if (!merchantSettings) {
@@ -161,17 +167,14 @@ export async function syncMultiCurrencyPaymentToXero(
       );
     }
 
-    log.info(
-      {
-        paymentLinkId,
-        xeroInvoiceId,
-        xeroPaymentId,
-        baseCurrency,
-        paymentCurrency,
-        conversionRate,
-      },
-      'Multi-currency Xero sync complete'
-    );
+    log.info('Multi-currency Xero sync complete', {
+      paymentLinkId,
+      xeroInvoiceId,
+      xeroPaymentId,
+      baseCurrency,
+      paymentCurrency,
+      conversionRate,
+    });
 
     return {
       success: true,
@@ -181,16 +184,18 @@ export async function syncMultiCurrencyPaymentToXero(
       paymentCurrency,
       conversionRate,
     };
-  } catch (error: any) {
-    log.error(
-      { paymentLinkId, organizationId, error: error.message },
-      'Multi-currency Xero sync failed'
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    log.error('Multi-currency Xero sync failed', error instanceof Error ? error : undefined, {
+      paymentLinkId,
+      organizationId,
+      message,
+    });
 
     return {
       success: false,
       invoiceCurrency: 'USD',
-      error: error.message,
+      error: message,
     };
   }
 }
@@ -204,7 +209,7 @@ async function syncMultiCurrencyInvoiceToXero(
   invoice: any,
   merchantSettings: any
 ): Promise<string> {
-  log.info({ paymentLinkId }, 'Syncing multi-currency invoice to Xero');
+  log.info('Syncing multi-currency invoice to Xero', { paymentLinkId });
 
   // Get Xero connection
   const xeroConnection = await prisma.xero_connections.findUnique({
@@ -278,8 +283,8 @@ async function syncMultiCurrencyInvoiceToXero(
     update: {
       status: 'SUCCESS',
       xero_invoice_id: xeroInvoiceId,
-      request_payload: xeroInvoice,
-      response_payload: { InvoiceID: xeroInvoiceId },
+      request_payload: asInputJson(xeroInvoice),
+      response_payload: asInputJson({ InvoiceID: xeroInvoiceId }),
       updated_at: new Date(),
     },
     create: {
@@ -288,8 +293,8 @@ async function syncMultiCurrencyInvoiceToXero(
       sync_type: 'INVOICE',
       status: 'SUCCESS',
       xero_invoice_id: xeroInvoiceId,
-      request_payload: xeroInvoice,
-      response_payload: { InvoiceID: xeroInvoiceId },
+      request_payload: asInputJson(xeroInvoice),
+      response_payload: asInputJson({ InvoiceID: xeroInvoiceId }),
       retry_count: 0,
       created_at: new Date(),
       updated_at: new Date(),
@@ -309,7 +314,7 @@ async function syncSimpleInvoiceToXero(
   merchantSettings: any,
   currency: string
 ): Promise<string> {
-  log.info({ paymentLinkId, currency }, 'Syncing simple invoice to Xero');
+  log.info('Syncing simple invoice to Xero', { paymentLinkId, currency });
 
   // Build Xero invoice
   const xeroInvoice: XeroMultiCurrencyInvoice = {
@@ -353,8 +358,8 @@ async function syncSimpleInvoiceToXero(
     update: {
       status: 'SUCCESS',
       xero_invoice_id: xeroInvoiceId,
-      request_payload: xeroInvoice,
-      response_payload: { InvoiceID: xeroInvoiceId },
+      request_payload: asInputJson(xeroInvoice),
+      response_payload: asInputJson({ InvoiceID: xeroInvoiceId }),
       updated_at: new Date(),
     },
     create: {
@@ -363,8 +368,8 @@ async function syncSimpleInvoiceToXero(
       sync_type: 'INVOICE',
       status: 'SUCCESS',
       xero_invoice_id: xeroInvoiceId,
-      request_payload: xeroInvoice,
-      response_payload: { InvoiceID: xeroInvoiceId },
+      request_payload: asInputJson(xeroInvoice),
+      response_payload: asInputJson({ InvoiceID: xeroInvoiceId }),
       retry_count: 0,
       created_at: new Date(),
       updated_at: new Date(),
@@ -385,7 +390,7 @@ async function syncPaymentToXero(
   paymentCurrency: string,
   conversionRate: number
 ): Promise<string> {
-  log.info({ xeroInvoiceId, paymentCurrency }, 'Syncing payment to Xero');
+  log.info('Syncing payment to Xero', { xeroInvoiceId, paymentCurrency });
 
   // Determine clearing account based on payment method
   let clearingAccountCode: string;
@@ -445,8 +450,8 @@ async function syncPaymentToXero(
     update: {
       status: 'SUCCESS',
       xero_payment_id: xeroPaymentId,
-      request_payload: xeroPayment,
-      response_payload: { PaymentID: xeroPaymentId },
+      request_payload: asInputJson(xeroPayment),
+      response_payload: asInputJson({ PaymentID: xeroPaymentId }),
       updated_at: new Date(),
     },
     create: {
@@ -455,8 +460,8 @@ async function syncPaymentToXero(
       sync_type: 'PAYMENT',
       status: 'SUCCESS',
       xero_payment_id: xeroPaymentId,
-      request_payload: xeroPayment,
-      response_payload: { PaymentID: xeroPaymentId },
+      request_payload: asInputJson(xeroPayment),
+      response_payload: asInputJson({ PaymentID: xeroPaymentId }),
       retry_count: 0,
       created_at: new Date(),
       updated_at: new Date(),
@@ -483,15 +488,18 @@ export async function getEffectiveExchangeRate(
   );
 
   if (override) {
-    log.info(
-      { organizationId, baseCurrency, quoteCurrency, rate: override.overrideRate },
-      'Using custom rate override for Xero sync'
-    );
+    log.info('Using custom rate override for Xero sync', {
+      organizationId,
+      baseCurrency,
+      quoteCurrency,
+      rate: override.overrideRate,
+    });
     return override.overrideRate;
   }
 
   // Fall back to market rate
-  return await convertCurrency(1, baseCurrency, quoteCurrency);
+  const converted = await convertCurrency(1, baseCurrency, quoteCurrency);
+  return converted.rate;
 }
 
 /**

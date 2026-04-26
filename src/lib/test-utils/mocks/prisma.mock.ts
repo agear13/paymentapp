@@ -1,8 +1,17 @@
 /**
  * Prisma Client Mock
  */
-
-export const mockPrisma = {
+export const mockPrisma: {
+  paymentLink: Record<string, jest.Mock>;
+  paymentEvent: Record<string, jest.Mock>;
+  fxSnapshot: Record<string, jest.Mock>;
+  ledgerEntry: Record<string, jest.Mock>;
+  xeroSync: Record<string, jest.Mock>;
+  merchantSettings: Record<string, jest.Mock>;
+  $transaction: jest.Mock;
+  $connect: jest.Mock;
+  $disconnect: jest.Mock;
+} = {
   paymentLink: {
     findUnique: jest.fn(),
     findMany: jest.fn(),
@@ -36,21 +45,21 @@ export const mockPrisma = {
     findFirst: jest.fn(),
     update: jest.fn(),
   },
-  $transaction: jest.fn((callback) => callback(mockPrisma)),
+  $transaction: jest.fn((callback: (p: typeof mockPrisma) => unknown) => callback(mockPrisma)),
   $connect: jest.fn(),
   $disconnect: jest.fn(),
 }
 
 export function resetPrismaMocks() {
-  Object.values(mockPrisma).forEach((mockFn) => {
-    if (typeof mockFn === 'object') {
-      Object.values(mockFn).forEach((fn) => {
-        if (typeof fn.mockReset === 'function') {
-          fn.mockReset()
+  for (const mockFn of Object.values(mockPrisma)) {
+    if (mockFn && typeof mockFn === 'object') {
+      for (const fn of Object.values(mockFn)) {
+        if (fn && typeof fn === 'object' && 'mockReset' in fn && typeof (fn as { mockReset: () => void }).mockReset === 'function') {
+          (fn as { mockReset: () => void }).mockReset();
         }
-      })
+      }
     }
-  })
+  }
 }
 
 

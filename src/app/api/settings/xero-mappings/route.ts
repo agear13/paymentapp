@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 // GET /api/settings/xero-mappings?organization_id=xxx
 export async function GET(request: NextRequest) {
@@ -33,7 +34,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // TODO: Verify user has permission to access settings for this organization
+    const canViewSettings = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'view_settings'
+    );
+    if (!canViewSettings) {
+      return NextResponse.json(
+        { error: 'Forbidden - insufficient organization permissions' },
+        { status: 403 }
+      );
+    }
 
     // Fetch merchant settings with Xero mappings
     const settings = await prisma.merchant_settings.findFirst({
@@ -86,7 +97,17 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // TODO: Verify user has permission to update settings for this organization
+    const canManageSettings = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'manage_settings'
+    );
+    if (!canManageSettings) {
+      return NextResponse.json(
+        { error: 'Forbidden - insufficient organization permissions' },
+        { status: 403 }
+      );
+    }
 
     // Validate all required mappings
     const required = [

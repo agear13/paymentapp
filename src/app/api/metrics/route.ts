@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/supabase/middleware';
+import { checkAdminAuth } from '@/lib/auth/admin.server';
 import {
   performanceMonitor,
   queryPerformanceTracker,
@@ -27,10 +28,10 @@ export async function GET(request: NextRequest) {
     // Require authentication
     const auth = await requireAuth(request);
     if (!auth.user) return auth.response!;
-    const { user } = auth;
-
-    // TODO: Add admin permission check
-    // For now, allow any authenticated user
+    const adminAuth = await checkAdminAuth();
+    if (!adminAuth.isAdmin) {
+      return NextResponse.json({ error: 'Forbidden - admin access required' }, { status: 403 });
+    }
 
     // Get performance summaries
     const apiMetrics = performanceMonitor.getSummary('api_request');
@@ -91,7 +92,10 @@ export async function DELETE(request: NextRequest) {
     // Require authentication
     const auth = await requireAuth(request);
     if (!auth.user) return auth.response!;
-    const { user } = auth;
+    const adminAuth = await checkAdminAuth();
+    if (!adminAuth.isAdmin) {
+      return NextResponse.json({ error: 'Forbidden - admin access required' }, { status: 403 });
+    }
 
     // Clear all metrics
     performanceMonitor.clear();

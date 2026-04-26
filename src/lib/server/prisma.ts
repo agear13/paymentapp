@@ -11,8 +11,11 @@
 
 // Next.js "server-only" is a compile-time hint; it doesn't exist in plain Node scripts.
 try {
-  require('server-only')
-} catch {}
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- optional dependency for Next bundles only
+  require('server-only');
+} catch {
+  /* scripts / tests */
+}
 import { PrismaClient } from '@prisma/client';
 
 // Runtime guard: Throw if accidentally imported in browser

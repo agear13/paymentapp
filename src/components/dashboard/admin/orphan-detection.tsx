@@ -67,7 +67,7 @@ export function OrphanDetection() {
       // Check each paid link for sync records
       const orphanList: OrphanLink[] = [];
       let noSyncCount = 0;
-      let noLedgerCount = 0;
+      const noLedgerCount = 0;
 
       for (const link of paidLinks) {
         try {

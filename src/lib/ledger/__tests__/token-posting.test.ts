@@ -7,78 +7,78 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import {
-  getCryptoClearing AccountCode,
+  getCryptoClearingAccountCode,
   validateTokenAccountMapping,
-  getTokenFromClearing Account,
-  getAllCryptoClearing Accounts,
+  getTokenFromClearingAccount,
+  getAllCryptoClearingAccounts,
   LEDGER_ACCOUNTS,
 } from '../account-mapping';
 import {
   postHederaSettlement,
   validateHederaPosting,
-  getAllHederaClearing Accounts,
+  getAllHederaClearingAccounts,
 } from '../posting-rules/hedera';
 import type { TokenType } from '@/lib/hedera/constants';
 
 describe('Token-to-Account Mapping', () => {
-  describe('getCryptoClearing AccountCode', () => {
+  describe('getCryptoClearingAccountCode', () => {
     it('should map HBAR to account 1051', () => {
-      const accountCode = getCryptoClearing AccountCode('HBAR');
+      const accountCode = getCryptoClearingAccountCode('HBAR');
       expect(accountCode).toBe('1051');
     });
 
     it('should map USDC to account 1052', () => {
-      const accountCode = getCryptoClearing AccountCode('USDC');
+      const accountCode = getCryptoClearingAccountCode('USDC');
       expect(accountCode).toBe('1052');
     });
 
     it('should map USDT to account 1053', () => {
-      const accountCode = getCryptoClearing AccountCode('USDT');
+      const accountCode = getCryptoClearingAccountCode('USDT');
       expect(accountCode).toBe('1053');
     });
 
     it('should map AUDD to account 1054', () => {
-      const accountCode = getCryptoClearing AccountCode('AUDD');
+      const accountCode = getCryptoClearingAccountCode('AUDD');
       expect(accountCode).toBe('1054');
     });
 
     it('should throw error for invalid token', () => {
       expect(() => {
-        getCryptoClearing AccountCode('INVALID' as TokenType);
+        getCryptoClearingAccountCode('INVALID' as TokenType);
       }).toThrow('No clearing account mapped for token');
     });
   });
 
   describe('Reverse lookup', () => {
     it('should get HBAR from account 1051', () => {
-      const token = getTokenFromClearing Account('1051');
+      const token = getTokenFromClearingAccount('1051');
       expect(token).toBe('HBAR');
     });
 
     it('should get USDC from account 1052', () => {
-      const token = getTokenFromClearing Account('1052');
+      const token = getTokenFromClearingAccount('1052');
       expect(token).toBe('USDC');
     });
 
     it('should get USDT from account 1053', () => {
-      const token = getTokenFromClearing Account('1053');
+      const token = getTokenFromClearingAccount('1053');
       expect(token).toBe('USDT');
     });
 
     it('should get AUDD from account 1054', () => {
-      const token = getTokenFromClearing Account('1054');
+      const token = getTokenFromClearingAccount('1054');
       expect(token).toBe('AUDD');
     });
 
     it('should return null for non-crypto account', () => {
-      const token = getTokenFromClearing Account('1200');
+      const token = getTokenFromClearingAccount('1200');
       expect(token).toBeNull();
     });
   });
 
-  describe('getAllCryptoClearing Accounts', () => {
+  describe('getAllCryptoClearingAccounts', () => {
     it('should return all 4 crypto clearing account codes', () => {
-      const accounts = getAllCryptoClearing Accounts();
+      const accounts = getAllCryptoClearingAccounts();
       expect(accounts).toHaveLength(4);
       expect(accounts).toContain('1051'); // HBAR
       expect(accounts).toContain('1052'); // USDC
@@ -152,9 +152,9 @@ describe('Hedera Posting Validation', () => {
     });
   });
 
-  describe('getAllHederaClearing Accounts', () => {
+  describe('getAllHederaClearingAccounts', () => {
     it('should return all 4 Hedera clearing accounts in order', () => {
-      const accounts = getAllHederaClearing Accounts();
+      const accounts = getAllHederaClearingAccounts();
       expect(accounts).toHaveLength(4);
       expect(accounts[0]).toBe('1051'); // HBAR
       expect(accounts[1]).toBe('1052'); // USDC
@@ -171,12 +171,12 @@ describe('Token-Specific Posting Tests', () => {
 
   describe('HBAR Posting', () => {
     it('should use account 1051 for HBAR', () => {
-      const accountCode = getCryptoClearing AccountCode('HBAR');
+      const accountCode = getCryptoClearingAccountCode('HBAR');
       expect(accountCode).toBe('1051');
     });
 
     it('should create correct description for HBAR payment', () => {
-      const accountCode = getCryptoClearing AccountCode('HBAR');
+      const accountCode = getCryptoClearingAccountCode('HBAR');
       expect(accountCode).toBe('1051');
       
       // Verify it's the native token account
@@ -186,7 +186,7 @@ describe('Token-Specific Posting Tests', () => {
 
   describe('USDC Posting', () => {
     it('should use account 1052 for USDC', () => {
-      const accountCode = getCryptoClearing AccountCode('USDC');
+      const accountCode = getCryptoClearingAccountCode('USDC');
       expect(accountCode).toBe('1052');
       expect(accountCode).toBe(LEDGER_ACCOUNTS.CRYPTO_CLEARING_USDC);
     });
@@ -194,7 +194,7 @@ describe('Token-Specific Posting Tests', () => {
 
   describe('USDT Posting', () => {
     it('should use account 1053 for USDT', () => {
-      const accountCode = getCryptoClearing AccountCode('USDT');
+      const accountCode = getCryptoClearingAccountCode('USDT');
       expect(accountCode).toBe('1053');
       expect(accountCode).toBe(LEDGER_ACCOUNTS.CRYPTO_CLEARING_USDT);
     });
@@ -202,7 +202,7 @@ describe('Token-Specific Posting Tests', () => {
 
   describe('AUDD Posting - CRITICAL TEST', () => {
     it('should use account 1054 for AUDD (not 1051!)', () => {
-      const accountCode = getCryptoClearing AccountCode('AUDD');
+      const accountCode = getCryptoClearingAccountCode('AUDD');
       expect(accountCode).toBe('1054');
       expect(accountCode).not.toBe('1051'); // Ensure NOT using HBAR account
       expect(accountCode).toBe(LEDGER_ACCOUNTS.CRYPTO_CLEARING_AUDD);
@@ -233,10 +233,10 @@ describe('Token-Specific Posting Tests', () => {
 describe('Cross-Token Validation', () => {
   it('should ensure each token has unique clearing account', () => {
     const accounts = [
-      getCryptoClearing AccountCode('HBAR'),
-      getCryptoClearing AccountCode('USDC'),
-      getCryptoClearing AccountCode('USDT'),
-      getCryptoClearing AccountCode('AUDD'),
+      getCryptoClearingAccountCode('HBAR'),
+      getCryptoClearingAccountCode('USDC'),
+      getCryptoClearingAccountCode('USDT'),
+      getCryptoClearingAccountCode('AUDD'),
     ];
 
     // Check all accounts are unique
@@ -273,22 +273,22 @@ describe('Cross-Token Validation', () => {
 describe('Edge Cases', () => {
   it('should handle case-sensitive token types', () => {
     // These should work
-    expect(getCryptoClearing AccountCode('HBAR')).toBe('1051');
-    expect(getCryptoClearing AccountCode('AUDD')).toBe('1054');
+    expect(getCryptoClearingAccountCode('HBAR')).toBe('1051');
+    expect(getCryptoClearingAccountCode('AUDD')).toBe('1054');
   });
 
   it('should differentiate between similar account codes', () => {
-    expect(getTokenFromClearing Account('1051')).toBe('HBAR');
-    expect(getTokenFromClearing Account('1054')).toBe('AUDD');
+    expect(getTokenFromClearingAccount('1051')).toBe('HBAR');
+    expect(getTokenFromClearingAccount('1054')).toBe('AUDD');
     
     // Ensure we're not confusing them
-    expect(getTokenFromClearing Account('1051')).not.toBe('AUDD');
-    expect(getTokenFromClearing Account('1054')).not.toBe('HBAR');
+    expect(getTokenFromClearingAccount('1051')).not.toBe('AUDD');
+    expect(getTokenFromClearingAccount('1054')).not.toBe('HBAR');
   });
 
   it('should handle accounts receivable correctly', () => {
     expect(LEDGER_ACCOUNTS.ACCOUNTS_RECEIVABLE).toBe('1200');
-    expect(getTokenFromClearing Account('1200')).toBeNull(); // Not a crypto account
+    expect(getTokenFromClearingAccount('1200')).toBeNull(); // Not a crypto account
   });
 });
 
@@ -299,7 +299,7 @@ describe('Integration Scenarios', () => {
       const invoiceCurrency = 'AUD';
       const paymentToken: TokenType = 'AUDD';
       
-      const clearingAccount = getCryptoClearing AccountCode(paymentToken);
+      const clearingAccount = getCryptoClearingAccountCode(paymentToken);
       
       expect(clearingAccount).toBe('1054');
       expect(clearingAccount).toBe(LEDGER_ACCOUNTS.CRYPTO_CLEARING_AUDD);
@@ -314,17 +314,17 @@ describe('Integration Scenarios', () => {
   describe('Multi-currency invoice payments', () => {
     it('should use correct accounts for different token payments', () => {
       // USD invoice paid with USDC
-      expect(getCryptoClearing AccountCode('USDC')).toBe('1052');
+      expect(getCryptoClearingAccountCode('USDC')).toBe('1052');
       
       // AUD invoice paid with AUDD
-      expect(getCryptoClearing AccountCode('AUDD')).toBe('1054');
+      expect(getCryptoClearingAccountCode('AUDD')).toBe('1054');
       
       // USD invoice paid with HBAR
-      expect(getCryptoClearing AccountCode('HBAR')).toBe('1051');
+      expect(getCryptoClearingAccountCode('HBAR')).toBe('1051');
       
       // Ensure each is different
       const codes = ['HBAR', 'USDC', 'USDT', 'AUDD'].map((t) =>
-        getCryptoClearing AccountCode(t as TokenType)
+        getCryptoClearingAccountCode(t as TokenType)
       );
       expect(new Set(codes).size).toBe(4); // All unique
     });

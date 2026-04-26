@@ -3,6 +3,7 @@
  * Manages fetching and querying Xero Chart of Accounts
  */
 
+import { Account } from 'xero-node';
 import { getXeroClient } from './client';
 import { getActiveConnection } from './connection-service';
 
@@ -55,19 +56,20 @@ export async function fetchXeroAccounts(
     );
     
     // Filter to only active accounts
-    const activeAccounts = response.body.accounts?.filter(
-      account => account.status === 'ACTIVE'
-    ) || [];
-    
+    const activeAccounts =
+      response.body.accounts?.filter(
+        (account) => account.status === Account.StatusEnum.ACTIVE
+      ) || [];
+
     return {
-      accounts: activeAccounts.map(account => ({
+      accounts: activeAccounts.map((account) => ({
         accountID: account.accountID!,
         code: account.code!,
         name: account.name!,
-        type: account.type!,
+        type: account.type != null ? String(account.type) : '',
         taxType: account.taxType,
-        status: account.status!,
-        class: account.class,
+        status: account.status != null ? String(account.status) : '',
+        class: account._class != null ? String(account._class) : undefined,
       })),
       total: activeAccounts.length,
     };

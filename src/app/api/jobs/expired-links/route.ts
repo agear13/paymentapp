@@ -25,7 +25,14 @@ export async function POST(request: NextRequest) {
     const cronSecret = request.headers.get('x-cron-secret');
     const expectedSecret = process.env.CRON_SECRET;
 
-    if (expectedSecret && cronSecret !== expectedSecret) {
+    if (!expectedSecret) {
+      return NextResponse.json(
+        { error: 'CRON_SECRET is not configured' },
+        { status: 503 }
+      );
+    }
+
+    if (cronSecret !== expectedSecret) {
       loggers.jobs.warn(
         { ip: request.headers.get('x-forwarded-for') },
         'Unauthorized cron job attempt'
@@ -100,7 +107,14 @@ export async function GET(request: NextRequest) {
     const cronSecret = request.headers.get('x-cron-secret');
     const expectedSecret = process.env.CRON_SECRET;
 
-    if (expectedSecret && cronSecret !== expectedSecret) {
+    if (!expectedSecret) {
+      return NextResponse.json(
+        { error: 'CRON_SECRET is not configured' },
+        { status: 503 }
+      );
+    }
+
+    if (cronSecret !== expectedSecret) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

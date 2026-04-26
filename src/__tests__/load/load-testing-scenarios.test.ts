@@ -16,7 +16,7 @@
  * - Apache JMeter (load/stress testing)
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from '@jest/globals';
 
 describe('Load Testing: System Scalability', () => {
   describe('LT1: Concurrent Payment Processing', () => {
@@ -76,7 +76,7 @@ describe('Load Testing: System Scalability', () => {
       // Simulate 100 queries against large dataset
       for (let i = 0; i < 100; i++) {
         const start = Date.now();
-        await simulateDatabase Query(recordCount);
+        await simulateDatabaseQuery(recordCount);
         queryTimes.push(Date.now() - start);
       }
 

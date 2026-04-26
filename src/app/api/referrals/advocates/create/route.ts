@@ -5,15 +5,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthedParticipantForProgram } from '@/lib/referrals/participant-auth';
 import { buildShareTemplates } from '@/lib/referrals/share-templates';
 
 function generateAdvocateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const random = crypto.randomBytes(6);
   let code = 'ADV-';
   for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars[random[i] % chars.length];
   }
   return code;
 }

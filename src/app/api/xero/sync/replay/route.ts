@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/server';
 import { processSyncById } from '@/lib/xero/queue-processor';
 import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 /**
  * POST /api/xero/sync/replay
@@ -49,7 +50,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Verify user has permission to access this organization
+    const canManageSettings = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'manage_settings'
+    );
+    if (!canManageSettings) {
+      return NextResponse.json(
+        { error: 'Forbidden - insufficient organization permissions' },
+        { status: 403 }
+      );
+    }
 
     // Parse request body
     const body = await request.json();

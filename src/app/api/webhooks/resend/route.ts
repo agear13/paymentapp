@@ -36,7 +36,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
       }
     } else if (config.isProduction) {
-      log.warn({}, 'RESEND_WEBHOOK_SECRET not set — Resend webhooks are not verified');
+      log.error({}, 'RESEND_WEBHOOK_SECRET not set in production');
+      return NextResponse.json(
+        { error: 'Webhook verifier is not configured' },
+        { status: 503 }
+      );
     }
 
     let body: { type?: string; data?: { email_id?: string; bounce?: { message?: string } } };

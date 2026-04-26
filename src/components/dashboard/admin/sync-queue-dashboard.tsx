@@ -97,9 +97,10 @@ export function SyncQueueDashboard() {
       }
 
       // Load sync records (use failed endpoint for failed filter, otherwise get all)
-      let endpoint = statusFilter === 'FAILED'
-        ? `/api/xero/sync/failed?organization_id=${organization.id}&limit=50`
-        : `/api/xero/sync/failed?organization_id=${organization.id}&limit=200`; // Temp: get all via failed endpoint
+      const endpoint =
+        statusFilter === 'FAILED'
+          ? `/api/xero/sync/failed?organization_id=${organization.id}&limit=50`
+          : `/api/xero/sync/failed?organization_id=${organization.id}&limit=200`; // Temp: get all via failed endpoint
       
       const syncsResponse = await fetch(endpoint);
       if (syncsResponse.ok) {

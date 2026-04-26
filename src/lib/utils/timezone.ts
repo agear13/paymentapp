@@ -39,7 +39,7 @@ export function getUserTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   } catch (error) {
-    log.warn({ error }, 'Failed to get user timezone, defaulting to UTC');
+    log.warn('Failed to get user timezone, defaulting to UTC', { error: String(error) });
     return 'UTC';
   }
 }
@@ -57,7 +57,7 @@ export function getTimezoneOffset(timezone: string, date: Date = new Date()): nu
     const offsetMs = tzDate.getTime() - utcDate.getTime();
     return Math.round(offsetMs / (1000 * 60));
   } catch (error) {
-    log.warn({ error, timezone }, 'Failed to get timezone offset');
+    log.warn('Failed to get timezone offset', { error: String(error), timezone });
     return 0;
   }
 }
@@ -78,7 +78,7 @@ export function isDaylightSavingTime(timezone: string, date: Date = new Date()):
     const stdOffset = Math.max(janOffset, julOffset);
     return currentOffset < stdOffset;
   } catch (error) {
-    log.warn({ error, timezone }, 'Failed to detect DST');
+    log.warn('Failed to detect DST', { error: String(error), timezone });
     return false;
   }
 }
@@ -108,24 +108,25 @@ export function calculateExpiryDate(
     if (fromDST !== toDST) {
       // DST transition occurred - adjust by 1 hour
       const adjustment = fromDST ? 1 : -1; // Spring forward, fall back
-      log.info(
-        {
-          fromDate,
-          expiryDate,
-          timezone,
-          fromDST,
-          toDST,
-          adjustment,
-        },
-        'DST boundary crossed during expiry calculation'
-      );
+      log.info('DST boundary crossed during expiry calculation', {
+        fromDate,
+        expiryDate,
+        timezone,
+        fromDST,
+        toDST,
+        adjustment,
+      });
       
       return new Date(expiryDate.getTime() + adjustment * 60 * 60 * 1000);
     }
     
     return expiryDate;
   } catch (error) {
-    log.error({ error, fromDate, hours, timezone }, 'Failed to calculate expiry date');
+    log.error('Failed to calculate expiry date', error instanceof Error ? error : undefined, {
+      fromDate,
+      hours,
+      timezone,
+    });
     // Fallback to simple calculation
     return new Date(fromDate.getTime() + hours * 60 * 60 * 1000);
   }
@@ -200,7 +201,11 @@ export function createDateRange(
       timezone,
     };
   } catch (error) {
-    log.error({ error, startDate, endDate, timezone }, 'Failed to create date range');
+    log.error('Failed to create date range', error instanceof Error ? error : undefined, {
+      startDate,
+      endDate,
+      timezone,
+    });
     // Fallback to simple range
     return {
       start: startDate,
@@ -227,7 +232,7 @@ export function getStartOfDay(date: Date, timezone: string = 'UTC'): Date {
     
     return startOfDay;
   } catch (error) {
-    log.error({ error, date, timezone }, 'Failed to get start of day');
+    log.error('Failed to get start of day', error instanceof Error ? error : undefined, { date, timezone });
     const fallback = new Date(date);
     fallback.setHours(0, 0, 0, 0);
     return fallback;
@@ -251,7 +256,7 @@ export function getEndOfDay(date: Date, timezone: string = 'UTC'): Date {
     
     return endOfDay;
   } catch (error) {
-    log.error({ error, date, timezone }, 'Failed to get end of day');
+    log.error('Failed to get end of day', error instanceof Error ? error : undefined, { date, timezone });
     const fallback = new Date(date);
     fallback.setHours(23, 59, 59, 999);
     return fallback;
@@ -284,7 +289,7 @@ export function formatTimestamp(
 
     return date.toLocaleString('en-US', { ...defaultOptions, ...options });
   } catch (error) {
-    log.error({ error, date, timezone }, 'Failed to format timestamp');
+    log.error('Failed to format timestamp', error instanceof Error ? error : undefined, { date, timezone });
     return date.toISOString();
   }
 }
@@ -307,13 +312,13 @@ export function parseDate(
     const date = new Date(dateString);
     
     if (isNaN(date.getTime())) {
-      log.warn({ dateString }, 'Invalid date string');
+      log.warn('Invalid date string', { dateString });
       return null;
     }
     
     return date;
   } catch (error) {
-    log.error({ error, dateString }, 'Failed to parse date');
+    log.error('Failed to parse date', error instanceof Error ? error : undefined, { dateString });
     return null;
   }
 }
@@ -412,7 +417,7 @@ export function getSafeTimezone(timezone?: string): string {
     return timezone;
   }
   
-  log.warn({ timezone }, 'Invalid timezone, falling back to UTC');
+  log.warn('Invalid timezone, falling back to UTC', { timezone });
   return 'UTC';
 }
 

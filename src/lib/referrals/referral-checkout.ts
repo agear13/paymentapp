@@ -44,7 +44,7 @@ export async function createReferralCheckoutSession(
     return { success: false, error: 'Invalid referral code' };
   }
 
-  log.info({ correlationId, referralCode: code }, 'Creating referral checkout session');
+  log.info('Creating referral checkout session', { correlationId, referralCode: code });
 
   try {
     // 1. Lookup referral_link + splits (or legacy rules)
@@ -67,7 +67,7 @@ export async function createReferralCheckoutSession(
     });
 
     if (!referralLink) {
-      log.warn({ code }, 'Referral link not found or inactive');
+      log.warn('Referral link not found or inactive', { code });
       return { success: false, error: 'Referral link not found or inactive' };
     }
 
@@ -75,13 +75,13 @@ export async function createReferralCheckoutSession(
     const rule = referralLink.referral_rules[0];
     const hasSplits = splits.length > 0;
     if (!hasSplits && !rule) {
-      log.warn({ referralLinkId: referralLink.id }, 'No splits or referral rule configured');
+      log.warn('No splits or referral rule configured', { referralLinkId: referralLink.id });
       return { success: false, error: 'No referral rule or splits configured' };
     }
 
     const merchantSettings = referralLink.organizations.merchant_settings[0];
     if (!merchantSettings?.stripe_account_id) {
-      log.warn({ organizationId: referralLink.organization_id }, 'Stripe not configured');
+      log.warn('Stripe not configured', { organizationId: referralLink.organization_id });
       return { success: false, error: 'Stripe not configured for this merchant' };
     }
 
@@ -171,15 +171,12 @@ export async function createReferralCheckoutSession(
       },
     });
 
-    log.info(
-      {
-        correlationId,
-        referralLinkId: referralLink.id,
-        paymentLinkId: paymentLink.id,
-        sessionId: session.id,
-      },
-      'Referral checkout session created'
-    );
+    log.info('Referral checkout session created', {
+      correlationId,
+      referralLinkId: referralLink.id,
+      paymentLinkId: paymentLink.id,
+      sessionId: session.id,
+    });
 
     return {
       success: true,
@@ -187,12 +184,13 @@ export async function createReferralCheckoutSession(
       sessionId: session.id,
       paymentLinkId: paymentLink.id,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     const stripeError = handleStripeError(error);
-    log.error(
-      { correlationId, referralCode: code, error: stripeError.message },
-      'Referral checkout failed'
-    );
+    log.error('Referral checkout failed', error instanceof Error ? error : undefined, {
+      correlationId,
+      referralCode: code,
+      error: stripeError.message,
+    });
     return {
       success: false,
       error: stripeError.message,

@@ -30,21 +30,19 @@ export async function verifyWebhookSignature(
       secret
     );
 
-    log.info(
-      {
-        eventId: event.id,
-        eventType: event.type,
-      },
-      'Webhook signature verified'
-    );
+    log.info('Webhook signature verified', {
+      eventId: event.id,
+      eventType: event.type,
+    });
 
     return event;
   } catch (error: any) {
     log.error(
+      'Webhook signature verification failed',
+      error instanceof Error ? error : undefined,
       {
-        error: error.message,
-      },
-      'Webhook signature verification failed'
+        message: error?.message,
+      }
     );
     return null;
   }

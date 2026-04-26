@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { evaluateAllAlerts, getAlertRules } from '@/lib/monitoring/alert-rules';
 import { logger } from '@/lib/logger';
+import { hasOrganizationAccess } from '@/lib/auth/organization-access';
+import { checkAdminAuth } from '@/lib/auth/admin.server';
 
 /**
  * GET /api/monitoring/alerts?organization_id=xxx
@@ -35,7 +37,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const organizationId = searchParams.get('organization_id') || undefined;
 
-    // TODO: Verify user has permission to access this organization
+    if (organizationId) {
+      const canAccessOrg = await hasOrganizationAccess(user.id, organizationId);
+      if (!canAccessOrg) {
+        return NextResponse.json(
+          { error: 'Forbidden - insufficient organization permissions' },
+          { status: 403 }
+        );
+      }
+    }
 
     logger.info({ organizationId, userId: user.id }, 'Evaluating alerts via API');
 
@@ -98,15 +108,14 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
 
-    // Allow either cron secret or authenticated user
+    // Allow either cron secret or authenticated global admin.
     let authorized = false;
     
     if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
       authorized = true;
     } else {
-      const supabase = await createClient();
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      authorized = !authError && !!user;
+      const adminAuth = await checkAdminAuth();
+      authorized = !!adminAuth.isAdmin;
     }
 
     if (!authorized) {

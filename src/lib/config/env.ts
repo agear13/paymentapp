@@ -77,57 +77,80 @@ const envSchema = z.object({
   SENTRY_DSN: z.string().url().optional(),
 });
 
+/** Placeholders merged under process.env for build-time and optional local RELAX mode. */
+function buildTimePlaceholderRecord(): Record<string, string | undefined> {
+  return {
+    NODE_ENV: process.env.NODE_ENV || 'production',
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'https://example.com',
+    DATABASE_URL: process.env.DATABASE_URL || 'postgresql://placeholder',
+    DIRECT_URL: process.env.DIRECT_URL,
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co',
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key',
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key',
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder',
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder',
+    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || 'whsec_placeholder',
+    NEXT_PUBLIC_HEDERA_NETWORK: process.env.NEXT_PUBLIC_HEDERA_NETWORK || 'mainnet',
+    NEXT_PUBLIC_HEDERA_MIRROR_NODE_URL:
+      process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE_URL || 'https://mainnet.mirrornode.hedera.com',
+    NEXT_PUBLIC_HEDERA_USDC_TOKEN_ID: process.env.NEXT_PUBLIC_HEDERA_USDC_TOKEN_ID,
+    NEXT_PUBLIC_HEDERA_USDT_TOKEN_ID: process.env.NEXT_PUBLIC_HEDERA_USDT_TOKEN_ID,
+    NEXT_PUBLIC_HEDERA_AUDD_TOKEN_ID: process.env.NEXT_PUBLIC_HEDERA_AUDD_TOKEN_ID,
+    XERO_CLIENT_ID: process.env.XERO_CLIENT_ID,
+    XERO_CLIENT_SECRET: process.env.XERO_CLIENT_SECRET,
+    XERO_REDIRECT_URI: process.env.XERO_REDIRECT_URI,
+    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || 'placeholder-encryption-key-32chars',
+    SESSION_SECRET: process.env.SESSION_SECRET,
+    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+    ENABLE_HEDERA_PAYMENTS: process.env.ENABLE_HEDERA_PAYMENTS || 'true',
+    ENABLE_HEDERA_STABLECOINS: process.env.ENABLE_HEDERA_STABLECOINS || 'false',
+    ENABLE_XERO_SYNC: process.env.ENABLE_XERO_SYNC || 'true',
+    ENABLE_BETA_OPS: process.env.ENABLE_BETA_OPS || 'false',
+    ENABLE_WISE_PAYMENTS: process.env.ENABLE_WISE_PAYMENTS || 'false',
+    NEXT_PUBLIC_SHOW_WISE_DEMO: process.env.NEXT_PUBLIC_SHOW_WISE_DEMO || 'true',
+    BETA_LOCKDOWN_MODE: process.env.BETA_LOCKDOWN_MODE || 'true',
+    WISE_API_TOKEN: process.env.WISE_API_TOKEN,
+    WISE_PROFILE_ID: process.env.WISE_PROFILE_ID,
+    WISE_WEBHOOK_SECRET: process.env.WISE_WEBHOOK_SECRET,
+    DEFAULT_WISE_PROFILE_ID: process.env.DEFAULT_WISE_PROFILE_ID,
+    ADMIN_EMAIL_ALLOWLIST: process.env.ADMIN_EMAIL_ALLOWLIST,
+    SENTRY_DSN: process.env.SENTRY_DSN,
+  };
+}
+
 // Parse and validate environment variables
 function validateEnv() {
   // Skip validation during build time (Next.js build process)
   // Environment variables are only available at runtime on Render
-  const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build' || 
-                      process.env.NEXT_PHASE === 'phase-development-build' ||
-                      process.env.npm_lifecycle_event === 'build';
-  
+  const isBuildTime =
+    process.env.NEXT_PHASE === 'phase-production-build' ||
+    process.env.NEXT_PHASE === 'phase-development-build' ||
+    process.env.npm_lifecycle_event === 'build';
+
+  /**
+   * Fill missing required env from placeholders (merged with process.env, then Zod-parsed).
+   * - Local: NODE_ENV=development and RELAX_ENV_VALIDATION=1 (e.g. Playwright webServer, ad-hoc load tests).
+   * - CI tests: NODE_ENV=test, CI=true, and RELAX_ENV_VALIDATION=1 (GitHub Actions).
+   * Never enable RELAX_ENV_VALIDATION in production.
+   */
+  const relaxWithPlaceholders =
+    process.env.RELAX_ENV_VALIDATION === '1' &&
+    (process.env.NODE_ENV === 'development' ||
+      (process.env.CI === 'true' && process.env.NODE_ENV === 'test'));
+
   if (isBuildTime) {
     console.log('⏭️  Skipping environment validation during build time');
-    // Return safe defaults for build time
-    return {
-      NODE_ENV: process.env.NODE_ENV || 'production',
-      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'https://example.com',
-      DATABASE_URL: process.env.DATABASE_URL || 'postgresql://placeholder',
-      DIRECT_URL: process.env.DIRECT_URL,
-      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co',
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key',
-      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key',
-      STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder',
-      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder',
-      STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || 'whsec_placeholder',
-      NEXT_PUBLIC_HEDERA_NETWORK: (process.env.NEXT_PUBLIC_HEDERA_NETWORK as any) || 'mainnet',
-      NEXT_PUBLIC_HEDERA_MIRROR_NODE_URL: process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE_URL || 'https://mainnet.mirrornode.hedera.com',
-      NEXT_PUBLIC_HEDERA_USDC_TOKEN_ID: process.env.NEXT_PUBLIC_HEDERA_USDC_TOKEN_ID,
-      NEXT_PUBLIC_HEDERA_USDT_TOKEN_ID: process.env.NEXT_PUBLIC_HEDERA_USDT_TOKEN_ID,
-      NEXT_PUBLIC_HEDERA_AUDD_TOKEN_ID: process.env.NEXT_PUBLIC_HEDERA_AUDD_TOKEN_ID,
-      XERO_CLIENT_ID: process.env.XERO_CLIENT_ID,
-      XERO_CLIENT_SECRET: process.env.XERO_CLIENT_SECRET,
-      XERO_REDIRECT_URI: process.env.XERO_REDIRECT_URI,
-      ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || 'placeholder-encryption-key-32chars',
-      SESSION_SECRET: process.env.SESSION_SECRET,
-      UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-      UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-      RESEND_API_KEY: process.env.RESEND_API_KEY,
-      RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
-      RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
-      ENABLE_HEDERA_PAYMENTS: process.env.ENABLE_HEDERA_PAYMENTS || 'true',
-      ENABLE_HEDERA_STABLECOINS: process.env.ENABLE_HEDERA_STABLECOINS || 'false',
-      ENABLE_XERO_SYNC: process.env.ENABLE_XERO_SYNC || 'true',
-      ENABLE_BETA_OPS: process.env.ENABLE_BETA_OPS || 'false',
-      ENABLE_WISE_PAYMENTS: process.env.ENABLE_WISE_PAYMENTS || 'false',
-      NEXT_PUBLIC_SHOW_WISE_DEMO: process.env.NEXT_PUBLIC_SHOW_WISE_DEMO || 'true',
-      BETA_LOCKDOWN_MODE: process.env.BETA_LOCKDOWN_MODE || 'true',
-      WISE_API_TOKEN: process.env.WISE_API_TOKEN,
-      WISE_PROFILE_ID: process.env.WISE_PROFILE_ID,
-      WISE_WEBHOOK_SECRET: process.env.WISE_WEBHOOK_SECRET,
-      DEFAULT_WISE_PROFILE_ID: process.env.DEFAULT_WISE_PROFILE_ID,
-      ADMIN_EMAIL_ALLOWLIST: process.env.ADMIN_EMAIL_ALLOWLIST,
-      SENTRY_DSN: process.env.SENTRY_DSN,
-    };
+    return buildTimePlaceholderRecord() as z.infer<typeof envSchema>;
+  }
+
+  if (relaxWithPlaceholders) {
+    console.warn(
+      'RELAX_ENV_VALIDATION=1: merging placeholders for missing env (development or CI test only).',
+    );
+    return envSchema.parse({ ...buildTimePlaceholderRecord(), ...process.env });
   }
   
   try {

@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { generateAuthUrl, isXeroConfigured } from '@/lib/xero';
 import { logger } from '@/lib/logger';
 import { signOAuthState } from '@/lib/security/oauth-state';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,7 +46,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // TODO: Verify user has permission to connect Xero for this organization
+    const canManageSettings = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'manage_settings'
+    );
+    if (!canManageSettings) {
+      return NextResponse.json(
+        { error: 'Forbidden - insufficient organization permissions' },
+        { status: 403 }
+      );
+    }
 
     // Generate authorization URL
     const authUrl = await generateAuthUrl();

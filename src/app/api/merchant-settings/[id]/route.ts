@@ -4,6 +4,7 @@ import { prisma } from '@/lib/server/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
 import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 const updateMerchantSettingsSchema = z.object({
   displayName: z.string().min(2).max(255).optional(),
@@ -48,7 +49,14 @@ export async function GET(
       return apiError('Merchant settings not found', 404);
     }
 
-    // TODO: Check if user has access to this organization
+    const canViewSettings = await hasOrganizationPermission(
+      user.id,
+      settings.organization_id,
+      'view_settings'
+    );
+    if (!canViewSettings) {
+      return apiError('Forbidden - insufficient organization permissions', 403);
+    }
 
     return apiResponse(settings);
   } catch (error) {
@@ -76,7 +84,22 @@ export async function PATCH(
       return error;
     }
 
-    // TODO: Check if user has permission to update these settings
+    const existing = await prisma.merchant_settings.findUnique({
+      where: { id },
+      select: { organization_id: true },
+    });
+    if (!existing) {
+      return apiError('Merchant settings not found', 404);
+    }
+
+    const canManageSettings = await hasOrganizationPermission(
+      user.id,
+      existing.organization_id,
+      'manage_settings'
+    );
+    if (!canManageSettings) {
+      return apiError('Forbidden - insufficient organization permissions', 403);
+    }
 
     // Partial update: only set fields explicitly provided (pilot saves may send Stripe/Wise/HashPack only).
     const updateData: Record<string, unknown> = {};
@@ -117,7 +140,22 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // TODO: Check if user has permission to delete these settings
+    const existing = await prisma.merchant_settings.findUnique({
+      where: { id },
+      select: { organization_id: true },
+    });
+    if (!existing) {
+      return apiError('Merchant settings not found', 404);
+    }
+
+    const canManageSettings = await hasOrganizationPermission(
+      user.id,
+      existing.organization_id,
+      'manage_settings'
+    );
+    if (!canManageSettings) {
+      return apiError('Forbidden - insufficient organization permissions', 403);
+    }
 
     await prisma.merchant_settings.delete({
       where: { id },

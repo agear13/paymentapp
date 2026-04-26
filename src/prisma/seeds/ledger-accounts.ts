@@ -165,7 +165,7 @@ export async function verifyLedgerAccounts(
 /**
  * Get all crypto clearing accounts for an organization
  */
-export async function getCryptoClearing Accounts(organizationId: string) {
+export async function getCryptoClearingAccounts(organizationId: string) {
   return await prisma.ledger_accounts.findMany({
     where: {
       organization_id: organizationId,

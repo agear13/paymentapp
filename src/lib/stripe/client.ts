@@ -46,15 +46,12 @@ export function handleStripeError(error: any): {
   statusCode: number;
 } {
   if (error instanceof Stripe.errors.StripeError) {
-    log.error(
-      {
-        type: error.type,
-        code: error.code,
-        message: error.message,
-        statusCode: error.statusCode,
-      },
-      'Stripe API error'
-    );
+    log.error('Stripe API error', error, {
+      type: error.type,
+      code: error.code,
+      message: error.message,
+      statusCode: error.statusCode,
+    });
 
     return {
       message: error.message,
@@ -63,7 +60,9 @@ export function handleStripeError(error: any): {
     };
   }
 
-  log.error({ error: error.message }, 'Unknown Stripe error');
+  log.error('Unknown Stripe error', error instanceof Error ? error : undefined, {
+    message: error?.message,
+  });
   return {
     message: 'An unexpected error occurred',
     statusCode: 500,

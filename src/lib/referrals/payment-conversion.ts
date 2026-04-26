@@ -39,10 +39,12 @@ export async function createReferralConversionFromPaymentConfirmed(
 ): Promise<CreateReferralConversionResult> {
   const { paymentLinkId, paymentEventId, grossAmount, currency, provider } = params;
 
-  log.info(
-    { paymentEventId, paymentLinkId, amount: grossAmount, currency },
-    '[REFERRAL_AUTO_CONVERSION] start'
-  );
+  log.info('[REFERRAL_AUTO_CONVERSION] start', {
+    paymentEventId,
+    paymentLinkId,
+    amount: grossAmount,
+    currency,
+  });
 
   const adminClient = createAdminClient();
 
@@ -56,26 +58,29 @@ export async function createReferralConversionFromPaymentConfirmed(
       .limit(1);
 
     if (attrError) {
-      log.error(
-        { paymentEventId, paymentLinkId, error: attrError },
-        '[REFERRAL_AUTO_CONVERSION] fail'
-      );
+      log.error('[REFERRAL_AUTO_CONVERSION] fail', undefined, {
+        paymentEventId,
+        paymentLinkId,
+        error: attrError,
+      });
       throw attrError;
     }
 
     const attrRow = attrRows?.[0];
     if (!attrRow?.program_id || !attrRow?.participant_id) {
-      log.info(
-        { paymentEventId, paymentLinkId },
-        '[REFERRAL_AUTO_CONVERSION] attribution_missing'
-      );
+      log.info('[REFERRAL_AUTO_CONVERSION] attribution_missing', {
+        paymentEventId,
+        paymentLinkId,
+      });
       return { created: false, reason: 'no referral attribution' };
     }
 
-    log.info(
-      { paymentEventId, paymentLinkId, programId: attrRow.program_id, participantId: attrRow.participant_id },
-      '[REFERRAL_AUTO_CONVERSION] attribution_found'
-    );
+    log.info('[REFERRAL_AUTO_CONVERSION] attribution_found', {
+      paymentEventId,
+      paymentLinkId,
+      programId: attrRow.program_id,
+      participantId: attrRow.participant_id,
+    });
 
     const externalRef = `payment_event:${paymentEventId}`;
 
@@ -95,10 +100,10 @@ export async function createReferralConversionFromPaymentConfirmed(
       .single();
 
     if (existing) {
-      log.info(
-        { externalRef, existingConversionId: existing.id },
-        '[REFERRAL_AUTO_CONVERSION] conversion_skipped_idempotent'
-      );
+      log.info('[REFERRAL_AUTO_CONVERSION] conversion_skipped_idempotent', {
+        externalRef,
+        existingConversionId: existing.id,
+      });
       return { created: false, skipped: true, conversionId: existing.id, reason: 'idempotent' };
     }
 
@@ -122,10 +127,7 @@ export async function createReferralConversionFromPaymentConfirmed(
 
     if (insertError) {
       if (insertError.code === '23505') {
-        log.info(
-          { externalRef },
-          '[REFERRAL_AUTO_CONVERSION] conversion_skipped_idempotent'
-        );
+        log.info('[REFERRAL_AUTO_CONVERSION] conversion_skipped_idempotent', { externalRef });
         return { created: false, skipped: true, reason: 'idempotent' };
       }
       throw insertError;
@@ -135,18 +137,19 @@ export async function createReferralConversionFromPaymentConfirmed(
       throw new Error('Conversion insert returned no data');
     }
 
-    log.info(
-      { conversionId: conversion.id, externalRef },
-      '[REFERRAL_AUTO_CONVERSION] conversion_created'
-    );
+    log.info('[REFERRAL_AUTO_CONVERSION] conversion_created', {
+      conversionId: conversion.id,
+      externalRef,
+    });
 
     // 4. Create partner ledger entries
     try {
       const ledgerResult = await createPartnerLedgerEntryForReferralConversion(conversion.id);
-      log.info(
-        { conversionId: conversion.id, created: ledgerResult.created, skipped: ledgerResult.skipped },
-        '[REFERRAL_AUTO_CONVERSION] ledger_created'
-      );
+      log.info('[REFERRAL_AUTO_CONVERSION] ledger_created', {
+        conversionId: conversion.id,
+        created: ledgerResult.created,
+        skipped: ledgerResult.skipped,
+      });
       return {
         created: true,
         conversionId: conversion.id,
@@ -155,8 +158,9 @@ export async function createReferralConversionFromPaymentConfirmed(
       };
     } catch (ledgerErr) {
       log.error(
-        { conversionId: conversion.id, err: ledgerErr },
-        '[REFERRAL_AUTO_CONVERSION] ledger failed (conversion created)'
+        '[REFERRAL_AUTO_CONVERSION] ledger failed (conversion created)',
+        ledgerErr instanceof Error ? ledgerErr : undefined,
+        { conversionId: conversion.id, err: ledgerErr }
       );
       return {
         created: true,
@@ -167,10 +171,11 @@ export async function createReferralConversionFromPaymentConfirmed(
       };
     }
   } catch (err) {
-    log.error(
-      { error: err, paymentEventId, paymentLinkId },
-      '[REFERRAL_AUTO_CONVERSION] fail'
-    );
+    log.error('[REFERRAL_AUTO_CONVERSION] fail', err instanceof Error ? err : undefined, {
+      paymentEventId,
+      paymentLinkId,
+      error: err,
+    });
     throw err;
   }
 }

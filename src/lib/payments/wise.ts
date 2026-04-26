@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { getBankDetails, hasWiseCredentials, type WiseBankDetails } from '@/lib/wise/client';
 import config from '@/lib/config/env';
@@ -131,7 +132,7 @@ export async function persistWiseContextForPaymentLink(input: {
         payment_link_id: input.paymentLinkId,
         event_type: 'PAYMENT_INITIATED',
         payment_method: 'WISE',
-        metadata: context.metadata,
+        metadata: context.metadata as Prisma.InputJsonValue,
         created_at: new Date(),
       },
     });

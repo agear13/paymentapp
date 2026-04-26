@@ -208,8 +208,9 @@ export async function applyRevenueShareSplits(
     return await applyRevenueShareSplitsInternal(params);
   } catch (err: any) {
     log.error(
-      { correlationId, paymentLinkId, stripeEventId, error: err?.message },
-      'Commission posting unexpected error (webhook-safe, returning 200)'
+      'Commission posting unexpected error (webhook-safe, returning 200)',
+      err instanceof Error ? err : undefined,
+      { correlationId, paymentLinkId, stripeEventId, error: err instanceof Error ? err.message : String(err) }
     );
     await createCommissionFailureAlert(organizationId, paymentLinkId, err?.message, correlationId);
     return { posted: false };
@@ -230,24 +231,23 @@ async function applyRevenueShareSplitsInternal(
   // Legacy: consultant + BD from referral_rules metadata
   const meta = extractReferralMetadata(session.metadata);
   if (!meta) {
-    log.info(
-      { stripeEventId, paymentLinkId },
-      'Commission skipped: no referral metadata'
-    );
+    log.info('Commission skipped: no referral metadata', { stripeEventId, paymentLinkId });
     return { posted: false };
   }
 
   if (meta.consultantPct > 0 && !meta.consultantId) {
-    log.info(
-      { stripeEventId, paymentLinkId, role: 'CONSULTANT' },
-      'Commission skipped: consultant_pct > 0 but consultant_id missing; BD may still post'
-    );
+    log.info('Commission skipped: consultant_pct > 0 but consultant_id missing; BD may still post', {
+      stripeEventId,
+      paymentLinkId,
+      role: 'CONSULTANT',
+    });
   }
   if (meta.bdPartnerPct > 0 && !meta.bdPartnerId) {
-    log.info(
-      { stripeEventId, paymentLinkId, role: 'BD_PARTNER' },
-      'Commission skipped: bd_partner_pct > 0 but bd_partner_id missing'
-    );
+    log.info('Commission skipped: bd_partner_pct > 0 but bd_partner_id missing', {
+      stripeEventId,
+      paymentLinkId,
+      role: 'BD_PARTNER',
+    });
   }
 
   const basisAmount = computeBasisAmount(meta.commissionBasis, grossAmount, currency);
@@ -260,21 +260,29 @@ async function applyRevenueShareSplitsInternal(
   const bdAboveMin = meta.hasBd && bdPartnerAmountRounded >= 0.01;
 
   if (!consultantAboveMin && !bdAboveMin) {
-    log.info(
-      { stripeEventId, paymentLinkId, consultantAmount: consultantAmountRounded, bdPartnerAmount: bdPartnerAmountRounded },
-      'Commission skipped: amounts below minimum'
-    );
+    log.info('Commission skipped: amounts below minimum', {
+      stripeEventId,
+      paymentLinkId,
+      consultantAmount: consultantAmountRounded,
+      bdPartnerAmount: bdPartnerAmountRounded,
+    });
     return { posted: false };
   }
 
   try {
     await provisionCommissionLedgerAccounts(prisma, organizationId, correlationId);
-  } catch (provisionErr: any) {
+  } catch (provisionErr: unknown) {
     log.error(
-      { correlationId, organizationId, error: provisionErr?.message },
-      'Commission accounts provisioned failed'
+      'Commission accounts provisioned failed',
+      provisionErr instanceof Error ? provisionErr : undefined,
+      { correlationId, organizationId, error: provisionErr instanceof Error ? provisionErr.message : String(provisionErr) }
     );
-    await createCommissionFailureAlert(organizationId, paymentLinkId, provisionErr?.message, correlationId);
+    await createCommissionFailureAlert(
+      organizationId,
+      paymentLinkId,
+      provisionErr instanceof Error ? provisionErr.message : String(provisionErr),
+      correlationId
+    );
     return { posted: false };
   }
 
@@ -284,10 +292,11 @@ async function applyRevenueShareSplitsInternal(
   // Post consultant commission only if hasConsultant and amount >= 0.01
   if (consultantAboveMin && meta.consultantId) {
     try {
-      log.info(
-        { correlationId, consultantId: meta.consultantId, amount: consultantAmountRounded },
-        'Posting consultant commission'
-      );
+      log.info('Posting consultant commission', {
+        correlationId,
+        consultantId: meta.consultantId,
+        amount: consultantAmountRounded,
+      });
 
       const consultantEntries = [
         {
@@ -315,22 +324,28 @@ async function applyRevenueShareSplitsInternal(
       });
 
       if (consultantResult.entriesPosted === 0) {
-        log.info(
-          { correlationId, idempotencyKey: `commission-${stripeEventId}-consultant` },
-          'Commission consultant entries already exist (idempotent retry)'
-        );
+        log.info('Commission consultant entries already exist (idempotent retry)', {
+          correlationId,
+          idempotencyKey: `commission-${stripeEventId}-consultant`,
+        });
       } else {
-        log.info(
-          { correlationId, consultantAmount: consultantAmountRounded },
-          'Commission posted successfully (consultant)'
-        );
+        log.info('Commission posted successfully (consultant)', {
+          correlationId,
+          consultantAmount: consultantAmountRounded,
+        });
       }
-    } catch (err: any) {
-      log.error(
-        { correlationId, consultantId: meta.consultantId, error: err?.message },
-        'Commission posting failed (will retry)'
+    } catch (err: unknown) {
+      log.error('Commission posting failed (will retry)', err instanceof Error ? err : undefined, {
+        correlationId,
+        consultantId: meta.consultantId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      await createCommissionFailureAlert(
+        organizationId,
+        paymentLinkId,
+        err instanceof Error ? err.message : String(err),
+        correlationId
       );
-      await createCommissionFailureAlert(organizationId, paymentLinkId, err?.message, correlationId);
       return { posted: false };
     }
   }
@@ -338,10 +353,11 @@ async function applyRevenueShareSplitsInternal(
   // Post BD partner commission only if hasBd and amount >= 0.01
   if (bdAboveMin && meta.bdPartnerId) {
     try {
-      log.info(
-        { correlationId, bdPartnerId: meta.bdPartnerId, amount: bdPartnerAmountRounded },
-        'Posting BD partner commission'
-      );
+      log.info('Posting BD partner commission', {
+        correlationId,
+        bdPartnerId: meta.bdPartnerId,
+        amount: bdPartnerAmountRounded,
+      });
 
       const bdEntries = [
         {
@@ -369,22 +385,28 @@ async function applyRevenueShareSplitsInternal(
       });
 
       if (bdResult.entriesPosted === 0) {
-        log.info(
-          { correlationId, idempotencyKey: `commission-${stripeEventId}-bd` },
-          'Commission BD partner entries already exist (idempotent retry)'
-        );
+        log.info('Commission BD partner entries already exist (idempotent retry)', {
+          correlationId,
+          idempotencyKey: `commission-${stripeEventId}-bd`,
+        });
       } else {
-        log.info(
-          { correlationId, bdPartnerAmount: bdPartnerAmountRounded },
-          'Commission posted successfully (BD partner)'
-        );
+        log.info('Commission posted successfully (BD partner)', {
+          correlationId,
+          bdPartnerAmount: bdPartnerAmountRounded,
+        });
       }
-    } catch (err: any) {
-      log.error(
-        { correlationId, bdPartnerId: meta.bdPartnerId, error: err?.message },
-        'Commission posting failed (will retry)'
+    } catch (err: unknown) {
+      log.error('Commission posting failed (will retry)', err instanceof Error ? err : undefined, {
+        correlationId,
+        bdPartnerId: meta.bdPartnerId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      await createCommissionFailureAlert(
+        organizationId,
+        paymentLinkId,
+        err instanceof Error ? err.message : String(err),
+        correlationId
       );
-      await createCommissionFailureAlert(organizationId, paymentLinkId, err?.message, correlationId);
       return { posted: false };
     }
   }
@@ -407,13 +429,15 @@ async function applyRevenueShareSplitsInternal(
     obligationId = obligation.id;
   } catch (obligErr: any) {
     if (obligErr?.code === 'P2002') {
-      log.info({ stripeEventId }, 'Commission obligation already exists (idempotent)');
+      log.info('Commission obligation already exists (idempotent)', { stripeEventId });
       const existing = await prisma.commission_obligations.findUnique({
         where: { stripe_event_id: stripeEventId },
       });
       if (existing) obligationId = existing.id;
     } else {
-      log.warn({ error: obligErr?.message }, 'Commission obligation create failed (non-blocking)');
+      log.warn('Commission obligation create failed (non-blocking)', {
+        error: obligErr instanceof Error ? obligErr.message : String(obligErr),
+      });
     }
   }
 
@@ -451,9 +475,11 @@ async function applyRevenueShareSplitsInternal(
         });
       } catch (lineErr: any) {
         if (lineErr?.code === 'P2002') {
-          log.info({ stripeEventId }, 'Commission obligation lines already exist (idempotent)');
+          log.info('Commission obligation lines already exist (idempotent)', { stripeEventId });
         } else {
-          log.warn({ error: lineErr?.message }, 'Commission obligation lines create failed (non-blocking)');
+          log.warn('Commission obligation lines create failed (non-blocking)', {
+            error: lineErr instanceof Error ? lineErr.message : String(lineErr),
+          });
         }
       }
     }
@@ -483,7 +509,7 @@ async function applyRevenueShareSplitsFromSplitsInternal(
   const splitAmounts = computeSplitAmounts(basisAmount, splitsMeta, currency);
   const aboveMin = splitAmounts.filter((s) => s.amount >= 0.01);
   if (aboveMin.length === 0) {
-    log.info({ stripeEventId, paymentLinkId }, 'Commission skipped: all split amounts below minimum');
+    log.info('Commission skipped: all split amounts below minimum', { stripeEventId, paymentLinkId });
     return { posted: false };
   }
 
@@ -491,7 +517,11 @@ async function applyRevenueShareSplitsFromSplitsInternal(
     await provisionCommissionLedgerAccounts(prisma, organizationId, correlationId);
   } catch (provisionErr: unknown) {
     const message = (provisionErr as Error)?.message;
-    log.error({ correlationId, organizationId, error: message }, 'Commission accounts provision failed');
+    log.error('Commission accounts provision failed', provisionErr instanceof Error ? provisionErr : undefined, {
+      correlationId,
+      organizationId,
+      error: message,
+    });
     await createCommissionFailureAlert(organizationId, paymentLinkId, message, correlationId);
     return { posted: false };
   }
@@ -526,13 +556,20 @@ async function applyRevenueShareSplitsFromSplitsInternal(
         correlationId,
       });
       if (result.entriesPosted === 0) {
-        log.info({ correlationId, idempotencyKey: `commission-${stripeEventId}-split-${s.split_id}` }, 'Commission split entries already exist (idempotent retry)');
+        log.info('Commission split entries already exist (idempotent retry)', {
+          correlationId,
+          idempotencyKey: `commission-${stripeEventId}-split-${s.split_id}`,
+        });
       } else {
-        log.info({ correlationId, splitId: s.split_id, amount: s.amount }, 'Commission split posted');
+        log.info('Commission split posted', { correlationId, splitId: s.split_id, amount: s.amount });
       }
     } catch (err: unknown) {
       const message = (err as Error)?.message;
-      log.error({ correlationId, splitId: s.split_id, error: message }, 'Commission split posting failed');
+      log.error('Commission split posting failed', err instanceof Error ? err : undefined, {
+        correlationId,
+        splitId: s.split_id,
+        error: message,
+      });
       await createCommissionFailureAlert(organizationId, paymentLinkId, message, correlationId);
       return { posted: false };
     }
@@ -559,13 +596,15 @@ async function applyRevenueShareSplitsFromSplitsInternal(
   } catch (obligErr: unknown) {
     const err = obligErr as { code?: string };
     if (err?.code === 'P2002') {
-      log.info({ stripeEventId }, 'Commission obligation already exists (idempotent)');
+      log.info('Commission obligation already exists (idempotent)', { stripeEventId });
       const existing = await prisma.commission_obligations.findUnique({
         where: { stripe_event_id: stripeEventId },
       });
       if (existing) obligationId = existing.id;
     } else {
-      log.warn({ error: (obligErr as Error)?.message }, 'Commission obligation create failed (non-blocking)');
+      log.warn('Commission obligation create failed (non-blocking)', {
+        error: obligErr instanceof Error ? obligErr.message : String(obligErr),
+      });
     }
   }
 
@@ -583,9 +622,14 @@ async function applyRevenueShareSplitsFromSplitsInternal(
         });
       } catch (itemErr: unknown) {
         if ((itemErr as { code?: string })?.code === 'P2002') {
-          log.info({ stripeEventId, splitId: s.split_id }, 'Commission obligation item already exists (idempotent)');
+          log.info('Commission obligation item already exists (idempotent)', {
+            stripeEventId,
+            splitId: s.split_id,
+          });
         } else {
-          log.warn({ error: (itemErr as Error)?.message }, 'Commission obligation item create failed');
+          log.warn('Commission obligation item create failed', {
+            error: itemErr instanceof Error ? itemErr.message : String(itemErr),
+          });
         }
       }
     }
@@ -603,9 +647,11 @@ async function applyRevenueShareSplitsFromSplitsInternal(
       });
     } catch (lineErr: unknown) {
       if ((lineErr as { code?: string })?.code === 'P2002') {
-        log.info({ stripeEventId }, 'Commission obligation lines already exist (idempotent)');
+        log.info('Commission obligation lines already exist (idempotent)', { stripeEventId });
       } else {
-        log.warn({ error: (lineErr as Error)?.message }, 'Commission obligation lines create failed');
+        log.warn('Commission obligation lines create failed', {
+          error: lineErr instanceof Error ? lineErr.message : String(lineErr),
+        });
       }
     }
   }
@@ -633,7 +679,9 @@ async function createCommissionFailureAlert(
         },
       },
     });
-  } catch (notifErr: any) {
-    log.warn({ notifError: notifErr?.message }, 'Could not create commission failure notification');
+  } catch (notifErr: unknown) {
+    log.warn('Could not create commission failure notification', {
+      notifError: notifErr instanceof Error ? notifErr.message : String(notifErr),
+    });
   }
 }

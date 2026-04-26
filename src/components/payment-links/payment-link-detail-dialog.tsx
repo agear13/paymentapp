@@ -141,7 +141,8 @@ export interface PaymentLinkDetailDialogProps {
   paymentLink: PaymentLinkDetails | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onResend?: (paymentLink: PaymentLinkDetails, email: string) => void | Promise<void>;
+  onSendInvoice?: (paymentLink: PaymentLinkDetails, email: string) => void | Promise<void>;
+  onResend?: (paymentLink: PaymentLinkDetails) => void | Promise<void>;
   onMarkAsPaid?: (paymentLink: PaymentLinkDetails) => void | Promise<void>;
   /** After manual mark paid / reopen — refresh list and detail in parent */
   onManualSettlementComplete?: () => void | Promise<void>;
@@ -193,6 +194,7 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
   paymentLink,
   open,
   onOpenChange,
+  onSendInvoice,
   onResend,
   onMarkAsPaid,
   onManualSettlementComplete,
@@ -249,9 +251,9 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
     window.open(paymentUrl, '_blank');
   };
 
-  const handleResend = async () => {
+  const handleSendInvoice = async () => {
     const email = sendEmail.trim();
-    if (!onResend || !paymentLink) return;
+    if (!onSendInvoice || !paymentLink) return;
     if (!email) {
       toast({
         title: 'Could not send invoice',
@@ -262,7 +264,26 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
     }
     setSendLoading(true);
     try {
-      await onResend(paymentLink, email);
+      await onSendInvoice(paymentLink, email);
+    } finally {
+      setSendLoading(false);
+    }
+  };
+
+  const handleResendInvoice = async () => {
+    if (!onResend || !paymentLink) return;
+    setSendLoading(true);
+    try {
+      await onResend(paymentLink);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : '';
+      if (message.toLowerCase().includes('no email provided and no previous recipient available')) {
+        toast({
+          title: 'Could not send invoice',
+          description: 'No previous recipient found. Please enter an email to send.',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setSendLoading(false);
     }
@@ -754,12 +775,21 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                 <Button
                   size="sm"
                   variant="default"
-                  onClick={() => void handleResend()}
+                  onClick={() => void handleSendInvoice()}
                   disabled={!canResend || sendLoading}
                   className="w-full"
                 >
                   <Send className="mr-2 h-4 w-4" />
                   {sendLoading ? 'Sending invoice...' : 'Send invoice'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleResendInvoice()}
+                  disabled={!canResend || sendLoading}
+                  className="w-full"
+                >
+                  {sendLoading ? 'Resending invoice...' : 'Resend invoice'}
                 </Button>
                 {!canResend ? (
                   <p className="text-xs text-muted-foreground">

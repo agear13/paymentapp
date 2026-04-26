@@ -109,7 +109,7 @@ export async function submitCryptoPaymentConfirmation(
         payment_link_id: link.id,
         event_type: 'CRYPTO_PAYMENT_SUBMITTED',
         payment_method: 'CRYPTO',
-        pilot_deal_id: link.pilot_deal_id ?? undefined,
+        pilot_deal_id: (link as { pilot_deal_id?: string | null }).pilot_deal_id ?? undefined,
         amount_received: link.amount,
         currency_received: link.currency,
         correlation_id: correlationId,
@@ -146,18 +146,18 @@ export async function submitCryptoPaymentConfirmation(
         },
       });
     } catch (e) {
-      log.warn({ err: e, paymentLinkId: link.id }, 'Could not create merchant notification for crypto submit');
+      log.warn('Could not create merchant notification for crypto submit', {
+        err: e instanceof Error ? e.message : String(e),
+        paymentLinkId: link.id,
+      });
     }
 
-    log.info(
-      {
-        paymentLinkId: link.id,
-        confirmationId,
-        nextStatus,
-        match_confidence: fullVerification.match_confidence,
-      },
-      'Crypto payment confirmation recorded'
-    );
+    log.info('Crypto payment confirmation recorded', {
+      paymentLinkId: link.id,
+      confirmationId,
+      nextStatus,
+      match_confidence: fullVerification.match_confidence,
+    });
 
     return {
       confirmationId,

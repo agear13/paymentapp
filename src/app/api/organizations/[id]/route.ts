@@ -35,6 +35,10 @@ export async function PATCH(
       return apiError('Organization not found or access denied', 404);
     }
 
+    if (!['OWNER', 'ADMIN'].includes(userOrg.role.toUpperCase())) {
+      return apiError('Forbidden - only OWNER or ADMIN can update organization', 403);
+    }
+
     const { data: body, error } = await validateBody(request, updateOrganizationSchema);
     
     if (error) {

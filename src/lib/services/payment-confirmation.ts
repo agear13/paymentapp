@@ -81,7 +81,7 @@ export async function confirmPayment(
       normalizedProviderRef
     );
 
-  log.info({
+  log.info('Starting payment confirmation', {
     correlationId,
     paymentLinkId,
     provider,
@@ -89,7 +89,7 @@ export async function confirmPayment(
     normalizedProviderRef: provider === 'hedera' ? normalizedProviderRef : undefined,
     amountReceived,
     currencyReceived,
-  }, 'Starting payment confirmation');
+  });
 
   try {
     const idempotencyCheck =
@@ -100,10 +100,10 @@ export async function confirmPayment(
           : await checkHederaIdempotency(normalizedProviderRef, providerRef);
 
     if (idempotencyCheck.exists) {
-      log.info({
+      log.info('Payment already processed (idempotent)', {
         correlationId,
         existingEventId: idempotencyCheck.eventId,
-      }, 'Payment already processed (idempotent)');
+      });
 
       const earlyResult = {
         success: true,
@@ -149,11 +149,11 @@ export async function confirmPayment(
       }
 
       if (paymentLink.status === 'PAID') {
-        log.warn({
+        log.warn('Payment link already paid', {
           correlationId,
           paymentLinkId,
           status: paymentLink.status,
-        }, 'Payment link already paid');
+        });
         await getFxSnapshotService().ensureSettlementFxSnapshot(tx, {
           id: paymentLinkId,
           currency: paymentLink.currency,
@@ -233,10 +233,10 @@ export async function confirmPayment(
         if (pilotDeal?.id) {
           paymentEventData.pilot_deal_id = pilotDeal.id;
         } else {
-          log.warn(
-            { correlationId, pilotDealIdFromMeta },
-            'Ignoring metadata pilot_deal_id (no matching deal_network_pilot_deals row)'
-          );
+          log.warn('Ignoring metadata pilot_deal_id (no matching deal_network_pilot_deals row)', {
+            correlationId,
+            pilotDealIdFromMeta,
+          });
         }
       }
 
@@ -270,11 +270,11 @@ export async function confirmPayment(
         data: paymentEventData,
       });
 
-      log.info({
+      log.info('Payment event created', {
         correlationId,
         paymentEventId: paymentEvent.id,
         paymentLinkId,
-      }, 'Payment event created');
+      });
 
       // 4. Ensure canonical SETTLEMENT fx snapshot (payment_link_id, SETTLEMENT, currency, currency); then post to ledger
       try {
@@ -293,7 +293,7 @@ export async function confirmPayment(
             organizationId: paymentLink.organization_id,
             stripePaymentIntentId: paymentIntentId || providerRef,
             grossAmount: amountReceived.toString(),
-            feeAmount: calculatedFee,
+            feeAmount: String(calculatedFee),
             currency: currencyReceived,
             correlationId,
           });
@@ -336,7 +336,7 @@ export async function confirmPayment(
             paymentLinkId,
             organizationId: paymentLink.organization_id,
             tokenType,
-            cryptoAmount: amountReceived,
+            cryptoAmount: String(amountReceived),
             invoiceAmount: paymentLink.amount.toString(),
             invoiceCurrency: paymentLink.currency,
             fxRate: rate,
@@ -358,19 +358,20 @@ export async function confirmPayment(
         // Validate ledger balance
         await validatePostingBalance(paymentLinkId);
 
-        log.info({
+        log.info('Ledger entries posted and validated', {
           correlationId,
           paymentLinkId,
-        }, 'Ledger entries posted and validated');
-      } catch (ledgerError: any) {
+        });
+      } catch (ledgerError: unknown) {
         log.error(
+          'Ledger posting failed (will retry)',
+          ledgerError instanceof Error ? ledgerError : undefined,
           {
             correlationId,
             organizationId: paymentLink.organization_id,
             paymentLinkId,
-            error: ledgerError?.message,
-          },
-          'Ledger posting failed (will retry)'
+            error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
+          }
         );
 
         // Create notification so user is aware
@@ -380,19 +381,21 @@ export async function confirmPayment(
               organization_id: paymentLink.organization_id,
               type: 'SYSTEM_ALERT',
               title: 'Ledger posting failed',
-              message: `Ledger posting failed for payment link. Payment was confirmed but ledger entries could not be created. Correlation ID: ${correlationId}. Error: ${ledgerError?.message || 'Unknown'}. Ledger posting will be retried.`,
+              message: `Ledger posting failed for payment link. Payment was confirmed but ledger entries could not be created. Correlation ID: ${correlationId}. Error: ${
+                ledgerError instanceof Error ? ledgerError.message : String(ledgerError)
+              }. Ledger posting will be retried.`,
               data: {
                 paymentLinkId,
                 correlationId,
-                error: ledgerError?.message,
+                error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
               },
             },
           });
-        } catch (notifErr: any) {
-          log.warn(
-            { correlationId, notifError: notifErr?.message },
-            'Could not create ledger failure notification'
-          );
+        } catch (notifErr: unknown) {
+          log.warn('Could not create ledger failure notification', {
+            correlationId,
+            notifError: notifErr instanceof Error ? notifErr.message : String(notifErr),
+          });
         }
         // Do NOT throw - payment confirmed is source of truth; return 200
       }
@@ -439,16 +442,20 @@ export async function confirmPayment(
             },
           });
 
-          log.info({
+          log.info('Xero sync queued (idempotent)', {
             correlationId,
             paymentLinkId,
-          }, 'Xero sync queued (idempotent)');
-        } catch (xeroError: any) {
+          });
+        } catch (xeroError: unknown) {
           // Don't fail payment if Xero sync fails
-          log.error({
-            correlationId,
-            error: xeroError.message,
-          }, 'Xero sync queue failed (non-blocking)');
+          log.error(
+            'Xero sync queue failed (non-blocking)',
+            xeroError instanceof Error ? xeroError : undefined,
+            {
+              correlationId,
+              error: xeroError instanceof Error ? xeroError.message : String(xeroError),
+            }
+          );
         }
       }
 
@@ -459,14 +466,11 @@ export async function confirmPayment(
       };
     });
 
-    log.info(
-      {
-        correlationId,
-        paymentEventId: result.paymentEventId,
-        paymentLinkId,
-      },
-      'Payment confirmed (returning 200)'
-    );
+    log.info('Payment confirmed (returning 200)', {
+      correlationId,
+      paymentEventId: result.paymentEventId,
+      paymentLinkId,
+    });
 
     // 6. Auto-create referral conversion (non-blocking; must not fail payment)
     if (result.success && result.paymentEventId) {
@@ -487,42 +491,42 @@ export async function confirmPayment(
           ...(provider === 'wise' && { wiseTransferId: transactionId || normalizedProviderRef }),
         });
         if (refResult.created) {
-          log.info(
-            {
-              correlationId,
-              paymentEventId: result.paymentEventId,
-              paymentLinkId,
-              conversionId: refResult.conversionId,
-              providerRef: provider === 'stripe' ? paymentIntentId : normalizedProviderRef,
-            },
-            '[REFERRAL_AUTO_CONVERSION] conversion created'
-          );
+          log.info('[REFERRAL_AUTO_CONVERSION] conversion created', {
+            correlationId,
+            paymentEventId: result.paymentEventId,
+            paymentLinkId,
+            conversionId: refResult.conversionId,
+            providerRef: provider === 'stripe' ? paymentIntentId : normalizedProviderRef,
+          });
         } else if (refResult.skipped) {
-          log.info(
-            {
-              correlationId,
-              paymentEventId: result.paymentEventId,
-              paymentLinkId,
-              reason: refResult.reason,
-            },
-            '[REFERRAL_AUTO_CONVERSION] skipped (idempotent)'
-          );
+          log.info('[REFERRAL_AUTO_CONVERSION] skipped (idempotent)', {
+            correlationId,
+            paymentEventId: result.paymentEventId,
+            paymentLinkId,
+            reason: refResult.reason,
+          });
         }
       } catch (refErr: any) {
-        log.warn(
-          { correlationId, paymentEventId: result.paymentEventId, paymentLinkId, err: refErr?.message },
-          '[REFERRAL_AUTO_CONVERSION] failed (non-blocking)'
-        );
+        log.warn('[REFERRAL_AUTO_CONVERSION] failed (non-blocking)', {
+          correlationId,
+          paymentEventId: result.paymentEventId,
+          paymentLinkId,
+          err: refErr instanceof Error ? refErr.message : String(refErr),
+        });
       }
     }
 
     return result;
   } catch (error: any) {
-    log.error({
-      correlationId,
-      error: error.message,
-      stack: error.stack,
-    }, 'Payment confirmation failed');
+    log.error(
+      'Payment confirmation failed',
+      error instanceof Error ? error : undefined,
+      {
+        correlationId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      }
+    );
 
     return {
       success: false,

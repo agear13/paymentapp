@@ -98,7 +98,7 @@ export async function handleUnderpayment(
 
   // Determine suggested action based on shortfall percentage
   let suggestedAction: 'retry' | 'contact_support' | 'manual_review';
-  let canRetry = true;
+  const canRetry = true;
   let message: string;
 
   if (shortfallPercent < 1) {

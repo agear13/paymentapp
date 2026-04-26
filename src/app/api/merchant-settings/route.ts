@@ -6,6 +6,7 @@ import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
 import config from '@/lib/config/env';
 import { resolveWiseFieldsForCreate } from '@/lib/merchant-settings/resolve-wise-create-fields';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 const createMerchantSettingsSchema = z.object({
   organizationId: z.string().uuid(),
@@ -35,7 +36,14 @@ export async function GET(request: NextRequest) {
       return apiError('organizationId is required', 400);
     }
 
-    // TODO: Check if user has access to this organization
+    const canViewSettings = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'view_settings'
+    );
+    if (!canViewSettings) {
+      return apiError('Forbidden - insufficient organization permissions', 403);
+    }
 
     const settings = await prisma.merchant_settings.findMany({
       where: { organization_id: organizationId },
@@ -72,7 +80,14 @@ export async function POST(request: NextRequest) {
       return error;
     }
 
-    // TODO: Check if user has permission to create settings for this organization
+    const canManageSettings = await hasOrganizationPermission(
+      user.id,
+      body.organizationId,
+      'manage_settings'
+    );
+    if (!canManageSettings) {
+      return apiError('Forbidden - insufficient organization permissions', 403);
+    }
 
     const wiseFields = resolveWiseFieldsForCreate({
       wiseProfileId: body.wiseProfileId,
