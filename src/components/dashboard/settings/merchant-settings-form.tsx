@@ -42,7 +42,17 @@ const currencies = [
 
 const merchantSettingsSchema = z.object({
   displayName: z.string().min(2, 'Display name must be at least 2 characters').max(255),
-  organizationLogoUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  organizationLogoUrl: z
+    .string()
+    .optional()
+    .or(z.literal(''))
+    .refine(
+      (value) =>
+        !value ||
+        value.startsWith('/uploads/logos/') ||
+        /^https?:\/\//i.test(value),
+      'Must be a valid URL or uploaded logo path'
+    ),
   defaultCurrency: z.string().length(3, 'Currency must be a 3-letter ISO code'),
   stripeAccountId: z.string().optional().refine(
     (val) => !val || val.startsWith('acct_'),

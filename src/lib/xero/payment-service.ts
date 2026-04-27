@@ -9,6 +9,7 @@ import { getActiveConnection } from './connection-service';
 import { prisma } from '@/lib/server/prisma';
 import { Payment } from 'xero-node';
 import type { TokenType } from '@/lib/hedera/constants';
+import { fetchXeroAccounts } from './accounts-service';
 
 export interface PaymentRecordingParams {
   paymentLinkId: string;
@@ -38,7 +39,6 @@ export async function recordXeroPayment(
   params: PaymentRecordingParams
 ): Promise<PaymentRecordingResult> {
   const {
-    paymentLinkId,
     organizationId,
     invoiceId,
     amount,
@@ -88,6 +88,14 @@ export async function recordXeroPayment(
   // Update tenants (read-only property, must use updateTenants method)
   await xeroClient.updateTenants();
 
+  const { accounts } = await fetchXeroAccounts(organizationId);
+  const clearingCodeExists = accounts.some((account) => account.code === clearingAccountId);
+  if (!clearingCodeExists) {
+    throw new Error(
+      `Mapped clearing account code "${clearingAccountId}" is not available in Xero. Refresh account mappings and select an active account code.`
+    );
+  }
+
   // Build payment narration
   const narration = buildPaymentNarration(
     paymentMethod,
@@ -110,10 +118,20 @@ export async function recordXeroPayment(
   };
 
   // Create payment in Xero
-  const response = await xeroClient.accountingApi.createPayment(
-    connection.tenantId,
-    payment
-  );
+  let response;
+  try {
+    response = await xeroClient.accountingApi.createPayment(
+      connection.tenantId,
+      payment
+    );
+  } catch (error: unknown) {
+    const details =
+      typeof error === 'object' && error !== null
+        ? (error as { response?: { body?: unknown }; message?: string }).response?.body ||
+          (error as { message?: string }).message
+        : undefined;
+    throw new Error(`Failed to create payment in Xero: ${JSON.stringify(details)}`);
+  }
 
   if (!response.body.payments || response.body.payments.length === 0) {
     throw new Error('Failed to create payment in Xero');

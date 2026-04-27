@@ -11,6 +11,7 @@ import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 const createMerchantSettingsSchema = z.object({
   organizationId: z.string().uuid(),
   displayName: z.string().min(2).max(255),
+  organizationLogoUrl: z.string().min(1).optional(),
   defaultCurrency: z.string().length(3),
   stripeAccountId: z.string().optional(),
   hederaAccountId: z.string().min(1).optional(),
@@ -105,6 +106,7 @@ export async function POST(request: NextRequest) {
     const createData: Record<string, unknown> = {
       organization_id: body.organizationId,
       display_name: body.displayName,
+      organization_logo_url: body.organizationLogoUrl,
       default_currency: body.defaultCurrency,
       stripe_account_id: body.stripeAccountId,
       hedera_account_id: body.hederaAccountId,

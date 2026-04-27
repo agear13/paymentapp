@@ -6,6 +6,8 @@
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
+const RATE_LIMIT_TIMEOUT_MS = Number.parseInt(process.env.RATE_LIMIT_TIMEOUT_MS || '60', 10)
+
 // Create Redis client
 const redis = process.env.UPSTASH_REDIS_REST_URL
   ? new Redis({
@@ -21,8 +23,9 @@ export const rateLimiters = {
     ? new Ratelimit({
         redis,
         limiter: Ratelimit.slidingWindow(5, '15 m'), // 5 requests per 15 minutes
-        analytics: true,
+        analytics: false,
         prefix: 'ratelimit:auth',
+        ephemeralCache: new Map(),
       })
     : null,
 
@@ -31,8 +34,9 @@ export const rateLimiters = {
     ? new Ratelimit({
         redis,
         limiter: Ratelimit.slidingWindow(100, '15 m'), // 100 requests per 15 minutes
-        analytics: true,
+        analytics: false,
         prefix: 'ratelimit:api',
+        ephemeralCache: new Map(),
       })
     : null,
 
@@ -41,8 +45,9 @@ export const rateLimiters = {
     ? new Ratelimit({
         redis,
         limiter: Ratelimit.slidingWindow(30, '1 m'), // 30 requests per minute
-        analytics: true,
+        analytics: false,
         prefix: 'ratelimit:public',
+        ephemeralCache: new Map(),
       })
     : null,
 
@@ -51,8 +56,9 @@ export const rateLimiters = {
     ? new Ratelimit({
         redis,
         limiter: Ratelimit.slidingWindow(1000, '1 m'), // 1000 requests per minute
-        analytics: true,
+        analytics: false,
         prefix: 'ratelimit:webhook',
+        ephemeralCache: new Map(),
       })
     : null,
 
@@ -61,8 +67,9 @@ export const rateLimiters = {
     ? new Ratelimit({
         redis,
         limiter: Ratelimit.slidingWindow(300, '15 m'), // 300 requests per 15 minutes (1 per 3 seconds)
-        analytics: true,
+        analytics: false,
         prefix: 'ratelimit:polling',
+        ephemeralCache: new Map(),
       })
     : null,
 }
@@ -103,9 +110,27 @@ export async function checkRateLimit(
     }
   }
 
-  const { success, limit, remaining, reset } = await limiter.limit(identifier)
+  // Fail-open guard: under Redis slowness/failure, do not block request handling.
+  // This protects hot paths from transport-level collapse caused by limiter latency.
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('RATE_LIMIT_TIMEOUT')), RATE_LIMIT_TIMEOUT_MS)
+  })
 
-  return { success, limit, remaining, reset }
+  try {
+    const { success, limit, remaining, reset } = await Promise.race([
+      limiter.limit(identifier),
+      timeout,
+    ])
+
+    return { success, limit, remaining, reset }
+  } catch {
+    return {
+      success: true,
+      limit: 999999,
+      remaining: 999999,
+      reset: Date.now() + 60000,
+    }
+  }
 }
 
 /**

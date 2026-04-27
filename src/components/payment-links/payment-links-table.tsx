@@ -103,6 +103,7 @@ export interface PaymentLink {
   lastSentToEmail?: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
+  paidAt?: Date | string | null;
   paymentEvents?: any[];
 }
 
@@ -357,6 +358,7 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
             <TableHead>Customer</TableHead>
             <TableHead>Due Date</TableHead>
             <TableHead>Invoice Date</TableHead>
+            <TableHead>Paid Date</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -412,6 +414,17 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
               </TableCell>
               <TableCell>
                 {formatDate(paymentLink.invoiceDate || paymentLink.createdAt) || (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell>
+                {paymentLink.status === 'PAID' ||
+                paymentLink.status === 'PAID_UNVERIFIED' ||
+                paymentLink.status === 'REQUIRES_REVIEW' ? (
+                  formatDate(paymentLink.paidAt, 'MMM d, yyyy p') || (
+                    <span className="text-muted-foreground">Pending confirmation timestamp</span>
+                  )
+                ) : (
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>

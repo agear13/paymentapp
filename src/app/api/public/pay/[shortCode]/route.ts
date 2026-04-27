@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
+import { derivePaidAtFromEvents } from '@/lib/payments/paid-at';
 
 /**
  * GET /api/public/pay/[shortCode]
@@ -213,6 +214,12 @@ export async function GET(
       rate: Number(s.rate),
       capturedAt: s.captured_at,
     }));
+    const paidAt = derivePaidAtFromEvents(paymentLink.payment_events || []);
+    const submittedAt =
+      paymentLink.payment_events?.find(
+        (event) =>
+          event.event_type === 'CRYPTO_PAYMENT_SUBMITTED' || event.event_type === 'PAYMENT_INITIATED'
+      )?.created_at ?? null;
 
     // Return sanitized data (exclude sensitive info)
     return NextResponse.json({
@@ -269,6 +276,8 @@ export async function GET(
         fxSnapshot,
         availableFxSnapshots,
         lastEvent: paymentLink.payment_events?.[0] || null,
+        paidAt,
+        submittedAt,
       },
     });
   } catch (error: any) {

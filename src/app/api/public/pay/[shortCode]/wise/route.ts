@@ -15,6 +15,37 @@ import { buildWiseReference, getMerchantWiseConfig, persistWiseContextForPayment
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
 
+const MISSING_LINK_TTL_MS = 30_000;
+const missingShortCodeUntil = new Map<string, number>();
+
+function isMissingShortCodeCached(shortCode: string): boolean {
+  const expiresAt = missingShortCodeUntil.get(shortCode);
+  if (!expiresAt) return false;
+  if (expiresAt <= Date.now()) {
+    missingShortCodeUntil.delete(shortCode);
+    return false;
+  }
+  return true;
+}
+
+function cacheMissingShortCode(shortCode: string): void {
+  missingShortCodeUntil.set(shortCode, Date.now() + MISSING_LINK_TTL_MS);
+}
+
+function fetchWisePaymentLink(shortCode: string) {
+  return prisma.payment_links.findUnique({
+    where: { short_code: shortCode },
+    select: {
+      id: true,
+      amount: true,
+      status: true,
+      currency: true,
+      payment_method: true,
+      organization_id: true,
+    },
+  });
+}
+
 /**
  * Validate Wise configuration and return error response if missing.
  */
@@ -70,21 +101,25 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ shortCode: string }> }
 ) {
-  const rateLimitResult = await applyRateLimit(request, 'public');
-  if (!rateLimitResult.success) {
-    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
-  }
-
   const { shortCode } = await params;
   if (!isValidShortCode(shortCode)) {
     return NextResponse.json({ error: 'Invalid short code' }, { status: 400 });
   }
 
-  const paymentLink = await prisma.payment_links.findUnique({
-    where: { short_code: shortCode },
-  });
+  // Hot negative-cache to avoid hammering Redis/DB for repeated invalid lookups.
+  if (isMissingShortCodeCached(shortCode)) {
+    return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
+  }
+
+  const rateLimitResult = await applyRateLimit(request, 'public');
+  if (!rateLimitResult.success) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+  }
+
+  const paymentLink = await fetchWisePaymentLink(shortCode);
 
   if (!paymentLink) {
+    cacheMissingShortCode(shortCode);
     return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
   }
   if (paymentLink.payment_method && paymentLink.payment_method !== 'WISE') {
@@ -132,21 +167,24 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ shortCode: string }> }
 ) {
-  const rateLimitResult = await applyRateLimit(request, 'public');
-  if (!rateLimitResult.success) {
-    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
-  }
-
   const { shortCode } = await params;
   if (!isValidShortCode(shortCode)) {
     return NextResponse.json({ error: 'Invalid short code' }, { status: 400 });
   }
 
-  const paymentLink = await prisma.payment_links.findUnique({
-    where: { short_code: shortCode },
-  });
+  if (isMissingShortCodeCached(shortCode)) {
+    return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
+  }
+
+  const rateLimitResult = await applyRateLimit(request, 'public');
+  if (!rateLimitResult.success) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+  }
+
+  const paymentLink = await fetchWisePaymentLink(shortCode);
 
   if (!paymentLink) {
+    cacheMissingShortCode(shortCode);
     return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
   }
   if (paymentLink.payment_method && paymentLink.payment_method !== 'WISE') {

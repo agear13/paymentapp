@@ -9,12 +9,33 @@ import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { getCurrentUser } from '@/lib/auth/session';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { apiError } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
 
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'logos');
+
+function isAllowedLogoFile(file: File): { valid: boolean; extension: string | null } {
+  const mimeType = (file.type || '').toLowerCase();
+  const extension = path.extname(file.name || '').toLowerCase();
+
+  if (ALLOWED_TYPES.includes(mimeType)) {
+    return {
+      valid: true,
+      extension: ALLOWED_EXTENSIONS.includes(extension) ? extension : null,
+    };
+  }
+
+  // Some browsers/upload flows can provide empty or generic MIME types.
+  if (ALLOWED_EXTENSIONS.includes(extension)) {
+    return { valid: true, extension };
+  }
+
+  return { valid: false, extension: null };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,8 +66,18 @@ export async function POST(request: NextRequest) {
       return apiError('Organization ID is required', 400);
     }
 
+    const canManageSettings = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'manage_settings'
+    );
+    if (!canManageSettings) {
+      return apiError('Forbidden - insufficient organization permissions', 403);
+    }
+
     // Validate file type
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    const fileValidation = isAllowedLogoFile(file);
+    if (!fileValidation.valid) {
       return apiError(
         'Invalid file type. Allowed types: PNG, JPG, JPEG, WEBP',
         400
@@ -67,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate unique filename
-    const fileExtension = path.extname(file.name);
+    const fileExtension = fileValidation.extension ?? '.png';
     const timestamp = Date.now();
     const sanitizedOrgId = organizationId.replace(/[^a-zA-Z0-9]/g, '');
     const filename = `${sanitizedOrgId}-${timestamp}${fileExtension}`;

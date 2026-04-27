@@ -20,7 +20,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -303,6 +302,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   const [attachmentUploading, setAttachmentUploading] = React.useState(false);
   const initialAttachmentRef = React.useRef<PaymentLinkAttachmentDraft | null>(null);
   const wasOpenRef = React.useRef(false);
+  const invoiceRefSuggestionRequestedRef = React.useRef(false);
 
   // Fetch merchant settings when dialog opens
   React.useEffect(() => {
@@ -341,6 +341,45 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   React.useEffect(() => {
     if (!open) setGuardrail(null);
   }, [open]);
+
+  React.useEffect(() => {
+    if (!open || mode !== 'create' || !organizationId) return;
+    if (invoiceRefSuggestionRequestedRef.current) return;
+
+    const invoiceRefFieldState = form.getFieldState('invoiceReference');
+    const currentValue = form.getValues('invoiceReference')?.trim() || '';
+    if (invoiceRefFieldState.isDirty || currentValue.length > 0) {
+      return;
+    }
+
+    invoiceRefSuggestionRequestedRef.current = true;
+    let cancelled = false;
+
+    const fetchSuggestion = async () => {
+      try {
+        const response = await fetch(
+          `/api/payment-links/next-reference?organizationId=${organizationId}`
+        );
+        if (!response.ok) return;
+        const json = (await response.json()) as { data?: { invoiceReference?: string } };
+        const suggested = json.data?.invoiceReference?.trim();
+        if (cancelled || !suggested) return;
+        const latestFieldState = form.getFieldState('invoiceReference');
+        const latestValue = form.getValues('invoiceReference')?.trim() || '';
+        if (!latestFieldState.isDirty && !latestValue) {
+          form.setValue('invoiceReference', suggested, { shouldDirty: false });
+        }
+      } catch {
+        // Non-blocking: user can still type reference manually.
+      }
+    };
+
+    void fetchSuggestion();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, mode, organizationId, form]);
 
   const railSetup = React.useMemo(
     () => computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings)),
@@ -447,6 +486,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     const justOpened = open && !wasOpenRef.current;
     wasOpenRef.current = open;
     if (!open || !justOpened) return;
+    invoiceRefSuggestionRequestedRef.current = false;
 
     if (mode === 'edit' && editPaymentLink) {
       const due = editPaymentLink.dueDate ? new Date(editPaymentLink.dueDate) : undefined;
@@ -1001,14 +1041,38 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
   const selectedPaymentMethod = form.watch('paymentMethod');
 
+  const renderTrigger = () => {
+    const handleOpen = () => setOpen(true);
+    if (!trigger) {
+      return <Button onClick={handleOpen}>Create Payment Link</Button>;
+    }
+    if (!React.isValidElement(trigger)) {
+      return (
+        <span className="inline-flex" onClick={handleOpen} role="button" tabIndex={0}>
+          {trigger}
+        </span>
+      );
+    }
+    const triggerProps = trigger.props as {
+      onClick?: (event: React.MouseEvent) => void;
+      type?: string;
+    };
+    return React.cloneElement(trigger, {
+      ...triggerProps,
+      ...(trigger.type === 'button' && !triggerProps.type ? { type: 'button' } : {}),
+      onClick: (event: React.MouseEvent) => {
+        triggerProps.onClick?.(event);
+        if (!event.defaultPrevented) {
+          handleOpen();
+        }
+      },
+    });
+  };
+
   return (
     <>
     <Dialog open={open} onOpenChange={setOpen}>
-      {showTrigger ? (
-        <DialogTrigger asChild>
-          {trigger || <Button>Create Payment Link</Button>}
-        </DialogTrigger>
-      ) : null}
+      {showTrigger ? renderTrigger() : null}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === 'edit' ? 'Edit invoice' : 'Create Invoice'}</DialogTitle>
@@ -1545,7 +1609,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                     />
                   </FormControl>
                   <FormDescription>
-                    For your internal tracking. Not shown to customers.
+                    Auto-generated sequentially per organization; you can edit before saving.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

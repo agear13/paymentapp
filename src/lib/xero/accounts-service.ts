@@ -55,10 +55,14 @@ export async function fetchXeroAccounts(
       'Code'     // order by code
     );
     
-    // Filter to only active accounts
+    // Filter to only active accounts with usable account code.
+    // System/placeholder accounts can be active but have no code and are not valid for mapping.
     const activeAccounts =
       response.body.accounts?.filter(
-        (account) => account.status === Account.StatusEnum.ACTIVE
+        (account) =>
+          account.status === Account.StatusEnum.ACTIVE &&
+          typeof account.code === 'string' &&
+          account.code.trim().length > 0
       ) || [];
 
     return {
@@ -112,6 +116,25 @@ export async function searchXeroAccounts(
     account.name.toLowerCase().includes(term) ||
     account.code.toLowerCase().includes(term)
   );
+}
+
+export async function validateMappedAccountCodes(
+  organizationId: string,
+  mappedCodes: string[]
+): Promise<{ valid: boolean; missingCodes: string[] }> {
+  const uniqueCodes = [...new Set(mappedCodes.map((code) => code.trim()).filter(Boolean))];
+  if (uniqueCodes.length === 0) {
+    return { valid: true, missingCodes: [] };
+  }
+
+  const { accounts } = await fetchXeroAccounts(organizationId);
+  const availableCodes = new Set(accounts.map((account) => account.code));
+  const missingCodes = uniqueCodes.filter((code) => !availableCodes.has(code));
+
+  return {
+    valid: missingCodes.length === 0,
+    missingCodes,
+  };
 }
 
 

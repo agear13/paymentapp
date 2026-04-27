@@ -23,6 +23,8 @@ interface PaymentLinkPaidProps {
       createdAt: string;
       paymentMethod?: string;
     };
+    paidAt?: string | null;
+    submittedAt?: string | null;
     attachmentUrl?: string | null;
     attachmentFilename?: string | null;
     attachmentMimeType?: string | null;
@@ -35,9 +37,13 @@ export const PaymentLinkPaid: React.FC<PaymentLinkPaidProps> = ({
   paymentLink,
   variant = 'standard',
 }) => {
-  const paymentDate = paymentLink.lastEvent?.createdAt
-    ? format(new Date(paymentLink.lastEvent.createdAt), 'PPp')
-    : 'Unknown';
+  const timestampSource =
+    paymentLink.paidAt ||
+    paymentLink.submittedAt ||
+    paymentLink.lastEvent?.createdAt ||
+    null;
+  const paymentDate = timestampSource ? format(new Date(timestampSource), 'PPp') : null;
+  const dateLabel = variant === 'standard' ? 'Payment Date' : 'Submitted At';
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -75,11 +81,13 @@ export const PaymentLinkPaid: React.FC<PaymentLinkPaidProps> = ({
                   {paymentLink.currency} {paymentLink.amount}
                 </p>
               </div>
-              {paymentLink.lastEvent && (
+              {(paymentLink.lastEvent || paymentDate) && (
                 <>
                   <div>
-                    <p className="text-xs text-slate-500 mb-1">Payment Date</p>
-                    <p className="text-sm text-slate-700">{paymentDate}</p>
+                    <p className="text-xs text-slate-500 mb-1">{dateLabel}</p>
+                    <p className="text-sm text-slate-700">
+                      {paymentDate ?? 'Timestamp pending'}
+                    </p>
                   </div>
                   {paymentLink.lastEvent.paymentMethod && (
                     <div>

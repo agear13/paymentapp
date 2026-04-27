@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
+import { validateMappedAccountCodes } from '@/lib/xero/accounts-service';
 
 // GET /api/settings/xero-mappings?organization_id=xxx
 export async function GET(request: NextRequest) {
@@ -143,6 +144,19 @@ export async function PUT(request: NextRequest) {
     if (uniqueCryptoAccounts.size !== cryptoAccounts.length) {
       return NextResponse.json(
         { error: 'Each clearing account must be mapped to a different Xero account' },
+        { status: 400 }
+      );
+    }
+
+    const mappedCodes = required
+      .map((field) => mappings[field] as string)
+      .filter(Boolean);
+    const mappingValidation = await validateMappedAccountCodes(organizationId, mappedCodes);
+    if (!mappingValidation.valid) {
+      return NextResponse.json(
+        {
+          error: `Some mapped Xero account codes are no longer available: ${mappingValidation.missingCodes.join(', ')}. Refresh accounts and reselect valid options.`,
+        },
         { status: 400 }
       );
     }

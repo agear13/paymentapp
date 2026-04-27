@@ -13,6 +13,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { getMerchantWiseConfig } from '@/lib/payments/wise';
 import { assertPaymentLinksUpdateDataValid } from '@/lib/payments/payment-links-update-guard';
+import { derivePaidAtFromEvents } from '@/lib/payments/paid-at';
 
 // Helper to transform snake_case DB fields to camelCase for frontend
 function transformPaymentLink(link: any) {
@@ -39,6 +40,13 @@ function transformPaymentLink(link: any) {
     createdAt: event.created_at,
     metadata: event.metadata,
   })) || [];
+  const paidAt = derivePaidAtFromEvents(
+    link.payment_events?.map((event: any) => ({
+      event_type: event.event_type,
+      created_at: event.created_at,
+      received_at: event.received_at ?? null,
+    })) || []
+  );
 
   // Transform ledger entries to camelCase
   const ledgerEntries = link.ledger_entries?.map((entry: any) => ({
@@ -99,6 +107,7 @@ function transformPaymentLink(link: any) {
     manualBankInstructions: link.manual_bank_instructions ?? null,
     createdAt: link.created_at,
     updatedAt: link.updated_at,
+    paidAt,
     wiseStatus: link.wise_status ?? null,
     wiseQuoteId: link.wise_quote_id ?? null,
     wiseTransferId: link.wise_transfer_id ?? null,
@@ -379,6 +388,23 @@ export async function PATCH(
       patch.invoiceReference !== undefined
         ? patch.invoiceReference
         : currentLink.invoice_reference;
+
+    if (mergedInvoiceRef && mergedInvoiceRef !== currentLink.invoice_reference) {
+      const duplicateInvoiceReference = await prisma.payment_links.findFirst({
+        where: {
+          organization_id: currentLink.organization_id,
+          invoice_reference: mergedInvoiceRef,
+          NOT: { id },
+        },
+        select: { id: true },
+      });
+      if (duplicateInvoiceReference) {
+        return NextResponse.json(
+          { error: `Invoice reference "${mergedInvoiceRef}" already exists for this organization.` },
+          { status: 409 }
+        );
+      }
+    }
     const mergedCustomerEmail =
       patch.customerEmail !== undefined
         ? patch.customerEmail

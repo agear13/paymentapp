@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,40 +17,80 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+  const submissionInFlightRef = useRef(false);
+
+  useEffect(() => {
+    const requestedMode = searchParams.get('mode');
+    if (requestedMode === 'signup' || requestedMode === 'signin') {
+      setMode(requestedMode);
+      return;
+    }
+    setMode('signin');
+  }, [searchParams]);
+
+  const getPostAuthDestination = () => {
+    const redirectedFrom = searchParams.get('redirectedFrom');
+    if (redirectedFrom && redirectedFrom.startsWith('/dashboard')) {
+      return redirectedFrom;
+    }
+    return '/dashboard';
+  };
+
+  const waitForSession = async () => {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 120 * (attempt + 1)));
+    }
+    return false;
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submissionInFlightRef.current) return;
+    submissionInFlightRef.current = true;
     setLoading(true);
     setError(null);
+    setNotice(null);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) throw error;
 
-      router.push('/dashboard');
+      await waitForSession();
+      router.replace(getPostAuthDestination());
       router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to login');
     } finally {
       setLoading(false);
+      submissionInFlightRef.current = false;
     }
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submissionInFlightRef.current) return;
+    submissionInFlightRef.current = true;
     setLoading(true);
     setError(null);
+    setNotice(null);
 
     // Validate password match
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       setLoading(false);
+      submissionInFlightRef.current = false;
       return;
     }
 
@@ -58,6 +98,7 @@ export default function LoginPage() {
     if (password.length < 8) {
       setError('Password must be at least 8 characters');
       setLoading(false);
+      submissionInFlightRef.current = false;
       return;
     }
 
@@ -76,28 +117,25 @@ export default function LoginPage() {
       if (data.user && !data.user.identities?.length) {
         setError('An account with this email already exists');
         setLoading(false);
+        submissionInFlightRef.current = false;
         return;
       }
 
-      // Refresh router to ensure session is loaded, then redirect to onboarding
+      if (!data.session) {
+        setNotice('Check your email to confirm your account, then sign in.');
+        setMode('signin');
+        return;
+      }
+
+      await waitForSession();
+      router.replace('/onboarding');
       router.refresh();
-      
-      // Use a small delay to ensure session cookies are set
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      router.push('/onboarding');
     } catch (err: any) {
       setError(err.message || 'Failed to create account');
     } finally {
       setLoading(false);
+      submissionInFlightRef.current = false;
     }
-  };
-
-  const toggleMode = () => {
-    setMode(mode === 'signin' ? 'signup' : 'signin');
-    setError(null);
-    setPassword('');
-    setConfirmPassword('');
   };
 
   return (
@@ -286,6 +324,12 @@ export default function LoginPage() {
               </div>
             )}
 
+            {notice && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+                {notice}
+              </div>
+            )}
+
             <Button 
               type="submit" 
               className="w-full h-11 text-base" 
@@ -309,14 +353,12 @@ export default function LoginPage() {
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
               {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
-              <button
-                type="button"
-                onClick={toggleMode}
+              <Link
+                href={mode === 'signin' ? '/auth/signup' : '/auth/login'}
                 className="text-primary hover:text-[rgb(61,92,224)] font-semibold transition-colors"
-                disabled={loading}
               >
                 {mode === 'signin' ? 'Create account' : 'Sign in'}
-              </button>
+              </Link>
             </p>
           </div>
 

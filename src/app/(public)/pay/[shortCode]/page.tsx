@@ -72,6 +72,8 @@ interface PaymentLinkData {
   availableFxSnapshots?: Array<{ tokenType: string; rate: number; capturedAt: string }>;
   fxSnapshot: unknown;
   lastEvent: unknown;
+  paidAt?: string | null;
+  submittedAt?: string | null;
 }
 
 type LoadingState = 'loading' | 'found' | 'not_found' | 'error';

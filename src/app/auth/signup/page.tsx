@@ -7,6 +7,6 @@ import { redirect } from 'next/navigation';
  * This page redirects to prevent 404 errors for direct navigation or external links.
  */
 export default function SignupPage() {
-  // Server-side redirect to login page where signup is handled
-  redirect('/auth/login');
+  // Preserve a stable /auth/signup entry URL while rendering signup mode in auth UI.
+  redirect('/auth/login?mode=signup');
 }

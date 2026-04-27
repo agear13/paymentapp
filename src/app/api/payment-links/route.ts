@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import { requireAuth } from '@/lib/supabase/middleware';
@@ -21,6 +22,7 @@ import { generateQRCodeDataUrl } from '@/lib/qr-code';
 import { getFxService, type Currency } from '@/lib/fx';
 import { buildWisePaymentContext, getMerchantWiseConfig } from '@/lib/payments/wise';
 import { assertPilotDealOwnedByUser } from '@/lib/deal-network-demo/pilot-deal-invoice-link.server';
+import { derivePaidAtFromEvents } from '@/lib/payments/paid-at';
 
 /** FX summary for list view (lightweight) */
 export interface FxSummary {
@@ -28,6 +30,43 @@ export interface FxSummary {
   hasSettlementSnapshot: boolean;
   settlementRate: number | null;
   settlementToken: string | null;
+}
+
+const AUTO_INVOICE_REFERENCE_PREFIX = 'INV-';
+const AUTO_INVOICE_REFERENCE_PAD_LENGTH = 4;
+
+function normalizeInvoiceReference(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function formatAutoInvoiceReference(sequence: number): string {
+  return `${AUTO_INVOICE_REFERENCE_PREFIX}${String(sequence).padStart(
+    AUTO_INVOICE_REFERENCE_PAD_LENGTH,
+    '0'
+  )}`;
+}
+
+async function getNextInvoiceReferenceSequence(
+  tx: Prisma.TransactionClient,
+  organizationId: string
+): Promise<number> {
+  const rows = await tx.$queryRaw<Array<{ max_sequence: number }>>`
+    SELECT COALESCE(MAX((substring(invoice_reference from '^INV-([0-9]+)$'))::int), 0) AS max_sequence
+    FROM payment_links
+    WHERE organization_id = ${organizationId}
+      AND invoice_reference ~ '^INV-[0-9]+$'
+  `;
+  const currentMax = Number(rows[0]?.max_sequence ?? 0);
+  return currentMax + 1;
+}
+
+function isSerializationRetryError(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2034'
+  );
 }
 
 // Helper to transform snake_case DB fields to camelCase for frontend
@@ -58,6 +97,13 @@ function transformPaymentLink(link: Record<string, unknown>) {
       fxSummary.settlementToken = settlement.token_type;
     }
   }
+
+  const paymentEvents = link.payment_events as Array<{
+    event_type?: string | null;
+    created_at?: Date | null;
+    received_at?: Date | null;
+  }> | undefined;
+  const paidAt = derivePaidAtFromEvents(paymentEvents);
 
   return {
     id: link.id,
@@ -116,6 +162,7 @@ function transformPaymentLink(link: Record<string, unknown>) {
     createdAt: link.created_at,
     updatedAt: link.updated_at,
     paymentEvents: link.payment_events,
+    paidAt,
     fxSummary,
     pilotDealId: (link as { pilot_deal_id?: string | null }).pilot_deal_id ?? null,
   };
@@ -221,7 +268,7 @@ export async function GET(request: NextRequest) {
       include: {
         payment_events: {
           orderBy: { created_at: 'desc' },
-          take: 1,
+          take: 10,
         },
         fx_snapshots: {
           select: {
@@ -350,9 +397,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const requestedInvoiceReference = normalizeInvoiceReference(validatedData.invoiceReference);
+
     // Create payment link with initial event
-    const now = new Date();
-    const paymentLink = await prisma.$transaction(async (tx) => {
+    let paymentLink: Awaited<ReturnType<typeof prisma.payment_links.create>>;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        paymentLink = await prisma.$transaction(async (tx) => {
+          const now = new Date();
+          let invoiceReferenceToStore = requestedInvoiceReference;
+          if (!invoiceReferenceToStore) {
+            const nextSequence = await getNextInvoiceReferenceSequence(tx, dbOrgId);
+            invoiceReferenceToStore = formatAutoInvoiceReference(nextSequence);
+          }
+
+          const duplicateInvoiceReference = await tx.payment_links.findFirst({
+            where: {
+              organization_id: dbOrgId,
+              invoice_reference: invoiceReferenceToStore,
+            },
+            select: { id: true },
+          });
+          if (duplicateInvoiceReference) {
+            throw new Error(
+              `DUPLICATE_INVOICE_REFERENCE:${invoiceReferenceToStore}`
+            );
+          }
+
       const linkId = randomUUID();
 
       const hederaCheckoutMode =
@@ -372,7 +443,7 @@ export async function POST(request: NextRequest) {
           amount: validatedData.amount,
           currency: validatedData.currency,
           description: validatedData.description,
-          invoice_reference: validatedData.invoiceReference || null,
+          invoice_reference: invoiceReferenceToStore,
           invoice_date: validatedData.invoiceDate
             ? new Date(validatedData.invoiceDate as string)
             : now,
@@ -477,7 +548,18 @@ export async function POST(request: NextRequest) {
       });
 
       return link;
-    });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        break;
+      } catch (error) {
+        if (isSerializationRetryError(error) && attempt < 2) {
+          continue;
+        }
+        throw error;
+      }
+    }
+    if (!paymentLink!) {
+      throw new Error('Failed to create invoice link');
+    }
 
     loggers.payment.info(
       {
@@ -547,6 +629,13 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
+    if (typeof error?.message === 'string' && error.message.startsWith('DUPLICATE_INVOICE_REFERENCE:')) {
+      const duplicateReference = error.message.split(':')[1] || 'invoice reference';
+      return NextResponse.json(
+        { error: `Invoice reference "${duplicateReference}" already exists for this organization.` },
+        { status: 409 }
+      );
+    }
     loggers.api.error({ error: error.message }, 'Failed to create payment link');
 
     if (error.name === 'ZodError') {

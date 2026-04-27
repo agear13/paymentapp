@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { sendInvoiceEmail } from '@/lib/email/send-invoice-email';
+import { resolveMerchantLogoUrl } from '@/lib/merchant-settings/logo-url';
 import {
   downloadPaymentLinkAttachmentFromStorage,
   isValidPaymentLinkAttachmentStorageKey,
@@ -118,10 +119,20 @@ export async function sendInvoiceForPaymentLink(params: {
     }
   }
 
+  const merchantSettings = await prisma.merchant_settings.findFirst({
+    where: { organization_id: link.organization_id },
+    select: { organization_logo_url: true },
+    orderBy: { created_at: 'desc' },
+  });
+
   const sendResult = await sendInvoiceEmail({
     toEmail: normalizedEmail,
     paymentUrl,
     merchantName: link.organizations?.name || 'Provvypay',
+    merchantLogoUrl: resolveMerchantLogoUrl(
+      merchantSettings?.organization_logo_url,
+      params.origin
+    ),
     invoice: {
       id: link.id,
       shortCode: link.short_code,

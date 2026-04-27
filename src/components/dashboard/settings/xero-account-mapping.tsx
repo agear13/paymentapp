@@ -34,6 +34,18 @@ interface XeroAccount {
   class?: string;
 }
 
+const DEFAULT_ACCOUNT_ORDER = 999;
+
+const ACCOUNT_TYPE_ORDER: Record<string, number> = {
+  SALES: 1,
+  REVENUE: 2,
+  BANK: 3,
+  CURRENT: 4,
+  CURRLIAB: 5,
+  EXPENSE: 6,
+  OVERHEADS: 7,
+};
+
 interface AccountMappings {
   xero_revenue_account_id: string;
   xero_receivable_account_id: string;
@@ -64,7 +76,8 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
       setError(null);
       
       const response = await fetch(
-        `/api/xero/accounts?organization_id=${organizationId}`
+        `/api/xero/accounts?organization_id=${organizationId}`,
+        { cache: 'no-store' }
       );
 
       if (!response.ok) {
@@ -197,7 +210,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
         <AccountMappingField
           label="Revenue Account"
           description="Sales revenue from invoices"
-          accounts={accounts.filter(a => a.type === 'REVENUE')}
+          accounts={getAccountOptions(accounts, ['SALES', 'REVENUE'])}
           value={mappings.xero_revenue_account_id || ''}
           onChange={(value) =>
             setMappings({ ...mappings, xero_revenue_account_id: value })
@@ -209,7 +222,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
         <AccountMappingField
           label="Accounts Receivable"
           description="Customer invoices pending payment"
-          accounts={accounts.filter(a => a.type === 'CURRENT' || a.type === 'CURRLIAB')}
+          accounts={getAccountOptions(accounts, ['CURRENT', 'CURRLIAB'])}
           value={mappings.xero_receivable_account_id || ''}
           onChange={(value) =>
             setMappings({ ...mappings, xero_receivable_account_id: value })
@@ -221,7 +234,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
         <AccountMappingField
           label="Stripe Clearing Account"
           description="Stripe payment settlements"
-          accounts={accounts.filter(a => a.type === 'CURRENT' || a.type === 'BANK')}
+          accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
           value={mappings.xero_stripe_clearing_account_id || ''}
           onChange={(value) =>
             setMappings({ ...mappings, xero_stripe_clearing_account_id: value })
@@ -233,7 +246,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
         <AccountMappingField
           label="Crypto Clearing - HBAR"
           description="HBAR cryptocurrency settlements"
-          accounts={accounts.filter(a => a.type === 'CURRENT' || a.type === 'BANK')}
+          accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
           value={mappings.xero_hbar_clearing_account_id || ''}
           onChange={(value) =>
             setMappings({ ...mappings, xero_hbar_clearing_account_id: value })
@@ -245,7 +258,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
         <AccountMappingField
           label="Crypto Clearing - USDC"
           description="USDC stablecoin settlements"
-          accounts={accounts.filter(a => a.type === 'CURRENT' || a.type === 'BANK')}
+          accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
           value={mappings.xero_usdc_clearing_account_id || ''}
           onChange={(value) =>
             setMappings({ ...mappings, xero_usdc_clearing_account_id: value })
@@ -257,7 +270,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
         <AccountMappingField
           label="Crypto Clearing - USDT"
           description="USDT stablecoin settlements"
-          accounts={accounts.filter(a => a.type === 'CURRENT' || a.type === 'BANK')}
+          accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
           value={mappings.xero_usdt_clearing_account_id || ''}
           onChange={(value) =>
             setMappings({ ...mappings, xero_usdt_clearing_account_id: value })
@@ -269,7 +282,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
         <AccountMappingField
           label="Crypto Clearing - AUDD"
           description="AUDD (Australian Digital Dollar) stablecoin settlements"
-          accounts={accounts.filter(a => a.type === 'CURRENT' || a.type === 'BANK')}
+          accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
           value={mappings.xero_audd_clearing_account_id || ''}
           onChange={(value) =>
             setMappings({ ...mappings, xero_audd_clearing_account_id: value })
@@ -282,7 +295,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
         <AccountMappingField
           label="Processor Fee Expense"
           description="Payment processing fees"
-          accounts={accounts.filter(a => a.type === 'EXPENSE' || a.type === 'OVERHEADS')}
+          accounts={getAccountOptions(accounts, ['EXPENSE', 'OVERHEADS'])}
           value={mappings.xero_fee_expense_account_id || ''}
           onChange={(value) =>
             setMappings({ ...mappings, xero_fee_expense_account_id: value })
@@ -526,6 +539,25 @@ function findAccount(accounts: XeroAccount[], searchTerms: string[]): XeroAccoun
       account.name?.toLowerCase().includes(term.toLowerCase())
     )
   );
+}
+
+function getAccountOptions(accounts: XeroAccount[], preferredTypes: string[]): XeroAccount[] {
+  const preferred = new Set(preferredTypes);
+  return [...accounts].sort((a, b) => {
+    const aBucket = preferred.has(a.type) ? 0 : 1;
+    const bBucket = preferred.has(b.type) ? 0 : 1;
+    if (aBucket !== bBucket) {
+      return aBucket - bBucket;
+    }
+
+    const aOrder = ACCOUNT_TYPE_ORDER[a.type] ?? DEFAULT_ACCOUNT_ORDER;
+    const bOrder = ACCOUNT_TYPE_ORDER[b.type] ?? DEFAULT_ACCOUNT_ORDER;
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+
+    return `${a.code} ${a.name}`.localeCompare(`${b.code} ${b.name}`);
+  });
 }
 
 

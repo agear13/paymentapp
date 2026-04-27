@@ -99,6 +99,7 @@ export interface PaymentLinkDetails {
   lastSentToEmail?: string | null;
   createdAt: Date;
   updatedAt: Date;
+  paidAt?: Date | string | null;
   paymentEvents?: Array<{
     id: string;
     eventType: string;
@@ -723,6 +724,21 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                         <p className="text-sm font-medium">Expires</p>
                         <p className="text-sm">
                           {format(new Date(paymentLink.expiresAt), 'PPpp')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {(paymentLink.status === 'PAID' ||
+                    paymentLink.status === 'PAID_UNVERIFIED' ||
+                    paymentLink.status === 'REQUIRES_REVIEW') && (
+                    <div className="flex items-start gap-2">
+                      <Calendar className="mt-1 h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Paid date</p>
+                        <p className="text-sm">
+                          {paymentLink.paidAt
+                            ? format(new Date(paymentLink.paidAt), 'PPpp')
+                            : 'Pending confirmation timestamp'}
                         </p>
                       </div>
                     </div>
