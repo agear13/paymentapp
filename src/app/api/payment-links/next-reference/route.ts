@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     const rows = await prisma.$queryRaw<Array<{ max_sequence: number }>>`
       SELECT COALESCE(MAX((substring(invoice_reference from '^INV-([0-9]+)$'))::int), 0) AS max_sequence
       FROM payment_links
-      WHERE organization_id = ${organizationId}
+      WHERE organization_id = ${organizationId}::uuid
         AND invoice_reference ~ '^INV-[0-9]+$'
     `;
     const nextSequence = Number(rows[0]?.max_sequence ?? 0) + 1;

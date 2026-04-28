@@ -55,7 +55,7 @@ async function getNextInvoiceReferenceSequence(
   const rows = await tx.$queryRaw<Array<{ max_sequence: number }>>`
     SELECT COALESCE(MAX((substring(invoice_reference from '^INV-([0-9]+)$'))::int), 0) AS max_sequence
     FROM payment_links
-    WHERE organization_id = ${organizationId}
+    WHERE organization_id = ${organizationId}::uuid
       AND invoice_reference ~ '^INV-[0-9]+$'
   `;
   const currentMax = Number(rows[0]?.max_sequence ?? 0);
