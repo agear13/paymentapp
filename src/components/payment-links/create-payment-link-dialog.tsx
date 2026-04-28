@@ -342,45 +342,6 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     if (!open) setGuardrail(null);
   }, [open]);
 
-  React.useEffect(() => {
-    if (!open || mode !== 'create' || !organizationId) return;
-    if (invoiceRefSuggestionRequestedRef.current) return;
-
-    const invoiceRefFieldState = form.getFieldState('invoiceReference');
-    const currentValue = form.getValues('invoiceReference')?.trim() || '';
-    if (invoiceRefFieldState.isDirty || currentValue.length > 0) {
-      return;
-    }
-
-    invoiceRefSuggestionRequestedRef.current = true;
-    let cancelled = false;
-
-    const fetchSuggestion = async () => {
-      try {
-        const response = await fetch(
-          `/api/payment-links/next-reference?organizationId=${organizationId}`
-        );
-        if (!response.ok) return;
-        const json = (await response.json()) as { data?: { invoiceReference?: string } };
-        const suggested = json.data?.invoiceReference?.trim();
-        if (cancelled || !suggested) return;
-        const latestFieldState = form.getFieldState('invoiceReference');
-        const latestValue = form.getValues('invoiceReference')?.trim() || '';
-        if (!latestFieldState.isDirty && !latestValue) {
-          form.setValue('invoiceReference', suggested, { shouldDirty: false });
-        }
-      } catch {
-        // Non-blocking: user can still type reference manually.
-      }
-    };
-
-    void fetchSuggestion();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, mode, organizationId, form]);
-
   const railSetup = React.useMemo(
     () => computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings)),
     [merchantSettings]
@@ -465,6 +426,45 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
   const collectionMode = form.watch('collectionMode');
   const invoiceAttachment = form.watch('attachment');
+
+  React.useEffect(() => {
+    if (!open || mode !== 'create' || !organizationId) return;
+    if (invoiceRefSuggestionRequestedRef.current) return;
+
+    const invoiceRefFieldState = form.getFieldState('invoiceReference');
+    const currentValue = form.getValues('invoiceReference')?.trim() || '';
+    if (invoiceRefFieldState.isDirty || currentValue.length > 0) {
+      return;
+    }
+
+    invoiceRefSuggestionRequestedRef.current = true;
+    let cancelled = false;
+
+    const fetchSuggestion = async () => {
+      try {
+        const response = await fetch(
+          `/api/payment-links/next-reference?organizationId=${organizationId}`
+        );
+        if (!response.ok) return;
+        const json = (await response.json()) as { data?: { invoiceReference?: string } };
+        const suggested = json.data?.invoiceReference?.trim();
+        if (cancelled || !suggested) return;
+        const latestFieldState = form.getFieldState('invoiceReference');
+        const latestValue = form.getValues('invoiceReference')?.trim() || '';
+        if (!latestFieldState.isDirty && !latestValue) {
+          form.setValue('invoiceReference', suggested, { shouldDirty: false });
+        }
+      } catch {
+        // Non-blocking: user can still type reference manually.
+      }
+    };
+
+    void fetchSuggestion();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, mode, organizationId, form]);
 
   React.useEffect(() => {
     if (collectionMode === 'invoice_only') {
