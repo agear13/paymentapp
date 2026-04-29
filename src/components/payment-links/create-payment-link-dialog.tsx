@@ -308,6 +308,48 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   const wasOpenRef = React.useRef(false);
   const invoiceRefSuggestionRequestedRef = React.useRef(false);
 
+  const form = useForm<CreatePaymentLinkFormValues>({
+    resolver: zodResolver(createPaymentLinkFormSchema),
+    defaultValues: {
+      collectionMode: 'payment_request',
+      paymentMethod: 'STRIPE',
+      hederaCheckoutMode: 'INTERACTIVE',
+      cryptoNetwork: '',
+      cryptoAddress: '',
+      cryptoCurrency: '',
+      cryptoMemo: '',
+      cryptoInstructions: '',
+      manualBankRecipientName: '',
+      manualBankCurrency: '',
+      manualBankDestinationType: '',
+      manualBankBankName: '',
+      manualBankAccountNumber: '',
+      manualBankIban: '',
+      manualBankSwiftBic: '',
+      manualBankRoutingSortCode: '',
+      manualBankWiseReference: '',
+      manualBankRevolutHandle: '',
+      manualBankInstructions: '',
+      amount: undefined,
+      currency: defaultCurrency,
+      description: '',
+      invoiceReference: '',
+      customerEmail: '',
+      customerName: '',
+      customerPhone: '',
+      invoiceDate: new Date(),
+      dueDate: undefined,
+      expiresAt: undefined,
+      attachment: undefined,
+      sendViaEmail: false,
+      sendEmail: '',
+      ...defaultValues,
+    },
+  });
+
+  const collectionMode = form.watch('collectionMode');
+  const invoiceAttachment = form.watch('attachment');
+
   // Fetch merchant settings when dialog opens
   React.useEffect(() => {
     async function fetchMerchantSettings() {
@@ -346,17 +388,6 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   React.useEffect(() => {
     if (!open) setGuardrail(null);
   }, [open]);
-
-  /** Prefer merchant accounting currency for new invoices (not payment rail). */
-  React.useEffect(() => {
-    if (!open || mode !== 'create' || !merchantSettingsLoaded) return;
-    const acct = merchantSettings?.defaultCurrency?.trim().toUpperCase().slice(0, 3);
-    if (!acct || acct.length !== 3) return;
-    const current = form.getValues('currency');
-    if (!current || current === defaultCurrency) {
-      form.setValue('currency', acct, { shouldDirty: false });
-    }
-  }, [open, mode, merchantSettingsLoaded, merchantSettings?.defaultCurrency, defaultCurrency, form]);
 
   const railSetup = React.useMemo(
     () => computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings)),
@@ -401,47 +432,16 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     ];
   }, [merchantSettings?.wiseEnabled, railSetup.wiseConfigured, railSetup.wiseIncomplete]);
 
-  const form = useForm<CreatePaymentLinkFormValues>({
-    resolver: zodResolver(createPaymentLinkFormSchema),
-    defaultValues: {
-      collectionMode: 'payment_request',
-      paymentMethod: 'STRIPE',
-      hederaCheckoutMode: 'INTERACTIVE',
-      cryptoNetwork: '',
-      cryptoAddress: '',
-      cryptoCurrency: '',
-      cryptoMemo: '',
-      cryptoInstructions: '',
-      manualBankRecipientName: '',
-      manualBankCurrency: '',
-      manualBankDestinationType: '',
-      manualBankBankName: '',
-      manualBankAccountNumber: '',
-      manualBankIban: '',
-      manualBankSwiftBic: '',
-      manualBankRoutingSortCode: '',
-      manualBankWiseReference: '',
-      manualBankRevolutHandle: '',
-      manualBankInstructions: '',
-      amount: undefined,
-      currency: defaultCurrency,
-      description: '',
-      invoiceReference: '',
-      customerEmail: '',
-      customerName: '',
-      customerPhone: '',
-      invoiceDate: new Date(),
-      dueDate: undefined,
-      expiresAt: undefined,
-      attachment: undefined,
-      sendViaEmail: false,
-      sendEmail: '',
-      ...defaultValues,
-    },
-  });
-
-  const collectionMode = form.watch('collectionMode');
-  const invoiceAttachment = form.watch('attachment');
+  /** Prefer merchant accounting currency for new invoices (not payment rail). */
+  React.useEffect(() => {
+    if (!open || mode !== 'create' || !merchantSettingsLoaded) return;
+    const acct = merchantSettings?.defaultCurrency?.trim().toUpperCase().slice(0, 3);
+    if (!acct || acct.length !== 3) return;
+    const current = form.getValues('currency');
+    if (!current || current === defaultCurrency) {
+      form.setValue('currency', acct, { shouldDirty: false });
+    }
+  }, [open, mode, merchantSettingsLoaded, merchantSettings?.defaultCurrency, defaultCurrency, form]);
 
   React.useEffect(() => {
     if (!open || mode !== 'create' || !organizationId) return;
