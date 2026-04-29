@@ -62,6 +62,12 @@ function isRabbitHolePilotAllowedPath(pathname: string): boolean {
     return true;
   }
   if (
+    pathname === '/dashboard/settings/integrations' ||
+    pathname.startsWith('/dashboard/settings/integrations/')
+  ) {
+    return true;
+  }
+  if (
     pathname === '/dashboard/partners/deal-network' ||
     pathname.startsWith('/dashboard/partners/deal-network/')
   ) {

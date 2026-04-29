@@ -7,6 +7,7 @@ import { prisma } from '@/lib/server/prisma';
 import { encryptToken, decryptToken } from './encryption';
 import { refreshAccessToken, getXeroTenants, revokeConnection } from './client';
 import { randomUUID } from 'crypto';
+import { loggers } from '@/lib/logger';
 
 export interface XeroConnection {
   id: string;
@@ -74,15 +75,22 @@ export async function getXeroConnection(
     return null;
   }
 
-  return {
-    id: connection.id,
-    organizationId: connection.organization_id,
-    tenantId: connection.tenant_id,
-    accessToken: decryptToken(connection.access_token),
-    refreshToken: decryptToken(connection.refresh_token),
-    expiresAt: connection.expires_at,
-    connectedAt: connection.connected_at,
-  };
+  try {
+    return {
+      id: connection.id,
+      organizationId: connection.organization_id,
+      tenantId: connection.tenant_id,
+      accessToken: decryptToken(connection.access_token),
+      refreshToken: decryptToken(connection.refresh_token),
+      expiresAt: connection.expires_at,
+      connectedAt: connection.connected_at,
+    };
+  } catch {
+    loggers.xero.warn('xero_token_decrypt_failed_treating_as_disconnected', {
+      organizationId,
+    });
+    return null;
+  }
 }
 
 /**

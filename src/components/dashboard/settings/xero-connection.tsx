@@ -29,6 +29,7 @@ import {
 import { toast } from 'sonner';
 import { Loader2, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface XeroConnectionProps {
   organizationId: string;
@@ -39,6 +40,8 @@ interface ConnectionStatus {
   tenantId?: string;
   expiresAt?: string;
   connectedAt?: string;
+  /** Server hint when tokens are invalid, tenant list fails, or Xero env is missing. */
+  operatorMessage?: string;
   tenants?: Array<{
     tenantId: string;
     tenantName: string;
@@ -59,18 +62,43 @@ export function XeroConnection({ organizationId }: XeroConnectionProps) {
   const fetchStatus = React.useCallback(async () => {
     try {
       const response = await fetch(
-        `/api/xero/status?organization_id=${organizationId}`
+        `/api/xero/status?organization_id=${encodeURIComponent(organizationId)}`
       );
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch status');
+      let data: ConnectionStatus & { error?: string };
+      try {
+        data = await response.json();
+      } catch {
+        toast.error('Could not read Xero status from the server.');
+        setStatus({
+          connected: false,
+          operatorMessage:
+            'Xero connection needs to be refreshed, or the server returned an invalid response.',
+        });
+        return;
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        const message =
+          (typeof data.operatorMessage === 'string' && data.operatorMessage) ||
+          (typeof data.error === 'string' && data.error) ||
+          'Failed to load Xero connection status';
+        console.error('Error fetching Xero status:', response.status, message);
+        toast.error(message);
+        setStatus({
+          connected: false,
+          operatorMessage: message,
+        });
+        return;
+      }
+
       setStatus(data);
     } catch (error) {
       console.error('Error fetching Xero status:', error);
-      toast.error('Failed to load Xero connection status');
+      const message =
+        'Could not reach Xero status. Check your network, or reconnect Xero from Integrations.';
+      toast.error(message);
+      setStatus({ connected: false, operatorMessage: message });
     } finally {
       setLoading(false);
     }
@@ -191,6 +219,13 @@ export function XeroConnection({ organizationId }: XeroConnectionProps) {
 
   return (
     <div className="space-y-4">
+      {status?.operatorMessage ? (
+        <Alert>
+          <AlertTitle>Xero</AlertTitle>
+          <AlertDescription>{status.operatorMessage}</AlertDescription>
+        </Alert>
+      ) : null}
+
       {/* Connection Status */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
