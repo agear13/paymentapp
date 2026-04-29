@@ -8,6 +8,8 @@ import { getActiveConnection } from './connection-service';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import { Invoice, Contact, LineItem } from 'xero-node';
+import { getFxService } from '@/lib/fx';
+import type { Currency } from '@/lib/fx/types';
 
 export interface InvoiceCreationParams {
   paymentLinkId: string;
@@ -24,6 +26,72 @@ export interface InvoiceCreationResult {
   invoiceNumber: string;
   status: string;
   total: number;
+}
+
+function roundXeroCurrencyRate(rate: number): number {
+  return Math.round(rate * 1e6) / 1e6;
+}
+
+/**
+ * Xero expects `CurrencyRate` = units of **organisation base currency** per **1 unit of invoice currency**
+ * when `CurrencyCode` differs from the org base (e.g. USD invoice, AUD base).
+ *
+ * We prefer `payment_links.base_amount` / `amount` when `base_currency` matches reporting currency,
+ * then FX (USDC→AUD as USD proxy), then a direct pair fetch when supported.
+ */
+async function resolveXeroCurrencyRate(params: {
+  paymentLinkId: string;
+  invoiceCurrency: string;
+  reportingCurrency: string;
+}): Promise<number> {
+  const inv = params.invoiceCurrency.trim().toUpperCase();
+  const rep = params.reportingCurrency.trim().toUpperCase();
+
+  const pl = await prisma.payment_links.findUnique({
+    where: { id: params.paymentLinkId },
+    select: {
+      amount: true,
+      base_amount: true,
+      base_currency: true,
+    },
+  });
+
+  if (pl?.base_amount != null && pl.base_currency) {
+    const baseCur = pl.base_currency.trim().toUpperCase();
+    if (baseCur === rep) {
+      const invAmt = Number(pl.amount);
+      const baseAmt = Number(pl.base_amount);
+      if (invAmt > 0 && baseAmt > 0 && Number.isFinite(invAmt) && Number.isFinite(baseAmt)) {
+        const rate = baseAmt / invAmt;
+        if (rate > 0 && Number.isFinite(rate)) {
+          loggers.xero.info('xero_invoice_currency_rate_from_link_base_fields', {
+            paymentLinkId: params.paymentLinkId,
+            rate: roundXeroCurrencyRate(rate),
+          });
+          return roundXeroCurrencyRate(rate);
+        }
+      }
+    }
+  }
+
+  const fx = getFxService();
+  await fx.initialize();
+
+  if (inv === 'USD' && rep === 'AUD') {
+    const r = await fx.getRate('USDC', 'AUD');
+    return roundXeroCurrencyRate(r.rate);
+  }
+
+  try {
+    const r = await fx.getRate(inv as Currency, rep as Currency);
+    return roundXeroCurrencyRate(r.rate);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `Could not resolve an exchange rate from ${inv} to ${rep} for Xero (${msg}). ` +
+        `Set Merchant Settings → default currency to your Xero base currency, or provide base_amount/base_currency on the payment link when invoicing in a foreign currency.`
+    );
+  }
 }
 
 /**
@@ -93,19 +161,26 @@ export async function createXeroInvoice(
   // Update tenants (read-only property, must use updateTenants method)
   await xeroClient.updateTenants();
 
-  // Check if currency is supported by merchant's base currency
-  // If trying to use a different currency, warn but allow it
-  const baseCurrency = settings.default_currency || 'USD';
-  if (currency !== baseCurrency) {
-    loggers.xero.warn(
-      'Creating invoice in different currency than base',
-      {
-        invoiceCurrency: currency,
-        baseCurrency,
-        paymentLinkId,
-        organizationId,
-      }
-    );
+  /**
+   * Merchant reporting currency (Settings). When unset, assume it matches the invoice
+   * so we do not invent a rate; set default_currency to your Xero org base (e.g. AUD).
+   */
+  const reportingCurrency = (settings.default_currency ?? currency).trim().toUpperCase();
+  const invoiceCurrency = currency.trim().toUpperCase();
+
+  let currencyRate: number | undefined;
+  if (invoiceCurrency !== reportingCurrency) {
+    loggers.xero.warn('Creating invoice in different currency than reporting', {
+      invoiceCurrency,
+      reportingCurrency,
+      paymentLinkId,
+      organizationId,
+    });
+    currencyRate = await resolveXeroCurrencyRate({
+      paymentLinkId,
+      invoiceCurrency,
+      reportingCurrency,
+    });
   }
 
   // Get or create contact
@@ -133,7 +208,8 @@ export async function createXeroInvoice(
     lineItems,
     reference: invoiceReference || undefined,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    currencyCode: currency as any, // Cast to match Xero SDK type
+    currencyCode: invoiceCurrency as any, // Cast to match Xero SDK type
+    ...(currencyRate != null ? { currencyRate } : {}),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     status: Invoice.StatusEnum.AUTHORISED as any, // Cast to match Xero SDK type
   };

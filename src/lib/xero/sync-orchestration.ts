@@ -12,59 +12,7 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import type { TokenType } from '@/lib/hedera/types';
 import { logger } from '@/lib/logger';
-
-/**
- * Parse Xero API error and provide user-friendly message
- */
-function parseXeroError(error: unknown): string {
-  // Type guard for error objects
-  if (!error || typeof error !== 'object') {
-    return 'Unknown error occurred during Xero sync';
-  }
-
-  const errorObj = error as Record<string, unknown>;
-  
-  // Check if it's a Xero API error with validation details
-  if (errorObj.response && typeof errorObj.response === 'object') {
-    const response = errorObj.response as Record<string, unknown>;
-    if (response.body && typeof response.body === 'object') {
-      const body = response.body as Record<string, unknown>;
-      if (Array.isArray(body.Elements)) {
-        const elements = body.Elements;
-        const validationErrors = (elements[0] as Record<string, unknown>)?.ValidationErrors;
-        
-        if (Array.isArray(validationErrors) && validationErrors.length > 0) {
-          const messages = validationErrors
-            .map((e: unknown) => (e as Record<string, unknown>).Message)
-            .join('; ');
-          
-          // Provide specific fixes for common errors
-          if (messages.includes('not subscribed to currency')) {
-            return `Currency not supported: ${messages}. Please ensure your Xero organization supports the payment currency, or change your default currency in Settings.`;
-          }
-          
-          if (messages.includes('not a valid code')) {
-            return `Invalid account code: ${messages}. Please configure correct Xero account codes in Settings → Integrations → Xero Account Mapping. Account codes should be values like "200", "400", not IDs.`;
-          }
-          
-          return `Xero validation error: ${messages}`;
-        }
-      }
-      
-      // Check for Xero API response errors
-      if (body.Message && typeof body.Message === 'string') {
-        return `Xero API error: ${body.Message}`;
-      }
-    }
-  }
-  
-  // Generic error
-  if ('message' in errorObj && typeof errorObj.message === 'string') {
-    return errorObj.message;
-  }
-  
-  return 'Unknown error occurred during Xero sync';
-}
+import { formatXeroSyncError } from './xero-sync-errors';
 
 export interface SyncPaymentParams {
   paymentLinkId: string;
@@ -251,7 +199,7 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
       invoiceNumber: invoiceResult.invoiceNumber,
     };
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : parseXeroError(error);
+    const errorMessage = formatXeroSyncError(error);
     await upsertSyncStatus({
       paymentLinkId,
       syncType: 'INVOICE',
@@ -380,7 +328,7 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
       narration: paymentResult.narration,
     };
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : parseXeroError(error);
+    const errorMessage = formatXeroSyncError(error);
     await upsertSyncStatus({
       paymentLinkId,
       syncType: 'PAYMENT',
