@@ -407,7 +407,7 @@ export async function confirmPayment(
             where: {
               xero_syncs_payment_link_sync_type_unique: {
                 payment_link_id: paymentLinkId,
-                sync_type: 'INVOICE',
+                sync_type: 'PAYMENT',
               },
             },
             update: {
@@ -426,7 +426,7 @@ export async function confirmPayment(
             create: {
               id: crypto.randomUUID(),
               payment_link_id: paymentLinkId,
-              sync_type: 'INVOICE',
+              sync_type: 'PAYMENT',
               status: 'PENDING',
               request_payload: {
                 paymentLinkId,

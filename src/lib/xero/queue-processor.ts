@@ -6,7 +6,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import { syncPaymentToXero } from './sync-orchestration';
+import { syncInvoiceToXero, syncPaymentToXero } from './sync-orchestration';
 import {
   getPendingSyncJobs,
   getProcessableSyncJobById,
@@ -62,15 +62,19 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
       stats.processed++;
 
       try {
-        // Validate payment link is in PAID status
-        if (job.payment_links.status !== 'PAID') {
+        const requiresOpen = job.sync_type === 'INVOICE';
+        const statusOk = requiresOpen
+          ? job.payment_links.status === 'OPEN' || job.payment_links.status === 'PAID'
+          : job.payment_links.status === 'PAID';
+        if (!statusOk) {
           logger.warn(
             {
               syncId: job.id,
+              syncType: job.sync_type,
               paymentLinkId: job.payment_link_id,
               status: job.payment_links.status,
             },
-            'Skipping sync - payment link not in PAID status'
+            'Skipping sync - payment link status does not match sync type requirements'
           );
           stats.skipped++;
           return;
@@ -94,17 +98,23 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
           'Executing Xero sync'
         );
 
-        const result = await syncPaymentToXero({
-          paymentLinkId: job.payment_link_id,
-          organizationId,
-        });
+        const result =
+          job.sync_type === 'INVOICE'
+            ? await syncInvoiceToXero({
+                paymentLinkId: job.payment_link_id,
+                organizationId,
+              })
+            : await syncPaymentToXero({
+                paymentLinkId: job.payment_link_id,
+                organizationId,
+              });
 
         if (result.success) {
           // Mark as successful
           await markSyncSuccess(job.id, {
-            invoiceId: result.invoiceId!,
-            invoiceNumber: result.invoiceNumber!,
-            paymentId: result.paymentId!,
+            invoiceId: result.invoiceId ?? null,
+            invoiceNumber: result.invoiceNumber ?? null,
+            paymentId: result.paymentId ?? null,
             narration: result.narration,
           });
 
@@ -197,8 +207,14 @@ export async function processSyncById(syncId: string): Promise<{
     }
 
     // Validate payment link
-    if (job.payment_links.status !== 'PAID') {
-      const error = `Payment link not in PAID status: ${job.payment_links.status}`;
+    const requiresOpen = job.sync_type === 'INVOICE';
+    const statusOk = requiresOpen
+      ? job.payment_links.status === 'OPEN' || job.payment_links.status === 'PAID'
+      : job.payment_links.status === 'PAID';
+    if (!statusOk) {
+      const error = requiresOpen
+        ? `Payment link not in OPEN/PAID status: ${job.payment_links.status}`
+        : `Payment link not in PAID status: ${job.payment_links.status}`;
       logger.warn({ syncId, status: job.payment_links.status }, error);
       return { success: false, error };
     }
@@ -212,16 +228,22 @@ export async function processSyncById(syncId: string): Promise<{
       job.payment_links.organization_id;
 
     // Execute sync
-    const result = await syncPaymentToXero({
-      paymentLinkId: job.payment_link_id,
-      organizationId,
-    });
+    const result =
+      job.sync_type === 'INVOICE'
+        ? await syncInvoiceToXero({
+            paymentLinkId: job.payment_link_id,
+            organizationId,
+          })
+        : await syncPaymentToXero({
+            paymentLinkId: job.payment_link_id,
+            organizationId,
+          });
 
     if (result.success) {
       await markSyncSuccess(job.id, {
-        invoiceId: result.invoiceId!,
-        invoiceNumber: result.invoiceNumber!,
-        paymentId: result.paymentId!,
+        invoiceId: result.invoiceId ?? null,
+        invoiceNumber: result.invoiceNumber ?? null,
+        paymentId: result.paymentId ?? null,
         narration: result.narration,
       });
 

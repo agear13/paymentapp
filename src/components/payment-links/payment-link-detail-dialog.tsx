@@ -133,8 +133,11 @@ export interface PaymentLinkDetails {
     id: string;
     syncType: string;
     status: string;
+    xeroInvoiceId?: string | null;
+    xeroPaymentId?: string | null;
     errorMessage: string | null;
     createdAt: Date;
+    updatedAt?: Date | string | null;
   }>;
 }
 
@@ -1074,8 +1077,18 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                             {sync.errorMessage}
                           </p>
                         )}
+                        {sync.xeroInvoiceId ? (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Invoice synced: {sync.xeroInvoiceId}
+                          </p>
+                        ) : null}
+                        {sync.xeroPaymentId ? (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Payment pushed: {sync.xeroPaymentId}
+                          </p>
+                        ) : null}
                         <p className="text-xs text-muted-foreground mt-1">
-                          {format(new Date(sync.createdAt), 'PPp')}
+                          Updated {format(new Date(sync.updatedAt || sync.createdAt), 'PPp')}
                         </p>
                       </div>
                     </div>

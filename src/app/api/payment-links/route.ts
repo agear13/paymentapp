@@ -23,6 +23,8 @@ import { getFxService, type Currency } from '@/lib/fx';
 import { buildWisePaymentContext, getMerchantWiseConfig } from '@/lib/payments/wise';
 import { assertPilotDealOwnedByUser } from '@/lib/deal-network-demo/pilot-deal-invoice-link.server';
 import { derivePaidAtFromEvents } from '@/lib/payments/paid-at';
+import config from '@/lib/config/env';
+import { queueXeroSync } from '@/lib/xero/queue-service';
 
 /** FX summary for list view (lightweight) */
 export interface FxSummary {
@@ -620,6 +622,25 @@ export async function POST(request: NextRequest) {
 
     // Same camelCase shape as GET /api/payment-links so clients always get `shortCode` for /pay/{shortCode}
     const createdPayload = transformPaymentLink(paymentLink as unknown as Record<string, unknown>);
+
+    if (config.features.xeroSync && paymentLink.status === 'OPEN') {
+      try {
+        await queueXeroSync({
+          paymentLinkId: paymentLink.id,
+          organizationId: dbOrgId,
+          syncType: 'INVOICE',
+        });
+      } catch (queueError: unknown) {
+        loggers.xero.error(
+          'Failed to queue initial Xero invoice sync',
+          {
+            paymentLinkId: paymentLink.id,
+            organizationId: dbOrgId,
+            error: queueError instanceof Error ? queueError.message : String(queueError),
+          }
+        );
+      }
+    }
 
     return NextResponse.json(
       {

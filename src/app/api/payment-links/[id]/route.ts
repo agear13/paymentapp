@@ -67,8 +67,11 @@ function transformPaymentLink(link: any) {
     id: sync.id,
     syncType: sync.sync_type,
     status: sync.status,
+    xeroInvoiceId: sync.xero_invoice_id ?? null,
+    xeroPaymentId: sync.xero_payment_id ?? null,
     errorMessage: sync.error_message,
     createdAt: sync.created_at,
+    updatedAt: sync.updated_at,
   })) || [];
 
   return {

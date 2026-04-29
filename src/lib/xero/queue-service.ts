@@ -8,11 +8,12 @@
 import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
 import { randomUUID } from 'crypto';
-import type { XeroSyncStatus } from '@prisma/client';
+import type { XeroSyncType } from '@prisma/client';
 
 export interface QueueSyncJobParams {
   paymentLinkId: string;
   organizationId: string;
+  syncType?: XeroSyncType;
   priority?: number; // Optional priority (higher = more important)
 }
 
@@ -56,7 +57,7 @@ export function calculateNextRetryTime(retryCount: number): Date | null {
  * @returns Sync record ID
  */
 export async function queueXeroSync(params: QueueSyncJobParams): Promise<string> {
-  const { paymentLinkId, organizationId, priority = 0 } = params;
+  const { paymentLinkId, organizationId, syncType = 'PAYMENT', priority = 0 } = params;
 
   logger.info(
     { paymentLinkId, organizationId },
@@ -68,7 +69,7 @@ export async function queueXeroSync(params: QueueSyncJobParams): Promise<string>
     where: {
       xero_syncs_payment_link_sync_type_unique: {
         payment_link_id: paymentLinkId,
-        sync_type: 'INVOICE',
+        sync_type: syncType,
       },
     },
     update: {
@@ -77,6 +78,7 @@ export async function queueXeroSync(params: QueueSyncJobParams): Promise<string>
       request_payload: {
         paymentLinkId,
         organizationId,
+        syncType,
         requeuedAt: new Date().toISOString(),
         priority,
       },
@@ -87,11 +89,12 @@ export async function queueXeroSync(params: QueueSyncJobParams): Promise<string>
     create: {
       id: randomUUID(),
       payment_link_id: paymentLinkId,
-      sync_type: 'INVOICE',
+      sync_type: syncType,
       status: 'PENDING',
       request_payload: {
         paymentLinkId,
         organizationId,
+        syncType,
         queuedAt: new Date().toISOString(),
         priority,
       },
@@ -193,9 +196,9 @@ export async function markSyncInProgress(syncId: string): Promise<void> {
 export async function markSyncSuccess(
   syncId: string,
   result: {
-    invoiceId: string;
-    invoiceNumber: string;
-    paymentId: string;
+    invoiceId?: string | null;
+    invoiceNumber?: string | null;
+    paymentId?: string | null;
     narration?: string;
   }
 ): Promise<void> {
@@ -203,14 +206,14 @@ export async function markSyncSuccess(
     where: { id: syncId },
     data: {
       status: 'SUCCESS',
-      xero_invoice_id: result.invoiceId,
-      xero_payment_id: result.paymentId,
+      xero_invoice_id: result.invoiceId ?? null,
+      xero_payment_id: result.paymentId ?? null,
       response_payload: {
         success: true,
-        invoiceId: result.invoiceId,
-        invoiceNumber: result.invoiceNumber,
-        paymentId: result.paymentId,
-        narration: result.narration,
+        invoiceId: result.invoiceId ?? null,
+        invoiceNumber: result.invoiceNumber ?? null,
+        paymentId: result.paymentId ?? null,
+        narration: result.narration ?? null,
         completedAt: new Date().toISOString(),
       },
       next_retry_at: null, // Clear retry time

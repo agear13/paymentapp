@@ -12,6 +12,8 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { transitionPaymentLinkStatus } from '@/lib/payment-link-state-machine';
 import { paymentEventBlocksReopenAfterPaid } from '@/lib/payments/payment-link-external-evidence';
 import { revalidatePath } from 'next/cache';
+import config from '@/lib/config/env';
+import { queueXeroSync } from '@/lib/xero/queue-service';
 
 const bodySchema = z.object({
   action: z.enum(['mark_paid', 'reopen']),
@@ -94,6 +96,24 @@ export async function POST(
         );
       }
       await transitionPaymentLinkStatus(link.id, 'PAID', user.id);
+      if (config.features.xeroSync) {
+        try {
+          await queueXeroSync({
+            paymentLinkId: link.id,
+            organizationId: link.organization_id,
+            syncType: 'PAYMENT',
+          });
+        } catch (queueError: unknown) {
+          loggers.xero.error(
+            'Failed to queue Xero payment sync after manual mark paid',
+            {
+              paymentLinkId: link.id,
+              organizationId: link.organization_id,
+              error: queueError instanceof Error ? queueError.message : String(queueError),
+            }
+          );
+        }
+      }
     } else {
       if (
         link.status !== 'PAID' &&
