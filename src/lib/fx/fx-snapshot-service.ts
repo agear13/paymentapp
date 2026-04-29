@@ -605,12 +605,14 @@ export class FxSnapshotService {
    */
   async ensureSettlementFxSnapshot(
     tx: Pick<typeof prisma, 'fx_snapshots'>,
-    paymentLink: { id: string; currency: string }
+    paymentLink: { id: string; currency: string; invoice_currency?: string | null }
   ): Promise<void> {
     const paymentLinkId = paymentLink.id;
-    const currency = (paymentLink.currency ?? '').trim().toUpperCase();
+    const currency = (paymentLink.invoice_currency ?? paymentLink.currency ?? '')
+      .trim()
+      .toUpperCase();
     if (!currency || currency.length < 3 || currency.length > 10) {
-      logger.warn({ paymentLinkId, currency: paymentLink.currency }, 'ensureSettlementFxSnapshot: invalid currency, skip');
+      logger.warn({ paymentLinkId, currency }, 'ensureSettlementFxSnapshot: invalid currency, skip');
       return;
     }
     const existing = await tx.fx_snapshots.findFirst({

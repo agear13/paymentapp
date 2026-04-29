@@ -14,6 +14,7 @@ import { fromSmallestUnit } from '@/lib/hedera/token-service';
 import { generateCorrelationId } from '@/lib/services/correlation';
 import { normalizeHederaTransactionId } from '@/lib/hedera/txid';
 import { getFxService } from '@/lib/fx';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 
 const requestSchema = z.object({
   paymentLinkId: z.string().uuid(),
@@ -100,6 +101,7 @@ export async function POST(request: NextRequest) {
         status: true,
         amount: true,
         currency: true,
+        invoice_currency: true,
       },
     });
 
@@ -356,7 +358,8 @@ export async function POST(request: NextRequest) {
 
     // Settlement FX snapshot for audit (manual verify path)
     const fxService = getFxService();
-    const invoiceCurrency = paymentLink.currency as 'USD' | 'AUD';
+    const invoiceCcy = invoiceDenominationCurrency(paymentLink);
+    const invoiceCurrency = invoiceCcy as 'USD' | 'AUD';
     const exchangeRate = await fxService.getRate(tokenType, invoiceCurrency);
 
     const paymentEventData = {
@@ -408,7 +411,7 @@ export async function POST(request: NextRequest) {
           snapshot_type: 'SETTLEMENT',
           token_type: tokenType,
           base_currency: tokenType,
-          quote_currency: paymentLink.currency,
+          quote_currency: invoiceCcy,
           rate: exchangeRate.rate,
           provider: exchangeRate.provider,
           captured_at: exchangeRate.timestamp,
@@ -422,7 +425,7 @@ export async function POST(request: NextRequest) {
           ledger_account_id: ledgerAccounts.cryptoClearing,
           entry_type: 'DEBIT',
           amount: paymentLink.amount,
-          currency: paymentLink.currency,
+          currency: invoiceCcy,
           description: `${tokenType} payment received - ${normalizedTxId} (manual verification)`,
           idempotency_key: `${idempotencyKey}-debit`,
           created_at: now,
@@ -436,7 +439,7 @@ export async function POST(request: NextRequest) {
           ledger_account_id: ledgerAccounts.accountsReceivable,
           entry_type: 'CREDIT',
           amount: paymentLink.amount,
-          currency: paymentLink.currency,
+          currency: invoiceCcy,
           description: `${tokenType} payment received - ${normalizedTxId} (manual verification)`,
           idempotency_key: `${idempotencyKey}-credit`,
           created_at: now,
@@ -454,7 +457,7 @@ export async function POST(request: NextRequest) {
         paymentLinkId: validated.paymentLinkId,
         paymentEventId: paymentEvent.id,
         grossAmount,
-        currency: paymentLink.currency,
+        currency: invoiceCcy,
         provider: 'hedera',
         hederaTransactionId: normalizedTxId,
       });

@@ -62,6 +62,8 @@ export interface PaymentLink {
   status: 'DRAFT' | 'OPEN' | 'PAID_UNVERIFIED' | 'REQUIRES_REVIEW' | 'PAID' | 'EXPIRED' | 'CANCELED';
   amount: number;
   currency: string;
+  /** Accounting / invoice denomination (same as legacy `currency` when synced). */
+  invoiceCurrency?: string;
   description: string;
   invoiceReference: string | null;
   customerEmail: string | null;

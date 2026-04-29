@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { stripe, handleStripeError, toSmallestUnit } from '@/lib/stripe/client';
 import { prisma } from '@/lib/server/prisma';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 import { log } from '@/lib/logger';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
@@ -95,11 +96,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const invoiceCcy = invoiceDenominationCurrency(paymentLink);
+
     // Calculate amount in smallest currency unit
-    const amountInSmallestUnit = toSmallestUnit(
-      Number(paymentLink.amount),
-      paymentLink.currency
-    );
+    const amountInSmallestUnit = toSmallestUnit(Number(paymentLink.amount), invoiceCcy);
 
     // Get base URL from environment or request
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
       line_items: [
         {
           price_data: {
-            currency: paymentLink.currency.toLowerCase(),
+            currency: invoiceCcy.toLowerCase(),
             product_data: {
               name: paymentLink.description || `Payment for ${paymentLink.short_code}`,
               description: paymentLink.invoice_reference
@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
           checkoutSessionId: session.id, // ✅ Store in metadata for lookup
           checkoutUrl: session.url,
           amount: amountInSmallestUnit,
-          currency: paymentLink.currency,
+          currency: invoiceCcy,
           expiresAt: new Date(sessionExpiresAt * 1000).toISOString(),
         },
       },
@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
         paymentLinkId,
         sessionId: session.id,
         amount: amountInSmallestUnit,
-        currency: paymentLink.currency,
+        currency: invoiceCcy,
       }
     );
 

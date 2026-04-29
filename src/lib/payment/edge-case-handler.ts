@@ -11,6 +11,7 @@
 
 import { log } from '@/lib/logger';
 import { prisma } from '@/lib/server/prisma';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 import type { PaymentLinkStatus } from '@prisma/client';
 
 // ============================================================================
@@ -438,6 +439,7 @@ export async function handleExpiredLinkPayment(
       id: true,
       amount: true,
       currency: true,
+      invoice_currency: true,
       description: true,
       status: true,
       expires_at: true,
@@ -451,6 +453,8 @@ export async function handleExpiredLinkPayment(
       canRenew: false,
     };
   }
+
+  const invoiceCcy = invoiceDenominationCurrency(paymentLink);
 
   // Log the attempt
   await prisma.payment_events.create({
@@ -479,7 +483,7 @@ export async function handleExpiredLinkPayment(
     canRenew,
     originalLinkDetails: {
       amount: paymentLink.amount.toString(),
-      currency: paymentLink.currency,
+      currency: invoiceCcy,
       description: paymentLink.description,
     },
   };

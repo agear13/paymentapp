@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
 import { derivePaidAtFromEvents } from '@/lib/payments/paid-at';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 
 /**
  * GET /api/public/pay/[shortCode]
@@ -229,7 +230,7 @@ export async function GET(
         status: currentStatus,
         paymentMethod: paymentLink.payment_method,
         amount: paymentLink.amount.toString(),
-        currency: paymentLink.currency,
+        currency: invoiceDenominationCurrency(paymentLink),
         description: paymentLink.description,
         invoiceReference: paymentLink.invoice_reference,
         invoiceDate: paymentLink.invoice_date ?? null,

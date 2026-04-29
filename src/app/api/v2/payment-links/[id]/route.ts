@@ -27,6 +27,7 @@ function transformPaymentLink(link: any) {
     shortCode: link.short_code,
     amount: link.amount,
     currency: link.currency,
+    invoiceCurrency: link.invoice_currency ?? link.currency,
     status: link.status,
     description: link.description,
     invoiceReference: link.invoice_reference,

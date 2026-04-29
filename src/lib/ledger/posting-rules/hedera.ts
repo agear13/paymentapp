@@ -23,6 +23,7 @@ import type { TokenType } from '@/lib/hedera/constants';
 import { TOKEN_CONFIG, TOKEN_IDS } from '@/lib/hedera/constants';
 import type { PaymentToken } from '@prisma/client';
 import { loggers } from '@/lib/logger';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 
 /**
  * Get current network (mainnet/testnet)
@@ -263,6 +264,7 @@ export interface BuildSettlementParamsInput {
   paymentLink: {
     amount: any; // Decimal or string
     currency: string;
+    invoice_currency?: string | null;
   };
   fxSnapshot: {
     rate: any; // Decimal or number
@@ -290,7 +292,7 @@ export function buildHederaSettlementParams(
     tokenType: paymentEvent.payment_token as TokenType,
     cryptoAmount: paymentEvent.amount_received.toString(),
     invoiceAmount: paymentLink.amount.toString(),
-    invoiceCurrency: paymentLink.currency,
+    invoiceCurrency: invoiceDenominationCurrency(paymentLink),
     fxRate: typeof fxSnapshot.rate === 'number' 
       ? fxSnapshot.rate 
       : parseFloat(fxSnapshot.rate.toString()),

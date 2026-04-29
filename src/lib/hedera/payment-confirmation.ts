@@ -9,10 +9,8 @@ import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import type { TokenType } from './constants';
 import type { PaymentToken } from '@prisma/client';
-import {
-  postHederaSettlement,
-  buildHederaSettlementParams,
-} from '@/lib/ledger/posting-rules/hedera';
+import { postHederaSettlement } from '@/lib/ledger/posting-rules/hedera';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 import { validatePostingBalance } from '@/lib/ledger/balance-validation';
 import {
   checkDuplicatePayment,
@@ -136,6 +134,7 @@ export async function confirmHederaPayment(
         organization_id: true,
         amount: true,
         currency: true,
+        invoice_currency: true,
         status: true,
       },
     });
@@ -143,6 +142,8 @@ export async function confirmHederaPayment(
     if (!paymentLink) {
       throw new Error(`Payment link not found: ${paymentLinkId}`);
     }
+
+    const invoiceCcy = invoiceDenominationCurrency(paymentLink);
 
     // Double-check status (in case changed since validation)
     if (paymentLink.status === 'PAID') {
@@ -171,7 +172,7 @@ export async function confirmHederaPayment(
         payment_method: 'HEDERA',
         hedera_transaction_id: normalizedTxId,
         amount_received: amountReceived,
-        currency_received: paymentLink.currency, // Invoice currency
+        currency_received: tokenType,
         correlation_id: correlationId,
         metadata: {
           raw_transaction_id: transactionId,
@@ -225,7 +226,7 @@ export async function confirmHederaPayment(
       tokenType,
       cryptoAmount: amountReceived,
       invoiceAmount: paymentLink.amount.toString(),
-      invoiceCurrency: paymentLink.currency,
+      invoiceCurrency: invoiceCcy,
       fxRate: typeof fxSnapshot.rate === 'number'
         ? fxSnapshot.rate
         : parseFloat(fxSnapshot.rate.toString()),
@@ -244,7 +245,7 @@ export async function confirmHederaPayment(
           correlationId,
           tokenType,
           invoiceAmount: paymentLink.amount.toString(),
-          currency: paymentLink.currency,
+          currency: invoiceCcy,
         },
         'Hedera settlement posted to ledger successfully'
       );
@@ -396,7 +397,7 @@ export async function retryLedgerPosting(paymentLinkId: string): Promise<void> {
     tokenType: metadata.tokenType,
     cryptoAmount: paymentEvent.amount_received?.toString() || '0',
     invoiceAmount: paymentLink.amount.toString(),
-    invoiceCurrency: paymentLink.currency,
+    invoiceCurrency: invoiceDenominationCurrency(paymentLink),
     fxRate: typeof fxSnapshot.rate === 'number'
       ? fxSnapshot.rate
       : parseFloat(fxSnapshot.rate.toString()),

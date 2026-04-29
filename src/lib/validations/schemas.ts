@@ -225,6 +225,9 @@ export const CreatePaymentLinkSchema = z.object({
     .number()
     .positive('Amount must be positive')
     .multipleOf(0.01, 'Amount must have at most 2 decimal places'),
+  /** Accounting / invoice denomination (Xero, display). Independent of payment rail. */
+  invoiceCurrency: currencyCodeSchema.optional(),
+  /** Kept for backwards compatibility; must match invoice denomination. Prefer also sending `invoiceCurrency`. */
   currency: currencyCodeSchema,
   description: z
     .string()
@@ -344,6 +347,7 @@ export const UpdatePaymentLinkSchema = z
       .positive('Amount must be positive')
       .multipleOf(0.01, 'Amount must have at most 2 decimal places')
       .optional(),
+    invoiceCurrency: currencyCodeSchema.optional(),
     currency: currencyCodeSchema.optional(),
     description: z
       .string()

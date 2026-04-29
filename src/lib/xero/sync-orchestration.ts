@@ -13,6 +13,7 @@ import { randomUUID } from 'crypto';
 import type { TokenType } from '@/lib/hedera/types';
 import { logger } from '@/lib/logger';
 import { formatXeroSyncError } from './xero-sync-errors';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 
 export interface SyncPaymentParams {
   paymentLinkId: string;
@@ -126,6 +127,7 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
         status: true,
         amount: true,
         currency: true,
+        invoice_currency: true,
         description: true,
         customer_email: true,
         invoice_reference: true,
@@ -167,7 +169,7 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
       paymentLinkId,
       organizationId,
       amount: paymentLink.amount.toString(),
-      currency: paymentLink.currency,
+      currency: invoiceDenominationCurrency(paymentLink),
       description: paymentLink.description,
       customerEmail: paymentLink.customer_email || undefined,
       invoiceReference: paymentLink.invoice_reference || undefined,
@@ -300,7 +302,7 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
       organizationId,
       invoiceId: invoiceSync.xero_invoice_id,
       amount: paymentLink.amount.toString(),
-      currency: paymentLink.currency,
+      currency: invoiceDenominationCurrency(paymentLink),
       paymentDate: paymentEvent.received_at ?? paymentEvent.created_at,
       paymentMethod,
       paymentToken,

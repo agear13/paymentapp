@@ -654,7 +654,7 @@ export default function PaymentLinksPage() {
           {organizationId ? (
             <CreatePaymentLinkDialog
               organizationId={organizationId}
-              defaultCurrency="USD"
+              defaultCurrency="AUD"
               onSuccess={handleCreateSuccess}
               trigger={
                 <Button>
@@ -812,6 +812,7 @@ export default function PaymentLinksPage() {
             id: linkToEdit.id,
             amount: Number(linkToEdit.amount),
             currency: linkToEdit.currency,
+            invoiceCurrency: linkToEdit.invoiceCurrency ?? linkToEdit.currency,
             description: linkToEdit.description,
             invoiceReference: linkToEdit.invoiceReference,
             customerEmail: linkToEdit.customerEmail,
@@ -860,10 +861,10 @@ export default function PaymentLinksPage() {
       {organizationId && linkToDuplicate && (
         <CreatePaymentLinkDialog
           organizationId={organizationId}
-          defaultCurrency={linkToDuplicate.currency}
+          defaultCurrency={linkToDuplicate.invoiceCurrency ?? linkToDuplicate.currency}
           defaultValues={{
             amount: Number(linkToDuplicate.amount),
-            currency: linkToDuplicate.currency,
+            currency: linkToDuplicate.invoiceCurrency ?? linkToDuplicate.currency,
             description: `${linkToDuplicate.description} (Copy)`,
             invoiceReference: linkToDuplicate.invoiceReference || '',
             customerEmail: linkToDuplicate.customerEmail || '',

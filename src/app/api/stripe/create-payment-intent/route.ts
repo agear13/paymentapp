@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe, handleStripeError, toSmallestUnit, generateIdempotencyKey } from '@/lib/stripe/client';
 import { prisma } from '@/lib/server/prisma';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 import { log } from '@/lib/logger';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
@@ -139,11 +140,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const invoiceCcy = invoiceDenominationCurrency(paymentLink);
+
     // Calculate amount in smallest currency unit
-    const amountInSmallestUnit = toSmallestUnit(
-      Number(paymentLink.amount),
-      paymentLink.currency
-    );
+    const amountInSmallestUnit = toSmallestUnit(Number(paymentLink.amount), invoiceCcy);
 
     // Generate idempotency key
     const idempotencyKey = generateIdempotencyKey(paymentLinkId);
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
         paymentIntent = await stripe.paymentIntents.create(
           {
             amount: amountInSmallestUnit,
-            currency: paymentLink.currency.toLowerCase(),
+            currency: invoiceCcy.toLowerCase(),
             metadata: {
               payment_link_id: paymentLinkId,
               organization_id: paymentLink.organization_id,
@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
         metadata: {
           paymentIntentStatus: paymentIntent.status,
           amount: amountInSmallestUnit,
-          currency: paymentLink.currency,
+          currency: invoiceCcy,
         },
       },
     });
@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
         paymentLinkId,
         paymentIntentId: paymentIntent.id,
         amount: amountInSmallestUnit,
-        currency: paymentLink.currency,
+        currency: invoiceCcy,
       },
       'PaymentIntent created successfully'
     );

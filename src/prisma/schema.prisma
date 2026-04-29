@@ -247,7 +247,10 @@ model payment_links {
   status            PaymentLinkStatus @default(DRAFT)
   payment_method    PaymentMethod? // STRIPE | HEDERA | WISE | CRYPTO (null = legacy, all methods)
   amount            Decimal           @db.Decimal(18, 2)
+  /// @deprecated Kept in sync with `invoice_currency` for backwards compatibility; prefer `invoice_currency` in new code.
   currency          String            @db.Char(3)
+  /// ISO 4217 accounting currency for the invoice amount, public display, and Xero ACCREC — independent of payment rail (Stripe / HBAR / etc.).
+  invoice_currency  String            @db.Char(3)
   description       String
   invoice_reference String?           @db.VarChar(255)
   customer_email    String?           @db.VarChar(255)

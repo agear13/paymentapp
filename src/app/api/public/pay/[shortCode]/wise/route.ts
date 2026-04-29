@@ -14,6 +14,7 @@ import { hasWiseCredentials } from '@/lib/wise/client';
 import { buildWiseReference, getMerchantWiseConfig, persistWiseContextForPaymentLink } from '@/lib/payments/wise';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 
 const MISSING_LINK_TTL_MS = 30_000;
 const missingShortCodeUntil = new Map<string, number>();
@@ -40,6 +41,7 @@ function fetchWisePaymentLink(shortCode: string) {
       amount: true,
       status: true,
       currency: true,
+      invoice_currency: true,
       payment_method: true,
       organization_id: true,
     },
@@ -126,8 +128,10 @@ export async function GET(
     return NextResponse.json({ error: 'Wise is not enabled for this payment link' }, { status: 400 });
   }
 
+  const invoiceCcy = invoiceDenominationCurrency(paymentLink);
+
   // Validate Wise configuration
-  const validation = await validateWiseConfig(paymentLink.organization_id, paymentLink.currency);
+  const validation = await validateWiseConfig(paymentLink.organization_id, invoiceCcy);
   if ('error' in validation) {
     return validation.error;
   }
@@ -143,7 +147,7 @@ export async function GET(
       shortCode,
       amount: paymentLink.amount.toString(),
       organizationId: paymentLink.organization_id,
-      fallbackCurrency: paymentLink.currency,
+      fallbackCurrency: invoiceCcy,
     });
     await prisma.payment_links.update({
       where: { id: paymentLink.id },
@@ -195,8 +199,10 @@ export async function POST(
     return NextResponse.json({ error: 'Link is not open for payment' }, { status: 400 });
   }
 
+  const invoiceCcy = invoiceDenominationCurrency(paymentLink);
+
   // Validate Wise configuration
-  const validation = await validateWiseConfig(paymentLink.organization_id, paymentLink.currency);
+  const validation = await validateWiseConfig(paymentLink.organization_id, invoiceCcy);
   if ('error' in validation) {
     return validation.error;
   }
@@ -213,7 +219,7 @@ export async function POST(
       shortCode,
       amount: paymentLink.amount.toString(),
       organizationId: paymentLink.organization_id,
-      fallbackCurrency: paymentLink.currency,
+      fallbackCurrency: invoiceCcy,
     });
     loggers.api.info(`Wise payment instructions created for ${shortCode} (ref: ${context.reference}, currency: ${context.currency})`);
     return NextResponse.json({ instructions: context });

@@ -115,6 +115,7 @@ function transformPaymentLink(link: Record<string, unknown>) {
     paymentMethod: link.payment_method ?? null,
     amount: Number(link.amount),
     currency: link.currency,
+    invoiceCurrency: (link as { invoice_currency?: string }).invoice_currency ?? link.currency,
     description: link.description,
     invoiceReference: link.invoice_reference,
     invoiceDate: link.invoice_date ?? null,
@@ -241,7 +242,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (filters.currency) {
-      where.currency = filters.currency;
+      where.invoice_currency = filters.currency;
     }
 
     if (filters.startDate || filters.endDate) {
@@ -383,15 +384,19 @@ export async function POST(request: NextRequest) {
     const isWisePayment = !invoiceOnly && validatedData.paymentMethod === 'WISE';
     let wiseContext: Awaited<ReturnType<typeof buildWisePaymentContext>> | null = null;
 
+    const effectiveInvoiceCurrency = (
+      validatedData.invoiceCurrency ?? validatedData.currency
+    ).toUpperCase();
+
     if (isWisePayment) {
       try {
         // Validate merchant-level Wise config before creating invoice
-        await getMerchantWiseConfig(dbOrgId, validatedData.currency);
+        await getMerchantWiseConfig(dbOrgId, effectiveInvoiceCurrency);
         wiseContext = await buildWisePaymentContext({
           shortCode,
           amount: validatedData.amount.toString(),
           organizationId: dbOrgId,
-          fallbackCurrency: validatedData.currency,
+          fallbackCurrency: effectiveInvoiceCurrency,
         });
       } catch (wiseError: unknown) {
         const message = wiseError instanceof Error ? wiseError.message : 'Failed to prepare Wise payment context';
@@ -443,7 +448,8 @@ export async function POST(request: NextRequest) {
           status: 'OPEN',
           payment_method: resolvedPaymentMethod,
           amount: validatedData.amount,
-          currency: validatedData.currency,
+          currency: effectiveInvoiceCurrency,
+          invoice_currency: effectiveInvoiceCurrency,
           description: validatedData.description,
           invoice_reference: invoiceReferenceToStore,
           invoice_date: validatedData.invoiceDate
@@ -569,7 +575,7 @@ export async function POST(request: NextRequest) {
         shortCode: paymentLink.short_code,
         organizationId: dbOrgId,
         amount: validatedData.amount,
-        currency: validatedData.currency,
+        currency: effectiveInvoiceCurrency,
         wiseContextPrepared: !!wiseContext,
       },
       'Payment link created'
@@ -577,7 +583,7 @@ export async function POST(request: NextRequest) {
 
     // Capture FX creation snapshots for all supported tokens (fail-open)
     const paymentLinkId = paymentLink.id;
-    const invoiceCurrency = validatedData.currency;
+    const invoiceCurrency = effectiveInvoiceCurrency;
     loggers.payment.info(
       { paymentLinkId, invoiceCurrency },
       'FX_CREATION_START'

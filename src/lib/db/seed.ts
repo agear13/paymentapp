@@ -210,6 +210,7 @@ const seedPaymentLinks = async (organizations: any[]) => {
         status: link.status,
         amount: link.amount,
         currency: link.currency,
+        invoice_currency: link.currency,
         description: link.description,
         invoice_reference: link.invoiceReference,
         customer_email: link.customerEmail,

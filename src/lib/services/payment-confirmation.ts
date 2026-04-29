@@ -156,7 +156,8 @@ export async function confirmPayment(
         });
         await getFxSnapshotService().ensureSettlementFxSnapshot(tx, {
           id: paymentLinkId,
-          currency: paymentLink.currency,
+          currency: paymentLink.invoice_currency ?? paymentLink.currency,
+          invoice_currency: paymentLink.invoice_currency ?? paymentLink.currency,
         });
         const existingEvent = await tx.payment_events.findFirst({
           where: {
@@ -280,7 +281,8 @@ export async function confirmPayment(
       try {
         await getFxSnapshotService().ensureSettlementFxSnapshot(tx, {
           id: paymentLinkId,
-          currency: paymentLink.currency,
+          currency: paymentLink.invoice_currency ?? paymentLink.currency,
+          invoice_currency: paymentLink.invoice_currency ?? paymentLink.currency,
         });
 
         if (provider === 'stripe') {
@@ -298,7 +300,7 @@ export async function confirmPayment(
             correlationId,
           });
         } else if (provider === 'hedera' && tokenType) {
-          const invoiceCurrency = paymentLink.currency;
+          const invoiceCurrency = paymentLink.invoice_currency ?? paymentLink.currency;
           const fxService = getFxService();
           const exchangeRate = await fxService.getRate(tokenType, invoiceCurrency as 'USD' | 'AUD');
           await getFxSnapshotService().createSettlementSnapshotInTx(tx, {
@@ -338,7 +340,7 @@ export async function confirmPayment(
             tokenType,
             cryptoAmount: String(amountReceived),
             invoiceAmount: paymentLink.amount.toString(),
-            invoiceCurrency: paymentLink.currency,
+            invoiceCurrency: paymentLink.invoice_currency ?? paymentLink.currency,
             fxRate: rate,
             transactionId: transactionId || providerRef,
             correlationId,

@@ -26,6 +26,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:production": "dotenv -e ../.env.production -- prisma migrate deploy",
     "db:generate": "prisma generate",
+    "db:backfill:crypto-invoice-aud": "tsx scripts/backfill-crypto-invoice-currency-aud.ts",
     "db:seed": "tsx lib/db/seed.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",

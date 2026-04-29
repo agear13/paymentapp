@@ -40,6 +40,7 @@ function transformPaymentLink(link: any) {
     shortCode: link.short_code,
     amount: link.amount,
     currency: link.currency,
+    invoiceCurrency: link.invoice_currency ?? link.currency,
     status: link.status,
     description: link.description,
     invoiceReference: link.invoice_reference,
@@ -152,7 +153,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (filters.currency) {
-      where.currency = filters.currency;
+      where.invoice_currency = filters.currency;
     }
 
     if (filters.startDate || filters.endDate) {

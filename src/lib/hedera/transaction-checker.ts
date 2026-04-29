@@ -16,6 +16,7 @@ import { fromSmallestUnit } from './token-service';
 import { prisma } from '@/lib/server/prisma';
 import { generateCorrelationId } from '@/lib/services/correlation';
 import { normalizeHederaTransactionId } from './txid';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 
 export interface CheckTransactionOptions {
   paymentLinkId: string;
@@ -372,6 +373,7 @@ async function updatePaymentLinkWithTransaction(
         organization_id: true,
         amount: true,
         currency: true,
+        invoice_currency: true,
         status: true,
       },
     });
@@ -401,6 +403,8 @@ async function updatePaymentLinkWithTransaction(
 
     // Get or create ledger accounts for this organization
     const ledgerAccounts = await ensureLedgerAccounts(paymentLink.organization_id, tokenType);
+
+    const invoiceCcy = invoiceDenominationCurrency(paymentLink);
 
     const now = new Date();
     // Use correlation_id as base for idempotency keys
@@ -455,7 +459,7 @@ async function updatePaymentLinkWithTransaction(
           ledger_account_id: ledgerAccounts.cryptoClearing,
           entry_type: 'DEBIT' as const,
           amount: paymentLink.amount,
-          currency: paymentLink.currency,
+          currency: invoiceCcy,
           description: `${tokenType} payment received - ${normalizedTxId}`,
           idempotency_key: `${idempotencyKey}-debit`,
           created_at: now,
@@ -468,7 +472,7 @@ async function updatePaymentLinkWithTransaction(
           ledger_account_id: ledgerAccounts.accountsReceivable,
           entry_type: 'CREDIT' as const,
           amount: paymentLink.amount,
-          currency: paymentLink.currency,
+          currency: invoiceCcy,
           description: `${tokenType} payment received - ${normalizedTxId}`,
           idempotency_key: `${idempotencyKey}-credit`,
           created_at: now,
@@ -514,7 +518,7 @@ async function updatePaymentLinkWithTransaction(
 
       const paymentEvent = results[1] as { id: string };
       const grossAmount = parseFloat(String(paymentLink.amount));
-      const currency = paymentLink.currency;
+      const currency = invoiceCcy;
 
       // 5. Auto-create referral conversion (non-blocking)
       try {

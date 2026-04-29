@@ -81,6 +81,7 @@ function transformPaymentLink(link: any) {
     paymentMethod: link.payment_method ?? null,
     amount: Number(link.amount),
     currency: link.currency,
+    invoiceCurrency: link.invoice_currency ?? link.currency,
     description: link.description,
     invoiceReference: link.invoice_reference,
     invoiceDate: link.invoice_date ?? null,
@@ -384,7 +385,12 @@ export async function PATCH(
 
     const mergedAmount =
       patch.amount !== undefined ? patch.amount : Number(currentLink.amount);
-    const mergedCurrency = patch.currency ?? currentLink.currency;
+    const mergedInvoiceCurrency =
+      patch.invoiceCurrency !== undefined
+        ? patch.invoiceCurrency
+        : patch.currency !== undefined
+          ? patch.currency
+          : currentLink.invoice_currency ?? currentLink.currency;
     const mergedDescription =
       patch.description !== undefined ? patch.description : currentLink.description;
     const mergedInvoiceRef =
@@ -581,7 +587,7 @@ export async function PATCH(
       const invoiceOnlySame = invoiceOnly === currentLink.invoice_only_mode;
       if (
         mergedAmount !== Number(currentLink.amount) ||
-        mergedCurrency !== currentLink.currency ||
+        mergedInvoiceCurrency !== (currentLink.invoice_currency ?? currentLink.currency) ||
         !pmSame ||
         !invoiceOnlySame
       ) {
@@ -597,7 +603,7 @@ export async function PATCH(
 
     if (!invoiceOnly && paymentMethod === 'WISE') {
       try {
-        await getMerchantWiseConfig(currentLink.organization_id, mergedCurrency);
+        await getMerchantWiseConfig(currentLink.organization_id, mergedInvoiceCurrency);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Wise configuration invalid';
         return NextResponse.json({ error: message, code: 'WISE_CONFIG_ERROR' }, { status: 400 });
@@ -606,7 +612,8 @@ export async function PATCH(
 
     const prismaData: Record<string, unknown> = {
       amount: new Prisma.Decimal(mergedAmount.toFixed(2)),
-      currency: mergedCurrency,
+      currency: mergedInvoiceCurrency,
+      invoice_currency: mergedInvoiceCurrency,
       description: mergedDescription,
       invoice_reference: mergedInvoiceRef,
       customer_email: mergedCustomerEmail,

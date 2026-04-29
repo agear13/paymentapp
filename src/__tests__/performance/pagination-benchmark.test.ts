@@ -25,6 +25,7 @@ describe('Pagination Performance Benchmark', () => {
       organization_id: TEST_ORG_ID,
       amount: (i + 1) * 100,
       currency: 'USD' as const,
+      invoice_currency: 'USD' as const,
       status: 'ACTIVE' as const,
       description: `Test payment link ${i}`,
       wallet_address: `0.0.${1000 + i}`,

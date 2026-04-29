@@ -103,6 +103,7 @@ export async function createReferralCheckoutSession(
         status: 'OPEN',
         amount,
         currency,
+        invoice_currency: currency,
         description,
         invoice_reference: `REF-${code}`,
         created_at: now,

@@ -19,6 +19,7 @@ import { convertCurrency } from '@/lib/currency/currency-converter';
 import { getCurrency } from '@/lib/currency/currency-config';
 import { getActiveRateOverride } from '@/lib/currency/rate-management';
 import type { MultiCurrencyInvoice } from '@/lib/currency/multi-currency-line-items';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 
 function asInputJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -119,9 +120,10 @@ export async function syncMultiCurrencyPaymentToXero(
       throw new Error('Merchant settings not found');
     }
 
-    // Determine currencies
-    const baseCurrency = paymentLink.base_currency || paymentLink.currency;
-    const paymentCurrency = paymentLink.customer_selected_currency || paymentLink.currency;
+    // Determine currencies (invoice denomination vs payer-selected rail)
+    const invoiceCcy = invoiceDenominationCurrency(paymentLink);
+    const baseCurrency = paymentLink.base_currency || invoiceCcy;
+    const paymentCurrency = paymentLink.customer_selected_currency || invoiceCcy;
     const conversionRate = paymentLink.conversion_rate_at_creation
       ? Number(paymentLink.conversion_rate_at_creation)
       : 1;

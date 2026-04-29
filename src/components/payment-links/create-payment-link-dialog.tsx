@@ -68,6 +68,8 @@ interface MerchantSettings {
   hederaAccountId?: string;
   wiseEnabled?: boolean;
   wiseProfileId?: string;
+  /** Merchant default / accounting currency (ISO 4217) — used as invoice currency default, not payment rail. */
+  defaultCurrency?: string | null;
 }
 
 // Form validation schema - SMB-friendly (customer contact details optional)
@@ -209,6 +211,8 @@ export interface EditPaymentLinkSeed {
   id: string;
   amount: number;
   currency: string;
+  /** When present (API), preferred over `currency` for invoice denomination. */
+  invoiceCurrency?: string;
   description: string;
   invoiceReference: string | null;
   customerEmail: string | null;
@@ -269,7 +273,7 @@ export interface CreatePaymentLinkDialogProps {
 
 export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = ({
   organizationId,
-  defaultCurrency = 'USD',
+  defaultCurrency = 'AUD',
   defaultValues,
   pilotDealId = null,
   onSuccess,
@@ -320,6 +324,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               hederaAccountId: settings.hedera_account_id,
               wiseEnabled: settings.wise_enabled,
               wiseProfileId: settings.wise_profile_id,
+              defaultCurrency: settings.default_currency ?? null,
             });
           } else {
             setMerchantSettings(null);
@@ -341,6 +346,17 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   React.useEffect(() => {
     if (!open) setGuardrail(null);
   }, [open]);
+
+  /** Prefer merchant accounting currency for new invoices (not payment rail). */
+  React.useEffect(() => {
+    if (!open || mode !== 'create' || !merchantSettingsLoaded) return;
+    const acct = merchantSettings?.defaultCurrency?.trim().toUpperCase().slice(0, 3);
+    if (!acct || acct.length !== 3) return;
+    const current = form.getValues('currency');
+    if (!current || current === defaultCurrency) {
+      form.setValue('currency', acct, { shouldDirty: false });
+    }
+  }, [open, mode, merchantSettingsLoaded, merchantSettings?.defaultCurrency, defaultCurrency, form]);
 
   const railSetup = React.useMemo(
     () => computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings)),
@@ -533,7 +549,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         manualBankRevolutHandle: editPaymentLink.manualBankRevolutHandle ?? '',
         manualBankInstructions: editPaymentLink.manualBankInstructions ?? '',
         amount: editPaymentLink.amount,
-        currency: editPaymentLink.currency,
+        currency: editPaymentLink.invoiceCurrency ?? editPaymentLink.currency,
         description: editPaymentLink.description,
         invoiceReference: editPaymentLink.invoiceReference || '',
         customerEmail: editPaymentLink.customerEmail || '',
@@ -688,6 +704,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         body: JSON.stringify({
           amount: data.amount,
           currency: data.currency,
+          invoiceCurrency: data.currency,
           description: data.description,
           invoiceReference: data.invoiceReference || null,
           customerEmail: data.customerEmail || null,
@@ -806,6 +823,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           organizationId,
           amount: data.amount,
           currency: data.currency,
+          invoiceCurrency: data.currency,
           description: data.description,
           invoiceReference: data.invoiceReference || undefined,
           customerEmail: data.customerEmail || undefined,
@@ -1493,7 +1511,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                         disabled={wiseTransferLocked}
                       />
                     </FormControl>
-                    <FormDescription>Payment amount</FormDescription>
+                    <FormDescription>Amount in invoice currency (above)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1504,7 +1522,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                 name="currency"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Currency *</FormLabel>
+                    <FormLabel>Invoice currency *</FormLabel>
                     <FormControl>
                       <CurrencySelect
                         value={field.value}
@@ -1512,7 +1530,10 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                         disabled={wiseTransferLocked}
                       />
                     </FormControl>
-                    <FormDescription>ISO 4217 code</FormDescription>
+                    <FormDescription>
+                      Accounting denomination for this amount (Xero, PDF, ledger). Independent of how the customer pays
+                      (card, Hashpack, Wise, etc.).
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
