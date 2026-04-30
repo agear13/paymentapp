@@ -70,17 +70,14 @@ export async function confirmHederaPayment(
   // Generate correlation ID from normalized transaction ID
   const correlationId = generateCorrelationId('hedera', normalizedTxId);
 
-  log.info(
-    {
-      paymentLinkId,
-      transactionId,
-      normalizedTxId,
-      tokenType,
-      amountReceived,
-      correlationId,
-    },
-    'Processing Hedera payment confirmation'
-  );
+  log.info('Processing Hedera payment confirmation', {
+    paymentLinkId,
+    transactionId,
+    normalizedTxId,
+    tokenType,
+    amountReceived,
+    correlationId,
+  });
 
   // Sprint 24: Check for duplicate payment FIRST
   const duplicateCheck = await checkDuplicatePayment(
@@ -90,15 +87,12 @@ export async function confirmHederaPayment(
   );
 
   if (duplicateCheck.isDuplicate) {
-    log.warn(
-      {
-        paymentLinkId,
-        transactionId,
-        correlationId,
-        existingEventId: duplicateCheck.existingPaymentEventId,
-      },
-      'Duplicate payment detected - skipping'
-    );
+    log.warn('Duplicate payment detected - skipping', {
+      paymentLinkId,
+      transactionId,
+      correlationId,
+      existingEventId: duplicateCheck.existingPaymentEventId,
+    });
     return; // Already processed
   }
 
@@ -106,14 +100,11 @@ export async function confirmHederaPayment(
   const attemptValidation = await validatePaymentAttempt(paymentLinkId, false);
   
   if (!attemptValidation.allowed) {
-    log.warn(
-      {
-        paymentLinkId,
-        reason: attemptValidation.reason,
-        status: attemptValidation.currentStatus,
-      },
-      'Payment attempt not allowed'
-    );
+    log.warn('Payment attempt not allowed', {
+      paymentLinkId,
+      reason: attemptValidation.reason,
+      status: attemptValidation.currentStatus,
+    });
     throw new Error(attemptValidation.reason || 'Payment not allowed');
   }
 
@@ -121,7 +112,10 @@ export async function confirmHederaPayment(
   const lockAcquired = await acquirePaymentLock(paymentLinkId);
   
   if (!lockAcquired) {
-    log.warn({ paymentLinkId }, 'Could not acquire payment lock - another process may be handling');
+    log.warn(
+      'Could not acquire payment lock - another process may be handling',
+      { paymentLinkId }
+    );
     throw new Error('Payment is being processed by another request');
   }
 
@@ -147,7 +141,7 @@ export async function confirmHederaPayment(
 
     // Double-check status (in case changed since validation)
     if (paymentLink.status === 'PAID') {
-      log.info({ paymentLinkId }, 'Payment link already marked as PAID');
+      log.info('Payment link already marked as PAID', { paymentLinkId });
       return; // Already processed
     }
 
@@ -190,15 +184,20 @@ export async function confirmHederaPayment(
     }),
     ]);
 
-      log.info(
-        {
-          paymentLinkId,
-          transactionId,
-          correlationId,
-          tokenType,
-        },
-        'Payment link updated to PAID status'
-      );
+      log.info('Payment link updated to PAID status', {
+        paymentLinkId,
+        transactionId,
+        correlationId,
+        tokenType,
+      });
+
+    // Same as Stripe path: queue Xero PAYMENT sync on confirmation (do not tie to ledger posting success).
+    const { queueXeroPaymentSyncIfEnabled } = await import('@/lib/xero/queue-service');
+    await queueXeroPaymentSyncIfEnabled({
+      paymentLinkId,
+      organizationId: paymentLink.organization_id,
+      source: 'confirm-hedera-payment',
+    });
 
     // Get FX snapshot for settlement
     const fxSnapshot = await prisma.fx_snapshots.findFirst({
@@ -211,10 +210,10 @@ export async function confirmHederaPayment(
     });
 
     if (!fxSnapshot) {
-      log.error(
-        { paymentLinkId, tokenType },
-        'FX snapshot not found for settlement'
-      );
+      log.error('FX snapshot not found for settlement', undefined, {
+        paymentLinkId,
+        tokenType,
+      });
       throw new Error('FX snapshot not found - cannot post to ledger');
     }
 
@@ -238,44 +237,19 @@ export async function confirmHederaPayment(
       // Validate balance
       await validatePostingBalance(paymentLinkId);
 
-      log.info(
-        {
-          paymentLinkId,
-          transactionId,
-          correlationId,
-          tokenType,
-          invoiceAmount: paymentLink.amount.toString(),
-          currency: invoiceCcy,
-        },
-        'Hedera settlement posted to ledger successfully'
-      );
-
-      // Queue Xero sync (Sprint 13)
-      try {
-        const { queueXeroSync } = await import('@/lib/xero/queue-service');
-        await queueXeroSync({
-          paymentLinkId,
-          organizationId: paymentLink.organization_id,
-        });
-        log.info({ paymentLinkId }, 'Xero sync queued successfully');
-      } catch (queueError: any) {
-        log.error(
-          {
-            paymentLinkId,
-            error: queueError.message,
-          },
-          'Failed to queue Xero sync - will retry later'
-        );
-        // Don't throw - payment is confirmed, sync can be retried manually
-      }
+      log.info('Hedera settlement posted to ledger successfully', {
+        paymentLinkId,
+        transactionId,
+        correlationId,
+        tokenType,
+        invoiceAmount: paymentLink.amount.toString(),
+        currency: invoiceCcy,
+      });
     } catch (error: any) {
       log.error(
-        {
-          paymentLinkId,
-          transactionId,
-          error: error.message,
-        },
-        'Failed to post Hedera settlement to ledger'
+        'Failed to post Hedera settlement to ledger',
+        error,
+        { paymentLinkId, transactionId }
       );
       
       // Don't throw - payment is still confirmed
@@ -342,11 +316,11 @@ export async function hasLedgerEntries(paymentLinkId: string): Promise<boolean> 
  * @throws Error if retry fails
  */
 export async function retryLedgerPosting(paymentLinkId: string): Promise<void> {
-  log.info({ paymentLinkId }, 'Retrying ledger posting');
+  log.info('Retrying ledger posting', { paymentLinkId });
 
   // Check if already has ledger entries
   if (await hasLedgerEntries(paymentLinkId)) {
-    log.info({ paymentLinkId }, 'Ledger entries already exist');
+    log.info('Ledger entries already exist', { paymentLinkId });
     return;
   }
 
@@ -407,6 +381,6 @@ export async function retryLedgerPosting(paymentLinkId: string): Promise<void> {
   // Validate balance
   await validatePostingBalance(paymentLinkId);
 
-  log.info({ paymentLinkId }, 'Ledger posting retry successful');
+  log.info('Ledger posting retry successful', { paymentLinkId });
 }
 

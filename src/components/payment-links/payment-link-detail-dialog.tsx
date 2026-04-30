@@ -1077,14 +1077,18 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                             {sync.errorMessage}
                           </p>
                         )}
-                        {sync.xeroInvoiceId ? (
+                        {sync.syncType === 'INVOICE' &&
+                        sync.status === 'SUCCESS' &&
+                        sync.xeroInvoiceId ? (
                           <p className="text-xs text-muted-foreground mt-1">
-                            Invoice synced: {sync.xeroInvoiceId}
+                            Invoice in Xero: {sync.xeroInvoiceId}
                           </p>
                         ) : null}
-                        {sync.xeroPaymentId ? (
+                        {sync.syncType === 'PAYMENT' &&
+                        sync.status === 'SUCCESS' &&
+                        sync.xeroPaymentId ? (
                           <p className="text-xs text-muted-foreground mt-1">
-                            Payment pushed: {sync.xeroPaymentId}
+                            Payment in Xero: {sync.xeroPaymentId}
                           </p>
                         ) : null}
                         <p className="text-xs text-muted-foreground mt-1">

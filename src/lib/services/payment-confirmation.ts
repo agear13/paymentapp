@@ -277,20 +277,32 @@ export async function confirmPayment(
         paymentLinkId,
       });
 
-      // 4. Ensure canonical SETTLEMENT fx snapshot (payment_link_id, SETTLEMENT, currency, currency); then post to ledger
-      try {
-        await getFxSnapshotService().ensureSettlementFxSnapshot(tx, {
-          id: paymentLinkId,
-          currency: paymentLink.invoice_currency ?? paymentLink.currency,
-          invoice_currency: paymentLink.invoice_currency ?? paymentLink.currency,
-        });
+      // 4. Post to ledger — atomicity per rail:
+      //
+      //   Stripe  : postStripeSettlement uses tx → failure rolls back the entire
+      //             transaction (payment_link, payment_event, ledger entries all
+      //             stay untouched). Webhook returns 500; Stripe retries.
+      //
+      //   Hedera/Wise: posting rules do not yet accept tx. Their errors are caught
+      //             locally so the payment confirmation still commits, matching the
+      //             previous behaviour. Remove the try/catch here once
+      //             postHederaSettlement and postWiseSettlement are updated to
+      //             accept Prisma.TransactionClient.
 
-        if (provider === 'stripe') {
-          const { calculateStripeFee } = await import('@/lib/ledger/posting-rules/stripe');
-          const amountInCents = Math.round(amountReceived * 100);
-          const calculatedFee = calculateStripeFee(amountInCents, currencyReceived.toLowerCase());
+      await getFxSnapshotService().ensureSettlementFxSnapshot(tx, {
+        id: paymentLinkId,
+        currency: paymentLink.invoice_currency ?? paymentLink.currency,
+        invoice_currency: paymentLink.invoice_currency ?? paymentLink.currency,
+      });
 
-          await postStripeSettlement({
+      if (provider === 'stripe') {
+        // Atomic: any error here rolls back the enclosing prisma.$transaction.
+        const { calculateStripeFee } = await import('@/lib/ledger/posting-rules/stripe');
+        const amountInCents = Math.round(amountReceived * 100);
+        const calculatedFee = calculateStripeFee(amountInCents, currencyReceived.toLowerCase());
+
+        await postStripeSettlement(
+          {
             paymentLinkId,
             organizationId: paymentLink.organization_id,
             stripePaymentIntentId: paymentIntentId || providerRef,
@@ -298,8 +310,14 @@ export async function confirmPayment(
             feeAmount: String(calculatedFee),
             currency: currencyReceived,
             correlationId,
-          });
-        } else if (provider === 'hedera' && tokenType) {
+          },
+          tx, // ledger writes share the enclosing transaction
+        );
+
+        log.info('Stripe ledger entries posted (atomic)', { correlationId, paymentLinkId });
+      } else if (provider === 'hedera' && tokenType) {
+        // TODO: pass tx once postHederaSettlement accepts Prisma.TransactionClient.
+        try {
           const invoiceCurrency = paymentLink.invoice_currency ?? paymentLink.currency;
           const fxService = getFxService();
           const exchangeRate = await fxService.getRate(tokenType, invoiceCurrency as 'USD' | 'AUD');
@@ -324,12 +342,11 @@ export async function confirmPayment(
           });
 
           if (!fxSnapshot) {
-            throw new Error(
-              `FX snapshot not found for ${tokenType} settlement`
-            );
+            throw new Error(`FX snapshot not found for ${tokenType} settlement`);
           }
 
-          const rate = fxRate ||
+          const rate =
+            fxRate ??
             (typeof fxSnapshot.rate === 'number'
               ? fxSnapshot.rate
               : parseFloat(fxSnapshot.rate.toString()));
@@ -346,7 +363,26 @@ export async function confirmPayment(
             correlationId,
             idempotencyKey: correlationId,
           });
-        } else if (provider === 'wise') {
+
+          log.info('Hedera ledger entries posted (non-atomic)', { correlationId, paymentLinkId });
+        } catch (ledgerError: unknown) {
+          const msg = ledgerError instanceof Error ? ledgerError.message : String(ledgerError);
+          log.error('Hedera ledger posting failed — payment confirmed, ledger is pending manual reconciliation', ledgerError instanceof Error ? ledgerError : undefined, { correlationId, paymentLinkId, error: msg });
+          try {
+            await tx.notifications.create({
+              data: {
+                organization_id: paymentLink.organization_id,
+                type: 'SYSTEM_ALERT',
+                title: 'Hedera ledger posting failed',
+                message: `Ledger entries could not be created for Hedera payment. Correlation ID: ${correlationId}. Error: ${msg}`,
+                data: { paymentLinkId, correlationId, error: msg },
+              },
+            });
+          } catch { /* notification failure must not mask the original error */ }
+        }
+      } else if (provider === 'wise') {
+        // TODO: pass tx once postWiseSettlement accepts Prisma.TransactionClient.
+        try {
           await postWiseSettlement({
             paymentLinkId,
             organizationId: paymentLink.organization_id,
@@ -355,51 +391,23 @@ export async function confirmPayment(
             currency: currencyReceived,
             correlationId,
           });
-        }
 
-        // Validate ledger balance
-        await validatePostingBalance(paymentLinkId);
-
-        log.info('Ledger entries posted and validated', {
-          correlationId,
-          paymentLinkId,
-        });
-      } catch (ledgerError: unknown) {
-        log.error(
-          'Ledger posting failed (will retry)',
-          ledgerError instanceof Error ? ledgerError : undefined,
-          {
-            correlationId,
-            organizationId: paymentLink.organization_id,
-            paymentLinkId,
-            error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
-          }
-        );
-
-        // Create notification so user is aware
-        try {
-          await tx.notifications.create({
-            data: {
-              organization_id: paymentLink.organization_id,
-              type: 'SYSTEM_ALERT',
-              title: 'Ledger posting failed',
-              message: `Ledger posting failed for payment link. Payment was confirmed but ledger entries could not be created. Correlation ID: ${correlationId}. Error: ${
-                ledgerError instanceof Error ? ledgerError.message : String(ledgerError)
-              }. Ledger posting will be retried.`,
+          log.info('Wise ledger entries posted (non-atomic)', { correlationId, paymentLinkId });
+        } catch (ledgerError: unknown) {
+          const msg = ledgerError instanceof Error ? ledgerError.message : String(ledgerError);
+          log.error('Wise ledger posting failed — payment confirmed, ledger is pending manual reconciliation', ledgerError instanceof Error ? ledgerError : undefined, { correlationId, paymentLinkId, error: msg });
+          try {
+            await tx.notifications.create({
               data: {
-                paymentLinkId,
-                correlationId,
-                error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
+                organization_id: paymentLink.organization_id,
+                type: 'SYSTEM_ALERT',
+                title: 'Wise ledger posting failed',
+                message: `Ledger entries could not be created for Wise payment. Correlation ID: ${correlationId}. Error: ${msg}`,
+                data: { paymentLinkId, correlationId, error: msg },
               },
-            },
-          });
-        } catch (notifErr: unknown) {
-          log.warn('Could not create ledger failure notification', {
-            correlationId,
-            notifError: notifErr instanceof Error ? notifErr.message : String(notifErr),
-          });
+            });
+          } catch { /* notification failure must not mask the original error */ }
         }
-        // Do NOT throw - payment confirmed is source of truth; return 200
       }
 
       // 5. Queue Xero sync if enabled (idempotent upsert)
@@ -473,6 +481,24 @@ export async function confirmPayment(
       paymentEventId: result.paymentEventId,
       paymentLinkId,
     });
+
+    // Validate cumulative ledger balance against committed data.
+    // This runs after the transaction commits so the global prisma client
+    // can see the new entries. A failure here is a monitoring signal — the
+    // payment is already confirmed and cannot be rolled back, so we log and
+    // alert rather than throw. The per-batch validateBalance inside
+    // LedgerEntryService is the primary correctness gate.
+    if (!result.alreadyProcessed && provider === 'stripe') {
+      try {
+        await validatePostingBalance(paymentLinkId);
+      } catch (balanceError: unknown) {
+        log.error(
+          'Post-commit balance validation failed — ledger may be unbalanced, manual reconciliation required',
+          balanceError instanceof Error ? balanceError : undefined,
+          { correlationId, paymentLinkId, error: balanceError instanceof Error ? balanceError.message : String(balanceError) },
+        );
+      }
+    }
 
     // 6. Auto-create referral conversion (non-blocking; must not fail payment)
     if (result.success && result.paymentEventId) {

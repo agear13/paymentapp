@@ -33,7 +33,9 @@ export interface PostingParams {
   paymentLinkId: string;
   organizationId: string;
   idempotencyKey: string;
-  correlationId?: string; // Optional, for idempotent retry logging
+  correlationId?: string;
+  /** Pass the enclosing Prisma transaction client to make ledger writes atomic with the caller's transaction. */
+  tx?: Prisma.TransactionClient;
 }
 
 /**
@@ -75,7 +77,8 @@ export class LedgerEntryService {
    * @throws Error if validation fails
    */
   async postJournalEntries(params: PostingParams): Promise<PostingResult> {
-    const { entries, paymentLinkId, organizationId, idempotencyKey, correlationId } = params;
+    const { entries, paymentLinkId, organizationId, idempotencyKey, correlationId, tx } = params;
+    const db = tx ?? prisma;
 
     loggers.ledger.info(
       {
@@ -88,7 +91,7 @@ export class LedgerEntryService {
 
     // 1. Check idempotency - has this batch already been posted? (first entry key)
     const firstEntryKey = `${idempotencyKey}-0`;
-    const alreadyPosted = await this.checkIdempotency(firstEntryKey);
+    const alreadyPosted = await this.checkIdempotency(firstEntryKey, db);
     if (alreadyPosted) {
       loggers.ledger.info(
         { idempotencyKey, correlationId },
@@ -109,7 +112,7 @@ export class LedgerEntryService {
     this.validateBalance(entries);
 
     // 3. Get account IDs from codes
-    const accountIds = await this.getAccountIds(organizationId, entries);
+    const accountIds = await this.getAccountIds(organizationId, entries, db);
 
     // 4. Build batch with unique idempotency_key per entry (deterministic)
     const totalDebits = entries
@@ -130,7 +133,7 @@ export class LedgerEntryService {
     }));
 
     // 5. Post via createMany with skipDuplicates (idempotent on retries)
-    const result = await prisma.ledger_entries.createMany({
+    const result = await db.ledger_entries.createMany({
       data,
       skipDuplicates: true,
     });
@@ -284,11 +287,13 @@ export class LedgerEntryService {
    * @returns True if entries already exist
    * @private
    */
-  private async checkIdempotency(key: string): Promise<boolean> {
-    const count = await prisma.ledger_entries.count({
+  private async checkIdempotency(
+    key: string,
+    db: Prisma.TransactionClient | typeof prisma,
+  ): Promise<boolean> {
+    const count = await db.ledger_entries.count({
       where: { idempotency_key: key },
     });
-    
     return count > 0;
   }
 
@@ -304,13 +309,12 @@ export class LedgerEntryService {
    */
   private async getAccountIds(
     organizationId: string,
-    entries: JournalEntry[]
+    entries: JournalEntry[],
+    db: Prisma.TransactionClient | typeof prisma,
   ): Promise<Record<string, string>> {
-    // Get unique account codes
     const codes = [...new Set(entries.map((e) => e.accountCode))];
 
-    // Fetch accounts
-    const accounts = await prisma.ledger_accounts.findMany({
+    const accounts = await db.ledger_accounts.findMany({
       where: {
         organization_id: organizationId,
         code: { in: codes },

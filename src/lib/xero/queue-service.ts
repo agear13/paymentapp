@@ -9,6 +9,7 @@ import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
 import { randomUUID } from 'crypto';
 import type { XeroSyncType } from '@prisma/client';
+import { config } from '@/lib/config/env';
 
 export interface QueueSyncJobParams {
   paymentLinkId: string;
@@ -56,12 +57,85 @@ export function calculateNextRetryTime(retryCount: number): Date | null {
  * @param params - Queue job parameters
  * @returns Sync record ID
  */
+/**
+ * Queue PAYMENT sync after PAYMENT_CONFIRMED (same intent as Stripe path in payment-confirmation).
+ * Safe to call from Hedera persistence paths; no-ops when Xero sync feature is off.
+ */
+export async function queueXeroPaymentSyncIfEnabled(params: {
+  paymentLinkId: string;
+  organizationId: string;
+  source: string;
+}): Promise<void> {
+  if (!config.features.xeroSync) {
+    logger.info(
+      {
+        paymentLinkId: params.paymentLinkId,
+        organizationId: params.organizationId,
+        source: params.source,
+      },
+      'Xero sync feature disabled; skip PAYMENT queue'
+    );
+    return;
+  }
+  try {
+    const syncId = await queueXeroSync({
+      paymentLinkId: params.paymentLinkId,
+      organizationId: params.organizationId,
+      syncType: 'PAYMENT',
+    });
+    logger.info(
+      {
+        syncId,
+        paymentLinkId: params.paymentLinkId,
+        organizationId: params.organizationId,
+        source: params.source,
+      },
+      'Xero PAYMENT sync queued after PAYMENT_CONFIRMED'
+    );
+  } catch (e: unknown) {
+    logger.error(
+      {
+        paymentLinkId: params.paymentLinkId,
+        organizationId: params.organizationId,
+        source: params.source,
+        error: e instanceof Error ? e.message : String(e),
+      },
+      'Failed to queue Xero PAYMENT sync'
+    );
+  }
+}
+
 export async function queueXeroSync(params: QueueSyncJobParams): Promise<string> {
   const { paymentLinkId, organizationId, syncType = 'PAYMENT', priority = 0 } = params;
 
+  const existing = await prisma.xero_syncs.findUnique({
+    where: {
+      xero_syncs_payment_link_sync_type_unique: {
+        payment_link_id: paymentLinkId,
+        sync_type: syncType,
+      },
+    },
+    select: { id: true, status: true, xero_invoice_id: true, xero_payment_id: true },
+  });
+
+  if (existing?.status === 'SUCCESS') {
+    logger.info(
+      {
+        syncId: existing.id,
+        paymentLinkId,
+        organizationId,
+        syncType,
+        xero_invoice_id: existing.xero_invoice_id,
+        xero_payment_id: existing.xero_payment_id,
+      },
+      'Xero sync already SUCCESS; not resetting to PENDING'
+    );
+    return existing.id;
+  }
+
   logger.info(
-    { paymentLinkId, organizationId },
-    'Queuing Xero sync for payment'
+    { paymentLinkId, organizationId, syncType },
+    'Queuing Xero sync job'
   );
 
   // Upsert: create if doesn't exist, or requeue if not SUCCESS

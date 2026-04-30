@@ -174,15 +174,34 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
       customerEmail: paymentLink.customer_email || undefined,
       invoiceReference: paymentLink.invoice_reference || undefined,
     });
+    const invoiceId = invoiceResult.invoiceId?.trim();
+    const invoiceNumber = invoiceResult.invoiceNumber?.trim();
+    if (!invoiceId || !invoiceNumber) {
+      const msg = 'Xero createInvoices did not return a usable invoice ID and invoice number';
+      logger.error(
+        { paymentLinkId, organizationId, invoiceResult },
+        msg
+      );
+      await upsertSyncStatus({
+        paymentLinkId,
+        syncType: 'INVOICE',
+        organizationId,
+        status: 'FAILED',
+        errorMessage: msg,
+      });
+      return { success: false, error: msg };
+    }
     await upsertSyncStatus({
       paymentLinkId,
       syncType: 'INVOICE',
       organizationId,
       status: 'SUCCESS',
-      invoiceId: invoiceResult.invoiceId,
-      invoiceNumber: invoiceResult.invoiceNumber,
+      invoiceId,
+      invoiceNumber,
       payload: {
         invoice: invoiceResult as unknown as Prisma.InputJsonValue,
+        xeroRawInvoicesResponse: (invoiceResult as { xeroRawInvoicesResponse?: unknown })
+          .xeroRawInvoicesResponse ?? null,
       } as Prisma.InputJsonValue,
     });
     await prisma.payment_links.updateMany({
@@ -191,14 +210,14 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
         xero_invoice_number: null,
       },
       data: {
-        xero_invoice_number: invoiceResult.invoiceNumber,
+        xero_invoice_number: invoiceNumber,
         updated_at: new Date(),
       },
     });
     return {
       success: true,
-      invoiceId: invoiceResult.invoiceId,
-      invoiceNumber: invoiceResult.invoiceNumber,
+      invoiceId,
+      invoiceNumber,
     };
   } catch (error: unknown) {
     const errorMessage = formatXeroSyncError(error);
@@ -274,8 +293,9 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
       { payment_method: paymentEvent.payment_method, source_type: paymentEvent.source_type },
       paymentLink.payment_method
     );
-    const paymentToken = paymentEvent.metadata
-      ? ((paymentEvent.metadata as Record<string, unknown>).token_type as TokenType | undefined)
+    const meta = paymentEvent.metadata as Record<string, unknown> | null | undefined;
+    const paymentToken = meta
+      ? ((meta.token_type ?? meta.tokenType) as TokenType | undefined)
       : undefined;
     const transactionId =
       paymentEvent.stripe_payment_intent_id ||
@@ -311,13 +331,27 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
       cryptoAmount,
     });
 
+    const paymentId = paymentResult.paymentId?.trim();
+    if (!paymentId) {
+      const msg = 'Xero createPayment did not return a payment ID';
+      logger.error({ paymentLinkId, organizationId, paymentResult }, msg);
+      await upsertSyncStatus({
+        paymentLinkId,
+        syncType: 'PAYMENT',
+        organizationId,
+        status: 'FAILED',
+        errorMessage: msg,
+      });
+      return { success: false, error: msg };
+    }
+
     await upsertSyncStatus({
       paymentLinkId,
       syncType: 'PAYMENT',
       organizationId,
       status: 'SUCCESS',
       invoiceId: invoiceSync.xero_invoice_id,
-      paymentId: paymentResult.paymentId,
+      paymentId,
       payload: {
         payment: paymentResult as unknown as Prisma.InputJsonValue,
       } as Prisma.InputJsonValue,
@@ -326,7 +360,7 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
     return {
       success: true,
       invoiceId: invoiceSync.xero_invoice_id,
-      paymentId: paymentResult.paymentId,
+      paymentId,
       narration: paymentResult.narration,
     };
   } catch (error: unknown) {

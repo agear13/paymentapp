@@ -7,6 +7,7 @@
 import { getXeroClient } from './client';
 import { getActiveConnection } from './connection-service';
 import { prisma } from '@/lib/server/prisma';
+import { loggers } from '@/lib/logger';
 import { Payment } from 'xero-node';
 import type { TokenType } from '@/lib/hedera/constants';
 import { fetchXeroAccounts } from './accounts-service';
@@ -139,15 +140,31 @@ export async function recordXeroPayment(
 
   const createdPayment = response.body.payments[0];
 
-  // Log the narration for audit trail
-  console.log('Payment recorded in Xero:', {
-    paymentId: createdPayment.paymentID,
+  const paymentId = createdPayment.paymentID?.trim();
+  if (!paymentId) {
+    loggers.xero.error(
+      'createPayment: missing paymentID in Xero response',
+      undefined,
+      {
+        organizationId,
+        invoiceId,
+        xeroPayments: response.body.payments,
+      }
+    );
+    throw new Error('Xero did not return a valid payment ID');
+  }
+
+  loggers.xero.info('Xero payment recorded', {
+    organizationId,
+    invoiceId,
+    paymentId,
     clearingAccount: clearingAccountId,
     narration,
+    amount: createdPayment.amount,
   });
 
   return {
-    paymentId: createdPayment.paymentID!,
+    paymentId,
     status: String(createdPayment.status!),
     amount: createdPayment.amount!,
     narration,

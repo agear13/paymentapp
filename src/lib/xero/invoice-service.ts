@@ -26,6 +26,8 @@ export interface InvoiceCreationResult {
   invoiceNumber: string;
   status: string;
   total: number;
+  /** Raw Xero API invoices payload (for audit / debugging). */
+  xeroRawInvoicesResponse?: unknown;
 }
 
 function roundXeroCurrencyRate(rate: number): number {
@@ -226,11 +228,37 @@ export async function createXeroInvoice(
 
   const createdInvoice = response.body.invoices[0];
 
+  const invoiceId = createdInvoice.invoiceID?.trim();
+  const invoiceNumber = createdInvoice.invoiceNumber?.trim();
+  if (!invoiceId || !invoiceNumber) {
+    loggers.xero.error(
+      {
+        paymentLinkId,
+        organizationId,
+        xeroResponseInvoices: response.body.invoices,
+      },
+      'createInvoices: missing invoiceID or invoiceNumber in Xero response'
+    );
+    throw new Error('Xero did not return a valid invoice ID and number');
+  }
+
+  loggers.xero.info(
+    {
+      paymentLinkId,
+      organizationId,
+      invoiceId,
+      invoiceNumber,
+      status: createdInvoice.status,
+    },
+    'Xero ACCREC created'
+  );
+
   return {
-    invoiceId: createdInvoice.invoiceID!,
-    invoiceNumber: createdInvoice.invoiceNumber!,
+    invoiceId,
+    invoiceNumber,
     status: String(createdInvoice.status!),
     total: createdInvoice.total!,
+    xeroRawInvoicesResponse: response.body.invoices,
   };
 }
 

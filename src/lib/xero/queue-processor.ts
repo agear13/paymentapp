@@ -98,6 +98,18 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
           'Executing Xero sync'
         );
 
+        logger.info(
+          {
+            syncId: job.id,
+            syncType: job.sync_type,
+            paymentLinkId: job.payment_link_id,
+            organizationId,
+            requestPayload: job.request_payload,
+            retryCount: job.retry_count,
+          },
+          'Xero sync job: invoking orchestration'
+        );
+
         const result =
           job.sync_type === 'INVOICE'
             ? await syncInvoiceToXero({
@@ -108,6 +120,20 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
                 paymentLinkId: job.payment_link_id,
                 organizationId,
               });
+
+        logger.info(
+          {
+            syncId: job.id,
+            syncType: job.sync_type,
+            paymentLinkId: job.payment_link_id,
+            success: result.success,
+            invoiceId: result.invoiceId,
+            invoiceNumber: result.invoiceNumber,
+            paymentId: result.paymentId,
+            error: result.error,
+          },
+          'Xero sync job: orchestration finished'
+        );
 
         if (result.success) {
           // Mark as successful

@@ -62,6 +62,7 @@ export {
 
 export {
   queueXeroSync,
+  queueXeroPaymentSyncIfEnabled,
   getPendingSyncJobs,
   markSyncSuccess,
   markSyncFailed,

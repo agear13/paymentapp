@@ -441,6 +441,7 @@ async function updatePaymentLinkWithTransaction(
             normalized_transaction_id: normalizedTxId,
             amount: transaction.amount,
             tokenType,
+            token_type: tokenType,
             sender: transaction.sender,
             // transaction.timestamp is set from tx.consensus_timestamp in parseAndMatchTransaction (line 275)
             consensus_timestamp: transaction.timestamp,
@@ -570,6 +571,14 @@ async function updatePaymentLinkWithTransaction(
           },
         }
       );
+
+      // Align with Stripe: enqueue Xero PAYMENT sync on PAYMENT_CONFIRMED (was missing — only confirmHederaPayment queued, and that path is unused for auto-detect).
+      const { queueXeroPaymentSyncIfEnabled } = await import('@/lib/xero/queue-service');
+      await queueXeroPaymentSyncIfEnabled({
+        paymentLinkId,
+        organizationId: paymentLink.organization_id,
+        source: 'hedera-transaction-checker',
+      });
 
       return { success: true };
     } catch (err: unknown) {

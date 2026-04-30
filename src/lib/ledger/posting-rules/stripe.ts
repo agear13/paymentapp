@@ -7,6 +7,7 @@
  * 2. DR Processor Fee Expense (6100), CR Stripe Clearing (1050) - Fee amount
  */
 
+import { Prisma } from '@prisma/client';
 import { LedgerEntryService, JournalEntry } from '../ledger-entry-service';
 import { LEDGER_ACCOUNTS } from '../account-mapping';
 import { provisionStripeLedgerAccounts } from '../ledger-account-provisioner';
@@ -38,7 +39,8 @@ export interface StripeSettlementParams {
  * @throws Error if posting fails
  */
 export async function postStripeSettlement(
-  params: StripeSettlementParams
+  params: StripeSettlementParams,
+  tx: Prisma.TransactionClient,
 ): Promise<void> {
   const {
     paymentLinkId,
@@ -98,6 +100,7 @@ export async function postStripeSettlement(
     organizationId,
     idempotencyKey: `stripe-payment-${stripePaymentIntentId}`,
     correlationId,
+    tx,
   });
 
   loggers.ledger.info(
@@ -141,6 +144,7 @@ export async function postStripeSettlement(
       organizationId,
       idempotencyKey: `stripe-fee-${stripePaymentIntentId}`,
       correlationId,
+      tx,
     });
 
     loggers.ledger.info(
@@ -271,7 +275,8 @@ export interface StripeRefundReversalParams {
  * Idempotency: refundId preferred (stripe-refund-${refundId}), else stripe-refund-${stripeEventId}. Entries use -0/-1 suffix.
  */
 export async function postStripeRefundReversal(
-  params: StripeRefundReversalParams
+  params: StripeRefundReversalParams,
+  tx?: Prisma.TransactionClient,
 ): Promise<void> {
   const {
     paymentLinkId,
@@ -350,6 +355,7 @@ export async function postStripeRefundReversal(
     organizationId,
     idempotencyKey: keyBase,
     correlationId,
+    tx,
   });
 
   loggers.ledger.info(

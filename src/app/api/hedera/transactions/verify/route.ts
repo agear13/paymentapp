@@ -485,6 +485,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const { queueXeroPaymentSyncIfEnabled } = await import('@/lib/xero/queue-service');
+    await queueXeroPaymentSyncIfEnabled({
+      paymentLinkId: validated.paymentLinkId,
+      organizationId: paymentLink.organization_id,
+      source: 'hedera-manual-verify-api',
+    });
+
     const duration = Date.now() - startTime;
 
     loggers.hedera.info('Payment manually verified and persisted', {
