@@ -283,31 +283,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   mode = 'create',
   editPaymentLink = null,
 }) => {
-  const { toast } = useToast();
-  const [internalOpen, setInternalOpen] = React.useState(false);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [descriptionLength, setDescriptionLength] = React.useState(0);
-  const [merchantSettings, setMerchantSettings] = React.useState<MerchantSettings | null>(null);
-  const [merchantSettingsLoaded, setMerchantSettingsLoaded] = React.useState(false);
-  const [guardrail, setGuardrail] = React.useState<{
-    kind: PaymentLinksGuardrailKind;
-    setup: PaymentLinkRailSetupStatus;
-  } | null>(null);
-
-  // Use controlled or internal state
-  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
-  const setOpen = controlledOnOpenChange || setInternalOpen;
-  const isOpenControlled = controlledOpen !== undefined;
-  const showTrigger = !isOpenControlled || trigger != null;
-  const wiseTransferLocked =
-    mode === 'edit' && Boolean(editPaymentLink?.wiseTransferId);
-
-  const attachmentFileInputRef = React.useRef<HTMLInputElement>(null);
-  const [attachmentUploading, setAttachmentUploading] = React.useState(false);
-  const initialAttachmentRef = React.useRef<PaymentLinkAttachmentDraft | null>(null);
-  const wasOpenRef = React.useRef(false);
-  const invoiceRefSuggestionRequestedRef = React.useRef(false);
-
+  // useForm MUST run before any other hook or logic that references `form` (TDZ-safe: first hooks in this component).
   const form = useForm<CreatePaymentLinkFormValues>({
     resolver: zodResolver(createPaymentLinkFormSchema),
     defaultValues: {
@@ -349,6 +325,31 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
   const collectionMode = form.watch('collectionMode');
   const invoiceAttachment = form.watch('attachment');
+
+  const { toast } = useToast();
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [descriptionLength, setDescriptionLength] = React.useState(0);
+  const [merchantSettings, setMerchantSettings] = React.useState<MerchantSettings | null>(null);
+  const [merchantSettingsLoaded, setMerchantSettingsLoaded] = React.useState(false);
+  const [guardrail, setGuardrail] = React.useState<{
+    kind: PaymentLinksGuardrailKind;
+    setup: PaymentLinkRailSetupStatus;
+  } | null>(null);
+
+  // Use controlled or internal state
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = controlledOnOpenChange || setInternalOpen;
+  const isOpenControlled = controlledOpen !== undefined;
+  const showTrigger = !isOpenControlled || trigger != null;
+  const wiseTransferLocked =
+    mode === 'edit' && Boolean(editPaymentLink?.wiseTransferId);
+
+  const attachmentFileInputRef = React.useRef<HTMLInputElement>(null);
+  const [attachmentUploading, setAttachmentUploading] = React.useState(false);
+  const initialAttachmentRef = React.useRef<PaymentLinkAttachmentDraft | null>(null);
+  const wasOpenRef = React.useRef(false);
+  const invoiceRefSuggestionRequestedRef = React.useRef(false);
 
   // Fetch merchant settings when dialog opens
   React.useEffect(() => {
