@@ -36,6 +36,11 @@ export interface PostingParams {
   correlationId?: string;
   /** Pass the enclosing Prisma transaction client to make ledger writes atomic with the caller's transaction. */
   tx?: Prisma.TransactionClient;
+  /**
+   * When set, skips `ledger_entries.count` idempotency check on `db` (caller verified with root client).
+   * Shortens interactive transactions (e.g. Stripe refund under PgBouncer).
+   */
+  ledgerIdempotencyPrecheck?: 'absent' | 'exists';
 }
 
 /**
@@ -77,7 +82,8 @@ export class LedgerEntryService {
    * @throws Error if validation fails
    */
   async postJournalEntries(params: PostingParams): Promise<PostingResult> {
-    const { entries, paymentLinkId, organizationId, idempotencyKey, correlationId, tx } = params;
+    const { entries, paymentLinkId, organizationId, idempotencyKey, correlationId, tx, ledgerIdempotencyPrecheck } =
+      params;
     const db = tx ?? prisma;
 
     loggers.ledger.info(
@@ -91,7 +97,14 @@ export class LedgerEntryService {
 
     // 1. Check idempotency - has this batch already been posted? (first entry key)
     const firstEntryKey = `${idempotencyKey}-0`;
-    const alreadyPosted = await this.checkIdempotency(firstEntryKey, db);
+    let alreadyPosted: boolean;
+    if (ledgerIdempotencyPrecheck === 'exists') {
+      alreadyPosted = true;
+    } else if (ledgerIdempotencyPrecheck === 'absent') {
+      alreadyPosted = false;
+    } else {
+      alreadyPosted = await this.checkIdempotency(firstEntryKey, db);
+    }
     if (alreadyPosted) {
       loggers.ledger.info(
         { idempotencyKey, correlationId },

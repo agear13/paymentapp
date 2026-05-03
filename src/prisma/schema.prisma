@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_DATABASE_URL")
+  directUrl = env("DATABASE_URL")
 }
 
 model audit_logs {
@@ -182,6 +182,7 @@ model organizations {
   // Manual payouts (Option B)
   payout_methods               payout_methods[]
   payout_batches               payout_batches[]
+  recurring_templates          recurring_templates[]
 }
 
 model user_organizations {
@@ -197,6 +198,30 @@ model user_organizations {
   @@index([user_id])
   @@index([organization_id])
   @@index([role])
+}
+
+/// Merchant-defined schedule that creates a new OPEN payment link (invoice) each run.
+model recurring_templates {
+  id                     String                    @id @default(uuid()) @db.Uuid
+  organization_id      String                    @db.Uuid
+  amount                 Decimal                   @db.Decimal(18, 2)
+  currency               String                    @db.Char(3)
+  description            String                    @db.Text
+  customer_email         String?                   @db.VarChar(255)
+  recurrence_interval    RecurringTemplateInterval
+  interval_count         Int                       @default(1)
+  next_run_at            DateTime                  @db.Timestamptz(6)
+  end_date               DateTime?                 @db.Date
+  status                 RecurringTemplateStatus   @default(ACTIVE)
+  /// Calendar days after invoice_date for due_date; null = no due date on generated links.
+  due_days_after_invoice Int?
+  last_run_at            DateTime?                 @db.Timestamptz(6)
+  created_at             DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                  @updatedAt @db.Timestamptz(6)
+  organizations          organizations             @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@index([status, next_run_at])
+  @@index([organization_id])
 }
 
 model payment_events {
@@ -652,6 +677,17 @@ enum PayoutBatchStatus {
 enum CommissionObligationLineStatus {
   POSTED
   PAID
+}
+
+enum RecurringTemplateInterval {
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum RecurringTemplateStatus {
+  ACTIVE
+  PAUSED
 }
 
 // ============================================================================

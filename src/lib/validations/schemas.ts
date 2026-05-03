@@ -387,6 +387,63 @@ export const UpdatePaymentLinkSchema = z
   })
   .strict();
 
+// ============================================================================
+// RECURRING INVOICE TEMPLATES
+// ============================================================================
+
+export const RecurringTemplateIntervalApiSchema = z.enum(['weekly', 'monthly', 'custom']);
+
+export const CreateRecurringTemplateSchema = z.object({
+  organizationId: uuidSchema,
+  amount: z
+    .number()
+    .positive('Amount must be positive')
+    .multipleOf(0.01, 'Amount must have at most 2 decimal places'),
+  currency: z
+    .string()
+    .min(3)
+    .max(3)
+    .transform((c) => c.trim().toUpperCase())
+    .pipe(currencyCodeSchema),
+  description: z
+    .string()
+    .min(1, 'Description is required')
+    .max(200, 'Description must not exceed 200 characters'),
+  customerEmail: z
+    .string()
+    .email('Invalid email address')
+    .max(255)
+    .optional()
+    .or(z.literal(''))
+    .transform((val) => (val && val.trim() ? val.trim() : undefined)),
+  interval: RecurringTemplateIntervalApiSchema,
+  intervalCount: z.coerce.number().int().min(1).max(366).default(1),
+  nextRunAt: z.coerce.date(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .nullable()
+    .transform((v) => (v === '' || v == null ? null : v)),
+  dueDaysAfterInvoice: z.coerce.number().int().min(0).max(3650).optional().nullable(),
+});
+
+export const PatchRecurringTemplateSchema = z
+  .object({
+    status: z.enum(['active', 'paused']).optional(),
+    nextRunAt: z.coerce.date().optional(),
+    description: z.string().min(1).max(200).optional(),
+    interval: RecurringTemplateIntervalApiSchema.optional(),
+    intervalCount: z.coerce.number().int().min(1).max(366).optional(),
+    endDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    dueDaysAfterInvoice: z.coerce.number().int().min(0).max(3650).nullable().optional(),
+  })
+  .strict();
+
 /** Payer-submitted manual crypto payment notice (public, no auth). */
 export const PublicCryptoConfirmationSubmitSchema = z.object({
   payerNetwork: z.string().min(1).max(255),

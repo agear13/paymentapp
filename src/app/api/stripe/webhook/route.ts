@@ -23,6 +23,7 @@ import {
   extractStripeLinkage,
 } from '@/lib/webhooks/stripe-audit';
 import { postStripeSettlement, calculateStripeFee, postStripeRefundReversal } from '@/lib/ledger/posting-rules/stripe';
+import { provisionStripeLedgerAccounts } from '@/lib/ledger/ledger-account-provisioner';
 import { applyRevenueShareSplits } from '@/lib/referrals/commission-posting';
 import { validatePostingBalance } from '@/lib/ledger/balance-validation';
 import {
@@ -569,6 +570,13 @@ async function handleRefundObjectEvent(event: Stripe.Event, correlationId: strin
     return;
   }
   const paymentLinkId = paymentEventForLink.payment_link_id;
+  if (!paymentLinkId) {
+    log.warn(
+      { correlationId, eventId: event.id, refundId, paymentIntentId: piId },
+      'Refund event: PAYMENT_CONFIRMED row has no payment_link_id'
+    );
+    return;
+  }
   const refundCorrelationId = `stripe_refund_${refundId}`;
 
   const existingRefund = await prisma.payment_events.findFirst({
@@ -590,65 +598,84 @@ async function handleRefundObjectEvent(event: Stripe.Event, correlationId: strin
   const amountDollarsStr = amountDollars.toFixed(2);
   const currencyUpper = currency.toUpperCase();
 
-  await prisma.$transaction(async (tx) => {
-    await tx.payment_events.create({
-      data: {
-        payment_link_id: paymentLinkId,
-        event_type: 'REFUND_CONFIRMED',
-        payment_method: 'STRIPE',
-        stripe_event_id: stripeEventId,
-        stripe_payment_intent_id: piId,
-        amount_received: amountDollars,
-        currency_received: currencyUpper,
-        correlation_id: refundCorrelationId,
-        metadata: {
-          refundId,
-          refundStatus: refund.status,
-          refundEventType: event.type,
-        },
-      },
-    });
-
-    const [paidAgg, refundAgg] = await Promise.all([
-      tx.payment_events.aggregate({
-        where: { payment_link_id: paymentLinkId, event_type: 'PAYMENT_CONFIRMED' },
-        _sum: { amount_received: true },
-      }),
-      tx.payment_events.aggregate({
-        where: { payment_link_id: paymentLinkId, event_type: 'REFUND_CONFIRMED' },
-        _sum: { amount_received: true },
-      }),
-    ]);
-    const totalPaid = Number(paidAgg._sum?.amount_received ?? 0);
-    const totalRefunded = Number(refundAgg._sum?.amount_received ?? 0);
-    const newStatus: 'PAID' | 'PARTIALLY_REFUNDED' | 'REFUNDED' =
-      totalPaid > 0 && totalRefunded >= totalPaid
-        ? 'REFUNDED'
-        : totalRefunded > 0
-          ? 'PARTIALLY_REFUNDED'
-          : 'PAID';
-    await tx.payment_links.update({
-      where: { id: paymentLinkId },
-      data: { status: newStatus, updated_at: new Date() },
-    });
-  });
-
-  const paymentLink = await prisma.payment_links.findUnique({
+  const paymentLinkRow = await prisma.payment_links.findUnique({
     where: { id: paymentLinkId },
     select: { organization_id: true },
   });
-  if (paymentLink) {
-    await postStripeRefundReversal({
-      paymentLinkId,
-      organizationId: paymentLink.organization_id,
-      stripePaymentIntentId: piId,
-      refundAmountDollars: amountDollarsStr,
-      currency: currencyUpper,
-      refundId,
-      stripeEventId,
-      correlationId,
-    });
+  if (!paymentLinkRow) {
+    log.warn({ correlationId, eventId: event.id, refundId, paymentLinkId }, 'Refund event: payment link not found');
+    return;
   }
+  const organizationId = paymentLinkRow.organization_id;
+
+  const paidAgg = await prisma.payment_events.aggregate({
+    where: { payment_link_id: paymentLinkId, event_type: 'PAYMENT_CONFIRMED' },
+    _sum: { amount_received: true },
+  });
+  const refundAgg = await prisma.payment_events.aggregate({
+    where: { payment_link_id: paymentLinkId, event_type: 'REFUND_CONFIRMED' },
+    _sum: { amount_received: true },
+  });
+  const totalPaid = Number(paidAgg._sum?.amount_received ?? 0);
+  const totalRefundedBefore = Number(refundAgg._sum?.amount_received ?? 0);
+  const totalRefundedAfter = totalRefundedBefore + amountDollars;
+  const newStatus: 'PAID' | 'PARTIALLY_REFUNDED' | 'REFUNDED' =
+    totalPaid > 0 && totalRefundedAfter >= totalPaid
+      ? 'REFUNDED'
+      : totalRefundedAfter > 0
+        ? 'PARTIALLY_REFUNDED'
+        : 'PAID';
+
+  const ledgerKeyBase = refundId ? `stripe-refund-${refundId}` : `stripe-refund-${stripeEventId}`;
+  const firstLedgerKey = `${ledgerKeyBase}-0`;
+  const ledgerEntryExists =
+    (await prisma.ledger_entries.count({ where: { idempotency_key: firstLedgerKey } })) > 0;
+
+  await provisionStripeLedgerAccounts(prisma, organizationId, correlationId);
+
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.payment_events.create({
+        data: {
+          payment_link_id: paymentLinkId,
+          event_type: 'REFUND_CONFIRMED',
+          payment_method: 'STRIPE',
+          stripe_event_id: stripeEventId,
+          stripe_payment_intent_id: piId,
+          amount_received: amountDollars,
+          currency_received: currencyUpper,
+          correlation_id: refundCorrelationId,
+          metadata: {
+            refundId,
+            refundStatus: refund.status,
+            refundEventType: event.type,
+          },
+        },
+      });
+
+      await tx.payment_links.update({
+        where: { id: paymentLinkId },
+        data: { status: newStatus, updated_at: new Date() },
+      });
+
+      await postStripeRefundReversal(
+        {
+          paymentLinkId,
+          organizationId,
+          stripePaymentIntentId: piId,
+          refundAmountDollars: amountDollarsStr,
+          currency: currencyUpper,
+          refundId,
+          stripeEventId,
+          correlationId,
+          stripeAccountsProvisioned: true,
+          ledgerIdempotencyPrecheck: ledgerEntryExists ? 'exists' : 'absent',
+        },
+        tx,
+      );
+    },
+    { timeout: 15000 },
+  );
 
   log.info(
     {

@@ -3,6 +3,7 @@
  * Double-entry: DR Wise Clearing (1055), CR Accounts Receivable (1200)
  */
 
+import { Prisma } from '@prisma/client';
 import { LedgerEntryService, JournalEntry } from '../ledger-entry-service';
 import { LEDGER_ACCOUNTS } from '../account-mapping';
 import { provisionWiseLedgerAccounts } from '../ledger-account-provisioner';
@@ -18,7 +19,10 @@ export interface WiseSettlementParams {
   correlationId?: string;
 }
 
-export async function postWiseSettlement(params: WiseSettlementParams): Promise<void> {
+export async function postWiseSettlement(
+  params: WiseSettlementParams,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
   const {
     paymentLinkId,
     organizationId,
@@ -61,6 +65,7 @@ export async function postWiseSettlement(params: WiseSettlementParams): Promise<
     organizationId,
     idempotencyKey: `wise-transfer-${wiseTransferId}`,
     correlationId,
+    tx,
   });
 
   loggers.ledger.info(

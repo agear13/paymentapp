@@ -152,7 +152,12 @@ function validateEnv() {
     );
     return envSchema.parse({ ...buildTimePlaceholderRecord(), ...process.env });
   }
-  
+
+  if (process.env.TEST_MODE === 'true' && process.env.NODE_ENV !== 'production') {
+    console.warn('TEST_MODE=true: skipping env validation for local test endpoints');
+    return buildTimePlaceholderRecord() as z.infer<typeof envSchema>;
+  }
+
   try {
     return envSchema.parse(process.env);
   } catch (error) {
@@ -169,8 +174,13 @@ function validateEnv() {
   }
 }
 
+console.log("TEST_MODE ACTIVE:", process.env.TEST_MODE);
+
 // Validated environment variables
-const env = validateEnv();
+const env =
+  process.env.TEST_MODE === 'true' && process.env.NODE_ENV !== 'production'
+    ? (buildTimePlaceholderRecord() as z.infer<typeof envSchema>)
+    : validateEnv();
 
 // Derived configuration
 export const config = {

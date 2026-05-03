@@ -13,6 +13,7 @@
  * Amount is in invoice currency (converted via FX rate)
  */
 
+import { Prisma } from '@prisma/client';
 import { LedgerEntryService, JournalEntry } from '../ledger-entry-service';
 import {
   getCryptoClearingAccountCode,
@@ -60,7 +61,8 @@ export interface HederaSettlementParams {
  * @throws Error if posting fails or wrong clearing account used
  */
 export async function postHederaSettlement(
-  params: HederaSettlementParams
+  params: HederaSettlementParams,
+  tx: Prisma.TransactionClient,
 ): Promise<void> {
   const {
     paymentLinkId,
@@ -137,6 +139,7 @@ export async function postHederaSettlement(
     paymentLinkId,
     organizationId,
     idempotencyKey: idempotencyKey || `hedera-settlement-${transactionId}`,
+    tx,
   });
 
   // Log the posting for audit
@@ -201,12 +204,16 @@ function buildHederaDescription(params: {
  * Convenience wrapper for use with database models
  */
 export async function postHederaSettlementFromPaymentToken(
-  params: Omit<HederaSettlementParams, 'tokenType'> & { paymentToken: PaymentToken }
+  params: Omit<HederaSettlementParams, 'tokenType'> & { paymentToken: PaymentToken },
+  tx: Prisma.TransactionClient,
 ): Promise<void> {
-  return postHederaSettlement({
-    ...params,
-    tokenType: params.paymentToken as TokenType,
-  });
+  return postHederaSettlement(
+    {
+      ...params,
+      tokenType: params.paymentToken as TokenType,
+    },
+    tx,
+  );
 }
 
 /**

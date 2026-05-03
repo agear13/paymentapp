@@ -5,7 +5,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
@@ -18,13 +17,12 @@ import {
   PaymentLinkFiltersSchema,
 } from '@/lib/validations/schemas';
 import { generateUniqueShortCode } from '@/lib/server/short-code';
-import { generateQRCodeDataUrl } from '@/lib/qr-code';
-import { getFxService, type Currency } from '@/lib/fx';
 import { buildWisePaymentContext, getMerchantWiseConfig } from '@/lib/payments/wise';
 import { assertPilotDealOwnedByUser } from '@/lib/deal-network-demo/pilot-deal-invoice-link.server';
 import { derivePaidAtFromEvents } from '@/lib/payments/paid-at';
-import config from '@/lib/config/env';
-import { queueXeroSync } from '@/lib/xero/queue-service';
+import { insertPaymentLinkInTransaction } from '@/lib/payment-links/create-payment-link-in-tx';
+import { normalizeInvoiceReference } from '@/lib/payment-links/invoice-reference';
+import { runPaymentLinkPostCreateEffects } from '@/lib/payment-links/payment-link-post-create';
 
 /** FX summary for list view (lightweight) */
 export interface FxSummary {
@@ -32,36 +30,6 @@ export interface FxSummary {
   hasSettlementSnapshot: boolean;
   settlementRate: number | null;
   settlementToken: string | null;
-}
-
-const AUTO_INVOICE_REFERENCE_PREFIX = 'INV-';
-const AUTO_INVOICE_REFERENCE_PAD_LENGTH = 4;
-
-function normalizeInvoiceReference(value: string | null | undefined): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length ? trimmed : null;
-}
-
-function formatAutoInvoiceReference(sequence: number): string {
-  return `${AUTO_INVOICE_REFERENCE_PREFIX}${String(sequence).padStart(
-    AUTO_INVOICE_REFERENCE_PAD_LENGTH,
-    '0'
-  )}`;
-}
-
-async function getNextInvoiceReferenceSequence(
-  tx: Prisma.TransactionClient,
-  organizationId: string
-): Promise<number> {
-  const rows = await tx.$queryRaw<Array<{ max_sequence: number }>>`
-    SELECT COALESCE(MAX((substring(invoice_reference from '^INV-([0-9]+)$'))::int), 0) AS max_sequence
-    FROM payment_links
-    WHERE organization_id = ${organizationId}::uuid
-      AND invoice_reference ~ '^INV-[0-9]+$'
-  `;
-  const currentMax = Number(rows[0]?.max_sequence ?? 0);
-  return currentMax + 1;
 }
 
 function isSerializationRetryError(error: unknown): boolean {
@@ -410,153 +378,24 @@ export async function POST(request: NextRequest) {
     let paymentLink: Awaited<ReturnType<typeof prisma.payment_links.create>>;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        paymentLink = await prisma.$transaction(async (tx) => {
-          const now = new Date();
-          let invoiceReferenceToStore = requestedInvoiceReference;
-          if (!invoiceReferenceToStore) {
-            const nextSequence = await getNextInvoiceReferenceSequence(tx, dbOrgId);
-            invoiceReferenceToStore = formatAutoInvoiceReference(nextSequence);
-          }
-
-          const duplicateInvoiceReference = await tx.payment_links.findFirst({
-            where: {
-              organization_id: dbOrgId,
-              invoice_reference: invoiceReferenceToStore,
-            },
-            select: { id: true },
-          });
-          if (duplicateInvoiceReference) {
-            throw new Error(
-              `DUPLICATE_INVOICE_REFERENCE:${invoiceReferenceToStore}`
-            );
-          }
-
-      const linkId = randomUUID();
-
-      const hederaCheckoutMode =
-        !invoiceOnly && resolvedPaymentMethod === 'HEDERA'
-          ? validatedData.hederaCheckoutMode ?? 'INTERACTIVE'
-          : null;
-
-      const isCrypto = !invoiceOnly && resolvedPaymentMethod === 'CRYPTO';
-      const isManualBank = !invoiceOnly && resolvedPaymentMethod === 'MANUAL_BANK';
-
-      const linkCreateData: Record<string, unknown> = {
-          id: linkId,
-          organization_id: dbOrgId,
-          short_code: shortCode,
-          status: 'OPEN',
-          payment_method: resolvedPaymentMethod,
-          amount: validatedData.amount,
-          currency: effectiveInvoiceCurrency,
-          invoice_currency: effectiveInvoiceCurrency,
-          description: validatedData.description,
-          invoice_reference: invoiceReferenceToStore,
-          invoice_date: validatedData.invoiceDate
-            ? new Date(validatedData.invoiceDate as string)
-            : now,
-          customer_email: validatedData.customerEmail || null,
-          customer_name: validatedData.customerName || null,
-          customer_phone: validatedData.customerPhone || null,
-          due_date: validatedData.dueDate ? new Date(validatedData.dueDate as string) : null,
-          expires_at: validatedData.expiresAt ? new Date(validatedData.expiresAt as string) : null,
-          invoice_only_mode: invoiceOnly,
-          hedera_checkout_mode: hederaCheckoutMode,
-          crypto_network: isCrypto ? (validatedData.cryptoNetwork?.trim() ?? null) : null,
-          crypto_address: isCrypto ? (validatedData.cryptoAddress?.trim() ?? null) : null,
-          crypto_currency: isCrypto ? (validatedData.cryptoCurrency?.trim() ?? null) : null,
-          crypto_memo: isCrypto ? (validatedData.cryptoMemo?.trim() || null) : null,
-          crypto_instructions: isCrypto ? (validatedData.cryptoInstructions?.trim() || null) : null,
-          manual_bank_recipient_name: isManualBank
-            ? validatedData.manualBankRecipientName?.trim() ?? null
-            : null,
-          manual_bank_currency: isManualBank
-            ? validatedData.manualBankCurrency?.trim() ?? null
-            : null,
-          manual_bank_destination_type: isManualBank
-            ? validatedData.manualBankDestinationType?.trim() ?? null
-            : null,
-          manual_bank_bank_name: isManualBank ? validatedData.manualBankBankName?.trim() || null : null,
-          manual_bank_account_number: isManualBank
-            ? validatedData.manualBankAccountNumber?.trim() || null
-            : null,
-          manual_bank_iban: isManualBank ? validatedData.manualBankIban?.trim() || null : null,
-          manual_bank_swift_bic: isManualBank ? validatedData.manualBankSwiftBic?.trim() || null : null,
-          manual_bank_routing_sort_code: isManualBank
-            ? validatedData.manualBankRoutingSortCode?.trim() || null
-            : null,
-          manual_bank_wise_reference: isManualBank
-            ? validatedData.manualBankWiseReference?.trim() || null
-            : null,
-          manual_bank_revolut_handle: isManualBank
-            ? validatedData.manualBankRevolutHandle?.trim() || null
-            : null,
-          manual_bank_instructions: isManualBank
-            ? validatedData.manualBankInstructions?.trim() || null
-            : null,
-          attachment_storage_key: validatedData.attachment?.storageKey ?? null,
-          attachment_bucket: validatedData.attachment?.bucket ?? null,
-          attachment_filename: validatedData.attachment?.filename ?? null,
-          attachment_mime_type: validatedData.attachment?.mimeType ?? null,
-          attachment_size_bytes: validatedData.attachment?.sizeBytes ?? null,
-          created_at: now,
-          updated_at: now,
-          wise_status: wiseContext ? 'INSTRUCTIONS_READY' : null,
-          pilot_deal_id: pilotDealIdToStore,
-      };
-
-      const link = await tx.payment_links.create({
-        data: linkCreateData as any,
-      });
-
-      // Create initial payment event
-      await tx.payment_events.create({
-        data: {
-          id: randomUUID(),
-          payment_link_id: link.id,
-          event_type: 'CREATED',
-          pilot_deal_id: pilotDealIdToStore,
-          metadata: {
-            createdBy: user.id,
-          },
-          created_at: now,
-        },
-      });
-
-      if (wiseContext) {
-        await tx.payment_events.create({
-          data: {
-            id: randomUUID(),
-            payment_link_id: link.id,
-            event_type: 'PAYMENT_INITIATED',
-            payment_method: 'WISE',
-            pilot_deal_id: pilotDealIdToStore,
-            metadata: wiseContext.metadata as object,
-            created_at: now,
-          },
-        });
-      }
-
-      // Create audit log
-      await tx.audit_logs.create({
-        data: {
-          id: randomUUID(),
-          organization_id: dbOrgId,
-          user_id: user.id,
-          entity_type: 'PaymentLink',
-          entity_id: link.id,
-          action: 'CREATE',
-          new_values: {
-            shortCode,
-            amount: validatedData.amount.toString(),
-            currency: validatedData.currency,
-          },
-          created_at: now,
-        },
-      });
-
-      return link;
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        paymentLink = await prisma.$transaction(
+          async (tx) =>
+            insertPaymentLinkInTransaction(tx, {
+              organizationId: dbOrgId,
+              shortCode,
+              actorUserId: user.id,
+              validatedData,
+              invoiceOnly,
+              resolvedPaymentMethod,
+              effectiveInvoiceCurrency,
+              requestedInvoiceReference,
+              wiseContext: wiseContext
+                ? { metadata: wiseContext.metadata as Record<string, unknown> }
+                : null,
+              pilotDealIdToStore,
+            }),
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+        );
         break;
       } catch (error) {
         if (isSerializationRetryError(error) && attempt < 2) {
@@ -581,72 +420,15 @@ export async function POST(request: NextRequest) {
       'Payment link created'
     );
 
-    // Capture FX creation snapshots for all supported tokens (fail-open)
-    const paymentLinkId = paymentLink.id;
-    const invoiceCurrency = effectiveInvoiceCurrency;
-    loggers.payment.info(
-      { paymentLinkId, invoiceCurrency },
-      'FX_CREATION_START'
-    );
-    try {
-      const fxService = getFxService();
-      const snapshots = await fxService.captureAllCreationSnapshots(
-        paymentLinkId,
-        invoiceCurrency as Currency
-      );
-      const tokenList = snapshots?.map((s) => (s as { token_type?: string | null }).token_type ?? (s as { tokenType?: string }).tokenType) ?? [];
-      loggers.payment.info(
-        {
-          paymentLinkId,
-          snapshotCount: snapshots?.length ?? 0,
-          tokens: tokenList,
-        },
-        'FX_CREATION_SUCCESS'
-      );
-    } catch (fxError: unknown) {
-      const err = fxError instanceof Error ? fxError : new Error(String(fxError));
-      loggers.payment.error(
-        {
-          paymentLinkId,
-          invoiceCurrency,
-          errName: err.name,
-          errMessage: err.message,
-          stack: err.stack,
-          cause: err.cause != null ? String(err.cause) : undefined,
-        },
-        'FX_CREATION_FAIL'
-      );
-    }
-
-    // Generate QR code (async, don't wait)
-    generateQRCodeDataUrl(shortCode).catch((error) => {
-      loggers.payment.error(
-        { paymentLinkId: paymentLink.id, error },
-        'Failed to generate QR code'
-      );
+    await runPaymentLinkPostCreateEffects({
+      paymentLinkId: paymentLink.id,
+      organizationId: dbOrgId,
+      invoiceCurrency: effectiveInvoiceCurrency,
+      shortCode,
     });
 
     // Same camelCase shape as GET /api/payment-links so clients always get `shortCode` for /pay/{shortCode}
     const createdPayload = transformPaymentLink(paymentLink as unknown as Record<string, unknown>);
-
-    if (config.features.xeroSync && paymentLink.status === 'OPEN') {
-      try {
-        await queueXeroSync({
-          paymentLinkId: paymentLink.id,
-          organizationId: dbOrgId,
-          syncType: 'INVOICE',
-        });
-      } catch (queueError: unknown) {
-        loggers.xero.error(
-          'Failed to queue initial Xero invoice sync',
-          {
-            paymentLinkId: paymentLink.id,
-            organizationId: dbOrgId,
-            error: queueError instanceof Error ? queueError.message : String(queueError),
-          }
-        );
-      }
-    }
 
     return NextResponse.json(
       {

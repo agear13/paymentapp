@@ -267,6 +267,10 @@ export interface StripeRefundReversalParams {
   /** Fallback when refundId not set (e.g. charge.refunded). Keys: stripe-refund-${stripeEventId}-0/1 */
   stripeEventId?: string;
   correlationId?: string;
+  /** When true, caller already awaited `provisionStripeLedgerAccounts` for this org. */
+  stripeAccountsProvisioned?: boolean;
+  /** When set, skips ledger idempotency COUNT on the transaction client (caller checked with root `prisma`). */
+  ledgerIdempotencyPrecheck?: 'absent' | 'exists';
 }
 
 /**
@@ -287,6 +291,8 @@ export async function postStripeRefundReversal(
     refundId,
     stripeEventId,
     correlationId,
+    stripeAccountsProvisioned,
+    ledgerIdempotencyPrecheck,
   } = params;
 
   const keyBase = refundId
@@ -321,7 +327,9 @@ export async function postStripeRefundReversal(
     'Starting Stripe refund reversal posting'
   );
 
-  await provisionStripeLedgerAccounts(prisma, organizationId, correlationId);
+  if (!stripeAccountsProvisioned) {
+    await provisionStripeLedgerAccounts(prisma, organizationId, correlationId);
+  }
 
   const ledgerService = new LedgerEntryService();
   const description = [
@@ -356,6 +364,7 @@ export async function postStripeRefundReversal(
     idempotencyKey: keyBase,
     correlationId,
     tx,
+    ledgerIdempotencyPrecheck,
   });
 
   loggers.ledger.info(

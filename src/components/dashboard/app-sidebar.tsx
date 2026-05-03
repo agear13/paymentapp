@@ -28,6 +28,7 @@ import {
   Layers,
   Building2,
   FileCheck,
+  Repeat,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -59,6 +60,11 @@ const paymentLinksCoreNavItems = [
     title: 'Invoices',
     href: '/dashboard/payment-links',
     icon: LinkIcon,
+  },
+  {
+    title: 'Recurring',
+    href: '/dashboard/recurring-templates',
+    icon: Repeat,
   },
 ];
 
@@ -555,10 +561,12 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
           <SidebarGroupContent>
             <SidebarMenu>
               {mainNavigationItems.map((item) => {
-                const isActive =
-                  item.href === '/dashboard/payment-links'
-                    ? pathname === item.href || pathname.startsWith(`${item.href}/`)
-                    : pathname === item.href;
+                const isNestedHref =
+                  item.href === '/dashboard/payment-links' ||
+                  item.href === '/dashboard/recurring-templates';
+                const isActive = isNestedHref
+                  ? pathname === item.href || pathname.startsWith(`${item.href}/`)
+                  : pathname === item.href;
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={isActive}>
