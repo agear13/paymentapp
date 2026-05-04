@@ -47,6 +47,13 @@ export async function insertPaymentLinkInTransaction(
     pilotDealIdToStore,
   } = input;
 
+  if (typeof dbOrgId !== 'string' || !dbOrgId.trim()) {
+    throw new Error('Missing server org context');
+  }
+  if (validatedData.organizationId !== dbOrgId) {
+    throw new Error('Organization mismatch between CreatePaymentLink payload and insert context');
+  }
+
   const now = new Date();
   let invoiceReferenceToStore = requestedInvoiceReference;
   if (!invoiceReferenceToStore) {

@@ -56,6 +56,11 @@ async function processOneDueTemplate(shortCode: string): Promise<TxResult> {
             return { kind: 'idle' };
           }
 
+          const expectedOrgIdFromRow = template.organization_id;
+          if (!expectedOrgIdFromRow) {
+            throw new Error('Template missing organization_id');
+          }
+
           const now = new Date();
           const currency = template.currency.trim().toUpperCase();
           let dueDateIso: string | undefined;
@@ -69,7 +74,7 @@ async function processOneDueTemplate(shortCode: string): Promise<TxResult> {
           }
 
           const validatedData = CreatePaymentLinkSchema.parse({
-            organizationId: template.organization_id,
+            organizationId: expectedOrgIdFromRow,
             amount: Number(template.amount),
             currency,
             invoiceCurrency: currency,
@@ -79,8 +84,15 @@ async function processOneDueTemplate(shortCode: string): Promise<TxResult> {
             dueDate: dueDateIso,
           });
 
+          if (validatedData.organizationId !== expectedOrgIdFromRow) {
+            throw new Error('Recurring payload org mismatch');
+          }
+          if (template.organization_id !== expectedOrgIdFromRow) {
+            throw new Error('Org mismatch in recurring execution');
+          }
+
           const link = await insertPaymentLinkInTransaction(tx, {
-            organizationId: template.organization_id,
+            organizationId: expectedOrgIdFromRow,
             shortCode,
             actorUserId: null,
             validatedData,
@@ -114,7 +126,7 @@ async function processOneDueTemplate(shortCode: string): Promise<TxResult> {
             kind: 'ok',
             paymentLinkId: link.id,
             shortCode: link.short_code,
-            organizationId: template.organization_id,
+            organizationId: expectedOrgIdFromRow,
             invoiceCurrency: currency,
             invoiceReference: link.invoice_reference,
             recurringTemplateId: template.id,
@@ -160,6 +172,7 @@ export async function runRecurringTemplatesJob(): Promise<{
       }
       loggers.payment.info(
         {
+          msg: 'Recurring invoice generated',
           recurringTemplateId: result.recurringTemplateId,
           paymentLinkId: result.paymentLinkId,
           invoiceReference: result.invoiceReference,
@@ -167,6 +180,15 @@ export async function runRecurringTemplatesJob(): Promise<{
           shortCode: result.shortCode,
         },
         'Recurring invoice generated from template'
+      );
+      loggers.jobs.info(
+        {
+          msg: 'Recurring invoice generated',
+          recurringTemplateId: result.recurringTemplateId,
+          paymentLinkId: result.paymentLinkId,
+          organizationId: result.organizationId,
+        },
+        'Recurring invoice generated'
       );
       try {
         await runPaymentLinkPostCreateEffects({

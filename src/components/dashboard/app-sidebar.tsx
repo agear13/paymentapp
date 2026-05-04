@@ -361,6 +361,20 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
+                    isActive={
+                      pathname === '/dashboard/recurring-templates' ||
+                      pathname.startsWith('/dashboard/recurring-templates/')
+                    }
+                  >
+                    <Link href="/dashboard/recurring-templates">
+                      <Repeat className="size-4" />
+                      <span>Recurring</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
                     isActive={pathname === '/dashboard/settings/merchant' || pathname.startsWith('/dashboard/settings/merchant/')}
                   >
                     <Link href="/dashboard/settings/merchant">
@@ -472,6 +486,20 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                     <Link href="/dashboard/payment-links">
                       <LinkIcon className="size-4" />
                       <span>Invoices</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={
+                      pathname === '/dashboard/recurring-templates' ||
+                      pathname.startsWith('/dashboard/recurring-templates/')
+                    }
+                  >
+                    <Link href="/dashboard/recurring-templates">
+                      <Repeat className="size-4" />
+                      <span>Recurring</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

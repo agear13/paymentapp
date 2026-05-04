@@ -8,9 +8,11 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { PatchRecurringTemplateSchema } from '@/lib/validations/schemas';
 import { apiIntervalToPrisma, apiStatusToPrisma } from '@/lib/recurring-templates/api-mappers';
 import { serializeRecurringTemplate } from '@/lib/recurring-templates/serialize-template';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 
 /**
  * PATCH /api/recurring-templates/[id]
+ * Template must belong to the authenticated user's server-resolved organization.
  */
 export async function PATCH(
   request: NextRequest,
@@ -26,6 +28,11 @@ export async function PATCH(
     if (!auth.user) return auth.response!;
     const { user } = auth;
 
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'No organization found for user' }, { status: 404 });
+    }
+
     const { id } = params;
     const existing = await prisma.recurring_templates.findUnique({
       where: { id },
@@ -34,11 +41,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const canEdit = await checkUserPermission(
-      user.id,
-      existing.organization_id,
-      'edit_payment_links'
-    );
+    if (existing.organization_id !== org.id) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    const canEdit = await checkUserPermission(user.id, org.id, 'edit_payment_links');
     if (!canEdit) {
       return NextResponse.json(
         { error: 'Forbidden - Insufficient permissions' },

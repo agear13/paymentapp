@@ -41,6 +41,9 @@ export function AppHeader({ productProfile }: AppHeaderProps) {
               <Link href="/dashboard/payment-links">Invoice dashboard</Link>
             </Button>
             <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
+              <Link href="/dashboard/recurring-templates">Recurring</Link>
+            </Button>
+            <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
               <Link href="/dashboard/settings/merchant">Merchant settings</Link>
             </Button>
           </>

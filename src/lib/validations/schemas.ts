@@ -428,6 +428,11 @@ export const CreateRecurringTemplateSchema = z.object({
   dueDaysAfterInvoice: z.coerce.number().int().min(0).max(3650).optional().nullable(),
 });
 
+/** POST body: organization must never come from the client — resolve server-side. */
+export const CreateRecurringTemplateBodySchema = CreateRecurringTemplateSchema.omit({
+  organizationId: true,
+});
+
 export const PatchRecurringTemplateSchema = z
   .object({
     status: z.enum(['active', 'paused']).optional(),

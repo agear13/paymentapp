@@ -4,12 +4,15 @@ import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
-import { CreateRecurringTemplateSchema } from '@/lib/validations/schemas';
+import { CreateRecurringTemplateBodySchema } from '@/lib/validations/schemas';
 import { apiIntervalToPrisma } from '@/lib/recurring-templates/api-mappers';
 import { serializeRecurringTemplate } from '@/lib/recurring-templates/serialize-template';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
+import { loggers } from '@/lib/logger';
 
 /**
- * GET /api/recurring-templates?organizationId=
+ * GET /api/recurring-templates
+ * Organization is always resolved from the authenticated user (never from query/body).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -22,10 +25,12 @@ export async function GET(request: NextRequest) {
     if (!auth.user) return auth.response!;
     const { user } = auth;
 
-    const organizationId = request.nextUrl.searchParams.get('organizationId');
-    if (!organizationId) {
-      return NextResponse.json({ error: 'organizationId is required' }, { status: 400 });
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'No organization found for user' }, { status: 404 });
     }
+
+    const organizationId = org.id;
 
     const canView = await checkUserPermission(user.id, organizationId, 'view_payment_links');
     if (!canView) {
@@ -46,6 +51,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/recurring-templates
+ * Organization is always resolved from the authenticated user (ignore client organizationId).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -58,11 +64,16 @@ export async function POST(request: NextRequest) {
     if (!auth.user) return auth.response!;
     const { user } = auth;
 
-    const body = CreateRecurringTemplateSchema.parse(await request.json());
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'No organization found for user' }, { status: 404 });
+    }
+
+    const organizationId = org.id;
 
     const canCreate = await checkUserPermission(
       user.id,
-      body.organizationId,
+      organizationId,
       'create_payment_links'
     );
     if (!canCreate) {
@@ -72,17 +83,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const org = await prisma.organizations.findUnique({
-      where: { id: body.organizationId },
-      select: { id: true },
-    });
-    if (!org) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
-    }
+    const body = CreateRecurringTemplateBodySchema.parse(await request.json());
 
     const row = await prisma.recurring_templates.create({
       data: {
-        organization_id: body.organizationId,
+        organization_id: organizationId,
         amount: body.amount,
         currency: body.currency,
         description: body.description,
@@ -95,6 +100,16 @@ export async function POST(request: NextRequest) {
         status: 'ACTIVE',
       },
     });
+
+    loggers.payment.info(
+      {
+        msg: 'Recurring template created',
+        userId: user.id,
+        organizationId,
+        templateId: row.id,
+      },
+      'Recurring template created'
+    );
 
     return NextResponse.json({ data: serializeRecurringTemplate(row) }, { status: 201 });
   } catch (error: unknown) {

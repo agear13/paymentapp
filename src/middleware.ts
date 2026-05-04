@@ -49,10 +49,16 @@ function isRestrictedPath(pathname: string): boolean {
   return RESTRICTED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
-/** Rabbit Hole pilot: deal network + invoices (payment links) + main dashboard hub only. */
+/** Rabbit Hole / Strait pilots: deal network + invoices + recurring templates + merchant hub only. */
 function isRabbitHolePilotAllowedPath(pathname: string): boolean {
   if (pathname === '/dashboard' || pathname === '/dashboard/') return true;
   if (pathname === '/dashboard/payment-links' || pathname.startsWith('/dashboard/payment-links/')) {
+    return true;
+  }
+  if (
+    pathname === '/dashboard/recurring-templates' ||
+    pathname.startsWith('/dashboard/recurring-templates/')
+  ) {
     return true;
   }
   if (
@@ -269,7 +275,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Rabbit Hole + Strait pilots: deal network + invoices + /dashboard hub only (same allowed set)
+  // Rabbit Hole + Strait pilots: deal network + invoices + recurring + /dashboard hub only (same allowed set)
   if (
     hasSession &&
     isDashboardRoute &&
