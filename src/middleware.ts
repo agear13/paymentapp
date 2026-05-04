@@ -28,6 +28,10 @@ import {
   isRabbitHolePilotEmail,
   isStraitExperiencesPilotEmail,
 } from '@/lib/auth/admin-shared';
+import {
+  isDealNetworkPilotDashboardPathAllowed,
+  normalizeMiddlewarePathname,
+} from '@/lib/middleware/pilot-dashboard-allowlist';
 
 /**
  * Single source of truth for path prefixes restricted to beta admins.
@@ -47,39 +51,6 @@ const RESTRICTED_PATH_PREFIXES = [
  */
 function isRestrictedPath(pathname: string): boolean {
   return RESTRICTED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-}
-
-/** Rabbit Hole / Strait pilots: deal network + invoices + recurring templates + merchant hub only. */
-function isRabbitHolePilotAllowedPath(pathname: string): boolean {
-  if (pathname === '/dashboard' || pathname === '/dashboard/') return true;
-  if (pathname === '/dashboard/payment-links' || pathname.startsWith('/dashboard/payment-links/')) {
-    return true;
-  }
-  if (
-    pathname === '/dashboard/recurring-templates' ||
-    pathname.startsWith('/dashboard/recurring-templates/')
-  ) {
-    return true;
-  }
-  if (
-    pathname === '/dashboard/settings/merchant' ||
-    pathname.startsWith('/dashboard/settings/merchant/')
-  ) {
-    return true;
-  }
-  if (
-    pathname === '/dashboard/settings/integrations' ||
-    pathname.startsWith('/dashboard/settings/integrations/')
-  ) {
-    return true;
-  }
-  if (
-    pathname === '/dashboard/partners/deal-network' ||
-    pathname.startsWith('/dashboard/partners/deal-network/')
-  ) {
-    return true;
-  }
-  return false;
 }
 
 function isRabbitHoleDealNetworkPath(pathname: string): boolean {
@@ -282,7 +253,13 @@ export async function middleware(request: NextRequest) {
     email &&
     isDealNetworkMinimalPilotSessionUser(email)
   ) {
-    if (!isRabbitHolePilotAllowedPath(pathname)) {
+    const pathForPilot = normalizeMiddlewarePathname(pathname);
+    const pilotAllowed = isDealNetworkPilotDashboardPathAllowed(pathname);
+    if (DEBUG_MIDDLEWARE || process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log('[middleware] MIDDLEWARE PATH:', pathname, 'normalized:', pathForPilot, 'pilotAllowed:', pilotAllowed);
+    }
+    if (!pilotAllowed) {
       if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=redirect_pilot_to_deal_network'); }
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = '/dashboard/partners/deal-network';
