@@ -112,7 +112,7 @@ All files that imported `@/lib/prisma` now import `@/lib/server/prisma`:
 - `src/lib/payment/edge-case-handler.ts`
 - `src/lib/ledger/ledger-entry-service.ts`
 - `src/lib/ledger/balance-validation.ts`
-- `src/lib/payment-link-state-machine.ts`
+- `src/lib/payments/state-machine.ts`
 - `src/lib/jobs/expired-links-job.ts`
 - `src/lib/audit/audit-log.ts`
 - `src/lib/auth/permissions.ts`
