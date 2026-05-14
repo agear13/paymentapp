@@ -35,6 +35,7 @@ export const PaymentEventTypeSchema = z.enum([
   'CANCELED',
   'REFUND_CONFIRMED',
   'CRYPTO_PAYMENT_SUBMITTED',
+  'RECURRING_EXECUTION',
 ]);
 
 export const PaymentMethodSchema = z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO', 'MANUAL_BANK']);
@@ -426,6 +427,11 @@ export const CreateRecurringTemplateSchema = z.object({
     .nullable()
     .transform((v) => (v === '' || v == null ? null : v)),
   dueDaysAfterInvoice: z.coerce.number().int().min(0).max(3650).optional().nullable(),
+});
+
+/** POST body: organization must never come from the client — resolve server-side. */
+export const CreateRecurringTemplateBodySchema = CreateRecurringTemplateSchema.omit({
+  organizationId: true,
 });
 
 export const PatchRecurringTemplateSchema = z

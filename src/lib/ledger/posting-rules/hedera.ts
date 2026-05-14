@@ -1,6 +1,10 @@
 /**
  * Hedera Settlement Posting Rules
  * Double-entry accounting rules for Hedera cryptocurrency payments
+ *
+ * Architectural guardrail:
+ * - Keep posting invocation coupled to canonical settlement orchestration to prevent
+ *   PAYMENT_CONFIRMED/ledger divergence and replay-driven duplicate postings.
  * 
  * CRITICAL: Each token has its own clearing account
  * - HBAR → 1051 (Crypto Clearing - HBAR)

@@ -5,6 +5,7 @@
 
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
+import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 
 export interface ExpiredLinksJobResult {
   success: boolean;
@@ -57,15 +58,18 @@ export async function runExpiredLinksJob(): Promise<ExpiredLinksJobResult> {
 
       try {
         // Transition to EXPIRED status
-        await prisma.$transaction([
-          prisma.payment_links.update({
-            where: { id: link.id },
-            data: {
-              status: 'EXPIRED',
-              updated_at: new Date(),
+        await prisma.$transaction(async (tx) => {
+          await transitionPaymentLinkState({
+            tx,
+            paymentLinkId: link.id,
+            targetState: 'EXPIRED',
+            source: 'job:expired-links',
+            reason: 'link_expired',
+            metadata: {
+              expiryDate: link.expires_at?.toISOString(),
             },
-          }),
-          prisma.payment_events.create({
+          });
+          await tx.payment_events.create({
             data: {
               payment_link_id: link.id,
               event_type: 'EXPIRED',
@@ -76,8 +80,8 @@ export async function runExpiredLinksJob(): Promise<ExpiredLinksJobResult> {
                 jobProcessed: true,
               },
             },
-          }),
-          prisma.audit_logs.create({
+          });
+          await tx.audit_logs.create({
             data: {
               organization_id: link.organization_id,
               entity_type: 'PaymentLink',
@@ -86,8 +90,8 @@ export async function runExpiredLinksJob(): Promise<ExpiredLinksJobResult> {
               old_values: { status: 'OPEN' },
               new_values: { status: 'EXPIRED' },
             },
-          }),
-        ]);
+          });
+        });
 
         expiredCount++;
 

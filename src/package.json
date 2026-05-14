@@ -40,7 +40,11 @@
     "cron:reconcile": "node cron/reconciliation.js",
     "test:merchant": "tsx scripts/test-merchant-endpoint.ts",
     "setup:merchant": "tsx scripts/setup-merchant.ts",
-    "cleanup:wise-merchant-config": "tsx scripts/cleanup/remove-wise-config.ts"
+    "cleanup:wise-merchant-config": "tsx scripts/cleanup/remove-wise-config.ts",
+    "check:payment-state-integrity": "node ../scripts/check-forbidden-payment-state-mutations.js",
+    "check:settlement-integrity": "node ../scripts/check-forbidden-payment-state-mutations.js",
+    "check:settlement-concurrency": "jest __tests__/payments/settlement-concurrency.test.ts",
+    "verify:revenue-share-matrix": "tsx scripts/verify-revenue-share-matrix.ts"
   },
   "overrides": {
     "@walletconnect/core": "2.17.1",

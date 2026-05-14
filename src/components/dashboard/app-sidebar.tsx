@@ -110,8 +110,8 @@ const partnersItems = [
         href: '/dashboard/partners/deal-network/obligations',
       },
       {
-        title: 'Referral Links',
-        href: '/dashboard/partners/referral-links',
+        title: 'My referrals',
+        href: '/dashboard/referrals/mine',
       },
       {
         title: 'Commissions',
@@ -201,8 +201,8 @@ const settingsItems = [
         href: '/dashboard/settings/integrations',
       },
       {
-        title: 'Notifications',
-        href: '/dashboard/settings/notifications',
+        title: 'Service catalog',
+        href: '/dashboard/settings/services',
       },
     ],
   },
@@ -218,8 +218,15 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
   const isStraitExperiencesPilot = productProfile === 'strait_experiences_pilot';
   const { showAdvancedMainNav } = usePaymentLinksNavActivation(productProfile);
   const pathname = usePathname();
+  /** usePathname() can be null during transitions; treat as empty for nav active states. */
+  const path = pathname ?? '';
   const router = useRouter();
   const supabase = createClient();
+
+  React.useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    console.log('IS RABBIT HOLE PILOT:', isRabbitHolePilot, 'path:', path);
+  }, [isRabbitHolePilot, path]);
 
   const mainNavigationItems = React.useMemo(() => {
     if (isRabbitHolePilot || isStraitExperiencesPilot) return [];
@@ -303,9 +310,9 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
   if (isRabbitHolePilot) {
     const pilotHome = '/dashboard/partners/deal-network';
     const pilotObligations = `${pilotHome}/obligations`;
-    const isObligationsView = pathname === pilotObligations;
+    const isObligationsView = path === pilotObligations;
     const isDealNetworkSectionActive =
-      pathname === pilotHome || (pathname.startsWith(`${pilotHome}/`) && !isObligationsView);
+      path === pilotHome || (path.startsWith(`${pilotHome}/`) && !isObligationsView);
     return (
       <Sidebar collapsible="icon">
         <SidebarHeader>
@@ -350,7 +357,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === '/dashboard/payment-links' || pathname.startsWith('/dashboard/payment-links/')}
+                    isActive={path === '/dashboard/payment-links' || path.startsWith('/dashboard/payment-links/')}
                   >
                     <Link href="/dashboard/payment-links">
                       <LinkIcon className="size-4" />
@@ -361,7 +368,21 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === '/dashboard/settings/merchant' || pathname.startsWith('/dashboard/settings/merchant/')}
+                    isActive={
+                      path === '/dashboard/recurring-templates' ||
+                      path.startsWith('/dashboard/recurring-templates/')
+                    }
+                  >
+                    <Link href="/dashboard/recurring-templates">
+                      <Repeat className="size-4" />
+                      <span>Recurring</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={path === '/dashboard/settings/merchant' || path.startsWith('/dashboard/settings/merchant/')}
                   >
                     <Link href="/dashboard/settings/merchant">
                       <Building2 className="size-4" />
@@ -420,9 +441,9 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
   if (isStraitExperiencesPilot) {
     const pilotHome = '/dashboard/partners/deal-network';
     const pilotObligations = `${pilotHome}/obligations`;
-    const isObligationsView = pathname === pilotObligations;
+    const isObligationsView = path === pilotObligations;
     const isDealNetworkSectionActive =
-      pathname === pilotHome || (pathname.startsWith(`${pilotHome}/`) && !isObligationsView);
+      path === pilotHome || (path.startsWith(`${pilotHome}/`) && !isObligationsView);
     return (
       <Sidebar collapsible="icon">
         <SidebarHeader>
@@ -467,7 +488,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === '/dashboard/payment-links' || pathname.startsWith('/dashboard/payment-links/')}
+                    isActive={path === '/dashboard/payment-links' || path.startsWith('/dashboard/payment-links/')}
                   >
                     <Link href="/dashboard/payment-links">
                       <LinkIcon className="size-4" />
@@ -478,7 +499,21 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === '/dashboard/settings/merchant' || pathname.startsWith('/dashboard/settings/merchant/')}
+                    isActive={
+                      path === '/dashboard/recurring-templates' ||
+                      path.startsWith('/dashboard/recurring-templates/')
+                    }
+                  >
+                    <Link href="/dashboard/recurring-templates">
+                      <Repeat className="size-4" />
+                      <span>Recurring</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={path === '/dashboard/settings/merchant' || path.startsWith('/dashboard/settings/merchant/')}
                   >
                     <Link href="/dashboard/settings/merchant">
                       <Building2 className="size-4" />
@@ -565,8 +600,8 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                   item.href === '/dashboard/payment-links' ||
                   item.href === '/dashboard/recurring-templates';
                 const isActive = isNestedHref
-                  ? pathname === item.href || pathname.startsWith(`${item.href}/`)
-                  : pathname === item.href;
+                  ? path === item.href || path.startsWith(`${item.href}/`)
+                  : path === item.href;
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={isActive}>
@@ -589,7 +624,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
             <SidebarGroupContent>
               <SidebarMenu>
                 {partnersItems.map((item) => (
-                  <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/partners')}>
+                  <Collapsible key={item.title} asChild defaultOpen={path.includes('/partners')}>
                     <SidebarMenuItem>
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton>
@@ -605,12 +640,12 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                             const obligationsHref = `${dealNetworkBase}/obligations`;
                             const isActive =
                               subItem.href === obligationsHref
-                                ? pathname === obligationsHref
+                                ? path === obligationsHref
                                 : subItem.href === dealNetworkBase
-                                  ? pathname === dealNetworkBase ||
-                                    (pathname.startsWith(`${dealNetworkBase}/`) &&
-                                      pathname !== obligationsHref)
-                                  : pathname === subItem.href;
+                                  ? path === dealNetworkBase ||
+                                    (path.startsWith(`${dealNetworkBase}/`) &&
+                                      path !== obligationsHref)
+                                  : path === subItem.href;
                             return (
                               <SidebarMenuSubItem key={subItem.href}>
                                 <SidebarMenuSubButton asChild isActive={isActive}>
@@ -627,7 +662,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                   </Collapsible>
                 ))}
                 {programsItems.map((item) => (
-                  <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/programs')}>
+                  <Collapsible key={item.title} asChild defaultOpen={path.includes('/programs')}>
                     <SidebarMenuItem>
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton>
@@ -639,7 +674,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                       <CollapsibleContent>
                         <SidebarMenuSub>
                           {item.items?.map((subItem) => {
-                            const isActive = pathname === subItem.href;
+                            const isActive = path === subItem.href;
                             return (
                               <SidebarMenuSubItem key={subItem.href}>
                                 <SidebarMenuSubButton asChild isActive={isActive}>
@@ -667,7 +702,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
             <SidebarGroupContent>
               <SidebarMenu>
                 {platformPreviewItems.map((item) => (
-                  <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/platform-preview')}>
+                  <Collapsible key={item.title} asChild defaultOpen={path.includes('/platform-preview')}>
                     <SidebarMenuItem>
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton>
@@ -679,7 +714,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                       <CollapsibleContent>
                         <SidebarMenuSub>
                           {item.items?.map((subItem) => {
-                            const isActive = pathname === subItem.href;
+                            const isActive = path === subItem.href;
                             return (
                               <SidebarMenuSubItem key={subItem.href}>
                                 <SidebarMenuSubButton asChild isActive={isActive}>
@@ -706,7 +741,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
           <SidebarGroupContent>
             <SidebarMenu>
               {settingsItems.map((item) => (
-                <Collapsible key={item.title} asChild defaultOpen={pathname.includes('/settings')}>
+                <Collapsible key={item.title} asChild defaultOpen={path.includes('/settings')}>
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton>
@@ -718,7 +753,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                     <CollapsibleContent>
                       <SidebarMenuSub>
                         {item.items?.map((subItem) => {
-                          const isActive = pathname === subItem.href;
+                          const isActive = path === subItem.href;
                           return (
                             <SidebarMenuSubItem key={subItem.href}>
                               <SidebarMenuSubButton asChild isActive={isActive}>

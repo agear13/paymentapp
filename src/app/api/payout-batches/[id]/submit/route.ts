@@ -8,10 +8,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
-import { log } from '@/lib/logger';
+import { loggers } from '@/lib/logger';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -41,6 +42,12 @@ export async function POST(
     const lockdownResponse = checkBetaLockdown(user.email);
     if (lockdownResponse) return lockdownResponse;
 
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+    const organizationId = org.id;
+
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const externalReference = (body as { external_reference?: string }).external_reference;
@@ -50,11 +57,11 @@ export async function POST(
       include: { payouts: true },
     });
 
-    if (!batch) {
-      return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
+    if (!batch || batch.organization_id !== organizationId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const canManage = await checkUserPermission(user.id, batch.organization_id, 'manage_ledger');
+    const canManage = await checkUserPermission(user.id, organizationId, 'manage_ledger');
     if (!canManage) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -78,8 +85,14 @@ export async function POST(
       });
     });
 
-    log.info(
-      { organizationId: batch.organization_id, batchId: id, externalReference },
+    loggers.payment.info(
+      {
+        msg: 'Payout operation',
+        userId: user.id,
+        organizationId,
+        batchId: id,
+        externalReference,
+      },
       'Payout batch submitted'
     );
 

@@ -13,6 +13,7 @@ import { log } from '@/lib/logger';
 import { prisma } from '@/lib/server/prisma';
 import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 import type { PaymentLinkStatus } from '@prisma/client';
+import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 
 // ============================================================================
 // Type Definitions
@@ -157,11 +158,12 @@ export async function handleOverpayment(
     'Overpayment detected'
   );
 
-  // Create overpayment tracking event
+  // Operational analytics only: do not use PAYMENT_CONFIRMED here — that type is canonical
+  // settlement truth and must only be created via confirmPayment() / approved writers.
   await prisma.payment_events.create({
     data: {
       payment_link_id: paymentLinkId,
-      event_type: 'PAYMENT_CONFIRMED',
+      event_type: 'PAYMENT_PENDING',
       payment_method: 'HEDERA',
       amount_received: receivedAmount,
       metadata: {
@@ -326,9 +328,14 @@ export async function validatePaymentAttempt(
     
     // Auto-transition to EXPIRED if not already
     if (link.status !== 'EXPIRED') {
-      await prisma.payment_links.update({
-        where: { id: paymentLinkId },
-        data: { status: 'EXPIRED', updated_at: new Date() },
+      await prisma.$transaction(async (tx) => {
+        await transitionPaymentLinkState({
+          tx,
+          paymentLinkId,
+          targetState: 'EXPIRED',
+          source: 'edge-case-handler',
+          reason: 'expired_payment_attempt',
+        });
       });
     }
 

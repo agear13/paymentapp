@@ -14,6 +14,7 @@ import {
   markSyncSuccess,
   markSyncFailed,
 } from './queue-service';
+import { acquireJobLease, releaseJobLease, renewJobLease } from '@/lib/jobs/job-lease';
 
 export interface ProcessorStats {
   processed: number;
@@ -47,6 +48,17 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
     errors: [],
   };
 
+  const leaseTtlSeconds =
+    Number.parseInt(process.env.XERO_QUEUE_LEASE_TTL_SECONDS || '900', 10) || 900;
+  const lease = await acquireJobLease({
+    jobName: 'xero-queue-processor',
+    leaseTtlSeconds,
+  });
+  if (!lease.acquired) {
+    logger.info({ batchSize }, 'Skipping queue processor: lease is active elsewhere');
+    return stats;
+  }
+
   try {
     // Get pending jobs
     const jobs = await getPendingSyncJobs(batchSize);
@@ -56,7 +68,21 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
       return stats;
     }
 
-    logger.info({ count: jobs.length }, 'Processing sync jobs');
+    const oldestPending = jobs
+      .map((j) => j.created_at)
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+    const maxRetryCount = jobs.reduce((max, j) => Math.max(max, j.retry_count), 0);
+    logger.info(
+      {
+        count: jobs.length,
+        oldestPendingAgeSec: oldestPending
+          ? Math.floor((Date.now() - oldestPending.getTime()) / 1000)
+          : 0,
+        maxRetryCount,
+        maxConcurrency,
+      },
+      'Processing sync jobs'
+    );
 
     const processJob = async (job: (typeof jobs)[number]) => {
       stats.processed++;
@@ -185,6 +211,11 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
 
     // Process jobs with bounded concurrency to improve throughput while protecting downstream APIs.
     for (let i = 0; i < jobs.length; i += maxConcurrency) {
+      await renewJobLease({
+        jobName: 'xero-queue-processor',
+        ownerId: lease.ownerId,
+        leaseTtlSeconds,
+      });
       const batch = jobs.slice(i, i + maxConcurrency);
       await Promise.all(batch.map(processJob));
       // Small pause between batches to avoid provider burst limits.
@@ -204,6 +235,11 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error({ error: errorMessage }, 'Error in queue processor');
     throw error;
+  } finally {
+    await releaseJobLease({
+      jobName: 'xero-queue-processor',
+      ownerId: lease.ownerId,
+    });
   }
 
   return stats;

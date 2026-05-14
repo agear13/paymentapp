@@ -9,6 +9,7 @@ import Long from 'long';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
@@ -45,20 +46,21 @@ export async function POST(
     const lockdownResponse = checkBetaLockdown(user.email);
     if (lockdownResponse) return lockdownResponse;
 
-    const { id: batchId } = await params;
-    const searchParams = request.nextUrl.searchParams;
-    const organizationId = searchParams.get('organizationId');
-    if (!organizationId) {
-      return NextResponse.json({ error: 'organizationId is required' }, { status: 400 });
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
+    const organizationId = org.id;
+
+    const { id: batchId } = await params;
 
     const canManage = await checkUserPermission(user.id, organizationId, 'manage_ledger');
     if (!canManage) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const batch = await prisma.payout_batches.findFirst({
-      where: { id: batchId, organization_id: organizationId },
+    const batch = await prisma.payout_batches.findUnique({
+      where: { id: batchId },
       include: {
         payouts: {
           where: { status: { not: 'PAID' } },
@@ -70,8 +72,8 @@ export async function POST(
       },
     });
 
-    if (!batch) {
-      return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
+    if (!batch || batch.organization_id !== organizationId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     const merchantAccountId = batch.organizations?.merchant_settings?.[0]?.hedera_account_id;

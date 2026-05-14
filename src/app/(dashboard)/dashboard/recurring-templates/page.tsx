@@ -41,7 +41,7 @@ type RecurringTemplateRow = {
 
 export default function RecurringTemplatesPage() {
   const { toast } = useToast();
-  const { organizationId, isLoading: isOrgLoading } = useOrganization();
+  const { isLoading: isOrgLoading } = useOrganization();
   const [templates, setTemplates] = React.useState<RecurringTemplateRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
@@ -63,15 +63,9 @@ export default function RecurringTemplatesPage() {
   const [dueDays, setDueDays] = React.useState('');
 
   const load = React.useCallback(async () => {
-    if (!organizationId) {
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     try {
-      const res = await fetch(
-        `/api/recurring-templates?organizationId=${encodeURIComponent(organizationId)}`
-      );
+      const res = await fetch('/api/recurring-templates');
       if (!res.ok) throw new Error('Failed to load templates');
       const json = (await res.json()) as { data: RecurringTemplateRow[] };
       setTemplates(json.data ?? []);
@@ -84,7 +78,7 @@ export default function RecurringTemplatesPage() {
     } finally {
       setLoading(false);
     }
-  }, [organizationId, toast]);
+  }, [toast]);
 
   React.useEffect(() => {
     void load();
@@ -92,11 +86,9 @@ export default function RecurringTemplatesPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!organizationId) return;
     setSubmitting(true);
     try {
       const payload: Record<string, unknown> = {
-        organizationId,
         amount: Number(amount),
         currency: currency.trim().toUpperCase(),
         description: description.trim(),
@@ -158,10 +150,10 @@ export default function RecurringTemplatesPage() {
     }
   }
 
-  if (isOrgLoading || !organizationId) {
+  if (isOrgLoading) {
     return (
       <div className="p-6">
-        <p className="text-sm text-muted-foreground">Loading organization…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     );
   }

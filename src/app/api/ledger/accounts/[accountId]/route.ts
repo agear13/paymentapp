@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import { requireAuth } from '@/lib/auth/middleware';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 
@@ -46,6 +47,12 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+    const organizationId = org.id;
+
     const { accountId } = params;
 
     // Get account
@@ -60,17 +67,14 @@ export async function GET(
       },
     });
 
-    if (!account) {
-      return NextResponse.json(
-        { error: 'Ledger account not found' },
-        { status: 404 }
-      );
+    if (!account || account.organization_id !== organizationId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     // Check permission
     const canView = await checkUserPermission(
       user.id,
-      account.organization_id,
+      organizationId,
       'view_payment_links'
     );
     if (!canView) {
@@ -79,6 +83,11 @@ export async function GET(
         { status: 403 }
       );
     }
+
+    loggers.payment.info(
+      { msg: 'Ledger/commission access', userId: user.id, organizationId, accountId },
+      'Ledger account get'
+    );
 
     loggers.api.info({ accountId }, 'Retrieved ledger account');
 
@@ -133,6 +142,12 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+    const organizationId = org.id;
+
     const { accountId } = params;
 
     // Get existing account
@@ -140,17 +155,14 @@ export async function PUT(
       where: { id: accountId },
     });
 
-    if (!existingAccount) {
-      return NextResponse.json(
-        { error: 'Ledger account not found' },
-        { status: 404 }
-      );
+    if (!existingAccount || existingAccount.organization_id !== organizationId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     // Check permission
     const canEdit = await checkUserPermission(
       user.id,
-      existingAccount.organization_id,
+      organizationId,
       'edit_payment_links'
     );
     if (!canEdit) {
@@ -182,7 +194,7 @@ export async function PUT(
     // Create audit log
     await prisma.audit_logs.create({
       data: {
-        organization_id: existingAccount.organization_id,
+        organization_id: organizationId,
         user_id: user.id,
         entity_type: 'LedgerAccount',
         entity_id: accountId,
@@ -257,6 +269,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+    const organizationId = org.id;
+
     const { accountId } = params;
 
     // Get existing account
@@ -271,17 +289,14 @@ export async function DELETE(
       },
     });
 
-    if (!existingAccount) {
-      return NextResponse.json(
-        { error: 'Ledger account not found' },
-        { status: 404 }
-      );
+    if (!existingAccount || existingAccount.organization_id !== organizationId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     // Check permission
     const canEdit = await checkUserPermission(
       user.id,
-      existingAccount.organization_id,
+      organizationId,
       'edit_payment_links'
     );
     if (!canEdit) {
@@ -310,7 +325,7 @@ export async function DELETE(
     // Create audit log
     await prisma.audit_logs.create({
       data: {
-        organization_id: existingAccount.organization_id,
+        organization_id: organizationId,
         user_id: user.id,
         entity_type: 'LedgerAccount',
         entity_id: accountId,

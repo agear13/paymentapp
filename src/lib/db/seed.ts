@@ -237,6 +237,8 @@ const seedPaymentEvents = async (paymentLinks: any[]) => {
   const paidLink = paymentLinks.find(link => link.status === 'PAID');
   
   if (paidLink) {
+    // Settlement guard allowlist: PAYMENT_CONFIRMED here is fixture data for local DB seed only.
+    // Production links must never be settled this way — use confirmPayment().
     const events = [
       {
         payment_link_id: paidLink.id,

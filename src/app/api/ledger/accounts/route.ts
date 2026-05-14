@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import { requireAuth } from '@/lib/auth/middleware';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { LedgerAccountType } from '@prisma/client';
@@ -17,7 +18,6 @@ import { LedgerAccountType } from '@prisma/client';
  * Validation schema for creating a ledger account
  */
 const CreateLedgerAccountSchema = z.object({
-  organizationId: z.string().uuid(),
   code: z.string().min(1).max(50),
   name: z.string().min(1).max(255),
   accountType: z.enum(['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE']),
@@ -28,7 +28,6 @@ const CreateLedgerAccountSchema = z.object({
  * Query parameters schema for listing accounts
  */
 const ListQuerySchema = z.object({
-  organizationId: z.string().uuid(),
   accountType: z.enum(['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE']).optional(),
   search: z.string().optional(),
 });
@@ -54,10 +53,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+    const organizationId = org.id;
+
     // Parse query parameters
     const searchParams = request.nextUrl.searchParams;
     const query = ListQuerySchema.parse({
-      organizationId: searchParams.get('organizationId'),
       accountType: searchParams.get('accountType') || undefined,
       search: searchParams.get('search') || undefined,
     });
@@ -65,7 +69,7 @@ export async function GET(request: NextRequest) {
     // Check permission
     const canView = await checkUserPermission(
       user.id,
-      query.organizationId,
+      organizationId,
       'view_payment_links' // Using existing permission
     );
     if (!canView) {
@@ -75,9 +79,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    loggers.payment.info(
+      { msg: 'Ledger/commission access', userId: user.id, organizationId },
+      'Ledger accounts list'
+    );
+
     // Build where clause
     const where: any = {
-      organization_id: query.organizationId,
+      organization_id: organizationId,
     };
 
     if (query.accountType) {
@@ -106,7 +115,7 @@ export async function GET(request: NextRequest) {
 
     loggers.api.info(
       {
-        organizationId: query.organizationId,
+        organizationId,
         count: accounts.length,
         filters: query,
       },
@@ -167,6 +176,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+    const organizationId = org.id;
+
     // Parse and validate body
     const body = await request.json();
     const validatedData = CreateLedgerAccountSchema.parse(body);
@@ -174,7 +189,7 @@ export async function POST(request: NextRequest) {
     // Check permission
     const canEdit = await checkUserPermission(
       user.id,
-      validatedData.organizationId,
+      organizationId,
       'edit_payment_links' // Using existing permission
     );
     if (!canEdit) {
@@ -184,11 +199,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    loggers.payment.info(
+      { msg: 'Ledger/commission access', userId: user.id, organizationId },
+      'Ledger account create'
+    );
+
     // Check if account code already exists for this organization
     const existing = await prisma.ledger_accounts.findUnique({
       where: {
         organization_id_code: {
-          organization_id: validatedData.organizationId,
+          organization_id: organizationId,
           code: validatedData.code,
         },
       },
@@ -207,7 +227,7 @@ export async function POST(request: NextRequest) {
     // Create account
     const account = await prisma.ledger_accounts.create({
       data: {
-        organization_id: validatedData.organizationId,
+        organization_id: organizationId,
         code: validatedData.code,
         name: validatedData.name,
         account_type: validatedData.accountType as LedgerAccountType,
@@ -218,7 +238,7 @@ export async function POST(request: NextRequest) {
     // Create audit log
     await prisma.audit_logs.create({
       data: {
-        organization_id: validatedData.organizationId,
+        organization_id: organizationId,
         user_id: user.id,
         entity_type: 'LedgerAccount',
         entity_id: account.id,
@@ -235,7 +255,7 @@ export async function POST(request: NextRequest) {
       {
         accountId: account.id,
         code: account.code,
-        organizationId: validatedData.organizationId,
+        organizationId,
       },
       'Ledger account created'
     );

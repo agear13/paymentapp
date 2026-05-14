@@ -23,6 +23,7 @@ import { derivePaidAtFromEvents } from '@/lib/payments/paid-at';
 import { insertPaymentLinkInTransaction } from '@/lib/payment-links/create-payment-link-in-tx';
 import { normalizeInvoiceReference } from '@/lib/payment-links/invoice-reference';
 import { runPaymentLinkPostCreateEffects } from '@/lib/payment-links/payment-link-post-create';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 
 /** FX summary for list view (lightweight) */
 export interface FxSummary {
@@ -156,22 +157,12 @@ export async function GET(request: NextRequest) {
     if (!auth.user) return auth.response!;
     const { user } = auth;
 
-    // Get query params
-    const searchParams = request.nextUrl.searchParams;
-    const organizationId = searchParams.get('organizationId');
-
-    if (!organizationId) {
-      return NextResponse.json({ error: 'organizationId is required' }, { status: 400 });
-    }
-
-    // Verify the organization exists and user has access
-    const org = await prisma.organizations.findUnique({
-      where: { id: organizationId },
-    });
-
+    const org = await getOrganizationForAuthenticatedUser(user.id);
     if (!org) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+      return NextResponse.json({ error: 'No organization found for user' }, { status: 404 });
     }
+
+    const organizationId = org.id;
 
     // Check permission
     const canView = await checkUserPermission(user.id, organizationId, 'view_payment_links');
@@ -183,6 +174,8 @@ export async function GET(request: NextRequest) {
     }
 
     const dbOrgId = organizationId;
+
+    const searchParams = request.nextUrl.searchParams;
 
     // Parse pagination
     const pagination = PaginationSchema.parse({
@@ -302,20 +295,24 @@ export async function POST(request: NextRequest) {
     if (!auth.user) return auth.response!;
     const { user } = auth;
 
-    // Parse and validate body
-    const body = await request.json();
-    const validatedData = CreatePaymentLinkSchema.parse(body);
-
-    const organizationId = validatedData.organizationId;
-
-    // Verify the organization exists
-    const org = await prisma.organizations.findUnique({
-      where: { id: organizationId },
-    });
-
+    const org = await getOrganizationForAuthenticatedUser(user.id);
     if (!org) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+      return NextResponse.json({ error: 'No organization found for user' }, { status: 404 });
     }
+
+    const organizationId = org.id;
+
+    const rawBody = await request.json();
+    if (rawBody === null || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const bodyWithoutClientOrg = { ...(rawBody as Record<string, unknown>) };
+    delete bodyWithoutClientOrg.organizationId;
+
+    const validatedData = CreatePaymentLinkSchema.parse({
+      ...bodyWithoutClientOrg,
+      organizationId,
+    });
 
     // Check permission
     const canCreate = await checkUserPermission(

@@ -42,6 +42,8 @@ export async function createManualPilotDealPaymentEvent(params: {
       ? PaymentEventSourceType.CSV_IMPORT
       : PaymentEventSourceType.MANUAL;
 
+  // Settlement guard allowlist: Deal Network pilot demo rows (no payment_link settlement path).
+  // Live payment-link rails must use confirmPayment() for PAYMENT_CONFIRMED.
   const row = await prisma.payment_events.create({
     data: {
       id: randomUUID(),

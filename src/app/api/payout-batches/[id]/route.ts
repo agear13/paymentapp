@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
@@ -40,20 +41,20 @@ export async function GET(
     const lockdownResponse = checkBetaLockdown(user.email);
     if (lockdownResponse) return lockdownResponse;
 
-    const { id } = await params;
-    const searchParams = request.nextUrl.searchParams;
-    const organizationId = searchParams.get('organizationId');
-
-    if (!organizationId) {
-      return NextResponse.json({ error: 'organizationId is required' }, { status: 400 });
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
+    const organizationId = org.id;
 
-    const batch = await prisma.payout_batches.findFirst({
-      where: { id, organization_id: organizationId },
+    const { id } = await params;
+
+    const batch = await prisma.payout_batches.findUnique({
+      where: { id },
     });
 
-    if (!batch) {
-      return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
+    if (!batch || batch.organization_id !== organizationId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     const canView = await checkUserPermission(user.id, organizationId, 'view_payment_links');

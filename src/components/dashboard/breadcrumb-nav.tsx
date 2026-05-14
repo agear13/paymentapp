@@ -17,6 +17,7 @@ import {
 const pathTitles: Record<string, string> = {
   dashboard: 'Dashboard',
   'payment-links': 'Payment Links',
+  'recurring-templates': 'Recurring',
   ledger: 'Ledger',
   transactions: 'Transactions',
   settings: 'Settings',

@@ -10,6 +10,7 @@ import { log } from '@/lib/logger';
 import type { PaymentLinkStatus } from '@prisma/client';
 import { verifyManualConfirmationBase } from '@/lib/payments/manual-confirmation-verification';
 import { statusAfterManualConfirmationVerification } from '@/lib/payments/payment-confirmation-lifecycle';
+import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 
 export type SubmitManualBankConfirmationParams = {
   paymentLinkId: string;
@@ -85,14 +86,22 @@ export async function submitManualBankPaymentConfirmation(
       },
     });
 
-    await tx.payment_links.update({
-      where: { id: link.id },
-      data: { status: 'PAID_UNVERIFIED', updated_at: new Date() },
+    await transitionPaymentLinkState({
+      tx,
+      paymentLinkId: link.id,
+      targetState: 'PAID_UNVERIFIED',
+      source: 'manual-bank-submission',
+      reason: 'payer_manual_bank_submission',
+      metadata: { confirmationId },
     });
     if (nextStatus === 'REQUIRES_REVIEW') {
-      await tx.payment_links.update({
-        where: { id: link.id },
-        data: { status: 'REQUIRES_REVIEW', updated_at: new Date() },
+      await transitionPaymentLinkState({
+        tx,
+        paymentLinkId: link.id,
+        targetState: 'REQUIRES_REVIEW',
+        source: 'manual-bank-submission',
+        reason: 'verification_requires_review',
+        metadata: { confirmationId },
       });
     }
 

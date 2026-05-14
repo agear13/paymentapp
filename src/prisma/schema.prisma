@@ -76,6 +76,17 @@ model webhook_events {
   @@index([stripe_refund_id])
 }
 
+/// Lightweight distributed lease rows for singleton cron/worker execution.
+model operational_job_leases {
+  job_name         String   @id @db.VarChar(128)
+  owner_id         String   @db.VarChar(191)
+  lease_expires_at DateTime @db.Timestamptz(6)
+  acquired_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([lease_expires_at], map: "operational_job_leases_lease_expires_at_idx")
+}
+
 model fx_snapshots {
   id              String         @id @default(uuid()) @db.Uuid
   payment_link_id String         @db.Uuid
@@ -183,6 +194,8 @@ model organizations {
   payout_methods               payout_methods[]
   payout_batches               payout_batches[]
   recurring_templates          recurring_templates[]
+  organization_services        organization_services[]
+  referral_codes               referral_codes[]
 }
 
 model user_organizations {
@@ -278,6 +291,18 @@ model payment_links {
   invoice_currency  String            @db.Char(3)
   description       String
   invoice_reference String?           @db.VarChar(255)
+  /// Option B commission: links invoice to `referral_links` so Wise/Hedera (no Stripe metadata) can resolve revenue share.
+  referral_link_id  String?           @db.Uuid
+  /// Sprint 1: optional participant code row used for this invoice (audit / dashboards).
+  referral_code_id  String?           @db.Uuid
+  /// Denormalized public referral code string at invoice creation (immutable).
+  attribution_referral_code        String?            @db.VarChar(50)
+  /// Participant (Supabase user id) attributed at invoice creation.
+  attributed_participant_user_id   String?            @db.VarChar(255)
+  attribution_source               AttributionSource?
+  /// Stripe-shaped commission fields frozen at invoice creation; settlement prefers this over DB rule lookup.
+  commission_attribution_snapshot  Json?
+  organization_service_id          String?            @db.Uuid
   customer_email    String?           @db.VarChar(255)
   customer_phone    String?           @db.VarChar(50)
   customer_name     String?           @db.VarChar(255)
@@ -343,6 +368,9 @@ model payment_links {
   ledger_entries          ledger_entries[]
   payment_events          payment_events[]
   organizations           organizations             @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  commission_referral_link referral_links?          @relation(fields: [referral_link_id], references: [id], onDelete: SetNull)
+  referral_code_row      referral_codes?          @relation(fields: [referral_code_id], references: [id], onDelete: SetNull)
+  organization_service   organization_services?   @relation(fields: [organization_service_id], references: [id], onDelete: SetNull)
   xero_syncs              xero_syncs[]
   multi_currency_invoices multi_currency_invoices[]
   commission_obligations  commission_obligations[]
@@ -357,6 +385,44 @@ model payment_links {
   @@index([expires_at])
   @@index([payment_method])
   @@index([pilot_deal_id])
+  @@index([referral_link_id])
+  @@index([referral_code_id])
+  @@index([organization_service_id])
+}
+
+model organization_services {
+  id              String          @id @default(uuid()) @db.Uuid
+  organization_id String          @db.Uuid
+  name            String          @db.VarChar(255)
+  description     String          @db.Text
+  price           Decimal         @db.Decimal(18, 2)
+  currency        String          @db.Char(3)
+  active          Boolean         @default(true)
+  created_at      DateTime        @default(now()) @db.Timestamptz(6)
+  organizations   organizations   @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  payment_links   payment_links[]
+
+  @@index([organization_id, active])
+}
+
+/// Participant-facing referral code (1:1 with commission-bearing `referral_links`).
+model referral_codes {
+  id                  String             @id @default(uuid()) @db.Uuid
+  organization_id     String             @db.Uuid
+  participant_user_id String?            @db.VarChar(255)
+  referral_link_id    String             @unique @db.Uuid
+  code                String             @unique @db.VarChar(50)
+  slug                String?            @unique @db.VarChar(64)
+  status              ReferralCodeStatus @default(ACTIVE)
+  created_at          DateTime           @default(now()) @db.Timestamptz(6)
+  expires_at          DateTime?          @db.Timestamptz(6)
+  organizations       organizations      @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  referral_links      referral_links     @relation(fields: [referral_link_id], references: [id], onDelete: Cascade)
+  payment_links       payment_links[]
+
+  @@index([organization_id])
+  @@index([participant_user_id])
+  @@index([code])
 }
 
 /// Payer-submitted “I sent crypto” + assisted verification (Payment Links manual crypto)
@@ -534,6 +600,8 @@ enum PaymentEventType {
   REFUND_CONFIRMED
   /// Payer submitted manual crypto details; invoice PAID_UNVERIFIED or REQUIRES_REVIEW (Payment Links only)
   CRYPTO_PAYMENT_SUBMITTED
+  /// Scheduler: one row per recurring template run (idempotency via correlation_id).
+  RECURRING_EXECUTION
 }
 
 /// Provenance of a payment_events row (additive; optional on legacy rows).
@@ -639,6 +707,21 @@ enum EmailStatus {
 enum ReferralLinkStatus {
   ACTIVE
   INACTIVE
+}
+
+/// Participant-facing referral code row (1:1 with commission `referral_links` definition).
+enum ReferralCodeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// Immutable financial attribution source written at invoice creation.
+enum AttributionSource {
+  REFERRAL_CHECKOUT
+  REFERRAL_SERVICE_SELECTION
+  OPERATOR_MANUAL
+  API_CREATE_PAYMENT_LINK
+  RECURRING_TEMPLATE
 }
 
 enum CommissionBasis {
@@ -786,12 +869,17 @@ model referral_links {
   code                   String                   @unique @db.VarChar(50)
   status                 ReferralLinkStatus       @default(ACTIVE)
   checkout_config        Json?
+  /// Optional vanity path segment for `/ref/{slug}` (distinct from `code` used for `/r/{code}`).
+  slug                   String?                  @unique @db.VarChar(64)
+  expires_at             DateTime?                @db.Timestamptz(6)
   created_at             DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                 @updatedAt @db.Timestamptz(6)
   organizations          organizations            @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   referral_rules         referral_rules[]
   referral_link_splits   referral_link_splits[]
   commission_obligations commission_obligations[]
+  payment_links          payment_links[]
+  referral_code          referral_codes?
 
   @@index([organization_id])
   @@index([code])

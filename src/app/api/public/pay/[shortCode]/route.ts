@@ -96,12 +96,18 @@ export async function GET(
     if (isExpired && currentStatus === 'OPEN') {
       // Update to EXPIRED status
       const now = new Date();
-      await prisma.$transaction([
-        prisma.payment_links.update({
-          where: { id: paymentLink.id },
-          data: { status: 'EXPIRED', updated_at: now },
-        }),
-        prisma.payment_events.create({
+      const [{ transitionPaymentLinkState }] = await Promise.all([
+        import('@/lib/payments/state-machine'),
+      ]);
+      await prisma.$transaction(async (tx) => {
+        await transitionPaymentLinkState({
+          tx,
+          paymentLinkId: paymentLink.id,
+          targetState: 'EXPIRED',
+          source: 'public-pay-route',
+          reason: 'auto_expire_on_fetch',
+        });
+        await tx.payment_events.create({
           data: {
             id: randomUUID(),
             payment_link_id: paymentLink.id,
@@ -109,8 +115,8 @@ export async function GET(
             metadata: { expiredAt: now.toISOString() },
             created_at: now,
           },
-        }),
-      ]);
+        });
+      });
       currentStatus = 'EXPIRED';
     }
 

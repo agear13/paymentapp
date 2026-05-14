@@ -16,7 +16,7 @@ import { fromSmallestUnit } from './token-service';
 import { prisma } from '@/lib/server/prisma';
 import { generateCorrelationId } from '@/lib/services/correlation';
 import { normalizeHederaTransactionId } from './txid';
-import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
+import { confirmPayment } from '@/lib/services/payment-confirmation';
 
 export interface CheckTransactionOptions {
   paymentLinkId: string;
@@ -401,217 +401,66 @@ async function updatePaymentLinkWithTransaction(
       return { success: true };
     }
 
-    // Get or create ledger accounts for this organization
-    const ledgerAccounts = await ensureLedgerAccounts(paymentLink.organization_id, tokenType);
+    const mirrorUrl =
+      network === 'mainnet'
+        ? 'https://mainnet-public.mirrornode.hedera.com'
+        : 'https://testnet.mirrornode.hedera.com';
 
-    const invoiceCcy = invoiceDenominationCurrency(paymentLink);
+    const amountReceived = parseFloat(String(transaction.amount));
 
-    const now = new Date();
-    // Use correlation_id as base for idempotency keys
-    const idempotencyKey = correlationId;
-    
-    // Build Mirror Node URL for metadata
-    const mirrorUrl = network === 'mainnet'
-      ? 'https://mainnet-public.mirrornode.hedera.com'
-      : 'https://testnet.mirrornode.hedera.com';
-
-    // === WRAP DB PERSISTENCE IN TRY/CATCH ===
-    try {
-      // INSTRUMENTATION: Log exact payloads being passed to Prisma
-      const updatePayload = {
-        where: { id: paymentLinkId },
-        data: {
-          status: 'PAID' as const,
-          updated_at: now,
-        },
-      };
-      
-      const eventPayload = {
-        data: {
-          payment_link_id: paymentLinkId,
-          event_type: 'PAYMENT_CONFIRMED' as const,
-          payment_method: 'HEDERA' as const,
-          hedera_transaction_id: normalizedTxId,
-          amount_received: transaction.amount,
-          currency_received: tokenType,
-          correlation_id: correlationId,
-          metadata: {
-            transactionId: transaction.transactionId,
-            raw_transaction_id: transaction.transactionId,
-            normalized_transaction_id: normalizedTxId,
-            amount: transaction.amount,
-            tokenType,
-            token_type: tokenType,
-            sender: transaction.sender,
-            // transaction.timestamp is set from tx.consensus_timestamp in parseAndMatchTransaction (line 275)
-            consensus_timestamp: transaction.timestamp,
-            memo: transaction.memo,
-            merchantAccount: transaction.merchantAccount,
-            network,
-            mirror_url: mirrorUrl,
-            payer_account_id: transaction.sender,
-          },
-        },
-      };
-      
-      const debitPayload = {
-        data: {
-          payment_link_id: paymentLinkId,
-          ledger_account_id: ledgerAccounts.cryptoClearing,
-          entry_type: 'DEBIT' as const,
-          amount: paymentLink.amount,
-          currency: invoiceCcy,
-          description: `${tokenType} payment received - ${normalizedTxId}`,
-          idempotency_key: `${idempotencyKey}-debit`,
-          created_at: now,
-        },
-      };
-      
-      const creditPayload = {
-        data: {
-          payment_link_id: paymentLinkId,
-          ledger_account_id: ledgerAccounts.accountsReceivable,
-          entry_type: 'CREDIT' as const,
-          amount: paymentLink.amount,
-          currency: invoiceCcy,
-          description: `${tokenType} payment received - ${normalizedTxId}`,
-          idempotency_key: `${idempotencyKey}-credit`,
-          created_at: now,
-        },
-      };
-      
-      loggers.hedera.info(
-        'INSTRUMENTATION: Prisma payloads before transaction',
-        {
-          updatePayload: {
-            where: updatePayload.where,
-            dataKeys: Object.keys(updatePayload.data),
-            hasId: 'id' in updatePayload.data,
-          },
-          eventPayload: {
-            dataKeys: Object.keys(eventPayload.data),
-            hasId: 'id' in eventPayload.data,
-          },
-          debitPayload: {
-            dataKeys: Object.keys(debitPayload.data),
-            hasId: 'id' in debitPayload.data,
-          },
-          creditPayload: {
-            dataKeys: Object.keys(creditPayload.data),
-            hasId: 'id' in creditPayload.data,
-          },
-        }
-      );
-      
-      const results = await prisma.$transaction([
-        // 1. Update payment link status
-        prisma.payment_links.update(updatePayload),
-        
-        // 2. Create payment event with full details
-        prisma.payment_events.create(eventPayload),
-        
-        // 3. Create ledger entry: DEBIT Crypto Clearing Account
-        prisma.ledger_entries.create(debitPayload),
-        
-        // 4. Create ledger entry: CREDIT Accounts Receivable
-        prisma.ledger_entries.create(creditPayload),
-      ]);
-
-      const paymentEvent = results[1] as { id: string };
-      const grossAmount = parseFloat(String(paymentLink.amount));
-      const currency = invoiceCcy;
-
-      // 5. Auto-create referral conversion (non-blocking)
-      try {
-        const { createReferralConversionFromPaymentConfirmed } = await import('@/lib/referrals/payment-conversion');
-        const refResult = await createReferralConversionFromPaymentConfirmed({
-          paymentLinkId,
-          paymentEventId: paymentEvent.id,
-          grossAmount,
-          currency,
-          provider: 'hedera',
-          hederaTransactionId: normalizedTxId,
-        });
-        if (refResult.created) {
-          loggers.hedera.info('[REFERRAL_AUTO_CONVERSION] conversion created', {
-            paymentLinkId,
-            paymentEventId: paymentEvent.id,
-            hederaTransactionId: normalizedTxId,
-            conversionId: refResult.conversionId,
-          });
-        } else if (refResult.skipped) {
-          loggers.hedera.info('[REFERRAL_AUTO_CONVERSION] skipped (idempotent)', {
-            paymentLinkId,
-            paymentEventId: paymentEvent.id,
-            hederaTransactionId: normalizedTxId,
-            reason: refResult.reason,
-          });
-        }
-      } catch (refErr: unknown) {
-        loggers.hedera.warn('[REFERRAL_AUTO_CONVERSION] failed (non-blocking)', {
-          paymentLinkId,
-          paymentEventId: paymentEvent.id,
-          transactionId: transaction.transactionId,
-          err: refErr,
-        });
-      }
-
-      loggers.hedera.info(
-        'Payment persisted successfully',
-        {
-          paymentLinkId,
-          transactionId: transaction.transactionId,
-          correlationId,
-          amount: transaction.amount,
-          tokenType,
-          sender: transaction.sender,
-          ledgerEntries: {
-            debit: ledgerAccounts.cryptoClearing,
-            credit: ledgerAccounts.accountsReceivable,
-          },
-        }
-      );
-
-      // Align with Stripe: enqueue Xero PAYMENT sync on PAYMENT_CONFIRMED (was missing — only confirmHederaPayment queued, and that path is unused for auto-detect).
-      const { queueXeroPaymentSyncIfEnabled } = await import('@/lib/xero/queue-service');
-      await queueXeroPaymentSyncIfEnabled({
-        paymentLinkId,
-        organizationId: paymentLink.organization_id,
+    const confirmResult = await confirmPayment({
+      paymentLinkId,
+      provider: 'hedera',
+      providerRef: transaction.transactionId,
+      transactionId: normalizedTxId,
+      amountReceived,
+      currencyReceived: tokenType,
+      tokenType,
+      correlationId,
+      metadata: {
+        transactionId: transaction.transactionId,
+        raw_transaction_id: transaction.transactionId,
+        normalized_transaction_id: normalizedTxId,
+        amount: transaction.amount,
+        tokenType,
+        token_type: tokenType,
+        sender: transaction.sender,
+        consensus_timestamp: transaction.timestamp,
+        memo: transaction.memo,
+        merchantAccount: transaction.merchantAccount,
+        network,
+        mirror_url: mirrorUrl,
+        payer_account_id: transaction.sender,
         source: 'hedera-transaction-checker',
-      });
+      },
+    });
 
-      return { success: true };
-    } catch (err: unknown) {
-      // Log detailed error with all context
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('[monitor] persist failed', {
+    if (!confirmResult.success) {
+      const msg = confirmResult.error || 'confirmPayment failed';
+      loggers.hedera.error('Hedera confirmPayment failed (transaction-checker)', {
         paymentLinkId,
         transactionId: transaction.transactionId,
         correlationId,
-        sender: transaction.sender,
-        amount: transaction.amount,
-        token: tokenType,
+        tokenType,
         network,
-      }, err);
-      
-      loggers.hedera.error(
-        'Prisma transaction failed during persistence',
-        err instanceof Error ? err : new Error(String(err)),
-        { 
-          paymentLinkId, 
-          transactionId: transaction.transactionId,
-          correlationId,
-          sender: transaction.sender,
-          amount: transaction.amount,
-          tokenType,
-          network,
-        }
-      );
-      
-      return { success: false, error: errorMessage };
+        error: msg,
+      });
+      return { success: false, error: msg };
     }
+
+    loggers.hedera.info('Payment persisted via confirmPayment (transaction-checker)', {
+      paymentLinkId,
+      transactionId: transaction.transactionId,
+      correlationId,
+      amount: transaction.amount,
+      tokenType,
+      sender: transaction.sender,
+      paymentEventId: confirmResult.paymentEventId,
+    });
+
+    return { success: true };
   } catch (error) {
-    // Catch outer errors (e.g., ensureLedgerAccounts failures)
+    // Catch outer errors (e.g., confirmPayment / prisma read failures)
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[monitor] persist failed', {
       paymentLinkId,
@@ -640,66 +489,3 @@ async function updatePaymentLinkWithTransaction(
     return { success: false, error: errorMessage };
   }
 }
-
-/**
- * Ensure ledger accounts exist for the organization (idempotent)
- * Returns account IDs for crypto clearing and accounts receivable
- */
-async function ensureLedgerAccounts(
-  organizationId: string,
-  tokenType: TokenType
-): Promise<{ cryptoClearing: string; accountsReceivable: string }> {
-  // Upsert Crypto Clearing account for this token (idempotent)
-  const cryptoCode = `1051-${tokenType}`;
-  const cryptoAccount = await prisma.ledger_accounts.upsert({
-    where: {
-      organization_id_code: {
-        organization_id: organizationId,
-        code: cryptoCode,
-      },
-    },
-    update: {},
-    create: {
-      organization_id: organizationId,
-      code: cryptoCode,
-      name: `Crypto Clearing - ${tokenType}`,
-      account_type: 'ASSET',
-    },
-  });
-
-  loggers.hedera.info('Ensured crypto clearing account exists', {
-    organizationId,
-    accountId: cryptoAccount.id,
-    code: cryptoCode,
-  });
-
-  // Upsert Accounts Receivable account (idempotent)
-  const arCode = '1200';
-  const arAccount = await prisma.ledger_accounts.upsert({
-    where: {
-      organization_id_code: {
-        organization_id: organizationId,
-        code: arCode,
-      },
-    },
-    update: {},
-    create: {
-      organization_id: organizationId,
-      code: arCode,
-      name: 'Accounts Receivable',
-      account_type: 'ASSET',
-    },
-  });
-
-  loggers.hedera.info('Ensured accounts receivable account exists', {
-    organizationId,
-    accountId: arAccount.id,
-    code: arCode,
-  });
-
-  return {
-    cryptoClearing: cryptoAccount.id,
-    accountsReceivable: arAccount.id,
-  };
-}
-

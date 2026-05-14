@@ -46,7 +46,10 @@ export function calculateNextRetryTime(retryCount: number): Date | null {
     6 * 60 * 60 * 1000, // 6 hours
   ];
 
-  const delay = RETRY_SCHEDULE[retryCount] || RETRY_SCHEDULE[RETRY_SCHEDULE.length - 1];
+  const baseDelay = RETRY_SCHEDULE[retryCount] || RETRY_SCHEDULE[RETRY_SCHEDULE.length - 1];
+  // Add +/-20% jitter to avoid synchronized retry storms.
+  const jitterRatio = (Math.random() * 0.4) - 0.2;
+  const delay = Math.max(30_000, Math.round(baseDelay * (1 + jitterRatio)));
   return new Date(Date.now() + delay);
 }
 

@@ -4,6 +4,7 @@
  */
 
 import { loggers } from '@/lib/logger';
+import { acquireJobLease, releaseJobLease } from '@/lib/jobs/job-lease';
 
 export interface JobConfig {
   name: string;
@@ -28,6 +29,12 @@ export interface JobExecution {
   success: boolean;
   result: JobResult;
   error?: string;
+}
+
+export interface JobLeaseConfig {
+  enabled: boolean;
+  leaseTtlSeconds?: number;
+  ownerId?: string;
 }
 
 /**
@@ -119,6 +126,47 @@ export async function executeJob(
   );
 
   return execution;
+}
+
+export async function executeLeasedJob(
+  config: JobConfig,
+  jobFunction: () => Promise<JobResult>,
+  leaseConfig: JobLeaseConfig
+): Promise<JobExecution> {
+  if (!leaseConfig.enabled) {
+    return executeJob(config, jobFunction);
+  }
+
+  const leaseTtlSeconds = Math.max(30, leaseConfig.leaseTtlSeconds ?? 600);
+  const lease = await acquireJobLease({
+    jobName: config.name,
+    leaseTtlSeconds,
+    ownerId: leaseConfig.ownerId,
+  });
+
+  if (!lease.acquired) {
+    const now = new Date();
+    const execution: JobExecution = {
+      jobName: config.name,
+      startTime: now,
+      endTime: now,
+      duration: 0,
+      success: true,
+      result: {
+        success: true,
+        message: 'Skipped: lease already active',
+        data: { skipped: true, reason: 'lease_active' },
+        duration: 0,
+      },
+    };
+    return execution;
+  }
+
+  try {
+    return await executeJob(config, jobFunction);
+  } finally {
+    await releaseJobLease({ jobName: config.name, ownerId: lease.ownerId });
+  }
 }
 
 /**

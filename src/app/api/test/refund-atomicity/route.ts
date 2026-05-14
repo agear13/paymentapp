@@ -21,6 +21,7 @@ import { prisma } from '@/lib/server/prisma';
 import { generateCorrelationId } from '@/lib/services/correlation';
 import { processStripeWebhookEvent } from '@/app/api/stripe/webhook/route';
 import Stripe from 'stripe';
+import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 
 /** Unique 8-char payment link short_code (DB constraint). */
 function shortCodeFromUuid(): string {
@@ -232,9 +233,12 @@ async function runLedgerFailureSimulation(params: {
             ? 'PARTIALLY_REFUNDED'
             : 'PAID';
 
-      await tx.payment_links.update({
-        where: { id: testPaymentLinkId },
-        data: { status: newStatus, updated_at: new Date() },
+      await transitionPaymentLinkState({
+        tx,
+        paymentLinkId: testPaymentLinkId,
+        targetState: newStatus,
+        source: 'test-refund-atomicity',
+        reason: 'simulate_refund_status_transition',
       });
 
       throw new Error('[TEST] Simulated ledger failure — verifying atomicity rollback');

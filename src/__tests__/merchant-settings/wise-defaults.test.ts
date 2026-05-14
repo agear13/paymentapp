@@ -2,7 +2,7 @@
  * Wise fields on NEW merchant_settings (POST) — no env injection, explicit enable only.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from '@jest/globals';
 import { resolveWiseFieldsForCreate } from '@/lib/merchant-settings/resolve-wise-create-fields';
 
 describe('resolveWiseFieldsForCreate', () => {

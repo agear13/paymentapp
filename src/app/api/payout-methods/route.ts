@@ -9,9 +9,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
+import { loggers } from '@/lib/logger';
 import { z } from 'zod';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
@@ -32,7 +34,6 @@ const HEDERA_ACCOUNT_ID_REGEX = /^0\.0\.\d+$/;
 
 const CreatePayoutMethodSchema = z
   .object({
-    organizationId: z.string().uuid(),
     userId: z.string().min(1).optional(),
     methodType: PayoutMethodTypeEnum,
     handle: z.string().max(255).optional().nullable(),
@@ -62,13 +63,14 @@ export async function GET(request: NextRequest) {
     const lockdownResponse = checkBetaLockdown(user.email);
     if (lockdownResponse) return lockdownResponse;
 
-    const searchParams = request.nextUrl.searchParams;
-    const organizationId = searchParams.get('organizationId');
-    const userIdParam = searchParams.get('userId');
-
-    if (!organizationId) {
-      return NextResponse.json({ error: 'organizationId is required' }, { status: 400 });
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
+    const organizationId = org.id;
+
+    const searchParams = request.nextUrl.searchParams;
+    const userIdParam = searchParams.get('userId');
 
     const canView = await checkUserPermission(user.id, organizationId, 'view_payment_links');
     if (!canView) {
@@ -125,6 +127,12 @@ export async function POST(request: NextRequest) {
     const lockdownResponse = checkBetaLockdown(user.email);
     if (lockdownResponse) return lockdownResponse;
 
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+    const organizationId = org.id;
+
     const body = await request.json();
     const parsed = CreatePayoutMethodSchema.safeParse(body);
     if (!parsed.success) {
@@ -134,7 +142,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { organizationId, methodType, handle, notes, isDefault, hederaAccountId } = parsed.data;
+    const { methodType, handle, notes, isDefault, hederaAccountId } = parsed.data;
     const userId = parsed.data.userId ?? user.id;
 
     const canManage = await checkUserPermission(user.id, organizationId, 'manage_ledger');
@@ -171,6 +179,11 @@ export async function POST(request: NextRequest) {
             : undefined,
       },
     });
+
+    loggers.payment.info(
+      { msg: 'Payout operation', userId: user.id, organizationId },
+      'Payout method created'
+    );
 
     return NextResponse.json(
       {

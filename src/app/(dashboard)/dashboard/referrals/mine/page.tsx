@@ -1,0 +1,198 @@
+'use client';
+
+import * as React from 'react';
+import { useOrganization } from '@/hooks/use-organization';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { ExternalLink, Loader2 } from 'lucide-react';
+
+type DashboardPayload = {
+  referralCodes: Array<{
+    id: string;
+    code: string;
+    slug: string | null;
+    referralUrl: string;
+    qrUrl: string;
+    createdAt: string;
+  }>;
+  invoices: Array<{
+    id: string;
+    shortCode: string;
+    description: string;
+    amount: number;
+    currency: string;
+    status: string;
+    createdAt: string;
+    serviceId: string | null;
+  }>;
+  commissionItems: Array<{
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    shortCode: string | null;
+    invoiceReference: string | null;
+  }>;
+};
+
+export default function MyReferralsPage() {
+  const { organizationId, isLoading: isOrgLoading } = useOrganization();
+  const [data, setData] = React.useState<DashboardPayload | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  const load = React.useCallback(async () => {
+    if (!organizationId) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/me/referral-dashboard?organizationId=${organizationId}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to load');
+      setData(json.data);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  }, [organizationId]);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  if (isOrgLoading || loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-gray-600">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        Loading…
+      </div>
+    );
+  }
+
+  if (!data) {
+    return <p className="text-gray-600">Nothing to show.</p>;
+  }
+
+  const paid = data.commissionItems.filter((c) => c.status === 'PAID');
+  const pending = data.commissionItems.filter((c) => c.status !== 'PAID');
+
+  return (
+    <div className="space-y-8 max-w-4xl">
+      <div>
+        <h1 className="text-3xl font-bold">My referrals</h1>
+        <p className="text-gray-600 mt-1">Your shareable links, invoices generated from them, and commission lines.</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Referral links</CardTitle>
+          <CardDescription>Share `/r/CODE` or use the QR image.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {data.referralCodes.length === 0 ? (
+            <p className="text-sm text-gray-600">No participant referral codes yet. Create one under Partners → Referral links.</p>
+          ) : (
+            data.referralCodes.map((c) => (
+              <div key={c.id} className="flex flex-col sm:flex-row gap-4 border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                <div className="flex-1 space-y-1">
+                  <p className="font-mono text-lg font-semibold">{c.code}</p>
+                  {c.slug ? (
+                    <p className="text-sm text-gray-500">
+                      Vanity: /ref/{c.slug}
+                    </p>
+                  ) : null}
+                  <a
+                    href={c.referralUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-blue-600 inline-flex items-center gap-1"
+                  >
+                    {c.referralUrl} <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+                <div className="shrink-0">
+                  <img src={c.qrUrl} alt={`QR for ${c.code}`} width={140} height={140} className="rounded border border-gray-200" />
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Invoices from your referrals</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data.invoices.length === 0 ? (
+            <p className="text-sm text-gray-600">No attributed invoices yet.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {data.invoices.map((i) => (
+                <li key={i.id} className="py-3 flex justify-between gap-4">
+                  <div>
+                    <p className="font-medium">{i.description}</p>
+                    <p className="text-xs text-gray-500 font-mono">{i.shortCode}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold">
+                      {i.amount.toFixed(2)} {i.currency}
+                    </p>
+                    <Badge variant="secondary">{i.status}</Badge>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Commissions</CardTitle>
+          <CardDescription>Ledger obligation lines tied to your attributed invoices.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Paid</p>
+            {paid.length === 0 ? (
+              <p className="text-sm text-gray-500">None yet.</p>
+            ) : (
+              <ul className="mt-1 space-y-1 text-sm">
+                {paid.map((p) => (
+                  <li key={p.id} className="flex justify-between">
+                    <span>
+                      {p.shortCode} {p.invoiceReference ? `· ${p.invoiceReference}` : ''}
+                    </span>
+                    <span className="font-mono">
+                      {p.amount.toFixed(4)} {p.currency}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-700">Pending</p>
+            {pending.length === 0 ? (
+              <p className="text-sm text-gray-500">None.</p>
+            ) : (
+              <ul className="mt-1 space-y-1 text-sm">
+                {pending.map((p) => (
+                  <li key={p.id} className="flex justify-between">
+                    <span>
+                      {p.shortCode} {p.invoiceReference ? `· ${p.invoiceReference}` : ''}
+                    </span>
+                    <span className="font-mono">
+                      {p.amount.toFixed(4)} {p.currency} · {p.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
@@ -135,8 +136,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (splitsInput && splitsInput.length > 0) {
-      const [referralLink] = await prisma.$transaction([
-        prisma.referral_links.create({
+      const referralLink = await prisma.$transaction(async (tx) => {
+        const link = await tx.referral_links.create({
           data: {
             organization_id: organizationId,
             created_by_user_id: user.id,
@@ -144,21 +145,44 @@ export async function POST(request: NextRequest) {
             status,
             checkout_config: checkoutConfig || undefined,
           },
-        }),
-      ]);
-      await prisma.referral_link_splits.createMany({
-        data: splitsInput.map((s, i) => ({
-          referral_link_id: referralLink.id,
-          label: s.label || `Partner ${i + 1}`,
-          percentage: s.percentage,
-          beneficiary_id: s.beneficiary_id ?? undefined,
-          sort_order: s.sort_order ?? i,
-        })),
+        });
+        await tx.referral_link_splits.createMany({
+          data: splitsInput.map((s, i) => ({
+            referral_link_id: link.id,
+            label: s.label || `Partner ${i + 1}`,
+            percentage: s.percentage,
+            beneficiary_id: s.beneficiary_id ?? undefined,
+            sort_order: s.sort_order ?? i,
+          })),
+        });
+        await tx.referral_codes.create({
+          data: {
+            id: randomUUID(),
+            organization_id: organizationId,
+            participant_user_id: user.id,
+            referral_link_id: link.id,
+            code: normalizedCode,
+            status: 'ACTIVE',
+          },
+        });
+        return link;
       });
       const correlationId = `ref-${normalizedCode}-${Date.now()}`;
-      log.info('Referral link created with splits', { correlationId, referralLinkId: referralLink.id, code: normalizedCode, splitsCount: splitsInput.length });
+      log.info('Referral link created with splits', {
+        correlationId,
+        referralLinkId: referralLink.id,
+        code: normalizedCode,
+        splitsCount: splitsInput.length,
+      });
       return NextResponse.json(
-        { data: { id: referralLink.id, code: referralLink.code, status: referralLink.status, url: `/r/${referralLink.code}` } },
+        {
+          data: {
+            id: referralLink.id,
+            code: referralLink.code,
+            status: referralLink.status,
+            url: `/r/${referralLink.code}`,
+          },
+        },
         { status: 201 }
       );
     }
@@ -205,8 +229,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'bdPartnerId is required when bdPartnerPct > 0' }, { status: 400 });
     }
 
-    const [referralLink] = await prisma.$transaction([
-      prisma.referral_links.create({
+    const referralLink = await prisma.$transaction(async (tx) => {
+      const link = await tx.referral_links.create({
         data: {
           organization_id: organizationId,
           created_by_user_id: user.id,
@@ -214,18 +238,28 @@ export async function POST(request: NextRequest) {
           status,
           checkout_config: checkoutConfig || undefined,
         },
-      }),
-    ]);
-
-    await prisma.referral_rules.create({
-      data: {
-        referral_link_id: referralLink.id,
-        consultant_id: finalConsultantId,
-        bd_partner_id: finalBdPartnerId,
-        consultant_pct: consultantPct,
-        bd_partner_pct: bdPartnerPct,
-        basis,
-      },
+      });
+      await tx.referral_rules.create({
+        data: {
+          referral_link_id: link.id,
+          consultant_id: finalConsultantId,
+          bd_partner_id: finalBdPartnerId,
+          consultant_pct: consultantPct,
+          bd_partner_pct: bdPartnerPct,
+          basis,
+        },
+      });
+      await tx.referral_codes.create({
+        data: {
+          id: randomUUID(),
+          organization_id: organizationId,
+          participant_user_id: user.id,
+          referral_link_id: link.id,
+          code: normalizedCode,
+          status: 'ACTIVE',
+        },
+      });
+      return link;
     });
 
     const correlationId = `ref-${normalizedCode}-${Date.now()}`;
