@@ -5,6 +5,10 @@ import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
+import {
+  serviceCreatedAtIso,
+  serviceUpdatedAtIso,
+} from '@/lib/format/organization-service-timestamps';
 
 const CreateSchema = z.object({
   organizationId: z.string().uuid(),
@@ -38,10 +42,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const statusFilter = request.nextUrl.searchParams.get('status');
+    const activeWhere =
+      statusFilter === 'active' ? { active: true } : statusFilter === 'archived' ? { active: false } : {};
+
     const rows = await prisma.organization_services.findMany({
-      where: { organization_id: organizationId },
+      where: { organization_id: organizationId, ...activeWhere },
       orderBy: { created_at: 'desc' },
       take: 200,
+      include: {
+        _count: { select: { payment_links: true } },
+      },
     });
 
     return NextResponse.json({
@@ -53,6 +64,8 @@ export async function GET(request: NextRequest) {
         currency: r.currency,
         active: r.active,
         createdAt: r.created_at.toISOString(),
+        updatedAt: r.updated_at.toISOString(),
+        linkedInvoiceCount: r._count.payment_links,
       })),
     });
   } catch (error: unknown) {
@@ -98,6 +111,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const createdAt = serviceCreatedAtIso(row.created_at);
+    const updatedAt = serviceUpdatedAtIso(row.created_at, row.updated_at);
+    const fallbackIso = new Date(0).toISOString();
+
     return NextResponse.json(
       {
         data: {
@@ -107,6 +124,8 @@ export async function POST(request: NextRequest) {
           price: Number(row.price),
           currency: row.currency,
           active: row.active,
+          createdAt: createdAt ?? fallbackIso,
+          updatedAt: updatedAt ?? createdAt ?? fallbackIso,
         },
       },
       { status: 201 }

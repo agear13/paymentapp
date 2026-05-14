@@ -27,6 +27,7 @@ if (typeof window !== 'undefined') {
 if (!process.env.DATABASE_URL) {
   throw new Error('❌ FATAL: DATABASE_URL environment variable is not set');
 }
+// DIRECT_DATABASE_URL is read by the generated client for Prisma CLI / direct connections (see schema directUrl).
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
@@ -34,6 +35,7 @@ export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: ['error', 'warn'],
+    // Runtime queries use DATABASE_URL (pooled). directUrl is defined in prisma/schema.prisma.
     datasources: {
       db: {
         url: process.env.DATABASE_URL,

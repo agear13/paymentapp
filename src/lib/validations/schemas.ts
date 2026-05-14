@@ -389,6 +389,31 @@ export const UpdatePaymentLinkSchema = z
   .strict();
 
 // ============================================================================
+// ORGANIZATION SERVICES (merchant catalog)
+// ============================================================================
+
+/** PATCH /api/organization-services/[id] — partial update; org enforced from existing row, not body. */
+export const UpdateOrganizationServiceSchema = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    description: z.string().max(8000).optional(),
+    price: z
+      .number()
+      .positive('Amount must be positive')
+      .multipleOf(0.01, 'Amount must have at most 2 decimal places')
+      .optional(),
+    currency: z
+      .string()
+      .length(3)
+      .transform((c) => c.trim().toUpperCase())
+      .pipe(currencyCodeSchema)
+      .optional(),
+    active: z.boolean().optional(),
+  })
+  .strict()
+  .refine((d) => Object.keys(d).length > 0, { message: 'At least one field is required' });
+
+// ============================================================================
 // RECURRING INVOICE TEMPLATES
 // ============================================================================
 
