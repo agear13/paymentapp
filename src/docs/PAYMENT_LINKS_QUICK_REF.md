@@ -252,13 +252,10 @@ CANCELED (terminal)
 import {
   isValidTransition,
   getValidNextStates,
-  isTerminalState,
-  transitionPaymentLinkStatus,
-  checkAndUpdateExpiredStatus,
-  batchUpdateExpiredLinks,
+  transitionPaymentLinkState,
   isPaymentLinkEditable,
   isPaymentLinkCancelable
-} from '@/lib/payment-link-state-machine';
+} from '@/lib/payments/state-machine';
 
 // Check if transition is valid
 const canTransition = isValidTransition('DRAFT', 'OPEN'); // true
@@ -267,21 +264,16 @@ const canTransition = isValidTransition('DRAFT', 'OPEN'); // true
 const nextStates = getValidNextStates('OPEN');
 // Returns: ['PAID', 'EXPIRED', 'CANCELED']
 
-// Check if terminal
-const isTerminal = isTerminalState('PAID'); // true
-
 // Transition status (with validation)
-const updated = await transitionPaymentLinkStatus(
-  paymentLinkId,
-  'OPEN',
-  userId
+const updated = await prisma.$transaction((tx) =>
+  transitionPaymentLinkState({
+    tx,
+    paymentLinkId,
+    targetState: 'OPEN',
+    source: 'admin',
+    reason: 'manual_reopen',
+  })
 );
-
-// Check and update if expired
-await checkAndUpdateExpiredStatus(paymentLinkId);
-
-// Batch update expired links (background job)
-const count = await batchUpdateExpiredLinks();
 
 // Check if editable
 const editable = isPaymentLinkEditable('DRAFT'); // true

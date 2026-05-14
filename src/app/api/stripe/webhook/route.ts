@@ -3,8 +3,8 @@
  * POST /api/stripe/webhook - Handle Stripe webhook events
  * No authentication required (verified by signature)
  * 
- * Sprint 24: Enhanced with edge case handling
- * Beta: Enhanced with correlation IDs and unified payment confirmation
+ * Settlement: successful charges converge through confirmPayment(). Refund object events
+ * write REFUND_CONFIRMED and transition refund states — not duplicate settlement.
  */
 
 // Force Node.js runtime (required for raw body access)
@@ -22,9 +22,8 @@ import {
   markStripeWebhookOutcome,
   extractStripeLinkage,
 } from '@/lib/webhooks/stripe-audit';
-import { postStripeSettlement, calculateStripeFee, postStripeRefundReversal } from '@/lib/ledger/posting-rules/stripe';
+import { postStripeRefundReversal } from '@/lib/ledger/posting-rules/stripe';
 import { provisionStripeLedgerAccounts } from '@/lib/ledger/ledger-account-provisioner';
-import { applyRevenueShareSplits } from '@/lib/referrals/commission-posting';
 import { validatePostingBalance } from '@/lib/ledger/balance-validation';
 import {
   checkDuplicatePayment,
@@ -35,6 +34,7 @@ import {
 import { generateCorrelationId } from '@/lib/services/correlation';
 import { confirmPayment } from '@/lib/services/payment-confirmation';
 import Stripe from 'stripe';
+import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 
 /**
  * POST /api/stripe/webhook
@@ -269,6 +269,13 @@ async function handlePaymentIntentSucceeded(event: Stripe.Event, correlationId: 
   const amountReceived = fromSmallestUnit(paymentIntent.amount_received || paymentIntent.amount, paymentIntent.currency);
 
   // Use unified payment confirmation service (idempotent)
+  const piMeta =
+    paymentIntent.metadata &&
+    typeof paymentIntent.metadata === 'object' &&
+    !Array.isArray(paymentIntent.metadata)
+      ? (paymentIntent.metadata as Record<string, string>)
+      : {};
+
   const result = await confirmPayment({
     paymentLinkId,
     provider: 'stripe',
@@ -283,6 +290,7 @@ async function handlePaymentIntentSucceeded(event: Stripe.Event, correlationId: 
       payment_method_types: paymentIntent.payment_method_types,
       receipt_email: paymentIntent.receipt_email,
       customer: paymentIntent.customer,
+      ...piMeta,
     },
   });
 
@@ -457,49 +465,6 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event, correlationId
     paymentEventId: result.paymentEventId,
     alreadyProcessed: result.alreadyProcessed,
   }, 'Checkout session payment confirmed successfully');
-
-  // Best-effort: apply revenue share splits (commission posting)
-  try {
-    const orgId = session.metadata?.organization_id;
-    if (!orgId) {
-      log.warn(
-        { correlationId, sessionId: session.id },
-        'Commission skipped: missing organization_id in session.metadata'
-      );
-    } else {
-      const commissionResult = await applyRevenueShareSplits({
-        session,
-        stripeEventId: event.id,
-        paymentLinkId,
-        organizationId: orgId,
-        grossAmount: amountReceived,
-        currency: currencyReceived,
-        correlationId,
-      });
-      if (commissionResult.posted) {
-        log.info(
-          { correlationId, consultantAmount: commissionResult.consultantAmount, bdPartnerAmount: commissionResult.bdPartnerAmount },
-          'Commission posted successfully'
-        );
-      } else {
-        log.info(
-          {
-            correlationId,
-            paymentLinkId,
-            stripeEventId: event.id,
-            referralLinkId: session.metadata?.referral_link_id ?? undefined,
-          },
-          'Commission posting returned posted=false'
-        );
-      }
-    }
-  } catch (commissionErr: any) {
-    log.error(
-      { correlationId, paymentLinkId, error: commissionErr?.message },
-      'Commission posting failed (best-effort, payment confirmed)'
-    );
-    // Do NOT throw - return 200
-  }
 }
 
 /**
@@ -653,9 +618,16 @@ async function handleRefundObjectEvent(event: Stripe.Event, correlationId: strin
         },
       });
 
-      await tx.payment_links.update({
-        where: { id: paymentLinkId },
-        data: { status: newStatus, updated_at: new Date() },
+      await transitionPaymentLinkState({
+        tx,
+        paymentLinkId,
+        targetState: newStatus,
+        source: 'stripe-webhook-refund',
+        reason: 'refund_confirmed',
+        metadata: {
+          stripeEventId,
+          refundId,
+        },
       });
 
       await postStripeRefundReversal(

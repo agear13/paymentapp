@@ -110,8 +110,8 @@ const partnersItems = [
         href: '/dashboard/partners/deal-network/obligations',
       },
       {
-        title: 'Referral Links',
-        href: '/dashboard/partners/referral-links',
+        title: 'My referrals',
+        href: '/dashboard/referrals/mine',
       },
       {
         title: 'Commissions',
@@ -201,8 +201,8 @@ const settingsItems = [
         href: '/dashboard/settings/integrations',
       },
       {
-        title: 'Notifications',
-        href: '/dashboard/settings/notifications',
+        title: 'Service catalog',
+        href: '/dashboard/settings/services',
       },
     ],
   },

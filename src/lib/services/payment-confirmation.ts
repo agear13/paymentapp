@@ -18,9 +18,21 @@ import { validatePostingBalance } from '@/lib/ledger/balance-validation';
 import config from '@/lib/config/env';
 import { normalizeHederaTransactionId } from '@/lib/hedera/txid';
 import { createReferralConversionFromPaymentConfirmed } from '@/lib/referrals/payment-conversion';
+import type Stripe from 'stripe';
+import {
+  applyRevenueShareSplits,
+  coerceJsonToCommissionMetadata,
+  parseReferralSplitsFromMetadata,
+} from '@/lib/referrals/commission-posting';
+import { isCompleteCommissionAttributionMetadata } from '@/lib/referrals/commission-attribution-snapshot';
 import { assertPaymentLinksUpdateDataValid } from '@/lib/payments/payment-links-update-guard';
 import { getFxService } from '@/lib/fx';
 import { getFxSnapshotService } from '@/lib/fx/fx-snapshot-service';
+import {
+  transitionPaymentLinkState,
+  InvalidPaymentLinkTransitionError,
+} from '@/lib/payments/state-machine';
+import { validateLedgerInvariant } from '@/lib/ledger/invariant-checker';
 
 export interface ConfirmPaymentParams {
   paymentLinkId: string;
@@ -46,13 +58,109 @@ export interface ConfirmPaymentResult {
   error?: string;
 }
 
+function setCommissionMetaIfEmpty(
+  out: Record<string, string>,
+  key: string,
+  value: string | null | undefined
+) {
+  const cur = out[key];
+  if (cur != null && String(cur).trim() !== '') return;
+  if (value == null || String(value).trim() === '') return;
+  out[key] = String(value);
+}
+
 /**
- * Main payment confirmation function
- * Handles the complete pipeline atomically with idempotency
+ * Merge payment event metadata with immutable `payment_links.commission_attribution_snapshot`,
+ * then load splits/rules from DB only if commission parsers still lack a full shape.
+ * Invoice snapshot wins over sparse event metadata for commission keys when complete.
+ */
+async function resolveReferralCommissionMetadata(params: {
+  paymentEventMetadata: unknown;
+  paymentLinkReferralLinkId: string | null;
+  paymentLinkCommissionSnapshot: unknown;
+}): Promise<Stripe.Metadata | undefined> {
+  const base = coerceJsonToCommissionMetadata(params.paymentEventMetadata);
+  const snapMd = coerceJsonToCommissionMetadata(params.paymentLinkCommissionSnapshot);
+
+  let out: Record<string, string> = { ...(base ?? {}) };
+  if (snapMd && isCompleteCommissionAttributionMetadata(snapMd)) {
+    out = {
+      ...out,
+      ...Object.fromEntries(
+        Object.entries(snapMd).filter(([, v]) => v != null && String(v).trim() !== '')
+      ),
+    };
+  }
+
+  const fromEvent = String(out.referral_link_id ?? '').trim();
+  if (!fromEvent && params.paymentLinkReferralLinkId) {
+    out.referral_link_id = params.paymentLinkReferralLinkId;
+  }
+
+  const rid = String(out.referral_link_id ?? '').trim();
+  if (!rid) {
+    return Object.keys(out).length > 0 ? (out as Stripe.Metadata) : undefined;
+  }
+
+  let md = out as Stripe.Metadata;
+  if (isCompleteCommissionAttributionMetadata(md)) {
+    return md;
+  }
+
+  const refLink = await prisma.referral_links.findUnique({
+    where: { id: rid },
+    include: {
+      referral_link_splits: { orderBy: { sort_order: 'asc' } },
+      referral_rules: { orderBy: { created_at: 'desc' }, take: 1 },
+    },
+  });
+  if (!refLink) {
+    return Object.keys(out).length > 0 ? (out as Stripe.Metadata) : undefined;
+  }
+
+  setCommissionMetaIfEmpty(out, 'referral_code', refLink.code);
+
+  const splits = refLink.referral_link_splits;
+  const rule = refLink.referral_rules[0];
+  if (splits.length > 0) {
+    if (!parseReferralSplitsFromMetadata(out as Stripe.Metadata)) {
+      out.referral_splits = JSON.stringify(
+        splits.map((s) => ({
+          split_id: s.id,
+          label: s.label,
+          percentage: Number(s.percentage),
+          beneficiary_id: s.beneficiary_id ?? null,
+          sort_order: s.sort_order,
+        }))
+      );
+    }
+    // Matches referral-checkout: multi-split commissions use GROSS basis.
+    setCommissionMetaIfEmpty(out, 'commission_basis', 'GROSS');
+  } else if (rule) {
+    setCommissionMetaIfEmpty(out, 'consultant_id', rule.consultant_id ?? '');
+    setCommissionMetaIfEmpty(out, 'bd_partner_id', rule.bd_partner_id ?? '');
+    setCommissionMetaIfEmpty(out, 'consultant_pct', rule.consultant_pct.toString());
+    setCommissionMetaIfEmpty(out, 'bd_partner_pct', rule.bd_partner_pct.toString());
+    setCommissionMetaIfEmpty(out, 'commission_basis', rule.basis);
+  }
+
+  md = out as Stripe.Metadata;
+  return Object.keys(out).length > 0 ? md : undefined;
+}
+
+/**
+ * Canonical settlement orchestrator.
+ *
+ * Architectural guardrails:
+ * - `PAYMENT_CONFIRMED` is the settlement truth record.
+ * - Settlement must converge through `confirmPayment()` (webhook, reconciliation, manual recoveries).
+ * - State transition + payment event + ledger posting + downstream sync enqueue remain transaction-coupled.
+ * - Replays must safely no-op and never duplicate ledger/Xero side effects.
  */
 export async function confirmPayment(
   params: ConfirmPaymentParams
 ): Promise<ConfirmPaymentResult> {
+  const startedAt = Date.now();
   const {
     paymentLinkId,
     provider,
@@ -139,7 +247,7 @@ export async function confirmPayment(
 
     // Execute confirmation pipeline in transaction
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Get and validate payment link
+      // 1. Get and validate payment link with fresh state
       const paymentLink = await tx.payment_links.findUnique({
         where: { id: paymentLinkId },
       });
@@ -148,8 +256,38 @@ export async function confirmPayment(
         throw new Error(`Payment link ${paymentLinkId} not found`);
       }
 
+      // PRIMARY idempotency guard: PAYMENT_CONFIRMED exists for this link.
+      const existingConfirmed = await tx.payment_events.findFirst({
+        where: {
+          payment_link_id: paymentLinkId,
+          event_type: 'PAYMENT_CONFIRMED',
+        },
+        select: { id: true },
+      });
+
+      if (existingConfirmed) {
+        log.info('Idempotent skip: PAYMENT_CONFIRMED already exists for paymentLinkId', {
+          correlationId,
+          paymentLinkId,
+          existingPaymentEventId: existingConfirmed.id,
+        });
+
+        await getFxSnapshotService().ensureSettlementFxSnapshot(tx, {
+          id: paymentLinkId,
+          currency: paymentLink.invoice_currency ?? paymentLink.currency,
+          invoice_currency: paymentLink.invoice_currency ?? paymentLink.currency,
+        });
+
+        return {
+          success: true,
+          alreadyProcessed: true,
+          paymentEventId: existingConfirmed.id,
+        };
+      }
+
+      // Secondary guard: link already marked as PAID without a confirmed row (defensive).
       if (paymentLink.status === 'PAID') {
-        log.warn('Payment link already paid', {
+        log.warn('Payment link already paid but no PAYMENT_CONFIRMED found (defensive skip)', {
           correlationId,
           paymentLinkId,
           status: paymentLink.status,
@@ -159,34 +297,43 @@ export async function confirmPayment(
           currency: paymentLink.invoice_currency ?? paymentLink.currency,
           invoice_currency: paymentLink.invoice_currency ?? paymentLink.currency,
         });
-        const existingEvent = await tx.payment_events.findFirst({
-          where: {
-            payment_link_id: paymentLinkId,
-            event_type: 'PAYMENT_CONFIRMED',
-          },
-        });
         return {
           success: true,
           alreadyProcessed: true,
-          paymentEventId: existingEvent?.id,
+          paymentEventId: undefined,
         };
       }
 
-      if (paymentLink.status !== 'OPEN') {
-        throw new Error(
-          `Payment link status is ${paymentLink.status}, expected OPEN`
-        );
+      // Enforce valid OPEN -> PAID transition via core state machine.
+      try {
+        await transitionPaymentLinkState({
+          tx,
+          paymentLinkId,
+          targetState: 'PAID',
+          source: `confirmPayment:${provider}`,
+          reason: 'settlement_confirmed',
+          metadata: {
+            providerRef: normalizedProviderRef,
+          },
+        });
+      } catch (err) {
+        if (err instanceof InvalidPaymentLinkTransitionError) {
+          log.error(
+            'Invalid payment link state transition during settlement',
+            err,
+            {
+              correlationId,
+              paymentLinkId,
+              provider,
+              currentStatus: paymentLink.status,
+              targetStatus: 'PAID',
+            }
+          );
+        }
+        throw err;
       }
 
-      // 2. Update payment link to PAID (no paid_at - derived from payment_events)
-      const updateData = { status: 'PAID' as const, updated_at: new Date() };
-      assertPaymentLinksUpdateDataValid(updateData);
-      await tx.payment_links.update({
-        where: { id: paymentLinkId },
-        data: updateData,
-      });
-
-      // 3. Create payment event with idempotency fields
+      // 2. Create payment event with idempotency fields
       const sourceType: PaymentEventSourceType =
         provider === 'stripe'
           ? PaymentEventSourceType.STRIPE
@@ -328,25 +475,7 @@ export async function confirmPayment(
           provider: exchangeRate.provider,
           captured_at: exchangeRate.timestamp,
         });
-
-        const fxSnapshot = await tx.fx_snapshots.findFirst({
-          where: {
-            payment_link_id: paymentLinkId,
-            snapshot_type: 'SETTLEMENT',
-            token_type: tokenType,
-          },
-          orderBy: { captured_at: 'desc' },
-        });
-
-        if (!fxSnapshot) {
-          throw new Error(`FX snapshot not found for ${tokenType} settlement`);
-        }
-
-        const rate =
-          fxRate ??
-          (typeof fxSnapshot.rate === 'number'
-            ? fxSnapshot.rate
-            : parseFloat(fxSnapshot.rate.toString()));
+        const rate = fxRate ?? exchangeRate.rate;
 
         await postHederaSettlement(
           {
@@ -452,6 +581,8 @@ export async function confirmPayment(
       correlationId,
       paymentEventId: result.paymentEventId,
       paymentLinkId,
+      settlementDurationMs: Date.now() - startedAt,
+      replayNoop: result.alreadyProcessed === true,
     });
 
     // Validate cumulative ledger balance against committed data.
@@ -463,6 +594,19 @@ export async function confirmPayment(
     if (!result.alreadyProcessed) {
       try {
         await validatePostingBalance(paymentLinkId);
+        const invariantRows = await validateLedgerInvariant(paymentLinkId);
+        for (const invariant of invariantRows) {
+          if (!invariant.balanced) {
+            log.error('Settlement committed with ledger invariant violation', undefined, {
+              correlationId,
+              paymentLinkId,
+              currency: invariant.currency,
+              debitTotal: invariant.debitTotal,
+              creditTotal: invariant.creditTotal,
+              difference: invariant.difference,
+            });
+          }
+        }
       } catch (balanceError: unknown) {
         log.error(
           'Post-commit balance validation failed — ledger may be unbalanced, manual reconciliation required',
@@ -516,6 +660,57 @@ export async function confirmPayment(
       }
     }
 
+    // Revenue share (commission) — only when this invocation created a new PAYMENT_CONFIRMED row.
+    // Idempotent webhook retries set alreadyProcessed: true; do not re-run (avoids redundant work; commission is idempotent anyway).
+    if (result.success && result.paymentEventId && result.alreadyProcessed === false) {
+      try {
+        const [pe, link] = await Promise.all([
+          prisma.payment_events.findUnique({
+            where: { id: result.paymentEventId },
+            select: { metadata: true },
+          }),
+          prisma.payment_links.findUnique({
+            where: { id: paymentLinkId },
+            select: {
+              organization_id: true,
+              referral_link_id: true,
+              commission_attribution_snapshot: true,
+            },
+          }),
+        ]);
+        if (link?.organization_id) {
+          const paymentLinkReferralLinkId =
+            typeof link.referral_link_id === 'string' ? link.referral_link_id : null;
+          const referralMetadata = await resolveReferralCommissionMetadata({
+            paymentEventMetadata: pe?.metadata ?? null,
+            paymentLinkReferralLinkId,
+            paymentLinkCommissionSnapshot: link.commission_attribution_snapshot ?? null,
+          });
+          await applyRevenueShareSplits({
+            stripeEventId: result.paymentEventId,
+            commissionSourceId: result.paymentEventId,
+            referralMetadata,
+            paymentLinkId,
+            organizationId: link.organization_id,
+            grossAmount: amountReceived,
+            currency: currencyReceived,
+            correlationId,
+          });
+        }
+      } catch (commissionErr: unknown) {
+        log.error(
+          'Revenue share failed (non-blocking)',
+          commissionErr instanceof Error ? commissionErr : undefined,
+          {
+            correlationId,
+            paymentLinkId,
+            paymentEventId: result.paymentEventId,
+            error: commissionErr instanceof Error ? commissionErr.message : String(commissionErr),
+          }
+        );
+      }
+    }
+
     return result;
   } catch (error: any) {
     log.error(
@@ -525,6 +720,7 @@ export async function confirmPayment(
         correlationId,
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
+        settlementDurationMs: Date.now() - startedAt,
       }
     );
 

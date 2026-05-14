@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { CreatePaymentLinkSchema } from '@/lib/validations/schemas';
 import { insertPaymentLinkInTransaction } from '@/lib/payment-links/create-payment-link-in-tx';
@@ -15,6 +16,11 @@ function isSerializationRetryError(error: unknown): boolean {
 }
 
 type TxIdle = { kind: 'idle' };
+type TxDuplicate = {
+  kind: 'duplicate';
+  executionId: string;
+  templateId: string;
+};
 type TxOk = {
   kind: 'ok';
   paymentLinkId: string;
@@ -23,9 +29,10 @@ type TxOk = {
   invoiceCurrency: string;
   invoiceReference: string | null;
   recurringTemplateId: string;
+  executionId: string;
 };
 
-type TxResult = TxIdle | TxOk;
+type TxResult = TxIdle | TxOk | TxDuplicate;
 
 async function processOneDueTemplate(shortCode: string): Promise<TxResult> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -91,6 +98,49 @@ async function processOneDueTemplate(shortCode: string): Promise<TxResult> {
             throw new Error('Org mismatch in recurring execution');
           }
 
+          const executionId = `recurring-${template.id}-${template.next_run_at.toISOString()}`;
+
+          // Idempotency gate: after row lock, before payment link insert (same isolation as the run).
+          const existingExecution = await tx.payment_events.findFirst({
+            where: {
+              correlation_id: executionId,
+              event_type: 'RECURRING_EXECUTION',
+            },
+          });
+          const anchor = template.next_run_at;
+          const nextRun = computeNextRunAt(
+            anchor,
+            template.recurrence_interval,
+            template.interval_count
+          );
+          const pauseAfterSchedule =
+            template.end_date != null && nextRunExceedsEndDate(nextRun, template.end_date);
+
+          if (existingExecution) {
+            loggers.jobs.info(
+              {
+                msg: 'Skipping duplicate recurring execution',
+                executionId,
+                templateId: template.id,
+              },
+              'Skipping duplicate recurring execution'
+            );
+            // Keep schedule aligned with the committed execution marker (avoids hot-loop if DB was inconsistent).
+            await tx.recurring_templates.update({
+              where: { id: template.id },
+              data: {
+                next_run_at: nextRun,
+                last_run_at: now,
+                status: pauseAfterSchedule ? 'PAUSED' : 'ACTIVE',
+              },
+            });
+            return {
+              kind: 'duplicate',
+              executionId,
+              templateId: template.id,
+            };
+          }
+
           const link = await insertPaymentLinkInTransaction(tx, {
             organizationId: expectedOrgIdFromRow,
             shortCode,
@@ -104,14 +154,15 @@ async function processOneDueTemplate(shortCode: string): Promise<TxResult> {
             pilotDealIdToStore: null,
           });
 
-          const anchor = template.next_run_at;
-          const nextRun = computeNextRunAt(
-            anchor,
-            template.recurrence_interval,
-            template.interval_count
-          );
-          const pauseAfterSchedule =
-            template.end_date != null && nextRunExceedsEndDate(nextRun, template.end_date);
+          await tx.payment_events.create({
+            data: {
+              id: randomUUID(),
+              event_type: 'RECURRING_EXECUTION',
+              correlation_id: executionId,
+              payment_link_id: link.id,
+              organization_id: template.organization_id,
+            },
+          });
 
           await tx.recurring_templates.update({
             where: { id: template.id },
@@ -130,6 +181,7 @@ async function processOneDueTemplate(shortCode: string): Promise<TxResult> {
             invoiceCurrency: currency,
             invoiceReference: link.invoice_reference,
             recurringTemplateId: template.id,
+            executionId,
           };
         },
         {
@@ -170,6 +222,18 @@ export async function runRecurringTemplatesJob(): Promise<{
       if (result.kind === 'idle') {
         break;
       }
+      if (result.kind === 'duplicate') {
+        continue;
+      }
+      loggers.jobs.info(
+        {
+          msg: 'Recurring execution processed',
+          executionId: result.executionId,
+          templateId: result.recurringTemplateId,
+          organizationId: result.organizationId,
+        },
+        'Recurring execution processed'
+      );
       loggers.payment.info(
         {
           msg: 'Recurring invoice generated',

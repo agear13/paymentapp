@@ -10,6 +10,7 @@ import { log } from '@/lib/logger';
 import { verifyCryptoConfirmationInput } from '@/lib/payments/crypto-confirmation-verification';
 import type { PaymentLinkStatus } from '@prisma/client';
 import { statusAfterManualConfirmationVerification } from '@/lib/payments/payment-confirmation-lifecycle';
+import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 
 export type SubmitCryptoConfirmationParams = {
   paymentLinkId: string;
@@ -84,20 +85,22 @@ export async function submitCryptoPaymentConfirmation(
       },
     });
 
-    await tx.payment_links.update({
-      where: { id: link.id },
-      data: {
-        status: 'PAID_UNVERIFIED',
-        updated_at: new Date(),
-      },
+    await transitionPaymentLinkState({
+      tx,
+      paymentLinkId: link.id,
+      targetState: 'PAID_UNVERIFIED',
+      source: 'crypto-submission',
+      reason: 'payer_crypto_submission',
+      metadata: { confirmationId },
     });
     if (nextStatus === 'REQUIRES_REVIEW') {
-      await tx.payment_links.update({
-        where: { id: link.id },
-        data: {
-          status: 'REQUIRES_REVIEW',
-          updated_at: new Date(),
-        },
+      await transitionPaymentLinkState({
+        tx,
+        paymentLinkId: link.id,
+        targetState: 'REQUIRES_REVIEW',
+        source: 'crypto-submission',
+        reason: 'verification_requires_review',
+        metadata: { confirmationId },
       });
     }
 

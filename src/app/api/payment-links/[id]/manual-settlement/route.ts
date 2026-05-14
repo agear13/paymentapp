@@ -9,7 +9,7 @@ import { loggers } from '@/lib/logger';
 import { requireAuth } from '@/lib/auth/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
-import { transitionPaymentLinkStatus } from '@/lib/payment-link-state-machine';
+import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 import { paymentEventBlocksReopenAfterPaid } from '@/lib/payments/payment-link-external-evidence';
 import { revalidatePath } from 'next/cache';
 import config from '@/lib/config/env';
@@ -95,7 +95,16 @@ export async function POST(
           { status: 400 }
         );
       }
-      await transitionPaymentLinkStatus(link.id, 'PAID', user.id);
+      await prisma.$transaction(async (tx) => {
+        await transitionPaymentLinkState({
+          tx,
+          paymentLinkId: link.id,
+          targetState: 'PAID',
+          source: 'manual-settlement-api',
+          reason: 'operator_mark_paid',
+          metadata: { actorUserId: user.id },
+        });
+      });
       if (config.features.xeroSync) {
         try {
           await queueXeroSync({
@@ -137,7 +146,16 @@ export async function POST(
           { status: 400 }
         );
       }
-      await transitionPaymentLinkStatus(link.id, 'OPEN', user.id);
+      await prisma.$transaction(async (tx) => {
+        await transitionPaymentLinkState({
+          tx,
+          paymentLinkId: link.id,
+          targetState: 'OPEN',
+          source: 'manual-settlement-api',
+          reason: 'operator_reopen',
+          metadata: { actorUserId: user.id },
+        });
+      });
     }
 
     loggers.api.info('Manual invoice settlement');

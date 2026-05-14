@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
@@ -37,15 +38,16 @@ export async function GET(request: NextRequest) {
     const lockdownResponse = checkBetaLockdown(user.email);
     if (lockdownResponse) return lockdownResponse;
 
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+    const organizationId = org.id;
+
     const searchParams = request.nextUrl.searchParams;
-    const organizationId = searchParams.get('organizationId');
     const batchId = searchParams.get('batchId');
     const userId = searchParams.get('userId');
     const limit = Math.min(parseInt(searchParams.get('limit') || '100', 10), 200);
-
-    if (!organizationId) {
-      return NextResponse.json({ error: 'organizationId is required' }, { status: 400 });
-    }
 
     const canView = await checkUserPermission(user.id, organizationId, 'view_payment_links');
     if (!canView) {

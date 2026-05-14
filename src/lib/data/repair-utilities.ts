@@ -16,6 +16,7 @@ import { log } from '@/lib/logger';
 import { retryLedgerPosting, hasLedgerEntries } from '@/lib/hedera/payment-confirmation';
 import { queueXeroSync } from '@/lib/xero/queue-service';
 import type { PaymentLinkStatus } from '@prisma/client';
+import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 
 // ============================================================================
 // Type Definitions
@@ -455,16 +456,26 @@ export async function repairConsistencyIssues(
 
       if (issue.issueType === 'STATUS_MISMATCH') {
         // Fix status mismatch - update to PAID
-        await prisma.payment_links.update({
-          where: { id: issue.paymentLinkId },
-          data: { status: 'PAID', updated_at: new Date() },
+        await prisma.$transaction(async (tx) => {
+          await transitionPaymentLinkState({
+            tx,
+            paymentLinkId: issue.paymentLinkId,
+            targetState: 'PAID',
+            source: 'repair-utilities',
+            reason: 'auto_repair_status_mismatch',
+          });
         });
         repaired++;
       } else if (issue.issueType === 'STALE_EXPIRY') {
         // Fix stale expiry - update to EXPIRED
-        await prisma.payment_links.update({
-          where: { id: issue.paymentLinkId },
-          data: { status: 'EXPIRED', updated_at: new Date() },
+        await prisma.$transaction(async (tx) => {
+          await transitionPaymentLinkState({
+            tx,
+            paymentLinkId: issue.paymentLinkId,
+            targetState: 'EXPIRED',
+            source: 'repair-utilities',
+            reason: 'auto_repair_stale_expiry',
+          });
         });
         repaired++;
       }

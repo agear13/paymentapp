@@ -62,7 +62,7 @@ describe('Stripe refund webhook (Option A)', () => {
     const content = fs.readFileSync(WEBHOOK_ROUTE_PATH, 'utf-8');
     expect(content).toContain('PARTIALLY_REFUNDED');
     expect(content).toContain('REFUNDED');
-    expect(content).toContain('totalRefunded >= totalPaid');
+    expect(content).toContain('totalRefundedAfter >= totalPaid');
   });
 
   describe('single-path refund: no double-write (charge.refunded is log-only)', () => {

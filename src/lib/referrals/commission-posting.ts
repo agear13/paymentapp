@@ -36,13 +36,45 @@ export interface ReferralMetadata {
 }
 
 export interface ApplyRevenueShareSplitsParams {
-  session: Stripe.Checkout.Session;
+  /** Optional when referralMetadata is supplied (e.g. confirmPayment reads payment_event.metadata). */
+  session?: Stripe.Checkout.Session;
+  /** Referral commission fields (same shape as Stripe Checkout session.metadata). */
+  referralMetadata?: Stripe.Metadata | null;
+  /** Stable id for obligation + ledger idempotency (use payment_events.id when confirming via confirmPayment). */
+  commissionSourceId?: string;
+  /** Legacy Stripe evt_* id; used as idempotency root when commissionSourceId is omitted. */
   stripeEventId: string;
   paymentLinkId: string;
   organizationId: string;
   grossAmount: number; // decimal
   currency: string;
   correlationId?: string;
+}
+
+/** Coerce Prisma Json / plain objects into string-key metadata for commission parsers. */
+export function coerceJsonToCommissionMetadata(meta: unknown): Stripe.Metadata | null {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null;
+  const src = meta as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(src)) {
+    if (v == null) continue;
+    if (typeof v === 'string') out[k] = v;
+    else if (typeof v === 'number' || typeof v === 'boolean') out[k] = String(v);
+    else out[k] = JSON.stringify(v);
+  }
+  return Object.keys(out).length > 0 ? (out as Stripe.Metadata) : null;
+}
+
+function resolveCommissionRootId(params: ApplyRevenueShareSplitsParams): string {
+  return params.commissionSourceId ?? params.stripeEventId;
+}
+
+function resolveCommissionMetadata(
+  params: ApplyRevenueShareSplitsParams
+): Stripe.Metadata | null {
+  if (params.referralMetadata) return params.referralMetadata;
+  if (params.session?.metadata) return params.session.metadata;
+  return null;
 }
 
 /**
@@ -120,7 +152,14 @@ function currencyPrecision(currency: string): number {
 }
 
 /**
- * Compute amount per split so total <= basisAmount. Remainder goes to first split (sort_order 1).
+ * Compute amount per split so total <= basisAmount.
+ *
+ * When declared split percentages sum to ~100% of the invoice basis, per-line flooring can leave a
+ * tiny positive remainder (fractional cents). That remainder is absorbed by the first split — this is
+ * rounding correction only.
+ *
+ * When percentages sum to less than 100% (partial revenue share), the unallocated portion stays with
+ * the platform; it must NOT be dumped onto the first partner (that would overpay).
  */
 export function computeSplitAmounts(
   basisAmount: number,
@@ -130,6 +169,10 @@ export function computeSplitAmounts(
   const prec = currencyPrecision(currency);
   const mult = 10 ** prec;
   const sorted = [...splits].sort((a, b) => a.sort_order - b.sort_order);
+  const declaredPctTotal = sorted.reduce((a, s) => a + s.percentage, 0);
+  /** Treat as “full basis” allocation only when splits are intended to exhaust 100% of basis. */
+  const fullBasisAllocation =
+    declaredPctTotal >= 99.99 && declaredPctTotal <= 100.01;
   const amounts: { split_id: string; label: string; percentage: number; beneficiary_id: string | null; amount: number }[] = [];
   let total = 0;
   for (const s of sorted) {
@@ -139,7 +182,7 @@ export function computeSplitAmounts(
     total += amount;
   }
   const remainder = Math.floor((basisAmount - total) * mult) / mult;
-  if (remainder > 0 && amounts.length > 0) {
+  if (remainder > 0 && amounts.length > 0 && fullBasisAllocation) {
     amounts[0].amount = Math.floor((amounts[0].amount + remainder) * mult) / mult;
   }
   return amounts;
@@ -194,15 +237,8 @@ export function extractReferralMetadata(
 export async function applyRevenueShareSplits(
   params: ApplyRevenueShareSplitsParams
 ): Promise<{ posted: boolean; consultantAmount?: number; bdPartnerAmount?: number }> {
-  const {
-    session,
-    stripeEventId,
-    paymentLinkId,
-    organizationId,
-    grossAmount,
-    currency,
-    correlationId,
-  } = params;
+  const { paymentLinkId, organizationId, grossAmount, currency, correlationId } = params;
+  const rootId = resolveCommissionRootId(params);
 
   try {
     return await applyRevenueShareSplitsInternal(params);
@@ -210,7 +246,7 @@ export async function applyRevenueShareSplits(
     log.error(
       'Commission posting unexpected error (webhook-safe, returning 200)',
       err instanceof Error ? err : undefined,
-      { correlationId, paymentLinkId, stripeEventId, error: err instanceof Error ? err.message : String(err) }
+      { correlationId, paymentLinkId, commissionRootId: rootId, error: err instanceof Error ? err.message : String(err) }
     );
     await createCommissionFailureAlert(organizationId, paymentLinkId, err?.message, correlationId);
     return { posted: false };
@@ -220,31 +256,33 @@ export async function applyRevenueShareSplits(
 async function applyRevenueShareSplitsInternal(
   params: ApplyRevenueShareSplitsParams
 ): Promise<{ posted: boolean; consultantAmount?: number; bdPartnerAmount?: number }> {
-  const { session, stripeEventId, paymentLinkId, organizationId, grossAmount, currency, correlationId } = params;
+  const { paymentLinkId, organizationId, grossAmount, currency, correlationId } = params;
+  const rootId = resolveCommissionRootId(params);
+  const commissionMd = resolveCommissionMetadata(params);
 
   // Generic multi-level splits (from referral_link_splits at checkout)
-  const splitsMeta = parseReferralSplitsFromMetadata(session.metadata);
+  const splitsMeta = parseReferralSplitsFromMetadata(commissionMd);
   if (splitsMeta && splitsMeta.length > 0) {
     return applyRevenueShareSplitsFromSplitsInternal(params, splitsMeta);
   }
 
   // Legacy: consultant + BD from referral_rules metadata
-  const meta = extractReferralMetadata(session.metadata);
+  const meta = extractReferralMetadata(commissionMd);
   if (!meta) {
-    log.info('Commission skipped: no referral metadata', { stripeEventId, paymentLinkId });
+    log.info('Commission skipped: no referral metadata', { commissionRootId: rootId, paymentLinkId });
     return { posted: false };
   }
 
   if (meta.consultantPct > 0 && !meta.consultantId) {
     log.info('Commission skipped: consultant_pct > 0 but consultant_id missing; BD may still post', {
-      stripeEventId,
+      commissionRootId: rootId,
       paymentLinkId,
       role: 'CONSULTANT',
     });
   }
   if (meta.bdPartnerPct > 0 && !meta.bdPartnerId) {
     log.info('Commission skipped: bd_partner_pct > 0 but bd_partner_id missing', {
-      stripeEventId,
+      commissionRootId: rootId,
       paymentLinkId,
       role: 'BD_PARTNER',
     });
@@ -261,7 +299,7 @@ async function applyRevenueShareSplitsInternal(
 
   if (!consultantAboveMin && !bdAboveMin) {
     log.info('Commission skipped: amounts below minimum', {
-      stripeEventId,
+      commissionRootId: rootId,
       paymentLinkId,
       consultantAmount: consultantAmountRounded,
       bdPartnerAmount: bdPartnerAmountRounded,
@@ -319,14 +357,14 @@ async function applyRevenueShareSplitsInternal(
         entries: consultantEntries,
         paymentLinkId,
         organizationId,
-        idempotencyKey: `commission-${stripeEventId}-consultant`,
+        idempotencyKey: `commission-${rootId}-consultant`,
         correlationId,
       });
 
       if (consultantResult.entriesPosted === 0) {
         log.info('Commission consultant entries already exist (idempotent retry)', {
           correlationId,
-          idempotencyKey: `commission-${stripeEventId}-consultant`,
+          idempotencyKey: `commission-${rootId}-consultant`,
         });
       } else {
         log.info('Commission posted successfully (consultant)', {
@@ -380,14 +418,14 @@ async function applyRevenueShareSplitsInternal(
         entries: bdEntries,
         paymentLinkId,
         organizationId,
-        idempotencyKey: `commission-${stripeEventId}-bd`,
+        idempotencyKey: `commission-${rootId}-bd`,
         correlationId,
       });
 
       if (bdResult.entriesPosted === 0) {
         log.info('Commission BD partner entries already exist (idempotent retry)', {
           correlationId,
-          idempotencyKey: `commission-${stripeEventId}-bd`,
+          idempotencyKey: `commission-${rootId}-bd`,
         });
       } else {
         log.info('Commission posted successfully (BD partner)', {
@@ -418,7 +456,7 @@ async function applyRevenueShareSplitsInternal(
       data: {
         payment_link_id: paymentLinkId,
         referral_link_id: meta.referralLinkId,
-        stripe_event_id: stripeEventId,
+        stripe_event_id: rootId,
         consultant_amount: consultantAmountRounded,
         bd_partner_amount: bdPartnerAmountRounded,
         currency: currencyUpper,
@@ -429,9 +467,9 @@ async function applyRevenueShareSplitsInternal(
     obligationId = obligation.id;
   } catch (obligErr: any) {
     if (obligErr?.code === 'P2002') {
-      log.info('Commission obligation already exists (idempotent)', { stripeEventId });
+      log.info('Commission obligation already exists (idempotent)', { commissionRootId: rootId });
       const existing = await prisma.commission_obligations.findUnique({
-        where: { stripe_event_id: stripeEventId },
+        where: { stripe_event_id: rootId },
       });
       if (existing) obligationId = existing.id;
     } else {
@@ -475,7 +513,7 @@ async function applyRevenueShareSplitsInternal(
         });
       } catch (lineErr: any) {
         if (lineErr?.code === 'P2002') {
-          log.info('Commission obligation lines already exist (idempotent)', { stripeEventId });
+          log.info('Commission obligation lines already exist (idempotent)', { commissionRootId: rootId });
         } else {
           log.warn('Commission obligation lines create failed (non-blocking)', {
             error: lineErr instanceof Error ? lineErr.message : String(lineErr),
@@ -499,8 +537,10 @@ async function applyRevenueShareSplitsFromSplitsInternal(
   params: ApplyRevenueShareSplitsParams,
   splitsMeta: ReferralSplitMeta[]
 ): Promise<{ posted: boolean; consultantAmount?: number; bdPartnerAmount?: number }> {
-  const { session, stripeEventId, paymentLinkId, organizationId, grossAmount, currency, correlationId } = params;
-  const metadata = session.metadata || {};
+  const { paymentLinkId, organizationId, grossAmount, currency, correlationId } = params;
+  const rootId = resolveCommissionRootId(params);
+  const commissionMd = resolveCommissionMetadata(params) || {};
+  const metadata = commissionMd as Record<string, string>;
   const referralLinkId = metadata.referral_link_id as string;
   const referralCode = (metadata.referral_code as string) || '';
   const commissionBasis = ((metadata.commission_basis as string) || 'GROSS') as 'GROSS' | 'NET';
@@ -509,7 +549,7 @@ async function applyRevenueShareSplitsFromSplitsInternal(
   const splitAmounts = computeSplitAmounts(basisAmount, splitsMeta, currency);
   const aboveMin = splitAmounts.filter((s) => s.amount >= 0.01);
   if (aboveMin.length === 0) {
-    log.info('Commission skipped: all split amounts below minimum', { stripeEventId, paymentLinkId });
+    log.info('Commission skipped: all split amounts below minimum', { commissionRootId: rootId, paymentLinkId });
     return { posted: false };
   }
 
@@ -552,13 +592,13 @@ async function applyRevenueShareSplitsFromSplitsInternal(
         entries,
         paymentLinkId,
         organizationId,
-        idempotencyKey: `commission-${stripeEventId}-split-${s.split_id}`,
+        idempotencyKey: `commission-${rootId}-split-${s.split_id}`,
         correlationId,
       });
       if (result.entriesPosted === 0) {
         log.info('Commission split entries already exist (idempotent retry)', {
           correlationId,
-          idempotencyKey: `commission-${stripeEventId}-split-${s.split_id}`,
+          idempotencyKey: `commission-${rootId}-split-${s.split_id}`,
         });
       } else {
         log.info('Commission split posted', { correlationId, splitId: s.split_id, amount: s.amount });
@@ -583,7 +623,7 @@ async function applyRevenueShareSplitsFromSplitsInternal(
       data: {
         payment_link_id: paymentLinkId,
         referral_link_id: referralLinkId,
-        stripe_event_id: stripeEventId,
+        stripe_event_id: rootId,
         consultant_amount: totalAmount,
         bd_partner_amount: 0,
         currency: currencyUpper,
@@ -596,9 +636,9 @@ async function applyRevenueShareSplitsFromSplitsInternal(
   } catch (obligErr: unknown) {
     const err = obligErr as { code?: string };
     if (err?.code === 'P2002') {
-      log.info('Commission obligation already exists (idempotent)', { stripeEventId });
+      log.info('Commission obligation already exists (idempotent)', { commissionRootId: rootId });
       const existing = await prisma.commission_obligations.findUnique({
-        where: { stripe_event_id: stripeEventId },
+        where: { stripe_event_id: rootId },
       });
       if (existing) obligationId = existing.id;
     } else {
@@ -623,7 +663,7 @@ async function applyRevenueShareSplitsFromSplitsInternal(
       } catch (itemErr: unknown) {
         if ((itemErr as { code?: string })?.code === 'P2002') {
           log.info('Commission obligation item already exists (idempotent)', {
-            stripeEventId,
+            commissionRootId: rootId,
             splitId: s.split_id,
           });
         } else {
@@ -647,7 +687,7 @@ async function applyRevenueShareSplitsFromSplitsInternal(
       });
     } catch (lineErr: unknown) {
       if ((lineErr as { code?: string })?.code === 'P2002') {
-        log.info('Commission obligation lines already exist (idempotent)', { stripeEventId });
+        log.info('Commission obligation lines already exist (idempotent)', { commissionRootId: rootId });
       } else {
         log.warn('Commission obligation lines create failed', {
           error: lineErr instanceof Error ? lineErr.message : String(lineErr),

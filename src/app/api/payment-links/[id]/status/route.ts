@@ -10,11 +10,11 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { PaymentLinkStatusSchema } from '@/lib/validations/schemas';
-import { 
-  transitionPaymentLinkStatus,
+import {
+  transitionPaymentLinkState,
   isValidTransition,
   getValidNextStates,
-} from '@/lib/payment-link-state-machine';
+} from '@/lib/payments/state-machine';
 import { prisma } from '@/lib/server/prisma';
 
 const StatusTransitionSchema = z.object({
@@ -58,7 +58,7 @@ export async function POST(
       where: { id },
       select: {
         id: true,
-        organizationId: true,
+        organization_id: true,
         status: true,
       },
     });
@@ -73,7 +73,7 @@ export async function POST(
     // Check permission
     const canEdit = await checkUserPermission(
       user.id,
-      currentLink.organizationId,
+      currentLink.organization_id,
       'edit_payment_links'
     );
     if (!canEdit) {
@@ -100,10 +100,15 @@ export async function POST(
     }
 
     // Perform transition
-    const updatedLink = await transitionPaymentLinkStatus(
-      id,
-      newStatus,
-      user.id
+    const updatedLink = await prisma.$transaction(async (tx) =>
+      transitionPaymentLinkState({
+        tx,
+        paymentLinkId: id,
+        targetState: newStatus,
+        source: 'payment-link-status-api',
+        reason: 'manual_status_transition',
+        metadata: { actorUserId: user.id },
+      })
     );
 
     loggers.payment.info(
@@ -217,12 +222,15 @@ export async function GET(
 
     // Auto-transition to EXPIRED if needed
     if (isExpired && currentStatus === 'OPEN') {
-      await prisma.$transaction([
-        prisma.payment_links.update({
-          where: { id },
-          data: { status: 'EXPIRED', updated_at: new Date() },
-        }),
-        prisma.payment_events.create({
+      await prisma.$transaction(async (tx) => {
+        await transitionPaymentLinkState({
+          tx,
+          paymentLinkId: id,
+          targetState: 'EXPIRED',
+          source: 'payment-link-status-api',
+          reason: 'auto_expire_on_status_check',
+        });
+        await tx.payment_events.create({
           data: {
             payment_link_id: id,
             event_type: 'EXPIRED',
@@ -231,8 +239,8 @@ export async function GET(
               autoExpired: true,
             },
           },
-        }),
-      ]);
+        });
+      });
       if (isDev) {
         loggers.api.info({ paymentLinkId: id }, 'Auto-expired payment link');
       }

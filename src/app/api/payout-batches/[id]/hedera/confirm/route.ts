@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
@@ -29,7 +30,6 @@ function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
 
 const ConfirmSchema = z.object({
   transactionId: z.string().regex(/^0\.0\.\d+[@-]\d+\.\d+$/),
-  organizationId: z.string().uuid(),
   includedPayoutIds: z.array(z.string().uuid()).min(1, 'includedPayoutIds is required and must have at least one payout id'),
 });
 
@@ -55,27 +55,35 @@ export async function POST(
     const lockdownResponse = checkBetaLockdown(user.email);
     if (lockdownResponse) return lockdownResponse;
 
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+    const organizationId = org.id;
+
     const { id: batchId } = await params;
     const body = await request.json().catch(() => ({}));
     const parsed = ConfirmSchema.safeParse(body);
     if (!parsed.success) {
       const issues = parsed.error.issues;
-      const msg = issues.map((e: { message: string }) => e.message).join('; ') || 'transactionId, organizationId, and includedPayoutIds required';
+      const msg =
+        issues.map((e: { message: string }) => e.message).join('; ') ||
+        'transactionId and includedPayoutIds required';
       return NextResponse.json(
         { error: msg, details: issues },
         { status: 400 }
       );
     }
 
-    const { transactionId, organizationId, includedPayoutIds } = parsed.data;
+    const { transactionId, includedPayoutIds } = parsed.data;
 
     const canManage = await checkUserPermission(user.id, organizationId, 'manage_ledger');
     if (!canManage) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const batch = await prisma.payout_batches.findFirst({
-      where: { id: batchId, organization_id: organizationId },
+    const batch = await prisma.payout_batches.findUnique({
+      where: { id: batchId },
       include: {
         payouts: {
           where: { status: { not: 'PAID' } },
@@ -84,8 +92,8 @@ export async function POST(
       },
     });
 
-    if (!batch) {
-      return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
+    if (!batch || batch.organization_id !== organizationId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     const unpaidIds = new Set(batch.payouts.map((p) => p.id));

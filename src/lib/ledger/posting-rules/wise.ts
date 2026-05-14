@@ -1,6 +1,10 @@
 /**
  * Wise Settlement Posting Rules
  * Double-entry: DR Wise Clearing (1055), CR Accounts Receivable (1200)
+ *
+ * Architectural guardrail:
+ * - Invoke only from canonical settlement orchestration so PAYMENT_CONFIRMED and
+ *   ledger effects remain replay-safe and transactionally coherent.
  */
 
 import { Prisma } from '@prisma/client';

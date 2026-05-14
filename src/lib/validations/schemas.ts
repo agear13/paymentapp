@@ -35,6 +35,7 @@ export const PaymentEventTypeSchema = z.enum([
   'CANCELED',
   'REFUND_CONFIRMED',
   'CRYPTO_PAYMENT_SUBMITTED',
+  'RECURRING_EXECUTION',
 ]);
 
 export const PaymentMethodSchema = z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO', 'MANUAL_BANK']);

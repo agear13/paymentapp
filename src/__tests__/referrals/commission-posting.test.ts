@@ -252,6 +252,26 @@ describe('Commission Posting', () => {
       const result = computeSplitAmounts(99.99, splits, 'USD');
       expect(result[0].amount).toBe(9.99);
     });
+
+    it('when splits total 100%, absorbs rounding remainder into first split', () => {
+      const splits: ReferralSplitMeta[] = [
+        { split_id: 's1', label: 'P1', percentage: 33.33, beneficiary_id: null, sort_order: 1 },
+        { split_id: 's2', label: 'P2', percentage: 33.33, beneficiary_id: null, sort_order: 2 },
+        { split_id: 's3', label: 'P3', percentage: 33.34, beneficiary_id: null, sort_order: 3 },
+      ];
+      const result = computeSplitAmounts(100, splits, 'USD');
+      const total = result.reduce((s, x) => s + x.amount, 0);
+      expect(total).toBe(100);
+    });
+
+    it('when splits total under 100%, does not assign unallocated basis to first partner', () => {
+      const splits: ReferralSplitMeta[] = [
+        { split_id: 's1', label: 'P1', percentage: 10, beneficiary_id: null, sort_order: 0 },
+      ];
+      const result = computeSplitAmounts(100, splits, 'USD');
+      expect(result[0].amount).toBe(10);
+      expect(result.reduce((a, r) => a + r.amount, 0)).toBe(10);
+    });
   });
 
   describe('parseReferralSplitsFromMetadata', () => {

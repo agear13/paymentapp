@@ -7,16 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CreditCard, Loader2 } from 'lucide-react';
 
-interface CheckoutConfig {
-  amount?: number;
-  currency?: string;
-  description?: string;
-  title?: string;
-}
-
 interface Props {
   referralCode: string;
-  checkoutConfig?: CheckoutConfig | null;
+  checkoutConfig?: Record<string, unknown> | null;
 }
 
 export function ReferralPayPageClient({ referralCode, checkoutConfig }: Props) {

@@ -32,7 +32,7 @@ Sprint 3 has been successfully completed! The application now has a fully functi
 - ✅ Payment URL construction
 - ✅ Filename generation helper
 
-#### State Machine (`src/lib/payment-link-state-machine.ts`)
+#### State Machine (`src/lib/payments/state-machine.ts`)
 - ✅ Complete lifecycle state validation
 - ✅ State transition logic: DRAFT → OPEN → PAID/EXPIRED/CANCELED
 - ✅ Terminal state detection
@@ -197,7 +197,7 @@ npm install qrcode @types/qrcode date-fns
 ### New Files (17)
 1. `src/lib/short-code.ts` - Short code generation utility
 2. `src/lib/qr-code.ts` - QR code generation utility
-3. `src/lib/payment-link-state-machine.ts` - Lifecycle state management
+3. `src/lib/payments/state-machine.ts` - Lifecycle state management
 4. `src/app/api/payment-links/route.ts` - List & create endpoints
 5. `src/app/api/payment-links/[id]/route.ts` - Individual link CRUD
 6. `src/app/api/payment-links/[id]/status/route.ts` - Status transitions

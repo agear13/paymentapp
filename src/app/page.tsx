@@ -3,6 +3,9 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { getUserOrganization } from '@/lib/auth/get-org';
 import Link from 'next/link';
 
+/** Uses cookie-backed Supabase (`getCurrentUser`); cannot be statically generated. */
+export const dynamic = 'force-dynamic';
+
 export default async function Home() {
   const user = await getCurrentUser();
   

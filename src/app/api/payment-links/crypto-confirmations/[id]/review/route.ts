@@ -10,7 +10,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { CryptoConfirmationReviewSchema } from '@/lib/validations/schemas';
-import { transitionPaymentLinkStatus } from '@/lib/payment-link-state-machine';
+import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 import { createReferralConversionFromPaymentConfirmed } from '@/lib/referrals/payment-conversion';
 
 export async function POST(
@@ -86,9 +86,15 @@ export async function POST(
       });
 
       if (link.status === 'PAID_UNVERIFIED') {
-        await prisma.payment_links.update({
-          where: { id: link.id },
-          data: { status: 'REQUIRES_REVIEW', updated_at: new Date() },
+        await prisma.$transaction(async (tx) => {
+          await transitionPaymentLinkState({
+            tx,
+            paymentLinkId: link.id,
+            targetState: 'REQUIRES_REVIEW',
+            source: 'crypto-review',
+            reason: 'merchant_flag_investigate',
+            metadata: { confirmationId: id },
+          });
         });
       }
 
@@ -108,7 +114,16 @@ export async function POST(
       );
     }
 
-    await transitionPaymentLinkStatus(link.id, 'PAID', user.id);
+    await prisma.$transaction(async (tx) => {
+      await transitionPaymentLinkState({
+        tx,
+        paymentLinkId: link.id,
+        targetState: 'PAID',
+        source: 'crypto-confirmation-review',
+        reason: 'merchant_mark_valid',
+        metadata: { actorUserId: user.id, confirmationId: id },
+      });
+    });
 
     await prisma.crypto_payment_confirmations.update({
       where: { id },

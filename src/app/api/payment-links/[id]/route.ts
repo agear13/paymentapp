@@ -135,10 +135,10 @@ function transformPaymentLink(link: any) {
 import { applyRateLimit } from '@/lib/rate-limit';
 import { UpdatePaymentLinkSchema } from '@/lib/validations/schemas';
 import {
-  transitionPaymentLinkStatus,
+  transitionPaymentLinkState,
   isPaymentLinkEditable,
   isPaymentLinkCancelable,
-} from '@/lib/payment-link-state-machine';
+} from '@/lib/payments/state-machine';
 import { tryDeletePaymentLinkAttachmentFile } from '@/lib/payment-links/payment-link-attachment';
 import { revalidatePath } from 'next/cache';
 import { assertPilotDealOwnedByUser } from '@/lib/deal-network-demo/pilot-deal-invoice-link.server';
@@ -825,10 +825,15 @@ export async function DELETE(
     }
 
     // Transition to CANCELED status
-    const canceledLink = await transitionPaymentLinkStatus(
-      id,
-      'CANCELED',
-      user.id
+    const canceledLink = await prisma.$transaction(async (tx) =>
+      transitionPaymentLinkState({
+        tx,
+        paymentLinkId: id,
+        targetState: 'CANCELED',
+        source: 'payment-links-api',
+        reason: 'cancel_payment_link',
+        metadata: { actorUserId: user.id },
+      })
     );
 
     loggers.api.info(

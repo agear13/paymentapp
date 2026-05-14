@@ -15,6 +15,7 @@ import { generateCorrelationId } from '@/lib/services/correlation';
 import { normalizeHederaTransactionId } from '@/lib/hedera/txid';
 import { getFxService } from '@/lib/fx';
 import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
+import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 
 const requestSchema = z.object({
   paymentLinkId: z.string().uuid(),
@@ -388,24 +389,22 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Update payment link and create records
-    const txResults = await prisma.$transaction([
-      // 1. Update payment link status
-      prisma.payment_links.update({
-        where: { id: validated.paymentLinkId },
-        data: {
-          status: 'PAID',
-          updated_at: now,
-        },
-      }),
+    // Update payment link and create records atomically
+    const paymentEvent = await prisma.$transaction(async (txDb) => {
+      await transitionPaymentLinkState({
+        tx: txDb,
+        paymentLinkId: validated.paymentLinkId,
+        targetState: 'PAID',
+        source: 'hedera-manual-verify',
+        reason: 'verified_on_mirror',
+        metadata: { transactionId: normalizedTxId },
+      });
 
-      // 2. Create payment event
-      prisma.payment_events.create({
+      const pe = await txDb.payment_events.create({
         data: paymentEventData,
-      }),
+      });
 
-      // 3. Settlement FX snapshot (audit)
-      prisma.fx_snapshots.create({
+      await txDb.fx_snapshots.create({
         data: {
           payment_link_id: validated.paymentLinkId,
           snapshot_type: 'SETTLEMENT',
@@ -416,10 +415,9 @@ export async function POST(request: NextRequest) {
           provider: exchangeRate.provider,
           captured_at: exchangeRate.timestamp,
         },
-      }),
+      });
 
-      // 4. Ledger entry: DEBIT Crypto Clearing
-      prisma.ledger_entries.create({
+      await txDb.ledger_entries.create({
         data: {
           payment_link_id: validated.paymentLinkId,
           ledger_account_id: ledgerAccounts.cryptoClearing,
@@ -430,10 +428,9 @@ export async function POST(request: NextRequest) {
           idempotency_key: `${idempotencyKey}-debit`,
           created_at: now,
         },
-      }),
+      });
 
-      // 5. Create ledger entry: CREDIT Accounts Receivable
-      prisma.ledger_entries.create({
+      await txDb.ledger_entries.create({
         data: {
           payment_link_id: validated.paymentLinkId,
           ledger_account_id: ledgerAccounts.accountsReceivable,
@@ -444,10 +441,10 @@ export async function POST(request: NextRequest) {
           idempotency_key: `${idempotencyKey}-credit`,
           created_at: now,
         },
-      }),
-    ]);
+      });
 
-    const paymentEvent = txResults[1] as { id: string };
+      return pe;
+    });
     const grossAmount = parseFloat(String(paymentLink.amount));
 
     // 5. Auto-create referral conversion (non-blocking)

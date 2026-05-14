@@ -2,6 +2,7 @@ import { createUserClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import { ReferralLandingClient } from '@/components/referrals/referral-landing-client';
 import { ReferralPayPageClient } from '@/components/referrals/referral-pay-page-client';
+import { ReferralCommissionLanding } from '@/components/referrals/referral-commission-landing';
 import { prisma } from '@/lib/server/prisma';
 
 export default async function ReferralLandingPage({
@@ -16,22 +17,60 @@ export default async function ReferralLandingPage({
     notFound();
   }
 
-  // Option B: Commission-enabled referral links (Prisma) - show Pay Now page
   const referralLink = await prisma.referral_links.findFirst({
-    where: { code: referralCode, status: 'ACTIVE' },
-    include: { referral_rules: { take: 1 } },
+    where: {
+      code: referralCode,
+      status: 'ACTIVE',
+      OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }],
+    },
+    include: {
+      referral_rules: { orderBy: { created_at: 'desc' }, take: 1 },
+      referral_link_splits: { orderBy: { sort_order: 'asc' } },
+    },
   });
 
-  if (referralLink && referralLink.referral_rules.length > 0) {
+  const hasRules = referralLink && referralLink.referral_rules.length > 0;
+  const hasSplits = referralLink && referralLink.referral_link_splits.length > 0;
+  const isCommissionReferral = referralLink && (hasRules || hasSplits);
+
+  if (isCommissionReferral && referralLink) {
+    const services = await prisma.organization_services.findMany({
+      where: { organization_id: referralLink.organization_id, active: true },
+      orderBy: { created_at: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        currency: true,
+      },
+    });
+
+    if (services.length > 0) {
+      return (
+        <ReferralCommissionLanding
+          referralCode={referralCode}
+          checkoutConfig={(referralLink.checkout_config ?? null) as Record<string, unknown> | null}
+          services={services.map((s) => ({
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            price: Number(s.price),
+            currency: s.currency,
+          }))}
+        />
+      );
+    }
+
     return (
       <ReferralPayPageClient
         referralCode={referralCode}
-        checkoutConfig={referralLink.checkout_config}
+        checkoutConfig={referralLink.checkout_config as Record<string, unknown> | null}
       />
     );
   }
 
-  // Legacy: Supabase referral participants (landing page with enquiry)
   let supabase;
   try {
     supabase = await createUserClient();
@@ -40,9 +79,7 @@ export default async function ReferralLandingPage({
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold text-red-600 mb-2">
-            Configuration Error
-          </h1>
+          <h1 className="text-2xl font-bold text-red-600 mb-2">Configuration Error</h1>
           <p className="text-gray-600">
             Referral system is not properly configured. Please contact support.
           </p>
@@ -51,7 +88,6 @@ export default async function ReferralLandingPage({
     );
   }
 
-  // Find participant and program (using referral_ namespaced tables)
   const { data: participant, error: participantError } = await supabase
     .from('referral_participants')
     .select(`
@@ -88,7 +124,6 @@ export default async function ReferralLandingPage({
     );
   }
 
-  // Fetch published reviews for this program (using referral_reviews)
   const { data: reviews } = await supabase
     .from('referral_reviews')
     .select('id, rating, testimonial, reviewer_name, photo_url, created_at')

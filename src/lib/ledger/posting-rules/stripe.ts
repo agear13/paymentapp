@@ -1,6 +1,10 @@
 /**
  * Stripe Settlement Posting Rules
  * Double-entry accounting rules for Stripe credit card payments
+ *
+ * Architectural guardrail:
+ * - Settlement posting must be called from canonical settlement orchestration (`confirmPayment`)
+ *   so ledger writes stay transactionally coupled to PAYMENT_CONFIRMED creation.
  * 
  * Posting Logic:
  * 1. DR Stripe Clearing (1050), CR Accounts Receivable (1200) - Gross amount

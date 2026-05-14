@@ -20,6 +20,7 @@ import {
 } from '@/lib/payment/edge-case-handler';
 import { generateCorrelationId } from '@/lib/services/correlation';
 import { normalizeHederaTransactionId } from './txid';
+import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 
 /**
  * Parameters for confirming a Hedera payment
@@ -152,37 +153,39 @@ export async function confirmHederaPayment(
       : 'https://testnet.mirrornode.hedera.com';
 
     // Update payment link and create event in transaction
-    await prisma.$transaction([
-    // Update payment link status
-    prisma.payment_links.update({
-      where: { id: paymentLinkId },
-      data: { status: 'PAID', updated_at: new Date() },
-    }),
-    // Create payment event
-    prisma.payment_events.create({
-      data: {
-        payment_link_id: paymentLinkId,
-        event_type: 'PAYMENT_CONFIRMED',
-        payment_method: 'HEDERA',
-        hedera_transaction_id: normalizedTxId,
-        amount_received: amountReceived,
-        currency_received: tokenType,
-        correlation_id: correlationId,
-        metadata: {
-          raw_transaction_id: transactionId,
-          normalized_transaction_id: normalizedTxId,
-          tokenType,
-          token_type: tokenType,
-          sender,
-          payer_account_id: sender,
-          memo,
-          confirmedAt: new Date().toISOString(),
-          network,
-          mirror_url: mirrorUrl,
+    await prisma.$transaction(async (tx) => {
+      await transitionPaymentLinkState({
+        tx,
+        paymentLinkId,
+        targetState: 'PAID',
+        source: 'hedera-payment-confirmation',
+        reason: 'hedera_confirmed',
+        metadata: { transactionId: normalizedTxId },
+      });
+      await tx.payment_events.create({
+        data: {
+          payment_link_id: paymentLinkId,
+          event_type: 'PAYMENT_CONFIRMED',
+          payment_method: 'HEDERA',
+          hedera_transaction_id: normalizedTxId,
+          amount_received: amountReceived,
+          currency_received: tokenType,
+          correlation_id: correlationId,
+          metadata: {
+            raw_transaction_id: transactionId,
+            normalized_transaction_id: normalizedTxId,
+            tokenType,
+            token_type: tokenType,
+            sender,
+            payer_account_id: sender,
+            memo,
+            confirmedAt: new Date().toISOString(),
+            network,
+            mirror_url: mirrorUrl,
+          },
         },
-      },
-    }),
-    ]);
+      });
+    });
 
       log.info('Payment link updated to PAID status', {
         paymentLinkId,

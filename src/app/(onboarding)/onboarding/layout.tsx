@@ -1,6 +1,9 @@
 import { getCurrentUser } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
 
+/** Layout reads session cookies; prerender must be skipped for this subtree. */
+export const dynamic = 'force-dynamic';
+
 export default async function OnboardingLayout({
   children,
 }: {
