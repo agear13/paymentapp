@@ -8,6 +8,11 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import {
+  ensureReferralIssuance,
+  resolveOrganizationIdForOperator,
+} from '@/lib/referrals/ensure-referral-issuance';
+import { log } from '@/lib/logger';
 
 export interface PilotSnapshotPayload {
   deals: RecentDeal[];
@@ -175,10 +180,21 @@ export async function markParticipantInviteOpened(token: string): Promise<void> 
   });
 }
 
+export type ApproveParticipantResult = {
+  deal: RecentDeal;
+  participant: DemoParticipant;
+  referralIssuance?: {
+    code: string;
+    referralUrl: string;
+    created: boolean;
+  };
+};
+
 export async function approveParticipantByInviteToken(
   token: string,
-  note: string | undefined
-): Promise<{ deal: RecentDeal; participant: DemoParticipant } | null> {
+  note: string | undefined,
+  options?: { approverUserId?: string | null }
+): Promise<ApproveParticipantResult | null> {
   const row = await prisma.deal_network_pilot_participants.findUnique({
     where: { invite_token: token },
     include: { deal: true },
@@ -205,13 +221,65 @@ export async function approveParticipantByInviteToken(
     },
   });
 
-  return {
-    deal: dealRowToRecentDeal(row.deal),
-    participant: {
-      ...next,
-      id: row.id,
-      dealId: row.deal_id,
-      inviteToken: row.invite_token,
-    },
+  const deal = dealRowToRecentDeal(row.deal);
+  const participant: DemoParticipant = {
+    ...next,
+    id: row.id,
+    dealId: row.deal_id,
+    inviteToken: row.invite_token,
   };
+
+  let referralIssuance: ApproveParticipantResult['referralIssuance'];
+  try {
+    const organizationId = await resolveOrganizationIdForOperator(row.deal.user_id);
+    if (organizationId) {
+      const issued = await ensureReferralIssuance({
+        organizationId,
+        operatorUserId: row.deal.user_id,
+        participantUserId: options?.approverUserId ?? null,
+        participantEmail: participant.email,
+        participantName: participant.name,
+        sourceParticipantId: row.id,
+        referralCodeHint: null,
+        commissionKind: participant.commissionKind,
+        commissionValue: participant.commissionValue,
+        projectLabel: deal.dealName,
+      });
+      referralIssuance = {
+        code: issued.code,
+        referralUrl: issued.referralUrl,
+        created: issued.created,
+      };
+      const payloadWithLink: DemoParticipant = {
+        ...participant,
+        inviteLink: issued.referralUrl,
+      };
+      await prisma.deal_network_pilot_participants.update({
+        where: { id: row.id },
+        data: {
+          participant_payload: payloadWithLink as unknown as Prisma.InputJsonValue,
+        },
+      });
+      return {
+        deal,
+        participant: payloadWithLink,
+        referralIssuance,
+      };
+    }
+    log.warn('Referral issuance skipped: operator has no organization', {
+      operatorUserId: row.deal.user_id,
+      pilotParticipantId: row.id,
+    });
+  } catch (err) {
+    log.error(
+      'Referral issuance failed after approval (non-blocking)',
+      err instanceof Error ? err : undefined,
+      {
+        pilotParticipantId: row.id,
+        error: err instanceof Error ? err.message : String(err),
+      }
+    );
+  }
+
+  return { deal, participant, referralIssuance };
 }

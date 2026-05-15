@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { approveParticipantByInviteToken } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { refreshDealNetworkPilotObligationsForUser } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
 import { prisma } from '@/lib/server/prisma';
+import { requireAuth } from '@/lib/supabase/middleware';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,10 @@ export async function POST(
   }
 
   try {
-    const result = await approveParticipantByInviteToken(token, note);
+    const auth = await requireAuth(request as NextRequest);
+    const approverUserId = auth.user?.id ?? null;
+
+    const result = await approveParticipantByInviteToken(token, note, { approverUserId });
     if (!result) {
       return NextResponse.json(
         { error: 'Invite link is inactive (participant removed)' },

@@ -16,6 +16,8 @@ import {
   computeParticipantCommissionTotalsForDeal,
   demoParticipantToPilotRow,
 } from '@/lib/deal-network-demo/commission-structure';
+import { ReferralSharePanel } from '@/components/referrals/referral-share-panel';
+import { buildReferralQrApiPath } from '@/lib/referrals/referral-share-url';
 
 function roleAmountsFromDeal(deal: RecentDeal) {
   return {
@@ -56,6 +58,7 @@ export default function DealInviteApprovalPage() {
           deal: RecentDeal;
           participant: DemoParticipant;
           dealParticipants?: DemoParticipant[];
+          referralIssuance?: { code: string; referralUrl: string };
         }>;
       })
       .then((data) => {
@@ -65,6 +68,16 @@ export default function DealInviteApprovalPage() {
         setDealParticipants(data.dealParticipants ?? []);
         setApproved(data.participant.approvalStatus === 'Approved');
         setNote(data.participant.approvalNote ?? '');
+        if (data.referralIssuance) {
+          setReferralIssuance(data.referralIssuance);
+        } else if (data.participant.inviteLink?.trim()) {
+          const url = data.participant.inviteLink.trim();
+          const codeMatch = url.match(/\/r\/([A-Z0-9_-]+)/i) ?? url.match(/\/ref\/([a-z0-9_-]+)/i);
+          setReferralIssuance({
+            referralUrl: url,
+            code: codeMatch?.[1]?.toUpperCase() ?? 'REFERRAL',
+          });
+        }
       })
       .catch((e: Error) => {
         if (!cancelled) setLoadError(e.message || 'Failed to load invite');
@@ -93,11 +106,22 @@ export default function DealInviteApprovalPage() {
         deal: RecentDeal;
         participant: DemoParticipant;
         dealParticipants?: DemoParticipant[];
+        referralIssuance?: { code: string; referralUrl: string };
       };
       setParticipant(data.participant);
       setDeal(data.deal);
       setDealParticipants(data.dealParticipants ?? []);
       setApproved(true);
+      if (data.referralIssuance) {
+        setReferralIssuance(data.referralIssuance);
+      } else if (data.participant.inviteLink?.trim()) {
+        const url = data.participant.inviteLink.trim();
+        const codeMatch = url.match(/\/r\/([A-Z0-9_-]+)/i) ?? url.match(/\/ref\/([a-z0-9_-]+)/i);
+        setReferralIssuance({
+          referralUrl: url,
+          code: codeMatch?.[1]?.toUpperCase() ?? 'REFERRAL',
+        });
+      }
       toast.success('Agreement approved');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Approval failed';
@@ -296,6 +320,26 @@ export default function DealInviteApprovalPage() {
               ) : null}
             </div>
           </form>
+
+          {approved && referralIssuance ? (
+            <div className="rounded-md border p-4 bg-background space-y-2">
+              <p className="text-sm font-medium">Your referral link</p>
+              <p className="text-xs text-muted-foreground">
+                Share this link or QR so payers can check out with your attribution.
+              </p>
+              <ReferralSharePanel
+                code={referralIssuance.code}
+                referralUrl={referralIssuance.referralUrl}
+                qrUrl={buildReferralQrApiPath(referralIssuance.code)}
+                participantLabel={participant.name}
+              />
+            </div>
+          ) : approved ? (
+            <p className="text-sm text-muted-foreground">
+              Referral link is being prepared. Sign in and open My referrals in the dashboard if it
+              does not appear here shortly.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
     </div>

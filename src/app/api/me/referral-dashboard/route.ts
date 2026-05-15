@@ -8,6 +8,7 @@ import {
   buildReferralShareUrl,
   resolveReferralSlug,
 } from '@/lib/referrals/referral-share-url';
+import { loadReferralCodesForParticipant } from '@/lib/referrals/participant-referral-codes';
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,22 +32,11 @@ export async function GET(request: NextRequest) {
 
     const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '');
 
-    const codes = await prisma.referral_codes.findMany({
-      where: {
-        organization_id: organizationId,
-        participant_user_id: auth.user.id,
-        status: 'ACTIVE',
-        OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }],
-      },
-      orderBy: { created_at: 'desc' },
-      take: 50,
-      select: {
-        id: true,
-        code: true,
-        slug: true,
-        created_at: true,
-        referral_links: { select: { slug: true } },
-      },
+    const codes = await loadReferralCodesForParticipant({
+      organizationId,
+      participantUserId: auth.user.id,
+      participantEmail: auth.user.email,
+      bindUserOnEmailMatch: true,
     });
 
     const invoices = await prisma.payment_links.findMany({

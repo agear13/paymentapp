@@ -6,6 +6,11 @@ import {
   getParticipantByInviteToken,
   getPilotParticipantsForDeal,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import {
+  ensureReferralIssuance,
+  resolveOrganizationIdForOperator,
+} from '@/lib/referrals/ensure-referral-issuance';
+import { log } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +38,45 @@ export async function GET(
     const deal = dealRowToRecentDeal(row.deal);
     const participant = { ...participantRowToDemo(row), inviteStatus: 'Opened' as const };
     const dealParticipants = await getPilotParticipantsForDeal(row.deal_id);
-    return NextResponse.json({ deal, participant, dealParticipants });
+
+    let referralIssuance: { code: string; referralUrl: string; created: boolean } | undefined;
+    if (row.approval_status === 'Approved') {
+      try {
+        const organizationId = await resolveOrganizationIdForOperator(row.deal.user_id);
+        if (organizationId) {
+          const issued = await ensureReferralIssuance({
+            organizationId,
+            operatorUserId: row.deal.user_id,
+            participantEmail: participant.email,
+            participantName: participant.name,
+            sourceParticipantId: row.id,
+            commissionKind: participant.commissionKind,
+            commissionValue: participant.commissionValue,
+            projectLabel: deal.dealName,
+          });
+          referralIssuance = {
+            code: issued.code,
+            referralUrl: issued.referralUrl,
+            created: issued.created,
+          };
+        }
+      } catch (err) {
+        log.warn('Referral backfill on invite GET failed', {
+          pilotParticipantId: row.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    return NextResponse.json({
+      deal,
+      participant: {
+        ...participant,
+        inviteLink: referralIssuance?.referralUrl ?? participant.inviteLink,
+      },
+      dealParticipants,
+      referralIssuance,
+    });
   } catch (e) {
     console.error('[deal-network-pilot/invites GET]', e);
     return NextResponse.json({ error: 'Failed to load invite' }, { status: 500 });
