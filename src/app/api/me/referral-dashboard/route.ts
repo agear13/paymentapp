@@ -3,6 +3,11 @@ import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
+import {
+  buildReferralQrUrl,
+  buildReferralShareUrl,
+  resolveReferralSlug,
+} from '@/lib/referrals/referral-share-url';
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,7 +40,13 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { created_at: 'desc' },
       take: 50,
-      select: { id: true, code: true, slug: true, created_at: true },
+      select: {
+        id: true,
+        code: true,
+        slug: true,
+        created_at: true,
+        referral_links: { select: { slug: true } },
+      },
     });
 
     const invoices = await prisma.payment_links.findMany({
@@ -82,16 +93,28 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: {
-        referralCodes: codes.map((c) => ({
-          id: c.id,
-          code: c.code,
-          slug: c.slug,
-          referralUrl: baseUrl ? `${baseUrl}/r/${c.code}` : `/r/${c.code}`,
-          qrUrl: baseUrl
-            ? `${baseUrl}/api/referral/${encodeURIComponent(c.code)}/qr`
-            : `/api/referral/${encodeURIComponent(c.code)}/qr`,
-          createdAt: c.created_at.toISOString(),
-        })),
+        referralCodes: codes.map((c) => {
+          const code = c.code.trim().toUpperCase();
+          const slug = resolveReferralSlug({
+            code,
+            slug: c.slug,
+            referralLinkSlug: c.referral_links.slug,
+          });
+          const shareSource = {
+            code,
+            slug: c.slug,
+            referralLinkSlug: c.referral_links.slug,
+          };
+          return {
+            id: c.id,
+            code,
+            slug,
+            vanityPath: slug ? `/ref/${slug}` : null,
+            referralUrl: buildReferralShareUrl(baseUrl || '', shareSource),
+            qrUrl: buildReferralQrUrl(baseUrl || '', code),
+            createdAt: c.created_at.toISOString(),
+          };
+        }),
         invoices: invoices.map((i) => ({
           id: i.id,
           shortCode: i.short_code,

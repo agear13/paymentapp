@@ -63,7 +63,11 @@ export default async function ParticipantsPage() {
         <CardHeader>
           <CardTitle>All Participants</CardTitle>
           <CardDescription>
-            View referral codes and generate shareable links
+            View program participants. For live referral URLs, QR codes, and copy actions, use{' '}
+            <Link href="/dashboard/referrals" className="text-blue-600 underline">
+              Referral sharing
+            </Link>
+            .
           </CardDescription>
         </CardHeader>
         <CardContent>

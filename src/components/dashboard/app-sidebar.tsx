@@ -29,6 +29,7 @@ import {
   Building2,
   FileCheck,
   Repeat,
+  Share2,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -65,6 +66,11 @@ const paymentLinksCoreNavItems = [
     title: 'Recurring',
     href: '/dashboard/recurring-templates',
     icon: Repeat,
+  },
+  {
+    title: 'Referral sharing',
+    href: '/dashboard/referrals',
+    icon: Share2,
   },
 ];
 
@@ -110,8 +116,16 @@ const partnersItems = [
         href: '/dashboard/partners/deal-network/obligations',
       },
       {
+        title: 'Referral sharing',
+        href: '/dashboard/referrals',
+      },
+      {
         title: 'My referrals',
         href: '/dashboard/referrals/mine',
+      },
+      {
+        title: 'Commission link setup',
+        href: '/dashboard/partners/referral-links',
       },
       {
         title: 'Commissions',
@@ -149,6 +163,14 @@ const programsItems = [
       {
         title: 'Consultant',
         href: '/dashboard/consultant',
+      },
+      {
+        title: 'Participants',
+        href: '/dashboard/programs/participants',
+      },
+      {
+        title: 'Referral sharing',
+        href: '/dashboard/referrals',
       },
     ],
   },

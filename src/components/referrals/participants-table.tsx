@@ -4,6 +4,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Copy, ExternalLink } from 'lucide-react';
+import { toast } from 'sonner';
+import Link from 'next/link';
 
 interface Participant {
   id: string;
@@ -17,10 +19,14 @@ interface Participant {
 }
 
 export function ParticipantsTable({ participants }: { participants: Participant[] }) {
-  const copyReferralLink = (code: string) => {
-    const url = `${window.location.origin}/r/${code}`;
-    navigator.clipboard.writeText(url);
-    alert('Referral link copied to clipboard!');
+  const copyReferralLink = async (code: string) => {
+    const url = `${window.location.origin}/r/${code.trim().toUpperCase()}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Referral link copied');
+    } catch {
+      toast.error('Failed to copy');
+    }
   };
 
   const openReferralPage = (code: string) => {
@@ -44,6 +50,15 @@ export function ParticipantsTable({ participants }: { participants: Participant[
   };
 
   return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Program participants use Supabase referral codes. For commission-enabled Prisma links (QR, vanity
+        URLs), see{' '}
+        <Link href="/dashboard/referrals" className="text-blue-600 underline">
+          Referral sharing
+        </Link>
+        .
+      </p>
     <Table>
       <TableHeader>
         <TableRow>
@@ -100,5 +115,6 @@ export function ParticipantsTable({ participants }: { participants: Participant[
         ))}
       </TableBody>
     </Table>
+    </div>
   );
 }

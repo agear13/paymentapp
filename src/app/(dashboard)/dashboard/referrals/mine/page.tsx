@@ -1,17 +1,21 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useOrganization } from '@/hooks/use-organization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ReferralSharePanel } from '@/components/referrals/referral-share-panel';
+import { ReferralWorkflowCallout } from '@/components/referrals/referral-workflow-callout';
 import { toast } from 'sonner';
-import { ExternalLink, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 type DashboardPayload = {
   referralCodes: Array<{
     id: string;
     code: string;
     slug: string | null;
+    vanityPath: string | null;
     referralUrl: string;
     qrUrl: string;
     createdAt: string;
@@ -80,40 +84,45 @@ export default function MyReferralsPage() {
     <div className="space-y-8 max-w-4xl">
       <div>
         <h1 className="text-3xl font-bold">My referrals</h1>
-        <p className="text-gray-600 mt-1">Your shareable links, invoices generated from them, and commission lines.</p>
+        <p className="text-gray-600 mt-1">
+          Your shareable links, attributed invoices, and commission lines. Copy your link or QR and send it
+          to customers — attribution is automatic when they pay.
+        </p>
       </div>
+
+      <ReferralWorkflowCallout audience="participant" />
 
       <Card>
         <CardHeader>
-          <CardTitle>Referral links</CardTitle>
-          <CardDescription>Share `/r/CODE` or use the QR image.</CardDescription>
+          <CardTitle>Your referral links</CardTitle>
+          <CardDescription>
+            These links already exist for your account. Share them as-is — we do not generate new codes
+            here.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           {data.referralCodes.length === 0 ? (
-            <p className="text-sm text-gray-600">No participant referral codes yet. Create one under Partners → Referral links.</p>
+            <div className="text-sm text-gray-600 space-y-2">
+              <p>No referral link is assigned to your user yet.</p>
+              <p>
+                Ask your operator to add you as a participant, or visit{' '}
+                <Link href="/dashboard/referrals" className="text-blue-600 underline">
+                  Referral sharing
+                </Link>{' '}
+                if you manage the organization.
+              </p>
+            </div>
           ) : (
             data.referralCodes.map((c) => (
-              <div key={c.id} className="flex flex-col sm:flex-row gap-4 border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                <div className="flex-1 space-y-1">
-                  <p className="font-mono text-lg font-semibold">{c.code}</p>
-                  {c.slug ? (
-                    <p className="text-sm text-gray-500">
-                      Vanity: /ref/{c.slug}
-                    </p>
-                  ) : null}
-                  <a
-                    href={c.referralUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm text-blue-600 inline-flex items-center gap-1"
-                  >
-                    {c.referralUrl} <ExternalLink className="h-3 w-3" />
-                  </a>
-                </div>
-                <div className="shrink-0">
-                  <img src={c.qrUrl} alt={`QR for ${c.code}`} width={140} height={140} className="rounded border border-gray-200" />
-                </div>
-              </div>
+              <ReferralSharePanel
+                key={c.id}
+                code={c.code}
+                referralUrl={c.referralUrl}
+                qrUrl={c.qrUrl}
+                status="ACTIVE"
+                vanityPath={c.vanityPath}
+                createdAt={c.createdAt}
+              />
             ))
           )}
         </CardContent>
@@ -122,10 +131,11 @@ export default function MyReferralsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Invoices from your referrals</CardTitle>
+          <CardDescription>Payment links created after someone used your referral URL.</CardDescription>
         </CardHeader>
         <CardContent>
           {data.invoices.length === 0 ? (
-            <p className="text-sm text-gray-600">No attributed invoices yet.</p>
+            <p className="text-sm text-gray-600">No attributed invoices yet — share your link to get started.</p>
           ) : (
             <ul className="divide-y divide-gray-100">
               {data.invoices.map((i) => (
