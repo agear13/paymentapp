@@ -9,6 +9,7 @@ import { prisma } from '@/lib/server/prisma';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildReferralShareUrl } from '@/lib/referrals/referral-share-url';
 import { log } from '@/lib/logger';
+import { referralTrace } from '@/lib/referrals/referral-trace';
 import type { CommissionStructureKind } from '@/lib/deal-network-demo/commission-structure';
 
 export type EnsureReferralIssuanceInput = {
@@ -114,12 +115,26 @@ export async function ensureReferralIssuance(
   } = input;
 
   let participantUserId = input.participantUserId?.trim() || null;
-  if (!participantUserId && input.participantEmail?.trim()) {
-    participantUserId = await resolveSupabaseUserIdByEmail(input.participantEmail);
+  const emailLookupAttempted = !participantUserId && !!input.participantEmail?.trim();
+  if (emailLookupAttempted) {
+    participantUserId = await resolveSupabaseUserIdByEmail(input.participantEmail!);
   }
 
   const slug = pilotSlug(sourceParticipantId);
   const code = deterministicCodeFromSource(sourceParticipantId, referralCodeHint);
+
+  referralTrace('ensureReferralIssuance.start', {
+    organizationId,
+    operatorUserId,
+    sourceParticipantId,
+    slug,
+    code,
+    participantUserIdInput: input.participantUserId ?? null,
+    participantUserIdResolved: participantUserId,
+    participantEmail: input.participantEmail?.trim().toLowerCase() || null,
+    emailLookupAttempted,
+    emailLookupHit: emailLookupAttempted ? !!participantUserId : null,
+  });
 
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '');
 
@@ -128,14 +143,35 @@ export async function ensureReferralIssuance(
     include: { referral_code: true, referral_link_splits: true, referral_rules: true },
   });
 
+  if (existingBySlug) {
+    referralTrace('ensureReferralIssuance.slugLookup', {
+      organizationId,
+      slug,
+      referralLinkId: existingBySlug.id,
+      hasReferralCode: !!existingBySlug.referral_code,
+      referralCodeId: existingBySlug.referral_code?.id ?? null,
+      existingParticipantUserId: existingBySlug.referral_code?.participant_user_id ?? null,
+    });
+  }
+
   if (existingBySlug?.referral_code) {
     const rc = existingBySlug.referral_code;
-    if (participantUserId && rc.participant_user_id !== participantUserId) {
+    const rebound = participantUserId && rc.participant_user_id !== participantUserId;
+    if (rebound) {
       await prisma.referral_codes.update({
         where: { id: rc.id },
         data: { participant_user_id: participantUserId },
       });
     }
+    referralTrace('ensureReferralIssuance.reuseBySlug', {
+      organizationId,
+      referralLinkId: existingBySlug.id,
+      referralCodeId: rc.id,
+      code: rc.code,
+      created: false,
+      participantUserId: participantUserId ?? rc.participant_user_id,
+      rebound,
+    });
     return {
       referralLinkId: existingBySlug.id,
       referralCodeId: rc.id,
@@ -155,6 +191,17 @@ export async function ensureReferralIssuance(
     include: { referral_code: true },
   });
 
+  if (existingByCode) {
+    referralTrace('ensureReferralIssuance.codeLookup', {
+      organizationId,
+      code,
+      found: true,
+      linkOrgId: existingByCode.organization_id,
+      orgMatch: existingByCode.organization_id === organizationId,
+      hasReferralCode: !!existingByCode.referral_code,
+    });
+  }
+
   if (existingByCode && existingByCode.organization_id === organizationId) {
     let linkId = existingByCode.id;
     if (!existingByCode.slug) {
@@ -165,6 +212,11 @@ export async function ensureReferralIssuance(
     }
     let rc = existingByCode.referral_code;
     if (!rc) {
+      referralTrace('ensureReferralIssuance.createCodeOnExistingLink', {
+        organizationId,
+        referralLinkId: linkId,
+        code,
+      });
       rc = await prisma.referral_codes.create({
         data: {
           id: randomUUID(),
@@ -215,6 +267,12 @@ export async function ensureReferralIssuance(
       include: { referral_links: true },
     });
     if (existingForUser) {
+      referralTrace('ensureReferralIssuance.reuseByUser', {
+        organizationId,
+        participantUserId,
+        referralCodeId: existingForUser.id,
+        code: existingForUser.code,
+      });
       return {
         referralLinkId: existingForUser.referral_link_id,
         referralCodeId: existingForUser.id,
@@ -231,6 +289,7 @@ export async function ensureReferralIssuance(
   }
 
   const pct = commissionPctDecimal(commissionKind, commissionValue);
+  const hasUser = !!participantUserId;
   const checkoutConfig = {
     pilotParticipantId: sourceParticipantId,
     participantEmail: input.participantEmail?.trim().toLowerCase() || null,
@@ -253,7 +312,6 @@ export async function ensureReferralIssuance(
       },
     });
 
-    const hasUser = !!participantUserId;
     if (hasUser && pct > 0) {
       await tx.referral_rules.create({
         data: {
@@ -292,12 +350,16 @@ export async function ensureReferralIssuance(
     return { link, rc };
   });
 
-  log.info('Referral issued on participant approval', {
+  referralTrace('ensureReferralIssuance.created', {
     organizationId,
     sourceParticipantId,
-    code,
     referralLinkId: created.link.id,
+    referralCodeId: created.rc.id,
+    code,
+    slug,
     participantUserId,
+    created: true,
+    commissionRulePath: hasUser && pct > 0 ? 'referral_rules' : 'referral_link_splits',
   });
 
   return {

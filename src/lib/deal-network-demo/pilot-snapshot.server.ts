@@ -13,6 +13,7 @@ import {
   resolveOrganizationIdForOperator,
 } from '@/lib/referrals/ensure-referral-issuance';
 import { log } from '@/lib/logger';
+import { referralTrace } from '@/lib/referrals/referral-trace';
 
 export interface PilotSnapshotPayload {
   deals: RecentDeal[];
@@ -230,8 +231,23 @@ export async function approveParticipantByInviteToken(
   };
 
   let referralIssuance: ApproveParticipantResult['referralIssuance'];
+  referralTrace('approveParticipant.start', {
+    inviteToken: token,
+    pilotParticipantId: row.id,
+    dealId: row.deal_id,
+    operatorUserId: row.deal.user_id,
+    approverUserId: options?.approverUserId ?? null,
+    participantEmail: participant.email?.trim() || null,
+    approvalStatus: row.approval_status,
+  });
+
   try {
     const organizationId = await resolveOrganizationIdForOperator(row.deal.user_id);
+    referralTrace('approveParticipant.orgResolve', {
+      operatorUserId: row.deal.user_id,
+      organizationId,
+      resolved: !!organizationId,
+    });
     if (organizationId) {
       const issued = await ensureReferralIssuance({
         organizationId,
@@ -250,6 +266,16 @@ export async function approveParticipantByInviteToken(
         referralUrl: issued.referralUrl,
         created: issued.created,
       };
+      referralTrace('approveParticipant.issuanceOk', {
+        organizationId,
+        pilotParticipantId: row.id,
+        referralLinkId: issued.referralLinkId,
+        referralCodeId: issued.referralCodeId,
+        code: issued.code,
+        referralUrl: issued.referralUrl,
+        created: issued.created,
+        participantUserId: issued.participantUserId,
+      });
       const payloadWithLink: DemoParticipant = {
         ...participant,
         inviteLink: issued.referralUrl,

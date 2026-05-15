@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useOrganization } from '@/hooks/use-organization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ReferralSharePanel } from '@/components/referrals/referral-share-panel';
@@ -41,16 +40,22 @@ type DashboardPayload = {
 };
 
 export default function MyReferralsPage() {
-  const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const [data, setData] = React.useState<DashboardPayload | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   const load = React.useCallback(async () => {
-    if (!organizationId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/me/referral-dashboard?organizationId=${organizationId}`);
+      const res = await fetch('/api/me/referral-dashboard');
       const json = await res.json();
+      if (process.env.NODE_ENV !== 'production') {
+        console.info('[referral-trace] mine.page.fetch', {
+          status: res.status,
+          ok: res.ok,
+          error: json.error ?? null,
+          referralCodesCount: json.data?.referralCodes?.length ?? null,
+        });
+      }
       if (!res.ok) throw new Error(json.error || 'Failed to load');
       setData(json.data);
     } catch (e) {
@@ -58,13 +63,13 @@ export default function MyReferralsPage() {
     } finally {
       setLoading(false);
     }
-  }, [organizationId]);
+  }, []);
 
   React.useEffect(() => {
     load();
   }, [load]);
 
-  if (isOrgLoading || loading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-24 text-gray-600">
         <Loader2 className="h-6 w-6 animate-spin mr-2" />

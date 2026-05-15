@@ -106,8 +106,16 @@ export default function DealInviteApprovalPage() {
         deal: RecentDeal;
         participant: DemoParticipant;
         dealParticipants?: DemoParticipant[];
-        referralIssuance?: { code: string; referralUrl: string };
+        referralIssuance?: { code: string; referralUrl: string; created?: boolean };
       };
+      if (process.env.NODE_ENV !== 'production') {
+        console.info('[referral-trace] invite.approve.response', {
+          hasReferralIssuance: !!data.referralIssuance,
+          referralCode: data.referralIssuance?.code ?? null,
+          referralUrl: data.referralIssuance?.referralUrl ?? null,
+          participantInviteLink: data.participant.inviteLink ?? null,
+        });
+      }
       setParticipant(data.participant);
       setDeal(data.deal);
       setDealParticipants(data.dealParticipants ?? []);

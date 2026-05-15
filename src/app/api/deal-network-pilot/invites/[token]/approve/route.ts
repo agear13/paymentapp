@@ -3,6 +3,7 @@ import { approveParticipantByInviteToken } from '@/lib/deal-network-demo/pilot-s
 import { refreshDealNetworkPilotObligationsForUser } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
+import { referralTrace } from '@/lib/referrals/referral-trace';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,14 @@ export async function POST(
     if (owner?.user_id) {
       await refreshDealNetworkPilotObligationsForUser(owner.user_id);
     }
+    referralTrace('api.approveInvite.response', {
+      inviteToken: token,
+      hasReferralIssuance: !!result.referralIssuance,
+      referralCode: result.referralIssuance?.code ?? null,
+      referralUrl: result.referralIssuance?.referralUrl ?? null,
+      participantInviteLink: result.participant.inviteLink ?? null,
+    });
+
     return NextResponse.json(result);
   } catch (e) {
     console.error('[deal-network-pilot/invites/approve POST]', e);
