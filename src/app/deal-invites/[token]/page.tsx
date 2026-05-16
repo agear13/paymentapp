@@ -37,10 +37,15 @@ export default function DealInviteApprovalPage() {
   const [dealParticipants, setDealParticipants] = React.useState<DemoParticipant[]>([]);
   const [note, setNote] = React.useState('');
   const [approved, setApproved] = React.useState(false);
+  const [referralIssuance, setReferralIssuance] = React.useState<{
+    code: string;
+    referralUrl: string;
+  } | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
+    setReferralIssuance(null);
     if (!token) {
       setLoading(false);
       setLoadError('Missing invite token');
@@ -78,6 +83,8 @@ export default function DealInviteApprovalPage() {
             referralUrl: url,
             code: codeMatch?.[1]?.toUpperCase() ?? 'REFERRAL',
           });
+        } else {
+          setReferralIssuance(null);
         }
       })
       .catch((e: Error) => {
@@ -130,6 +137,8 @@ export default function DealInviteApprovalPage() {
           referralUrl: url,
           code: codeMatch?.[1]?.toUpperCase() ?? 'REFERRAL',
         });
+      } else {
+        setReferralIssuance(null);
       }
       toast.success('Agreement approved');
     } catch (e: unknown) {
