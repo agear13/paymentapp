@@ -4,6 +4,7 @@ import { ReferralLandingClient } from '@/components/referrals/referral-landing-c
 import { ReferralPayPageClient } from '@/components/referrals/referral-pay-page-client';
 import { ReferralCommissionLanding } from '@/components/referrals/referral-commission-landing';
 import { prisma } from '@/lib/server/prisma';
+import { filterServicesForReferralConfig } from '@/lib/referrals/referral-commerce-config';
 
 export default async function ReferralLandingPage({
   params,
@@ -34,7 +35,7 @@ export default async function ReferralLandingPage({
   const isCommissionReferral = referralLink && (hasRules || hasSplits);
 
   if (isCommissionReferral && referralLink) {
-    const services = await prisma.organization_services.findMany({
+    const allServices = await prisma.organization_services.findMany({
       where: { organization_id: referralLink.organization_id, active: true },
       orderBy: { created_at: 'desc' },
       take: 100,
@@ -46,6 +47,8 @@ export default async function ReferralLandingPage({
         currency: true,
       },
     });
+
+    const services = filterServicesForReferralConfig(allServices, referralLink.checkout_config);
 
     if (services.length > 0) {
       return (

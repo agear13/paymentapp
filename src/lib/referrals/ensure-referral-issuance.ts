@@ -11,6 +11,12 @@ import { buildReferralShareUrl } from '@/lib/referrals/referral-share-url';
 import { log } from '@/lib/logger';
 import { referralTrace } from '@/lib/referrals/referral-trace';
 import type { CommissionStructureKind } from '@/lib/deal-network-demo/commission-structure';
+import {
+  type ParticipantReferralCommerce,
+  commerceCommissionPctDecimal,
+  mergeReferralCommerceIntoCheckoutConfig,
+  normalizeReferralCommerce,
+} from '@/lib/referrals/referral-commerce-config';
 
 export type EnsureReferralIssuanceInput = {
   organizationId: string;
@@ -25,7 +31,44 @@ export type EnsureReferralIssuanceInput = {
   commissionKind?: CommissionStructureKind;
   commissionValue?: number;
   projectLabel?: string | null;
+  referralCommerce?: ParticipantReferralCommerce | null;
 };
+
+function isReferralCommerceMode(commerce?: ParticipantReferralCommerce | null): boolean {
+  return commerce?.commissionMode === 'referral_commerce';
+}
+
+function buildIssuanceCheckoutConfig(input: EnsureReferralIssuanceInput): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    pilotParticipantId: input.sourceParticipantId,
+    participantEmail: input.participantEmail?.trim().toLowerCase() || null,
+    participantName: input.participantName?.trim() || null,
+    projectLabel: input.projectLabel?.trim() || null,
+    commissionKind: input.commissionKind ?? 'pct_deal_value',
+    commissionValue: input.commissionValue ?? 10,
+    issuedAt: new Date().toISOString(),
+  };
+  if (input.referralCommerce) {
+    return mergeReferralCommerceIntoCheckoutConfig(base, normalizeReferralCommerce(input.referralCommerce));
+  }
+  return base;
+}
+
+async function syncCheckoutConfigOnLink(
+  linkId: string,
+  existingConfig: unknown,
+  input: EnsureReferralIssuanceInput
+): Promise<void> {
+  const base =
+    existingConfig && typeof existingConfig === 'object'
+      ? ({ ...(existingConfig as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const next = { ...base, ...buildIssuanceCheckoutConfig(input) };
+  await prisma.referral_links.update({
+    where: { id: linkId },
+    data: { checkout_config: next as Prisma.InputJsonValue },
+  });
+}
 
 export type EnsureReferralIssuanceResult = {
   referralLinkId: string;
@@ -163,6 +206,7 @@ export async function ensureReferralIssuance(
         data: { participant_user_id: participantUserId },
       });
     }
+    await syncCheckoutConfigOnLink(existingBySlug.id, existingBySlug.checkout_config, input);
     referralTrace('ensureReferralIssuance.reuseBySlug', {
       organizationId,
       referralLinkId: existingBySlug.id,
@@ -243,6 +287,7 @@ export async function ensureReferralIssuance(
         data: { participant_user_id: participantUserId },
       });
     }
+    await syncCheckoutConfigOnLink(linkId, existingByCode.checkout_config, input);
     return {
       referralLinkId: linkId,
       referralCodeId: rc.id,
@@ -254,6 +299,32 @@ export async function ensureReferralIssuance(
       }),
       created: false,
       participantUserId: participantUserId ?? rc.participant_user_id,
+    };
+  }
+
+  if (existingBySlug && !existingBySlug.referral_code) {
+    await syncCheckoutConfigOnLink(existingBySlug.id, existingBySlug.checkout_config, input);
+    const rc = await prisma.referral_codes.create({
+      data: {
+        id: randomUUID(),
+        organization_id: organizationId,
+        participant_user_id: participantUserId,
+        referral_link_id: existingBySlug.id,
+        code: existingBySlug.code,
+        status: 'ACTIVE',
+      },
+    });
+    return {
+      referralLinkId: existingBySlug.id,
+      referralCodeId: rc.id,
+      code: rc.code,
+      referralUrl: buildReferralShareUrl(baseUrl, {
+        code: rc.code,
+        slug: existingBySlug.slug,
+        referralLinkSlug: existingBySlug.slug,
+      }),
+      created: true,
+      participantUserId,
     };
   }
 
@@ -290,15 +361,10 @@ export async function ensureReferralIssuance(
 
   const pct = commissionPctDecimal(commissionKind, commissionValue);
   const hasUser = !!participantUserId;
-  const checkoutConfig = {
-    pilotParticipantId: sourceParticipantId,
-    participantEmail: input.participantEmail?.trim().toLowerCase() || null,
-    participantName: participantName?.trim() || null,
-    projectLabel: projectLabel?.trim() || null,
-    commissionKind: commissionKind ?? 'pct_deal_value',
-    commissionValue: commissionValue ?? 10,
-    issuedAt: new Date().toISOString(),
-  } satisfies Record<string, unknown>;
+  const commerce = input.referralCommerce
+    ? normalizeReferralCommerce(input.referralCommerce)
+    : null;
+  const checkoutConfig = buildIssuanceCheckoutConfig(input);
 
   const created = await prisma.$transaction(async (tx) => {
     const link = await tx.referral_links.create({
@@ -312,7 +378,19 @@ export async function ensureReferralIssuance(
       },
     });
 
-    if (hasUser && pct > 0) {
+    if (isReferralCommerceMode(commerce)) {
+      const commercePct = commerceCommissionPctDecimal(commerce!);
+      const pctDisplay = (commercePct * 100).toFixed(2);
+      await tx.referral_link_splits.create({
+        data: {
+          referral_link_id: link.id,
+          label: participantName?.trim() || 'Referral commerce',
+          percentage: Number(pctDisplay),
+          beneficiary_id: null,
+          sort_order: 0,
+        },
+      });
+    } else if (hasUser && pct > 0) {
       await tx.referral_rules.create({
         data: {
           referral_link_id: link.id,
@@ -359,7 +437,11 @@ export async function ensureReferralIssuance(
     slug,
     participantUserId,
     created: true,
-    commissionRulePath: hasUser && pct > 0 ? 'referral_rules' : 'referral_link_splits',
+    commissionRulePath: isReferralCommerceMode(commerce)
+      ? 'referral_commerce_splits'
+      : hasUser && pct > 0
+        ? 'referral_rules'
+        : 'referral_link_splits',
   });
 
   return {

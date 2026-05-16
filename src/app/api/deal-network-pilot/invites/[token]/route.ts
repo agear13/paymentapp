@@ -10,6 +10,7 @@ import {
   ensureReferralIssuance,
   resolveOrganizationIdForOperator,
 } from '@/lib/referrals/ensure-referral-issuance';
+import { shouldIssueReferralLink } from '@/lib/referrals/referral-commerce-config';
 import { log } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -43,7 +44,7 @@ export async function GET(
     if (row.approval_status === 'Approved') {
       try {
         const organizationId = await resolveOrganizationIdForOperator(row.deal.user_id);
-        if (organizationId) {
+        if (organizationId && shouldIssueReferralLink(participant.referralCommerce)) {
           const issued = await ensureReferralIssuance({
             organizationId,
             operatorUserId: row.deal.user_id,
@@ -53,6 +54,7 @@ export async function GET(
             commissionKind: participant.commissionKind,
             commissionValue: participant.commissionValue,
             projectLabel: deal.dealName,
+            referralCommerce: participant.referralCommerce ?? null,
           });
           referralIssuance = {
             code: issued.code,

@@ -12,6 +12,10 @@ import {
   ensureReferralIssuance,
   resolveOrganizationIdForOperator,
 } from '@/lib/referrals/ensure-referral-issuance';
+import {
+  shouldIssueReferralLink,
+  type ParticipantReferralCommerce,
+} from '@/lib/referrals/referral-commerce-config';
 import { log } from '@/lib/logger';
 import { referralTrace } from '@/lib/referrals/referral-trace';
 
@@ -248,7 +252,7 @@ export async function approveParticipantByInviteToken(
       organizationId,
       resolved: !!organizationId,
     });
-    if (organizationId) {
+    if (organizationId && shouldIssueReferralLink(participant.referralCommerce)) {
       const issued = await ensureReferralIssuance({
         organizationId,
         operatorUserId: row.deal.user_id,
@@ -260,6 +264,7 @@ export async function approveParticipantByInviteToken(
         commissionKind: participant.commissionKind,
         commissionValue: participant.commissionValue,
         projectLabel: deal.dealName,
+        referralCommerce: participant.referralCommerce ?? null,
       });
       referralIssuance = {
         code: issued.code,

@@ -2319,6 +2319,7 @@ export default function DealNetworkPage() {
         }}
         commissionBaseParticipantOptions={commissionBaseParticipantOptions}
         experienceMode={isProjectMode ? 'project' : 'referral'}
+        organizationId={organizationId}
       />
       <ExportPayoutsModal
         open={exportOpen}

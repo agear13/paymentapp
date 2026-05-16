@@ -42,6 +42,11 @@ import {
   type PilotParticipantCommissionRow,
 } from '@/lib/deal-network-demo/commission-structure';
 import { normParticipantName } from '@/lib/deal-network-demo/participant-merge';
+import { ReferralCommerceSection } from '@/components/referrals/referral-commerce-section';
+import {
+  defaultReferralCommerce,
+  type ParticipantReferralCommerce,
+} from '@/lib/referrals/referral-commerce-config';
 import type { ParticipantPayoutSettlementStatus } from '@/lib/deal-network-demo/participant-payout-status';
 import type { PilotParticipantOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 
@@ -97,6 +102,8 @@ export interface DemoParticipant {
   payoutDueDate?: string;
   participantNotes?: string;
   companyName?: string;
+  /** Operator referral commerce configuration (invite/agreement time). */
+  referralCommerce?: import('@/lib/referrals/referral-commerce-config').ParticipantReferralCommerce;
 }
 
 export interface InviteParticipantModalProps {
@@ -114,6 +121,8 @@ export interface InviteParticipantModalProps {
   experienceMode?: 'referral' | 'project';
   /** Invitees on this deal eligible as %-of-participant base (excludes internal deal-role rows). */
   commissionBaseParticipantOptions?: { id: string; name: string; companyName?: string }[];
+  /** Merchant org for service catalog in referral commerce section */
+  organizationId?: string | null;
 }
 
 const INVITE_PREVIEW_PARTICIPANT_ID = '__invite_preview__';
@@ -140,6 +149,7 @@ export function InviteParticipantModal({
   featuredRoleAmounts,
   experienceMode = 'referral',
   commissionBaseParticipantOptions = [],
+  organizationId = null,
 }: InviteParticipantModalProps) {
   const isProjectMode = experienceMode === 'project';
   /** Strait / project: simplify invite UX; engine still supports all kinds for existing rows. */
@@ -174,6 +184,8 @@ export function InviteParticipantModal({
   >(null);
   const [duplicateCandidates, setDuplicateCandidates] = React.useState<DemoParticipant[]>([]);
   const [duplicateSubmitting, setDuplicateSubmitting] = React.useState(false);
+  const [referralCommerce, setReferralCommerce] =
+    React.useState<ParticipantReferralCommerce>(defaultReferralCommerce);
 
   function makeToken() {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -199,6 +211,7 @@ export function InviteParticipantModal({
     setDuplicateCandidates([]);
     setDuplicateSubmitting(false);
     setCommissionBaseParticipantId('');
+    setReferralCommerce(defaultReferralCommerce());
     if (isProjectMode) {
       setRole('Contributor');
       setCommissionKind('fixed_amount');
@@ -411,6 +424,7 @@ export function InviteParticipantModal({
         payoutDueDate: payoutDueDate.trim() || undefined,
         participantNotes: participantNotes.trim() || undefined,
         companyName: companyName.trim() || undefined,
+        referralCommerce,
       };
       const incomingNameKey = normParticipantName(participant.name);
       const existingDupes = existingParticipantsForDuplicateCheck.filter(
@@ -494,6 +508,7 @@ export function InviteParticipantModal({
       agreementNotes: agreementNotes.trim() || undefined,
       attachmentUrl: trimmedUrl || undefined,
       attachmentLabel: attachmentLabel.trim() || undefined,
+      referralCommerce,
     };
 
     const incomingNameKey = normParticipantName(participant.name);
@@ -916,6 +931,12 @@ export function InviteParticipantModal({
                 {submitError ? <p className="mt-1 text-xs text-destructive">{submitError}</p> : null}
               </div>
             </div>
+
+            <ReferralCommerceSection
+              organizationId={organizationId}
+              value={referralCommerce}
+              onChange={setReferralCommerce}
+            />
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={requestClose}>

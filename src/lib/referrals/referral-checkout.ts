@@ -13,6 +13,7 @@ import {
   buildCommissionAttributionMetadataFromReferralLink,
   commissionSnapshotToPrismaJson,
 } from '@/lib/referrals/commission-attribution-snapshot';
+import { isServiceAllowedForReferral } from '@/lib/referrals/referral-commerce-config';
 
 export interface ReferralCheckoutResult {
   success: boolean;
@@ -259,6 +260,10 @@ export async function createReferralServiceCheckoutSession(
     });
     if (!service) {
       return { success: false, error: 'Service not found for this merchant' };
+    }
+
+    if (!isServiceAllowedForReferral(referralLink.checkout_config, organizationServiceId)) {
+      return { success: false, error: 'This service is not available on this referral link' };
     }
 
     const amount = Number(service.price);

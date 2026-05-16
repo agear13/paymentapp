@@ -17,6 +17,7 @@ import {
   demoParticipantToPilotRow,
 } from '@/lib/deal-network-demo/commission-structure';
 import { ReferralSharePanel } from '@/components/referrals/referral-share-panel';
+import { ReferralCommerceAgreementSummary } from '@/components/referrals/referral-commerce-agreement-summary';
 import { buildReferralQrApiPath } from '@/lib/referrals/referral-share-url';
 
 function roleAmountsFromDeal(deal: RecentDeal) {
@@ -275,6 +276,10 @@ export default function DealInviteApprovalPage() {
               ) : null}
             </div>
           )}
+
+          {participant.referralCommerce ? (
+            <ReferralCommerceAgreementSummary commerce={participant.referralCommerce} />
+          ) : null}
 
           <div className="rounded-md border p-3 bg-background">
             <p className="text-sm font-medium">Commission structure &amp; payout preview</p>

@@ -5,6 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Loader2, Package } from 'lucide-react';
 import { ReferralPayPageClient } from '@/components/referrals/referral-pay-page-client';
+import {
+  describeReferralCommerce,
+  parseReferralCommerceFromCheckoutConfig,
+} from '@/lib/referrals/referral-commerce-config';
 
 export type ReferralServiceRow = {
   id: string;
@@ -23,6 +27,14 @@ interface Props {
 export function ReferralCommissionLanding({ referralCode, checkoutConfig, services }: Props) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const commerce = parseReferralCommerceFromCheckoutConfig(checkoutConfig);
+  const commerceSummary =
+    commerce && commerce.commissionMode === 'referral_commerce'
+      ? describeReferralCommerce(
+          commerce,
+          services.map((s) => s.name)
+        )
+      : null;
 
   const pickService = async (serviceId: string) => {
     setError('');
@@ -56,8 +68,12 @@ export function ReferralCommissionLanding({ referralCode, checkoutConfig, servic
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Choose a service</h1>
           <p className="text-gray-600 mt-1">
-            Referral <span className="font-mono">{referralCode}</span> — select a priced service to pay, or use a custom amount below.
+            Referral <span className="font-mono">{referralCode}</span> — select a priced service to pay
+            {commerceSummary ? '.' : ', or use a custom amount below.'}
           </p>
+          {commerceSummary ? (
+            <p className="text-sm text-gray-600 mt-2 rounded-md border bg-white px-3 py-2">{commerceSummary}</p>
+          ) : null}
         </div>
 
         {error ? (
@@ -98,9 +114,11 @@ export function ReferralCommissionLanding({ referralCode, checkoutConfig, servic
         </div>
       </div>
 
-      <div className="max-w-md mx-auto border-t border-gray-200 pt-8">
-        <ReferralPayPageClient referralCode={referralCode} checkoutConfig={checkoutConfig} />
-      </div>
+      {!commerceSummary ? (
+        <div className="max-w-md mx-auto border-t border-gray-200 pt-8">
+          <ReferralPayPageClient referralCode={referralCode} checkoutConfig={checkoutConfig} />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { applyRateLimit } from '@/lib/rate-limit';
+import { filterServicesForReferralConfig } from '@/lib/referrals/referral-commerce-config';
 
 export async function GET(
   _request: NextRequest,
@@ -24,13 +25,13 @@ export async function GET(
         status: 'ACTIVE',
         OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }],
       },
-      select: { organization_id: true },
+      select: { organization_id: true, checkout_config: true },
     });
     if (!referralLink) {
       return NextResponse.json({ error: 'Referral not found' }, { status: 404 });
     }
 
-    const services = await prisma.organization_services.findMany({
+    const allServices = await prisma.organization_services.findMany({
       where: { organization_id: referralLink.organization_id, active: true },
       orderBy: { created_at: 'desc' },
       take: 100,
@@ -42,6 +43,8 @@ export async function GET(
         currency: true,
       },
     });
+
+    const services = filterServicesForReferralConfig(allServices, referralLink.checkout_config);
 
     return NextResponse.json({
       data: services.map((s) => ({
