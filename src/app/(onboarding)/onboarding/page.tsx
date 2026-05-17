@@ -1,42 +1,29 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { OnboardingForm } from '@/components/onboarding/onboarding-form';
+import { WorkflowOnboardingForm } from '@/components/onboarding/workflow-onboarding-form';
 
-export default async function OnboardingPage() {
-  // Always show onboarding form for new signups
-  // The form will handle existing organizations gracefully
+export default function OnboardingPage() {
   return (
     <div className="space-y-6">
       <div className="text-center">
         <h1 className="text-3xl font-bold tracking-tight">Welcome to Provvypay</h1>
-        <p className="mt-2 text-muted-foreground">
-          Let&apos;s get you set up in just 2 quick steps so you can start accepting payments.
+        <p className="mt-2 text-muted-foreground max-w-lg mx-auto">
+          Set up your operational coordination workflow — projects, participants, funding, and
+          payouts — in a few guided steps.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Account Setup</CardTitle>
+          <CardTitle>Get started</CardTitle>
           <CardDescription>
-            Configure your organization and payment methods to start processing payments.
+            You can connect payment rails later. We will guide you through what needs attention
+            first.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <OnboardingForm />
+          <WorkflowOnboardingForm />
         </CardContent>
       </Card>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

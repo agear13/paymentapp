@@ -74,9 +74,9 @@ export function usePaymentLinksNavActivation(
         const key = `${REVEAL_SESSION_KEY}:${organizationId}`;
         if (!sessionStorage.getItem(key)) {
           toast({
-            title: 'More financial tools are now available',
+            title: 'More tools are now available',
             description:
-              'Reports, Ledger, Transactions, and Admin Operations are now in the sidebar.',
+              'Reports and advanced configuration options are available in the sidebar.',
           });
           sessionStorage.setItem(key, '1');
         }

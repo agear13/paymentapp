@@ -15,18 +15,27 @@ import {
 
 // Map pathnames to readable titles
 const pathTitles: Record<string, string> = {
-  dashboard: 'Dashboard',
-  'payment-links': 'Payment Links',
+  dashboard: 'Home',
+  projects: 'Projects',
+  participants: 'Participants',
+  payments: 'Payments',
+  payouts: 'Payouts',
+  reports: 'Reports',
+  settings: 'Settings',
+  'payment-links': 'Invoices',
   'recurring-templates': 'Recurring',
   ledger: 'Ledger',
   transactions: 'Transactions',
-  settings: 'Settings',
   organization: 'Organization',
   merchant: 'Merchant',
   team: 'Team',
   integrations: 'Integrations',
   partners: 'Partners',
-  'deal-network': 'Deal Network',
+  'deal-network': 'Projects',
+  programs: 'Participants',
+  commissions: 'Commissions',
+  obligations: 'Obligations',
+  referrals: 'Referrals',
 };
 
 interface BreadcrumbNavProps {

@@ -14,23 +14,16 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import {
-  LayoutDashboard,
   Link as LinkIcon,
-  Settings,
-  BookOpen,
-  CreditCard,
   LogOut,
   ChevronRight,
-  Activity,
-  BarChart3,
   Handshake,
-  Target,
   Layers,
   Building2,
   FileCheck,
   Repeat,
-  Share2,
 } from 'lucide-react';
+import { OperatorSidebarNav } from '@/components/dashboard/operator-sidebar-nav';
 import {
   Sidebar,
   SidebarContent,
@@ -48,110 +41,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { usePaymentLinksNavActivation } from '@/hooks/use-payment-links-nav-activation';
-
-/** Core Payment Links navigation — always shown for standard/admin. */
-const paymentLinksCoreNavItems = [
-  {
-    title: 'Dashboard',
-    href: '/dashboard',
-    icon: LayoutDashboard,
-  },
-  {
-    title: 'Invoices',
-    href: '/dashboard/payment-links',
-    icon: LinkIcon,
-  },
-  {
-    title: 'Recurring',
-    href: '/dashboard/recurring-templates',
-    icon: Repeat,
-  },
-  {
-    title: 'Referral sharing',
-    href: '/dashboard/referrals',
-    icon: Share2,
-  },
-];
-
-/** Shown after activation (rails configured and/or at least one invoice) for standard/admin. */
-const paymentLinksAdvancedNavItems = [
-  {
-    title: 'Reports',
-    href: '/dashboard/reports',
-    icon: BarChart3,
-  },
-  {
-    title: 'Ledger',
-    href: '/dashboard/ledger',
-    icon: BookOpen,
-  },
-  {
-    title: 'Transactions',
-    href: '/dashboard/transactions',
-    icon: CreditCard,
-  },
-  {
-    title: 'Admin Operations',
-    href: '/dashboard/admin',
-    icon: Activity,
-  },
-];
-
-const partnersItems = [
-  {
-    title: 'Partners',
-    icon: Handshake,
-    items: [
-      {
-        title: 'Projects',
-        href: '/dashboard/partners/deal-network',
-      },
-      {
-        title: 'Obligations',
-        href: '/dashboard/partners/deal-network/obligations',
-      },
-      {
-        title: 'My referrals',
-        href: '/dashboard/referrals/mine',
-      },
-      {
-        title: 'Commission link setup',
-        href: '/dashboard/partners/referral-links',
-      },
-      {
-        title: 'Commissions',
-        href: '/dashboard/partners/commissions',
-      },
-      {
-        title: 'Rules',
-        href: '/dashboard/partners/rules',
-      },
-      {
-        title: 'Payout methods',
-        href: '/dashboard/partners/payout-methods',
-      },
-      {
-        title: 'Payouts',
-        href: '/dashboard/partners/payouts',
-      },
-    ],
-  },
-];
-
-const programsItems = [
-  {
-    title: 'Programs',
-    icon: Target,
-    items: [
-      {
-        title: 'Participants',
-        href: '/dashboard/programs/participants',
-      },
-    ],
-  },
-];
-
+/** Gated internal tooling — beta admin only; unchanged structure. */
 const platformPreviewItems = [
   {
     title: 'Platform Preview',
@@ -177,35 +67,6 @@ const platformPreviewItems = [
   },
 ];
 
-const settingsItems = [
-  {
-    title: 'Settings',
-    icon: Settings,
-    items: [
-      {
-        title: 'Organization',
-        href: '/dashboard/settings/organization',
-      },
-      {
-        title: 'Merchant',
-        href: '/dashboard/settings/merchant',
-      },
-      {
-        title: 'Team',
-        href: '/dashboard/settings/team',
-      },
-      {
-        title: 'Integrations',
-        href: '/dashboard/settings/integrations',
-      },
-      {
-        title: 'Service catalog',
-        href: '/dashboard/settings/services',
-      },
-    ],
-  },
-];
-
 interface AppSidebarProps {
   productProfile: DashboardProductProfile;
 }
@@ -214,7 +75,6 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
   const isBetaAdmin = productProfile === 'admin';
   const isRabbitHolePilot = productProfile === 'rabbit_hole_pilot';
   const isStraitExperiencesPilot = productProfile === 'strait_experiences_pilot';
-  const { showAdvancedMainNav } = usePaymentLinksNavActivation(productProfile);
   const pathname = usePathname();
   /** usePathname() can be null during transitions; treat as empty for nav active states. */
   const path = pathname ?? '';
@@ -226,13 +86,6 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
     console.log('IS RABBIT HOLE PILOT:', isRabbitHolePilot, 'path:', path);
   }, [isRabbitHolePilot, path]);
 
-  const mainNavigationItems = React.useMemo(() => {
-    if (isRabbitHolePilot || isStraitExperiencesPilot) return [];
-    if (!showAdvancedMainNav) {
-      return paymentLinksCoreNavItems;
-    }
-    return [...paymentLinksCoreNavItems, ...paymentLinksAdvancedNavItems];
-  }, [isRabbitHolePilot, isStraitExperiencesPilot, showAdvancedMainNav]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [user, setUser] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
@@ -588,112 +441,9 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Main Navigation */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Main</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNavigationItems.map((item) => {
-                const isNestedHref =
-                  item.href === '/dashboard/payment-links' ||
-                  item.href === '/dashboard/recurring-templates';
-                const isActive = isNestedHref
-                  ? path === item.href || path.startsWith(`${item.href}/`)
-                  : path === item.href;
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={isActive}>
-                      <Link href={item.href}>
-                        <item.icon className="size-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <OperatorSidebarNav productProfile={productProfile} path={path} />
 
-        {/* Partners - Admin only during beta lockdown */}
-        {isBetaAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Revenue Share</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {partnersItems.map((item) => (
-                  <Collapsible key={item.title} asChild defaultOpen={path.includes('/partners')}>
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton>
-                          <item.icon className="size-4" />
-                          <span>{item.title}</span>
-                          <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {item.items?.map((subItem) => {
-                            const dealNetworkBase = '/dashboard/partners/deal-network';
-                            const obligationsHref = `${dealNetworkBase}/obligations`;
-                            const isActive =
-                              subItem.href === obligationsHref
-                                ? path === obligationsHref
-                                : subItem.href === dealNetworkBase
-                                  ? path === dealNetworkBase ||
-                                    (path.startsWith(`${dealNetworkBase}/`) &&
-                                      path !== obligationsHref)
-                                  : path === subItem.href;
-                            return (
-                              <SidebarMenuSubItem key={subItem.href}>
-                                <SidebarMenuSubButton asChild isActive={isActive}>
-                                  <Link href={subItem.href}>
-                                    <span>{subItem.title}</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            );
-                          })}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
-                ))}
-                {programsItems.map((item) => (
-                  <Collapsible key={item.title} asChild defaultOpen={path.includes('/programs')}>
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton>
-                          <item.icon className="size-4" />
-                          <span>{item.title}</span>
-                          <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {item.items?.map((subItem) => {
-                            const isActive = path === subItem.href;
-                            return (
-                              <SidebarMenuSubItem key={subItem.href}>
-                                <SidebarMenuSubButton asChild isActive={isActive}>
-                                  <Link href={subItem.href}>
-                                    <span>{subItem.title}</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            );
-                          })}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        {/* Platform Preview - Admin only during beta lockdown */}
+        {/* Platform Preview — gated beta admin; internal tooling unchanged */}
         {isBetaAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel>Platform Preview</SidebarGroupLabel>
@@ -732,44 +482,6 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
-
-        {/* Settings */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Configuration</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {settingsItems.map((item) => (
-                <Collapsible key={item.title} asChild defaultOpen={path.includes('/settings')}>
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton>
-                        <item.icon className="size-4" />
-                        <span>{item.title}</span>
-                        <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {item.items?.map((subItem) => {
-                          const isActive = path === subItem.href;
-                          return (
-                            <SidebarMenuSubItem key={subItem.href}>
-                              <SidebarMenuSubButton asChild isActive={isActive}>
-                                <Link href={subItem.href}>
-                                  <span>{subItem.title}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          );
-                        })}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </SidebarMenuItem>
-                </Collapsible>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter>
