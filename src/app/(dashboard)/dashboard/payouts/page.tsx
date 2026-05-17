@@ -1,5 +1,6 @@
 import { SectionHubPage } from '@/components/dashboard/section-hub-page';
 import { CircleDollarSign, FileCheck, History } from 'lucide-react';
+import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
 
 export default function PayoutsPage() {
   return (
@@ -9,8 +10,8 @@ export default function PayoutsPage() {
       links={[
         {
           title: 'Obligations',
-          description: 'Review funding gaps and payout readiness by project.',
-          href: '/dashboard/partners/deal-network/obligations',
+          description: 'Review who is owed what, funding gaps, and payout readiness by project.',
+          href: PAYOUTS_OBLIGATIONS_HREF,
           icon: FileCheck,
         },
         {
@@ -20,7 +21,7 @@ export default function PayoutsPage() {
           icon: CircleDollarSign,
         },
         {
-          title: 'Payout history',
+          title: 'Settlement history',
           description: 'Approve and monitor payout batches and settlement.',
           href: '/dashboard/partners/payouts',
           icon: History,

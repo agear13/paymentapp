@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, ArrowRight, FileCheck, FolderKanban, Users, Wallet } from 'lucide-react';
+import { AlertCircle, ArrowRight, FileCheck, FolderKanban, Wallet } from 'lucide-react';
+import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
 
 type ActionCard = {
   title: string;
@@ -12,25 +13,21 @@ type ActionCard = {
 };
 
 type OperationalHomeDashboardProps = {
-  showRevenueShare: boolean;
   actionCards: ActionCard[];
 };
 
-export function OperationalHomeDashboard({
-  showRevenueShare,
-  actionCards,
-}: OperationalHomeDashboardProps) {
+export function OperationalHomeDashboard({ actionCards }: OperationalHomeDashboardProps) {
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Home</h1>
           <p className="text-muted-foreground mt-1">
-            What needs your attention to keep payments, participants, and payouts moving safely.
+            What needs your attention to keep projects, funding, and payouts moving safely.
           </p>
         </div>
         <Button asChild>
-          <Link href="/dashboard/payment-links?action=create">Create invoice</Link>
+          <Link href="/dashboard/projects">Create project</Link>
         </Button>
       </div>
 
@@ -71,37 +68,38 @@ export function OperationalHomeDashboard({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <ol className="grid gap-3 sm:grid-cols-3">
             {[
               {
                 label: 'Projects',
                 href: '/dashboard/projects',
                 icon: FolderKanban,
-              },
-              {
-                label: 'Participants',
-                href: showRevenueShare ? '/dashboard/participants' : '/dashboard/settings/merchant',
-                icon: Users,
+                description: 'Create and manage coordination workspaces',
               },
               {
                 label: 'Payments',
                 href: '/dashboard/payments',
                 icon: Wallet,
+                description: 'Invoices and customer payment activity',
               },
               {
                 label: 'Payouts',
-                href: showRevenueShare ? '/dashboard/payouts' : '/dashboard/payment-links',
+                href: PAYOUTS_OBLIGATIONS_HREF,
                 icon: FileCheck,
+                description: 'Obligations and settlement coordination',
               },
             ].map((step) => (
               <li key={step.label}>
                 <Link
                   href={step.href}
-                  className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"
+                  className="flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-accent h-full"
                 >
-                  <step.icon className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">{step.label}</span>
-                  <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center gap-2">
+                    <step.icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-medium">{step.label}</span>
+                    <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <span className="text-xs text-muted-foreground pl-6">{step.description}</span>
                 </Link>
               </li>
             ))}
@@ -111,7 +109,7 @@ export function OperationalHomeDashboard({
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <AlertCircle className="h-3.5 w-3.5" />
-        <span>Operational alerts and live counts will populate here as coordination data connects.</span>
+        <span>Operational alerts and live counts update as your projects progress.</span>
       </div>
     </div>
   );

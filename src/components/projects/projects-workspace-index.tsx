@@ -1,11 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { FolderKanban, Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
@@ -18,19 +17,14 @@ import {
 import { useDealNetworkExperience } from '@/components/deal-network-demo/deal-network-experience-provider';
 import { useToast } from '@/hooks/use-toast';
 
-type ProjectsWorkspaceIndexProps = {
-  productProfile: DashboardProductProfile;
-};
-
-export function ProjectsWorkspaceIndex({ productProfile }: ProjectsWorkspaceIndexProps) {
+export function ProjectsWorkspaceIndex() {
+  const router = useRouter();
   const { dealNetworkExperienceMode } = useDealNetworkExperience();
   const { toast } = useToast();
   const [loading, setLoading] = React.useState(true);
   const [deals, setDeals] = React.useState<RecentDeal[]>([]);
   const [participants, setParticipants] = React.useState<DemoParticipant[]>([]);
   const [createOpen, setCreateOpen] = React.useState(false);
-
-  const hasRevenueShareAccess = productProfile === 'admin';
 
   const reload = React.useCallback(async () => {
     setLoading(true);
@@ -72,49 +66,23 @@ export function ProjectsWorkspaceIndex({ productProfile }: ProjectsWorkspaceInde
       }
       toast({ title: 'Project created', description: deal.dealName });
       setCreateOpen(false);
+      router.push(`/dashboard/projects/${encodeURIComponent(deal.id)}`);
+      router.refresh();
     },
-    [deals, participants, toast]
+    [deals, participants, router, toast]
   );
-
-  if (!hasRevenueShareAccess) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
-          <p className="text-muted-foreground mt-1">
-            Projects are your operational container for participants, funding, obligations, and
-            payouts.
-          </p>
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Project coordination</CardTitle>
-            <CardDescription>
-              Your account is set up for payment collection. Project coordination workspaces unlock
-              when revenue-share features are enabled for your organization.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild>
-              <Link href="/dashboard/payments">Go to Payments</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
-          <p className="text-muted-foreground mt-1">
-            Your operational workspace — coordinate participants, funding, obligations, and payouts
-            per project.
+          <p className="text-muted-foreground mt-1 max-w-2xl">
+            Projects coordinate participants, funding, obligations, and payouts. This is your
+            operational workspace — not a payment-only view.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button onClick={() => setCreateOpen(true)} size="lg">
           <Plus className="mr-2 h-4 w-4" />
           Create project
         </Button>
@@ -132,13 +100,13 @@ export function ProjectsWorkspaceIndex({ productProfile }: ProjectsWorkspaceInde
               <FolderKanban className="h-6 w-6 text-primary" />
             </div>
             <CardTitle>Create your first project</CardTitle>
-            <CardDescription>
-              A project is where you coordinate who gets paid, how funds enter, and when payouts
-              can be released safely.
+            <CardDescription className="max-w-md mx-auto">
+              Start by naming a project. You will add participants, link funding, track obligations,
+              and coordinate payouts — all in one place.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center pb-8">
-            <Button onClick={() => setCreateOpen(true)}>
+            <Button onClick={() => setCreateOpen(true)} size="lg">
               <Plus className="mr-2 h-4 w-4" />
               Create project
             </Button>

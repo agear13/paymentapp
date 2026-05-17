@@ -35,6 +35,7 @@ const pathTitles: Record<string, string> = {
   programs: 'Participants',
   commissions: 'Commissions',
   obligations: 'Obligations',
+  payouts: 'Payouts',
   referrals: 'Referrals',
 };
 

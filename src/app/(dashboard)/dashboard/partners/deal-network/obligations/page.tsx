@@ -8,6 +8,8 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { PAYOUTS_HUB_HREF } from '@/lib/navigation/operator-nav';
 import {
   Card,
   CardContent,
@@ -255,6 +257,12 @@ function computeKpis(rows: ObligationRow[]) {
 }
 
 export default function DealNetworkObligationsPage() {
+  const pathname = usePathname();
+  const backHref = pathname?.startsWith('/dashboard/payouts')
+    ? PAYOUTS_HUB_HREF
+    : '/dashboard/partners/deal-network';
+  const backLabel = pathname?.startsWith('/dashboard/payouts') ? 'Back to Payouts' : 'Back to Deal Network';
+
   const [allRows, setAllRows] = React.useState<ObligationRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -360,9 +368,9 @@ export default function DealNetworkObligationsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <Button variant="ghost" size="sm" asChild className="mb-2 -ml-2 h-8 px-2">
-            <Link href="/dashboard/partners/deal-network">
+            <Link href={backHref}>
               <ArrowLeft className="mr-1 size-4" />
-              Back to Deal Network
+              {backLabel}
             </Link>
           </Button>
           <h1 className="text-2xl font-semibold tracking-tight">Financial obligations</h1>

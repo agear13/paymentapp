@@ -2,7 +2,6 @@ import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard,
   FolderKanban,
-  Users,
   Wallet,
   Banknote,
   BarChart3,
@@ -26,9 +25,7 @@ export type OperatorNavItem = {
   title: string;
   href: string;
   icon?: LucideIcon;
-  /** Shown only when operator has revenue-share / project coordination access */
-  revenueShareOnly?: boolean;
-  /** Shown only for beta admin (internal tooling) */
+  /** Shown only for beta admin (partner paths / internal tooling) */
   adminOnly?: boolean;
 };
 
@@ -38,17 +35,17 @@ export type OperatorNavSection = {
   href: string;
   icon: LucideIcon;
   items?: OperatorNavItem[];
-  revenueShareOnly?: boolean;
 };
 
+export const PAYOUTS_HUB_HREF = '/dashboard/payouts';
+export const PAYOUTS_OBLIGATIONS_HREF = '/dashboard/payouts/obligations';
 const DEAL_NETWORK_BASE = '/dashboard/partners/deal-network';
-const OBLIGATIONS_HREF = `${DEAL_NETWORK_BASE}/obligations`;
 
-/** Primary workflow navigation for standard operators and beta admins. */
+/** Primary workflow navigation — Projects and Payouts are always visible. */
 export function getOperatorNavSections(
   productProfile: DashboardProductProfile
 ): OperatorNavSection[] {
-  const hasRevenueShare = productProfile === 'admin';
+  const isAdmin = productProfile === 'admin';
 
   const sections: OperatorNavSection[] = [
     {
@@ -62,31 +59,6 @@ export function getOperatorNavSections(
       title: 'Projects',
       href: '/dashboard/projects',
       icon: FolderKanban,
-      revenueShareOnly: true,
-    },
-    {
-      id: 'participants',
-      title: 'Participants',
-      href: '/dashboard/participants',
-      icon: Users,
-      revenueShareOnly: true,
-      items: [
-        {
-          title: 'All participants',
-          href: '/dashboard/programs/participants',
-          revenueShareOnly: true,
-        },
-        {
-          title: 'My referrals',
-          href: '/dashboard/referrals/mine',
-          revenueShareOnly: true,
-        },
-        {
-          title: 'Payout methods',
-          href: '/dashboard/partners/payout-methods',
-          revenueShareOnly: true,
-        },
-      ],
     },
     {
       id: 'payments',
@@ -102,27 +74,25 @@ export function getOperatorNavSections(
     {
       id: 'payouts',
       title: 'Payouts',
-      href: '/dashboard/payouts',
+      href: PAYOUTS_HUB_HREF,
       icon: Banknote,
-      revenueShareOnly: true,
       items: [
         {
           title: 'Obligations',
-          href: OBLIGATIONS_HREF,
+          href: PAYOUTS_OBLIGATIONS_HREF,
           icon: FileCheck,
-          revenueShareOnly: true,
         },
         {
           title: 'Commissions',
           href: '/dashboard/partners/commissions',
           icon: CircleDollarSign,
-          revenueShareOnly: true,
+          adminOnly: true,
         },
         {
-          title: 'Payout history',
+          title: 'Settlement history',
           href: '/dashboard/partners/payouts',
           icon: History,
-          revenueShareOnly: true,
+          adminOnly: true,
         },
       ],
     },
@@ -131,15 +101,7 @@ export function getOperatorNavSections(
       title: 'Reports',
       href: '/dashboard/reports',
       icon: BarChart3,
-      items: [
-        { title: 'Overview', href: '/dashboard/reports' },
-        { title: 'Transactions', href: '/dashboard/transactions' },
-        {
-          title: 'Commissions',
-          href: '/dashboard/partners/commissions',
-          revenueShareOnly: true,
-        },
-      ],
+      items: [{ title: 'Transactions', href: '/dashboard/transactions' }],
     },
     {
       id: 'settings',
@@ -196,14 +158,10 @@ export function getOperatorNavSections(
     },
   ];
 
-  return sections.filter((section) => {
-    if (section.revenueShareOnly && !hasRevenueShare) return false;
-    return true;
-  }).map((section) => ({
+  return sections.map((section) => ({
     ...section,
     items: section.items?.filter((item) => {
-      if (item.revenueShareOnly && !hasRevenueShare) return false;
-      if (item.adminOnly && productProfile !== 'admin') return false;
+      if (item.adminOnly && !isAdmin) return false;
       return true;
     }),
   }));
@@ -219,18 +177,6 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
     return path === '/dashboard/projects' || path.startsWith('/dashboard/projects/');
   }
 
-  if (href === '/dashboard/participants') {
-    return (
-      path === '/dashboard/participants' ||
-      path.startsWith('/dashboard/programs/participants') ||
-      path === '/dashboard/referrals/mine' ||
-      path.startsWith('/dashboard/referrals/mine/') ||
-      path === '/dashboard/partners/payout-methods' ||
-      path.startsWith('/dashboard/partners/payout-methods/') ||
-      (path === '/dashboard/referrals' && sectionId === 'participants')
-    );
-  }
-
   if (href === '/dashboard/payments') {
     return (
       path === '/dashboard/payments' ||
@@ -241,11 +187,18 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
     );
   }
 
-  if (href === '/dashboard/payouts') {
+  if (href === PAYOUTS_HUB_HREF) {
+    return path === PAYOUTS_HUB_HREF;
+  }
+
+  if (href === PAYOUTS_OBLIGATIONS_HREF) {
+    return path === PAYOUTS_OBLIGATIONS_HREF || path.startsWith(`${PAYOUTS_OBLIGATIONS_HREF}/`);
+  }
+
+  if (sectionId === 'payouts') {
     return (
-      path === '/dashboard/payouts' ||
-      path === OBLIGATIONS_HREF ||
-      path.startsWith(`${OBLIGATIONS_HREF}/`) ||
+      path === PAYOUTS_HUB_HREF ||
+      path.startsWith(`${PAYOUTS_HUB_HREF}/`) ||
       path === '/dashboard/partners/commissions' ||
       path.startsWith('/dashboard/partners/commissions/') ||
       path === '/dashboard/partners/payouts' ||
@@ -255,6 +208,10 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
 
   if (href === '/dashboard/reports') {
     return path === '/dashboard/reports' || path.startsWith('/dashboard/reports/');
+  }
+
+  if (sectionId === 'reports' && href === '/dashboard/transactions') {
+    return path === '/dashboard/transactions' || path.startsWith('/dashboard/transactions/');
   }
 
   if (href.startsWith('/dashboard/settings') || sectionId === 'settings') {
@@ -276,13 +233,9 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
     return (
       path === DEAL_NETWORK_BASE ||
       (path.startsWith(`${DEAL_NETWORK_BASE}/`) &&
-        path !== OBLIGATIONS_HREF &&
-        !path.startsWith(`${OBLIGATIONS_HREF}/`))
+        path !== PAYOUTS_OBLIGATIONS_HREF &&
+        !path.startsWith(`${PAYOUTS_OBLIGATIONS_HREF}/`))
     );
-  }
-
-  if (href === OBLIGATIONS_HREF) {
-    return path === OBLIGATIONS_HREF || path.startsWith(`${OBLIGATIONS_HREF}/`);
   }
 
   if (href === '/dashboard/payment-links' || href === '/dashboard/recurring-templates') {
@@ -298,4 +251,13 @@ export function isOperatorSectionActive(
 ): boolean {
   if (isOperatorNavActive(path, section.href, section.id)) return true;
   return section.items?.some((item) => isOperatorNavActive(path, item.href, section.id)) ?? false;
+}
+
+/** Skip redundant Overview sub-link when it matches section hub or a child href. */
+export function shouldShowSectionOverviewSubLink(
+  section: OperatorNavSection,
+  childItems: OperatorNavItem[]
+): boolean {
+  if (childItems.some((item) => item.href === section.href)) return false;
+  return true;
 }

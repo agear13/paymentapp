@@ -7,6 +7,7 @@ import {
   getOperatorNavSections,
   isOperatorNavActive,
   isOperatorSectionActive,
+  shouldShowSectionOverviewSubLink,
 } from '@/lib/navigation/operator-nav';
 import {
   SidebarGroup,
@@ -36,16 +37,16 @@ export function OperatorSidebarNav({ productProfile, path }: OperatorSidebarNavP
         <SidebarMenu>
           {sections.map((section) => {
             const childItems = section.items ?? [];
-            const useCollapsible = childItems.length > 1;
+            const useCollapsible = childItems.length > 0;
             const sectionActive = isOperatorSectionActive(path, section);
+            const showOverviewSubLink = shouldShowSectionOverviewSubLink(section, childItems);
 
             if (!useCollapsible) {
-              const href = childItems[0]?.href ?? section.href;
-              const active = isOperatorNavActive(path, href, section.id);
+              const active = isOperatorNavActive(path, section.href, section.id);
               return (
                 <SidebarMenuItem key={section.id}>
                   <SidebarMenuButton asChild isActive={active}>
-                    <Link href={href}>
+                    <Link href={section.href}>
                       <section.icon className="size-4" />
                       <span>{section.title}</span>
                     </Link>
@@ -66,16 +67,18 @@ export function OperatorSidebarNav({ productProfile, path }: OperatorSidebarNavP
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          asChild
-                          isActive={isOperatorNavActive(path, section.href, section.id)}
-                        >
-                          <Link href={section.href}>
-                            <span>Overview</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
+                      {showOverviewSubLink ? (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={isOperatorNavActive(path, section.href, section.id)}
+                          >
+                            <Link href={section.href}>
+                              <span>Overview</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ) : null}
                       {childItems.map((item) => (
                         <SidebarMenuSubItem key={item.href}>
                           <SidebarMenuSubButton

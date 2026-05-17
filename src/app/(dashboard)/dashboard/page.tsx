@@ -7,9 +7,9 @@ export const revalidate = 0;
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getUserOrganization } from '@/lib/auth/get-org';
-import { getDashboardProductProfile } from '@/lib/auth/dashboard-product.server';
 import { prisma } from '@/lib/server/prisma';
 import { OperationalHomeDashboard } from '@/components/dashboard/operational-home-dashboard';
+import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -21,9 +21,6 @@ export default async function DashboardPage() {
   if (!organization) {
     redirect('/onboarding');
   }
-
-  const productProfile = await getDashboardProductProfile();
-  const showRevenueShare = productProfile === 'admin';
 
   let unpaidInvoices = 0;
   try {
@@ -38,27 +35,18 @@ export default async function DashboardPage() {
   }
 
   const actionCards = [
-    ...(showRevenueShare
-      ? [
-          {
-            title: 'Projects needing action',
-            description: 'Review project funding, participants, and settlement progress.',
-            href: '/dashboard/projects',
-            variant: 'attention' as const,
-          },
-          {
-            title: 'Pending payouts',
-            description: 'Obligations and payout batches awaiting coordination.',
-            href: '/dashboard/payouts',
-            variant: 'attention' as const,
-          },
-          {
-            title: 'Participant onboarding',
-            description: 'Participants blocked or not yet payout-ready.',
-            href: '/dashboard/participants',
-          },
-        ]
-      : []),
+    {
+      title: 'Projects',
+      description: 'Review project funding, participants, and settlement progress.',
+      href: '/dashboard/projects',
+      variant: 'attention' as const,
+    },
+    {
+      title: 'Obligations',
+      description: 'See who is owed what and what is blocking payout release.',
+      href: PAYOUTS_OBLIGATIONS_HREF,
+      variant: 'attention' as const,
+    },
     {
       title: 'Unpaid invoices',
       description: 'Open invoices awaiting customer payment.',
@@ -73,7 +61,5 @@ export default async function DashboardPage() {
     },
   ];
 
-  return (
-    <OperationalHomeDashboard showRevenueShare={showRevenueShare} actionCards={actionCards} />
-  );
+  return <OperationalHomeDashboard actionCards={actionCards} />;
 }

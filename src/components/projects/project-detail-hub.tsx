@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { fetchPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import { persistPreferredDealIdToSession } from '@/lib/deal-network-demo/active-deal-resolution';
 import { summarizeProject } from '@/lib/projects/project-workspace-summary';
+import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
 
 type ProjectDetailHubProps = {
   projectId: string;
@@ -88,7 +89,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
   }
 
   const workspaceHref = '/dashboard/partners/deal-network';
-  const obligationsHref = '/dashboard/partners/deal-network/obligations';
+  const obligationsHref = PAYOUTS_OBLIGATIONS_HREF;
 
   return (
     <div className="space-y-8">
