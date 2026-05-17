@@ -33,7 +33,7 @@ export default function PartnerOnboardingPage() {
       localStorage.setItem('partnerProgramType', formData.programType);
     }
     // Navigate to partner dashboard (no real backend)
-    router.push('/dashboard/partners/dashboard');
+    router.push('/dashboard/partners/deal-network');
   };
 
   return (

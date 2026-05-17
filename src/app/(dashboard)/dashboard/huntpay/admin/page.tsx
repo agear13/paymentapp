@@ -126,8 +126,8 @@ export default function HuntPayAdminPage() {
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          <strong>Integration Active:</strong> When you approve a conversion, a real ledger entry is created in Partners → Ledger.
-          The sponsor earnings will appear in the Partners Dashboard automatically.
+          <strong>Integration Active:</strong> When you approve a conversion, a partner ledger entry is created automatically.
+          Sponsor earnings appear under Partners → Commissions.
         </AlertDescription>
       </Alert>
 

@@ -104,20 +104,12 @@ const partnersItems = [
     icon: Handshake,
     items: [
       {
-        title: 'Overview',
-        href: '/dashboard/partners/dashboard',
-      },
-      {
         title: 'Projects',
         href: '/dashboard/partners/deal-network',
       },
       {
         title: 'Obligations',
         href: '/dashboard/partners/deal-network/obligations',
-      },
-      {
-        title: 'Referral sharing',
-        href: '/dashboard/referrals',
       },
       {
         title: 'My referrals',
@@ -130,10 +122,6 @@ const partnersItems = [
       {
         title: 'Commissions',
         href: '/dashboard/partners/commissions',
-      },
-      {
-        title: 'Ledger',
-        href: '/dashboard/partners/ledger',
       },
       {
         title: 'Rules',
@@ -157,20 +145,8 @@ const programsItems = [
     icon: Target,
     items: [
       {
-        title: 'Overview',
-        href: '/dashboard/programs/overview',
-      },
-      {
-        title: 'Consultant',
-        href: '/dashboard/consultant',
-      },
-      {
         title: 'Participants',
         href: '/dashboard/programs/participants',
-      },
-      {
-        title: 'Referral sharing',
-        href: '/dashboard/referrals',
       },
     ],
   },
