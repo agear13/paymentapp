@@ -63,13 +63,6 @@ export function getOperatorNavSections(
       href: '/dashboard/projects',
       icon: FolderKanban,
       revenueShareOnly: true,
-      items: [
-        {
-          title: 'All projects',
-          href: DEAL_NETWORK_BASE,
-          revenueShareOnly: true,
-        },
-      ],
     },
     {
       id: 'participants',
@@ -223,10 +216,7 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
   }
 
   if (href === '/dashboard/projects') {
-    return (
-      path === '/dashboard/projects' ||
-      (path.startsWith(`${DEAL_NETWORK_BASE}`) && path !== OBLIGATIONS_HREF && !path.startsWith(`${OBLIGATIONS_HREF}/`))
-    );
+    return path === '/dashboard/projects' || path.startsWith('/dashboard/projects/');
   }
 
   if (href === '/dashboard/participants') {

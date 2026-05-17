@@ -1,5 +1,9 @@
-import { redirect } from 'next/navigation';
+export const dynamic = 'force-dynamic';
 
-export default function ProjectsPage() {
-  redirect('/dashboard/partners/deal-network');
+import { getDashboardProductProfile } from '@/lib/auth/dashboard-product.server';
+import { ProjectsWorkspaceIndex } from '@/components/projects/projects-workspace-index';
+
+export default async function ProjectsPage() {
+  const productProfile = await getDashboardProductProfile();
+  return <ProjectsWorkspaceIndex productProfile={productProfile} />;
 }

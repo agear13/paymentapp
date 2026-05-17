@@ -17,6 +17,7 @@ import {
 const pathTitles: Record<string, string> = {
   dashboard: 'Home',
   projects: 'Projects',
+  partners: 'Partners',
   participants: 'Participants',
   payments: 'Payments',
   payouts: 'Payouts',
@@ -30,8 +31,7 @@ const pathTitles: Record<string, string> = {
   merchant: 'Merchant',
   team: 'Team',
   integrations: 'Integrations',
-  partners: 'Partners',
-  'deal-network': 'Projects',
+  'deal-network': 'Coordination workspace',
   programs: 'Participants',
   commissions: 'Commissions',
   obligations: 'Obligations',

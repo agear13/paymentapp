@@ -75,7 +75,7 @@ export function OperationalHomeDashboard({
             {[
               {
                 label: 'Projects',
-                href: showRevenueShare ? '/dashboard/projects' : '/dashboard/payments',
+                href: '/dashboard/projects',
                 icon: FolderKanban,
               },
               {
