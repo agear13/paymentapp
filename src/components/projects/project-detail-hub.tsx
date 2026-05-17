@@ -1,121 +1,47 @@
 'use client';
 
-import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Banknote,
-  FileCheck,
-  Loader2,
-  Users,
-  Wallet,
-} from 'lucide-react';
+import { Banknote, FileCheck, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { fetchPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
-import { persistPreferredDealIdToSession } from '@/lib/deal-network-demo/active-deal-resolution';
-import { summarizeProject } from '@/lib/projects/project-workspace-summary';
-import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
+import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
+import {
+  projectFundingPath,
+  projectObligationsPath,
+  projectParticipantsPath,
+  projectPayoutsPath,
+} from '@/lib/projects/project-routes';
 
 type ProjectDetailHubProps = {
   projectId: string;
 };
 
 export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
-  const router = useRouter();
-  const [loading, setLoading] = React.useState(true);
-  const [notFound, setNotFound] = React.useState(false);
-  const [summary, setSummary] = React.useState<ReturnType<typeof summarizeProject> | null>(null);
+  const { summary } = useProjectWorkspace();
+  if (!summary) return null;
 
-  React.useEffect(() => {
-    persistPreferredDealIdToSession(projectId);
-  }, [projectId]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const snapshot = await fetchPilotSnapshot();
-      if (cancelled) return;
-      const deal = snapshot?.deals.find((d) => d.id === projectId);
-      if (!deal) {
-        setNotFound(true);
-        setSummary(null);
-      } else {
-        setNotFound(false);
-        setSummary(summarizeProject(deal, snapshot?.participants ?? []));
-      }
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin mr-2" />
-        Loading project…
-      </div>
-    );
-  }
-
-  if (notFound || !summary) {
-    return (
-      <div className="space-y-4">
-        <Button variant="ghost" asChild>
-          <Link href="/dashboard/projects">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            All projects
-          </Link>
-        </Button>
-        <Card>
-          <CardHeader>
-            <CardTitle>Project not found</CardTitle>
-            <CardDescription>This project may have been removed or you may not have access.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild>
-              <Link href="/dashboard/projects">Back to projects</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const workspaceHref = '/dashboard/partners/deal-network';
-  const obligationsHref = PAYOUTS_OBLIGATIONS_HREF;
+  const participantsHref = projectParticipantsPath(projectId);
+  const fundingHref = projectFundingPath(projectId);
+  const obligationsHref = projectObligationsPath(projectId);
+  const payoutsHref = projectPayoutsPath(projectId);
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-4">
-        <Button variant="ghost" className="w-fit px-0" asChild>
-          <Link href="/dashboard/projects">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            All projects
-          </Link>
-        </Button>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{summary.name}</h1>
-            {summary.description ? (
-              <p className="text-muted-foreground mt-1 max-w-2xl">{summary.description}</p>
-            ) : (
-              <p className="text-muted-foreground mt-1">
-                Coordinate participants, funding, obligations, and payouts for this project.
-              </p>
-            )}
-          </div>
-          <Button onClick={() => router.push(workspaceHref)}>
-            Open coordination workspace
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+      <div className="flex flex-col gap-3">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{summary.name}</h1>
+          {summary.description ? (
+            <p className="text-muted-foreground mt-1 max-w-2xl">{summary.description}</p>
+          ) : (
+            <p className="text-muted-foreground mt-1">
+              Coordinate participants, funding, obligations, and payouts for this project.
+            </p>
+          )}
         </div>
+        <Button asChild className="w-fit">
+          <Link href={participantsHref}>Invite participants</Link>
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -140,10 +66,15 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
               {summary.participantsReady}/{summary.participantCount}
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
             {summary.participantsPending > 0
               ? `${summary.participantsPending} still need payout readiness`
               : 'All participants payout-ready or none added yet'}
+            <div>
+              <Button asChild variant="outline" size="sm">
+                <Link href={participantsHref}>Manage participants</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -156,7 +87,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline" size="sm">
-              <Link href="/dashboard/payment-links?action=create">Create invoice</Link>
+              <Link href={fundingHref}>Funding workspace</Link>
             </Button>
           </CardContent>
         </Card>
@@ -170,7 +101,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline" size="sm">
-              <Link href={obligationsHref}>View obligations</Link>
+              <Link href={payoutsHref}>Payout coordination</Link>
             </Button>
           </CardContent>
         </Card>
@@ -180,7 +111,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
         <CardHeader>
           <CardTitle>Project operations</CardTitle>
           <CardDescription>
-            Contextual actions for this project — invoices, participants, obligations, and payouts.
+            Contextual actions for this project — participants, funding, obligations, and payouts.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -188,13 +119,13 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
             {
               title: 'Participants',
               description: 'Invite and manage who participates in this project.',
-              href: '/dashboard/participants',
+              href: participantsHref,
               icon: Users,
             },
             {
-              title: 'Invoices & funding',
+              title: 'Funding',
               description: 'Collect funds via invoices and payment links.',
-              href: '/dashboard/payment-links?action=create',
+              href: fundingHref,
               icon: Wallet,
             },
             {
@@ -204,9 +135,9 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
               icon: FileCheck,
             },
             {
-              title: 'Commissions & payouts',
-              description: 'Track earned commissions and payout history.',
-              href: '/dashboard/partners/commissions',
+              title: 'Payouts',
+              description: 'Coordinate disbursement after obligations are clear.',
+              href: payoutsHref,
               icon: Banknote,
             },
           ].map((item) => (
