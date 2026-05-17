@@ -4,6 +4,11 @@ import {
   effectiveOnboardingStatus,
   isOnboardingComplete,
 } from '@/lib/deal-network-demo/participant-onboarding';
+import {
+  buildProjectParticipant,
+  derivePayoutStatus,
+  payoutStatusLabel,
+} from '@/lib/projects/participant-entitlement';
 
 export type OperationalParticipantRole =
   | 'Contributor'
@@ -18,7 +23,7 @@ export type ParticipantOperationalStatus =
   | 'Onboarding incomplete'
   | 'Payout ready';
 
-const ROLE_TO_DEMO: Record<OperationalParticipantRole, DemoParticipant['role']> = {
+export const ROLE_TO_DEMO: Record<OperationalParticipantRole, DemoParticipant['role']> = {
   Contributor: 'Contributor',
   Contractor: 'Contributor',
   Referrer: 'Introducer',
@@ -50,12 +55,14 @@ export function operationalRoleLabel(participant: DemoParticipant): string {
 export function deriveParticipantOperationalStatus(
   participant: DemoParticipant
 ): ParticipantOperationalStatus {
-  if (participant.inviteStatus === 'Invited' && participant.approvalStatus === 'Pending approval') {
-    return 'Invited';
+  const lifecycle = participant.operationalLifecycle;
+  if (lifecycle === 'Draft participant') return 'Invited';
+  if (lifecycle === 'Payout ready') return 'Payout ready';
+  if (lifecycle === 'Payout blocked') {
+    return 'Onboarding incomplete';
   }
-  if (participant.approvalStatus === 'Pending approval') {
-    return 'Pending approval';
-  }
+  if (lifecycle === 'Invited') return 'Invited';
+  if (participant.approvalStatus === 'Pending approval') return 'Pending approval';
   if (participant.approvalStatus === 'Approved') {
     const onboarding = effectiveOnboardingStatus(participant);
     if (!isOnboardingComplete(onboarding)) {
@@ -67,43 +74,30 @@ export function deriveParticipantOperationalStatus(
 }
 
 export function payoutReadinessLabel(participant: DemoParticipant): string {
-  const status = deriveParticipantOperationalStatus(participant);
-  if (status === 'Payout ready') return 'Ready';
-  if (status === 'Onboarding incomplete') return 'Onboarding needed';
-  if (status === 'Pending approval' || status === 'Invited') return 'Not ready';
-  if (status === 'Approved') return 'Approved — onboarding pending';
-  return 'Not ready';
+  return payoutStatusLabel(derivePayoutStatus(participant));
 }
 
+/** @deprecated Use buildProjectParticipant from participant-entitlement */
 export function buildOperationalParticipant(input: {
   name: string;
-  email: string;
+  email?: string;
   role: OperationalParticipantRole;
   project: RecentDeal;
   payoutDueDate?: string;
   notes?: string;
 }): DemoParticipant {
-  const id = `proj-p-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const inviteToken = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-  const roleLabel = input.role;
-  return {
-    id,
-    name: input.name.trim(),
-    email: input.email.trim(),
-    role: ROLE_TO_DEMO[input.role],
+  return buildProjectParticipant({
+    name: input.name,
+    email: input.email,
+    role: input.role,
+    project: input.project,
+    payoutDueDate: input.payoutDueDate,
+    notes: input.notes,
+    participationModel: 'fixed_payout',
     commissionKind: 'fixed_amount',
     commissionValue: 0,
-    status: 'Pending',
-    inviteStatus: 'Invited',
-    approvalStatus: 'Pending approval',
-    onboardingStatus: 'NOT_STARTED',
-    inviteToken,
-    dealId: input.project.id,
-    dealName: input.project.dealName,
-    roleDetails: input.notes?.trim() || `${roleLabel} on ${input.project.dealName}`,
-    payoutDueDate: input.payoutDueDate?.trim() || undefined,
-    participantNotes: input.notes?.trim() || undefined,
-  };
+    enableCustomerAttribution: false,
+  });
 }
 
 export function participantSummaryStats(participants: DemoParticipant[]) {
@@ -113,10 +107,12 @@ export function participantSummaryStats(participants: DemoParticipant[]) {
   let pendingAgreements = 0;
 
   for (const p of participants) {
-    const op = deriveParticipantOperationalStatus(p);
-    if (op === 'Payout ready') ready += 1;
-    if (op === 'Onboarding incomplete') missingOnboarding += 1;
-    if (op === 'Invited' || op === 'Pending approval') pendingAgreements += 1;
+    const payout = derivePayoutStatus(p);
+    if (payout === 'payout ready') ready += 1;
+    if (payout === 'onboarding incomplete' || payout === 'payout blocked') missingOnboarding += 1;
+    if (p.operationalLifecycle === 'Draft participant' || payout === 'not invited') {
+      pendingAgreements += 1;
+    }
   }
 
   return { total, ready, missingOnboarding, pendingAgreements };

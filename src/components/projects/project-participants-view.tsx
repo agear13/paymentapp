@@ -15,34 +15,25 @@ import {
 } from '@/components/ui/table';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { InviteProjectParticipantModal } from '@/components/projects/invite-project-participant-modal';
+import { useOrganization } from '@/hooks/use-organization';
 import {
-  deriveParticipantOperationalStatus,
   operationalRoleLabel,
   participantSummaryStats,
-  payoutReadinessLabel,
-  type ParticipantOperationalStatus,
 } from '@/lib/projects/participants-for-project';
+import {
+  attributionStatusLabel,
+  deriveAttributionStatus,
+  deriveLifecycleStatus,
+  derivePayoutStatus,
+  payoutStatusLabel,
+} from '@/lib/projects/participant-entitlement';
+import { shouldIssueReferralLink } from '@/lib/referrals/referral-commerce-config';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-
-function statusVariant(
-  status: ParticipantOperationalStatus
-): 'default' | 'secondary' | 'outline' | 'destructive' {
-  switch (status) {
-    case 'Payout ready':
-      return 'default';
-    case 'Onboarding incomplete':
-      return 'destructive';
-    case 'Pending approval':
-    case 'Invited':
-      return 'secondary';
-    default:
-      return 'outline';
-  }
-}
 
 export function ProjectParticipantsView() {
   const { deal, summary, projectParticipants, allDeals, allParticipants, saveSnapshot } =
     useProjectWorkspace();
+  const { organizationId } = useOrganization();
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [obligationCounts, setObligationCounts] = React.useState<Record<string, number>>({});
 
@@ -66,7 +57,7 @@ export function ProjectParticipantsView() {
         }
         if (!cancelled) setObligationCounts(counts);
       } catch {
-        /* pilot obligations optional */
+        /* optional */
       }
     })();
     return () => {
@@ -84,10 +75,27 @@ export function ProjectParticipantsView() {
         ? 'Add participants to begin payout coordination'
         : `${stats.ready} of ${stats.total} payout-ready`;
 
-  const handleInvite = async (participant: DemoParticipant) => {
+  const handleInvite = async (participant: DemoParticipant): Promise<DemoParticipant> => {
     const next = [...allParticipants, participant];
     const ok = await saveSnapshot(allDeals, next);
     if (!ok) throw new Error('persist failed');
+
+    if (shouldIssueReferralLink(participant.referralCommerce)) {
+      const res = await fetch(
+        `/api/deal-network-pilot/participants/${encodeURIComponent(participant.id)}/activate-attribution`,
+        { method: 'POST', credentials: 'include', cache: 'no-store' }
+      );
+      if (res.ok) {
+        const json = (await res.json()) as { participant: DemoParticipant };
+        const merged = next.map((p) =>
+          p.id === participant.id ? json.participant : p
+        );
+        await saveSnapshot(allDeals, merged);
+        return json.participant;
+      }
+    }
+
+    return participant;
   };
 
   return (
@@ -96,12 +104,12 @@ export function ProjectParticipantsView() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Participant readiness: {stats.ready}/{stats.total || 0} ready · {payoutState}
+            {stats.total} stakeholder{stats.total === 1 ? '' : 's'} · {payoutState}
           </p>
         </div>
         <Button onClick={() => setInviteOpen(true)}>
           <UserPlus className="mr-2 h-4 w-4" />
-          Invite participant
+          Add participant
         </Button>
       </div>
 
@@ -140,14 +148,14 @@ export function ProjectParticipantsView() {
               No participants yet
             </CardTitle>
             <CardDescription>
-              Add everyone operationally involved in this project — contributors, contractors,
-              referrers, and partners.
+              Define financial stakeholders for this project — allocations, revenue share, and
+              customer attribution can be configured before onboarding.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => setInviteOpen(true)}>
               <UserPlus className="mr-2 h-4 w-4" />
-              Invite participant
+              Add participant
             </Button>
           </CardContent>
         </Card>
@@ -156,7 +164,8 @@ export function ProjectParticipantsView() {
           <CardHeader>
             <CardTitle>Project participants</CardTitle>
             <CardDescription>
-              Operational stakeholders for this project — not a global referral directory.
+              Financial stakeholder coordination — attribution and payout readiness are tracked
+              separately.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0 sm:p-0">
@@ -166,31 +175,33 @@ export function ProjectParticipantsView() {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Payout readiness</TableHead>
+                  <TableHead>Lifecycle</TableHead>
+                  <TableHead>Attribution</TableHead>
+                  <TableHead>Payout</TableHead>
                   <TableHead className="text-right">Obligations</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {projectParticipants.map((p) => {
-                  const opStatus = deriveParticipantOperationalStatus(p);
+                  const lifecycle = deriveLifecycleStatus(p);
+                  const attribution = deriveAttributionStatus(p);
+                  const payout = derivePayoutStatus(p);
                   return (
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{p.email || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{p.email?.trim() || '—'}</TableCell>
                       <TableCell>{operationalRoleLabel(p)}</TableCell>
                       <TableCell>
-                        <Badge variant={statusVariant(opStatus)}>{opStatus}</Badge>
+                        <Badge variant="outline">{lifecycle}</Badge>
                       </TableCell>
-                      <TableCell className="text-sm">{payoutReadinessLabel(p)}</TableCell>
+                      <TableCell>
+                        <Badge variant={attribution === 'active' ? 'default' : 'secondary'}>
+                          {attributionStatusLabel(attribution)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">{payoutStatusLabel(payout)}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {obligationCounts[p.id] ?? 0}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" disabled>
-                          Manage
-                        </Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -205,6 +216,7 @@ export function ProjectParticipantsView() {
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         project={deal}
+        organizationId={organizationId}
         onSubmit={handleInvite}
       />
     </div>

@@ -23,9 +23,21 @@ type Props = {
   value: ParticipantReferralCommerce;
   onChange: (next: ParticipantReferralCommerce) => void;
   disabled?: boolean;
+  /** Operational project workspace copy vs legacy pilot labels. */
+  tone?: 'pilot' | 'operational';
+  /** When parent controls the enable toggle, hide the checkbox row. */
+  hideEnableToggle?: boolean;
 };
 
-export function ReferralCommerceSection({ organizationId, value, onChange, disabled }: Props) {
+export function ReferralCommerceSection({
+  organizationId,
+  value,
+  onChange,
+  disabled,
+  tone = 'pilot',
+  hideEnableToggle = false,
+}: Props) {
+  const operational = tone === 'operational';
   const [services, setServices] = React.useState<OrganizationServiceOption[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -89,23 +101,31 @@ export function ReferralCommerceSection({ organizationId, value, onChange, disab
   return (
     <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
       <div>
-        <p className="text-sm font-medium">Referral commerce</p>
+        <p className="text-sm font-medium">
+          {operational ? 'Attributable revenue participation' : 'Referral commerce'}
+        </p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Configure referral link issuance and how this participant earns commission.
+          {operational
+            ? 'Issue a trackable customer link and configure how attributable revenue is recognized.'
+            : 'Configure referral link issuance and how this participant earns commission.'}
         </p>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id="ref-create-link"
-          checked={value.createReferralLink !== false}
-          disabled={disabled}
-          onCheckedChange={(c) => patch({ createReferralLink: c === true })}
-        />
-        <Label htmlFor="ref-create-link" className="font-normal cursor-pointer">
-          Create referral link for participant
-        </Label>
-      </div>
+      {!hideEnableToggle ? (
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="ref-create-link"
+            checked={value.createReferralLink !== false}
+            disabled={disabled}
+            onCheckedChange={(c) => patch({ createReferralLink: c === true })}
+          />
+          <Label htmlFor="ref-create-link" className="font-normal cursor-pointer">
+            {operational
+              ? 'Enable customer attribution tracking'
+              : 'Create referral link for participant'}
+          </Label>
+        </div>
+      ) : null}
 
       {value.createReferralLink !== false ? (
         <>
@@ -119,10 +139,12 @@ export function ReferralCommerceSection({ organizationId, value, onChange, disab
               <RadioGroupItem value="project_revenue_share" id="mode-project" className="mt-1" />
               <div>
                 <Label htmlFor="mode-project" className="font-medium cursor-pointer">
-                  Project revenue share
+                  {operational ? 'Revenue participation (project)' : 'Project revenue share'}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Uses deal/project commission above (percentage or fixed).
+                  {operational
+                    ? 'Uses the fixed payout or revenue share configured above.'
+                    : 'Uses deal/project commission above (percentage or fixed).'}
                 </p>
               </div>
             </div>
@@ -130,11 +152,12 @@ export function ReferralCommerceSection({ organizationId, value, onChange, disab
               <RadioGroupItem value="referral_commerce" id="mode-commerce" className="mt-1" />
               <div>
                 <Label htmlFor="mode-commerce" className="font-medium cursor-pointer">
-                  Referral commerce attribution
+                  {operational ? 'Customer attribution earnings' : 'Referral commerce attribution'}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Commission only when customers buy selected services through this participant&apos;s
-                  link.
+                  {operational
+                    ? 'Participant earns from attributable purchases through their trackable customer link.'
+                    : "Commission only when customers buy selected services through this participant's link."}
                 </p>
               </div>
             </div>
@@ -143,7 +166,9 @@ export function ReferralCommerceSection({ organizationId, value, onChange, disab
           {value.commissionMode === 'referral_commerce' ? (
             <div className="space-y-3 pl-1 border-l-2 border-muted ml-1">
               <div className="space-y-2">
-                <Label htmlFor="commerce-pct">Commission on each service sale (%)</Label>
+                <Label htmlFor="commerce-pct">
+                  {operational ? 'Revenue share on attributable purchases (%)' : 'Commission on each service sale (%)'}
+                </Label>
                 <Input
                   id="commerce-pct"
                   type="number"
@@ -160,10 +185,13 @@ export function ReferralCommerceSection({ organizationId, value, onChange, disab
               </div>
 
               <div className="space-y-2">
-                <Label>Services available on referral link</Label>
+                <Label>
+                  {operational ? 'Services on trackable customer link' : 'Services available on referral link'}
+                </Label>
                 <p className="text-xs text-muted-foreground">
-                  Leave all unchecked to allow every active service. Select specific services to
-                  restrict the landing page.
+                  {operational
+                    ? 'Leave all unchecked to allow every active service. Select specific services to restrict the payment link.'
+                    : 'Leave all unchecked to allow every active service. Select specific services to restrict the landing page.'}
                 </p>
                 {!organizationId ? (
                   <p className="text-xs text-amber-700">Organization required to load services.</p>

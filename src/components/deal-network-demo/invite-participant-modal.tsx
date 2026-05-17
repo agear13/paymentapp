@@ -104,6 +104,9 @@ export interface DemoParticipant {
   companyName?: string;
   /** Operator referral commerce configuration (invite/agreement time). */
   referralCommerce?: import('@/lib/referrals/referral-commerce-config').ParticipantReferralCommerce;
+  /** Project workspace lifecycle (operator coordination). */
+  operationalLifecycle?: import('@/lib/projects/participant-entitlement').ParticipantLifecycleStatus;
+  attributionStatus?: import('@/lib/projects/participant-entitlement').ParticipantAttributionStatus;
 }
 
 export interface InviteParticipantModalProps {
