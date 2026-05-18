@@ -284,6 +284,8 @@ export async function approveParticipantByInviteToken(
       const payloadWithLink: DemoParticipant = {
         ...participant,
         inviteLink: issued.referralUrl,
+        customerCommerceUrl: issued.referralUrl,
+        attributionStatus: 'active',
       };
       await prisma.deal_network_pilot_participants.update({
         where: { id: row.id },

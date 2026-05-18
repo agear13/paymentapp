@@ -15,8 +15,8 @@ import {
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 
 /**
- * Activate customer attribution for a project participant immediately.
- * Does not require onboarding or payout readiness — only payout release is gated later.
+ * Activate customer commerce for a project participant after agreement approval.
+ * Does not require payout onboarding — only payout release is gated later.
  */
 export async function POST(
   _request: Request,
@@ -43,6 +43,12 @@ export async function POST(
     }
 
     const cur = row.participant_payload as unknown as DemoParticipant;
+    if (row.approval_status !== 'Approved') {
+      return NextResponse.json(
+        { error: 'Participant must approve the agreement before customer attribution can activate' },
+        { status: 400 }
+      );
+    }
     if (!shouldIssueReferralLink(cur.referralCommerce)) {
       return NextResponse.json(
         { error: 'Customer attribution is not enabled for this participant' },
@@ -74,11 +80,8 @@ export async function POST(
       dealId: row.deal_id,
       inviteToken: row.invite_token,
       inviteLink: issued.referralUrl,
+      customerCommerceUrl: issued.referralUrl,
       attributionStatus: 'active',
-      operationalLifecycle:
-        cur.operationalLifecycle === 'Draft participant'
-          ? 'Attributable active'
-          : cur.operationalLifecycle ?? 'Attributable active',
     };
 
     await prisma.deal_network_pilot_participants.update({

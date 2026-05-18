@@ -117,27 +117,27 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
         <CardContent className="grid gap-3 sm:grid-cols-2">
           {[
             {
-              title: 'Participants',
-              description: 'Invite and manage who participates in this project.',
+              title: 'Invite participants',
+              description: 'Add stakeholders and send participant agreement links.',
               href: participantsHref,
               icon: Users,
             },
             {
+              title: 'Review agreements',
+              description: 'Track participation approval and pending agreements.',
+              href: participantsHref,
+              icon: FileCheck,
+            },
+            {
               title: 'Funding',
-              description: 'Collect funds via invoices and payment links.',
+              description: 'Invoices and payment collection for this project.',
               href: fundingHref,
               icon: Wallet,
             },
             {
-              title: 'Obligations',
-              description: 'Review funding gaps and payout readiness.',
+              title: 'Obligations & payouts',
+              description: 'Funding gaps, payout readiness, and disbursement coordination.',
               href: obligationsHref,
-              icon: FileCheck,
-            },
-            {
-              title: 'Payouts',
-              description: 'Coordinate disbursement after obligations are clear.',
-              href: payoutsHref,
               icon: Banknote,
             },
           ].map((item) => (

@@ -1,6 +1,7 @@
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { CommissionStructureKind } from '@/lib/deal-network-demo/commission-structure';
+import { COMMISSION_STRUCTURE_OPTIONS } from '@/lib/deal-network-demo/commission-structure';
 import {
   defaultReferralCommerce,
   normalizeReferralCommerce,
@@ -19,20 +20,13 @@ export type ProjectParticipationModel =
   | 'revenue_share'
   | 'customer_attribution';
 
-export type ParticipantLifecycleStatus =
-  | 'Draft participant'
-  | 'Invited'
-  | 'Attributable active'
-  | 'Payout blocked'
-  | 'Payout ready';
+/** Operational participation (agreement lifecycle). */
+export type ParticipationState = 'invited' | 'approved' | 'active';
 
-export type ParticipantAttributionStatus =
-  | 'inactive'
-  | 'active'
-  | 'generating conversions';
+export type ParticipantAttributionStatus = 'inactive' | 'active' | 'generating conversions';
 
 export type ParticipantPayoutStatus =
-  | 'not invited'
+  | 'no payout profile'
   | 'invited'
   | 'onboarding incomplete'
   | 'payout blocked'
@@ -51,9 +45,16 @@ export type BuildProjectParticipantInput = {
   commissionValue: number;
   enableCustomerAttribution: boolean;
   referralCommerce?: ParticipantReferralCommerce;
-  /** When true and email present, participant is marked invited (invite link sent separately). */
   sendInvite?: boolean;
 };
+
+export function isProjectWorkspaceParticipant(participant: DemoParticipant): boolean {
+  return participant.workspaceSource === 'project';
+}
+
+export function participantAgreementPath(token: string): string {
+  return `/deal-invites/${encodeURIComponent(token)}`;
+}
 
 export function participationModelToCommissionKind(
   model: ProjectParticipationModel
@@ -86,6 +87,9 @@ export function buildReferralCommerceForProject(input: {
   });
 }
 
+/**
+ * On invite: agreement only — pending approval, attribution inactive, no commerce URL.
+ */
 export function buildProjectParticipant(input: BuildProjectParticipantInput): DemoParticipant {
   const id = `proj-p-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const inviteToken = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
@@ -98,14 +102,6 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
       enableCustomerAttribution: input.enableCustomerAttribution,
     });
 
-  const attributionActive =
-    !!referralCommerce && shouldIssueReferralLink(referralCommerce);
-
-  let lifecycle: ParticipantLifecycleStatus = 'Draft participant';
-  if (attributionActive) lifecycle = 'Attributable active';
-  else if (hasEmail && input.sendInvite) lifecycle = 'Invited';
-  else if (hasEmail) lifecycle = 'Attributable active';
-
   return {
     id,
     name: input.name.trim(),
@@ -114,8 +110,8 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
     commissionKind: input.commissionKind,
     commissionValue: input.commissionValue,
     status: 'Pending',
-    inviteStatus: hasEmail && input.sendInvite ? 'Invited' : 'Invited',
-    approvalStatus: 'Approved',
+    inviteStatus: hasEmail ? 'Invited' : 'Invited',
+    approvalStatus: 'Pending approval',
     onboardingStatus: 'NOT_STARTED',
     inviteToken,
     dealId: input.project.id,
@@ -126,8 +122,12 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
     payoutDueDate: input.payoutDueDate?.trim() || undefined,
     participantNotes: input.notes?.trim() || undefined,
     referralCommerce,
-    operationalLifecycle: lifecycle,
-    attributionStatus: attributionActive ? 'active' : 'inactive',
+    workspaceSource: 'project',
+    participationModel: input.participationModel,
+    agreementUrl: participantAgreementPath(inviteToken),
+    attributionStatus: 'inactive',
+    inviteLink: undefined,
+    customerCommerceUrl: undefined,
   };
 }
 
@@ -142,24 +142,36 @@ export function participationModelLabel(model: ProjectParticipationModel): strin
   }
 }
 
-export function deriveLifecycleStatus(participant: DemoParticipant): ParticipantLifecycleStatus {
-  if (participant.operationalLifecycle) {
-    return participant.operationalLifecycle;
+export function deriveParticipationState(participant: DemoParticipant): ParticipationState {
+  if (participant.approvalStatus !== 'Approved') return 'invited';
+  const attribution = deriveAttributionStatus(participant);
+  if (attribution === 'active') return 'active';
+  return 'approved';
+}
+
+export function participationStateLabel(state: ParticipationState): string {
+  switch (state) {
+    case 'invited':
+      return 'Invited';
+    case 'approved':
+      return 'Approved';
+    case 'active':
+      return 'Active';
   }
-  const payout = derivePayoutStatus(participant);
-  if (payout === 'payout ready') return 'Payout ready';
-  if (payout === 'payout blocked' || payout === 'onboarding incomplete') return 'Payout blocked';
-  if (deriveAttributionStatus(participant) === 'active') return 'Attributable active';
-  if (participant.email?.trim() && participant.inviteStatus === 'Invited') return 'Invited';
-  if (!participant.email?.trim()) return 'Draft participant';
-  return 'Attributable active';
 }
 
 export function deriveAttributionStatus(
   participant: DemoParticipant
 ): ParticipantAttributionStatus {
   if (participant.attributionStatus === 'generating conversions') return 'generating conversions';
-  if (participant.attributionStatus === 'active' || participant.inviteLink) return 'active';
+  if (participant.approvalStatus !== 'Approved') return 'inactive';
+  if (
+    participant.attributionStatus === 'active' ||
+    participant.customerCommerceUrl?.trim() ||
+    (participant.inviteLink?.trim() && isProjectWorkspaceParticipant(participant))
+  ) {
+    return 'active';
+  }
   const commerce = participant.referralCommerce;
   if (commerce && shouldIssueReferralLink(commerce)) return 'inactive';
   return 'inactive';
@@ -178,22 +190,19 @@ export function attributionStatusLabel(status: ParticipantAttributionStatus): st
 
 export function derivePayoutStatus(participant: DemoParticipant): ParticipantPayoutStatus {
   if (participant.payoutSettlementStatus === 'Paid' || participant.payoutPaidAt) return 'paid';
-  if (!participant.email?.trim()) return 'not invited';
-  if (participant.inviteStatus === 'Invited' && participant.approvalStatus !== 'Approved') {
-    return 'invited';
-  }
+  if (!participant.email?.trim()) return 'no payout profile';
+  if (participant.approvalStatus !== 'Approved') return 'invited';
   const onboarding = effectiveOnboardingStatus(participant);
   if (!isOnboardingComplete(onboarding)) {
     return onboarding === 'INCOMPLETE' ? 'onboarding incomplete' : 'payout blocked';
   }
-  if (participant.approvalStatus === 'Approved') return 'payout ready';
-  return 'payout blocked';
+  return 'payout ready';
 }
 
 export function payoutStatusLabel(status: ParticipantPayoutStatus): string {
   switch (status) {
-    case 'not invited':
-      return 'Not invited';
+    case 'no payout profile':
+      return 'No payout profile';
     case 'invited':
       return 'Invited';
     case 'onboarding incomplete':
@@ -205,4 +214,45 @@ export function payoutStatusLabel(status: ParticipantPayoutStatus): string {
     case 'paid':
       return 'Paid';
   }
+}
+
+export function earningsStructureSummary(participant: DemoParticipant): string {
+  const model = participant.participationModel;
+  if (model) return participationModelLabel(model);
+  const kind =
+    COMMISSION_STRUCTURE_OPTIONS.find((o) => o.value === participant.commissionKind)?.label ??
+    participant.commissionKind;
+  if (participant.commissionKind === 'pct_deal_value') {
+    return `${participant.commissionValue}% revenue share`;
+  }
+  if (participant.commissionKind === 'fixed_amount') {
+    return `Fixed $${participant.commissionValue.toLocaleString()}`;
+  }
+  return kind;
+}
+
+/** Strip commerce URLs from API responses until agreement is approved (project flow). */
+export function sanitizeParticipantForAgreementView(
+  participant: DemoParticipant
+): DemoParticipant {
+  if (!isProjectWorkspaceParticipant(participant)) return participant;
+  if (participant.approvalStatus === 'Approved') return participant;
+  return {
+    ...participant,
+    inviteLink: undefined,
+    customerCommerceUrl: undefined,
+  };
+}
+
+export function applyPostApprovalActivation(
+  participant: DemoParticipant,
+  commerceUrl: string
+): DemoParticipant {
+  return {
+    ...participant,
+    approvalStatus: 'Approved',
+    attributionStatus: 'active',
+    customerCommerceUrl: commerceUrl,
+    inviteLink: commerceUrl,
+  };
 }

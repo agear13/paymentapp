@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { UserPlus, Users } from 'lucide-react';
+import { Copy, UserPlus, Users } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,18 +17,17 @@ import {
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { InviteProjectParticipantModal } from '@/components/projects/invite-project-participant-modal';
 import { useOrganization } from '@/hooks/use-organization';
-import {
-  operationalRoleLabel,
-  participantSummaryStats,
-} from '@/lib/projects/participants-for-project';
+import { operationalRoleLabel, participantSummaryStats } from '@/lib/projects/participants-for-project';
 import {
   attributionStatusLabel,
   deriveAttributionStatus,
-  deriveLifecycleStatus,
+  deriveParticipationState,
   derivePayoutStatus,
+  earningsStructureSummary,
+  participantAgreementPath,
+  participationStateLabel,
   payoutStatusLabel,
 } from '@/lib/projects/participant-entitlement';
-import { shouldIssueReferralLink } from '@/lib/referrals/referral-commerce-config';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 
 export function ProjectParticipantsView() {
@@ -79,23 +79,19 @@ export function ProjectParticipantsView() {
     const next = [...allParticipants, participant];
     const ok = await saveSnapshot(allDeals, next);
     if (!ok) throw new Error('persist failed');
-
-    if (shouldIssueReferralLink(participant.referralCommerce)) {
-      const res = await fetch(
-        `/api/deal-network-pilot/participants/${encodeURIComponent(participant.id)}/activate-attribution`,
-        { method: 'POST', credentials: 'include', cache: 'no-store' }
-      );
-      if (res.ok) {
-        const json = (await res.json()) as { participant: DemoParticipant };
-        const merged = next.map((p) =>
-          p.id === participant.id ? json.participant : p
-        );
-        await saveSnapshot(allDeals, merged);
-        return json.participant;
-      }
-    }
-
     return participant;
+  };
+
+  const copyAgreementLink = async (p: DemoParticipant) => {
+    const path = p.agreementUrl ?? participantAgreementPath(p.inviteToken);
+    const url =
+      typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Agreement link copied');
+    } catch {
+      toast.error('Could not copy');
+    }
   };
 
   return (
@@ -109,7 +105,7 @@ export function ProjectParticipantsView() {
         </div>
         <Button onClick={() => setInviteOpen(true)}>
           <UserPlus className="mr-2 h-4 w-4" />
-          Add participant
+          Invite participant
         </Button>
       </div>
 
@@ -148,14 +144,14 @@ export function ProjectParticipantsView() {
               No participants yet
             </CardTitle>
             <CardDescription>
-              Define financial stakeholders for this project — allocations, revenue share, and
-              customer attribution can be configured before onboarding.
+              Invite stakeholders, define participation and payout allocation, then send agreement
+              links. Customer payment links activate only after approval.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => setInviteOpen(true)}>
               <UserPlus className="mr-2 h-4 w-4" />
-              Add participant
+              Invite participant
             </Button>
           </CardContent>
         </Card>
@@ -164,35 +160,38 @@ export function ProjectParticipantsView() {
           <CardHeader>
             <CardTitle>Project participants</CardTitle>
             <CardDescription>
-              Financial stakeholder coordination — attribution and payout readiness are tracked
-              separately.
+              Participation, attribution, and payout readiness are tracked separately.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0 sm:p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Participant</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Lifecycle</TableHead>
+                  <TableHead>Participation</TableHead>
                   <TableHead>Attribution</TableHead>
-                  <TableHead>Payout</TableHead>
-                  <TableHead className="text-right">Obligations</TableHead>
+                  <TableHead>Payout readiness</TableHead>
+                  <TableHead>Earnings structure</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {projectParticipants.map((p) => {
-                  const lifecycle = deriveLifecycleStatus(p);
+                  const participation = deriveParticipationState(p);
                   const attribution = deriveAttributionStatus(p);
                   const payout = derivePayoutStatus(p);
                   return (
                     <TableRow key={p.id}>
-                      <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{p.email?.trim() || '—'}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">{p.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {p.email?.trim() || 'No email'}
+                        </div>
+                      </TableCell>
                       <TableCell>{operationalRoleLabel(p)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{lifecycle}</Badge>
+                        <Badge variant="outline">{participationStateLabel(participation)}</Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant={attribution === 'active' ? 'default' : 'secondary'}>
@@ -200,8 +199,18 @@ export function ProjectParticipantsView() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm">{payoutStatusLabel(payout)}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {obligationCounts[p.id] ?? 0}
+                      <TableCell className="text-sm text-muted-foreground">
+                        {earningsStructureSummary(p)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void copyAgreementLink(p)}
+                        >
+                          <Copy className="h-3.5 w-3.5 mr-1" />
+                          Agreement
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );

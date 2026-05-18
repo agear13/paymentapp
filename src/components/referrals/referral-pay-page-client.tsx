@@ -16,7 +16,7 @@ export function ReferralPayPageClient({ referralCode, checkoutConfig }: Props) {
   const config = (checkoutConfig as Record<string, unknown>) || {};
   const defaultAmount = Number(config.amount) || 100;
   const defaultCurrency = String(config.currency || 'AUD').toUpperCase().slice(0, 3);
-  const defaultDescription = String(config.description || `Payment via referral ${referralCode}`);
+  const defaultDescription = String(config.description || 'Service payment');
 
   const [amount, setAmount] = useState<string>(String(defaultAmount));
   const [currency, setCurrency] = useState(defaultCurrency);
@@ -73,7 +73,7 @@ export function ReferralPayPageClient({ referralCode, checkoutConfig }: Props) {
             Pay Now
           </CardTitle>
           <CardDescription>
-            Complete your payment via referral code <strong>{referralCode}</strong>
+            Enter your payment details to continue to secure checkout.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

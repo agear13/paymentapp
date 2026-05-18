@@ -104,9 +104,14 @@ export interface DemoParticipant {
   companyName?: string;
   /** Operator referral commerce configuration (invite/agreement time). */
   referralCommerce?: import('@/lib/referrals/referral-commerce-config').ParticipantReferralCommerce;
-  /** Project workspace lifecycle (operator coordination). */
-  operationalLifecycle?: import('@/lib/projects/participant-entitlement').ParticipantLifecycleStatus;
+  /** Project operator workspace vs Rabbit Hole / Strait pilot. */
+  workspaceSource?: 'project' | 'pilot';
+  participationModel?: import('@/lib/projects/participant-entitlement').ProjectParticipationModel;
+  agreementUrl?: string;
+  /** Customer commerce URL — only after participant approves agreement (project flow). */
+  customerCommerceUrl?: string;
   attributionStatus?: import('@/lib/projects/participant-entitlement').ParticipantAttributionStatus;
+  operationalLifecycle?: string;
 }
 
 export interface InviteParticipantModalProps {

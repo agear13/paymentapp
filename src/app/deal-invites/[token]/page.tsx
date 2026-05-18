@@ -18,7 +18,9 @@ import {
 } from '@/lib/deal-network-demo/commission-structure';
 import { ReferralSharePanel } from '@/components/referrals/referral-share-panel';
 import { ReferralCommerceAgreementSummary } from '@/components/referrals/referral-commerce-agreement-summary';
+import { ProjectParticipantAgreementPanel } from '@/components/projects/project-participant-agreement-panel';
 import { buildReferralQrApiPath } from '@/lib/referrals/referral-share-url';
+import { isProjectWorkspaceParticipant } from '@/lib/projects/participant-entitlement';
 
 function roleAmountsFromDeal(deal: RecentDeal) {
   return {
@@ -43,6 +45,7 @@ export default function DealInviteApprovalPage() {
   } | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [workspaceSource, setWorkspaceSource] = React.useState<'project' | 'pilot'>('pilot');
 
   React.useEffect(() => {
     setReferralIssuance(null);
@@ -65,6 +68,7 @@ export default function DealInviteApprovalPage() {
           participant: DemoParticipant;
           dealParticipants?: DemoParticipant[];
           referralIssuance?: { code: string; referralUrl: string };
+          workspaceSource?: 'project' | 'pilot';
         }>;
       })
       .then((data) => {
@@ -72,10 +76,21 @@ export default function DealInviteApprovalPage() {
         setDeal(data.deal);
         setParticipant(data.participant);
         setDealParticipants(data.dealParticipants ?? []);
+        setWorkspaceSource(
+          data.workspaceSource ??
+            (isProjectWorkspaceParticipant(data.participant) ? 'project' : 'pilot')
+        );
         setApproved(data.participant.approvalStatus === 'Approved');
         setNote(data.participant.approvalNote ?? '');
         if (data.referralIssuance) {
           setReferralIssuance(data.referralIssuance);
+        } else if (data.participant.customerCommerceUrl?.trim()) {
+          const url = data.participant.customerCommerceUrl.trim();
+          const codeMatch = url.match(/\/r\/([A-Z0-9_-]+)/i) ?? url.match(/\/ref\/([a-z0-9_-]+)/i);
+          setReferralIssuance({
+            referralUrl: url,
+            code: codeMatch?.[1]?.toUpperCase() ?? 'LINK',
+          });
         } else if (data.participant.inviteLink?.trim()) {
           const url = data.participant.inviteLink.trim();
           const codeMatch = url.match(/\/r\/([A-Z0-9_-]+)/i) ?? url.match(/\/ref\/([a-z0-9_-]+)/i);
@@ -204,6 +219,21 @@ export default function DealInviteApprovalPage() {
   const commissionStructureLabel =
     COMMISSION_STRUCTURE_OPTIONS.find((o) => o.value === participant.commissionKind)?.label ??
     participant.commissionKind;
+
+  if (workspaceSource === 'project' && deal) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
+        <ProjectParticipantAgreementPanel
+          token={token}
+          deal={deal}
+          participant={participant}
+          dealParticipants={dealParticipants}
+          initialApproved={approved}
+          initialReferralIssuance={referralIssuance}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">

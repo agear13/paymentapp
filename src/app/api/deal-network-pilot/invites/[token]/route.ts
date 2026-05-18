@@ -11,6 +11,10 @@ import {
   resolveOrganizationIdForOperator,
 } from '@/lib/referrals/ensure-referral-issuance';
 import { shouldIssueReferralLink } from '@/lib/referrals/referral-commerce-config';
+import {
+  isProjectWorkspaceParticipant,
+  sanitizeParticipantForAgreementView,
+} from '@/lib/projects/participant-entitlement';
 import { log } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -70,14 +74,22 @@ export async function GET(
       }
     }
 
+    const enriched = {
+      ...participant,
+      inviteLink: referralIssuance?.referralUrl ?? participant.inviteLink,
+      customerCommerceUrl:
+        referralIssuance?.referralUrl ?? participant.customerCommerceUrl ?? participant.inviteLink,
+    };
+
     return NextResponse.json({
       deal,
-      participant: {
-        ...participant,
-        inviteLink: referralIssuance?.referralUrl ?? participant.inviteLink,
-      },
+      participant: sanitizeParticipantForAgreementView(enriched),
       dealParticipants,
-      referralIssuance,
+      referralIssuance:
+        isProjectWorkspaceParticipant(participant) && row.approval_status !== 'Approved'
+          ? undefined
+          : referralIssuance,
+      workspaceSource: isProjectWorkspaceParticipant(participant) ? 'project' : 'pilot',
     });
   } catch (e) {
     console.error('[deal-network-pilot/invites GET]', e);

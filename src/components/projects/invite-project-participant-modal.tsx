@@ -33,13 +33,13 @@ import {
 import {
   defaultReferralCommerce,
   normalizeReferralCommerce,
-  shouldIssueReferralLink,
   type ParticipantReferralCommerce,
 } from '@/lib/referrals/referral-commerce-config';
 import { ReferralCommerceSection } from '@/components/referrals/referral-commerce-section';
 import {
   buildProjectParticipant,
   buildReferralCommerceForProject,
+  participantAgreementPath,
   participationModelToCommissionKind,
   type ProjectParticipationModel,
 } from '@/lib/projects/participant-entitlement';
@@ -96,10 +96,7 @@ export function InviteProjectParticipantModal({
   const [referralCommerce, setReferralCommerce] =
     React.useState<ParticipantReferralCommerce>(defaultReferralCommerce());
   const [saving, setSaving] = React.useState(false);
-  const [successLinks, setSuccessLinks] = React.useState<{
-    customerLink?: string;
-    inviteLink?: string;
-  } | null>(null);
+  const [agreementLink, setAgreementLink] = React.useState<string | null>(null);
 
   const commissionKind = participationModelToCommissionKind(participationModel);
 
@@ -114,7 +111,7 @@ export function InviteProjectParticipantModal({
       setEntitlementValue('0');
       setEnableCustomerAttribution(false);
       setReferralCommerce(defaultReferralCommerce());
-      setSuccessLinks(null);
+      setAgreementLink(null);
     }
   }, [open]);
 
@@ -201,19 +198,14 @@ export function InviteProjectParticipantModal({
       const saved = await onSubmit(participant);
       const finalParticipant = saved ?? participant;
 
-      const links: { customerLink?: string; inviteLink?: string } = {};
-      if (finalParticipant.inviteLink && shouldIssueReferralLink(finalParticipant.referralCommerce)) {
-        links.customerLink = finalParticipant.inviteLink;
-      }
-      if (email.trim()) {
-        const origin = typeof window !== 'undefined' ? window.location.origin : '';
-        links.inviteLink =
-          origin ? `${origin}/deal-invites/${finalParticipant.inviteToken}` : undefined;
-      }
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const agreementPath =
+        finalParticipant.agreementUrl ?? participantAgreementPath(finalParticipant.inviteToken);
+      const fullAgreementUrl = origin ? `${origin}${agreementPath}` : agreementPath;
 
-      setSuccessLinks(links);
-      toast.success(`${finalParticipant.name} added to ${project.dealName}`);
-      if (!links.customerLink && !links.inviteLink) {
+      setAgreementLink(fullAgreementUrl);
+      toast.success(`${finalParticipant.name} added — share the agreement link`);
+      if (!fullAgreementUrl) {
         onOpenChange(false);
       }
     } catch {
@@ -238,52 +230,35 @@ export function InviteProjectParticipantModal({
         <div className="max-h-[90vh] overflow-y-auto px-6 pt-6 pb-6">
           <DialogHeader>
             <DialogTitle>
-              {successLinks ? 'Participant configured' : 'Add project participant'}
+              {agreementLink ? 'Agreement link ready' : 'Add project participant'}
             </DialogTitle>
             <DialogDescription>
-              {successLinks
-                ? 'Financial participation is configured. Onboarding is only required before payout release.'
+              {agreementLink
+                ? 'Share this link so the participant can review and approve participation. Customer payment links activate only after approval.'
                 : `Define how this stakeholder participates financially in ${project.dealName}.`}
             </DialogDescription>
           </DialogHeader>
 
-          {successLinks ? (
+          {agreementLink ? (
             <div className="space-y-4 py-4">
-              {successLinks.customerLink ? (
-                <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                  <Label className="text-xs text-muted-foreground">Trackable customer link</Label>
-                  <div className="flex gap-2">
-                    <Input readOnly value={successLinks.customerLink} className="font-mono text-xs" />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => void copyText(successLinks.customerLink!)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Attribution is active. Earnings accrue immediately; payout requires onboarding.
-                  </p>
+                              <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+                <Label className="text-xs text-muted-foreground">Participant agreement link</Label>
+                <div className="flex gap-2">
+                  <Input readOnly value={agreementLink} className="font-mono text-xs" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => void copyText(agreementLink)}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
-              ) : null}
-              {successLinks.inviteLink ? (
-                <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                  <Label className="text-xs text-muted-foreground">Onboarding invite (optional)</Label>
-                  <div className="flex gap-2">
-                    <Input readOnly value={successLinks.inviteLink} className="font-mono text-xs" />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => void copyText(successLinks.inviteLink!)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
+                <p className="text-xs text-muted-foreground">
+                  Trackable customer payment links are issued after the participant approves this
+                  agreement.
+                </p>
+              </div>
               <DialogFooter>
                 <Button type="button" onClick={() => onOpenChange(false)}>
                   Done
