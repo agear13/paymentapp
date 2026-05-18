@@ -25,3 +25,5 @@ export function useProjectWorkspace(): ProjectContextValue {
   }
   return ctx;
 }
+
+export { useProjectWorkspaceRefresh, useProjectWorkspaceSmartPolling } from '@/hooks/use-project-workspace-refresh';
