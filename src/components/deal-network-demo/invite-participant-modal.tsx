@@ -108,6 +108,8 @@ export interface DemoParticipant {
   workspaceSource?: 'project' | 'pilot';
   participationModel?: import('@/lib/projects/participant-entitlement').ProjectParticipationModel;
   agreementUrl?: string;
+  /** Issued referral code (project flow, after approval). */
+  referralCode?: string;
   /** Customer commerce URL — only after participant approves agreement (project flow). */
   customerCommerceUrl?: string;
   attributionStatus?: import('@/lib/projects/participant-entitlement').ParticipantAttributionStatus;

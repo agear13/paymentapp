@@ -10,12 +10,16 @@ import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
   ensureReferralIssuance,
-  resolveOrganizationIdForOperator,
+  ReferralIssuanceError,
+  resolveOrganizationIdForPilotDeal,
 } from '@/lib/referrals/ensure-referral-issuance';
 import {
+  defaultReferralCommerce,
+  normalizeReferralCommerce,
   shouldIssueReferralLink,
   type ParticipantReferralCommerce,
 } from '@/lib/referrals/referral-commerce-config';
+import { isProjectWorkspaceParticipant } from '@/lib/projects/participant-entitlement';
 import { log } from '@/lib/logger';
 import { referralTrace } from '@/lib/referrals/referral-trace';
 
@@ -69,6 +73,23 @@ export type ReferralIssuanceSummary = {
   created: boolean;
 };
 
+function resolveReferralCommerceForIssuance(
+  participant: DemoParticipant
+): ParticipantReferralCommerce | null {
+  if (participant.referralCommerce) {
+    return normalizeReferralCommerce(participant.referralCommerce);
+  }
+  if (!isProjectWorkspaceParticipant(participant)) {
+    return null;
+  }
+  const base = defaultReferralCommerce();
+  const commissionMode =
+    participant.participationModel === 'customer_attribution'
+      ? 'referral_commerce'
+      : base.commissionMode;
+  return normalizeReferralCommerce({ ...base, commissionMode });
+}
+
 /** Issue (or reuse) customer commerce + persist on participant row. */
 export async function issueAndPersistParticipantAttribution(input: {
   row: {
@@ -83,32 +104,68 @@ export async function issueAndPersistParticipantAttribution(input: {
 }): Promise<{ participant: DemoParticipant; referralIssuance?: ReferralIssuanceSummary }> {
   const { row, participant } = input;
   const deal = dealRowToRecentDeal(row.deal);
+  const referralCommerce = resolveReferralCommerceForIssuance(participant);
 
-  if (!shouldIssueReferralLink(participant.referralCommerce)) {
-    return { participant };
-  }
-
-  const organizationId = await resolveOrganizationIdForOperator(row.deal.user_id);
-  if (!organizationId) {
-    log.warn('Attribution issuance skipped: operator has no organization', {
-      operatorUserId: row.deal.user_id,
+  if (!shouldIssueReferralLink(referralCommerce ?? participant.referralCommerce)) {
+    log.info('referral issuance skipped: createReferralLink disabled', {
       pilotParticipantId: row.id,
+      dealId: row.deal_id,
     });
     return { participant };
   }
 
-  const issued = await ensureReferralIssuance({
-    organizationId,
+  log.info('referral issuance started', {
+    pilotParticipantId: row.id,
+    dealId: row.deal_id,
     operatorUserId: row.deal.user_id,
-    participantUserId: input.approverUserId ?? null,
-    participantEmail: participant.email,
-    participantName: participant.name,
-    sourceParticipantId: row.id,
-    referralCodeHint: null,
-    commissionKind: participant.commissionKind,
-    commissionValue: participant.commissionValue,
-    projectLabel: deal.dealName,
-    referralCommerce: participant.referralCommerce ?? null,
+  });
+
+  const organizationId = await resolveOrganizationIdForPilotDeal(row.deal.user_id, row.deal_id);
+  if (!organizationId) {
+    throw new ReferralIssuanceError(
+      'Merchant organization not found for this project',
+      'ORGANIZATION_NOT_FOUND',
+      { pilotParticipantId: row.id, dealId: row.deal_id, operatorUserId: row.deal.user_id }
+    );
+  }
+
+  let issued;
+  try {
+    issued = await ensureReferralIssuance({
+      organizationId,
+      operatorUserId: row.deal.user_id,
+      participantUserId: null,
+      participantEmail: participant.email,
+      participantName: participant.name,
+      sourceParticipantId: row.id,
+      referralCodeHint: participant.referralCode ?? null,
+      commissionKind: participant.commissionKind,
+      commissionValue: participant.commissionValue,
+      projectLabel: deal.dealName,
+      referralCommerce,
+    });
+  } catch (err) {
+    log.error(
+      'referral generation failed',
+      err instanceof Error ? err : undefined,
+      { pilotParticipantId: row.id, dealId: row.deal_id, organizationId }
+    );
+    throw new ReferralIssuanceError(
+      'Referral link generation failed',
+      'REFERRAL_GENERATION_FAILED',
+      {
+        pilotParticipantId: row.id,
+        dealId: row.deal_id,
+        cause: err instanceof Error ? err.message : String(err),
+      }
+    );
+  }
+
+  log.info('referral code generated', {
+    pilotParticipantId: row.id,
+    referralCode: issued.code,
+    referralUrl: issued.referralUrl,
+    created: issued.created,
   });
 
   const referralIssuance: ReferralIssuanceSummary = {
@@ -122,17 +179,50 @@ export async function issueAndPersistParticipantAttribution(input: {
     id: row.id,
     dealId: row.deal_id,
     inviteToken: row.invite_token,
+    referralCode: issued.code,
     inviteLink: issued.referralUrl,
     customerCommerceUrl: issued.referralUrl,
     attributionStatus: 'active',
+    referralCommerce: referralCommerce ?? participant.referralCommerce,
   };
 
-  await prisma.deal_network_pilot_participants.update({
-    where: { id: row.id },
-    data: {
-      participant_payload: payloadWithLink as unknown as Prisma.InputJsonValue,
-    },
+  try {
+    await prisma.deal_network_pilot_participants.update({
+      where: { id: row.id },
+      data: {
+        participant_payload: payloadWithLink as unknown as Prisma.InputJsonValue,
+      },
+    });
+  } catch (err) {
+    log.error(
+      'referral persistence failed',
+      err instanceof Error ? err : undefined,
+      { pilotParticipantId: row.id, referralCode: issued.code }
+    );
+    throw new ReferralIssuanceError(
+      'Failed to persist customer commerce link on participant',
+      'PERSISTENCE_FAILED',
+      {
+        pilotParticipantId: row.id,
+        cause: err instanceof Error ? err.message : String(err),
+      }
+    );
+  }
+
+  log.info('customer commerce url persisted', {
+    pilotParticipantId: row.id,
+    customerCommerceUrl: issued.referralUrl,
   });
+
+  if (
+    process.env.NODE_ENV === 'development' &&
+    participant.approvalStatus === 'Approved' &&
+    !payloadWithLink.customerCommerceUrl?.trim()
+  ) {
+    log.warn('DEV: participant approved but customer commerce url missing after issuance', {
+      pilotParticipantId: row.id,
+    });
+  }
 
   return { participant: payloadWithLink, referralIssuance };
 }
@@ -372,6 +462,12 @@ export async function approveParticipantByInviteToken(
     inviteToken: row.invite_token,
   };
 
+  log.info('participant approval persisted', {
+    inviteToken: token,
+    pilotParticipantId: row.id,
+    dealId: row.deal_id,
+  });
+
   referralTrace('approveParticipant.start', {
     inviteToken: token,
     pilotParticipantId: row.id,
@@ -386,7 +482,11 @@ export async function approveParticipantByInviteToken(
     const activated = await issueAndPersistParticipantAttribution({
       row,
       participant,
-      approverUserId: options?.approverUserId ?? null,
+    });
+    log.info('approve participant response ready', {
+      pilotParticipantId: row.id,
+      hasReferralIssuance: !!activated.referralIssuance,
+      customerCommerceUrl: activated.participant.customerCommerceUrl ?? null,
     });
     return {
       deal,
@@ -395,14 +495,21 @@ export async function approveParticipantByInviteToken(
     };
   } catch (err) {
     log.error(
-      'Referral issuance failed after approval (non-blocking)',
+      'referral issuance failed after approval — rolling back approval',
       err instanceof Error ? err : undefined,
       {
         pilotParticipantId: row.id,
         error: err instanceof Error ? err.message : String(err),
       }
     );
+    await prisma.deal_network_pilot_participants.update({
+      where: { id: row.id },
+      data: {
+        approval_status: row.approval_status,
+        approved_at: row.approved_at,
+        participant_payload: cur as unknown as Prisma.InputJsonValue,
+      },
+    });
+    throw err;
   }
-
-  return { deal, participant };
 }

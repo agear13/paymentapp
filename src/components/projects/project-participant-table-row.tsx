@@ -34,24 +34,17 @@ export type ProjectParticipantTableRowProps = {
   participant: DemoParticipant;
   onCopyAgreement: (p: DemoParticipant) => void;
   onUpdateOnboarding: (id: string, value: PilotParticipantOnboardingStatus | 'BLOCKED') => void;
-  onActivateAttribution: (id: string) => void;
 };
 
 function ProjectParticipantTableRowComponent({
   participant: p,
   onCopyAgreement,
   onUpdateOnboarding,
-  onActivateAttribution,
 }: ProjectParticipantTableRowProps) {
   const invite = deriveInviteState(p);
   const participation = deriveParticipationLabel(p);
   const attribution = deriveAttributionStatus(p);
   const payoutOb = derivePayoutOnboardingState(p);
-  const needsAttribution =
-    p.approvalStatus === 'Approved' &&
-    attribution === 'inactive' &&
-    p.referralCommerce?.createReferralLink !== false;
-
   return (
     <TableRow>
       <TableCell>
@@ -106,11 +99,6 @@ function ProjectParticipantTableRowComponent({
             <Copy className="mr-1 h-3.5 w-3.5" />
             Agreement
           </Button>
-          {needsAttribution ? (
-            <Button variant="outline" size="sm" onClick={() => onActivateAttribution(p.id)}>
-              Activate attribution
-            </Button>
-          ) : null}
         </div>
       </TableCell>
     </TableRow>

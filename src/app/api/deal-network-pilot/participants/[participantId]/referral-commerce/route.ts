@@ -6,7 +6,7 @@ import { requireAuth } from '@/lib/supabase/middleware';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import {
   ensureReferralIssuance,
-  resolveOrganizationIdForOperator,
+  resolveOrganizationIdForPilotDeal,
 } from '@/lib/referrals/ensure-referral-issuance';
 import {
   normalizeReferralCommerce,
@@ -48,7 +48,7 @@ export async function PATCH(
 
   if (row.deal.user_id !== auth.user.id) {
     const org = await getOrganizationForAuthenticatedUser(auth.user.id);
-    const operatorOrg = await resolveOrganizationIdForOperator(row.deal.user_id);
+    const operatorOrg = await resolveOrganizationIdForPilotDeal(row.deal.user_id, row.deal_id);
     if (!org?.id || org.id !== operatorOrg) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -65,7 +65,7 @@ export async function PATCH(
   });
 
   let referralIssuance: { code: string; referralUrl: string } | undefined;
-  const organizationId = await resolveOrganizationIdForOperator(row.deal.user_id);
+  const organizationId = await resolveOrganizationIdForPilotDeal(row.deal.user_id, row.deal_id);
   if (organizationId && shouldIssueReferralLink(referralCommerce) && row.approval_status === 'Approved') {
     const deal = dealRowToRecentDeal(row.deal);
     const issued = await ensureReferralIssuance({

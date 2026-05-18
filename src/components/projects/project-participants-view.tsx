@@ -82,27 +82,6 @@ export function ProjectParticipantsView() {
     [invalidate, refreshSilent]
   );
 
-  const activateAttribution = React.useCallback(
-    async (participantId: string) => {
-      try {
-        const res = await fetch(
-          `/api/deal-network-pilot/participants/${participantId}/activate-attribution`,
-          { method: 'POST' }
-        );
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error((err as { error?: string }).error || 'Activation failed');
-        }
-        invalidate('participants');
-        await refreshSilent('participants');
-        toast.success('Attribution activated');
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : 'Activation failed');
-      }
-    },
-    [invalidate, refreshSilent]
-  );
-
   const handleInvite = React.useCallback(
     async (participant: DemoParticipant): Promise<DemoParticipant> => {
       const next = [...allParticipants, participant];
@@ -240,7 +219,6 @@ export function ProjectParticipantsView() {
                       participant={p}
                       onCopyAgreement={copyAgreementLink}
                       onUpdateOnboarding={updateOnboarding}
-                      onActivateAttribution={activateAttribution}
                     />
                   ))}
                 </TableBody>

@@ -22,11 +22,22 @@ export function buildReferralSharePath(source: ReferralShareSlugSource): string 
   return `/r/${code}`;
 }
 
+/** Public origin for referral share URLs (env + Vercel fallbacks). */
+export function getReferralPublicBaseUrl(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  const vercel = process.env.VERCEL_URL?.trim();
+  if (vercel) return `https://${vercel.replace(/\/$/, '')}`;
+  const site = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (site) return site.replace(/\/$/, '');
+  return '';
+}
+
 export function buildReferralShareUrl(
   baseUrl: string,
   source: ReferralShareSlugSource
 ): string {
-  const base = baseUrl.replace(/\/$/, '');
+  const base = (baseUrl || getReferralPublicBaseUrl()).replace(/\/$/, '');
   return `${base}${buildReferralSharePath(source)}`;
 }
 

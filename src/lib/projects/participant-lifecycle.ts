@@ -135,6 +135,9 @@ export function referralIssuanceFromParticipant(
     participant.inviteLink?.trim() ||
     '';
   if (!url) return null;
+  if (participant.referralCode?.trim()) {
+    return { referralUrl: url, code: participant.referralCode.trim().toUpperCase() };
+  }
   const codeMatch = url.match(/\/r\/([A-Z0-9_-]+)/i) ?? url.match(/\/ref\/([a-z0-9_-]+)/i);
   return {
     referralUrl: url,

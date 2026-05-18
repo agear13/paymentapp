@@ -166,8 +166,16 @@ export function ProjectParticipantAgreementPanel({
         body: JSON.stringify({ note: note.trim() || undefined }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error || 'Approval failed');
+        const err = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          issuanceFailed?: boolean;
+        };
+        throw new Error(
+          err.error ||
+            (err.issuanceFailed
+              ? 'Approval saved but customer link could not be generated'
+              : 'Approval failed')
+        );
       }
       const data = (await res.json()) as {
         participant: DemoParticipant;

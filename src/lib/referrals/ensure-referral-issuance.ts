@@ -7,7 +7,10 @@ import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { buildReferralShareUrl } from '@/lib/referrals/referral-share-url';
+import {
+  buildReferralShareUrl,
+  getReferralPublicBaseUrl,
+} from '@/lib/referrals/referral-share-url';
 import { log } from '@/lib/logger';
 import { referralTrace } from '@/lib/referrals/referral-trace';
 import type { CommissionStructureKind } from '@/lib/deal-network-demo/commission-structure';
@@ -94,7 +97,46 @@ function deterministicCodeFromSource(sourceParticipantId: string, hint?: string 
     if (fromHint.length >= 4) return fromHint;
   }
   const compact = sourceParticipantId.replace(/-/g, '').toUpperCase();
-  return `P${compact.slice(0, 8)}`;
+  return normalizeCode(`P${compact.slice(0, 20)}`);
+}
+
+function orgScopedReferralCode(baseCode: string, organizationId: string): string {
+  const orgSuffix = organizationId.replace(/-/g, '').slice(0, 6).toUpperCase();
+  return normalizeCode(`${baseCode}_${orgSuffix}`);
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code: string }).code === 'P2002'
+  );
+}
+
+export class ReferralIssuanceError extends Error {
+  readonly code:
+    | 'ORGANIZATION_NOT_FOUND'
+    | 'ISSUANCE_SKIPPED'
+    | 'REFERRAL_GENERATION_FAILED'
+    | 'PERSISTENCE_FAILED';
+
+  readonly details?: Record<string, unknown>;
+
+  constructor(
+    message: string,
+    code:
+      | 'ORGANIZATION_NOT_FOUND'
+      | 'ISSUANCE_SKIPPED'
+      | 'REFERRAL_GENERATION_FAILED'
+      | 'PERSISTENCE_FAILED',
+    details?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = 'ReferralIssuanceError';
+    this.code = code;
+    this.details = details;
+  }
 }
 
 function commissionPctDecimal(kind: CommissionStructureKind | undefined, value: number | undefined): number {
@@ -139,6 +181,36 @@ export async function resolveOrganizationIdForOperator(operatorUserId: string): 
   return row?.organization_id ?? null;
 }
 
+/** Resolve merchant org for a pilot/project deal (operator membership + deal-linked rows). */
+export async function resolveOrganizationIdForPilotDeal(
+  operatorUserId: string,
+  dealId: string
+): Promise<string | null> {
+  const fromOperator = await resolveOrganizationIdForOperator(operatorUserId);
+  if (fromOperator) return fromOperator;
+
+  const obligation = await prisma.deal_network_pilot_obligations.findFirst({
+    where: { deal_id: dealId, organization_id: { not: null } },
+    orderBy: { created_at: 'desc' },
+    select: { organization_id: true },
+  });
+  if (obligation?.organization_id) return obligation.organization_id;
+
+  const paymentLink = await prisma.payment_links.findFirst({
+    where: { pilot_deal_id: dealId },
+    orderBy: { created_at: 'desc' },
+    select: { organization_id: true },
+  });
+  if (paymentLink?.organization_id) return paymentLink.organization_id;
+
+  const paymentEvent = await prisma.payment_events.findFirst({
+    where: { pilot_deal_id: dealId, organization_id: { not: null } },
+    orderBy: { received_at: 'desc' },
+    select: { organization_id: true },
+  });
+  return paymentEvent?.organization_id ?? null;
+}
+
 /**
  * Ensure referral_links + referral_codes exist for an approved participant.
  * Idempotent on sourceParticipantId (via slug) and code string.
@@ -164,7 +236,7 @@ export async function ensureReferralIssuance(
   }
 
   const slug = pilotSlug(sourceParticipantId);
-  const code = deterministicCodeFromSource(sourceParticipantId, referralCodeHint);
+  let code = deterministicCodeFromSource(sourceParticipantId, referralCodeHint);
 
   referralTrace('ensureReferralIssuance.start', {
     organizationId,
@@ -179,7 +251,7 @@ export async function ensureReferralIssuance(
     emailLookupHit: emailLookupAttempted ? !!participantUserId : null,
   });
 
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '');
+  const baseUrl = getReferralPublicBaseUrl();
 
   const existingBySlug = await prisma.referral_links.findFirst({
     where: { organization_id: organizationId, slug },
@@ -243,6 +315,15 @@ export async function ensureReferralIssuance(
       linkOrgId: existingByCode.organization_id,
       orgMatch: existingByCode.organization_id === organizationId,
       hasReferralCode: !!existingByCode.referral_code,
+    });
+  }
+
+  if (existingByCode && existingByCode.organization_id !== organizationId) {
+    code = orgScopedReferralCode(code, organizationId);
+    referralTrace('ensureReferralIssuance.codeRemappedForOrg', {
+      organizationId,
+      sourceParticipantId,
+      code,
     });
   }
 
@@ -366,67 +447,103 @@ export async function ensureReferralIssuance(
     : null;
   const checkoutConfig = buildIssuanceCheckoutConfig(input);
 
-  const created = await prisma.$transaction(async (tx) => {
-    const link = await tx.referral_links.create({
-      data: {
-        organization_id: organizationId,
-        created_by_user_id: operatorUserId,
-        code,
-        slug,
-        status: 'ACTIVE',
-        checkout_config: checkoutConfig as Prisma.InputJsonValue,
-      },
+  let created: { link: { id: string; slug: string | null; code: string }; rc: { id: string; code: string } };
+  let createCode = code;
+  try {
+    created = await prisma.$transaction(async (tx) => {
+      const link = await tx.referral_links.create({
+        data: {
+          organization_id: organizationId,
+          created_by_user_id: operatorUserId,
+          code: createCode,
+          slug,
+          status: 'ACTIVE',
+          checkout_config: checkoutConfig as Prisma.InputJsonValue,
+        },
+      });
+
+      if (isReferralCommerceMode(commerce)) {
+        const commercePct = commerceCommissionPctDecimal(commerce!);
+        const pctDisplay = (commercePct * 100).toFixed(2);
+        await tx.referral_link_splits.create({
+          data: {
+            referral_link_id: link.id,
+            label: participantName?.trim() || 'Referral commerce',
+            percentage: Number(pctDisplay),
+            beneficiary_id: null,
+            sort_order: 0,
+          },
+        });
+      } else if (hasUser && pct > 0) {
+        await tx.referral_rules.create({
+          data: {
+            referral_link_id: link.id,
+            consultant_id: participantUserId,
+            bd_partner_id: null,
+            consultant_pct: pct,
+            bd_partner_pct: 0,
+            basis: 'GROSS',
+          },
+        });
+      } else {
+        const pctDisplay = (pct * 100).toFixed(2);
+        await tx.referral_link_splits.create({
+          data: {
+            referral_link_id: link.id,
+            label: participantName?.trim() || 'Partner 1',
+            percentage: Number(pctDisplay),
+            beneficiary_id: null,
+            sort_order: 0,
+          },
+        });
+      }
+
+      const rc = await tx.referral_codes.create({
+        data: {
+          id: randomUUID(),
+          organization_id: organizationId,
+          participant_user_id: participantUserId,
+          referral_link_id: link.id,
+          code: createCode,
+          status: 'ACTIVE',
+        },
+      });
+
+      return { link, rc };
     });
-
-    if (isReferralCommerceMode(commerce)) {
-      const commercePct = commerceCommissionPctDecimal(commerce!);
-      const pctDisplay = (commercePct * 100).toFixed(2);
-      await tx.referral_link_splits.create({
-        data: {
-          referral_link_id: link.id,
-          label: participantName?.trim() || 'Referral commerce',
-          percentage: Number(pctDisplay),
-          beneficiary_id: null,
-          sort_order: 0,
-        },
-      });
-    } else if (hasUser && pct > 0) {
-      await tx.referral_rules.create({
-        data: {
-          referral_link_id: link.id,
-          consultant_id: participantUserId,
-          bd_partner_id: null,
-          consultant_pct: pct,
-          bd_partner_pct: 0,
-          basis: 'GROSS',
-        },
-      });
-    } else {
-      const pctDisplay = (pct * 100).toFixed(2);
-      await tx.referral_link_splits.create({
-        data: {
-          referral_link_id: link.id,
-          label: participantName?.trim() || 'Partner 1',
-          percentage: Number(pctDisplay),
-          beneficiary_id: null,
-          sort_order: 0,
-        },
-      });
-    }
-
-    const rc = await tx.referral_codes.create({
-      data: {
-        id: randomUUID(),
-        organization_id: organizationId,
-        participant_user_id: participantUserId,
-        referral_link_id: link.id,
-        code,
-        status: 'ACTIVE',
-      },
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error;
+    createCode = orgScopedReferralCode(code, organizationId);
+    log.warn('ensureReferralIssuance.retryWithOrgScopedCode', {
+      organizationId,
+      sourceParticipantId,
+      code: createCode,
     });
-
-    return { link, rc };
-  });
+    created = await prisma.$transaction(async (tx) => {
+      const link = await tx.referral_links.create({
+        data: {
+          organization_id: organizationId,
+          created_by_user_id: operatorUserId,
+          code: createCode,
+          slug,
+          status: 'ACTIVE',
+          checkout_config: checkoutConfig as Prisma.InputJsonValue,
+        },
+      });
+      const rc = await tx.referral_codes.create({
+        data: {
+          id: randomUUID(),
+          organization_id: organizationId,
+          participant_user_id: participantUserId,
+          referral_link_id: link.id,
+          code: createCode,
+          status: 'ACTIVE',
+        },
+      });
+      return { link, rc };
+    });
+  }
+  code = createCode;
 
   referralTrace('ensureReferralIssuance.created', {
     organizationId,
