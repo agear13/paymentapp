@@ -5,11 +5,8 @@ import {
   participantRowToDemo,
   getParticipantByInviteToken,
   getPilotParticipantsForDeal,
+  issueAndPersistParticipantAttribution,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
-import {
-  ensureReferralIssuance,
-  resolveOrganizationIdForOperator,
-} from '@/lib/referrals/ensure-referral-issuance';
 import { shouldIssueReferralLink } from '@/lib/referrals/referral-commerce-config';
 import {
   isProjectWorkspaceParticipant,
@@ -38,58 +35,50 @@ export async function GET(
       );
     }
 
-    await markParticipantInviteOpened(token);
+    if (row.approval_status !== 'Approved') {
+      await markParticipantInviteOpened(token);
+    }
 
-    const deal = dealRowToRecentDeal(row.deal);
-    const participant = { ...participantRowToDemo(row), inviteStatus: 'Opened' as const };
-    const dealParticipants = await getPilotParticipantsForDeal(row.deal_id);
+    const refreshed = await getParticipantByInviteToken(token);
+    if (!refreshed || !refreshed.deal) {
+      return NextResponse.json({ error: 'Invite not found' }, { status: 404 });
+    }
+
+    const deal = dealRowToRecentDeal(refreshed.deal);
+    let participant = participantRowToDemo(refreshed);
+    const dealParticipants = await getPilotParticipantsForDeal(refreshed.deal_id);
 
     let referralIssuance: { code: string; referralUrl: string; created: boolean } | undefined;
-    if (row.approval_status === 'Approved') {
+
+    if (
+      refreshed.approval_status === 'Approved' &&
+      shouldIssueReferralLink(participant.referralCommerce)
+    ) {
       try {
-        const organizationId = await resolveOrganizationIdForOperator(row.deal.user_id);
-        if (organizationId && shouldIssueReferralLink(participant.referralCommerce)) {
-          const issued = await ensureReferralIssuance({
-            organizationId,
-            operatorUserId: row.deal.user_id,
-            participantEmail: participant.email,
-            participantName: participant.name,
-            sourceParticipantId: row.id,
-            commissionKind: participant.commissionKind,
-            commissionValue: participant.commissionValue,
-            projectLabel: deal.dealName,
-            referralCommerce: participant.referralCommerce ?? null,
-          });
-          referralIssuance = {
-            code: issued.code,
-            referralUrl: issued.referralUrl,
-            created: issued.created,
-          };
+        const activated = await issueAndPersistParticipantAttribution({
+          row: refreshed,
+          participant,
+        });
+        participant = activated.participant;
+        if (activated.referralIssuance) {
+          referralIssuance = activated.referralIssuance;
         }
       } catch (err) {
         log.warn('Referral backfill on invite GET failed', {
-          pilotParticipantId: row.id,
+          pilotParticipantId: refreshed.id,
           error: err instanceof Error ? err.message : String(err),
         });
       }
     }
 
-    const enriched = {
-      ...participant,
-      inviteLink: referralIssuance?.referralUrl ?? participant.inviteLink,
-      customerCommerceUrl:
-        referralIssuance?.referralUrl ?? participant.customerCommerceUrl ?? participant.inviteLink,
-    };
+    const isProject = isProjectWorkspaceParticipant(participant);
 
     return NextResponse.json({
       deal,
-      participant: sanitizeParticipantForAgreementView(enriched),
+      participant: sanitizeParticipantForAgreementView(participant),
       dealParticipants,
-      referralIssuance:
-        isProjectWorkspaceParticipant(participant) && row.approval_status !== 'Approved'
-          ? undefined
-          : referralIssuance,
-      workspaceSource: isProjectWorkspaceParticipant(participant) ? 'project' : 'pilot',
+      referralIssuance: isProject && refreshed.approval_status !== 'Approved' ? undefined : referralIssuance,
+      workspaceSource: isProject ? 'project' : 'pilot',
     });
   } catch (e) {
     console.error('[deal-network-pilot/invites GET]', e);

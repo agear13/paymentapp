@@ -112,6 +112,8 @@ export interface DemoParticipant {
   customerCommerceUrl?: string;
   attributionStatus?: import('@/lib/projects/participant-entitlement').ParticipantAttributionStatus;
   operationalLifecycle?: string;
+  /** Operator-flagged payout release block (attribution may still accrue). */
+  payoutBlocked?: boolean;
 }
 
 export interface InviteParticipantModalProps {

@@ -1,18 +1,14 @@
 import { NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
-import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
-import {
-  ensureReferralIssuance,
-  resolveOrganizationIdForOperator,
-} from '@/lib/referrals/ensure-referral-issuance';
+import { resolveOrganizationIdForOperator } from '@/lib/referrals/ensure-referral-issuance';
 import { shouldIssueReferralLink } from '@/lib/referrals/referral-commerce-config';
-import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
   dealRowToRecentDeal,
+  issueAndPersistParticipantAttribution,
   participantRowToDemo,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import { prisma } from '@/lib/server/prisma';
 
 /**
  * Activate customer commerce for a project participant after agreement approval.
@@ -42,10 +38,13 @@ export async function POST(
       }
     }
 
-    const cur = row.participant_payload as unknown as DemoParticipant;
+    const cur = participantRowToDemo(row);
     if (row.approval_status !== 'Approved') {
       return NextResponse.json(
-        { error: 'Participant must approve the agreement before customer attribution can activate' },
+        {
+          error:
+            'Participant must approve the agreement before customer attribution can activate',
+        },
         { status: 400 }
       );
     }
@@ -56,49 +55,23 @@ export async function POST(
       );
     }
 
-    const organizationId = await resolveOrganizationIdForOperator(row.deal.user_id);
-    if (!organizationId) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 400 });
+    const activated = await issueAndPersistParticipantAttribution({
+      row,
+      participant: cur,
+      approverUserId: user.id,
+    });
+
+    if (!activated.referralIssuance) {
+      return NextResponse.json(
+        { error: 'Could not issue customer commerce link — check organization setup' },
+        { status: 400 }
+      );
     }
 
-    const deal = dealRowToRecentDeal(row.deal);
-    const issued = await ensureReferralIssuance({
-      organizationId,
-      operatorUserId: row.deal.user_id,
-      participantEmail: cur.email,
-      participantName: cur.name,
-      sourceParticipantId: row.id,
-      commissionKind: cur.commissionKind,
-      commissionValue: cur.commissionValue,
-      projectLabel: deal.dealName,
-      referralCommerce: cur.referralCommerce ?? null,
-    });
-
-    const next: DemoParticipant = {
-      ...cur,
-      id: row.id,
-      dealId: row.deal_id,
-      inviteToken: row.invite_token,
-      inviteLink: issued.referralUrl,
-      customerCommerceUrl: issued.referralUrl,
-      attributionStatus: 'active',
-    };
-
-    await prisma.deal_network_pilot_participants.update({
-      where: { id: row.id },
-      data: { participant_payload: next as unknown as Prisma.InputJsonValue },
-    });
-
     return NextResponse.json({
-      participant: participantRowToDemo({
-        ...row,
-        participant_payload: next as unknown as Prisma.JsonValue,
-      }),
-      referralIssuance: {
-        code: issued.code,
-        referralUrl: issued.referralUrl,
-        created: issued.created,
-      },
+      participant: activated.participant,
+      referralIssuance: activated.referralIssuance,
+      deal: dealRowToRecentDeal(row.deal),
     });
   } catch (e: unknown) {
     const err = e as { statusCode?: number };

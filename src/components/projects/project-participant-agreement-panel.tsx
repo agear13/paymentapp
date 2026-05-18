@@ -20,6 +20,11 @@ import { buildReferralQrApiPath } from '@/lib/referrals/referral-share-url';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import { earningsStructureSummary } from '@/lib/projects/participant-entitlement';
 import { shouldIssueReferralLink } from '@/lib/referrals/referral-commerce-config';
+import {
+  isAttributionActive,
+  referralIssuanceFromParticipant,
+} from '@/lib/projects/participant-lifecycle';
+import { deriveAttributionStatus } from '@/lib/projects/participant-entitlement';
 
 function roleAmountsFromDeal(deal: RecentDeal) {
   return {
@@ -29,13 +34,37 @@ function roleAmountsFromDeal(deal: RecentDeal) {
   };
 }
 
+type CommerceLink = { code: string; referralUrl: string };
+
+type InvitePayload = {
+  deal: RecentDeal;
+  participant: DemoParticipant;
+  dealParticipants?: DemoParticipant[];
+  referralIssuance?: CommerceLink;
+};
+
+async function fetchInviteState(token: string): Promise<InvitePayload | null> {
+  const res = await fetch(`/api/deal-network-pilot/invites/${encodeURIComponent(token)}`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) return null;
+  return (await res.json()) as InvitePayload;
+}
+
+function commerceFromPayload(data: InvitePayload): CommerceLink | null {
+  if (data.referralIssuance?.referralUrl) {
+    return data.referralIssuance;
+  }
+  return referralIssuanceFromParticipant(data.participant);
+}
+
 type Props = {
   token: string;
   deal: RecentDeal;
   participant: DemoParticipant;
   dealParticipants: DemoParticipant[];
   initialApproved: boolean;
-  initialReferralIssuance: { code: string; referralUrl: string } | null;
+  initialReferralIssuance: CommerceLink | null;
 };
 
 export function ProjectParticipantAgreementPanel({
@@ -49,10 +78,56 @@ export function ProjectParticipantAgreementPanel({
   const [participant, setParticipant] = React.useState(initialParticipant);
   const [approved, setApproved] = React.useState(initialApproved);
   const [note, setNote] = React.useState(initialParticipant.approvalNote ?? '');
-  const [commerceLink, setCommerceLink] = React.useState<{
-    code: string;
-    referralUrl: string;
-  } | null>(initialReferralIssuance);
+  const [commerceLink, setCommerceLink] = React.useState<CommerceLink | null>(
+    initialReferralIssuance
+  );
+  const [issuingCommerce, setIssuingCommerce] = React.useState(false);
+
+  const attribution = deriveAttributionStatus(participant);
+  const expectsCommerce = shouldIssueReferralLink(participant.referralCommerce);
+
+  const applyInvitePayload = React.useCallback((data: InvitePayload) => {
+    setParticipant(data.participant);
+    setApproved(data.participant.approvalStatus === 'Approved');
+    const link = commerceFromPayload(data);
+    if (link) setCommerceLink(link);
+  }, []);
+
+  const refreshInvite = React.useCallback(async () => {
+    const data = await fetchInviteState(token);
+    if (data) applyInvitePayload(data);
+    return data;
+  }, [applyInvitePayload, token]);
+
+  React.useEffect(() => {
+    if (!approved || commerceLink || !expectsCommerce) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    setIssuingCommerce(true);
+
+    const poll = async () => {
+      while (!cancelled && attempts < 12) {
+        attempts += 1;
+        const data = await fetchInviteState(token);
+        const link = data ? commerceFromPayload(data) : null;
+        if (link) {
+          if (!cancelled) {
+            applyInvitePayload(data!);
+            setIssuingCommerce(false);
+          }
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 800));
+      }
+      if (!cancelled) setIssuingCommerce(false);
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [approved, commerceLink, expectsCommerce, applyInvitePayload, token]);
 
   const rolePayout = React.useMemo(() => {
     const rows = dealParticipants.map(demoParticipantToPilotRow);
@@ -96,30 +171,30 @@ export function ProjectParticipantAgreementPanel({
       }
       const data = (await res.json()) as {
         participant: DemoParticipant;
-        referralIssuance?: { code: string; referralUrl: string };
+        referralIssuance?: CommerceLink;
       };
       setParticipant(data.participant);
       setApproved(true);
-      if (data.referralIssuance) {
-        setCommerceLink(data.referralIssuance);
-      } else if (data.participant.customerCommerceUrl?.trim()) {
-        const url = data.participant.customerCommerceUrl.trim();
-        const codeMatch = url.match(/\/r\/([A-Z0-9_-]+)/i) ?? url.match(/\/ref\/([a-z0-9_-]+)/i);
-        setCommerceLink({
-          referralUrl: url,
-          code: codeMatch?.[1]?.toUpperCase() ?? 'LINK',
-        });
+
+      const immediate =
+        data.referralIssuance ?? referralIssuanceFromParticipant(data.participant);
+      if (immediate) {
+        setCommerceLink(immediate);
+      } else if (expectsCommerce) {
+        setIssuingCommerce(true);
+        const refreshed = await refreshInvite();
+        const link = refreshed ? commerceFromPayload(refreshed) : null;
+        if (link) setCommerceLink(link);
+        setIssuingCommerce(false);
       }
+
       toast.success('Participation approved');
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Approval failed');
     }
   }
 
-  const showCommerceAfterApproval =
-    approved &&
-    commerceLink &&
-    shouldIssueReferralLink(participant.referralCommerce);
+  const showCommerceAfterApproval = approved && !!commerceLink && expectsCommerce;
 
   return (
     <Card className="w-full max-w-2xl">
@@ -150,6 +225,14 @@ export function ProjectParticipantAgreementPanel({
               {approved ? 'Approved' : 'Pending your approval'}
             </Badge>
           </div>
+          {expectsCommerce ? (
+            <div className="sm:col-span-2">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Attribution</p>
+              <Badge variant={isAttributionActive(attribution) ? 'default' : 'outline'}>
+                {isAttributionActive(attribution) ? 'Active' : 'Inactive'}
+              </Badge>
+            </div>
+          ) : null}
         </div>
 
         {participant.roleDetails?.trim() ? (
@@ -206,7 +289,10 @@ export function ProjectParticipantAgreementPanel({
 
         {showCommerceAfterApproval ? (
           <div className="rounded-md border p-4 bg-background space-y-2">
-            <p className="text-sm font-medium">Trackable customer payment link</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium">Trackable customer payment link</p>
+              <Badge>Active</Badge>
+            </div>
             <p className="text-xs text-muted-foreground">
               Share this link with customers for service checkout. Commission and payout mechanics
               are not shown to customers.
@@ -218,9 +304,11 @@ export function ProjectParticipantAgreementPanel({
               participantLabel={participant.name}
             />
           </div>
-        ) : approved && shouldIssueReferralLink(participant.referralCommerce) ? (
+        ) : approved && expectsCommerce ? (
           <p className="text-sm text-muted-foreground">
-            Your trackable customer link is being prepared. Refresh this page in a moment.
+            {issuingCommerce
+              ? 'Preparing your trackable customer link…'
+              : 'Customer link unavailable — contact the project operator.'}
           </p>
         ) : null}
       </CardContent>

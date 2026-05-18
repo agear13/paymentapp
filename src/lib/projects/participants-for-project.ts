@@ -1,11 +1,7 @@
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import {
-  buildProjectParticipant,
-  deriveParticipationState,
-  derivePayoutStatus,
-  type OperationalParticipantRole,
-} from '@/lib/projects/participant-entitlement';
+import { buildProjectParticipant, type OperationalParticipantRole } from '@/lib/projects/participant-entitlement';
+import { participantSummaryMetrics } from '@/lib/projects/participant-lifecycle';
 
 export type { OperationalParticipantRole };
 
@@ -60,18 +56,14 @@ export function buildOperationalParticipant(input: {
   });
 }
 
+/** @deprecated Use participantSummaryMetrics from participant-lifecycle */
 export function participantSummaryStats(participants: DemoParticipant[]) {
-  const total = participants.length;
-  let ready = 0;
-  let missingOnboarding = 0;
-  let pendingAgreements = 0;
-
-  for (const p of participants) {
-    const payout = derivePayoutStatus(p);
-    if (payout === 'payout ready') ready += 1;
-    if (payout === 'onboarding incomplete' || payout === 'payout blocked') missingOnboarding += 1;
-    if (deriveParticipationState(p) === 'invited') pendingAgreements += 1;
-  }
-
-  return { total, ready, missingOnboarding, pendingAgreements };
+  const m = participantSummaryMetrics(participants);
+  return {
+    total: m.total,
+    ready: m.readyForPayout,
+    missingOnboarding: m.missingOnboarding,
+    pendingAgreements: m.pendingAgreements,
+    activeAttribution: m.activeAttribution,
+  };
 }

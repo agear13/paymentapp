@@ -192,6 +192,7 @@ export function derivePayoutStatus(participant: DemoParticipant): ParticipantPay
   if (participant.payoutSettlementStatus === 'Paid' || participant.payoutPaidAt) return 'paid';
   if (!participant.email?.trim()) return 'no payout profile';
   if (participant.approvalStatus !== 'Approved') return 'invited';
+  if (participant.payoutBlocked) return 'payout blocked';
   const onboarding = effectiveOnboardingStatus(participant);
   if (!isOnboardingComplete(onboarding)) {
     return onboarding === 'INCOMPLETE' ? 'onboarding incomplete' : 'payout blocked';

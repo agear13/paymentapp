@@ -37,14 +37,152 @@ export function participantRowToDemo(row: {
   deal_id: string;
   invite_token: string;
   participant_payload: Prisma.JsonValue;
+  approval_status?: string;
+  approved_at?: Date | null;
 }): DemoParticipant {
   const payload = row.participant_payload as unknown as DemoParticipant;
+  const approvalStatus: DemoParticipant['approvalStatus'] =
+    row.approval_status === 'Approved' || payload.approvalStatus === 'Approved'
+      ? 'Approved'
+      : 'Pending approval';
   return {
     ...payload,
     id: row.id,
     dealId: row.deal_id,
     inviteToken: row.invite_token,
+    approvalStatus,
+    approvedAt: row.approved_at
+      ? row.approved_at.toISOString()
+      : payload.approvedAt,
+    inviteStatus:
+      approvalStatus === 'Approved'
+        ? payload.inviteStatus === 'Opened'
+          ? 'Opened'
+          : payload.inviteStatus ?? 'Invited'
+        : payload.inviteStatus ?? 'Invited',
   };
+}
+
+export type ReferralIssuanceSummary = {
+  code: string;
+  referralUrl: string;
+  created: boolean;
+};
+
+/** Issue (or reuse) customer commerce + persist on participant row. */
+export async function issueAndPersistParticipantAttribution(input: {
+  row: {
+    id: string;
+    deal_id: string;
+    invite_token: string;
+    participant_payload: Prisma.JsonValue;
+    deal: { user_id: string; id: string; deal_payload: Prisma.JsonValue };
+  };
+  participant: DemoParticipant;
+  approverUserId?: string | null;
+}): Promise<{ participant: DemoParticipant; referralIssuance?: ReferralIssuanceSummary }> {
+  const { row, participant } = input;
+  const deal = dealRowToRecentDeal(row.deal);
+
+  if (!shouldIssueReferralLink(participant.referralCommerce)) {
+    return { participant };
+  }
+
+  const organizationId = await resolveOrganizationIdForOperator(row.deal.user_id);
+  if (!organizationId) {
+    log.warn('Attribution issuance skipped: operator has no organization', {
+      operatorUserId: row.deal.user_id,
+      pilotParticipantId: row.id,
+    });
+    return { participant };
+  }
+
+  const issued = await ensureReferralIssuance({
+    organizationId,
+    operatorUserId: row.deal.user_id,
+    participantUserId: input.approverUserId ?? null,
+    participantEmail: participant.email,
+    participantName: participant.name,
+    sourceParticipantId: row.id,
+    referralCodeHint: null,
+    commissionKind: participant.commissionKind,
+    commissionValue: participant.commissionValue,
+    projectLabel: deal.dealName,
+    referralCommerce: participant.referralCommerce ?? null,
+  });
+
+  const referralIssuance: ReferralIssuanceSummary = {
+    code: issued.code,
+    referralUrl: issued.referralUrl,
+    created: issued.created,
+  };
+
+  const payloadWithLink: DemoParticipant = {
+    ...participant,
+    id: row.id,
+    dealId: row.deal_id,
+    inviteToken: row.invite_token,
+    inviteLink: issued.referralUrl,
+    customerCommerceUrl: issued.referralUrl,
+    attributionStatus: 'active',
+  };
+
+  await prisma.deal_network_pilot_participants.update({
+    where: { id: row.id },
+    data: {
+      participant_payload: payloadWithLink as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  return { participant: payloadWithLink, referralIssuance };
+}
+
+export async function updatePilotParticipantPayload(
+  participantId: string,
+  operatorUserId: string,
+  patch: Partial<DemoParticipant>
+): Promise<DemoParticipant | null> {
+  const row = await prisma.deal_network_pilot_participants.findUnique({
+    where: { id: participantId },
+    include: { deal: true },
+  });
+  if (!row || row.deal.user_id !== operatorUserId) return null;
+
+  const cur = row.participant_payload as unknown as DemoParticipant;
+  const next: DemoParticipant = {
+    ...cur,
+    ...patch,
+    id: row.id,
+    dealId: row.deal_id,
+    inviteToken: row.invite_token,
+  };
+
+  await prisma.deal_network_pilot_participants.update({
+    where: { id: row.id },
+    data: {
+      approval_status:
+        next.approvalStatus === 'Approved' ? 'Approved' : row.approval_status,
+      approved_at:
+        next.approvalStatus === 'Approved'
+          ? next.approvedAt
+            ? new Date(next.approvedAt)
+            : row.approved_at ?? new Date()
+          : row.approved_at,
+      participant_payload: next as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  return participantRowToDemo({
+    ...row,
+    approval_status: next.approvalStatus === 'Approved' ? 'Approved' : row.approval_status,
+    approved_at:
+      next.approvalStatus === 'Approved'
+        ? next.approvedAt
+          ? new Date(next.approvedAt)
+          : row.approved_at
+        : row.approved_at,
+    participant_payload: next as unknown as Prisma.InputJsonValue,
+  });
 }
 
 function dealToPrismaData(deal: RecentDeal, userId: string) {
@@ -234,7 +372,6 @@ export async function approveParticipantByInviteToken(
     inviteToken: row.invite_token,
   };
 
-  let referralIssuance: ApproveParticipantResult['referralIssuance'];
   referralTrace('approveParticipant.start', {
     inviteToken: token,
     pilotParticipantId: row.id,
@@ -242,67 +379,20 @@ export async function approveParticipantByInviteToken(
     operatorUserId: row.deal.user_id,
     approverUserId: options?.approverUserId ?? null,
     participantEmail: participant.email?.trim() || null,
-    approvalStatus: row.approval_status,
+    approvalStatus: 'Approved',
   });
 
   try {
-    const organizationId = await resolveOrganizationIdForOperator(row.deal.user_id);
-    referralTrace('approveParticipant.orgResolve', {
-      operatorUserId: row.deal.user_id,
-      organizationId,
-      resolved: !!organizationId,
+    const activated = await issueAndPersistParticipantAttribution({
+      row,
+      participant,
+      approverUserId: options?.approverUserId ?? null,
     });
-    if (organizationId && shouldIssueReferralLink(participant.referralCommerce)) {
-      const issued = await ensureReferralIssuance({
-        organizationId,
-        operatorUserId: row.deal.user_id,
-        participantUserId: options?.approverUserId ?? null,
-        participantEmail: participant.email,
-        participantName: participant.name,
-        sourceParticipantId: row.id,
-        referralCodeHint: null,
-        commissionKind: participant.commissionKind,
-        commissionValue: participant.commissionValue,
-        projectLabel: deal.dealName,
-        referralCommerce: participant.referralCommerce ?? null,
-      });
-      referralIssuance = {
-        code: issued.code,
-        referralUrl: issued.referralUrl,
-        created: issued.created,
-      };
-      referralTrace('approveParticipant.issuanceOk', {
-        organizationId,
-        pilotParticipantId: row.id,
-        referralLinkId: issued.referralLinkId,
-        referralCodeId: issued.referralCodeId,
-        code: issued.code,
-        referralUrl: issued.referralUrl,
-        created: issued.created,
-        participantUserId: issued.participantUserId,
-      });
-      const payloadWithLink: DemoParticipant = {
-        ...participant,
-        inviteLink: issued.referralUrl,
-        customerCommerceUrl: issued.referralUrl,
-        attributionStatus: 'active',
-      };
-      await prisma.deal_network_pilot_participants.update({
-        where: { id: row.id },
-        data: {
-          participant_payload: payloadWithLink as unknown as Prisma.InputJsonValue,
-        },
-      });
-      return {
-        deal,
-        participant: payloadWithLink,
-        referralIssuance,
-      };
-    }
-    log.warn('Referral issuance skipped: operator has no organization', {
-      operatorUserId: row.deal.user_id,
-      pilotParticipantId: row.id,
-    });
+    return {
+      deal,
+      participant: activated.participant,
+      referralIssuance: activated.referralIssuance,
+    };
   } catch (err) {
     log.error(
       'Referral issuance failed after approval (non-blocking)',
@@ -314,5 +404,5 @@ export async function approveParticipantByInviteToken(
     );
   }
 
-  return { deal, participant, referralIssuance };
+  return { deal, participant };
 }
