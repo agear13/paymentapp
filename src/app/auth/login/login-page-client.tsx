@@ -152,9 +152,15 @@ export function LoginPageClient() {
 
           <div className="space-y-8 max-w-lg">
             <div className="space-y-4">
-              <h1 className="text-4xl font-bold tracking-tight">Welcome to Provvypay</h1>
+              <h1 className="text-4xl font-bold tracking-tight">
+                {mode === 'signin'
+                  ? 'Structured operational finance'
+                  : 'Set up your workspace'}
+              </h1>
               <p className="text-xl text-muted-foreground leading-relaxed">
-                The unified payment platform built for modern businesses
+                {mode === 'signin'
+                  ? 'Obligations, payout readiness, and reconciliation for every party on your events.'
+                  : 'Coordinate obligations across venues, promoters, suppliers, and contractors.'}
               </p>
             </div>
 
@@ -166,14 +172,39 @@ export function LoginPageClient() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
                     />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-1">Instant Payments</h3>
+                  <h3 className="font-semibold mb-1">Coordinate obligations across teams</h3>
                   <p className="text-sm text-muted-foreground">
-                    Accept payments via Stripe and crypto wallets with real-time settlement
+                    Promoters, DJs, suppliers, contractors, and affiliates on one event register
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-1">Real-time payout visibility</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Funded, partially funded, and blocked lines — before finance releases payment
                   </p>
                 </div>
               </div>
@@ -190,28 +221,9 @@ export function LoginPageClient() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-1">Automated Reconciliation</h3>
+                  <h3 className="font-semibold mb-1">Audit-ready reconciliation</h3>
                   <p className="text-sm text-muted-foreground">
-                    Sync with Xero automatically. No more manual entry or spreadsheet headaches
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-1">Bank-Grade Security</h3>
-                  <p className="text-sm text-muted-foreground">
-                    PCI-compliant with encrypted data storage and multi-factor authentication
+                    Xero sync and structured records — fewer manual checks at month-end
                   </p>
                 </div>
               </div>
@@ -247,8 +259,8 @@ export function LoginPageClient() {
             </h2>
             <p className="text-muted-foreground mt-2">
               {mode === 'signin'
-                ? 'Enter your credentials to access your account'
-                : 'Get started with Provvypay today'}
+                ? 'Sign in to review obligations, payout states, and reconciliation'
+                : 'Create a workspace for your venue, agency, or event operation'}
             </p>
           </div>
 
@@ -355,7 +367,7 @@ export function LoginPageClient() {
             </Button>
           </form>
 
-          <div className="text-center">
+          <div className="text-center space-y-3">
             <p className="text-sm text-muted-foreground">
               {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
               <Link
@@ -365,6 +377,11 @@ export function LoginPageClient() {
                 {mode === 'signin' ? 'Create account' : 'Sign in'}
               </Link>
             </p>
+            {mode === 'signup' ? (
+              <p className="text-xs text-muted-foreground">
+                No credit card required · Setup in minutes · Audit-ready workflows
+              </p>
+            ) : null}
           </div>
 
           {process.env.NODE_ENV === 'development' && (
