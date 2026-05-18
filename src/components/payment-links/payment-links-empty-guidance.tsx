@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-
-const CREATE_INVOICE_HREF = '/dashboard/payment-links#create-invoice';
+import { CREATE_INVOICE_HREF } from '@/lib/navigation/payment-routes';
 
 /** Empty state for Ledger → Entries tab (no ledger rows yet). */
 export function PaymentLinksLedgerEntriesEmpty() {

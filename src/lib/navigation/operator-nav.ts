@@ -18,6 +18,7 @@ import {
   BookOpen,
   Share2,
   Activity,
+  Download,
 } from 'lucide-react';
 import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
 
@@ -39,6 +40,11 @@ export type OperatorNavSection = {
 
 export const PAYOUTS_HUB_HREF = '/dashboard/payouts';
 export const PAYOUTS_OBLIGATIONS_HREF = '/dashboard/payouts/obligations';
+export const PAYOUTS_COMMISSIONS_HREF = '/dashboard/payouts/commissions';
+export const PAYOUTS_SETTLEMENTS_HREF = '/dashboard/payouts/settlements';
+export const REPORTS_LEDGER_HREF = '/dashboard/reports/ledger';
+export const REPORTS_EXPORTS_HREF = '/dashboard/reports/exports';
+
 const DEAL_NETWORK_BASE = '/dashboard/partners/deal-network';
 
 /** Primary workflow navigation — Projects and Payouts are always visible. */
@@ -66,6 +72,7 @@ export function getOperatorNavSections(
       href: '/dashboard/payments',
       icon: Wallet,
       items: [
+        { title: 'Overview', href: '/dashboard/payments' },
         { title: 'Invoices', href: '/dashboard/payment-links', icon: LinkIcon },
         { title: 'Recurring', href: '/dashboard/recurring-templates', icon: Repeat },
         { title: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
@@ -77,6 +84,7 @@ export function getOperatorNavSections(
       href: PAYOUTS_HUB_HREF,
       icon: Banknote,
       items: [
+        { title: 'Overview', href: PAYOUTS_HUB_HREF },
         {
           title: 'Obligations',
           href: PAYOUTS_OBLIGATIONS_HREF,
@@ -84,15 +92,13 @@ export function getOperatorNavSections(
         },
         {
           title: 'Commissions',
-          href: '/dashboard/partners/commissions',
+          href: PAYOUTS_COMMISSIONS_HREF,
           icon: CircleDollarSign,
-          adminOnly: true,
         },
         {
           title: 'Settlement history',
-          href: '/dashboard/partners/payouts',
+          href: PAYOUTS_SETTLEMENTS_HREF,
           icon: History,
-          adminOnly: true,
         },
       ],
     },
@@ -101,7 +107,11 @@ export function getOperatorNavSections(
       title: 'Reports',
       href: '/dashboard/reports',
       icon: BarChart3,
-      items: [{ title: 'Transactions', href: '/dashboard/transactions' }],
+      items: [
+        { title: 'Overview', href: '/dashboard/reports' },
+        { title: 'Ledger', href: REPORTS_LEDGER_HREF, icon: BookOpen },
+        { title: 'Exports', href: REPORTS_EXPORTS_HREF, icon: Download },
+      ],
     },
     {
       id: 'settings',
@@ -125,12 +135,6 @@ export function getOperatorNavSections(
           title: 'Service catalog',
           href: '/dashboard/settings/services',
           icon: Package,
-        },
-        {
-          title: 'Ledger',
-          href: '/dashboard/ledger',
-          icon: BookOpen,
-          adminOnly: true,
         },
         {
           title: 'Allocation rules',
@@ -183,7 +187,9 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
       path === '/dashboard/payment-links' ||
       path.startsWith('/dashboard/payment-links/') ||
       path === '/dashboard/recurring-templates' ||
-      path.startsWith('/dashboard/recurring-templates/')
+      path.startsWith('/dashboard/recurring-templates/') ||
+      path === '/dashboard/transactions' ||
+      path.startsWith('/dashboard/transactions/')
     );
   }
 
@@ -193,6 +199,14 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
 
   if (href === PAYOUTS_OBLIGATIONS_HREF) {
     return path === PAYOUTS_OBLIGATIONS_HREF || path.startsWith(`${PAYOUTS_OBLIGATIONS_HREF}/`);
+  }
+
+  if (href === PAYOUTS_COMMISSIONS_HREF) {
+    return path === PAYOUTS_COMMISSIONS_HREF || path.startsWith(`${PAYOUTS_COMMISSIONS_HREF}/`);
+  }
+
+  if (href === PAYOUTS_SETTLEMENTS_HREF) {
+    return path === PAYOUTS_SETTLEMENTS_HREF || path.startsWith(`${PAYOUTS_SETTLEMENTS_HREF}/`);
   }
 
   if (sectionId === 'payouts') {
@@ -207,18 +221,29 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
   }
 
   if (href === '/dashboard/reports') {
-    return path === '/dashboard/reports' || path.startsWith('/dashboard/reports/');
+    return path === '/dashboard/reports';
   }
 
-  if (sectionId === 'reports' && href === '/dashboard/transactions') {
-    return path === '/dashboard/transactions' || path.startsWith('/dashboard/transactions/');
+  if (href === REPORTS_LEDGER_HREF) {
+    return (
+      path === REPORTS_LEDGER_HREF ||
+      path.startsWith(`${REPORTS_LEDGER_HREF}/`) ||
+      path === '/dashboard/ledger' ||
+      path.startsWith('/dashboard/ledger/')
+    );
+  }
+
+  if (href === REPORTS_EXPORTS_HREF) {
+    return path === REPORTS_EXPORTS_HREF || path.startsWith(`${REPORTS_EXPORTS_HREF}/`);
+  }
+
+  if (sectionId === 'reports') {
+    return path === '/dashboard/reports' || path.startsWith('/dashboard/reports/');
   }
 
   if (href.startsWith('/dashboard/settings') || sectionId === 'settings') {
     return (
       path.startsWith('/dashboard/settings') ||
-      path === '/dashboard/ledger' ||
-      path.startsWith('/dashboard/ledger/') ||
       path === '/dashboard/admin' ||
       path.startsWith('/dashboard/admin/') ||
       path === '/dashboard/partners/rules' ||
@@ -239,6 +264,10 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
   }
 
   if (href === '/dashboard/payment-links' || href === '/dashboard/recurring-templates') {
+    return path === href || path.startsWith(`${href}/`);
+  }
+
+  if (href === '/dashboard/transactions') {
     return path === href || path.startsWith(`${href}/`);
   }
 

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
+import { createInvoiceHref } from '@/lib/navigation/payment-routes';
 
 export function ProjectFundingView() {
   const { summary } = useProjectWorkspace();
@@ -32,7 +33,7 @@ export function ProjectFundingView() {
           <Badge variant="outline">{summary.fundingLabel}</Badge>
           <div className="flex flex-wrap gap-2">
             <Button asChild>
-              <Link href="/dashboard/payment-links?action=create">Create invoice</Link>
+              <Link href={createInvoiceHref(summary.id)}>Create invoice</Link>
             </Button>
             <Button variant="outline" asChild>
               <Link href="/dashboard/payments">Payments workspace</Link>

@@ -1,6 +1,10 @@
 import { SectionHubPage } from '@/components/dashboard/section-hub-page';
 import { CircleDollarSign, FileCheck, History } from 'lucide-react';
-import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
+import {
+  PAYOUTS_COMMISSIONS_HREF,
+  PAYOUTS_OBLIGATIONS_HREF,
+  PAYOUTS_SETTLEMENTS_HREF,
+} from '@/lib/navigation/operator-nav';
 
 export default function PayoutsPage() {
   return (
@@ -17,13 +21,13 @@ export default function PayoutsPage() {
         {
           title: 'Commissions',
           description: 'Track earned commissions and allocation state.',
-          href: '/dashboard/partners/commissions',
+          href: PAYOUTS_COMMISSIONS_HREF,
           icon: CircleDollarSign,
         },
         {
           title: 'Settlement history',
           description: 'Approve and monitor payout batches and settlement.',
-          href: '/dashboard/partners/payouts',
+          href: PAYOUTS_SETTLEMENTS_HREF,
           icon: History,
         },
       ]}

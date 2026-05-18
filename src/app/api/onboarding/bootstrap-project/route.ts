@@ -1,10 +1,14 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth/session';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { buildOnboardingProject } from '@/lib/onboarding/build-onboarding-project';
-import { syncPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import {
+  getPilotSnapshotForUser,
+  syncPilotSnapshotForUser,
+} from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { saveOperatorOnboardingState } from '@/lib/onboarding/operator-onboarding.server';
 import type { OnboardingUseCaseId } from '@/lib/onboarding/operator-onboarding-types';
 
@@ -19,7 +23,7 @@ const schema = z.object({
 
 /**
  * POST /api/onboarding/bootstrap-project
- * Creates organization + merchant settings + first project for workflow onboarding.
+ * Creates organization + merchant settings + first project, or adds project when org already exists.
  */
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -32,23 +36,44 @@ export async function POST(request: NextRequest) {
     return error;
   }
 
-  const existingOrg = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT o.id FROM organizations o
-    INNER JOIN user_organizations uo ON uo.organization_id = o.id
-    WHERE uo.user_id = ${user.id}
-    LIMIT 1
-  `;
-
-  if (existingOrg.length > 0) {
-    return apiError('Organization already exists', 409);
-  }
-
   const project = buildOnboardingProject({
     projectName: body.projectName,
     description: body.description,
     estimatedValue: body.estimatedValue,
     currency: body.defaultCurrency as 'USD',
   });
+
+  const useCaseLabel = body.onboarding_use_case as OnboardingUseCaseId | undefined;
+  const existingOrg = await getOrganizationForAuthenticatedUser(user.id);
+
+  if (existingOrg) {
+    const snapshot = await getPilotSnapshotForUser(user.id);
+    const deals = [...snapshot.deals.filter((d) => d.id !== project.id), project];
+    await syncPilotSnapshotForUser(user.id, deals, snapshot.participants);
+
+    const settings = await prisma.merchant_settings.findFirst({
+      where: { organization_id: existingOrg.id },
+      select: { id: true },
+    });
+
+    await saveOperatorOnboardingState(existingOrg.id, user.id, {
+      step: 'participants',
+      onboarding_use_case: useCaseLabel,
+      onboarding_context: body.onboarding_context,
+      organizationId: existingOrg.id,
+      merchantSettingsId: settings?.id,
+      projectId: project.id,
+    });
+
+    return apiResponse(
+      {
+        organizationId: existingOrg.id,
+        merchantSettingsId: settings?.id ?? null,
+        projectId: project.id,
+      },
+      200
+    );
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     const organization = await tx.organizations.create({
@@ -79,7 +104,6 @@ export async function POST(request: NextRequest) {
 
   await syncPilotSnapshotForUser(user.id, [project], []);
 
-  const useCaseLabel = body.onboarding_use_case as OnboardingUseCaseId | undefined;
   await saveOperatorOnboardingState(result.organization.id, user.id, {
     step: 'participants',
     onboarding_use_case: useCaseLabel,

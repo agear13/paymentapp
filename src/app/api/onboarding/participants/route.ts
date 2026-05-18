@@ -15,7 +15,7 @@ import {
 
 const participantSchema = z.object({
   name: z.string().min(1).max(255),
-  email: z.string().email(),
+  email: z.union([z.string().email(), z.literal('')]).optional(),
   role: z.enum(['Contributor', 'Contractor', 'Referrer', 'Partner']),
 });
 
@@ -24,7 +24,7 @@ const schema = z.object({
   participants: z.array(participantSchema).max(20),
 });
 
-/** POST /api/onboarding/participants — add lightweight participants to the onboarding project */
+/** POST /api/onboarding/participants — add participants to the onboarding project (canonical pilot model). */
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -47,15 +47,16 @@ export async function POST(request: NextRequest) {
     return apiError('Project not found', 404);
   }
 
-  const newParticipants = body.participants.map((p) =>
-    buildOnboardingParticipant({
-      name: p.name,
-      email: p.email,
-      role: p.role,
-      dealId: deal.id,
-      dealName: deal.dealName,
-    })
-  );
+  const newParticipants = body.participants
+    .filter((p) => p.name.trim())
+    .map((p) =>
+      buildOnboardingParticipant({
+        name: p.name,
+        email: p.email?.trim() || undefined,
+        role: p.role,
+        deal,
+      })
+    );
 
   await syncPilotSnapshotForUser(user.id, snapshot.deals, [
     ...snapshot.participants,
@@ -70,5 +71,5 @@ export async function POST(request: NextRequest) {
     organizationId: org.id,
   });
 
-  return apiResponse({ added: newParticipants.length });
+  return apiResponse({ added: newParticipants.length, projectId: deal.id });
 }

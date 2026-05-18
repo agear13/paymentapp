@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
+import { PAYOUTS_SETTLEMENTS_HREF } from '@/lib/navigation/operator-nav';
 import { ArrowLeft, Copy, Check, Download, CheckCircle2, XCircle, Wallet } from 'lucide-react';
 import { useOrganization } from '@/hooks/use-organization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,8 +54,12 @@ interface Batch {
 
 export default function PayoutBatchDetailPage() {
   const params = useParams();
+  const pathname = usePathname();
   const router = useRouter();
   const id = params.id as string;
+  const settlementsListHref = pathname.includes('/dashboard/payouts/settlements')
+    ? PAYOUTS_SETTLEMENTS_HREF
+    : '/dashboard/partners/payouts';
   const { organizationId } = useOrganization();
   const [batch, setBatch] = React.useState<Batch | null>(null);
   const [payouts, setPayouts] = React.useState<Payout[]>([]);
@@ -263,7 +268,7 @@ export default function PayoutBatchDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/partners/payouts">
+          <Link href={settlementsListHref}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>

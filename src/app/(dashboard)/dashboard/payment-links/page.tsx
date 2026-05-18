@@ -6,6 +6,7 @@
 'use client';
 
 import * as React from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Plus, RefreshCw, Download } from 'lucide-react';
 import { useOrganization } from '@/hooks/use-organization';
 
@@ -41,7 +42,9 @@ import { PendingCryptoConfirmations } from '@/components/payment-links/pending-c
 import { PendingManualBankConfirmations } from '@/components/payment-links/pending-manual-bank-confirmations';
 
 export default function PaymentLinksPage() {
+  const searchParams = useSearchParams();
   const { toast } = useToast();
+  const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
   const [paymentLinks, setPaymentLinks] = React.useState<PaymentLink[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [filters, setFilters] = React.useState<{
@@ -84,6 +87,24 @@ export default function PaymentLinksPage() {
 
   // Get organization ID from context/hook
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
+
+  React.useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      setCreateDialogOpen(true);
+    }
+  }, [searchParams]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const openFromHash = () => {
+      if (window.location.hash === '#create-invoice') {
+        setCreateDialogOpen(true);
+      }
+    };
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+    return () => window.removeEventListener('hashchange', openFromHash);
+  }, []);
 
   type FetchPaymentLinksOpts = { silent?: boolean };
 
@@ -655,6 +676,8 @@ export default function PaymentLinksPage() {
             <CreatePaymentLinkDialog
               organizationId={organizationId}
               defaultCurrency="AUD"
+              open={createDialogOpen}
+              onOpenChange={setCreateDialogOpen}
               onSuccess={handleCreateSuccess}
               trigger={
                 <Button>

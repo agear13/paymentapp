@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { CopilotOnboardingStatusResponse } from '@/lib/copilot/onboarding-status-types';
+import { CREATE_INVOICE_HREF } from '@/lib/navigation/payment-routes';
 import type { MerchantSetupStep } from '@/lib/copilot/tools/get-merchant-setup-status';
 
 function StepRow({ step }: { step: MerchantSetupStep }) {
@@ -33,7 +34,7 @@ function StepRow({ step }: { step: MerchantSetupStep }) {
               </Button>
             ) : step.actionIntent === 'scroll_create_invoice' ? (
               <Button type="button" variant="outline" size="sm" asChild>
-                <Link href="/dashboard/payment-links#create-invoice">{step.actionLabel}</Link>
+                <Link href={CREATE_INVOICE_HREF}>{step.actionLabel}</Link>
               </Button>
             ) : null}
           </div>
@@ -114,7 +115,7 @@ export function PaymentLinksOnboardingAssistant({ organizationId }: { organizati
                   </Button>
                 ) : result.nextRecommendedAction.actionIntent === 'scroll_create_invoice' ? (
                   <Button type="button" size="sm" asChild>
-                    <Link href="/dashboard/payment-links#create-invoice">{result.nextRecommendedAction.actionLabel}</Link>
+                    <Link href={CREATE_INVOICE_HREF}>{result.nextRecommendedAction.actionLabel}</Link>
                   </Button>
                 ) : null}
               </div>

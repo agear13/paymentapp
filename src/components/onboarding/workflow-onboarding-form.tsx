@@ -293,7 +293,7 @@ export function WorkflowOnboardingForm() {
     setIsLoading(true);
     try {
       if (!skip) {
-        const valid = participants.filter((p) => p.name.trim() && p.email.trim());
+        const valid = participants.filter((p) => p.name.trim());
         if (valid.length > 0) {
           const res = await fetch('/api/onboarding/participants', {
             method: 'POST',

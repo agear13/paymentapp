@@ -1,6 +1,7 @@
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
-import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { OnboardingParticipantRole } from '@/lib/onboarding/operator-onboarding-types';
+import { buildProjectParticipant } from '@/lib/projects/participant-entitlement';
+import type { ProjectParticipationModel } from '@/lib/projects/participant-entitlement';
 
 export function buildOnboardingProject(input: {
   projectName: string;
@@ -27,36 +28,30 @@ export function buildOnboardingProject(input: {
   };
 }
 
-const ROLE_MAP: Record<OnboardingParticipantRole, DemoParticipant['role']> = {
-  Contributor: 'Contributor',
-  Contractor: 'Contributor',
-  Referrer: 'Introducer',
-  Partner: 'Connector',
+const ROLE_TO_MODEL: Record<OnboardingParticipantRole, ProjectParticipationModel> = {
+  Contributor: 'fixed_payout',
+  Contractor: 'fixed_payout',
+  Referrer: 'revenue_share',
+  Partner: 'customer_attribution',
 };
 
+/** Canonical project participant — same model as project workspace invite. */
 export function buildOnboardingParticipant(input: {
   name: string;
-  email: string;
+  email?: string;
   role: OnboardingParticipantRole;
-  dealId: string;
-  dealName: string;
-}): DemoParticipant {
-  const id = `onb-p-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const inviteToken = `onb-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-  return {
-    id,
-    name: input.name.trim(),
-    email: input.email.trim(),
-    role: ROLE_MAP[input.role],
-    commissionKind: 'fixed_amount',
-    commissionValue: 0,
-    status: 'Pending',
-    inviteStatus: 'Invited',
-    approvalStatus: 'Pending approval',
-    onboardingStatus: 'NOT_STARTED',
-    inviteToken,
-    dealId: input.dealId,
-    dealName: input.dealName,
-    roleDetails: `${input.role} — added during onboarding`,
-  };
+  deal: RecentDeal;
+}) {
+  const participationModel = ROLE_TO_MODEL[input.role];
+  return buildProjectParticipant({
+    name: input.name,
+    email: input.email,
+    role: input.role,
+    project: input.deal,
+    participationModel,
+    commissionKind: participationModel === 'revenue_share' ? 'pct_deal_value' : 'fixed_amount',
+    commissionValue: participationModel === 'revenue_share' ? 10 : 0,
+    enableCustomerAttribution: participationModel === 'customer_attribution',
+    notes: `${input.role} — added during onboarding`,
+  });
 }
