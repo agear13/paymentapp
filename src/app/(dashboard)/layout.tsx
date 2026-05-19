@@ -11,6 +11,7 @@ export const revalidate = 0;
 
 import { getDashboardProductProfile } from '@/lib/auth/dashboard-product.server';
 import { DashboardLayoutClient } from '@/components/dashboard/dashboard-layout-client';
+import { resolveCustomerFacingOrigin } from '@/lib/runtime/customer-facing-url';
 
 export default async function DashboardLayout({
   children,
@@ -18,9 +19,14 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const productProfile = await getDashboardProductProfile();
+  const customerFacing = resolveCustomerFacingOrigin();
 
   return (
-    <DashboardLayoutClient productProfile={productProfile}>
+    <DashboardLayoutClient
+      productProfile={productProfile}
+      customerFacingOrigin={customerFacing.configured ? customerFacing.origin : ''}
+      customerFacingConfigured={customerFacing.configured}
+    >
       {children}
     </DashboardLayoutClient>
   );

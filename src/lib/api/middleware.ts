@@ -119,14 +119,15 @@ export async function applyRateLimit(
  * CORS headers for API routes
  */
 export function getCorsHeaders(origin?: string) {
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
-    process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-  ]
+  const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const allowedOrigins =
+    process.env.ALLOWED_ORIGINS?.split(',').map((value) => value.trim()).filter(Boolean) ||
+    (configuredOrigin ? [configuredOrigin] : process.env.NODE_ENV === 'development' ? ['http://localhost:3000'] : []);
 
   const isAllowed = origin && allowedOrigins.includes(origin)
 
   return {
-    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0],
+    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0] || 'null',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',

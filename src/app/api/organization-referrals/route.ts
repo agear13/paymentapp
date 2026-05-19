@@ -8,6 +8,7 @@ import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
+import { getBrandedAppOrigin, resolveRequestOrigin } from '@/lib/runtime/customer-facing-url';
 import {
   buildReferralQrUrl,
   buildReferralShareUrl,
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? request.nextUrl.origin).replace(/\/$/, '');
+    const baseUrl = getBrandedAppOrigin(resolveRequestOrigin(request)).replace(/\/$/, '');
 
     const rows = await prisma.referral_codes.findMany({
       where: { organization_id: organizationId },

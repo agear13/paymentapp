@@ -9,6 +9,7 @@ import { prisma } from '@/lib/server/prisma';
 import { stripe, toSmallestUnit, handleStripeError } from '@/lib/stripe/client';
 import { generateUniqueShortCode } from '@/lib/server/short-code';
 import { log } from '@/lib/logger';
+import { getBrandedAppOrigin } from '@/lib/runtime/customer-facing-url';
 import {
   buildCommissionAttributionMetadataFromReferralLink,
   commissionSnapshotToPrismaJson,
@@ -146,7 +147,7 @@ export async function createReferralCheckoutSession(
       },
     });
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = getBrandedAppOrigin();
     const defaultSuccessUrl = `${baseUrl}/pay/${shortCode}/success?session_id={CHECKOUT_SESSION_ID}`;
     const defaultCancelUrl = `${baseUrl}/pay/${shortCode}`;
 
@@ -298,7 +299,7 @@ export async function createReferralServiceCheckoutSession(
       },
     });
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = getBrandedAppOrigin();
     const defaultSuccessUrl = `${baseUrl}/pay/${shortCode}/success?session_id={CHECKOUT_SESSION_ID}`;
     const defaultCancelUrl = `${baseUrl}/pay/${shortCode}`;
 

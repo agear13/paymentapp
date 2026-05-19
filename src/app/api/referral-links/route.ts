@@ -15,6 +15,7 @@ import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { log } from '@/lib/logger';
 import { z } from 'zod';
+import { getBrandedAppOrigin } from '@/lib/runtime/customer-facing-url';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -319,7 +320,7 @@ export async function GET(request: NextRequest) {
       take: limit,
     });
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = getBrandedAppOrigin();
 
     type LinkWithRelations = (typeof links)[0] & {
       referral_rules?: { consultant_pct: unknown; bd_partner_pct: unknown; basis: string }[];

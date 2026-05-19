@@ -9,6 +9,12 @@ const gitSha = process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT || 'unknown'
 const buildTime = process.env.BUILD_TIME || new Date().toISOString();
 const buildId = process.env.BUILD_ID || gitSha || buildTime;
 
+if ((process.env.NODE_ENV || 'development') === 'production' && !process.env.NEXT_PUBLIC_APP_URL?.trim()) {
+  console.warn(
+    '[build-info] NEXT_PUBLIC_APP_URL is missing during production build. Customer-facing invoice links will fail until configured.'
+  );
+}
+
 const outDir = path.join(__dirname, '../generated');
 const outFile = path.join(outDir, 'build-info.ts');
 

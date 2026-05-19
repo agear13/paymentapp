@@ -1,7 +1,10 @@
-/**
- * Build public referral URLs for sharing (vanity /r fallback).
- * Does not mutate codes — surfaces existing referral_codes / referral_links rows only.
- */
+/** Public origin for referral share URLs. */
+export {
+  buildCustomerFacingUrl,
+  getBrandedAppOrigin as getReferralPublicBaseUrl,
+} from '@/lib/runtime/customer-facing-url';
+
+import { buildCustomerFacingUrl } from '@/lib/runtime/customer-facing-url';
 
 export type ReferralShareSlugSource = {
   code: string;
@@ -22,23 +25,15 @@ export function buildReferralSharePath(source: ReferralShareSlugSource): string 
   return `/r/${code}`;
 }
 
-/** Public origin for referral share URLs (env + Vercel fallbacks). */
-export function getReferralPublicBaseUrl(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (fromEnv) return fromEnv.replace(/\/$/, '');
-  const vercel = process.env.VERCEL_URL?.trim();
-  if (vercel) return `https://${vercel.replace(/\/$/, '')}`;
-  const site = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (site) return site.replace(/\/$/, '');
-  return '';
-}
-
 export function buildReferralShareUrl(
   baseUrl: string,
   source: ReferralShareSlugSource
 ): string {
-  const base = (baseUrl || getReferralPublicBaseUrl()).replace(/\/$/, '');
-  return `${base}${buildReferralSharePath(source)}`;
+  const path = buildReferralSharePath(source);
+  if (baseUrl?.trim()) {
+    return buildCustomerFacingUrl(path, { origin: baseUrl });
+  }
+  return buildCustomerFacingUrl(path);
 }
 
 export function buildReferralQrApiPath(code: string): string {
@@ -46,6 +41,7 @@ export function buildReferralQrApiPath(code: string): string {
 }
 
 export function buildReferralQrUrl(baseUrl: string, code: string): string {
-  const base = baseUrl.replace(/\/$/, '');
-  return `${base}${buildReferralQrApiPath(code)}`;
+  return buildCustomerFacingUrl(buildReferralQrApiPath(code), {
+    origin: baseUrl,
+  });
 }

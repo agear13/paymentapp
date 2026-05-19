@@ -41,7 +41,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/formatters/format-currency';
-import { getPaymentLinkUrl } from '@/lib/branding/customer-facing-url';
+import { getPaymentLinkUrl } from '@/lib/runtime/customer-facing-url';
+import { useCustomerFacingOrigin } from '@/components/operational/customer-facing-origin-provider';
 import { warnIfUndefined } from '@/lib/operational/dev-import-guard';
 import {
   operationalStatusDescription,
@@ -211,8 +212,32 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
   onSelectionChange,
 }) => {
   const { toast } = useToast();
+  const { origin: customerFacingOrigin, configured: customerFacingConfigured } =
+    useCustomerFacingOrigin();
 
-  const isAllSelected = paymentLinks.length > 0 && 
+  const buildPublicPaymentUrl = React.useCallback(
+    (shortCode: string) => {
+      try {
+        return getPaymentLinkUrl(shortCode, {
+          origin: customerFacingConfigured ? customerFacingOrigin : undefined,
+        });
+      } catch {
+        return '';
+      }
+    },
+    [customerFacingConfigured, customerFacingOrigin]
+  );
+
+  const warnMissingCustomerDomain = React.useCallback(() => {
+    toast({
+      title: 'Customer link unavailable',
+      description:
+        'Customer-facing domain is not configured correctly. Set NEXT_PUBLIC_APP_URL in production.',
+      variant: 'destructive',
+    });
+  }, [toast]);
+
+  const isAllSelected = paymentLinks.length > 0 &&
     paymentLinks.every(link => selectedIds.has(link.id));
   const isSomeSelected = paymentLinks.some(link => selectedIds.has(link.id));
 
@@ -249,7 +274,11 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
       });
       return;
     }
-    const url = getPaymentLinkUrl(code);
+    const url = buildPublicPaymentUrl(code);
+    if (!url) {
+      warnMissingCustomerDomain();
+      return;
+    }
     navigator.clipboard.writeText(url);
     toast({
       title: 'URL Copied',
@@ -267,7 +296,11 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
       });
       return;
     }
-    const url = getPaymentLinkUrl(code);
+    const url = buildPublicPaymentUrl(code);
+    if (!url) {
+      warnMissingCustomerDomain();
+      return;
+    }
     window.open(url, '_blank');
   };
 

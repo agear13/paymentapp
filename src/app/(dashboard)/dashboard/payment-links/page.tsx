@@ -40,7 +40,8 @@ import { usePolling } from '@/hooks/use-polling';
 import { exportToCSV, type ExportColumn } from '@/lib/export-csv';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/formatters/format-currency';
-import { getPaymentLinkUrl } from '@/lib/branding/customer-facing-url';
+import { getPaymentLinkUrl } from '@/lib/runtime/customer-facing-url';
+import { CustomerFacingDomainWarning, useCustomerFacingOrigin } from '@/components/operational/customer-facing-origin-provider';
 
 export default function PaymentLinksPage() {
   const searchParams = useSearchParams();
@@ -183,13 +184,34 @@ export default function PaymentLinksPage() {
     }
   );
 
-  const getPublicInvoiceUrl = React.useCallback((shortCode: string) => {
-    return getPaymentLinkUrl(shortCode);
-  }, []);
+  const { origin: customerFacingOrigin, configured: customerFacingConfigured } =
+    useCustomerFacingOrigin();
 
-  const handleCopyPublicLink = React.useCallback((shortCode: string) => {
-    const url = getPublicInvoiceUrl(shortCode);
-    if (!url) return;
+  const getPublicInvoiceUrl = React.useCallback(
+    (shortCode: string) => {
+      try {
+        return getPaymentLinkUrl(shortCode, {
+          origin: customerFacingConfigured ? customerFacingOrigin : undefined,
+        });
+      } catch {
+        return '';
+      }
+    },
+    [customerFacingConfigured, customerFacingOrigin]
+  );
+
+  const handleCopyPublicLink = React.useCallback(
+    (shortCode: string) => {
+      const url = getPublicInvoiceUrl(shortCode);
+      if (!url) {
+        toast({
+          title: 'Customer link unavailable',
+          description:
+            'Customer-facing domain is not configured correctly. Set NEXT_PUBLIC_APP_URL in production.',
+          variant: 'destructive',
+        });
+        return;
+      }
     navigator.clipboard.writeText(url);
     toast({
       title: 'Invoice link copied',
@@ -197,9 +219,18 @@ export default function PaymentLinksPage() {
     });
   }, [getPublicInvoiceUrl, toast]);
 
-  const handleOpenPublicLink = React.useCallback((shortCode: string) => {
-    const url = getPublicInvoiceUrl(shortCode);
-    if (!url) return;
+  const handleOpenPublicLink = React.useCallback(
+    (shortCode: string) => {
+      const url = getPublicInvoiceUrl(shortCode);
+      if (!url) {
+        toast({
+          title: 'Customer link unavailable',
+          description:
+            'Customer-facing domain is not configured correctly. Set NEXT_PUBLIC_APP_URL in production.',
+          variant: 'destructive',
+        });
+        return;
+      }
     window.open(url, '_blank');
   }, [getPublicInvoiceUrl]);
 
@@ -647,6 +678,7 @@ export default function PaymentLinksPage() {
 
   return (
     <div className="space-y-6">
+      <CustomerFacingDomainWarning />
       {/* Header */}
       <div id="create-invoice" className="flex items-center justify-between scroll-mt-24">
         <div>

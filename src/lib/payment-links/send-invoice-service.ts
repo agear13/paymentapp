@@ -6,7 +6,7 @@ import { prisma } from '@/lib/server/prisma';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { sendInvoiceEmail } from '@/lib/email/send-invoice-email';
 import { resolveMerchantLogoUrl } from '@/lib/merchant-settings/logo-url';
-import { getBrandedAppOrigin } from '@/lib/branding/customer-facing-url';
+import { buildCustomerFacingUrl } from '@/lib/runtime/customer-facing-url';
 import {
   downloadPaymentLinkAttachmentFromStorage,
   isValidPaymentLinkAttachmentStorageKey,
@@ -72,7 +72,9 @@ export async function sendInvoiceForPaymentLink(params: {
     };
   }
 
-  const paymentUrl = `${getBrandedAppOrigin(params.origin)}/pay/${encodeURIComponent(link.short_code)}`;
+  const paymentUrl = buildCustomerFacingUrl(`/pay/${encodeURIComponent(link.short_code)}`, {
+    requestOrigin: params.origin,
+  });
   let emailAttachment:
     | {
         filename: string;

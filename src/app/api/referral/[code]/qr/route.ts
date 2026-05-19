@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import QRCode from 'qrcode';
 import { prisma } from '@/lib/server/prisma';
 import { applyRateLimit } from '@/lib/rate-limit';
+import { getBrandedAppOrigin, resolveRequestOrigin } from '@/lib/runtime/customer-facing-url';
 
 export async function GET(
   request: NextRequest,
@@ -31,7 +32,7 @@ export async function GET(
       return NextResponse.json({ error: 'Referral not found' }, { status: 404 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const baseUrl = getBrandedAppOrigin(resolveRequestOrigin(request));
     const url = `${baseUrl.replace(/\/$/, '')}/r/${referralCode}`;
     const png = await QRCode.toBuffer(url, { type: 'png', width: 280, margin: 2 });
 

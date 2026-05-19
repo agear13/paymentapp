@@ -10,6 +10,7 @@ import { prisma } from '@/lib/server/prisma';
 import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 import { log } from '@/lib/logger';
 import { applyRateLimit } from '@/lib/rate-limit';
+import { getBrandedAppOrigin, resolveRequestOrigin } from '@/lib/runtime/customer-facing-url';
 import { z } from 'zod';
 
 // Request validation schema
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
     const amountInSmallestUnit = toSmallestUnit(Number(paymentLink.amount), invoiceCcy);
 
     // Get base URL from environment or request
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const baseUrl = getBrandedAppOrigin(resolveRequestOrigin(request));
     
     // Construct return URLs
     const defaultSuccessUrl = `${baseUrl}/pay/${paymentLink.short_code}/success?session_id={CHECKOUT_SESSION_ID}`;

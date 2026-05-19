@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthedParticipantForProgram } from '@/lib/referrals/participant-auth';
 import { buildShareTemplates } from '@/lib/referrals/share-templates';
+import { getBrandedAppOrigin } from '@/lib/runtime/customer-facing-url';
 
 function generateAdvocateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -170,7 +171,7 @@ export async function POST(request: NextRequest) {
       percent: pct,
     });
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+    const baseUrl = getBrandedAppOrigin();
     const referralUrl = `${baseUrl}/r/${newParticipant.referral_code}`;
     const shareTemplates = buildShareTemplates(referralUrl, 'advocate', {
       clientName: name || undefined,

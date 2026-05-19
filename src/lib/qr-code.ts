@@ -5,7 +5,7 @@
 
 import QRCode from 'qrcode';
 
-import { getBrandedAppOrigin } from '@/lib/branding/customer-facing-url';
+import { getPaymentLinkUrl as buildPaymentLinkUrl } from '@/lib/runtime/customer-facing-url';
 
 export interface QRCodeOptions {
   size?: number;
@@ -21,12 +21,11 @@ export interface QRCodeOptions {
 /**
  * Generates payment link URL from short code
  * @param shortCode 8-character unique identifier
- * @param baseUrl Base application URL (defaults to env var)
+ * @param baseUrl Base application URL (defaults to canonical resolver)
  * @returns Full payment link URL
  */
 export const getPaymentLinkUrl = (shortCode: string, baseUrl?: string): string => {
-  const appUrl = baseUrl || getBrandedAppOrigin();
-  return `${appUrl}/pay/${shortCode}`;
+  return buildPaymentLinkUrl(shortCode, baseUrl ? { origin: baseUrl } : undefined);
 };
 
 /**

@@ -5,21 +5,10 @@ import {
   SendInvoiceBodySchema,
   sendInvoiceForPaymentLink,
 } from '@/lib/payment-links/send-invoice-service';
+import { getBrandedAppOrigin, resolveRequestOrigin } from '@/lib/runtime/customer-facing-url';
 
 function resolvePublicOrigin(request: NextRequest): string {
-  const forwardedProto = request.headers.get('x-forwarded-proto')?.trim();
-  const forwardedHost = request.headers.get('x-forwarded-host')?.trim();
-  if (forwardedProto && forwardedHost) {
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-
-  const host = request.headers.get('host')?.trim();
-  if (host) {
-    const protocol = request.nextUrl.protocol || 'https:';
-    return `${protocol}//${host}`;
-  }
-
-  return process.env.NEXT_PUBLIC_APP_URL?.trim() || request.nextUrl.origin;
+  return getBrandedAppOrigin(resolveRequestOrigin(request));
 }
 
 export async function POST(

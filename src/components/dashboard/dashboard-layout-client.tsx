@@ -13,26 +13,36 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/dashboard/app-sidebar';
 import { AppHeader } from '@/components/dashboard/app-header';
 import { OperationalChunkRecovery } from '@/components/operational/operational-chunk-recovery';
+import { CustomerFacingOriginProvider } from '@/components/operational/customer-facing-origin-provider';
 
 interface DashboardLayoutClientProps {
   children: React.ReactNode;
   productProfile: DashboardProductProfile;
+  customerFacingOrigin: string;
+  customerFacingConfigured: boolean;
 }
 
 export function DashboardLayoutClient({
   children,
   productProfile,
+  customerFacingOrigin,
+  customerFacingConfigured,
 }: DashboardLayoutClientProps) {
   return (
-    <SidebarProvider>
-      <OperationalChunkRecovery scope="dashboard-layout" />
-      <div className="flex h-screen w-full overflow-hidden">
-        <AppSidebar productProfile={productProfile} />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <AppHeader productProfile={productProfile} />
-          <main className="flex-1 overflow-y-auto bg-muted/30 p-6">{children}</main>
+    <CustomerFacingOriginProvider
+      origin={customerFacingOrigin}
+      configured={customerFacingConfigured}
+    >
+      <SidebarProvider>
+        <OperationalChunkRecovery scope="dashboard-layout" />
+        <div className="flex h-screen w-full overflow-hidden">
+          <AppSidebar productProfile={productProfile} />
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <AppHeader productProfile={productProfile} />
+            <main className="flex-1 overflow-y-auto bg-muted/30 p-6">{children}</main>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </CustomerFacingOriginProvider>
   );
 }

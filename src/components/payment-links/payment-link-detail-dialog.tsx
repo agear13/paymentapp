@@ -56,7 +56,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { isValidShortCode } from '@/lib/short-code';
-import { getPaymentLinkUrl } from '@/lib/branding/customer-facing-url';
+import { getPaymentLinkUrl } from '@/lib/runtime/customer-facing-url';
+import { usePaymentLinkUrl } from '@/components/operational/customer-facing-origin-provider';
 import {
   operationalStatusDescription,
   operationalStatusLabel,
@@ -204,6 +205,8 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
   const [sendEmail, setSendEmail] = React.useState('');
   const [sendLoading, setSendLoading] = React.useState(false);
   const [operationsSection, setOperationsSection] = React.useState<'fx' | 'events' | 'xero'>('fx');
+  const payCode = paymentLink?.shortCode?.trim() ?? '';
+  const paymentUrl = usePaymentLinkUrl(isValidShortCode(payCode) ? payCode : null);
 
   React.useEffect(() => {
     if (paymentLink && open) {
@@ -217,10 +220,6 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
   }, [paymentLink, open]);
 
   if (!paymentLink) return null;
-
-  const payCode = paymentLink.shortCode?.trim() ?? '';
-  const paymentUrl =
-    isValidShortCode(payCode) ? getPaymentLinkUrl(payCode) : '';
 
   const handleCopyUrl = () => {
     if (!paymentUrl) {
