@@ -12,14 +12,17 @@ import { useOrganization } from '@/hooks/use-organization';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CreatePaymentLinkDialog } from '@/components/payment-links/create-payment-link-dialog';
+import {
+  CreatePaymentLinkDialog,
+  PaymentLinkDetailDialog,
+  PaymentLinksOnboardingAssistant,
+  PendingCryptoConfirmations,
+  PendingManualBankConfirmations,
+  type PaymentLinkDetailPayload,
+} from '@/components/payment-links/payment-links-lazy-modules';
 import { PaymentLinksTable } from '@/components/payment-links/payment-links-table';
 import { PaymentLinksTableSkeleton } from '@/components/payment-links/payment-links-table-skeleton';
 import { PaymentLinksFilters } from '@/components/payment-links/payment-links-filters';
-import {
-  PaymentLinkDetailDialog,
-  type PaymentLinkDetails as PaymentLinkDetailPayload,
-} from '@/components/payment-links/payment-link-detail-dialog';
 import { BulkActionsToolbar } from '@/components/payment-links/bulk-actions-toolbar';
 import type { PaymentLink } from '@/components/payment-links/payment-links-table';
 import {
@@ -38,9 +41,6 @@ import { exportToCSV, type ExportColumn } from '@/lib/export-csv';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/formatters/format-currency';
 import { getPaymentLinkUrl } from '@/lib/branding/customer-facing-url';
-import { PaymentLinksOnboardingAssistant } from '@/components/payment-links-onboarding/payment-links-onboarding-assistant';
-import { PendingCryptoConfirmations } from '@/components/payment-links/pending-crypto-confirmations';
-import { PendingManualBankConfirmations } from '@/components/payment-links/pending-manual-bank-confirmations';
 
 export default function PaymentLinksPage() {
   const searchParams = useSearchParams();

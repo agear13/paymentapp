@@ -1,5 +1,11 @@
 import type { NextConfig } from "next";
 
+const buildId =
+  process.env.BUILD_ID ||
+  process.env.RENDER_GIT_COMMIT ||
+  process.env.GIT_SHA ||
+  "development";
+
 const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: false,
@@ -8,6 +14,12 @@ const nextConfig: NextConfig = {
   // Remaining strictness debt in `lib/payments/*`, `lib/payment/edge-case-handler.ts`, and Prisma JSON snapshots; tracked in SECURITY_AND_SCALE.md.
   typescript: {
     ignoreBuildErrors: true,
+  },
+
+  generateBuildId: async () => buildId,
+
+  experimental: {
+    optimizePackageImports: ["lucide-react", "date-fns", "@radix-ui/react-icons"],
   },
 
   // ✅ Turbopack root (prevents monorepo / path warnings)
@@ -39,14 +51,9 @@ const nextConfig: NextConfig = {
         crypto: false,
       };
 
-      // 🔒 Disable module concatenation (scope hoisting) to prevent
-      // "Identifier 'n' has already been declared" errors in dynamic imports
-      // This can occur when webpack merges modules into the same scope
+      // Prevent scope-hoisting collisions in dynamic import graphs (HashConnect / wallet islands).
       config.optimization = config.optimization || {};
       config.optimization.concatenateModules = false;
-
-      // TEMP HOTFIX: disable minification to prevent identifier collisions
-      config.optimization.minimize = false;
     }
 
     // Ignore warnings from dynamic imports
@@ -63,15 +70,32 @@ const nextConfig: NextConfig = {
   // 🔐 Cache Control for static assets (HTML no-store is handled in middleware.ts)
   async headers() {
     return [
-      // ✅ CRITICAL: Cache hashed Next.js static assets forever
-      // These have content hashes in filenames, so safe to cache indefinitely
-      // This prevents chunk mismatch by ensuring browsers use cached chunks consistently
+      // Hashed Next.js static assets — safe to cache indefinitely by content hash.
       {
         source: "/_next/static/:path*",
         headers: [
           {
             key: "Cache-Control",
             value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      // Build manifest must revalidate so clients detect deploys without stale chunk maps.
+      {
+        source: "/_next/static/:buildId/_buildManifest.js",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=0, must-revalidate",
+          },
+        ],
+      },
+      {
+        source: "/_next/static/:buildId/_ssgManifest.js",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=0, must-revalidate",
           },
         ],
       },

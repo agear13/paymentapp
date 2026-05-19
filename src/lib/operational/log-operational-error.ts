@@ -1,3 +1,5 @@
+import { BUILD_ID } from '@/generated/build-info';
+
 export type OperationalErrorContext = {
   route?: string;
   component?: string;
@@ -15,18 +17,21 @@ export type OperationalErrorLog = {
   timestamp: string;
 };
 
-const BUILD_VERSION =
-  process.env.NEXT_PUBLIC_BUILD_ID ??
-  process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ??
-  'development';
+const BUILD_VERSION = BUILD_ID;
 
 function extractMissingSymbol(message: string): string | undefined {
   const match = message.match(/(\w+) is not defined/);
   return match?.[1];
 }
 
-function isUndefinedReferenceError(message: string): boolean {
-  return /is not defined/i.test(message) || /can't find variable/i.test(message);
+function isOperationalUiError(message: string): boolean {
+  return (
+    /is not defined/i.test(message) ||
+    /can't find variable/i.test(message) ||
+    /loading chunk/i.test(message) ||
+    /chunkloaderror/i.test(message) ||
+    /failed to fetch dynamically imported module/i.test(message)
+  );
 }
 
 export function logOperationalError(error: Error, context: OperationalErrorContext = {}): OperationalErrorLog {
@@ -50,7 +55,7 @@ export function getOperationalErrorPresentation(error: Error): {
   message: string;
   suggestion?: string;
 } {
-  if (isUndefinedReferenceError(error.message)) {
+  if (isOperationalUiError(error.message)) {
     return {
       title: 'An operational UI error occurred',
       message:

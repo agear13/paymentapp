@@ -12,6 +12,7 @@ import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/dashboard/app-sidebar';
 import { AppHeader } from '@/components/dashboard/app-header';
+import { OperationalChunkRecovery } from '@/components/operational/operational-chunk-recovery';
 
 interface DashboardLayoutClientProps {
   children: React.ReactNode;
@@ -24,6 +25,7 @@ export function DashboardLayoutClient({
 }: DashboardLayoutClientProps) {
   return (
     <SidebarProvider>
+      <OperationalChunkRecovery scope="dashboard-layout" />
       <div className="flex h-screen w-full overflow-hidden">
         <AppSidebar productProfile={productProfile} />
         <div className="flex flex-1 flex-col overflow-hidden">

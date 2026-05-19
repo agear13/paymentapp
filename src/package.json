@@ -46,7 +46,8 @@
     "check:settlement-integrity": "node ../scripts/check-forbidden-payment-state-mutations.js",
     "check:settlement-concurrency": "jest __tests__/payments/settlement-concurrency.test.ts",
     "verify:ui-imports": "node scripts/verify-ui-imports.mjs",
-    "verify:operational-ui": "npm run verify:ui-imports && npm run test:operational"
+    "verify:operational-ui": "npm run verify:ui-imports && npm run test:operational",
+    "analyze:route-chunks": "node scripts/analyze-route-chunks.mjs"
   },
   "overrides": {
     "@walletconnect/core": "2.17.1",
