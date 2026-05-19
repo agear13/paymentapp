@@ -9,8 +9,10 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
 import { derivePaidAtFromEvents } from '@/lib/payments/paid-at';
 import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
-import { resolveMerchantLogoUrl } from '@/lib/merchant-settings/logo-url';
-import { getBrandedAppOrigin } from '@/lib/branding/customer-facing-url';
+import { resolveMerchantBranding } from '@/lib/branding/resolve-merchant-branding';
+import {
+  resolveRequestOrigin,
+} from '@/lib/runtime/customer-facing-url';
 
 /**
  * GET /api/public/pay/[shortCode]
@@ -230,6 +232,16 @@ export async function GET(
           event.event_type === 'CRYPTO_PAYMENT_SUBMITTED' || event.event_type === 'PAYMENT_INITIATED'
       )?.created_at ?? null;
 
+    const requestOrigin = resolveRequestOrigin(request);
+    const merchantDisplayName =
+      merchantSettings?.display_name || paymentLink.organizations.name;
+    const merchantBranding = resolveMerchantBranding({
+      merchantName: merchantDisplayName,
+      logoSource: merchantSettings?.organization_logo_url,
+      requestOrigin,
+      context: 'api.public.pay',
+    });
+
     // Return sanitized data (exclude sensitive info)
     return NextResponse.json({
       data: {
@@ -247,11 +259,8 @@ export async function GET(
         expiresAt: paymentLink.expires_at,
         createdAt: paymentLink.created_at,
         merchant: {
-          name: merchantSettings?.display_name || paymentLink.organizations.name,
-          logoUrl: resolveMerchantLogoUrl(
-            merchantSettings?.organization_logo_url,
-            getBrandedAppOrigin(request.nextUrl.origin)
-          ),
+          name: merchantBranding.merchantName,
+          logoUrl: merchantBranding.logoUrl,
         },
         availablePaymentMethods,
         wiseTransferId: paymentLink.wise_transfer_id ?? null,

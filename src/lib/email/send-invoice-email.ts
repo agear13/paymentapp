@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { sendEmail } from '@/lib/email/client';
+import { buildMerchantBrandingEmailMarkup } from '@/lib/branding/merchant-branding-email';
+import { merchantInitials } from '@/lib/branding/resolve-merchant-branding';
 
 type SendInvoiceEmailArgs = {
   toEmail: string;
@@ -58,10 +60,12 @@ export async function sendInvoiceEmail({
   const safeDescription = escapeHtml(invoice.description || 'Invoice payment');
   const safeRef = invoice.invoiceReference ? escapeHtml(invoice.invoiceReference) : null;
   const amountLabel = formatAmount(invoice.amount, invoice.currency);
-  const safeLogoUrl =
-    merchantLogoUrl && /^https?:\/\//i.test(merchantLogoUrl)
-      ? escapeHtml(merchantLogoUrl)
-      : null;
+  const brandingMarkup = buildMerchantBrandingEmailMarkup({
+    merchantName: merchantName || 'Provvypay',
+    logoUrl:
+      merchantLogoUrl && /^https?:\/\//i.test(merchantLogoUrl) ? merchantLogoUrl : null,
+    initials: merchantInitials(merchantName || 'Provvypay'),
+  });
 
   const subject = `Invoice from ${merchantName}: ${amountLabel}`;
   const text = [
@@ -78,7 +82,7 @@ export async function sendInvoiceEmail({
 
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;max-width:560px">
-      ${safeLogoUrl ? `<p style="margin:0 0 12px 0"><img src="${safeLogoUrl}" alt="${safeMerchant} logo" style="max-height:56px;max-width:220px;width:auto;height:auto;display:block"/></p>` : ''}
+      ${brandingMarkup}
       <p>You have received an invoice from <strong>${safeMerchant}</strong>.</p>
       <p style="margin:0 0 6px 0"><strong>Amount:</strong> ${escapeHtml(amountLabel)}</p>
       <p style="margin:0 0 6px 0"><strong>Description:</strong> ${safeDescription}</p>

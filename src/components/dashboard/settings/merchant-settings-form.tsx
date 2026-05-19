@@ -100,6 +100,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
   const [settingsId, setSettingsId] = React.useState<string | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = React.useState(false);
   const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
+  const [logoPreviewError, setLogoPreviewError] = React.useState(false);
   const [wiseGloballyEnabled, setWiseGloballyEnabled] = React.useState(true); // Default to true, will be updated from API
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -147,6 +148,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
             // Set logo preview if URL exists
             if (settings.organization_logo_url) {
               setLogoPreview(settings.organization_logo_url);
+              setLogoPreviewError(false);
             }
             
             // Update global Wise feature flag from API response
@@ -227,6 +229,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
       // Update form with new URL
       form.setValue('organizationLogoUrl', result.url);
       setLogoPreview(result.url);
+      setLogoPreviewError(false);
 
       toast.success('Logo uploaded successfully');
     } catch (error: unknown) {
@@ -245,6 +248,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
   const handleRemoveLogo = () => {
     form.setValue('organizationLogoUrl', '');
     setLogoPreview(null);
+    setLogoPreviewError(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -440,7 +444,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
               <FormControl>
                 <div className="space-y-4">
                   {/* Logo Preview */}
-                  {logoPreview && (
+                  {logoPreview && !logoPreviewError && (
                     <div className="relative inline-block">
                       <div className="border rounded-lg p-4 bg-gray-50">
                         {/* Use regular img tag for uploaded files to avoid Next.js Image optimization issues */}
@@ -448,6 +452,14 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
                           src={logoPreview}
                           alt="Organization logo"
                           className="max-h-24 w-auto object-contain"
+                          onError={() => {
+                            console.warn('[MerchantBranding]', {
+                              context: 'merchant-settings-form.preview',
+                              logoUrl: logoPreview,
+                              reason: 'image_load_failed',
+                            });
+                            setLogoPreviewError(true);
+                          }}
                         />
                       </div>
                       <Button
@@ -462,7 +474,11 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
                     </div>
                   )}
 
-                  {/* File Upload */}
+                  {logoPreview && logoPreviewError ? (
+                    <p className="text-sm text-muted-foreground">
+                      Logo preview unavailable. Re-upload or save a valid logo file.
+                    </p>
+                  ) : null}
                   <div className="flex items-center gap-4">
                     <Input
                       ref={fileInputRef}

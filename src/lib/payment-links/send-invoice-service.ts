@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { sendInvoiceEmail } from '@/lib/email/send-invoice-email';
-import { resolveMerchantLogoUrl } from '@/lib/merchant-settings/logo-url';
+import { resolveMerchantBranding } from '@/lib/branding/resolve-merchant-branding';
 import { buildCustomerFacingUrl } from '@/lib/runtime/customer-facing-url';
 import {
   downloadPaymentLinkAttachmentFromStorage,
@@ -124,18 +124,27 @@ export async function sendInvoiceForPaymentLink(params: {
 
   const merchantSettings = await prisma.merchant_settings.findFirst({
     where: { organization_id: link.organization_id },
-    select: { organization_logo_url: true },
+    select: { organization_logo_url: true, display_name: true },
     orderBy: { created_at: 'desc' },
+  });
+
+  const merchantDisplayName =
+    merchantSettings?.display_name?.trim() ||
+    link.organizations?.name ||
+    'Provvypay';
+
+  const merchantBranding = resolveMerchantBranding({
+    merchantName: merchantDisplayName,
+    logoSource: merchantSettings?.organization_logo_url,
+    requestOrigin: params.origin,
+    context: 'send-invoice-service',
   });
 
   const sendResult = await sendInvoiceEmail({
     toEmail: normalizedEmail,
     paymentUrl,
-    merchantName: link.organizations?.name || 'Provvypay',
-    merchantLogoUrl: resolveMerchantLogoUrl(
-      merchantSettings?.organization_logo_url,
-      getBrandedAppOrigin(params.origin)
-    ),
+    merchantName: merchantBranding.merchantName,
+    merchantLogoUrl: merchantBranding.logoUrl,
     invoice: {
       id: link.id,
       shortCode: link.short_code,
