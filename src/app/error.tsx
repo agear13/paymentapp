@@ -9,6 +9,10 @@
 import React from 'react';
 import Link from 'next/link';
 import { formatErrorMessage } from '@/components/ui/error/ErrorMessage';
+import {
+  getOperationalErrorPresentation,
+  logOperationalError,
+} from '@/lib/operational/log-operational-error';
 
 export default function Error({
   error,
@@ -18,11 +22,14 @@ export default function Error({
   reset: () => void;
 }) {
   React.useEffect(() => {
-    // Log error to error reporting service
-    console.error('Global error:', error);
+    logOperationalError(error, { digest: error.digest });
   }, [error]);
 
-  const formatted = formatErrorMessage(error);
+  const operational = getOperationalErrorPresentation(error);
+  const formatted =
+    /is not defined/i.test(error.message) || /can't find variable/i.test(error.message)
+      ? operational
+      : formatErrorMessage(error);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-gray-50 dark:bg-gray-900">

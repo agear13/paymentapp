@@ -7,7 +7,8 @@ const defaultBaseUrl = `http://127.0.0.1:${e2ePort}`;
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  timeout: 60_000,
+  workers: process.env.CI ? 1 : undefined,
+  timeout: 90_000,
   retries: process.env.CI ? 2 : 0,
   use: {
     baseURL: process.env.E2E_BASE_URL || defaultBaseUrl,

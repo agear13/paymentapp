@@ -141,24 +141,13 @@ export const getCurrencyName = (code: string): string => {
 
 /**
  * Format amount with currency
+ * @deprecated Import from `@/lib/formatters/format-currency` instead.
  */
-export const formatCurrency = (
-  amount: number,
-  currencyCode: string,
-  options?: {
-    minimumFractionDigits?: number;
-    maximumFractionDigits?: number;
-  }
-): string => {
-  const symbol = getCurrencySymbol(currencyCode);
-  
-  const formattedAmount = amount.toLocaleString('en-US', {
-    minimumFractionDigits: options?.minimumFractionDigits ?? 2,
-    maximumFractionDigits: options?.maximumFractionDigits ?? 2,
-  });
-
-  return `${symbol}${formattedAmount}`;
-};
+export {
+  formatCurrency,
+  formatCompactCurrency,
+  formatCurrencyWithoutSymbol,
+} from '@/lib/formatters/format-currency';
 
 
 

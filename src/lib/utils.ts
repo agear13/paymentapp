@@ -20,24 +20,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/**
- * Format currency amount
- * 
- * @example
- * ```tsx
- * formatCurrency(1000, 'USD') // => '$1,000.00'
- * formatCurrency(1000, 'AUD') // => 'A$1,000.00'
- * ```
- */
-export function formatCurrency(
-  amount: number,
-  currency: string = 'USD'
-): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-  }).format(amount);
-}
+export { formatCurrency } from '@/lib/formatters/format-currency';
 
 /**
  * Format date

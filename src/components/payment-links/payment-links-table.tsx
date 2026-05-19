@@ -40,13 +40,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { formatCurrency } from '@/lib/formatters/format-currency';
 import { getPaymentLinkUrl } from '@/lib/branding/customer-facing-url';
+import { warnIfUndefined } from '@/lib/operational/dev-import-guard';
 import {
   operationalStatusDescription,
   operationalStatusLabel,
 } from '@/lib/payments/operational-status-labels';
 import { useToast } from '@/hooks/use-toast';
 import { isValidShortCode } from '@/lib/short-code';
+
+warnIfUndefined('formatCurrency', formatCurrency, 'payment-links-table.tsx');
+warnIfUndefined('Button', Button, 'payment-links-table.tsx');
+warnIfUndefined('operationalStatusLabel', operationalStatusLabel, 'payment-links-table.tsx');
 
 // Helper to safely format dates
 const formatDate = (date: Date | string | null | undefined, formatStr: string = 'MMM d, yyyy'): string | null => {

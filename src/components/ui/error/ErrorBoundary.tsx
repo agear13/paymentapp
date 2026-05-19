@@ -8,6 +8,10 @@
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { formatErrorMessage } from './ErrorMessage';
+import {
+  getOperationalErrorPresentation,
+  logOperationalError,
+} from '@/lib/operational/log-operational-error';
 
 export interface ErrorBoundaryProps {
   /** Child components */
@@ -61,8 +65,9 @@ export class ErrorBoundary extends Component<
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ errorInfo });
 
-    // Log error
-    console.error('Error caught by boundary:', error, errorInfo);
+    logOperationalError(error, {
+      component: errorInfo.componentStack?.split('\n')[1]?.trim(),
+    });
 
     // Call error callback
     if (this.props.onError) {
@@ -89,7 +94,12 @@ export class ErrorBoundary extends Component<
       }
 
       // Default fallback
-      const formatted = formatErrorMessage(this.state.error);
+      const operational = getOperationalErrorPresentation(this.state.error);
+      const formatted =
+        /is not defined/i.test(this.state.error.message) ||
+        /can't find variable/i.test(this.state.error.message)
+          ? operational
+          : formatErrorMessage(this.state.error);
 
       return (
         <div className="min-h-[400px] flex items-center justify-center p-6">

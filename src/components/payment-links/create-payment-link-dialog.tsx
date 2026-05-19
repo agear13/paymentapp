@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import { CalendarIcon, FileText, Loader2, Paperclip, X } from 'lucide-react';
 
 import { CANONICAL_NETWORKS } from '@/lib/payments/canonical-networks';
+import { warnIfUndefined } from '@/lib/operational/dev-import-guard';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -56,6 +57,11 @@ import {
   PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
   isAllowedPaymentLinkAttachmentMime,
 } from '@/lib/payment-links/payment-link-attachment';
+
+warnIfUndefined('Button', Button, 'create-payment-link-dialog.tsx');
+warnIfUndefined('CANONICAL_NETWORKS', CANONICAL_NETWORKS, 'create-payment-link-dialog.tsx');
+warnIfUndefined('Input', Input, 'create-payment-link-dialog.tsx');
+warnIfUndefined('Dialog', Dialog, 'create-payment-link-dialog.tsx');
 
 interface PaymentMethodOption {
   value: 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO' | 'MANUAL_BANK';

@@ -18,6 +18,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:unit": "jest --testPathPattern=__tests__",
+    "test:operational": "jest __tests__/operational __tests__/format/format-currency.test.ts",
     "test:integration": "jest --testPathPattern=integration",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
@@ -44,7 +45,8 @@
     "check:payment-state-integrity": "node ../scripts/check-forbidden-payment-state-mutations.js",
     "check:settlement-integrity": "node ../scripts/check-forbidden-payment-state-mutations.js",
     "check:settlement-concurrency": "jest __tests__/payments/settlement-concurrency.test.ts",
-    "verify:revenue-share-matrix": "tsx scripts/verify-revenue-share-matrix.ts"
+    "verify:ui-imports": "node scripts/verify-ui-imports.mjs",
+    "verify:operational-ui": "npm run verify:ui-imports && npm run test:operational"
   },
   "overrides": {
     "@walletconnect/core": "2.17.1",

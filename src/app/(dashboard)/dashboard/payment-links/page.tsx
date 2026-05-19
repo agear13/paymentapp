@@ -36,7 +36,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePolling } from '@/hooks/use-polling';
 import { exportToCSV, type ExportColumn } from '@/lib/export-csv';
 import { format } from 'date-fns';
-import { formatCurrency } from '@/components/payment-links/currency-select';
+import { formatCurrency } from '@/lib/formatters/format-currency';
 import { getPaymentLinkUrl } from '@/lib/branding/customer-facing-url';
 import { PaymentLinksOnboardingAssistant } from '@/components/payment-links-onboarding/payment-links-onboarding-assistant';
 import { PendingCryptoConfirmations } from '@/components/payment-links/pending-crypto-confirmations';

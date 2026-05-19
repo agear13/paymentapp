@@ -41,7 +41,8 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
-import { formatCurrency } from './currency-select';
+import { formatCurrency } from '@/lib/formatters/format-currency';
+import { warnIfUndefined } from '@/lib/operational/dev-import-guard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   AlertDialog,
@@ -60,6 +61,9 @@ import {
   operationalStatusDescription,
   operationalStatusLabel,
 } from '@/lib/payments/operational-status-labels';
+
+warnIfUndefined('formatCurrency', formatCurrency, 'payment-link-detail-dialog.tsx');
+warnIfUndefined('Button', Button, 'payment-link-detail-dialog.tsx');
 
 export interface PaymentLinkDetails {
   id: string;
