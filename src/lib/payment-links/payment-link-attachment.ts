@@ -1,19 +1,29 @@
 /**
- * Payment link invoice attachments (merchant-uploaded PNG/JPEG/PDF).
- * Stored in Supabase Storage bucket (private; served only via API).
+ * Payment link invoice attachments — delegates to centralized storage-service.
  */
 
 import { randomUUID } from 'crypto';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-export const PAYMENT_LINK_ATTACHMENT_BUCKET = 'payment-link-attachments';
+import {
+  ASSET_CATEGORY_RULES,
+  buildStorageObjectKey,
+  isLegacySupabaseAttachmentKey,
+  isValidStorageObjectKey,
+  LEGACY_SUPABASE_ATTACHMENT_BUCKET,
+  sanitizeOriginalFilename,
+} from '@/lib/storage/asset-validation';
+import {
+  deleteAsset,
+  downloadAsset,
+  uploadAsset,
+  validateAssetOwnershipKey,
+} from '@/lib/storage/storage-service';
 
-export const PAYMENT_LINK_ATTACHMENT_ALLOWED_MIME = [
-  'image/png',
-  'image/jpeg',
-  'image/jpg',
-  'application/pdf',
-] as const;
+export const PAYMENT_LINK_ATTACHMENT_BUCKET = LEGACY_SUPABASE_ATTACHMENT_BUCKET;
+
+export const PAYMENT_LINK_ATTACHMENT_ALLOWED_MIME = ASSET_CATEGORY_RULES[
+  'invoice-attachments'
+].allowedMime;
 
 export type PaymentLinkAttachmentMime = (typeof PAYMENT_LINK_ATTACHMENT_ALLOWED_MIME)[number];
 
@@ -21,37 +31,31 @@ export function isAllowedPaymentLinkAttachmentMime(t: string): t is PaymentLinkA
   return (PAYMENT_LINK_ATTACHMENT_ALLOWED_MIME as readonly string[]).includes(t);
 }
 
-export const PAYMENT_LINK_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024; // 5MB
+export const PAYMENT_LINK_ATTACHMENT_MAX_BYTES = ASSET_CATEGORY_RULES['invoice-attachments'].maxBytes;
 
-export function sanitizeOriginalFilename(name: string): string {
-  return name.replace(/[^a-zA-Z0-9._\- ]/g, '_').slice(0, 255) || 'attachment';
-}
+export { sanitizeOriginalFilename };
 
-function requiredEnv(key: string): string {
-  const value = process.env[key];
-  if (!value) throw new Error(`Missing required environment variable: ${key}`);
-  return value;
-}
-
-function getSupabaseUrl(): string {
-  return process.env.SUPABASE_URL ?? requiredEnv('NEXT_PUBLIC_SUPABASE_URL');
-}
-
-export function createStorageAdminClient(): SupabaseClient {
-  return createClient(getSupabaseUrl(), requiredEnv('SUPABASE_SERVICE_ROLE_KEY'), {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
+/** @deprecated Use storage-service buildStorageObjectKey via uploadAsset */
 export function buildPaymentLinkAttachmentStorageKey(
   organizationId: string,
   mime: string,
+  paymentLinkId?: string,
   now = Date.now()
 ): string {
   const ext = extensionForAttachmentMime(mime);
   if (!ext) {
     throw new Error('Invalid file type');
   }
+
+  if (paymentLinkId) {
+    return buildStorageObjectKey({
+      category: 'invoice-attachments',
+      organizationId,
+      extension: ext,
+      resourceId: paymentLinkId,
+    });
+  }
+
   const safeOrg = organizationId.replace(/[^a-zA-Z0-9-]/g, '');
   const randomId = randomUUID().replace(/-/g, '').slice(0, 12);
   return `payment-links/${safeOrg}/${now}-${randomId}${ext}`;
@@ -59,57 +63,94 @@ export function buildPaymentLinkAttachmentStorageKey(
 
 export function isValidPaymentLinkAttachmentStorageKey(key: string): boolean {
   if (!key || key.length > 1024) return false;
-  if (!key.startsWith('payment-links/')) return false;
   if (key.includes('..')) return false;
-  return true;
+  return (
+    isValidStorageObjectKey(key, 'invoice-attachments') ||
+    isLegacySupabaseAttachmentKey(key)
+  );
 }
 
 export interface PaymentLinkAttachmentStoreInput {
   bucket?: string | null;
-  storageKey: string;
+  storageKey?: string;
   bytes: Buffer;
   mimeType: string;
+  organizationId: string;
+  paymentLinkId?: string;
+  originalFilename?: string;
 }
 
 export async function uploadPaymentLinkAttachmentToStorage({
-  bucket,
-  storageKey,
   bytes,
   mimeType,
-}: PaymentLinkAttachmentStoreInput): Promise<void> {
-  const resolvedBucket = bucket?.trim() || PAYMENT_LINK_ATTACHMENT_BUCKET;
-  const supabase = createStorageAdminClient();
-  const { error } = await supabase.storage.from(resolvedBucket).upload(storageKey, bytes, {
-    contentType: mimeType,
-    upsert: false,
+  organizationId,
+  paymentLinkId,
+  originalFilename,
+}: PaymentLinkAttachmentStoreInput): Promise<{
+  storageKey: string;
+  bucket: string;
+}> {
+  const result = await uploadAsset({
+    category: 'invoice-attachments',
+    organizationId,
+    bytes,
+    mimeType,
+    resourceId: paymentLinkId,
+    originalFilename,
+    context: 'payment-link-attachment.upload',
   });
-  if (error) throw new Error(`Attachment upload failed: ${error.message}`);
+
+  return {
+    storageKey: result.storageKey,
+    bucket: result.bucket,
+  };
 }
 
 export async function downloadPaymentLinkAttachmentFromStorage(
   bucket: string,
-  storageKey: string
+  storageKey: string,
+  organizationId?: string
 ): Promise<Buffer> {
-  const supabase = createStorageAdminClient();
-  const { data, error } = await supabase.storage.from(bucket).download(storageKey);
-  if (error || !data) throw new Error(error?.message || 'Attachment download failed');
-  return Buffer.from(await data.arrayBuffer());
+  const downloaded = await downloadAsset({
+    bucket,
+    storageKey,
+    organizationId,
+    category: 'invoice-attachments',
+    context: 'payment-link-attachment.download',
+  });
+  return downloaded.bytes;
 }
 
-/**
- * Best-effort delete of a stored attachment object.
- */
 export async function tryDeletePaymentLinkAttachmentFile(
   storageKey: string | null | undefined,
-  bucket: string | null | undefined
+  bucket: string | null | undefined,
+  organizationId?: string
 ): Promise<void> {
   if (!storageKey || !isValidPaymentLinkAttachmentStorageKey(storageKey)) return;
+
+  if (organizationId && storageKey.startsWith('invoice-attachments/')) {
+    if (
+      !validateAssetOwnershipKey({
+        storageKey,
+        organizationId,
+        category: 'invoice-attachments',
+      })
+    ) {
+      return;
+    }
+  }
+
   const resolvedBucket = bucket?.trim() || PAYMENT_LINK_ATTACHMENT_BUCKET;
   try {
-    const supabase = createStorageAdminClient();
-    await supabase.storage.from(resolvedBucket).remove([storageKey]);
+    await deleteAsset({
+      storageKey,
+      bucket: resolvedBucket,
+      organizationId: organizationId ?? 'unknown',
+      category: 'invoice-attachments',
+      context: 'payment-link-attachment.delete',
+    });
   } catch {
-    /* ignore */
+    /* best-effort */
   }
 }
 
@@ -126,3 +167,4 @@ export function extensionForAttachmentMime(mime: string): '.png' | '.jpg' | '.pd
       return null;
   }
 }
+

@@ -18,7 +18,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:unit": "jest --testPathPattern=__tests__",
-    "test:operational": "jest __tests__/operational __tests__/runtime __tests__/branding __tests__/format/format-currency.test.ts",
+    "test:operational": "jest __tests__/operational __tests__/runtime __tests__/branding __tests__/storage __tests__/format/format-currency.test.ts",
     "test:integration": "jest --testPathPattern=integration",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
@@ -56,6 +56,7 @@
     "@walletconnect/auth-client": "2.1.2"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1049.0",
     "@hashgraph/sdk": "^2.78.0",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.1.0",
@@ -126,6 +127,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@playwright/test": "^1.55.0",
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^16.3.1",
     "@types/jest": "^29.5.11",

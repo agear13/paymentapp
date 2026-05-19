@@ -135,7 +135,11 @@ export async function POST(
     });
 
     if (link.attachment_storage_key) {
-      await tryDeletePaymentLinkAttachmentFile(link.attachment_storage_key, link.attachment_bucket);
+      await tryDeletePaymentLinkAttachmentFile(
+        link.attachment_storage_key,
+        link.attachment_bucket,
+        link.organization_id
+      );
     }
 
     loggers.api.info(

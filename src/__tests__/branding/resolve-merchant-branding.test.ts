@@ -104,6 +104,23 @@ describe('resolveMerchantBranding', () => {
     expect(result.fallbackReason).toBe('unresolvable_origin');
   });
 
+  it('resolves R2 storage keys via resolveAssetUrl integration', () => {
+    process.env.R2_PUBLIC_URL = 'https://assets.example.com';
+    process.env.R2_ACCOUNT_ID = 'acc';
+    process.env.R2_ACCESS_KEY_ID = 'key';
+    process.env.R2_SECRET_ACCESS_KEY = 'secret';
+    process.env.R2_BUCKET_NAME = 'bucket';
+
+    const result = resolveMerchantBranding({
+      merchantName: 'Beach Club',
+      logoSource: 'merchant-logos/org-123/abc.png',
+      requestOrigin: 'https://provvypay-api.onrender.com',
+    });
+
+    expect(result.logoUrl).toBe('https://assets.example.com/merchant-logos/org-123/abc.png');
+    expect(result.usedFallback).toBe(false);
+  });
+
   it('resolveMerchantLogoUrl remains backward compatible', () => {
     process.env.NEXT_PUBLIC_APP_URL = 'https://pay.example.com';
 

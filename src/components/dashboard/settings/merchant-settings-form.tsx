@@ -50,6 +50,7 @@ const merchantSettingsSchema = z.object({
       (value) =>
         !value ||
         value.startsWith('/uploads/logos/') ||
+        value.startsWith('merchant-logos/') ||
         /^https?:\/\//i.test(value),
       'Must be a valid URL or uploaded logo path'
     ),

@@ -713,7 +713,11 @@ export async function PATCH(
     if (patch.attachment !== undefined) {
       const nextStorageKey = patch.attachment === null ? null : patch.attachment.storageKey;
       if (previousAttachmentStorageKey && previousAttachmentStorageKey !== nextStorageKey) {
-        await tryDeletePaymentLinkAttachmentFile(previousAttachmentStorageKey, previousAttachmentBucket);
+        await tryDeletePaymentLinkAttachmentFile(
+          previousAttachmentStorageKey,
+          previousAttachmentBucket,
+          currentLink.organization_id
+        );
       }
     }
 

@@ -75,6 +75,15 @@ const envSchema = z.object({
   
   // Sentry (optional)
   SENTRY_DSN: z.string().url().optional(),
+
+  // Object storage — Cloudflare R2 (optional locally; required for production uploads)
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET_NAME: z.string().optional(),
+  R2_PUBLIC_URL: z.string().url().optional(),
+  ASSET_CDN_URL: z.string().url().optional(),
+  STORAGE_ALLOW_LOCAL_FALLBACK: z.string().optional(),
 });
 
 /** Placeholders merged under process.env for build-time and optional local RELAX mode. */
@@ -118,6 +127,13 @@ function buildTimePlaceholderRecord(): Record<string, string | undefined> {
     DEFAULT_WISE_PROFILE_ID: process.env.DEFAULT_WISE_PROFILE_ID,
     ADMIN_EMAIL_ALLOWLIST: process.env.ADMIN_EMAIL_ALLOWLIST,
     SENTRY_DSN: process.env.SENTRY_DSN,
+    R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
+    R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
+    R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
+    R2_BUCKET_NAME: process.env.R2_BUCKET_NAME,
+    R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
+    ASSET_CDN_URL: process.env.ASSET_CDN_URL,
+    STORAGE_ALLOW_LOCAL_FALLBACK: process.env.STORAGE_ALLOW_LOCAL_FALLBACK,
   };
 }
 
@@ -286,6 +302,21 @@ export const config = {
   sentry: {
     dsn: env.SENTRY_DSN,
     isConfigured: !!env.SENTRY_DSN,
+  },
+
+  // Object storage (R2)
+  storage: {
+    r2AccountId: env.R2_ACCOUNT_ID,
+    r2BucketName: env.R2_BUCKET_NAME,
+    r2PublicUrl: env.R2_PUBLIC_URL,
+    assetCdnUrl: env.ASSET_CDN_URL,
+    isConfigured: !!(
+      env.R2_ACCOUNT_ID &&
+      env.R2_ACCESS_KEY_ID &&
+      env.R2_SECRET_ACCESS_KEY &&
+      env.R2_BUCKET_NAME &&
+      env.R2_PUBLIC_URL
+    ),
   },
 } as const;
 

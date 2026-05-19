@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
+import { getStorageHealth } from '@/lib/storage/storage-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,7 @@ export async function GET() {
     // Check database connection
     await prisma.$queryRaw`SELECT 1`;
 
+    const storageHealth = getStorageHealth();
     const healthData = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
@@ -35,7 +37,9 @@ export async function GET() {
       checks: {
         database: 'connected',
         server: 'running',
+        storage: storageHealth.configured ? 'configured' : 'misconfigured',
       },
+      storage: storageHealth,
     };
 
     return NextResponse.json(healthData, { status: 200 });

@@ -9,14 +9,32 @@ import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
+import { StorageServiceError } from '@/lib/storage/types';
 import {
-  buildPaymentLinkAttachmentStorageKey,
   PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
-  PAYMENT_LINK_ATTACHMENT_BUCKET,
   isAllowedPaymentLinkAttachmentMime,
   sanitizeOriginalFilename,
   uploadPaymentLinkAttachmentToStorage,
 } from '@/lib/payment-links/payment-link-attachment';
+
+function mapStorageError(error: unknown): { status: number; message: string } {
+  if (error instanceof StorageServiceError) {
+    switch (error.code) {
+      case 'invalid_mime':
+      case 'invalid_extension':
+      case 'oversized':
+        return { status: 400, message: error.message };
+      case 'misconfigured':
+        return {
+          status: 503,
+          message: 'Attachment storage is temporarily unavailable. Please try again later.',
+        };
+      default:
+        return { status: 500, message: 'Upload failed. Please try again.' };
+    }
+  }
+  return { status: 500, message: 'Upload failed' };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -81,12 +99,12 @@ export async function POST(request: NextRequest) {
     }
 
     const bytes = await file.arrayBuffer();
-    const storageKey = buildPaymentLinkAttachmentStorageKey(organizationId, mime);
-    await uploadPaymentLinkAttachmentToStorage({
-      bucket: PAYMENT_LINK_ATTACHMENT_BUCKET,
-      storageKey,
+    const uploaded = await uploadPaymentLinkAttachmentToStorage({
+      organizationId,
+      paymentLinkId: paymentLinkId || undefined,
       bytes: Buffer.from(bytes),
       mimeType: mime,
+      originalFilename: file.name,
     });
 
     const safeOriginalName = sanitizeOriginalFilename(file.name);
@@ -96,8 +114,8 @@ export async function POST(request: NextRequest) {
         userId: auth.user.id,
         organizationId,
         paymentLinkId: paymentLinkId || null,
-        bucket: PAYMENT_LINK_ATTACHMENT_BUCKET,
-        storageKey,
+        bucket: uploaded.bucket,
+        storageKey: uploaded.storageKey,
         sizeBytes: file.size,
         mime,
       },
@@ -107,16 +125,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       attachment: {
-        storageKey,
-        bucket: PAYMENT_LINK_ATTACHMENT_BUCKET,
+        storageKey: uploaded.storageKey,
+        bucket: uploaded.bucket,
         filename: safeOriginalName,
         mimeType: mime,
         sizeBytes: file.size,
       },
     });
   } catch (error: unknown) {
+    const mapped = mapStorageError(error);
     const message = error instanceof Error ? error.message : 'Upload failed';
     loggers.api.error({ error: message }, 'payment-links upload-attachment failed');
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: mapped.message }, { status: mapped.status });
   }
 }

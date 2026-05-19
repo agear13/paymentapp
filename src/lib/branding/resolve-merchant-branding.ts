@@ -2,6 +2,7 @@
  * Canonical merchant logo/branding resolution for customer-facing surfaces.
  */
 
+import { resolveAssetUrl } from '@/lib/storage/resolve-asset-url';
 import { logOperationalError } from '@/lib/operational/log-operational-error';
 import {
   resolveCustomerFacingOrigin,
@@ -159,6 +160,31 @@ export function resolveMerchantBranding(
     } catch {
       return buildFallback(merchantName, source, 'malformed_url', context);
     }
+  }
+
+  const assetResolution = resolveAssetUrl({
+    source,
+    category: 'merchant-logos',
+    visibility: 'public',
+    requestOrigin: input.requestOrigin,
+    runtimeOrigin: input.runtimeOrigin,
+    infrastructureOverride: input.infrastructureOverride,
+  });
+
+  if (assetResolution.url) {
+    const resolvedFrom =
+      assetResolution.resolvedFrom === 'legacy_relative' ? 'relative' : 'absolute';
+    const resolution: MerchantBrandingResolution = {
+      merchantName,
+      logoUrl: assetResolution.url,
+      initials: merchantInitials(merchantName),
+      usedFallback: false,
+      fallbackReason: 'none',
+      resolvedFrom,
+      sourceLogoPath: source,
+    };
+    logMerchantBrandingResolution(context, resolution, source);
+    return resolution;
   }
 
   const relativePath = source.startsWith('/') ? source : `/${source}`;
