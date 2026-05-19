@@ -60,7 +60,6 @@ export type {
   UploadAssetResult,
 } from '@/lib/storage/types';
 export {
-  ASSET_CATEGORIES,
   ASSET_CATEGORY_RULES,
   buildStorageObjectKey,
   isLegacySupabaseAttachmentKey,
@@ -69,6 +68,7 @@ export {
   sanitizeOriginalFilename,
   validateAssetOwnership as validateAssetOwnershipKey,
 } from '@/lib/storage/asset-validation';
+export { ASSET_CATEGORIES } from '@/lib/storage/types';
 
 function logStorageEvent(event: string, payload: Record<string, unknown>): void {
   console.info('[StorageService]', { event, ...payload });

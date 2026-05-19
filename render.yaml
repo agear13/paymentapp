@@ -25,7 +25,8 @@ services:
     plan: starter
     branch: main
     rootDir: src
-    buildCommand: npm ci --legacy-peer-deps && npx prisma generate && BUILD_ID=$RENDER_GIT_COMMIT GIT_SHA=$RENDER_GIT_COMMIT npm run build
+    # Status 127 fix: prisma CLI must be in dependencies; postinstall uses node scripts/postinstall.js
+    buildCommand: npm ci --legacy-peer-deps && BUILD_ID=${RENDER_GIT_COMMIT:-unknown} GIT_SHA=${RENDER_GIT_COMMIT:-unknown} npm run build
 
     startCommand: npm run start
     healthCheckPath: /api/health
