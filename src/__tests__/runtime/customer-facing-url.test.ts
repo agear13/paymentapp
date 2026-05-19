@@ -1,8 +1,10 @@
 import {
   buildCustomerFacingUrl,
+  evaluateCustomerFacingDomain,
   getBrandedAppOrigin,
   getClientBrandedOrigin,
   getPaymentLinkUrl,
+  isInfrastructureDomainAllowed,
   isInvalidCustomerHost,
   resolveCustomerFacingOrigin,
   validateCustomerFacingConfiguration,
@@ -13,6 +15,7 @@ describe('customer-facing URL resolver', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    delete process.env.ALLOW_INFRASTRUCTURE_DOMAINS;
   });
 
   afterAll(() => {
@@ -43,9 +46,54 @@ describe('customer-facing URL resolver', () => {
     );
   });
 
-  it('blocks onrender infrastructure hosts for customer URLs', () => {
+  it('blocks onrender infrastructure hosts when override is disabled', () => {
+    process.env.ALLOW_INFRASTRUCTURE_DOMAINS = 'false';
     expect(isInvalidCustomerHost('https://provvypay-api.onrender.com')).toBe(true);
     expect(isInvalidCustomerHost('https://pay.example.com')).toBe(false);
+  });
+
+  it('allows onrender in production when ALLOW_INFRASTRUCTURE_DOMAINS=true', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.ALLOW_INFRASTRUCTURE_DOMAINS = 'true';
+    delete process.env.NEXT_PUBLIC_APP_URL;
+
+    const resolution = resolveCustomerFacingOrigin({
+      requestOrigin: 'https://provvypay-api.onrender.com',
+    });
+
+    expect(resolution).toMatchObject({
+      configured: true,
+      origin: 'https://provvypay-api.onrender.com',
+      source: 'request',
+      infrastructureOverride: true,
+    });
+    expect(getPaymentLinkUrl('Avn7eLPc', { requestOrigin: 'https://provvypay-api.onrender.com' })).toBe(
+      'https://provvypay-api.onrender.com/pay/Avn7eLPc'
+    );
+  });
+
+  it('allows onrender via NEXT_PUBLIC_APP_URL when override enabled', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.ALLOW_INFRASTRUCTURE_DOMAINS = 'true';
+    process.env.NEXT_PUBLIC_APP_URL = 'https://provvypay-api.onrender.com';
+
+    expect(getPaymentLinkUrl('Avn7eLPc')).toBe('https://provvypay-api.onrender.com/pay/Avn7eLPc');
+    expect(validateCustomerFacingConfiguration()).toEqual({
+      ok: true,
+      origin: 'https://provvypay-api.onrender.com',
+      infrastructureOverride: true,
+    });
+  });
+
+  it('still blocks localhost in production even with infrastructure override', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.ALLOW_INFRASTRUCTURE_DOMAINS = 'true';
+
+    expect(isInvalidCustomerHost('http://localhost:3000')).toBe(true);
+    expect(isInvalidCustomerHost('http://127.0.0.1:3000')).toBe(true);
+    expect(
+      evaluateCustomerFacingDomain('http://localhost:3000').reason
+    ).toBe('loopback_blocked_in_production');
   });
 
   it('prefers env over request origin on server routes', () => {
@@ -70,23 +118,17 @@ describe('customer-facing URL resolver', () => {
     ).toBe('https://preview.example.com/pay/test');
   });
 
-  it('validates production configuration', () => {
-    process.env.NODE_ENV = 'production';
-    process.env.NEXT_PUBLIC_APP_URL = 'https://pay.example.com';
-
-    expect(validateCustomerFacingConfiguration()).toEqual({
-      ok: true,
-      origin: 'https://pay.example.com',
-    });
-  });
-
-  it('reports misconfiguration in production without env', () => {
+  it('reports misconfiguration in production without env or override', () => {
     process.env.NODE_ENV = 'production';
     delete process.env.NEXT_PUBLIC_APP_URL;
+    delete process.env.ALLOW_INFRASTRUCTURE_DOMAINS;
 
-    const result = validateCustomerFacingConfiguration();
+    const result = validateCustomerFacingConfiguration({
+      requestOrigin: 'https://provvypay-api.onrender.com',
+    });
     expect(result.ok).toBe(false);
     expect(result.message).toMatch(/not configured correctly/i);
+    expect(result.infrastructureOverride).toBe(false);
   });
 
   it('normalizes duplicate slashes in paths', () => {
@@ -103,5 +145,22 @@ describe('customer-facing URL resolver', () => {
     expect(() => getBrandedAppOrigin('https://provvypay-api.onrender.com')).toThrow(
       /not configured correctly/i
     );
+  });
+
+  it('getBrandedAppOrigin accepts onrender with override', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.ALLOW_INFRASTRUCTURE_DOMAINS = 'true';
+    delete process.env.NEXT_PUBLIC_APP_URL;
+
+    expect(getBrandedAppOrigin('https://provvypay-api.onrender.com')).toBe(
+      'https://provvypay-api.onrender.com'
+    );
+  });
+
+  it('isInfrastructureDomainAllowed reads env exactly', () => {
+    process.env.ALLOW_INFRASTRUCTURE_DOMAINS = 'true';
+    expect(isInfrastructureDomainAllowed()).toBe(true);
+    process.env.ALLOW_INFRASTRUCTURE_DOMAINS = '1';
+    expect(isInfrastructureDomainAllowed()).toBe(false);
   });
 });

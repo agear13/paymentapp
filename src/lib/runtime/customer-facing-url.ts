@@ -3,9 +3,12 @@
  *
  * Priority:
  * 1. NEXT_PUBLIC_APP_URL (branded production domain)
- * 2. Server request origin (API routes)
- * 3. Client runtime origin (non-infrastructure hosts only)
+ * 2. Server request origin (API routes / SSR)
+ * 3. Client runtime origin
  * 4. localhost — development only, never production
+ *
+ * Infrastructure domains (*.onrender.com) are blocked by default.
+ * Set ALLOW_INFRASTRUCTURE_DOMAINS=true for temporary staging on Render.
  */
 
 import { logOperationalError } from '@/lib/operational/log-operational-error';
@@ -13,26 +16,30 @@ import { logOperationalError } from '@/lib/operational/log-operational-error';
 export const CUSTOMER_FACING_MISCONFIG_MESSAGE =
   'Customer-facing domain is not configured correctly.';
 
-const INVALID_CUSTOMER_HOST_PATTERNS = [
-  /^localhost$/i,
-  /^127\.0\.0\.1$/,
-  /\.onrender\.com$/i,
-  /^onrender\.com$/i,
-];
-
 export type CustomerFacingOriginSource = 'env' | 'request' | 'runtime' | 'development';
+
+export type CustomerFacingDomainEvaluation = {
+  hostname: string | null;
+  accepted: boolean;
+  reason: string;
+  infrastructureOverride: boolean;
+  isLoopback: boolean;
+  isInfrastructure: boolean;
+};
 
 export type CustomerFacingOriginResolution =
   | {
       configured: true;
       origin: string;
       source: CustomerFacingOriginSource;
+      infrastructureOverride: boolean;
     }
   | {
       configured: false;
       origin: null;
       source: 'missing';
       message: string;
+      infrastructureOverride: boolean;
     };
 
 function isProductionEnvironment(): boolean {
@@ -43,12 +50,150 @@ function isDevelopmentEnvironment(): boolean {
   return process.env.NODE_ENV === 'development';
 }
 
-export function isInvalidCustomerHost(originOrUrl: string): boolean {
+/** Centralized staging override — server runtime and build-time env. */
+export function isInfrastructureDomainAllowed(): boolean {
+  return process.env.ALLOW_INFRASTRUCTURE_DOMAINS === 'true';
+}
+
+function infrastructureDomainsPermitted(explicitOverride?: boolean): boolean {
+  if (explicitOverride === true) return true;
+  return isInfrastructureDomainAllowed();
+}
+
+function hostnameFromOrigin(originOrUrl: string): string | null {
   try {
-    const hostname = new URL(originOrUrl).hostname;
-    return INVALID_CUSTOMER_HOST_PATTERNS.some((pattern) => pattern.test(hostname));
+    return new URL(originOrUrl).hostname;
   } catch {
-    return true;
+    return null;
+  }
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  return /^localhost$/i.test(hostname) || hostname === '127.0.0.1';
+}
+
+function isInfrastructureHost(hostname: string): boolean {
+  return /\.onrender\.com$/i.test(hostname) || /^onrender\.com$/i.test(hostname);
+}
+
+export function evaluateCustomerFacingDomain(
+  originOrUrl: string,
+  options?: { infrastructureOverride?: boolean }
+): CustomerFacingDomainEvaluation {
+  const infrastructureOverride = infrastructureDomainsPermitted(options?.infrastructureOverride);
+  const hostname = hostnameFromOrigin(originOrUrl);
+
+  if (!hostname) {
+    return {
+      hostname: null,
+      accepted: false,
+      reason: 'invalid_url',
+      infrastructureOverride,
+      isLoopback: false,
+      isInfrastructure: false,
+    };
+  }
+
+  const loopback = isLoopbackHost(hostname);
+  const infrastructure = isInfrastructureHost(hostname);
+
+  if (loopback) {
+    if (isProductionEnvironment()) {
+      return {
+        hostname,
+        accepted: false,
+        reason: 'loopback_blocked_in_production',
+        infrastructureOverride,
+        isLoopback: true,
+        isInfrastructure: infrastructure,
+      };
+    }
+    return {
+      hostname,
+      accepted: true,
+      reason: 'loopback_allowed_in_development',
+      infrastructureOverride,
+      isLoopback: true,
+      isInfrastructure: infrastructure,
+    };
+  }
+
+  if (infrastructure) {
+    if (infrastructureOverride) {
+      return {
+        hostname,
+        accepted: true,
+        reason: 'infrastructure_allowed_by_override',
+        infrastructureOverride: true,
+        isLoopback: false,
+        isInfrastructure: true,
+      };
+    }
+    return {
+      hostname,
+      accepted: false,
+      reason: 'infrastructure_blocked',
+      infrastructureOverride: false,
+      isLoopback: false,
+      isInfrastructure: true,
+    };
+  }
+
+  return {
+    hostname,
+    accepted: true,
+    reason: 'branded_domain',
+    infrastructureOverride,
+    isLoopback: false,
+    isInfrastructure: false,
+  };
+}
+
+export function isInvalidCustomerHost(
+  originOrUrl: string,
+  options?: { infrastructureOverride?: boolean }
+): boolean {
+  return !evaluateCustomerFacingDomain(originOrUrl, options).accepted;
+}
+
+export type CustomerFacingUrlOptions = {
+  origin?: string;
+  requestOrigin?: string;
+  runtimeOrigin?: string;
+  /** Server-provided override for client bundles without runtime env access. */
+  infrastructureOverride?: boolean;
+};
+
+function logCustomerFacingDomainEvaluation(
+  context: string,
+  candidate: string,
+  evaluation: CustomerFacingDomainEvaluation
+): void {
+  const payload = {
+    context,
+    candidate,
+    overrideEnabled: evaluation.infrastructureOverride,
+    hostname: evaluation.hostname,
+    accepted: evaluation.accepted,
+    reason: evaluation.reason,
+    isLoopback: evaluation.isLoopback,
+    isInfrastructure: evaluation.isInfrastructure,
+  };
+
+  if (evaluation.accepted) {
+    if (evaluation.isInfrastructure && evaluation.infrastructureOverride) {
+      console.info('[CustomerFacingDomain]', payload);
+    }
+    return;
+  }
+
+  if (isProductionEnvironment()) {
+    logOperationalError(new Error(`Customer-facing domain rejected: ${evaluation.reason}`), {
+      component: context,
+      route: candidate,
+    });
+  } else {
+    console.warn('[CustomerFacingDomain]', payload);
   }
 }
 
@@ -67,56 +212,78 @@ export function normalizeOrigin(origin: string): string | null {
   }
 }
 
-function readConfiguredEnvOrigin(): string | null {
+function readConfiguredEnvOrigin(options?: { infrastructureOverride?: boolean }): string | null {
   const envUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (!envUrl) return null;
   const normalized = normalizeOrigin(envUrl);
-  if (!normalized || isInvalidCustomerHost(normalized)) return null;
+  if (!normalized) return null;
+
+  const evaluation = evaluateCustomerFacingDomain(normalized, options);
+  logCustomerFacingDomainEvaluation('readConfiguredEnvOrigin', normalized, evaluation);
+  if (!evaluation.accepted) return null;
   return normalized;
 }
 
-function logProductionLeakage(context: string, candidate: string): void {
-  if (!isProductionEnvironment()) return;
-  logOperationalError(new Error('Invalid customer-facing origin in production'), {
-    component: context,
-    route: candidate,
-  });
+function resolveFromCandidate(
+  candidate: string | undefined,
+  source: CustomerFacingOriginSource,
+  context: string,
+  options?: { infrastructureOverride?: boolean }
+): CustomerFacingOriginResolution | null {
+  if (!candidate) return null;
+
+  const normalized = normalizeOrigin(candidate);
+  if (!normalized) return null;
+
+  const evaluation = evaluateCustomerFacingDomain(normalized, options);
+  logCustomerFacingDomainEvaluation(context, normalized, evaluation);
+
+  if (!evaluation.accepted) return null;
+
+  return {
+    configured: true,
+    origin: normalized,
+    source,
+    infrastructureOverride: evaluation.isInfrastructure && evaluation.infrastructureOverride,
+  };
 }
 
-export function resolveCustomerFacingOrigin(options?: {
-  requestOrigin?: string;
-  runtimeOrigin?: string;
-}): CustomerFacingOriginResolution {
-  const envOrigin = readConfiguredEnvOrigin();
+export function resolveCustomerFacingOrigin(options?: CustomerFacingUrlOptions): CustomerFacingOriginResolution {
+  const overrideEnabled = infrastructureDomainsPermitted(options?.infrastructureOverride);
+
+  const envOrigin = readConfiguredEnvOrigin(options);
   if (envOrigin) {
-    return { configured: true, origin: envOrigin, source: 'env' };
+    const evaluation = evaluateCustomerFacingDomain(envOrigin, options);
+    return {
+      configured: true,
+      origin: envOrigin,
+      source: 'env',
+      infrastructureOverride: evaluation.isInfrastructure && evaluation.infrastructureOverride,
+    };
   }
 
-  if (options?.requestOrigin) {
-    const normalized = normalizeOrigin(options.requestOrigin);
-    if (normalized && !isInvalidCustomerHost(normalized)) {
-      return { configured: true, origin: normalized, source: 'request' };
-    }
-    if (normalized && isProductionEnvironment()) {
-      logProductionLeakage('resolveCustomerFacingOrigin.requestOrigin', normalized);
-    }
-  }
+  const fromRequest = resolveFromCandidate(
+    options?.requestOrigin,
+    'request',
+    'resolveCustomerFacingOrigin.requestOrigin',
+    options
+  );
+  if (fromRequest) return fromRequest;
 
-  if (options?.runtimeOrigin) {
-    const normalized = normalizeOrigin(options.runtimeOrigin);
-    if (normalized && !isInvalidCustomerHost(normalized)) {
-      return { configured: true, origin: normalized, source: 'runtime' };
-    }
-    if (normalized && isProductionEnvironment()) {
-      logProductionLeakage('resolveCustomerFacingOrigin.runtimeOrigin', normalized);
-    }
-  }
+  const fromRuntime = resolveFromCandidate(
+    options?.runtimeOrigin,
+    'runtime',
+    'resolveCustomerFacingOrigin.runtimeOrigin',
+    options
+  );
+  if (fromRuntime) return fromRuntime;
 
   if (isDevelopmentEnvironment()) {
     return {
       configured: true,
       origin: 'http://localhost:3000',
       source: 'development',
+      infrastructureOverride: false,
     };
   }
 
@@ -125,40 +292,44 @@ export function resolveCustomerFacingOrigin(options?: {
     origin: null,
     source: 'missing',
     message: CUSTOMER_FACING_MISCONFIG_MESSAGE,
+    infrastructureOverride: overrideEnabled,
   };
 }
 
-export function getBrandedAppOrigin(requestOrigin?: string): string {
-  const resolution = resolveCustomerFacingOrigin({ requestOrigin });
+export function getBrandedAppOrigin(
+  requestOrigin?: string,
+  options?: Pick<CustomerFacingUrlOptions, 'infrastructureOverride'>
+): string {
+  const resolution = resolveCustomerFacingOrigin({
+    requestOrigin,
+    infrastructureOverride: options?.infrastructureOverride,
+  });
   if (resolution.configured) return resolution.origin;
   if (isDevelopmentEnvironment()) return 'http://localhost:3000';
   throw new Error(resolution.message);
 }
 
-export function getClientBrandedOrigin(runtimeOrigin?: string): string {
+export function getClientBrandedOrigin(
+  runtimeOrigin?: string,
+  options?: Pick<CustomerFacingUrlOptions, 'infrastructureOverride'>
+): string {
   const resolution = resolveCustomerFacingOrigin({
     runtimeOrigin:
       runtimeOrigin ??
       (typeof window !== 'undefined' ? window.location.origin : undefined),
+    infrastructureOverride: options?.infrastructureOverride,
   });
   if (resolution.configured) return resolution.origin;
   if (isDevelopmentEnvironment()) return 'http://localhost:3000';
   return '';
 }
 
-export function buildCustomerFacingUrl(
-  path: string,
-  options?: {
-    origin?: string;
-    requestOrigin?: string;
-    runtimeOrigin?: string;
-  }
-): string {
+export function buildCustomerFacingUrl(path: string, options?: CustomerFacingUrlOptions): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 
   if (options?.origin) {
     const base = normalizeOrigin(options.origin);
-    if (base && !isInvalidCustomerHost(base)) {
+    if (base && !isInvalidCustomerHost(base, options)) {
       return `${base}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
     }
   }
@@ -168,6 +339,7 @@ export function buildCustomerFacingUrl(
     runtimeOrigin:
       options?.runtimeOrigin ??
       (typeof window !== 'undefined' ? window.location.origin : undefined),
+    infrastructureOverride: options?.infrastructureOverride,
   });
 
   if (!resolution.configured) {
@@ -180,27 +352,29 @@ export function buildCustomerFacingUrl(
   return `${resolution.origin}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
 }
 
-export function getPaymentLinkUrl(
-  shortCode: string,
-  options?: {
-    origin?: string;
-    requestOrigin?: string;
-    runtimeOrigin?: string;
-  }
-): string {
+export function getPaymentLinkUrl(shortCode: string, options?: CustomerFacingUrlOptions): string {
   return buildCustomerFacingUrl(`/pay/${encodeURIComponent(shortCode)}`, options);
 }
 
-export function validateCustomerFacingConfiguration(): {
+export function validateCustomerFacingConfiguration(options?: CustomerFacingUrlOptions): {
   ok: boolean;
   message?: string;
   origin?: string;
+  infrastructureOverride: boolean;
 } {
-  const resolution = resolveCustomerFacingOrigin();
+  const resolution = resolveCustomerFacingOrigin(options);
   if (resolution.configured) {
-    return { ok: true, origin: resolution.origin };
+    return {
+      ok: true,
+      origin: resolution.origin,
+      infrastructureOverride: resolution.infrastructureOverride,
+    };
   }
-  return { ok: false, message: resolution.message };
+  return {
+    ok: false,
+    message: resolution.message,
+    infrastructureOverride: resolution.infrastructureOverride,
+  };
 }
 
 export function resolveRequestOrigin(request: {
@@ -220,4 +394,14 @@ export function resolveRequestOrigin(request: {
   }
 
   return request.nextUrl.origin;
+}
+
+/** @deprecated Use evaluateCustomerFacingDomain / isInvalidCustomerHost. */
+export function isValidCustomerFacingOrigin(originOrUrl: string): boolean {
+  return !isInvalidCustomerHost(originOrUrl);
+}
+
+/** @deprecated Alias for validateCustomerFacingConfiguration. */
+export function validateCustomerFacingDomain(options?: CustomerFacingUrlOptions) {
+  return validateCustomerFacingConfiguration(options);
 }

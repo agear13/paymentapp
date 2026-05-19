@@ -13,28 +13,33 @@ import {
 type CustomerFacingOriginContextValue = {
   origin: string;
   configured: boolean;
+  infrastructureOverride: boolean;
 };
 
 const CustomerFacingOriginContext = React.createContext<CustomerFacingOriginContextValue>({
   origin: '',
   configured: false,
+  infrastructureOverride: false,
 });
 
 export function CustomerFacingOriginProvider({
   origin,
   configured,
+  infrastructureOverride,
   children,
 }: {
   origin: string;
   configured: boolean;
+  infrastructureOverride: boolean;
   children: React.ReactNode;
 }) {
   const value = React.useMemo(
     () => ({
       origin,
       configured,
+      infrastructureOverride,
     }),
-    [origin, configured]
+    [origin, configured, infrastructureOverride]
   );
 
   return (
@@ -47,36 +52,40 @@ export function useCustomerFacingOrigin() {
 }
 
 export function usePaymentLinkUrl(shortCode: string | null | undefined): string {
-  const { origin, configured } = useCustomerFacingOrigin();
+  const { origin, configured, infrastructureOverride } = useCustomerFacingOrigin();
 
   return React.useMemo(() => {
     if (!shortCode?.trim()) return '';
     try {
+      const sharedOptions = { infrastructureOverride: infrastructureOverride || undefined };
       if (configured && origin) {
-        return getPaymentLinkUrl(shortCode, { origin });
+        return getPaymentLinkUrl(shortCode, { origin, ...sharedOptions });
       }
       return getPaymentLinkUrl(shortCode, {
         runtimeOrigin: typeof window !== 'undefined' ? window.location.origin : undefined,
+        ...sharedOptions,
       });
     } catch {
       return '';
     }
-  }, [configured, origin, shortCode]);
+  }, [configured, infrastructureOverride, origin, shortCode]);
 }
 
 export function useBuildCustomerFacingUrl() {
-  const { origin, configured } = useCustomerFacingOrigin();
+  const { origin, configured, infrastructureOverride } = useCustomerFacingOrigin();
 
   return React.useCallback(
     (path: string) => {
+      const sharedOptions = { infrastructureOverride: infrastructureOverride || undefined };
       if (configured && origin) {
-        return buildCustomerFacingUrl(path, { origin });
+        return buildCustomerFacingUrl(path, { origin, ...sharedOptions });
       }
       return buildCustomerFacingUrl(path, {
         runtimeOrigin: typeof window !== 'undefined' ? window.location.origin : undefined,
+        ...sharedOptions,
       });
     },
-    [configured, origin]
+    [configured, infrastructureOverride, origin]
   );
 }
 

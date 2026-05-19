@@ -20,6 +20,7 @@ interface DashboardLayoutClientProps {
   productProfile: DashboardProductProfile;
   customerFacingOrigin: string;
   customerFacingConfigured: boolean;
+  infrastructureOverride: boolean;
 }
 
 export function DashboardLayoutClient({
@@ -27,11 +28,13 @@ export function DashboardLayoutClient({
   productProfile,
   customerFacingOrigin,
   customerFacingConfigured,
+  infrastructureOverride,
 }: DashboardLayoutClientProps) {
   return (
     <CustomerFacingOriginProvider
       origin={customerFacingOrigin}
       configured={customerFacingConfigured}
+      infrastructureOverride={infrastructureOverride}
     >
       <SidebarProvider>
         <OperationalChunkRecovery scope="dashboard-layout" />

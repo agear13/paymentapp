@@ -184,7 +184,7 @@ export default function PaymentLinksPage() {
     }
   );
 
-  const { origin: customerFacingOrigin, configured: customerFacingConfigured } =
+  const { origin: customerFacingOrigin, configured: customerFacingConfigured, infrastructureOverride } =
     useCustomerFacingOrigin();
 
   const getPublicInvoiceUrl = React.useCallback(
@@ -192,12 +192,14 @@ export default function PaymentLinksPage() {
       try {
         return getPaymentLinkUrl(shortCode, {
           origin: customerFacingConfigured ? customerFacingOrigin : undefined,
+          runtimeOrigin: typeof window !== 'undefined' ? window.location.origin : undefined,
+          infrastructureOverride: infrastructureOverride || undefined,
         });
       } catch {
         return '';
       }
     },
-    [customerFacingConfigured, customerFacingOrigin]
+    [customerFacingConfigured, customerFacingOrigin, infrastructureOverride]
   );
 
   const handleCopyPublicLink = React.useCallback(
