@@ -124,7 +124,7 @@ export function getOperatorNavSections(
           href: '/dashboard/settings/organization',
           icon: Building2,
         },
-        { title: 'Merchant & rails', href: '/dashboard/settings/merchant' },
+        { title: 'Collection & settlement', href: '/dashboard/settings/merchant' },
         { title: 'Team', href: '/dashboard/settings/team' },
         {
           title: 'Integrations',

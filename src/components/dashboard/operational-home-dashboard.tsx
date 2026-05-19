@@ -21,9 +21,10 @@ export function OperationalHomeDashboard({ actionCards }: OperationalHomeDashboa
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Home</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Operational command center</h1>
           <p className="text-muted-foreground mt-1">
-            What needs your attention to keep projects, funding, and payouts moving safely.
+            Track payout readiness, obligations, approvals, reconciliation, and funding activity
+            across projects.
           </p>
         </div>
         <Button asChild>
@@ -62,9 +63,9 @@ export function OperationalHomeDashboard({ actionCards }: OperationalHomeDashboa
 
       <Card>
         <CardHeader>
-          <CardTitle>Operational workflow</CardTitle>
+          <CardTitle>Settlement coordination flow</CardTitle>
           <CardDescription>
-            Progress a project from funding through obligations to safe payout coordination.
+            Coordinate revenue, obligations, approvals, and payout readiness across every project.
           </CardDescription>
         </CardHeader>
         <CardContent>

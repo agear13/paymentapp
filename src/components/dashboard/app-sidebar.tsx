@@ -237,7 +237,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                   >
                     <Link href="/dashboard/settings/merchant">
                       <Building2 className="size-4" />
-                      <span>Merchant Settings</span>
+                      <span>Collection & settlement</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -368,7 +368,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                   >
                     <Link href="/dashboard/settings/merchant">
                       <Building2 className="size-4" />
-                      <span>Merchant Settings</span>
+                      <span>Collection & settlement</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

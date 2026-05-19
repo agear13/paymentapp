@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ArrowRight, FileCheck, Link2, Settings, Wallet } from 'lucide-react';
+import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
 
 const PREVIEW_ROWS = [
   {
@@ -35,6 +37,14 @@ const PREVIEW_ROWS = [
     detail: '10% net allocation',
     amount: '$4,950',
     funding: 'Unfunded',
+    state: 'Payout blocked',
+    tone: 'red' as const,
+  },
+  {
+    party: 'Affiliate · Coastal Media',
+    detail: 'Referral commission',
+    amount: '$1,200',
+    funding: 'Funded',
     state: 'Onboarding incomplete',
     tone: 'red' as const,
   },
@@ -46,6 +56,33 @@ const FUNDING_BADGE = {
   amber: 'text-amber-700 bg-amber-50 border-amber-200',
   red: 'text-red-700 bg-red-50 border-red-200',
 };
+
+const NEXT_STEPS = [
+  {
+    title: 'Connect your first payment provider',
+    description: 'Accept payments and fund obligations.',
+    href: '/dashboard/settings/merchant?onboarding=continue',
+    icon: Settings,
+  },
+  {
+    title: 'Add your first obligation',
+    description: 'Track what each participant is owed.',
+    href: PAYOUTS_OBLIGATIONS_HREF,
+    icon: FileCheck,
+  },
+  {
+    title: 'Create your first revenue entry',
+    description: 'Invoice clients or collect booking payments.',
+    href: '/dashboard/payment-links',
+    icon: Link2,
+  },
+  {
+    title: 'Review settlement readiness',
+    description: 'See what can and cannot be paid yet.',
+    href: PAYOUTS_OBLIGATIONS_HREF,
+    icon: Wallet,
+  },
+] as const;
 
 type OnboardingWorkspacePreviewProps = {
   projectName?: string;
@@ -62,10 +99,13 @@ export function OnboardingWorkspacePreview({ projectName }: OnboardingWorkspaceP
             <Badge variant="secondary" className="mb-2">
               Workspace ready
             </Badge>
-            <CardTitle className="text-xl">Your operational coordination workspace</CardTitle>
+            <CardTitle className="text-xl">
+              Your operational coordination workspace is ready
+            </CardTitle>
             <CardDescription className="mt-1 max-w-2xl">
-              {label} is set up. This is where finance and ops teams track revenue, obligations,
-              payout readiness, and reconciliation across every party on the event.
+              {label} is live. This workspace tracks revenue, obligations, payout readiness,
+              approvals, and reconciliation across multiple parties — all collection methods feed
+              into the same settlement view.
             </CardDescription>
           </div>
           <Button asChild variant="outline" size="sm" className="shrink-0">
@@ -73,13 +113,13 @@ export function OnboardingWorkspacePreview({ projectName }: OnboardingWorkspaceP
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         <div className="grid gap-3 sm:grid-cols-4">
           {[
-            { label: 'Revenue collected', value: '$0', note: 'Add invoices or payment links' },
-            { label: 'Payout ready', value: '$0', note: 'Funded obligations' },
-            { label: 'Partially funded', value: '$0', note: 'Awaiting balance' },
-            { label: 'Blocked / held', value: '$0', note: 'Onboarding or approval' },
+            { label: 'Revenue collected', value: '$18,750', note: 'Ticket + table sales' },
+            { label: 'Payout ready', value: '$7,425', note: 'Funded obligations' },
+            { label: 'Partially funded', value: '$5,000', note: 'Awaiting balance' },
+            { label: 'Blocked / held', value: '$6,150', note: 'Approval or onboarding' },
           ].map((item) => (
             <div key={item.label} className="rounded-lg border bg-background p-3">
               <div className="text-[11px] text-muted-foreground">{item.label}</div>
@@ -92,9 +132,9 @@ export function OnboardingWorkspacePreview({ projectName }: OnboardingWorkspaceP
         <div className="rounded-xl border bg-background p-4 space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="font-medium text-muted-foreground uppercase tracking-wide">
-              Sample settlement view
+              Settlement overview · {label}
             </span>
-            <span className="text-muted-foreground">Updates as you add revenue and obligations</span>
+            <span className="text-muted-foreground">Sample operational states</span>
           </div>
           {PREVIEW_ROWS.map((row) => (
             <div
@@ -120,15 +160,23 @@ export function OnboardingWorkspacePreview({ projectName }: OnboardingWorkspaceP
           ))}
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-3 text-xs text-muted-foreground">
-          <div className="rounded-lg border bg-background px-3 py-2">
-            <span className="font-medium text-foreground">Next:</span> add participants and obligations
-          </div>
-          <div className="rounded-lg border bg-background px-3 py-2">
-            <span className="font-medium text-foreground">Then:</span> collect revenue via invoice or link
-          </div>
-          <div className="rounded-lg border bg-background px-3 py-2">
-            <span className="font-medium text-foreground">Reconcile:</span> Xero sync when you connect
+        <div>
+          <h3 className="text-sm font-semibold mb-3">Suggested next steps</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {NEXT_STEPS.map((step) => (
+              <Link
+                key={step.title}
+                href={step.href}
+                className="flex gap-3 rounded-lg border bg-background p-4 transition-colors hover:bg-accent/40"
+              >
+                <step.icon className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{step.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 self-center" />
+              </Link>
+            ))}
           </div>
         </div>
       </CardContent>

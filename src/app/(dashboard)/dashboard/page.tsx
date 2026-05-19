@@ -44,27 +44,27 @@ export default async function DashboardPage({
 
   const actionCards = [
     {
-      title: 'Projects',
-      description: 'Review project funding, participants, and settlement progress.',
+      title: 'Settlement readiness',
+      description: 'Review funding status, participant onboarding, and payout coordination.',
       href: '/dashboard/projects',
       variant: 'attention' as const,
     },
     {
-      title: 'Obligations',
-      description: 'See who is owed what and what is blocking payout release.',
+      title: 'What is owed',
+      description: 'See obligations, approvals, blocked payouts, and participant states.',
       href: PAYOUTS_OBLIGATIONS_HREF,
       variant: 'attention' as const,
     },
     {
-      title: 'Unpaid invoices',
-      description: 'Open invoices awaiting customer payment.',
+      title: 'Revenue awaiting collection',
+      description: 'Track invoices, payment links, deposits, and pending revenue.',
       href: '/dashboard/payment-links?status=open',
       count: unpaidInvoices,
       variant: unpaidInvoices > 0 ? ('attention' as const) : undefined,
     },
     {
-      title: 'Payment activity',
-      description: 'Recent customer transactions and collection status.',
+      title: 'Funding activity',
+      description: 'Monitor incoming payments, funding progress, and settlement movement.',
       href: '/dashboard/transactions',
     },
   ];

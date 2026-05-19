@@ -77,8 +77,8 @@ export default async function IntegrationsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <Link href="/dashboard/settings/merchant" className="text-sm text-primary hover:underline">
-              Configure in Merchant Settings →
+            <Link href="/dashboard/settings/merchant?onboarding=continue" className="text-sm text-primary hover:underline">
+              Configure in Collection & Settlement Setup →
             </Link>
           </CardContent>
         </Card>
@@ -104,8 +104,8 @@ export default async function IntegrationsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <Link href="/dashboard/settings/merchant" className="text-sm text-primary hover:underline">
-              Configure in Merchant Settings →
+            <Link href="/dashboard/settings/merchant?onboarding=continue" className="text-sm text-primary hover:underline">
+              Configure in Collection & Settlement Setup →
             </Link>
           </CardContent>
         </Card>
@@ -138,8 +138,8 @@ export default async function IntegrationsPage() {
                 Profile ID: {maskedWiseProfileId}
               </p>
             )}
-            <Link href="/dashboard/settings/merchant" className="text-sm text-primary hover:underline">
-              Configure in Merchant Settings →
+            <Link href="/dashboard/settings/merchant?onboarding=continue" className="text-sm text-primary hover:underline">
+              Configure in Collection & Settlement Setup →
             </Link>
           </CardContent>
         </Card>

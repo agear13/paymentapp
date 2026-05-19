@@ -1,3 +1,5 @@
+import type { CollectionPreferenceId } from '@/lib/onboarding/collection-preference';
+
 export const ONBOARDING_USE_CASES = [
   {
     id: 'contractor_payouts',
@@ -41,6 +43,9 @@ export type OnboardingStep =
   | 'payment_rails'
   | 'complete';
 
+export type { CollectionPreferenceId } from '@/lib/onboarding/collection-preference';
+export { COLLECTION_PREFERENCES } from '@/lib/onboarding/collection-preference';
+
 export const ONBOARDING_PARTICIPANT_ROLES = [
   { value: 'Contractor', label: 'Contractor', description: 'Delivers contracted services and deliverables' },
   { value: 'Supplier', label: 'Supplier', description: 'Receives invoice-based payouts' },
@@ -62,6 +67,7 @@ export type OperatorOnboardingState = {
   step: OnboardingStep;
   onboarding_use_case?: OnboardingUseCaseId;
   onboarding_context?: string;
+  collection_preference?: CollectionPreferenceId;
   organizationId?: string;
   merchantSettingsId?: string;
   projectId?: string;
@@ -91,7 +97,7 @@ export function onboardingStepLabel(step: OnboardingStep): string {
     case 'participants':
       return 'Add participants';
     case 'funding':
-      return 'How you get paid';
+      return 'How you collect revenue';
     case 'payment_rails':
       return 'Payment methods';
     case 'complete':
@@ -108,10 +114,21 @@ export function onboardingStepTitle(step: OnboardingStep): string {
     case 'participants':
       return 'Who needs to get paid?';
     case 'funding':
-      return 'How will revenue be collected?';
+      return 'How do you usually collect money?';
     case 'payment_rails':
-      return 'Connect payment methods';
+      return 'Connect payment providers';
     default:
       return '';
+  }
+}
+
+export function onboardingStepSubtext(step: OnboardingStep): string | null {
+  switch (step) {
+    case 'funding':
+      return 'All collection methods feed into the same project settlement workspace.';
+    case 'payment_rails':
+      return 'Connect providers when you are ready to collect and settle funds. You can configure these anytime in Settings.';
+    default:
+      return null;
   }
 }

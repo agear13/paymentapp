@@ -25,34 +25,45 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Card, CardDescription } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+  CopilotGuideLink,
+  ProvvypayCopilotGuide,
+  type CopilotGuideTopic,
+} from '@/components/copilot/provvypay-copilot-guide';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
   ArrowRight,
+  Banknote,
+  CalendarClock,
   Check,
   ChevronDown,
   FileText,
   Link as LinkIcon,
   Loader2,
   Plus,
+  Sparkles,
 } from 'lucide-react';
 import {
   ONBOARDING_USE_CASES,
   ONBOARDING_STEP_ORDER,
   ONBOARDING_PARTICIPANT_ROLES,
+  COLLECTION_PREFERENCES,
   onboardingStepIndex,
   onboardingStepLabel,
   onboardingStepTitle,
+  onboardingStepSubtext,
   type OnboardingStep,
   type OnboardingUseCaseId,
   type OnboardingParticipantRole,
+  type CollectionPreferenceId,
 } from '@/lib/onboarding/operator-onboarding-types';
 
 const STORAGE_KEY = 'provvypay.onboarding.draft';
@@ -144,7 +155,15 @@ function OnboardingProgress({ step }: { step: OnboardingStep }) {
   );
 }
 
+const COLLECTION_ICONS = {
+  invoices: FileText,
+  payment_links: LinkIcon,
+  manual_transfers: Banknote,
+  decide_later: CalendarClock,
+} as const;
+
 function CompactOnboardingHeader({ step }: { step: OnboardingStep }) {
+  const subtext = onboardingStepSubtext(step);
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4">
@@ -158,6 +177,7 @@ function CompactOnboardingHeader({ step }: { step: OnboardingStep }) {
       <OnboardingProgress step={step} />
       <div>
         <h2 className="text-xl font-semibold">{onboardingStepTitle(step)}</h2>
+        {subtext ? <p className="text-sm text-muted-foreground mt-1">{subtext}</p> : null}
       </div>
     </div>
   );
@@ -175,7 +195,17 @@ export function WorkflowOnboardingForm() {
   const [projectName, setProjectName] = React.useState('');
   const [confirmedParticipants, setConfirmedParticipants] = React.useState<DraftParticipant[]>([]);
   const [draftParticipant, setDraftParticipant] = React.useState<DraftParticipant>(EMPTY_PARTICIPANT());
-  const [advancedRailsOpen, setAdvancedRailsOpen] = React.useState(false);
+  const [collectionPreference, setCollectionPreference] = React.useState<CollectionPreferenceId | null>(
+    null
+  );
+  const [advancedProvidersOpen, setAdvancedProvidersOpen] = React.useState(false);
+  const [copilotOpen, setCopilotOpen] = React.useState(false);
+  const [copilotTopic, setCopilotTopic] = React.useState<CopilotGuideTopic | null>(null);
+
+  function openCopilotGuide(topic: CopilotGuideTopic) {
+    setCopilotTopic(topic);
+    setCopilotOpen(true);
+  }
 
   const projectForm = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
@@ -215,6 +245,7 @@ export function WorkflowOnboardingForm() {
               merchantSettingsId?: string;
               projectId?: string;
               onboarding_use_case?: OnboardingUseCaseId;
+              collection_preference?: CollectionPreferenceId;
             };
           };
         };
@@ -230,6 +261,9 @@ export function WorkflowOnboardingForm() {
         if (state?.onboarding_use_case) {
           setUseCase(state.onboarding_use_case);
           setSelectedUseCase(state.onboarding_use_case);
+        }
+        if (state?.collection_preference) {
+          setCollectionPreference(state.collection_preference);
         }
         if (state?.merchantSettingsId) setMerchantSettingsId(state.merchantSettingsId);
         if (state?.projectId) setProjectId(state.projectId);
@@ -256,6 +290,7 @@ export function WorkflowOnboardingForm() {
           step: nextStep,
           onboarding_use_case: useCase ?? undefined,
           onboarding_context: selectedUseCaseMeta?.title,
+          collection_preference: collectionPreference ?? undefined,
           organizationId,
           merchantSettingsId: merchantSettingsId ?? undefined,
           projectId: projectId ?? undefined,
@@ -279,6 +314,7 @@ export function WorkflowOnboardingForm() {
             completedAt: new Date().toISOString(),
             onboarding_use_case: useCase ?? undefined,
             onboarding_context: selectedUseCaseMeta?.title,
+            collection_preference: collectionPreference ?? undefined,
             organizationId,
             merchantSettingsId: merchantSettingsId ?? undefined,
             projectId: projectId ?? undefined,
@@ -398,35 +434,44 @@ export function WorkflowOnboardingForm() {
   }
 
   async function onFundingContinue() {
-    await persistState('payment_rails');
-    setStep('payment_rails');
-  }
-
-  async function onRailsSubmit(values: RailsFormValues) {
+    if (!collectionPreference) {
+      toast.error('Select how you usually collect money');
+      return;
+    }
     setIsLoading(true);
     try {
-      if (merchantSettingsId) {
-        const hasAny = values.hederaAccountId?.trim() || values.wiseProfileId?.trim();
-        if (hasAny) {
-          const res = await fetch(`/api/merchant-settings/${merchantSettingsId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              hederaAccountId: values.hederaAccountId?.trim() || undefined,
-              wiseProfileId: values.wiseProfileId?.trim() || undefined,
-              wiseEnabled: Boolean(values.wiseProfileId?.trim()),
-            }),
-          });
-          if (!res.ok) {
-            throw new Error('Failed to save payout rails');
-          }
-          toast.success('Additional payout rails saved');
-        }
-      }
+      await persistState('payment_rails', { collection_preference: collectionPreference });
+      setStep('payment_rails');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function saveOptionalProviders(values: RailsFormValues) {
+    if (!merchantSettingsId) return;
+    const hasAny = values.hederaAccountId?.trim() || values.wiseProfileId?.trim();
+    if (!hasAny) return;
+    const res = await fetch(`/api/merchant-settings/${merchantSettingsId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        hederaAccountId: values.hederaAccountId?.trim() || undefined,
+        wiseProfileId: values.wiseProfileId?.trim() || undefined,
+        wiseEnabled: Boolean(values.wiseProfileId?.trim()),
+      }),
+    });
+    if (!res.ok) {
+      throw new Error('Failed to save provider settings');
+    }
+  }
+
+  async function finishOnboardingWithProviders() {
+    setIsLoading(true);
+    try {
+      await saveOptionalProviders(railsForm.getValues());
       await finishOnboarding();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to save payout rails');
-    } finally {
+      toast.error(e instanceof Error ? e.message : 'Failed to complete setup');
       setIsLoading(false);
     }
   }
@@ -663,40 +708,38 @@ export function WorkflowOnboardingForm() {
 
       {step === 'funding' && (
         <div className="space-y-6">
-          <p className="text-muted-foreground text-sm">
-            Choose how revenue enters this project. You can set up both paths later.
-          </p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Link href="/dashboard/payment-links?action=create">
-              <Card className="p-6 h-full hover:bg-accent/50 transition-colors cursor-pointer">
-                <FileText className="h-6 w-6 text-primary mb-3" />
-                <p className="font-semibold">Send invoices</p>
-                <CardDescription className="mt-1">
-                  Request payment from clients or partners with branded invoices.
-                </CardDescription>
-                <p className="text-xs text-muted-foreground mt-3">
-                  Best for agencies, suppliers, contractors, and settlements.
-                </p>
-              </Card>
-            </Link>
-            <Link href="/dashboard/payment-links?action=create">
-              <Card className="p-6 h-full hover:bg-accent/50 transition-colors cursor-pointer">
-                <LinkIcon className="h-6 w-6 text-primary mb-3" />
-                <p className="font-semibold">Share payment links</p>
-                <CardDescription className="mt-1">
-                  Collect payments instantly with a shareable checkout link or QR code.
-                </CardDescription>
-                <p className="text-xs text-muted-foreground mt-3">
-                  Best for ticketing, bookings, deposits, and sponsorships.
-                </p>
-              </Card>
-            </Link>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {COLLECTION_PREFERENCES.map((item) => {
+              const isSelected = collectionPreference === item.id;
+              const Icon = COLLECTION_ICONS[item.id];
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setCollectionPreference(item.id)}
+                  className={cn(
+                    'relative rounded-lg border p-4 text-left transition-colors hover:bg-accent/40',
+                    isSelected && 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                  )}
+                >
+                  {isSelected ? (
+                    <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <Check className="h-3 w-3" />
+                    </span>
+                  ) : null}
+                  <Icon className="h-5 w-5 text-primary mb-2" />
+                  <p className="font-medium pr-6">{item.title}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
+                </button>
+              );
+            })}
           </div>
           <div className="flex justify-between">
             <Button type="button" variant="ghost" onClick={() => setStep('participants')}>
               Back
             </Button>
-            <Button type="button" onClick={onFundingContinue}>
+            <Button type="button" disabled={!collectionPreference || isLoading} onClick={onFundingContinue}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Continue
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -706,104 +749,147 @@ export function WorkflowOnboardingForm() {
 
       {step === 'payment_rails' && (
         <div className="space-y-6">
-          <p className="text-muted-foreground text-sm">
-            Connect providers when you are ready to collect and settle. You can configure these
-            anytime in Settings.
-          </p>
-
           <Card className="p-5 border-primary/20 bg-primary/[0.03]">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold">Stripe</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Accept card payments and manage payout flows with Stripe Connect.
-                </p>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold">Stripe</p>
+                    <CopilotGuideLink
+                      label="What is Stripe Connect?"
+                      topic="stripe"
+                      onOpen={openCopilotGuide}
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Accept card payments and coordinate payout flows with Stripe Connect.
+                  </p>
+                </div>
+                <Button asChild className="shrink-0">
+                  <Link href="/dashboard/settings/merchant?onboarding=continue">Connect Stripe</Link>
+                </Button>
               </div>
-              <Button asChild>
-                <Link href="/dashboard/settings/merchant">Connect Stripe</Link>
-              </Button>
+              <p className="text-xs text-muted-foreground">
+                Don&apos;t have Stripe yet? Provvypay Co-Pilot can help you set it up.
+              </p>
             </div>
           </Card>
 
-          <Collapsible open={advancedRailsOpen} onOpenChange={setAdvancedRailsOpen}>
+          <Collapsible open={advancedProvidersOpen} onOpenChange={setAdvancedProvidersOpen}>
             <CollapsibleTrigger asChild>
               <Button type="button" variant="ghost" className="w-full justify-between px-0 hover:bg-transparent">
-                <span className="text-sm font-medium">Additional payout rails (optional)</span>
+                <span className="text-sm font-medium">Other ways to collect and settle funds</span>
                 <ChevronDown
-                  className={cn('h-4 w-4 transition-transform', advancedRailsOpen && 'rotate-180')}
+                  className={cn('h-4 w-4 transition-transform', advancedProvidersOpen && 'rotate-180')}
                 />
               </Button>
             </CollapsibleTrigger>
-            <CollapsibleContent className="pt-2">
+            <CollapsibleContent className="pt-2 space-y-4">
               <Form {...railsForm}>
-                <form onSubmit={railsForm.handleSubmit(onRailsSubmit)} className="space-y-4">
-                  <FormField
-                    control={railsForm.control}
-                    name="wiseProfileId"
-                    render={({ field }) => (
-                      <FormItem>
+                <FormField
+                  control={railsForm.control}
+                  name="wiseProfileId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between gap-2">
                         <FormLabel>Wise (optional)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Wise profile ID" {...field} />
-                        </FormControl>
-                        <FormDescription>International bank transfer payouts.</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={railsForm.control}
-                    name="hederaAccountId"
-                    render={({ field }) => (
-                      <FormItem>
+                        <CopilotGuideLink
+                          label="How do I connect this?"
+                          topic="wise"
+                          onOpen={openCopilotGuide}
+                        />
+                      </div>
+                      <FormControl>
+                        <Input placeholder="Wise profile ID" {...field} />
+                      </FormControl>
+                      <FormDescription>International bank transfer payouts.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={railsForm.control}
+                  name="hederaAccountId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between gap-2">
                         <FormLabel>Hedera (optional)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="0.0.12345" {...field} />
-                        </FormControl>
-                        <FormDescription>Digital asset settlement infrastructure.</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="flex justify-between pt-2">
-                    <Button type="button" variant="ghost" onClick={() => setStep('funding')}>
-                      Back
-                    </Button>
-                    <div className="flex gap-2">
-                      <Button type="button" variant="outline" disabled={isLoading} onClick={finishOnboarding}>
-                        Skip for now
-                      </Button>
-                      <Button type="submit" disabled={isLoading}>
-                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Go to workspace
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </form>
+                        <CopilotGuideLink
+                          label="How do I connect this?"
+                          topic="hedera"
+                          onOpen={openCopilotGuide}
+                        />
+                      </div>
+                      <FormControl>
+                        <Input placeholder="0.0.12345" {...field} />
+                      </FormControl>
+                      <FormDescription>Digital asset settlement infrastructure.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </Form>
             </CollapsibleContent>
           </Collapsible>
 
-          {!advancedRailsOpen ? (
-            <div className="flex justify-between">
-              <Button type="button" variant="ghost" onClick={() => setStep('funding')}>
-                Back
-              </Button>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" disabled={isLoading} onClick={finishOnboarding}>
-                  Skip for now
-                </Button>
-                <Button type="button" disabled={isLoading} onClick={finishOnboarding}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Go to workspace
-                  <ArrowRight className="ml-2 h-4 w-4" />
+          <p className="text-sm text-muted-foreground rounded-lg border bg-muted/30 px-4 py-3">
+            You can also record manual bank transfers or wallet payments without connecting a
+            provider.
+          </p>
+
+          <Card className="p-4 bg-muted/20">
+            <div className="flex items-start gap-3">
+              <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <div className="space-y-2 flex-1">
+                <p className="text-sm font-medium">Need help choosing providers?</p>
+                <p className="text-sm text-muted-foreground">
+                  Provvypay Co-Pilot can recommend payout setups based on your workflow, countries,
+                  contractors, and settlement needs.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openCopilotGuide('provider_choice')}
+                >
+                  Ask Co-Pilot
                 </Button>
               </div>
             </div>
-          ) : null}
+          </Card>
+
+          <div className="flex justify-between">
+            <Button type="button" variant="ghost" onClick={() => setStep('funding')}>
+              Back
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isLoading}
+                onClick={finishOnboardingWithProviders}
+              >
+                Skip for now
+              </Button>
+              <Button type="button" disabled={isLoading} onClick={finishOnboardingWithProviders}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Go to workspace
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       )}
+
+      <ProvvypayCopilotGuide
+        open={copilotOpen}
+        onOpenChange={setCopilotOpen}
+        topic={copilotTopic}
+        context={{
+          useCase: useCase ?? selectedUseCase,
+          collectionPreference,
+        }}
+      />
     </>
   );
 

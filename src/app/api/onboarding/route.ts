@@ -8,6 +8,7 @@ import {
   saveOperatorOnboardingState,
 } from '@/lib/onboarding/operator-onboarding.server';
 import type { OperatorOnboardingState } from '@/lib/onboarding/operator-onboarding-types';
+import { COLLECTION_PREFERENCE_VALUES } from '@/lib/onboarding/collection-preference';
 
 const patchSchema = z.object({
   organizationId: z.string().uuid(),
@@ -15,6 +16,7 @@ const patchSchema = z.object({
     step: z.enum(['use_case', 'project', 'participants', 'funding', 'payment_rails', 'complete']),
     onboarding_use_case: z.string().optional(),
     onboarding_context: z.string().optional(),
+    collection_preference: z.enum(COLLECTION_PREFERENCE_VALUES).optional(),
     organizationId: z.string().uuid().optional(),
     merchantSettingsId: z.string().uuid().optional(),
     projectId: z.string().optional(),

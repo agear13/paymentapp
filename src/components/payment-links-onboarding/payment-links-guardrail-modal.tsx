@@ -56,14 +56,14 @@ export function PaymentLinksGuardrailModal({
         return {
           title: setup.wiseIncomplete ? 'Finish Wise setup' : 'Wise is not available',
           description: setup.wiseIncomplete
-            ? 'Wise is enabled but the Wise profile ID is missing. Complete Wise in merchant settings, or choose another payment method.'
+            ? 'Wise is enabled but the Wise profile ID is missing. Complete Wise in collection & settlement setup, or choose another payment method.'
             : 'Wise is not fully configured for this organization. Set up Wise or choose another payment method.',
         };
       case 'hedera':
         return {
           title: 'Hedera wallet not configured',
           description:
-            'You selected crypto (Hedera), but no Hedera account ID is on file. Add a wallet in merchant settings or choose another payment method.',
+            'You selected crypto (Hedera), but no Hedera account ID is on file. Add a wallet in collection & settlement setup or choose another payment method.',
         };
       default:
         return {
@@ -103,7 +103,7 @@ export function PaymentLinksGuardrailModal({
                   ? 'Configure Wise'
                   : kind === 'hedera'
                     ? 'Configure wallet'
-                    : 'Open merchant settings'}
+                    : 'Open collection & settlement setup'}
             </Link>
           </Button>
           <Button
