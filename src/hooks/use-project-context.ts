@@ -17,6 +17,7 @@ import {
 } from '@/lib/projects/workspace-fetch';
 import { invalidateWorkspaceCache } from '@/lib/projects/workspace-query-cache';
 import { devRecordWorkspaceMount, devRecordWorkspaceRender } from '@/lib/projects/workspace-dev-diagnostics';
+import { setProjectDisplayNameRegistry } from '@/lib/projects/project-display-name-registry';
 
 export type { WorkspaceRefreshOptions, WorkspaceRefreshScope };
 
@@ -76,6 +77,10 @@ export function useProjectContext(projectId: string): ProjectContextValue {
         setNotFound(false);
         setDeal(data.deal);
         setSummary(data.summary);
+        setProjectDisplayNameRegistry(projectId, {
+          dealName: data.deal.dealName,
+          name: data.summary.name,
+        });
         if (data.deals?.length) setAllDeals(data.deals);
         persistPreferredDealIdToSession(projectId);
         setSectionErrors((prev) => {

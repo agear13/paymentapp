@@ -113,10 +113,29 @@ export function ProjectsWorkspaceIndex() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {summaries.map((project) => (
-            <ProjectCard key={project.id} project={project} />
-          ))}
+        <div className="space-y-6">
+          <div
+            className={
+              summaries.length === 1
+                ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)]'
+                : 'grid gap-4 md:grid-cols-2 xl:grid-cols-3'
+            }
+          >
+            {summaries.map((project) => (
+              <ProjectCard key={project.id} project={project} />
+            ))}
+            {summaries.length === 1 ? (
+              <Card className="border-dashed bg-muted/10 h-fit">
+                <CardHeader>
+                  <CardTitle className="text-base">How projects work</CardTitle>
+                  <CardDescription>
+                    Each project coordinates one operational engagement from participant agreements
+                    through payout readiness.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            ) : null}
+          </div>
         </div>
       )}
 

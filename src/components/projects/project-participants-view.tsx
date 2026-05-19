@@ -22,6 +22,14 @@ import { useProjectWorkspaceSmartPolling } from '@/hooks/use-project-workspace-r
 import { ProjectSectionErrorBoundary } from '@/components/projects/project-section-error-boundary';
 import { ProjectParticipantTableRow } from '@/components/projects/project-participant-table-row';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
+import { formatParticipantPayoutSummary } from '@/lib/projects/format-participant-payout-readiness';
+
+const ONBOARDING_CHECKLIST = [
+  'Add participants',
+  'Configure participation',
+  'Send agreements',
+  'Complete payout onboarding',
+] as const;
 
 export function ProjectParticipantsView() {
   const {
@@ -99,13 +107,8 @@ export function ProjectParticipantsView() {
   if (!deal || !summary) return null;
 
   const stats = participantSummaryMetrics(projectParticipants);
-  const payoutState =
-    stats.readyForPayout === stats.total && stats.total > 0
-      ? 'All participants payout-ready'
-      : stats.total === 0
-        ? 'Add participants to begin payout coordination'
-        : `${stats.readyForPayout} of ${stats.total} payout-ready`;
-
+  const payoutState = formatParticipantPayoutSummary(stats.readyForPayout, stats.total);
+  const hasParticipants = projectParticipants.length > 0;
   const sectionError = sectionErrors.participants;
 
   return (
@@ -122,7 +125,9 @@ export function ProjectParticipantsView() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              {stats.total} stakeholder{stats.total === 1 ? '' : 's'} · {payoutState}
+              {hasParticipants
+                ? `${stats.total} stakeholder${stats.total === 1 ? '' : 's'} · ${payoutState}`
+                : 'Add participants to begin payout coordination'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -144,50 +149,62 @@ export function ProjectParticipantsView() {
           </Card>
         ) : null}
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Pending agreements</CardDescription>
-              <CardTitle className="text-2xl">{stats.pendingAgreements}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Missing onboarding</CardDescription>
-              <CardTitle className="text-2xl">{stats.missingOnboarding}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Ready for payout</CardDescription>
-              <CardTitle className="text-2xl">{stats.readyForPayout}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Active attribution</CardDescription>
-              <CardTitle className="text-2xl">{stats.activeAttribution}</CardTitle>
-            </CardHeader>
-          </Card>
-        </div>
+        {hasParticipants ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Pending agreements</CardDescription>
+                <CardTitle className="text-2xl">{stats.pendingAgreements}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Missing onboarding</CardDescription>
+                <CardTitle className="text-2xl">{stats.missingOnboarding}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Ready for payout</CardDescription>
+                <CardTitle className="text-2xl">{stats.readyForPayout}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Active attribution</CardDescription>
+                <CardTitle className="text-2xl">{stats.activeAttribution}</CardTitle>
+              </CardHeader>
+            </Card>
+          </div>
+        ) : null}
 
-        {projectParticipants.length === 0 ? (
-          <Card>
+        {!hasParticipants ? (
+          <Card className="border-dashed">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Users className="h-5 w-5" />
                 No participants yet
               </CardTitle>
-              <CardDescription>
-                Invite stakeholders, define participation and payout allocation, then send agreement
+              <CardDescription className="max-w-xl">
+                Add stakeholders, define participation and payout allocation, then send agreement
                 links. Customer payment links activate only after approval.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
               <Button onClick={() => setInviteOpen(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />
-                Invite participant
+                Add participant
               </Button>
+              <ol className="grid gap-2 sm:grid-cols-2 text-sm text-muted-foreground">
+                {ONBOARDING_CHECKLIST.map((step, index) => (
+                  <li key={step} className="flex items-start gap-2">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-medium">
+                      {index + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
             </CardContent>
           </Card>
         ) : (

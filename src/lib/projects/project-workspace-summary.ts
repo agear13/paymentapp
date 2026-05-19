@@ -4,6 +4,8 @@ import {
   effectiveOnboardingStatus,
   isOnboardingComplete,
 } from '@/lib/deal-network-demo/participant-onboarding';
+import { getProjectDisplayName } from '@/lib/projects/get-project-display-name';
+import { formatOperationalStage } from '@/lib/projects/format-operational-stage';
 
 export type ProjectWorkspaceSummary = {
   id: string;
@@ -12,6 +14,7 @@ export type ProjectWorkspaceSummary = {
   value: number;
   currencyLabel: string;
   operationalStage: string;
+  operationalStageLabel: string;
   settlementStatus: string;
   paymentStatus: 'Not Paid' | 'Paid';
   participantCount: number;
@@ -68,11 +71,12 @@ export function summarizeProject(
 
   return {
     id: deal.id,
-    name: deal.dealName,
+    name: getProjectDisplayName({ dealName: deal.dealName }),
     description: deal.projectDescription,
     value: deal.value,
     currencyLabel: formatValue(deal),
     operationalStage: deal.currentStage ?? 'Introduced',
+    operationalStageLabel: formatOperationalStage(deal.currentStage),
     settlementStatus,
     paymentStatus: deal.paymentStatus,
     participantCount,

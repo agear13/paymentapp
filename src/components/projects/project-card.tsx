@@ -3,12 +3,18 @@ import { ArrowRight, Users, Wallet, Banknote } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { ProjectWorkspaceSummary } from '@/lib/projects/project-workspace-summary';
+import { formatParticipantPayoutReadiness } from '@/lib/projects/format-participant-payout-readiness';
 
 type ProjectCardProps = {
   project: ProjectWorkspaceSummary;
 };
 
 export function ProjectCard({ project }: ProjectCardProps) {
+  const participantLabel = formatParticipantPayoutReadiness(
+    project.participantsReady,
+    project.participantCount
+  );
+
   return (
     <Link href={`/dashboard/projects/${encodeURIComponent(project.id)}`}>
       <Card
@@ -33,7 +39,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2 text-xs">
-            <Badge variant="secondary">{project.operationalStage}</Badge>
+            <Badge variant="secondary">{project.operationalStageLabel}</Badge>
             <Badge variant="outline">{project.settlementStatus}</Badge>
             <Badge variant="outline">{project.currencyLabel}</Badge>
           </div>
@@ -42,8 +48,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
             <div className="flex items-center gap-2 text-muted-foreground">
               <Users className="h-3.5 w-3.5 shrink-0" />
               <span>
-                Participants: {project.participantsReady}/{project.participantCount} payout-ready
-                {project.participantsPending > 0
+                Participants: {participantLabel}
+                {project.participantsPending > 0 && project.participantCount > 0
                   ? ` · ${project.participantsPending} pending`
                   : ''}
               </span>

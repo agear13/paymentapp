@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowRight, FileCheck, Link2, Settings, Wallet } from 'lucide-react';
 import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
+import { getProjectDisplayName, UNTITLED_PROJECT_LABEL } from '@/lib/projects/get-project-display-name';
 
 const PREVIEW_ROWS = [
   {
@@ -89,7 +90,8 @@ type OnboardingWorkspacePreviewProps = {
 };
 
 export function OnboardingWorkspacePreview({ projectName }: OnboardingWorkspacePreviewProps) {
-  const label = projectName?.trim() || 'Your first project';
+  const resolvedName = getProjectDisplayName({ dealName: projectName });
+  const label = resolvedName !== UNTITLED_PROJECT_LABEL ? resolvedName : 'Your first project';
 
   return (
     <Card className="border-primary/25 bg-primary/[0.03]">

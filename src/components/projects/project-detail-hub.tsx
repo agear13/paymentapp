@@ -1,17 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { Banknote, FileCheck, Users, Wallet } from 'lucide-react';
+import { Banknote, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import {
   projectFundingPath,
-  projectObligationsPath,
   projectParticipantsPath,
   projectPayoutsPath,
 } from '@/lib/projects/project-routes';
+import { formatParticipantPayoutReadiness } from '@/lib/projects/format-participant-payout-readiness';
 
 type ProjectDetailHubProps = {
   projectId: string;
@@ -23,8 +23,12 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
 
   const participantsHref = projectParticipantsPath(projectId);
   const fundingHref = projectFundingPath(projectId);
-  const obligationsHref = projectObligationsPath(projectId);
   const payoutsHref = projectPayoutsPath(projectId);
+
+  const participantLabel = formatParticipantPayoutReadiness(
+    summary.participantsReady,
+    summary.participantCount
+  );
 
   return (
     <div className="space-y-8">
@@ -45,7 +49,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Badge variant="secondary">{summary.operationalStage}</Badge>
+        <Badge variant="secondary">{summary.operationalStageLabel}</Badge>
         <Badge variant="outline">{summary.settlementStatus}</Badge>
         <Badge variant="outline">{summary.currencyLabel}</Badge>
         {summary.needsAttention ? (
@@ -63,13 +67,17 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
               Participants
             </CardDescription>
             <CardTitle className="text-2xl">
-              {summary.participantsReady}/{summary.participantCount}
+              {summary.participantCount === 0
+                ? '—'
+                : `${summary.participantsReady}/${summary.participantCount}`}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
-            {summary.participantsPending > 0
-              ? `${summary.participantsPending} still need payout readiness`
-              : 'All participants payout-ready or none added yet'}
+            {summary.participantCount === 0
+              ? 'No participants added yet'
+              : summary.participantsPending > 0
+                ? `${participantLabel} · ${summary.participantsPending} still need payout readiness`
+                : participantLabel}
             <div>
               <Button asChild variant="outline" size="sm">
                 <Link href={participantsHref}>Manage participants</Link>
@@ -87,7 +95,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline" size="sm">
-              <Link href={fundingHref}>Funding workspace</Link>
+              <Link href={fundingHref}>Add invoice</Link>
             </Button>
           </CardContent>
         </Card>
@@ -101,60 +109,11 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline" size="sm">
-              <Link href={payoutsHref}>Payout coordination</Link>
+              <Link href={payoutsHref}>View payouts</Link>
             </Button>
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Project operations</CardTitle>
-          <CardDescription>
-            Contextual actions for this project — participants, funding, obligations, and payouts.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
-          {[
-            {
-              title: 'Invite participants',
-              description: 'Add stakeholders and send participant agreement links.',
-              href: participantsHref,
-              icon: Users,
-            },
-            {
-              title: 'Review agreements',
-              description: 'Track participation approval and pending agreements.',
-              href: participantsHref,
-              icon: FileCheck,
-            },
-            {
-              title: 'Funding',
-              description: 'Invoices and payment collection for this project.',
-              href: fundingHref,
-              icon: Wallet,
-            },
-            {
-              title: 'Obligations & payouts',
-              description: 'Funding gaps, payout readiness, and disbursement coordination.',
-              href: obligationsHref,
-              icon: Banknote,
-            },
-          ].map((item) => (
-            <Link
-              key={item.title}
-              href={item.href}
-              className="flex items-start gap-3 rounded-lg border p-4 transition-colors hover:bg-accent/50"
-            >
-              <item.icon className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium">{item.title}</p>
-                <p className="text-sm text-muted-foreground mt-0.5">{item.description}</p>
-              </div>
-            </Link>
-          ))}
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -18,7 +18,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:unit": "jest --testPathPattern=__tests__",
-    "test:operational": "jest __tests__/operational __tests__/runtime __tests__/branding __tests__/storage __tests__/format/format-currency.test.ts",
+    "test:operational": "jest __tests__/operational __tests__/runtime __tests__/branding __tests__/storage __tests__/projects __tests__/format/format-currency.test.ts",
     "test:integration": "jest --testPathPattern=integration",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",

@@ -12,8 +12,17 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import {
+  getProjectDisplayNameFromRegistry,
+  projectBreadcrumbFallbackLabel,
+  setProjectDisplayNameRegistry,
+  subscribeProjectDisplayNameRegistry,
+} from '@/lib/projects/project-display-name-registry';
+import {
+  getProjectDisplayName,
+  isLikelyProjectIdSegment,
+} from '@/lib/projects/get-project-display-name';
 
-// Map pathnames to readable titles
 const pathTitles: Record<string, string> = {
   dashboard: 'Home',
   projects: 'Projects',
@@ -35,7 +44,8 @@ const pathTitles: Record<string, string> = {
   programs: 'Participants',
   commissions: 'Commissions',
   obligations: 'Obligations',
-  payouts: 'Payouts',
+  funding: 'Funding',
+  activity: 'Activity',
   referrals: 'Referrals',
 };
 
@@ -43,8 +53,74 @@ interface BreadcrumbNavProps {
   productProfile: DashboardProductProfile;
 }
 
+function useProjectNameForBreadcrumb(projectId: string | null): string | null {
+  const [, bump] = React.useReducer((n: number) => n + 1, 0);
+
+  React.useEffect(() => {
+    if (!projectId) return;
+    return subscribeProjectDisplayNameRegistry(bump);
+  }, [projectId]);
+
+  const cached = projectId ? getProjectDisplayNameFromRegistry(projectId) : null;
+
+  React.useEffect(() => {
+    if (!projectId || cached) return;
+    let cancelled = false;
+    void fetch(`/api/projects/workspace/${encodeURIComponent(projectId)}/summary`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload: { summary?: { name?: string }; deal?: { dealName?: string } } | null) => {
+        if (cancelled || !payload) return;
+        const label = getProjectDisplayName({
+          name: payload.summary?.name,
+          dealName: payload.deal?.dealName,
+        });
+        setProjectDisplayNameRegistry(projectId, { name: label, dealName: label });
+      })
+      .catch(() => {
+        /* ignore */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, cached]);
+
+  return cached;
+}
+
+function titleForSegment(
+  segment: string,
+  index: number,
+  segments: string[],
+  projectName: string | null
+): string {
+  const prev = index > 0 ? segments[index - 1] : null;
+
+  if (prev === 'projects' && isLikelyProjectIdSegment(segment)) {
+    return projectName ?? projectBreadcrumbFallbackLabel();
+  }
+
+  if (pathTitles[segment]) return pathTitles[segment];
+
+  if (isLikelyProjectIdSegment(segment)) {
+    return projectBreadcrumbFallbackLabel();
+  }
+
+  return segment.charAt(0).toUpperCase() + segment.slice(1);
+}
+
 export function BreadcrumbNav({ productProfile }: BreadcrumbNavProps) {
   const pathname = usePathname();
+
+  const projectId = React.useMemo(() => {
+    const segments = pathname.split('/').filter(Boolean);
+    const projectsIdx = segments.indexOf('projects');
+    if (projectsIdx === -1) return null;
+    const candidate = segments[projectsIdx + 1];
+    if (!candidate || !isLikelyProjectIdSegment(candidate)) return null;
+    return candidate;
+  }, [pathname]);
+
+  const projectName = useProjectNameForBreadcrumb(projectId);
 
   if (productProfile === 'rabbit_hole_pilot') {
     return (
@@ -58,18 +134,15 @@ export function BreadcrumbNav({ productProfile }: BreadcrumbNavProps) {
     );
   }
 
-  // Split the pathname into segments and filter out empty strings
   const segments = pathname.split('/').filter(Boolean);
-  
-  // Don't show breadcrumbs on the root dashboard
+
   if (segments.length <= 1) {
     return null;
   }
 
-  // Build breadcrumb items
   const breadcrumbs = segments.map((segment, index) => {
     const href = '/' + segments.slice(0, index + 1).join('/');
-    const title = pathTitles[segment] || segment.charAt(0).toUpperCase() + segment.slice(1);
+    const title = titleForSegment(segment, index, segments, projectName);
     const isLast = index === segments.length - 1;
 
     return {
@@ -100,16 +173,3 @@ export function BreadcrumbNav({ productProfile }: BreadcrumbNavProps) {
     </Breadcrumb>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
