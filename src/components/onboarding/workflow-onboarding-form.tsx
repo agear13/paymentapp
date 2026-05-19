@@ -27,21 +27,29 @@ import {
 } from '@/components/ui/select';
 import { Card, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
   ArrowRight,
+  Check,
+  ChevronDown,
+  FileText,
+  Link as LinkIcon,
   Loader2,
   Plus,
-  Trash2,
-  Wallet,
-  Link as LinkIcon,
 } from 'lucide-react';
 import {
   ONBOARDING_USE_CASES,
   ONBOARDING_STEP_ORDER,
+  ONBOARDING_PARTICIPANT_ROLES,
   onboardingStepIndex,
   onboardingStepLabel,
+  onboardingStepTitle,
   type OnboardingStep,
   type OnboardingUseCaseId,
   type OnboardingParticipantRole,
@@ -65,7 +73,6 @@ const projectSchema = z.object({
 });
 
 const railsSchema = z.object({
-  stripeAccountId: z.string().optional(),
   hederaAccountId: z.string().optional(),
   wiseProfileId: z.string().optional(),
 });
@@ -78,6 +85,12 @@ type DraftParticipant = {
   email: string;
   role: OnboardingParticipantRole;
 };
+
+const EMPTY_PARTICIPANT = (): DraftParticipant => ({
+  name: '',
+  email: '',
+  role: 'Contractor',
+});
 
 function setOrgCookie() {
   document.cookie = 'provvypay_has_org=true; path=/; max-age=31536000';
@@ -104,17 +117,65 @@ function saveDraft(draft: { useCase?: OnboardingUseCaseId; context?: string }) {
   }
 }
 
+function OnboardingProgress({ step }: { step: OnboardingStep }) {
+  const stepNumber = onboardingStepIndex(step) + 1;
+  const totalSteps = ONBOARDING_STEP_ORDER.length;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-4">
+        <Badge variant="secondary">
+          Step {stepNumber} of {totalSteps}
+        </Badge>
+        <span className="text-sm text-muted-foreground">{onboardingStepLabel(step)}</span>
+      </div>
+      <div className="flex gap-1">
+        {ONBOARDING_STEP_ORDER.map((s, i) => (
+          <div
+            key={s}
+            className={cn(
+              'h-1 flex-1 rounded-full transition-colors',
+              i <= onboardingStepIndex(step) ? 'bg-primary' : 'bg-muted'
+            )}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CompactOnboardingHeader({ step }: { step: OnboardingStep }) {
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-4">
+        <Link href="/" className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+            <span className="text-sm font-bold text-primary-foreground">P</span>
+          </div>
+          <span className="text-lg font-bold">Provvypay</span>
+        </Link>
+      </div>
+      <OnboardingProgress step={step} />
+      <div>
+        <h2 className="text-xl font-semibold">{onboardingStepTitle(step)}</h2>
+      </div>
+    </div>
+  );
+}
+
 export function WorkflowOnboardingForm() {
   const router = useRouter();
   const [step, setStep] = React.useState<OnboardingStep>('use_case');
   const [isLoading, setIsLoading] = React.useState(false);
   const [useCase, setUseCase] = React.useState<OnboardingUseCaseId | null>(null);
+  const [selectedUseCase, setSelectedUseCase] = React.useState<OnboardingUseCaseId | null>(null);
   const [organizationId, setOrganizationId] = React.useState<string | null>(null);
   const [merchantSettingsId, setMerchantSettingsId] = React.useState<string | null>(null);
   const [projectId, setProjectId] = React.useState<string | null>(null);
-  const [participants, setParticipants] = React.useState<DraftParticipant[]>([
-    { name: '', email: '', role: 'Contributor' },
-  ]);
+  const [projectName, setProjectName] = React.useState('');
+  const [confirmedParticipants, setConfirmedParticipants] = React.useState<DraftParticipant[]>([]);
+  const [draftParticipant, setDraftParticipant] = React.useState<DraftParticipant>(EMPTY_PARTICIPANT());
+  const [advancedRailsOpen, setAdvancedRailsOpen] = React.useState(false);
 
   const projectForm = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
@@ -129,7 +190,6 @@ export function WorkflowOnboardingForm() {
   const railsForm = useForm<RailsFormValues>({
     resolver: zodResolver(railsSchema),
     defaultValues: {
-      stripeAccountId: '',
       hederaAccountId: '',
       wiseProfileId: '',
     },
@@ -137,7 +197,10 @@ export function WorkflowOnboardingForm() {
 
   React.useEffect(() => {
     const draft = loadDraft();
-    if (draft.useCase) setUseCase(draft.useCase);
+    if (draft.useCase) {
+      setUseCase(draft.useCase);
+      setSelectedUseCase(draft.useCase);
+    }
 
     (async () => {
       try {
@@ -166,6 +229,7 @@ export function WorkflowOnboardingForm() {
         const state = payload.state;
         if (state?.onboarding_use_case) {
           setUseCase(state.onboarding_use_case);
+          setSelectedUseCase(state.onboarding_use_case);
         }
         if (state?.merchantSettingsId) setMerchantSettingsId(state.merchantSettingsId);
         if (state?.projectId) setProjectId(state.projectId);
@@ -179,13 +243,9 @@ export function WorkflowOnboardingForm() {
   }, []);
 
   const selectedUseCaseMeta = ONBOARDING_USE_CASES.find((u) => u.id === useCase);
-  const stepNumber = onboardingStepIndex(step) + 1;
-  const totalSteps = ONBOARDING_STEP_ORDER.length;
+  const isWelcomeStep = step === 'use_case';
 
-  async function persistState(
-    nextStep: OnboardingStep,
-    extra?: Record<string, unknown>
-  ) {
+  async function persistState(nextStep: OnboardingStep, extra?: Record<string, unknown>) {
     if (!organizationId) return;
     await fetch('/api/onboarding', {
       method: 'PATCH',
@@ -231,14 +291,17 @@ export function WorkflowOnboardingForm() {
     } catch {
       /* ignore */
     }
-    router.push('/dashboard');
+    const params = new URLSearchParams({ workspace: 'ready' });
+    if (projectName.trim()) params.set('project', projectName.trim());
+    router.push(`/dashboard?${params.toString()}`);
     router.refresh();
   }
 
-  function handleUseCaseSelect(id: OnboardingUseCaseId) {
-    setUseCase(id);
-    const meta = ONBOARDING_USE_CASES.find((u) => u.id === id);
-    saveDraft({ useCase: id, context: meta?.title });
+  function handleUseCaseContinue() {
+    if (!selectedUseCase) return;
+    setUseCase(selectedUseCase);
+    const meta = ONBOARDING_USE_CASES.find((u) => u.id === selectedUseCase);
+    saveDraft({ useCase: selectedUseCase, context: meta?.title });
     setStep('project');
   }
 
@@ -274,6 +337,7 @@ export function WorkflowOnboardingForm() {
       setOrganizationId(data.organizationId);
       setMerchantSettingsId(data.merchantSettingsId);
       setProjectId(data.projectId);
+      setProjectName(values.projectName);
       window.localStorage.setItem('provvypay.organizationId', data.organizationId);
       setOrgCookie();
       toast.success('Project created');
@@ -285,6 +349,21 @@ export function WorkflowOnboardingForm() {
     }
   }
 
+  function commitDraftParticipant() {
+    if (!draftParticipant.name.trim()) {
+      toast.error('Enter a participant name');
+      return;
+    }
+    setConfirmedParticipants((prev) => [...prev, { ...draftParticipant, name: draftParticipant.name.trim() }]);
+    setDraftParticipant(EMPTY_PARTICIPANT());
+  }
+
+  function allParticipantsToSubmit(): DraftParticipant[] {
+    const extras =
+      draftParticipant.name.trim() !== '' ? [{ ...draftParticipant, name: draftParticipant.name.trim() }] : [];
+    return [...confirmedParticipants, ...extras];
+  }
+
   async function onParticipantsContinue(skip: boolean) {
     if (!projectId) {
       toast.error('Create a project first');
@@ -293,7 +372,7 @@ export function WorkflowOnboardingForm() {
     setIsLoading(true);
     try {
       if (!skip) {
-        const valid = participants.filter((p) => p.name.trim());
+        const valid = allParticipantsToSubmit();
         if (valid.length > 0) {
           const res = await fetch('/api/onboarding/participants', {
             method: 'POST',
@@ -304,6 +383,8 @@ export function WorkflowOnboardingForm() {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.error || 'Failed to add participants');
           }
+          setConfirmedParticipants(valid);
+          setDraftParticipant(EMPTY_PARTICIPANT());
           toast.success(`Added ${valid.length} participant${valid.length === 1 ? '' : 's'}`);
         }
       }
@@ -325,96 +406,87 @@ export function WorkflowOnboardingForm() {
     setIsLoading(true);
     try {
       if (merchantSettingsId) {
-        const hasAny =
-          values.stripeAccountId?.trim() ||
-          values.hederaAccountId?.trim() ||
-          values.wiseProfileId?.trim();
+        const hasAny = values.hederaAccountId?.trim() || values.wiseProfileId?.trim();
         if (hasAny) {
           const res = await fetch(`/api/merchant-settings/${merchantSettingsId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              stripeAccountId: values.stripeAccountId?.trim() || undefined,
               hederaAccountId: values.hederaAccountId?.trim() || undefined,
               wiseProfileId: values.wiseProfileId?.trim() || undefined,
               wiseEnabled: Boolean(values.wiseProfileId?.trim()),
             }),
           });
           if (!res.ok) {
-            throw new Error('Failed to save payment methods');
+            throw new Error('Failed to save payout rails');
           }
-          toast.success('Payment methods saved');
+          toast.success('Additional payout rails saved');
         }
       }
       await finishOnboarding();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to save payment methods');
+      toast.error(e instanceof Error ? e.message : 'Failed to save payout rails');
     } finally {
       setIsLoading(false);
     }
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <Badge variant="secondary">
-          Step {stepNumber} of {totalSteps}
-        </Badge>
-        <span className="text-sm text-muted-foreground">{onboardingStepLabel(step)}</span>
-      </div>
-
-      <div className="flex gap-1">
-        {ONBOARDING_STEP_ORDER.map((s, i) => (
-          <div
-            key={s}
-            className={cn(
-              'h-1 flex-1 rounded-full transition-colors',
-              i <= onboardingStepIndex(step) ? 'bg-primary' : 'bg-muted'
-            )}
-          />
-        ))}
-      </div>
-
+  const stepBody = (
+    <>
       {step === 'use_case' && (
         <div className="space-y-6">
           <div>
-            <h2 className="text-xl font-semibold">What are you coordinating?</h2>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Provvypay helps coordinate payments, obligations, commissions, and payouts safely.
+            <p className="text-muted-foreground text-sm">
+              Provvypay helps coordinate revenue, obligations, approvals, and payouts across
+              multiple parties.
+            </p>
+            <p className="text-muted-foreground text-sm mt-2">
+              Choose your primary workflow. You can create additional workflows later.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {ONBOARDING_USE_CASES.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleUseCaseSelect(item.id)}
-                className={cn(
-                  'rounded-lg border p-4 text-left transition-colors hover:bg-accent/60',
-                  useCase === item.id && 'border-primary bg-primary/5'
-                )}
-              >
-                <p className="font-medium">{item.title}</p>
-                <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
-              </button>
-            ))}
+            {ONBOARDING_USE_CASES.map((item) => {
+              const isSelected = selectedUseCase === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedUseCase(item.id)}
+                  className={cn(
+                    'relative rounded-lg border p-4 text-left transition-colors hover:bg-accent/40',
+                    isSelected && 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                  )}
+                >
+                  {isSelected ? (
+                    <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <Check className="h-3 w-3" />
+                    </span>
+                  ) : null}
+                  <p className="font-medium pr-6">{item.title}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex justify-end">
+            <Button type="button" disabled={!selectedUseCase} onClick={handleUseCaseContinue}>
+              Continue
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </div>
         </div>
       )}
 
       {step === 'project' && (
         <div className="space-y-6">
-          <div>
-            <h2 className="text-xl font-semibold">Create your first project</h2>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Projects are where you coordinate participants, payments, obligations, and payouts.
-              {selectedUseCaseMeta ? (
-                <span className="block mt-1 text-foreground/80">
-                  Starting with: <strong>{selectedUseCaseMeta.title}</strong>
-                </span>
-              ) : null}
-            </p>
-          </div>
+          <p className="text-muted-foreground text-sm">
+            Projects are where you coordinate participants, obligations, revenue, and payouts.
+            {selectedUseCaseMeta ? (
+              <span className="block mt-1 text-foreground/80">
+                Starting with: <strong>{selectedUseCaseMeta.title}</strong>
+              </span>
+            ) : null}
+          </p>
           <Form {...projectForm}>
             <form onSubmit={projectForm.handleSubmit(onProjectSubmit)} className="space-y-4">
               <FormField
@@ -424,7 +496,7 @@ export function WorkflowOnboardingForm() {
                   <FormItem>
                     <FormLabel>Project name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Q2 contractor settlement" {...field} />
+                      <Input placeholder="Saturday Beach Event" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -477,6 +549,9 @@ export function WorkflowOnboardingForm() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <FormDescription>
+                        Currency can be changed later per invoice or payment.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -499,82 +574,71 @@ export function WorkflowOnboardingForm() {
 
       {step === 'participants' && (
         <div className="space-y-6">
-          <div>
-            <h2 className="text-xl font-semibold">Who needs to get paid?</h2>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Invite participants, contributors, contractors, or referrers into your project. No
-              banking or KYC required yet.
-            </p>
-          </div>
-          <div className="space-y-4">
-            {participants.map((p, index) => (
-              <Card key={index} className="p-4 space-y-3">
-                <div className="flex gap-3">
-                  <div className="flex-1 space-y-3">
-                    <Input
-                      placeholder="Name"
-                      value={p.name}
-                      onChange={(e) => {
-                        const next = [...participants];
-                        next[index] = { ...next[index], name: e.target.value };
-                        setParticipants(next);
-                      }}
-                    />
-                    <Input
-                      type="email"
-                      placeholder="Email"
-                      value={p.email}
-                      onChange={(e) => {
-                        const next = [...participants];
-                        next[index] = { ...next[index], email: e.target.value };
-                        setParticipants(next);
-                      }}
-                    />
-                    <Select
-                      value={p.role}
-                      onValueChange={(v) => {
-                        const next = [...participants];
-                        next[index] = { ...next[index], role: v as OnboardingParticipantRole };
-                        setParticipants(next);
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(['Contributor', 'Contractor', 'Referrer', 'Partner'] as const).map((r) => (
-                          <SelectItem key={r} value={r}>
-                            {r}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {participants.length > 1 ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setParticipants(participants.filter((_, i) => i !== index))}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  ) : null}
-                </div>
-              </Card>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                setParticipants([...participants, { name: '', email: '', role: 'Contributor' }])
+          <p className="text-muted-foreground text-sm">
+            Add promoters, suppliers, contractors, and other payout parties to your project. No
+            banking or KYC required yet.
+          </p>
+
+          {confirmedParticipants.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {confirmedParticipants.map((p, index) => (
+                <Badge key={`${p.name}-${index}`} variant="secondary" className="gap-2 py-1.5 px-3">
+                  <span>
+                    {p.name} — {p.role}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() =>
+                      setConfirmedParticipants(confirmedParticipants.filter((_, i) => i !== index))
+                    }
+                    aria-label={`Remove ${p.name}`}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+
+          <Card className="p-4 space-y-3">
+            <Input
+              placeholder="Name"
+              value={draftParticipant.name}
+              onChange={(e) => setDraftParticipant({ ...draftParticipant, name: e.target.value })}
+            />
+            <Input
+              type="email"
+              placeholder="Email (optional)"
+              value={draftParticipant.email}
+              onChange={(e) => setDraftParticipant({ ...draftParticipant, email: e.target.value })}
+            />
+            <Select
+              value={draftParticipant.role}
+              onValueChange={(v) =>
+                setDraftParticipant({ ...draftParticipant, role: v as OnboardingParticipantRole })
               }
             >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ONBOARDING_PARTICIPANT_ROLES.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {ONBOARDING_PARTICIPANT_ROLES.find((r) => r.value === draftParticipant.role)?.description}
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={commitDraftParticipant}>
               <Plus className="mr-2 h-4 w-4" />
-              Add another
+              Add participant
             </Button>
-          </div>
+          </Card>
+
           <div className="flex justify-between">
             <Button type="button" variant="ghost" onClick={() => setStep('project')}>
               Back
@@ -599,29 +663,32 @@ export function WorkflowOnboardingForm() {
 
       {step === 'funding' && (
         <div className="space-y-6">
-          <div>
-            <h2 className="text-xl font-semibold">How will funds enter the system?</h2>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Create your first invoice or payment link to start collecting funds for this project.
-            </p>
-          </div>
+          <p className="text-muted-foreground text-sm">
+            Choose how revenue enters this project. You can set up both paths later.
+          </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <Link href="/dashboard/payment-links?action=create">
               <Card className="p-6 h-full hover:bg-accent/50 transition-colors cursor-pointer">
-                <LinkIcon className="h-6 w-6 text-primary mb-3" />
-                <p className="font-semibold">Create invoice</p>
+                <FileText className="h-6 w-6 text-primary mb-3" />
+                <p className="font-semibold">Send invoices</p>
                 <CardDescription className="mt-1">
-                  Send a branded invoice with payment options.
+                  Request payment from clients or partners with branded invoices.
                 </CardDescription>
+                <p className="text-xs text-muted-foreground mt-3">
+                  Best for agencies, suppliers, contractors, and settlements.
+                </p>
               </Card>
             </Link>
             <Link href="/dashboard/payment-links?action=create">
               <Card className="p-6 h-full hover:bg-accent/50 transition-colors cursor-pointer">
-                <Wallet className="h-6 w-6 text-primary mb-3" />
-                <p className="font-semibold">Create payment link</p>
+                <LinkIcon className="h-6 w-6 text-primary mb-3" />
+                <p className="font-semibold">Share payment links</p>
                 <CardDescription className="mt-1">
-                  Share a link for quick customer payment.
+                  Collect payments instantly with a shareable checkout link or QR code.
                 </CardDescription>
+                <p className="text-xs text-muted-foreground mt-3">
+                  Best for ticketing, bookings, deposits, and sponsorships.
+                </p>
               </Card>
             </Link>
           </div>
@@ -639,75 +706,130 @@ export function WorkflowOnboardingForm() {
 
       {step === 'payment_rails' && (
         <div className="space-y-6">
-          <div>
-            <h2 className="text-xl font-semibold">Connect payment methods</h2>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Connect providers when you are ready to collect funds and settle payouts. You can
-              configure these later in Settings.
-            </p>
-          </div>
-          <Form {...railsForm}>
-            <form onSubmit={railsForm.handleSubmit(onRailsSubmit)} className="space-y-4">
-              <FormField
-                control={railsForm.control}
-                name="stripeAccountId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Stripe (optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="acct_xxxxxxxxxxxxx" {...field} />
-                    </FormControl>
-                    <FormDescription>Card payments via Stripe Connect.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={railsForm.control}
-                name="wiseProfileId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Wise profile ID (optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Wise profile ID" {...field} />
-                    </FormControl>
-                    <FormDescription>Bank transfer and international payouts.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={railsForm.control}
-                name="hederaAccountId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Hedera account (optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="0.0.12345" {...field} />
-                    </FormControl>
-                    <FormDescription>Crypto settlement rail.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="flex justify-between pt-2">
-                <Button type="button" variant="ghost" onClick={() => setStep('funding')}>
-                  Back
-                </Button>
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" disabled={isLoading} onClick={finishOnboarding}>
-                    Skip for now
-                  </Button>
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Finish setup
-                  </Button>
-                </div>
+          <p className="text-muted-foreground text-sm">
+            Connect providers when you are ready to collect and settle. You can configure these
+            anytime in Settings.
+          </p>
+
+          <Card className="p-5 border-primary/20 bg-primary/[0.03]">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold">Stripe</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Accept card payments and manage payout flows with Stripe Connect.
+                </p>
               </div>
-            </form>
-          </Form>
+              <Button asChild>
+                <Link href="/dashboard/settings/merchant">Connect Stripe</Link>
+              </Button>
+            </div>
+          </Card>
+
+          <Collapsible open={advancedRailsOpen} onOpenChange={setAdvancedRailsOpen}>
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" className="w-full justify-between px-0 hover:bg-transparent">
+                <span className="text-sm font-medium">Additional payout rails (optional)</span>
+                <ChevronDown
+                  className={cn('h-4 w-4 transition-transform', advancedRailsOpen && 'rotate-180')}
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <Form {...railsForm}>
+                <form onSubmit={railsForm.handleSubmit(onRailsSubmit)} className="space-y-4">
+                  <FormField
+                    control={railsForm.control}
+                    name="wiseProfileId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Wise (optional)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Wise profile ID" {...field} />
+                        </FormControl>
+                        <FormDescription>International bank transfer payouts.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={railsForm.control}
+                    name="hederaAccountId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Hedera (optional)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="0.0.12345" {...field} />
+                        </FormControl>
+                        <FormDescription>Digital asset settlement infrastructure.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="flex justify-between pt-2">
+                    <Button type="button" variant="ghost" onClick={() => setStep('funding')}>
+                      Back
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" disabled={isLoading} onClick={finishOnboarding}>
+                        Skip for now
+                      </Button>
+                      <Button type="submit" disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Go to workspace
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </form>
+              </Form>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {!advancedRailsOpen ? (
+            <div className="flex justify-between">
+              <Button type="button" variant="ghost" onClick={() => setStep('funding')}>
+                Back
+              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" disabled={isLoading} onClick={finishOnboarding}>
+                  Skip for now
+                </Button>
+                <Button type="button" disabled={isLoading} onClick={finishOnboarding}>
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Go to workspace
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
+    </>
+  );
+
+  if (isWelcomeStep) {
+    return (
+      <div className="w-full max-w-2xl space-y-8">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold tracking-tight">Welcome to Provvypay</h1>
+          <p className="mt-2 text-muted-foreground max-w-lg mx-auto">
+            Set up your workspace for coordinating revenue, obligations, and payouts across
+            multiple parties — in a few guided steps.
+          </p>
+        </div>
+        <OnboardingProgress step={step} />
+        <div>
+          <h2 className="text-xl font-semibold mb-4">{onboardingStepTitle(step)}</h2>
+          {stepBody}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-2xl space-y-6">
+      <CompactOnboardingHeader step={step} />
+      {stepBody}
     </div>
   );
 }

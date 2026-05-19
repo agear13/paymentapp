@@ -2,6 +2,7 @@ import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { OnboardingParticipantRole } from '@/lib/onboarding/operator-onboarding-types';
 import { buildProjectParticipant } from '@/lib/projects/participant-entitlement';
 import type { ProjectParticipationModel } from '@/lib/projects/participant-entitlement';
+import type { OperationalParticipantRole } from '@/lib/projects/participants-for-project';
 
 export function buildOnboardingProject(input: {
   projectName: string;
@@ -29,11 +30,33 @@ export function buildOnboardingProject(input: {
 }
 
 const ROLE_TO_MODEL: Record<OnboardingParticipantRole, ProjectParticipationModel> = {
-  Contributor: 'fixed_payout',
   Contractor: 'fixed_payout',
+  Supplier: 'fixed_payout',
+  Promoter: 'revenue_share',
+  Affiliate: 'revenue_share',
+  Venue: 'customer_attribution',
+  Staff: 'fixed_payout',
+  Performer: 'fixed_payout',
   Referrer: 'revenue_share',
-  Partner: 'customer_attribution',
 };
+
+export function mapOnboardingRoleToOperational(
+  role: OnboardingParticipantRole
+): OperationalParticipantRole {
+  switch (role) {
+    case 'Contractor':
+    case 'Staff':
+    case 'Performer':
+    case 'Supplier':
+      return 'Contractor';
+    case 'Promoter':
+    case 'Venue':
+      return 'Partner';
+    case 'Affiliate':
+    case 'Referrer':
+      return 'Referrer';
+  }
+}
 
 /** Canonical project participant — same model as project workspace invite. */
 export function buildOnboardingParticipant(input: {
@@ -43,10 +66,11 @@ export function buildOnboardingParticipant(input: {
   deal: RecentDeal;
 }) {
   const participationModel = ROLE_TO_MODEL[input.role];
+  const operationalRole = mapOnboardingRoleToOperational(input.role);
   return buildProjectParticipant({
     name: input.name,
     email: input.email,
-    role: input.role,
+    role: operationalRole,
     project: input.deal,
     participationModel,
     commissionKind: participationModel === 'revenue_share' ? 'pct_deal_value' : 'fixed_amount',

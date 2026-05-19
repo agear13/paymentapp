@@ -17,7 +17,7 @@ export const ONBOARDING_USE_CASES = [
   {
     id: 'affiliate_payouts',
     title: 'Affiliate payouts',
-    description: 'Manage affiliates and pay out earned commissions safely.',
+    description: 'Manage affiliates and pay out earned commissions.',
   },
   {
     id: 'event_settlement',
@@ -41,11 +41,22 @@ export type OnboardingStep =
   | 'payment_rails'
   | 'complete';
 
-export type OnboardingParticipantRole =
-  | 'Contributor'
-  | 'Contractor'
-  | 'Referrer'
-  | 'Partner';
+export const ONBOARDING_PARTICIPANT_ROLES = [
+  { value: 'Contractor', label: 'Contractor', description: 'Delivers contracted services and deliverables' },
+  { value: 'Supplier', label: 'Supplier', description: 'Receives invoice-based payouts' },
+  { value: 'Promoter', label: 'Promoter', description: 'Earns revenue share on event or campaign sales' },
+  { value: 'Affiliate', label: 'Affiliate', description: 'Earns referral commissions' },
+  { value: 'Venue', label: 'Venue', description: 'Host operator with revenue allocation' },
+  { value: 'Staff', label: 'Staff', description: 'Internal team member with payout obligations' },
+  { value: 'Performer', label: 'Performer', description: 'Fixed-fee or revenue-linked performance payout' },
+  { value: 'Referrer', label: 'Referrer', description: 'Introduces deals and earns referral fees' },
+] as const;
+
+export type OnboardingParticipantRole = (typeof ONBOARDING_PARTICIPANT_ROLES)[number]['value'];
+
+export const ONBOARDING_PARTICIPANT_ROLE_VALUES = ONBOARDING_PARTICIPANT_ROLES.map(
+  (r) => r.value
+) as [OnboardingParticipantRole, ...OnboardingParticipantRole[]];
 
 export type OperatorOnboardingState = {
   step: OnboardingStep;
@@ -80,10 +91,27 @@ export function onboardingStepLabel(step: OnboardingStep): string {
     case 'participants':
       return 'Add participants';
     case 'funding':
-      return 'Funding flow';
+      return 'How you get paid';
     case 'payment_rails':
       return 'Payment methods';
     case 'complete':
       return 'Complete';
+  }
+}
+
+export function onboardingStepTitle(step: OnboardingStep): string {
+  switch (step) {
+    case 'use_case':
+      return 'What are you coordinating?';
+    case 'project':
+      return 'Create your first project';
+    case 'participants':
+      return 'Who needs to get paid?';
+    case 'funding':
+      return 'How will revenue be collected?';
+    case 'payment_rails':
+      return 'Connect payment methods';
+    default:
+      return '';
   }
 }

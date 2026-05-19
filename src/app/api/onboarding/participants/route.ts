@@ -9,6 +9,9 @@ import {
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { buildOnboardingParticipant } from '@/lib/onboarding/build-onboarding-project';
 import {
+  ONBOARDING_PARTICIPANT_ROLE_VALUES,
+} from '@/lib/onboarding/operator-onboarding-types';
+import {
   getOperatorOnboardingState,
   saveOperatorOnboardingState,
 } from '@/lib/onboarding/operator-onboarding.server';
@@ -16,7 +19,7 @@ import {
 const participantSchema = z.object({
   name: z.string().min(1).max(255),
   email: z.union([z.string().email(), z.literal('')]).optional(),
-  role: z.enum(['Contributor', 'Contractor', 'Referrer', 'Partner']),
+  role: z.enum(ONBOARDING_PARTICIPANT_ROLE_VALUES),
 });
 
 const schema = z.object({

@@ -9,9 +9,14 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { getUserOrganization } from '@/lib/auth/get-org';
 import { prisma } from '@/lib/server/prisma';
 import { OperationalHomeDashboard } from '@/components/dashboard/operational-home-dashboard';
+import { OnboardingWorkspacePreview } from '@/components/onboarding/onboarding-workspace-preview';
 import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ workspace?: string; project?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) {
     redirect('/auth/login');
@@ -21,6 +26,9 @@ export default async function DashboardPage() {
   if (!organization) {
     redirect('/onboarding');
   }
+
+  const params = await searchParams;
+  const showWorkspacePreview = params.workspace === 'ready';
 
   let unpaidInvoices = 0;
   try {
@@ -61,5 +69,12 @@ export default async function DashboardPage() {
     },
   ];
 
-  return <OperationalHomeDashboard actionCards={actionCards} />;
+  return (
+    <div className="space-y-8">
+      {showWorkspacePreview ? (
+        <OnboardingWorkspacePreview projectName={params.project} />
+      ) : null}
+      <OperationalHomeDashboard actionCards={actionCards} />
+    </div>
+  );
 }
