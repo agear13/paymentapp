@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import { CalendarIcon, FileText, Loader2, Paperclip, X } from 'lucide-react';
 
 import { CANONICAL_NETWORKS } from '@/lib/payments/canonical-networks';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
