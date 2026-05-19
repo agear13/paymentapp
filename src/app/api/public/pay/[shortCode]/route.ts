@@ -9,6 +9,8 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
 import { derivePaidAtFromEvents } from '@/lib/payments/paid-at';
 import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
+import { resolveMerchantLogoUrl } from '@/lib/merchant-settings/logo-url';
+import { getBrandedAppOrigin } from '@/lib/branding/customer-facing-url';
 
 /**
  * GET /api/public/pay/[shortCode]
@@ -246,7 +248,10 @@ export async function GET(
         createdAt: paymentLink.created_at,
         merchant: {
           name: merchantSettings?.display_name || paymentLink.organizations.name,
-          logoUrl: merchantSettings?.organization_logo_url || null,
+          logoUrl: resolveMerchantLogoUrl(
+            merchantSettings?.organization_logo_url,
+            getBrandedAppOrigin(request.nextUrl.origin)
+          ),
         },
         availablePaymentMethods,
         wiseTransferId: paymentLink.wise_transfer_id ?? null,

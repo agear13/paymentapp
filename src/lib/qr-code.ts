@@ -5,6 +5,8 @@
 
 import QRCode from 'qrcode';
 
+import { getBrandedAppOrigin } from '@/lib/branding/customer-facing-url';
+
 export interface QRCodeOptions {
   size?: number;
   format?: 'png' | 'svg' | 'dataurl';
@@ -23,7 +25,7 @@ export interface QRCodeOptions {
  * @returns Full payment link URL
  */
 export const getPaymentLinkUrl = (shortCode: string, baseUrl?: string): string => {
-  const appUrl = baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = baseUrl || getBrandedAppOrigin();
   return `${appUrl}/pay/${shortCode}`;
 };
 

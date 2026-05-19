@@ -40,7 +40,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatCurrency } from './currency-select';
+import { getPaymentLinkUrl } from '@/lib/branding/customer-facing-url';
+import {
+  operationalStatusDescription,
+  operationalStatusLabel,
+} from '@/lib/payments/operational-status-labels';
 import { useToast } from '@/hooks/use-toast';
 import { isValidShortCode } from '@/lib/short-code';
 
@@ -186,26 +190,7 @@ const getStatusBadgeVariant = (status: string) => {
   }
 };
 
-const getStatusDescription = (status: string): string => {
-  switch (status) {
-    case 'OPEN':
-      return 'Awaiting payment';
-    case 'PAID_UNVERIFIED':
-      return 'Payment submitted - not yet verified';
-    case 'REQUIRES_REVIEW':
-      return 'Payment needs review (mismatch detected)';
-    case 'PAID':
-      return 'Payment confirmed';
-    case 'OVERDUE':
-      return 'Past due date, still unpaid';
-    case 'CANCELED':
-      return 'Invoice canceled';
-    case 'EXPIRED':
-      return 'Invoice expired';
-    default:
-      return '';
-  }
-};
+const getStatusDescription = (status: string): string => operationalStatusDescription(status);
 
 export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
   paymentLinks,
@@ -258,7 +243,7 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
       });
       return;
     }
-    const url = `${window.location.origin}/pay/${code}`;
+    const url = getPaymentLinkUrl(code);
     navigator.clipboard.writeText(url);
     toast({
       title: 'URL Copied',
@@ -276,7 +261,7 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
       });
       return;
     }
-    const url = `${window.location.origin}/pay/${code}`;
+    const url = getPaymentLinkUrl(code);
     window.open(url, '_blank');
   };
 
@@ -383,7 +368,7 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
               <TableCell>
                 <div className="space-y-1">
                   <Badge variant={getStatusBadgeVariant(effectiveStatus) as any}>
-                    {effectiveStatus}
+                    {operationalStatusLabel(effectiveStatus)}
                   </Badge>
                   {getStatusDescription(effectiveStatus) ? (
                     <p className="text-[11px] text-muted-foreground">{getStatusDescription(effectiveStatus)}</p>

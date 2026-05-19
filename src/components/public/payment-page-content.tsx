@@ -11,6 +11,7 @@ import { PaymentAmountDisplay } from '@/components/public/payment-amount-display
 import { MerchantBranding } from '@/components/public/merchant-branding';
 import { PaymentMethodSelector } from '@/components/public/payment-method-selector';
 import { PaymentProgressIndicator } from '@/components/public/payment-progress-indicator';
+import type { PaymentFlowStage } from '@/lib/payments/payment-flow-stages';
 import { PublicPaymentLinkAttachment } from '@/components/public/public-payment-link-attachment';
 import { Shield, Lock } from 'lucide-react';
 
@@ -46,13 +47,13 @@ interface PaymentPageContentProps {
   onPaymentStarted?: () => void;
 }
 
-type PaymentStep = 'select_method' | 'processing' | 'complete';
+type PaymentStep = PaymentFlowStage;
 
 export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
   paymentLink,
   onPaymentStarted,
 }) => {
-  const [currentStep, setCurrentStep] = useState<PaymentStep>('select_method');
+  const [currentStep, setCurrentStep] = useState<PaymentStep>('review_invoice');
   const [selectedMethod, setSelectedMethod] = useState<'stripe' | 'hedera' | 'wise' | null>(null);
 
   useEffect(() => {
@@ -66,7 +67,7 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
 
   const handleMethodSelect = (method: 'stripe' | 'hedera' | 'wise') => {
     setSelectedMethod(method);
-    // Notify that payment has started
+    setCurrentStep('send_payment');
     onPaymentStarted?.();
   };
 

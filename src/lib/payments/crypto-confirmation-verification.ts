@@ -4,6 +4,11 @@
  */
 
 import type { CryptoVerificationStatus, MatchConfidence } from '@prisma/client';
+import {
+  isAssetSupportedOnNetwork,
+  networkFamily,
+  normalizeNetworkName,
+} from '@/lib/payments/canonical-networks';
 import { finalizeVerification } from '@/lib/payments/manual-confirmation-verification';
 
 export type CryptoVerificationResult = {
@@ -16,35 +21,26 @@ function norm(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function detectNetworkFamily(merchantNetwork: string): 'evm' | 'solana' | 'bitcoin' | 'unknown' {
-  const n = norm(merchantNetwork);
-  if (
-    n.includes('ethereum') ||
-    n.includes('arbitrum') ||
-    n.includes('polygon') ||
-    n.includes('optimism') ||
-    n.includes('base') ||
-    n.includes('bsc') ||
-    n.includes('bnb') ||
-    n.includes('avalanche') ||
-    n.includes('gnosis') ||
-    n.includes('linea') ||
-    n === 'evm'
-  ) {
-    return 'evm';
-  }
-  if (n.includes('solana') || n === 'sol') return 'solana';
-  if (n.includes('bitcoin') || n === 'btc') return 'bitcoin';
-  return 'unknown';
+/** Normalize tx hash — strip explorer URLs, lowercase EVM prefix. */
+export function normalizeTxHash(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  let h = raw.trim();
+  if (!h) return null;
+  const urlMatch = h.match(/\/(?:tx|transaction)\/([a-zA-Z0-9]+)/i);
+  if (urlMatch?.[1]) h = urlMatch[1];
+  if (/^0x[a-fA-F0-9]+$/i.test(h)) return h.toLowerCase();
+  return h;
 }
 
-/** Ethereum-style: 0x + 64 hex (optionally longer for some chains). */
+function detectNetworkFamily(merchantNetwork: string): 'evm' | 'solana' | 'bitcoin' | 'hedera' | 'tron' | 'unknown' {
+  return networkFamily(merchantNetwork);
+}
+
 export function isLikelyEvmTxHash(hash: string): boolean {
   const h = hash.trim();
   return /^0x[a-fA-F0-9]{64}$/.test(h);
 }
 
-/** Solana: base58, typical length 87–88 (signatures). */
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,100}$/;
 
 export function isLikelySolanaTxSig(sig: string): boolean {
@@ -52,7 +48,6 @@ export function isLikelySolanaTxSig(sig: string): boolean {
   return BASE58.test(s) && s.length >= 80 && s.length <= 90;
 }
 
-/** Bitcoin txid: 64 hex, no 0x prefix typically. */
 export function isLikelyBtcTxId(hash: string): boolean {
   const h = hash.trim();
   if (/^0x[a-fA-F0-9]{64}$/.test(h)) return true;
@@ -66,7 +61,7 @@ export function validateTxHashFormat(
   if (txHash == null || !txHash.trim()) {
     return { valid: true };
   }
-  const h = txHash.trim();
+  const h = normalizeTxHash(txHash) ?? txHash.trim();
   const family = detectNetworkFamily(merchantNetwork);
 
   if (family === 'evm') {
@@ -96,27 +91,57 @@ export function validateTxHashFormat(
     }
     return { valid: true };
   }
-  // Unknown network: soft pass with optional length check
+  if (family === 'hedera') {
+    if (!/^\d+\.\d+\.\d+@\d+\.\d+$/.test(h) && h.length < 16) {
+      return { valid: false, issue: 'Transaction id does not match typical Hedera format' };
+    }
+    return { valid: true };
+  }
   if (h.length < 16) {
     return { valid: false, issue: 'Transaction hash looks too short for a typical on-chain id' };
   }
   return { valid: true };
 }
 
+function validateWalletFormat(
+  wallet: string,
+  network: string
+): { valid: boolean; issue?: string } {
+  const w = wallet.trim();
+  if (!w) return { valid: false, issue: 'Payer wallet/source address missing' };
+  const family = detectNetworkFamily(network);
+
+  if (family === 'evm') {
+    if (!/^0x[a-fA-F0-9]{40}$/.test(w)) {
+      return { valid: false, issue: 'Wallet address does not match EVM format (0x + 40 hex)' };
+    }
+  }
+  if (family === 'hedera') {
+    if (!/^0\.0\.\d+$/.test(w)) {
+      return { valid: false, issue: 'Wallet address does not match Hedera account format (0.0.xxxxx)' };
+    }
+  }
+  if (family === 'bitcoin') {
+    if (w.length < 26 || w.length > 90) {
+      return { valid: false, issue: 'Wallet address does not match typical Bitcoin address length' };
+    }
+  }
+  return { valid: true };
+}
+
 function networksLooselyMatch(requested: string, payer: string): { match: boolean; fuzzy: boolean } {
-  const a = norm(requested);
-  const b = norm(payer);
+  const a = norm(normalizeNetworkName(requested));
+  const b = norm(normalizeNetworkName(payer));
   if (a === b) return { match: true, fuzzy: false };
   if (a.includes(b) || b.includes(a)) return { match: true, fuzzy: true };
-  const tokensA = new Set(a.split(/[^a-z0-9]+/).filter(Boolean));
-  const tokensB = new Set(b.split(/[^a-z0-9]+/).filter(Boolean));
-  for (const t of tokensB) {
-    if (t.length >= 3 && tokensA.has(t)) return { match: true, fuzzy: true };
-  }
   return { match: false, fuzzy: false };
 }
 
-function currenciesMatch(requested: string | undefined, payerCurrency: string | undefined, amountSent: string): boolean {
+function currenciesMatch(
+  requested: string | undefined,
+  payerCurrency: string | undefined,
+  amountSent: string
+): boolean {
   const req = requested?.trim();
   if (!req) return true;
   const pc = payerCurrency?.trim();
@@ -126,7 +151,6 @@ function currenciesMatch(requested: string | undefined, payerCurrency: string | 
   return false;
 }
 
-/** Parse first decimal number from a string like "0.5 ETH" or "100.00". */
 function parseFirstNumber(s: string): number | null {
   const m = s.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
   if (!m) return null;
@@ -144,16 +168,16 @@ function amountsMatch(expected: number, payerAmountSent: string): { ok: boolean;
 }
 
 export function buildExplorerUrl(merchantNetwork: string, txHash: string): string | null {
-  const h = txHash.trim();
+  const h = (normalizeTxHash(txHash) ?? txHash).trim();
   if (!h) return null;
   const family = detectNetworkFamily(merchantNetwork);
+  const n = norm(normalizeNetworkName(merchantNetwork));
   if (family === 'evm') {
-    const n = norm(merchantNetwork);
     if (n.includes('polygon')) return `https://polygonscan.com/tx/${h}`;
     if (n.includes('arbitrum')) return `https://arbiscan.io/tx/${h}`;
     if (n.includes('base')) return `https://basescan.org/tx/${h}`;
     if (n.includes('optimism')) return `https://optimistic.etherscan.io/tx/${h}`;
-    if (n.includes('bsc') || n.includes('bnb')) return `https://bscscan.com/tx/${h}`;
+    if (n.includes('bnb')) return `https://bscscan.com/tx/${h}`;
     return `https://etherscan.io/tx/${h}`;
   }
   if (family === 'solana') {
@@ -161,6 +185,9 @@ export function buildExplorerUrl(merchantNetwork: string, txHash: string): strin
   }
   if (family === 'bitcoin') {
     return `https://mempool.space/tx/${h.replace(/^0x/i, '')}`;
+  }
+  if (family === 'hedera') {
+    return `https://hashscan.io/mainnet/transaction/${encodeURIComponent(h)}`;
   }
   return null;
 }
@@ -179,10 +206,31 @@ export function verifyCryptoConfirmationInput(params: {
   const issues: string[] = [];
   let hard = 0;
 
-  const net = params.merchantNetwork?.trim() || '';
+  const net = normalizeNetworkName(params.merchantNetwork?.trim() || '');
   const cur = params.merchantCryptoCurrency?.trim() || '';
+  const payerNet = normalizeNetworkName(params.payerNetwork);
+  const payerAsset = params.payerCurrency?.trim() || cur;
 
-  const txCheck = validateTxHashFormat(params.payerTxHash, net);
+  // Merchant-configured network + asset compatibility
+  if (net && cur) {
+    const merchantCompat = isAssetSupportedOnNetwork(net, cur);
+    if (!merchantCompat.supported && merchantCompat.reason) {
+      issues.push(merchantCompat.reason);
+      hard += 1;
+    }
+  }
+
+  // Payer-reported network + asset compatibility
+  if (payerNet && payerAsset) {
+    const payerCompat = isAssetSupportedOnNetwork(payerNet, payerAsset);
+    if (!payerCompat.supported && payerCompat.reason) {
+      issues.push(payerCompat.reason);
+      hard += 1;
+    }
+  }
+
+  const normalizedHash = normalizeTxHash(params.payerTxHash);
+  const txCheck = validateTxHashFormat(normalizedHash ?? params.payerTxHash, net || payerNet);
   if (!txCheck.valid && txCheck.issue) {
     issues.push(txCheck.issue);
     hard += 1;
@@ -191,7 +239,7 @@ export function verifyCryptoConfirmationInput(params: {
   if (net) {
     const { match, fuzzy } = networksLooselyMatch(net, params.payerNetwork);
     if (!match) {
-      issues.push(`Payer network "${params.payerNetwork}" does not match requested network "${net}"`);
+      issues.push(`Payer network "${payerNet}" does not match requested network "${net}"`);
       hard += 1;
     } else if (fuzzy) {
       issues.push(`Network matched loosely — confirm payer used the same chain as "${net}"`);
@@ -200,14 +248,15 @@ export function verifyCryptoConfirmationInput(params: {
 
   if (cur && !currenciesMatch(cur, params.payerCurrency ?? null, params.payerAmountSent)) {
     issues.push(
-      `Asset/currency may not match: invoice asks for "${cur}"; payer reported "${params.payerAmountSent}"` +
+      `Asset/currency mismatch: invoice asks for "${cur}"; payer reported "${params.payerAmountSent}"` +
         (params.payerCurrency ? ` (payer asset: ${params.payerCurrency})` : '')
     );
     hard += 1;
   }
 
-  if (!params.payerWalletAddress?.trim()) {
-    issues.push('Payer wallet/source address missing');
+  const walletCheck = validateWalletFormat(params.payerWalletAddress, net || payerNet);
+  if (!walletCheck.valid && walletCheck.issue) {
+    issues.push(walletCheck.issue);
     hard += 1;
   }
 
@@ -226,8 +275,12 @@ export function verifyCryptoConfirmationInput(params: {
   }
 
   const finalized = finalizeVerification(issues, hard);
-  if (finalized.match_confidence === 'LOW' && hard === 0) {
-    finalized.verification_issues.push('Overall confidence is low — manual review recommended');
+  if (finalized.match_confidence === 'HIGH' && issues.length > 0) {
+    finalized.match_confidence = 'MEDIUM';
+  }
+  if (hard > 0) {
+    finalized.verification_status = 'FLAGGED';
+    finalized.match_confidence = 'LOW';
   }
   return finalized;
 }

@@ -38,12 +38,15 @@ export function finalizeVerification(
   issues: string[],
   hardIssueCount: number
 ): UnifiedVerificationResult {
-  const verification_status: CryptoVerificationStatus = hardIssueCount > 0 ? 'FLAGGED' : 'VERIFIED';
+  const verification_status: CryptoVerificationStatus =
+    hardIssueCount > 0 || issues.length >= 3 ? 'FLAGGED' : 'VERIFIED';
 
   let match_confidence: MatchConfidence;
-  if (issues.length === 0) {
+  if (hardIssueCount > 0) {
+    match_confidence = 'LOW';
+  } else if (issues.length === 0) {
     match_confidence = 'HIGH';
-  } else if (hardIssueCount > 0 || issues.length >= 3) {
+  } else if (issues.length >= 2) {
     match_confidence = 'LOW';
   } else {
     match_confidence = 'MEDIUM';

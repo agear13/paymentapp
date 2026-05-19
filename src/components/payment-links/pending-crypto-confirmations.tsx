@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { buildExplorerUrl } from '@/lib/payments/crypto-confirmation-verification';
+import { verificationConfidenceLabel, operationalStatusLabel } from '@/lib/payments/operational-status-labels';
 
 export type CryptoVerificationRow = {
   id: string;
@@ -48,11 +49,22 @@ interface PendingCryptoConfirmationsProps {
   onChanged?: () => void;
 }
 
-function confidenceBadge(conf: string | null) {
-  if (conf === 'HIGH') return <Badge className="bg-emerald-600 hover:bg-emerald-600">High confidence</Badge>;
-  if (conf === 'MEDIUM') return <Badge variant="secondary">Medium confidence</Badge>;
-  if (conf === 'LOW') return <Badge variant="destructive">Low confidence</Badge>;
-  return <Badge variant="outline">—</Badge>;
+function confidenceBadge(
+  conf: string | null,
+  verificationStatus: string | null,
+  issueCount: number
+) {
+  const label = verificationConfidenceLabel(conf, verificationStatus, issueCount);
+  if (label === 'High confidence') {
+    return <Badge className="bg-emerald-600 hover:bg-emerald-600">{label}</Badge>;
+  }
+  if (label === 'Verification recommended') {
+    return <Badge variant="secondary">{label}</Badge>;
+  }
+  if (label === 'Flagged mismatch') {
+    return <Badge variant="destructive">{label}</Badge>;
+  }
+  return <Badge variant="outline">{label}</Badge>;
 }
 
 export function PendingCryptoConfirmations({
@@ -175,7 +187,7 @@ export function PendingCryptoConfirmations({
                   <p className="text-muted-foreground">
                     Invoice {r.paymentLink.shortCode} · {r.paymentLink.amount} {r.paymentLink.currency}
                     <Badge variant="outline" className="ml-2 text-xs">
-                      {r.paymentLink.status}
+                      {operationalStatusLabel(r.paymentLink.status)}
                     </Badge>
                   </p>
                 </div>
@@ -188,9 +200,11 @@ export function PendingCryptoConfirmations({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {confidenceBadge(r.matchConfidence)}
-                {r.verificationStatus ? (
-                  <Badge variant="outline">{r.verificationStatus === 'VERIFIED' ? 'Checks OK' : 'Flagged'}</Badge>
+                {confidenceBadge(r.matchConfidence, r.verificationStatus, r.verificationIssues.length)}
+                {r.verificationStatus === 'FLAGGED' || r.verificationIssues.length > 0 ? (
+                  <Badge variant="destructive">Review required</Badge>
+                ) : verifiedUi ? (
+                  <Badge variant="outline">Verified match</Badge>
                 ) : null}
                 {verifiedUi ? (
                   <span className="text-emerald-700 text-xs font-medium">Verified payment (no action required)</span>
@@ -262,7 +276,7 @@ export function PendingCryptoConfirmations({
                   {acting === `${r.id}:acknowledge` ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   ) : null}
-                  {r.paymentLink.status === 'PAID_UNVERIFIED' ? 'Confirm payment' : 'Acknowledge'}
+                  {r.paymentLink.status === 'PAID_UNVERIFIED' ? 'Review submission' : 'Acknowledge'}
                 </Button>
                 <Button
                   size="sm"
@@ -273,13 +287,13 @@ export function PendingCryptoConfirmations({
                   {acting === `${r.id}:flag_investigate` ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   ) : null}
-                  {r.paymentLink.status === 'REQUIRES_REVIEW' ? 'Reject / investigate' : 'Mark as incorrect'}
+                  {r.paymentLink.status === 'REQUIRES_REVIEW' ? 'Flag mismatch' : 'Mark as incorrect'}
                 </Button>
                 <Button size="sm" disabled={rowBusy} onClick={() => act(r.id, 'mark_valid')}>
                   {acting === `${r.id}:mark_valid` ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   ) : null}
-                  {r.paymentLink.status === 'REQUIRES_REVIEW' ? 'Confirm anyway (→ Paid)' : 'Confirm payment (→ Paid)'}
+                  {r.paymentLink.status === 'REQUIRES_REVIEW' ? 'Verify & mark paid' : 'Verify & mark paid'}
                 </Button>
               </div>
             </div>

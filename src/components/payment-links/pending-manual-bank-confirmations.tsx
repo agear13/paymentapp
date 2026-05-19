@@ -222,7 +222,7 @@ export function PendingManualBankConfirmations({
                   {acting === `${r.id}:acknowledge` ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   ) : null}
-                  {r.paymentLink.status === 'PAID_UNVERIFIED' ? 'Confirm payment' : 'Acknowledge'}
+                  {r.paymentLink.status === 'PAID_UNVERIFIED' ? 'Review submission' : 'Acknowledge'}
                 </Button>
                 <Button
                   size="sm"
@@ -233,13 +233,13 @@ export function PendingManualBankConfirmations({
                   {acting === `${r.id}:flag_investigate` ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   ) : null}
-                  {r.paymentLink.status === 'REQUIRES_REVIEW' ? 'Reject / investigate' : 'Mark as incorrect'}
+                  {r.paymentLink.status === 'REQUIRES_REVIEW' ? 'Flag mismatch' : 'Mark as incorrect'}
                 </Button>
                 <Button size="sm" disabled={rowBusy} onClick={() => act(r.id, 'mark_valid')}>
                   {acting === `${r.id}:mark_valid` ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   ) : null}
-                  {r.paymentLink.status === 'REQUIRES_REVIEW' ? 'Confirm anyway (→ Paid)' : 'Confirm payment (→ Paid)'}
+                  Verify & mark paid
                 </Button>
               </div>
             </div>

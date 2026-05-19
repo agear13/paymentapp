@@ -37,6 +37,7 @@ import { usePolling } from '@/hooks/use-polling';
 import { exportToCSV, type ExportColumn } from '@/lib/export-csv';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/components/payment-links/currency-select';
+import { getPaymentLinkUrl } from '@/lib/branding/customer-facing-url';
 import { PaymentLinksOnboardingAssistant } from '@/components/payment-links-onboarding/payment-links-onboarding-assistant';
 import { PendingCryptoConfirmations } from '@/components/payment-links/pending-crypto-confirmations';
 import { PendingManualBankConfirmations } from '@/components/payment-links/pending-manual-bank-confirmations';
@@ -183,8 +184,7 @@ export default function PaymentLinksPage() {
   );
 
   const getPublicInvoiceUrl = React.useCallback((shortCode: string) => {
-    if (typeof window === 'undefined') return '';
-    return `${window.location.origin}/pay/${encodeURIComponent(shortCode)}`;
+    return getPaymentLinkUrl(shortCode);
   }, []);
 
   const handleCopyPublicLink = React.useCallback((shortCode: string) => {

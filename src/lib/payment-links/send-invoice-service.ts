@@ -6,6 +6,7 @@ import { prisma } from '@/lib/server/prisma';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { sendInvoiceEmail } from '@/lib/email/send-invoice-email';
 import { resolveMerchantLogoUrl } from '@/lib/merchant-settings/logo-url';
+import { getBrandedAppOrigin } from '@/lib/branding/customer-facing-url';
 import {
   downloadPaymentLinkAttachmentFromStorage,
   isValidPaymentLinkAttachmentStorageKey,
@@ -71,7 +72,7 @@ export async function sendInvoiceForPaymentLink(params: {
     };
   }
 
-  const paymentUrl = `${params.origin}/pay/${encodeURIComponent(link.short_code)}`;
+  const paymentUrl = `${getBrandedAppOrigin(params.origin)}/pay/${encodeURIComponent(link.short_code)}`;
   let emailAttachment:
     | {
         filename: string;
@@ -131,7 +132,7 @@ export async function sendInvoiceForPaymentLink(params: {
     merchantName: link.organizations?.name || 'Provvypay',
     merchantLogoUrl: resolveMerchantLogoUrl(
       merchantSettings?.organization_logo_url,
-      params.origin
+      getBrandedAppOrigin(params.origin)
     ),
     invoice: {
       id: link.id,

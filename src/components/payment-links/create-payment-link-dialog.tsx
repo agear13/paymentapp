@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { format } from 'date-fns';
 import { CalendarIcon, FileText, Loader2, Paperclip, X } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { CANONICAL_NETWORKS } from '@/lib/payments/canonical-networks';
 import {
   Dialog,
   DialogContent,
@@ -405,7 +405,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       },
       {
         value: 'HEDERA',
-        label: 'Crypto (Hashpack)',
+        label: 'Crypto (Hashpack — auto-verified on Hedera)',
         available: true,
       },
       {
@@ -422,7 +422,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       },
       {
         value: 'CRYPTO',
-        label: 'Crypto (any wallet — manual instructions)',
+        label: 'Crypto (manual wallet instructions)',
         available: true,
       },
       {
@@ -1217,7 +1217,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                           <label htmlFor="hedera-int" className="text-sm cursor-pointer leading-snug">
                             <span className="font-medium">Interactive wallet payment (HashPack)</span>
                             <span className="block text-muted-foreground">
-                              Customer connects a wallet on the pay page.
+                              Semi-automated Hedera checkout with wallet connection and on-chain verification.
                             </span>
                           </label>
                         </div>
@@ -1242,8 +1242,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
             {collectionMode === 'payment_request' && form.watch('paymentMethod') === 'CRYPTO' ? (
               <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
                 <p className="text-sm text-muted-foreground">
-                  Enter the wallet your customer should pay. Nothing is auto-filled; you specify network, address, and
-                  asset.
+                  You specify network, wallet, and asset manually. Customers confirm payment after sending funds.
                 </p>
                 <FormField
                   control={form.control}
@@ -1260,14 +1259,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                         />
                       </FormControl>
                       <datalist id="merchant-crypto-networks">
-                        <option value="Bitcoin" />
-                        <option value="Ethereum" />
-                        <option value="Solana" />
-                        <option value="Polygon" />
-                        <option value="Arbitrum" />
-                        <option value="Base" />
-                        <option value="BSC / BNB Chain" />
-                        <option value="Hedera" />
+                        {CANONICAL_NETWORKS.map((network) => (
+                          <option key={network} value={network} />
+                        ))}
                       </datalist>
                       <FormDescription>Chain or network name (customers must match this exactly)</FormDescription>
                       <FormMessage />
@@ -1452,10 +1446,13 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                     name="manualBankWiseReference"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Wise email / profile reference</FormLabel>
+                        <FormLabel>Payment reference / memo to include</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Optional" />
+                          <Input {...field} placeholder="e.g. INV-1045 or PROVVY-ABC12345" />
                         </FormControl>
+                        <FormDescription>
+                          Shown on the invoice and bank instructions. Customers should include this with their transfer.
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

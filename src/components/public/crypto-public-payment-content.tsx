@@ -17,20 +17,11 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle, Copy, Check, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { PublicPaymentLinkAttachment } from '@/components/public/public-payment-link-attachment';
-
-const COMMON_NETWORKS = [
-  'Bitcoin',
-  'Ethereum',
-  'Solana',
-  'Polygon',
-  'Arbitrum',
-  'Base',
-  'BSC / BNB Chain',
-  'Avalanche C-Chain',
-  'Optimism',
-  'Tron',
-  'Hedera',
-];
+import { PaymentProgressIndicator } from '@/components/public/payment-progress-indicator';
+import { PaymentReferenceBlock } from '@/components/public/payment-reference-block';
+import { CANONICAL_NETWORKS, normalizeNetworkName } from '@/lib/payments/canonical-networks';
+import type { PaymentFlowStage } from '@/lib/payments/payment-flow-stages';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export interface CryptoPublicPaymentContentProps {
   shortCode: string;
@@ -81,6 +72,7 @@ export function CryptoPublicPaymentContent({
   const [showForm, setShowForm] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
+  const [includedReference, setIncludedReference] = React.useState(false);
   const [payerNetwork, setPayerNetwork] = React.useState('');
   const [payerAmountSent, setPayerAmountSent] = React.useState(paymentLink.amount);
   const [payerCurrency, setPayerCurrency] = React.useState(
@@ -89,11 +81,27 @@ export function CryptoPublicPaymentContent({
   const [payerWalletAddress, setPayerWalletAddress] = React.useState('');
   const [payerTxHash, setPayerTxHash] = React.useState('');
 
-  const network = paymentLink.cryptoNetwork?.trim() || '';
+  const network = normalizeNetworkName(paymentLink.cryptoNetwork?.trim() || '');
   const address = paymentLink.cryptoAddress?.trim() || '';
   const asset = paymentLink.cryptoCurrency?.trim() || '';
   const memo = paymentLink.cryptoMemo?.trim();
   const instructions = paymentLink.cryptoInstructions?.trim();
+  const paymentReference =
+    memo?.trim() ||
+    paymentLink.invoiceReference?.trim() ||
+    `PROVVY-${paymentLink.shortCode}`;
+
+  React.useEffect(() => {
+    if (network && !payerNetwork) {
+      setPayerNetwork(network);
+    }
+  }, [network, payerNetwork]);
+
+  const flowStage: PaymentFlowStage = submitted
+    ? 'awaiting_verification'
+    : showForm
+      ? 'confirm_payment'
+      : 'send_payment';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,6 +148,9 @@ export function CryptoPublicPaymentContent({
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
       <div className="w-full max-w-2xl">
+        <div className="mb-8">
+          <PaymentProgressIndicator currentStage={flowStage} />
+        </div>
         <Card className="border-0 shadow-xl">
           <CardHeader className="border-b bg-slate-50/50 pb-6">
             <MerchantBranding
@@ -164,6 +175,8 @@ export function CryptoPublicPaymentContent({
                 attachmentMimeType={paymentLink.attachmentMimeType}
               />
             ) : null}
+
+            <PaymentReferenceBlock reference={paymentReference} />
 
             <Alert variant="destructive" className="border-amber-200 bg-amber-50 text-amber-950">
               <AlertTriangle className="h-4 w-4 text-amber-700" />
@@ -240,20 +253,20 @@ export function CryptoPublicPaymentContent({
             {submitted ? (
               <Alert>
                 <Check className="h-4 w-4" />
-                <AlertTitle>Payment submitted successfully</AlertTitle>
+                <AlertTitle>Payment reported</AlertTitle>
                 <AlertDescription>
-                  Payment submitted successfully. The merchant will verify your payment shortly.
+                  Your payment details were submitted. Verification is in progress.
                 </AlertDescription>
               </Alert>
             ) : !showForm ? (
               <Button type="button" className="w-full sm:w-auto" onClick={() => setShowForm(true)}>
-                I’ve sent payment
+                I&apos;ve sent payment
               </Button>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4 border rounded-lg p-4 bg-white">
-                <h3 className="font-semibold text-slate-900">Confirm your payment</h3>
+                <h3 className="font-semibold text-slate-900">Verify your payment</h3>
                 <p className="text-sm text-muted-foreground">
-                  Tell us what you sent so we can match your transaction to this invoice.
+                  Submit what you sent so we can match your transaction to this invoice.
                 </p>
                 <div className="space-y-2">
                   <Label htmlFor="payerNetwork">Network you used *</Label>
@@ -261,12 +274,17 @@ export function CryptoPublicPaymentContent({
                     id="payerNetwork"
                     value={payerNetwork}
                     onChange={(e) => setPayerNetwork(e.target.value)}
-                    placeholder="Must match the network you sent on"
+                    placeholder={network || 'e.g. Hedera'}
                     list="crypto-network-suggestions"
                     required
                   />
+                  {network ? (
+                    <p className="text-xs text-muted-foreground">
+                      We expected payment on {network}. Correct this if you used another network.
+                    </p>
+                  ) : null}
                   <datalist id="crypto-network-suggestions">
-                    {COMMON_NETWORKS.map((n) => (
+                    {CANONICAL_NETWORKS.map((n) => (
                       <option key={n} value={n} />
                     ))}
                   </datalist>
@@ -312,6 +330,16 @@ export function CryptoPublicPaymentContent({
                     placeholder="Explorer link or tx id"
                   />
                 </div>
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="includedReference"
+                    checked={includedReference}
+                    onCheckedChange={(v) => setIncludedReference(v === true)}
+                  />
+                  <Label htmlFor="includedReference" className="text-sm font-normal leading-snug">
+                    I included the payment reference with my transfer.
+                  </Label>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit" disabled={submitting}>
                     {submitting ? (
@@ -320,7 +348,7 @@ export function CryptoPublicPaymentContent({
                         Submitting…
                       </>
                     ) : (
-                      'Submit confirmation'
+                      'Verify payment'
                     )}
                   </Button>
                   <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>

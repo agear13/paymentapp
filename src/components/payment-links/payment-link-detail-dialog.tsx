@@ -55,6 +55,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { isValidShortCode } from '@/lib/short-code';
+import { getPaymentLinkUrl } from '@/lib/branding/customer-facing-url';
+import {
+  operationalStatusDescription,
+  operationalStatusLabel,
+} from '@/lib/payments/operational-status-labels';
 
 export interface PaymentLinkDetails {
   id: string;
@@ -175,24 +180,7 @@ const getStatusBadgeVariant = (status: string) => {
   }
 };
 
-const getStatusDescription = (status: string): string => {
-  switch (status) {
-    case 'OPEN':
-      return 'Awaiting payment';
-    case 'PAID_UNVERIFIED':
-      return 'Payment submitted - not yet verified';
-    case 'REQUIRES_REVIEW':
-      return 'Payment needs review (mismatch detected)';
-    case 'PAID':
-      return 'Payment confirmed';
-    case 'CANCELED':
-      return 'Invoice canceled';
-    case 'EXPIRED':
-      return 'Invoice expired';
-    default:
-      return '';
-  }
-};
+const getStatusDescription = (status: string): string => operationalStatusDescription(status);
 
 export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = ({
   paymentLink,
@@ -211,6 +199,7 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
   const [settlementLoading, setSettlementLoading] = React.useState(false);
   const [sendEmail, setSendEmail] = React.useState('');
   const [sendLoading, setSendLoading] = React.useState(false);
+  const [operationsSection, setOperationsSection] = React.useState<'fx' | 'events' | 'xero'>('fx');
 
   React.useEffect(() => {
     if (paymentLink && open) {
@@ -227,9 +216,7 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
 
   const payCode = paymentLink.shortCode?.trim() ?? '';
   const paymentUrl =
-    typeof window !== 'undefined' && isValidShortCode(payCode)
-      ? `${window.location.origin}/pay/${payCode}`
-      : '';
+    isValidShortCode(payCode) ? getPaymentLinkUrl(payCode) : '';
 
   const handleCopyUrl = () => {
     if (!paymentUrl) {
@@ -386,7 +373,7 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
               ) : null}
             <div className="flex flex-col items-end gap-1">
               <Badge variant={getStatusBadgeVariant(paymentLink.status) as any}>
-                {paymentLink.status}
+                {operationalStatusLabel(paymentLink.status)}
               </Badge>
               {getStatusDescription(paymentLink.status) ? (
                 <p className="text-xs text-muted-foreground text-right">{getStatusDescription(paymentLink.status)}</p>
@@ -453,12 +440,10 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
         })()}
 
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="fx">FX Rates</TabsTrigger>
-            <TabsTrigger value="events">Events</TabsTrigger>
             <TabsTrigger value="ledger">Ledger</TabsTrigger>
-            <TabsTrigger value="xero">Xero Sync</TabsTrigger>
+            <TabsTrigger value="operations">Operations</TabsTrigger>
             <TabsTrigger value="qr">QR Code</TabsTrigger>
           </TabsList>
 
@@ -863,8 +848,62 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
             </Card>
           </TabsContent>
 
-          {/* FX Rates Tab */}
-          <TabsContent value="fx" className="space-y-4">
+          <TabsContent value="ledger" className="space-y-2">
+            {paymentLink.ledgerEntries && paymentLink.ledgerEntries.length > 0 ? (
+              paymentLink.ledgerEntries.map((entry) => (
+                <Card key={entry.id}>
+                  <CardContent className="flex items-center justify-between py-3">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">
+                        {entry.ledgerAccount.name} ({entry.ledgerAccount.code})
+                      </p>
+                      <p className="text-xs text-muted-foreground">{entry.description}</p>
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`text-sm font-medium ${
+                          entry.entryType === 'DEBIT' ? 'text-red-600' : 'text-green-600'
+                        }`}
+                      >
+                        {entry.entryType === 'DEBIT' ? 'DR' : 'CR'}{' '}
+                        {formatCurrency(Number(entry.amount), entry.currency)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(entry.createdAt), 'PPp')}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <p className="text-center py-8 text-sm text-muted-foreground">No ledger entries yet</p>
+            )}
+          </TabsContent>
+
+          {/* Operations — FX, events, accounting sync */}
+          <TabsContent value="operations" className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ['fx', 'FX Rates'],
+                  ['events', 'Events'],
+                  ['xero', 'Xero Sync'],
+                ] as const
+              ).map(([id, label]) => (
+                <Button
+                  key={id}
+                  type="button"
+                  size="sm"
+                  variant={operationsSection === id ? 'default' : 'outline'}
+                  onClick={() => setOperationsSection(id)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+
+          {operationsSection === 'fx' ? (
+          <div className="space-y-4">
             {(() => {
               const creationSnapshots = paymentLink.fxSnapshots?.filter(
                 (s) => s.snapshotType === 'CREATION'
@@ -981,10 +1020,11 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                 </>
               );
             })()}
-          </TabsContent>
+          </div>
+          ) : null}
 
-          {/* Events Tab */}
-          <TabsContent value="events" className="space-y-2">
+          {operationsSection === 'events' ? (
+          <div className="space-y-2">
             {paymentLink.paymentEvents && paymentLink.paymentEvents.length > 0 ? (
               paymentLink.paymentEvents.map((event) => (
                 <Card key={event.id}>
@@ -1011,45 +1051,11 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                 No events recorded yet
               </p>
             )}
-          </TabsContent>
+          </div>
+          ) : null}
 
-          {/* Ledger Tab */}
-          <TabsContent value="ledger" className="space-y-2">
-            {paymentLink.ledgerEntries && paymentLink.ledgerEntries.length > 0 ? (
-              paymentLink.ledgerEntries.map((entry) => (
-                <Card key={entry.id}>
-                  <CardContent className="flex items-center justify-between py-3">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">
-                        {entry.ledgerAccount.name} ({entry.ledgerAccount.code})
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {entry.description}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-medium ${
-                        entry.entryType === 'DEBIT' ? 'text-red-600' : 'text-green-600'
-                      }`}>
-                        {entry.entryType === 'DEBIT' ? 'DR' : 'CR'}{' '}
-                        {formatCurrency(Number(entry.amount), entry.currency)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(entry.createdAt), 'PPp')}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <p className="text-center py-8 text-sm text-muted-foreground">
-                No ledger entries yet
-              </p>
-            )}
-          </TabsContent>
-
-          {/* Xero Sync Tab */}
-          <TabsContent value="xero" className="space-y-2">
+          {operationsSection === 'xero' ? (
+          <div className="space-y-2">
             {paymentLink.xeroSyncs && paymentLink.xeroSyncs.length > 0 ? (
               paymentLink.xeroSyncs.map((sync) => (
                 <Card key={sync.id}>
@@ -1109,6 +1115,8 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                 </p>
               </div>
             )}
+          </div>
+          ) : null}
           </TabsContent>
 
           {/* QR Code Tab */}

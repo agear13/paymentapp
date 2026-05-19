@@ -16,6 +16,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Check, Copy, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { PublicPaymentLinkAttachment } from '@/components/public/public-payment-link-attachment';
+import { PaymentProgressIndicator } from '@/components/public/payment-progress-indicator';
+import { PaymentReferenceBlock } from '@/components/public/payment-reference-block';
+import type { PaymentFlowStage } from '@/lib/payments/payment-flow-stages';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export interface ManualBankPublicPaymentContentProps {
   shortCode: string;
@@ -73,6 +77,7 @@ export function ManualBankPublicPaymentContent({
   const [showForm, setShowForm] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
+  const [includedReference, setIncludedReference] = React.useState(false);
   const [payerAmountSent, setPayerAmountSent] = React.useState(paymentLink.amount);
   const [payerCurrency, setPayerCurrency] = React.useState(
     paymentLink.manualBankCurrency?.trim() || paymentLink.currency
@@ -82,6 +87,23 @@ export function ManualBankPublicPaymentContent({
   const [payerReference, setPayerReference] = React.useState('');
   const [payerProofDetails, setPayerProofDetails] = React.useState('');
   const [payerNote, setPayerNote] = React.useState('');
+
+  const paymentReference =
+    paymentLink.manualBankWiseReference?.trim() ||
+    paymentLink.invoiceReference?.trim() ||
+    `PROVVY-${paymentLink.shortCode}`;
+
+  React.useEffect(() => {
+    if (!payerReference && paymentReference) {
+      setPayerReference(paymentReference);
+    }
+  }, [paymentReference, payerReference]);
+
+  const flowStage: PaymentFlowStage = submitted
+    ? 'awaiting_verification'
+    : showForm
+      ? 'confirm_payment'
+      : 'send_payment';
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,6 +151,9 @@ export function ManualBankPublicPaymentContent({
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
       <div className="w-full max-w-2xl">
+        <div className="mb-8">
+          <PaymentProgressIndicator currentStage={flowStage} />
+        </div>
         <Card className="border-0 shadow-xl">
           <CardHeader className="border-b bg-slate-50/50 pb-6">
             <MerchantBranding
@@ -154,6 +179,8 @@ export function ManualBankPublicPaymentContent({
                 attachmentMimeType={paymentLink.attachmentMimeType}
               />
             ) : null}
+
+            <PaymentReferenceBlock reference={paymentReference} />
 
             <div className="rounded-lg border bg-slate-50/80 p-4 space-y-4">
               <h2 className="text-lg font-semibold text-slate-900">Pay by bank transfer</h2>
@@ -209,7 +236,7 @@ export function ManualBankPublicPaymentContent({
                 ) : null}
                 {paymentLink.manualBankWiseReference ? (
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                    <dt className="text-muted-foreground">Wise reference</dt>
+                    <dt className="text-muted-foreground">Transfer reference</dt>
                     <dd className="font-mono text-xs break-all">{paymentLink.manualBankWiseReference}</dd>
                   </div>
                 ) : null}
@@ -249,20 +276,20 @@ export function ManualBankPublicPaymentContent({
             {submitted ? (
               <Alert>
                 <Check className="h-4 w-4" />
-                <AlertTitle>Payment submitted successfully</AlertTitle>
+                <AlertTitle>Payment reported</AlertTitle>
                 <AlertDescription>
-                  Your transfer details were recorded and the merchant has been notified for verification.
+                  Your transfer details were recorded. Verification is in progress.
                 </AlertDescription>
               </Alert>
             ) : !showForm ? (
               <Button type="button" className="w-full sm:w-auto" onClick={() => setShowForm(true)}>
-                I’ve sent payment
+                I&apos;ve sent payment
               </Button>
             ) : (
               <form onSubmit={submit} className="space-y-4 border rounded-lg p-4 bg-white">
-                <h3 className="font-semibold text-slate-900">Confirm your transfer</h3>
+                <h3 className="font-semibold text-slate-900">Verify your transfer</h3>
                 <p className="text-sm text-muted-foreground">
-                  Submit what you sent. The merchant verifies after the transfer settles.
+                  Submit what you sent so we can reconcile your payment.
                 </p>
                 <div className="space-y-2">
                   <Label htmlFor="payerAmountSent">Amount sent *</Label>
@@ -330,6 +357,16 @@ export function ManualBankPublicPaymentContent({
                     placeholder="Anything else the merchant should know"
                   />
                 </div>
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="includedBankReference"
+                    checked={includedReference}
+                    onCheckedChange={(v) => setIncludedReference(v === true)}
+                  />
+                  <Label htmlFor="includedBankReference" className="text-sm font-normal leading-snug">
+                    I included the payment reference with my transfer.
+                  </Label>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit" disabled={submitting}>
                     {submitting ? (
@@ -338,7 +375,7 @@ export function ManualBankPublicPaymentContent({
                         Submitting…
                       </>
                     ) : (
-                      'Submit confirmation'
+                      'Verify payment'
                     )}
                   </Button>
                   <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
