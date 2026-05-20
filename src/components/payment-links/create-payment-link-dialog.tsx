@@ -56,7 +56,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
   isAllowedPaymentLinkAttachmentMime,
-} from '@/lib/payment-links/payment-link-attachment';
+} from '@/lib/payment-links/payment-link-attachment.shared';
 
 warnIfUndefined('Button', Button, 'create-payment-link-dialog.tsx');
 warnIfUndefined('CANONICAL_NETWORKS', CANONICAL_NETWORKS, 'create-payment-link-dialog.tsx');

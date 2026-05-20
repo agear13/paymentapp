@@ -1,17 +1,12 @@
 /**
- * Payment link invoice attachments — delegates to centralized storage-service.
+ * Payment link invoice attachments — server-side storage operations.
  */
+
+import 'server-only';
 
 import { randomUUID } from 'crypto';
 
-import {
-  ASSET_CATEGORY_RULES,
-  buildStorageObjectKey,
-  isLegacySupabaseAttachmentKey,
-  isValidStorageObjectKey,
-  LEGACY_SUPABASE_ATTACHMENT_BUCKET,
-  sanitizeOriginalFilename,
-} from '@/lib/storage/asset-validation';
+import { buildStorageObjectKey } from '@/lib/storage/asset-validation';
 import {
   deleteAsset,
   downloadAsset,
@@ -19,21 +14,22 @@ import {
   validateAssetOwnershipKey,
 } from '@/lib/storage/storage-service';
 
-export const PAYMENT_LINK_ATTACHMENT_BUCKET = LEGACY_SUPABASE_ATTACHMENT_BUCKET;
+export {
+  extensionForAttachmentMime,
+  isAllowedPaymentLinkAttachmentMime,
+  isValidPaymentLinkAttachmentStorageKey,
+  PAYMENT_LINK_ATTACHMENT_ALLOWED_MIME,
+  PAYMENT_LINK_ATTACHMENT_BUCKET,
+  PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
+  sanitizeOriginalFilename,
+  type PaymentLinkAttachmentMime,
+} from '@/lib/payment-links/payment-link-attachment.shared';
 
-export const PAYMENT_LINK_ATTACHMENT_ALLOWED_MIME = ASSET_CATEGORY_RULES[
-  'invoice-attachments'
-].allowedMime;
-
-export type PaymentLinkAttachmentMime = (typeof PAYMENT_LINK_ATTACHMENT_ALLOWED_MIME)[number];
-
-export function isAllowedPaymentLinkAttachmentMime(t: string): t is PaymentLinkAttachmentMime {
-  return (PAYMENT_LINK_ATTACHMENT_ALLOWED_MIME as readonly string[]).includes(t);
-}
-
-export const PAYMENT_LINK_ATTACHMENT_MAX_BYTES = ASSET_CATEGORY_RULES['invoice-attachments'].maxBytes;
-
-export { sanitizeOriginalFilename };
+import {
+  extensionForAttachmentMime,
+  isValidPaymentLinkAttachmentStorageKey,
+  PAYMENT_LINK_ATTACHMENT_BUCKET,
+} from '@/lib/payment-links/payment-link-attachment.shared';
 
 /** @deprecated Use storage-service buildStorageObjectKey via uploadAsset */
 export function buildPaymentLinkAttachmentStorageKey(
@@ -59,15 +55,6 @@ export function buildPaymentLinkAttachmentStorageKey(
   const safeOrg = organizationId.replace(/[^a-zA-Z0-9-]/g, '');
   const randomId = randomUUID().replace(/-/g, '').slice(0, 12);
   return `payment-links/${safeOrg}/${now}-${randomId}${ext}`;
-}
-
-export function isValidPaymentLinkAttachmentStorageKey(key: string): boolean {
-  if (!key || key.length > 1024) return false;
-  if (key.includes('..')) return false;
-  return (
-    isValidStorageObjectKey(key, 'invoice-attachments') ||
-    isLegacySupabaseAttachmentKey(key)
-  );
 }
 
 export interface PaymentLinkAttachmentStoreInput {
@@ -153,18 +140,3 @@ export async function tryDeletePaymentLinkAttachmentFile(
     /* best-effort */
   }
 }
-
-export function extensionForAttachmentMime(mime: string): '.png' | '.jpg' | '.pdf' | null {
-  switch (mime) {
-    case 'image/png':
-      return '.png';
-    case 'image/jpeg':
-    case 'image/jpg':
-      return '.jpg';
-    case 'application/pdf':
-      return '.pdf';
-    default:
-      return null;
-  }
-}
-

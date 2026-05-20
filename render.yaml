@@ -25,8 +25,8 @@ services:
     plan: starter
     branch: main
     rootDir: src
-    # Status 127 fix: prisma CLI must be in dependencies; postinstall uses node scripts/postinstall.js
-    buildCommand: npm ci --legacy-peer-deps && BUILD_ID=${RENDER_GIT_COMMIT:-unknown} GIT_SHA=${RENDER_GIT_COMMIT:-unknown} npm run build
+    # NODE_ENV=production omits devDependencies by default; Next.js build needs typescript/@types.
+    buildCommand: npm ci --include=dev --legacy-peer-deps && BUILD_ID=${RENDER_GIT_COMMIT:-unknown} GIT_SHA=${RENDER_GIT_COMMIT:-unknown} npm run build
 
     startCommand: npm run start
     healthCheckPath: /api/health

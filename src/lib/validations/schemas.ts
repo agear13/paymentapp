@@ -8,7 +8,7 @@ import {
   isValidPaymentLinkAttachmentStorageKey,
   PAYMENT_LINK_ATTACHMENT_BUCKET,
   PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
-} from '@/lib/payment-links/payment-link-attachment';
+} from '@/lib/payment-links/payment-link-attachment.shared';
 
 // ============================================================================
 // ENUM SCHEMAS
