@@ -4,6 +4,7 @@ import { RevenueSummaryCard } from './revenue-summary-card';
 import { TokenBreakdownChart } from './token-breakdown-chart';
 import { LedgerBalanceReport } from './ledger-balance-report';
 import { ReconciliationReport } from './reconciliation-report';
+import { OperationalInsightsCard } from './operational-insights-card';
 import { Button } from '@/components/ui/button';
 import { Download, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
@@ -170,6 +171,11 @@ export function ReportsPageClient({ organizationId }: ReportsPageClientProps) {
           endDate={endDate}
         />
       </div>
+
+      <OperationalInsightsCard
+        key={`insights-${refreshKey}`}
+        organizationId={organizationId}
+      />
 
       {/* Financial Reports */}
       <div className="space-y-6">

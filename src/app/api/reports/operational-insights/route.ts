@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
-import { buildReconciliationReport } from '@/lib/reports/reconciliation-report.server';
+import { getOperationalInsights } from '@/lib/reports/operational-insights';
 
 /**
- * GET /api/reports/reconciliation
+ * GET /api/reports/operational-insights
  *
- * Returns reconciliation report comparing:
- * - Expected balances (from payment links)
- * - Actual balances (from ledger entries)
+ * Returns system-detected operational states for the reports dashboard.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -26,13 +24,13 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const data = await buildReconciliationReport(organizationId);
+    const snapshot = await getOperationalInsights(organizationId);
 
-    return NextResponse.json(data);
+    return NextResponse.json(snapshot);
   } catch (error: unknown) {
-    console.error('[Reconciliation] Error:', error);
+    console.error('[Operational Insights] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to generate reconciliation report' },
+      { error: 'Failed to load operational insights' },
       { status: 500 }
     );
   }
