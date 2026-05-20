@@ -69,7 +69,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
           ) : (
             <p className="text-muted-foreground mt-1 max-w-2xl">
               Coordinate participants, funding, obligations, and payouts for this project.
-              Provvypay separates operational allocation from settlement execution.
+              Operational allocation and settlement execution stay in separate views.
             </p>
           )}
         </div>

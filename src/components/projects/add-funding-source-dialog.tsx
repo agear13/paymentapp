@@ -121,8 +121,7 @@ export function AddFundingSourceDialog({
           <DialogHeader>
             <DialogTitle>Add funding source</DialogTitle>
             <DialogDescription>
-              Track expected inflows and settlement readiness. Provvypay separates operational
-              allocation from settlement execution.
+              Track expected inflows and settlement readiness for this project.
             </DialogDescription>
           </DialogHeader>
 

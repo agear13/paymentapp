@@ -701,7 +701,7 @@ export function InviteParticipantModal({
                     id="inv-pnotes"
                     value={participantNotes}
                     onChange={(e) => setParticipantNotes(e.target.value)}
-                    placeholder="Internal notes — milestones, contractor context, or payment expectations."
+                    placeholder="Internal notes: milestones, contractor context, or payment expectations."
                     rows={3}
                     className="resize-y"
                   />

@@ -203,7 +203,7 @@ export function PayoutDestinationCard() {
                   onChange={(e) => setForm((f) => ({ ...f, hederaAccountId: e.target.value }))}
                   placeholder="0.0.12345"
                 />
-                <p className="text-xs text-muted-foreground">Format 0.0.x — for USDC/USDT payouts</p>
+                <p className="text-xs text-muted-foreground">Format 0.0.x for USDC/USDT payouts</p>
               </div>
             ) : (
               <div className="space-y-2">

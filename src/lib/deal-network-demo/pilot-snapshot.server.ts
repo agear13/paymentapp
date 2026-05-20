@@ -495,7 +495,7 @@ export async function approveParticipantByInviteToken(
     };
   } catch (err) {
     log.error(
-      'referral issuance failed after approval — rolling back approval',
+      'Referral issuance failed after approval. Rolling back approval.',
       err instanceof Error ? err : undefined,
       {
         pilotParticipantId: row.id,

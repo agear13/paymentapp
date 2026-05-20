@@ -59,16 +59,16 @@ export function buildShareTemplates(
   if (type === 'review') {
     return {
       subject: 'Quick review request',
-      emailBody: `${greeting}\n\nThanks for working with me — would you mind leaving a quick review? It helps a lot.\n\n${link}\n\nThanks!`,
-      whatsapp: `Thanks for working with me — would you mind leaving a quick review? ${link}`,
+      emailBody: `${greeting}\n\nThanks for working with me. Would you mind leaving a quick review? It helps a lot.\n\n${link}\n\nThanks!`,
+      whatsapp: `Thanks for working with me. Would you mind leaving a quick review? ${link}`,
       sms: `Thanks for working with me! Would you mind leaving a quick review? ${link}`,
     };
   }
 
   return {
     subject: `Referral link for ${serviceLabel}`,
-    emailBody: `${greeting}\n\nHere's your referral link for ${serviceLabel}. Share it with anyone who might benefit — you'll earn a commission when they convert.\n\n${link}\n\nLet me know if you have questions!`,
-    whatsapp: `Here's your referral link for ${serviceLabel}. Share it with anyone who might benefit — you'll earn a commission: ${link}`,
+    emailBody: `${greeting}\n\nHere's your referral link for ${serviceLabel}. Share it with anyone who might benefit. You earn a commission when they convert.\n\n${link}\n\nLet me know if you have questions!`,
+    whatsapp: `Here's your referral link for ${serviceLabel}. Share it with anyone who might benefit. You earn a commission when they convert: ${link}`,
     sms: `Your referral link for ${serviceLabel}: ${link}. Share it and earn when they convert!`,
   };
 }

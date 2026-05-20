@@ -66,7 +66,7 @@ export default function OperatorReferralsPage() {
           <h1 className="text-3xl font-bold">Referral sharing</h1>
           <p className="text-gray-600 mt-1">
             Operational hub for participant referral links, QR codes, and copy/share actions. Existing codes
-            are shown as-is — nothing is regenerated.
+            are shown as-is. Nothing is regenerated.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -110,7 +110,7 @@ export default function OperatorReferralsPage() {
                 <Link href="/dashboard/partners/referral-links" className="text-blue-600 underline">
                   Partners → Commission link setup
                 </Link>{' '}
-                or complete participant onboarding — codes are created automatically when links exist.
+                or complete participant onboarding. Codes are created automatically when links exist.
               </p>
             </div>
           ) : (

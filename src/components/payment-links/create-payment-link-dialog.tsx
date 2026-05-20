@@ -412,7 +412,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       },
       {
         value: 'HEDERA',
-        label: 'Crypto (Hashpack — auto-verified on Hedera)',
+        label: 'Crypto (Hashpack, auto-verified on Hedera)',
         available: true,
       },
       {
@@ -1847,7 +1847,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               </div>
               <p className="text-xs text-muted-foreground">
                 Optional PNG, JPG, or PDF (max {PAYMENT_LINK_ATTACHMENT_MAX_BYTES / (1024 * 1024)}MB). Shown on the
-                public invoice — useful for QR codes or bank transfer details.
+                public invoice, useful for QR codes or bank transfer details.
               </p>
               <input
                 ref={attachmentFileInputRef}

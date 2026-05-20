@@ -589,7 +589,7 @@ export function WorkflowOnboardingForm() {
                         <SelectContent>
                           {currencies.map((c) => (
                             <SelectItem key={c.code} value={c.code}>
-                              {c.code} — {c.name}
+                              {c.code} · {c.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -629,7 +629,7 @@ export function WorkflowOnboardingForm() {
               {confirmedParticipants.map((p, index) => (
                 <Badge key={`${p.name}-${index}`} variant="secondary" className="gap-2 py-1.5 px-3">
                   <span>
-                    {p.name} — {p.role}
+                    {p.name} · {p.role}
                   </span>
                   <button
                     type="button"
@@ -900,7 +900,7 @@ export function WorkflowOnboardingForm() {
           <h1 className="text-3xl font-bold tracking-tight">Welcome to Provvypay</h1>
           <p className="mt-2 text-muted-foreground max-w-lg mx-auto">
             Set up your workspace for coordinating revenue, obligations, and payouts across
-            multiple parties — in a few guided steps.
+            multiple parties in a few guided steps.
           </p>
         </div>
         <OnboardingProgress step={step} />

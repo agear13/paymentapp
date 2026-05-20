@@ -178,7 +178,7 @@ export function OperatorCommissionsWorkspace() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Commissions</h1>
           <p className="text-muted-foreground mt-1 max-w-2xl">
-            Commission allocation and accrual across projects — earned amounts, payout eligibility,
+            Commission allocation and accrual across projects: earned amounts, payout eligibility,
             and attribution-linked obligations.
           </p>
         </div>

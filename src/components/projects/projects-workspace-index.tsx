@@ -78,8 +78,8 @@ export function ProjectsWorkspaceIndex() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
           <p className="text-muted-foreground mt-1 max-w-2xl">
-            Projects coordinate participants, funding, obligations, and payouts. This is your
-            operational workspace — not a payment-only view.
+            Coordinate participants, funding, obligations, and payouts per project in one
+            workspace.
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)} size="lg">
@@ -102,7 +102,7 @@ export function ProjectsWorkspaceIndex() {
             <CardTitle>Create your first project</CardTitle>
             <CardDescription className="max-w-md mx-auto">
               Start by naming a project. You will add participants, link funding, track obligations,
-              and coordinate payouts — all in one place.
+              and coordinate payouts in one place.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center pb-8">

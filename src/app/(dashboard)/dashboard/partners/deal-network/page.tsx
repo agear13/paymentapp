@@ -600,7 +600,7 @@ export default function DealNetworkPage() {
     }
     const { fundedTotal, owedTotal, projectFundingStatus, linkedInvoiceCount } =
       projectFundingSummary;
-    return `${projectFundingStatusLabel(projectFundingStatus)} — ${formatDealCurrency(fundedTotal, activeDeal)} of ${formatDealCurrency(owedTotal, activeDeal)} on linked invoices · ${linkedInvoiceCount} linked`;
+    return `${projectFundingStatusLabel(projectFundingStatus)} · ${formatDealCurrency(fundedTotal, activeDeal)} of ${formatDealCurrency(owedTotal, activeDeal)} on linked invoices · ${linkedInvoiceCount} linked`;
   }, [isProjectMode, activeDeal, projectFundingSummary]);
 
   React.useEffect(() => {
@@ -1235,7 +1235,7 @@ export default function DealNetworkPage() {
             {featured.commissionSplits.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 {isProjectMode
-                  ? 'No fixed pool lines on this project yet — use participant invites for payout splits.'
+                  ? 'No fixed pool lines on this project yet. Use participant invites for payout splits.'
                   : 'No commission structure defined yet.'}
               </p>
             ) : (
@@ -1881,7 +1881,7 @@ export default function DealNetworkPage() {
                     deal.rhGraphIntroducer &&
                     deal.introducer.trim() !== deal.rhGraphIntroducer.trim() ? (
                       <span className="mt-1 block text-xs text-amber-700 dark:text-amber-400">
-                        Introducer override — graph: {deal.rhGraphIntroducer}
+                        Introducer override · graph: {deal.rhGraphIntroducer}
                       </span>
                     ) : null}
                   </TableCell>

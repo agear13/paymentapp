@@ -28,7 +28,7 @@ export function OperationalLedgerPage({
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Ledger</h1>
         <p className="text-muted-foreground mt-1 max-w-2xl">
-          Auditable financial memory for your organization — payment events, payout obligations,
+          Auditable financial memory for your organization: payment events, payout obligations,
           commission accruals, settlement releases, and invoice relationships in one operational
           view.
         </p>

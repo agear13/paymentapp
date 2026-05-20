@@ -375,7 +375,7 @@ export default function DealNetworkObligationsPage() {
           </Button>
           <h1 className="text-2xl font-semibold tracking-tight">Financial obligations</h1>
           <p className="text-muted-foreground text-sm">
-            Operator view — totals and rows reflect <strong>stored obligation lines</strong> and their
+            Operator view. Totals and rows reflect <strong>stored obligation lines</strong> and their
             statuses only (same rules as the table below).
           </p>
         </div>
@@ -475,7 +475,7 @@ export default function DealNetworkObligationsPage() {
             </CardDescription>
             <CardTitle className="text-xl tabular-nums sm:text-2xl">{loading ? '…' : rows.length}</CardTitle>
             {kpi.mixedCurrency && rows.length > 0 ? (
-              <p className="text-muted-foreground text-[11px]">Multiple currencies — amount totals hidden</p>
+              <p className="text-muted-foreground text-[11px]">Multiple currencies. Amount totals hidden.</p>
             ) : null}
           </CardHeader>
         </Card>
@@ -596,7 +596,7 @@ export default function DealNetworkObligationsPage() {
               {!loading && rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={10} className="text-muted-foreground py-10 text-center text-sm">
-                    No rows match the current filters — or no obligations have been generated yet.
+                    No rows match the current filters, or no obligations have been generated yet.
                   </TableCell>
                 </TableRow>
               ) : null}

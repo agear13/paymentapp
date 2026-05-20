@@ -37,7 +37,7 @@ export function ReferralSharePanel({
       toast.success('Referral link copied');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error('Could not copy — try selecting the link manually');
+      toast.error('Could not copy. Try selecting the link manually.');
     }
   };
 

@@ -123,7 +123,7 @@ export function OperatorSettlementsWorkspace() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settlement history</h1>
         <p className="text-muted-foreground mt-1 max-w-2xl">
-          Operational treasury and release history — payout batches, settlement dates, approval
+          Operational treasury and release history: payout batches, settlement dates, approval
           states, and project settlement references.
         </p>
       </div>

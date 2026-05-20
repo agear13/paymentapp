@@ -80,7 +80,7 @@ export function PaymentLinksOnboardingAssistant({ organizationId }: { organizati
   const title =
     result.overallStatus === 'not_started'
       ? 'Get set up to get paid'
-      : 'Almost there — finish setup';
+      : 'Almost there. Finish setup.';
 
   return (
     <Card className="border-sky-500/25 bg-gradient-to-r from-sky-500/5 to-transparent shadow-sm">

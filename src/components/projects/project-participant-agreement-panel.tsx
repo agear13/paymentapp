@@ -210,7 +210,7 @@ export function ProjectParticipantAgreementPanel({
         <CardTitle>Participant agreement</CardTitle>
         <CardDescription>
           Review your operational role, payout allocation, and attribution permissions for this
-          project. Approving confirms your participation — payout onboarding can be completed later.
+          project. Approving confirms your participation. Payout onboarding can be completed later.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -316,7 +316,7 @@ export function ProjectParticipantAgreementPanel({
           <p className="text-sm text-muted-foreground">
             {issuingCommerce
               ? 'Preparing your trackable customer link…'
-              : 'Customer link unavailable — contact the project operator.'}
+              : 'Customer link unavailable. Contact the project operator.'}
           </p>
         ) : null}
       </CardContent>

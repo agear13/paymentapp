@@ -131,7 +131,7 @@ export function CollectReviewModal({
           link={reviewUrl}
           templates={shareTemplates}
           title="Share review link"
-          description="Thanks for working with me — would you mind leaving a quick review?"
+          description="Thanks for working with me. Would you mind leaving a quick review?"
         />
       )}
     </>

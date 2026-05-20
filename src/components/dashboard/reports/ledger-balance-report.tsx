@@ -127,7 +127,7 @@ export function LedgerBalanceReport({ organizationId }: LedgerBalanceReportProps
         <CardHeader>
           <CardTitle>Ledger Balance Report</CardTitle>
           <CardDescription>
-            Sample data for demo — live data unavailable
+            Sample data for demo. Live data unavailable.
           </CardDescription>
         </CardHeader>
         <CardContent>

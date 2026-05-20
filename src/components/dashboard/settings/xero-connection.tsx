@@ -122,7 +122,7 @@ export function XeroConnection({ organizationId }: XeroConnectionProps) {
       const errorMessages: Record<string, string> = {
         missing_parameters: 'Missing required parameters',
         invalid_state: 'Invalid connection state',
-        unauthorized: 'Session mismatch — sign in again and retry',
+        unauthorized: 'Session mismatch. Sign in again and retry.',
         no_tenants: 'No Xero organizations found',
         connection_failed: 'Failed to establish connection',
       };

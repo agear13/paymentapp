@@ -91,7 +91,7 @@ export default function MyReferralsPage() {
         <h1 className="text-3xl font-bold">My referrals</h1>
         <p className="text-gray-600 mt-1">
           Your shareable links, attributed invoices, and commission lines. Copy your link or QR and send it
-          to customers — attribution is automatic when they pay.
+          to customers. Attribution is automatic when they pay.
         </p>
       </div>
 
@@ -101,7 +101,7 @@ export default function MyReferralsPage() {
         <CardHeader>
           <CardTitle>Your referral links</CardTitle>
           <CardDescription>
-            These links already exist for your account. Share them as-is — we do not generate new codes
+            These links already exist for your account. Share them as-is. We do not generate new codes
             here.
           </CardDescription>
         </CardHeader>
@@ -140,7 +140,7 @@ export default function MyReferralsPage() {
         </CardHeader>
         <CardContent>
           {data.invoices.length === 0 ? (
-            <p className="text-sm text-gray-600">No attributed invoices yet — share your link to get started.</p>
+            <p className="text-sm text-gray-600">No attributed invoices yet. Share your link to get started.</p>
           ) : (
             <ul className="divide-y divide-gray-100">
               {data.invoices.map((i) => (

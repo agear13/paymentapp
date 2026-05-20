@@ -434,7 +434,7 @@ function CreateDealModalReferral({
       const coId = `co-edit-${Date.now()}`;
       const ctId = `ct-edit-${Date.now()}`;
       const co: RhCompany = { id: coId, name: editDeal.partner };
-      const line = editDeal.rhContactLine?.split(' — ') ?? [];
+      const line = editDeal.rhContactLine?.split(/\s[—·]\s/) ?? [];
       const contactName = line[0] || editDeal.partner;
       const contactRole = line[1] || 'Contact';
       const ct: RhContact = {
@@ -769,7 +769,7 @@ function CreateDealModalReferral({
                           <Check className={cn('mr-2 h-4 w-4', contactId === c.id ? 'opacity-100' : 'opacity-0')} />
                           <span className="flex flex-col gap-0.5 text-left">
                             <span>
-                              {c.name} — {c.title} — {company?.name}
+                              {c.name} · {c.title} · {company?.name}
                             </span>
                             <span className="text-xs text-muted-foreground font-normal">{c.specialty}</span>
                           </span>
@@ -800,7 +800,7 @@ function CreateDealModalReferral({
             <div>
               <p className="text-sm font-medium">Commission structure</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Optional for now — you can save the deal and define introducer, closer, and platform payouts
+                Optional for now. You can save the deal and define introducer, closer, and platform payouts
                 later.
               </p>
             </div>
@@ -870,10 +870,10 @@ function CreateDealModalReferral({
                 <p className="text-xs text-muted-foreground">
                   {state.kind === 'formula_advanced'
                     ? state.formula.trim() === ''
-                      ? 'Not set yet — optional.'
+                      ? 'Not set yet (optional).'
                       : result.previewLine
                     : state.value.trim() === ''
-                      ? 'Not set yet — optional.'
+                      ? 'Not set yet (optional).'
                       : result.previewLine}
                 </p>
                 {(state.kind === 'formula_advanced' ? state.formula.trim() !== '' : state.value.trim() !== '') &&
@@ -966,7 +966,7 @@ function CreateDealModalReferral({
                 id="dn-latest-update"
                 value={latestUpdate}
                 onChange={(e) => setLatestUpdate(e.target.value)}
-                placeholder="What happened last — call summary, decision, blockers"
+                placeholder="What happened last: call summary, decision, blockers"
                 rows={3}
               />
             </div>

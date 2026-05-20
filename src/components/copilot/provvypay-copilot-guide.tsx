@@ -75,7 +75,7 @@ const GUIDE_CONTENT: Record<CopilotGuideTopic, GuideContent> = {
       'Describe your participants and where they are paid',
       'Note which currencies and settlement speeds you need',
       'Co-Pilot suggests Stripe, Wise, Hedera, or manual recording options',
-      'Connect providers when you are ready — onboarding does not require them',
+      'Connect providers when you are ready. Onboarding does not require them.',
     ],
     footerNote: 'You can configure providers anytime in Settings after entering your workspace.',
   },

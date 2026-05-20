@@ -204,7 +204,7 @@ export function LoginPageClient() {
                 <div>
                   <h3 className="font-semibold mb-1">Real-time payout visibility</h3>
                   <p className="text-sm text-muted-foreground">
-                    Funded, partially funded, and blocked lines — before finance releases payment
+                    Funded, partially funded, and blocked lines before finance releases payment
                   </p>
                 </div>
               </div>
@@ -223,7 +223,7 @@ export function LoginPageClient() {
                 <div>
                   <h3 className="font-semibold mb-1">Audit-ready reconciliation</h3>
                   <p className="text-sm text-muted-foreground">
-                    Xero sync and structured records — fewer manual checks at month-end
+                    Xero sync and structured records with fewer manual checks at month-end
                   </p>
                 </div>
               </div>

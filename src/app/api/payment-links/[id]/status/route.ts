@@ -320,9 +320,9 @@ function generateStatusMessage(status: string, lastEvent?: any): string {
       }
       return 'Awaiting payment';
     case 'PAID_UNVERIFIED':
-      return 'Crypto payment submitted — recorded on your invoice';
+      return 'Crypto payment submitted and recorded on your invoice';
     case 'REQUIRES_REVIEW':
-      return 'Crypto payment submitted — merchant review suggested';
+      return 'Crypto payment submitted. Merchant review suggested.';
     case 'PAID':
       const method = lastEvent?.payment_method;
       return method 

@@ -38,7 +38,7 @@ export function SelectedTokenDetails({
           <div className="flex items-center gap-2 pb-4 border-b">
             <span className="text-2xl">{getTokenIcon(selectedToken)}</span>
             <h3 className="text-lg font-semibold">
-              Payment details — {selectedToken}
+              Payment details ({selectedToken})
             </h3>
           </div>
 

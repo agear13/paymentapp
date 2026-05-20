@@ -39,7 +39,7 @@ export function operationalStatusDescription(status: string): string {
     case 'OPEN':
       return 'No payment has been reported yet.';
     case 'PAID_UNVERIFIED':
-      return 'Customer reported payment — verification pending.';
+      return 'Customer reported payment. Verification pending.';
     case 'REQUIRES_REVIEW':
       return 'Operator or system review needed before advancing settlement.';
     case 'PAID':

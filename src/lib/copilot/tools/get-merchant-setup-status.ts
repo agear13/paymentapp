@@ -83,7 +83,7 @@ export async function getMerchantSetupStatus(organizationId: string): Promise<Me
   } else if (setup.wiseIncomplete) {
     wiseStepStatus = 'attention';
     wiseDescription =
-      'Wise is toggled on but no profile ID is set — finish Wise setup in merchant settings.';
+      'Wise is toggled on but no profile ID is set. Finish Wise setup in merchant settings.';
   }
 
   steps.push({

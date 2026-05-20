@@ -45,7 +45,7 @@ function extractFromParsedBody(body: unknown): string | null {
 
   if (typeof o.Message === 'string' && o.Message.trim()) {
     const detail =
-      typeof o.Detail === 'string' && o.Detail.trim() ? ` — ${o.Detail}` : '';
+      typeof o.Detail === 'string' && o.Detail.trim() ? `. ${o.Detail}` : '';
     return `${o.Message}${detail}`;
   }
 

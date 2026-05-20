@@ -157,7 +157,7 @@ export default function PlatformPreviewOverviewPage() {
         {/* Sales Trend Chart */}
         <Card>
           <CardHeader>
-            <CardTitle>Sales (Gross vs Net) — Last 30 Days</CardTitle>
+            <CardTitle>Sales (Gross vs Net), last 30 days</CardTitle>
             <CardDescription>Revenue trends across all channels</CardDescription>
           </CardHeader>
           <CardContent>

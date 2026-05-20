@@ -117,7 +117,7 @@ export function computeDealCommissionTotal(
   const total = Math.round(dealValue * 0.2 * 0.5);
   const note = _formulaText.trim()
     ? `Expression recorded: “${_formulaText.trim().slice(0, 48)}${_formulaText.trim().length > 48 ? '…' : ''}”`
-    : 'No expression entered — showing sample math';
+    : 'No expression entered. Showing sample math.';
   return {
     total,
     previewLine: `${note}. Static result: $${total.toLocaleString()} (not evaluated)`,

@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       }
       if (!adminAuth.isAdmin) {
         return NextResponse.json(
-          { error: 'Forbidden — admin or cron token required' },
+          { error: 'Forbidden. Admin or cron token required.' },
           { status: 403 }
         );
       }
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
       }
       if (!adminAuth.isAdmin) {
         return NextResponse.json(
-          { error: 'Forbidden — admin or cron token required' },
+          { error: 'Forbidden. Admin or cron token required.' },
           { status: 403 }
         );
       }

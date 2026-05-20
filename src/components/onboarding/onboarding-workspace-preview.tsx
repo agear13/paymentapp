@@ -106,7 +106,7 @@ export function OnboardingWorkspacePreview({ projectName }: OnboardingWorkspaceP
             </CardTitle>
             <CardDescription className="mt-1 max-w-2xl">
               {label} is live. This workspace tracks revenue, obligations, payout readiness,
-              approvals, and reconciliation across multiple parties — all collection methods feed
+              approvals, and reconciliation across multiple parties. All collection methods feed
               into the same settlement view.
             </CardDescription>
           </div>

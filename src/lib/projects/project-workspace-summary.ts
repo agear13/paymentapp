@@ -56,13 +56,13 @@ function legacyFundingLabel(deal: RecentDeal): { fundingLabel: string; fundingSu
   if (deal.paymentStatus === 'Paid') {
     return {
       fundingLabel: 'Confirmed revenue on file',
-      fundingSubcopy: 'Legacy settlement marker — add funding sources for full treasury visibility.',
+      fundingSubcopy: 'Legacy settlement marker on file. Add funding sources for full treasury visibility.',
     };
   }
   if (deal.paymentLink) {
     return {
       fundingLabel: 'Pending revenue',
-      fundingSubcopy: 'Invoice or payment link attached — add as a funding source for coordination.',
+      fundingSubcopy: 'Invoice or payment link attached. Add it as a funding source for coordination.',
     };
   }
   return {

@@ -108,5 +108,5 @@ export function getContactById(id: string): RhContact | undefined {
 
 /** e.g. Bob — BD Lead — CertiK */
 export function formatRhContactLine(contact: RhContact, companyName: string): string {
-  return `${contact.name} — ${contact.title} — ${companyName}`;
+  return `${contact.name} · ${contact.title} · ${companyName}`;
 }

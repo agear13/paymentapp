@@ -94,7 +94,7 @@ export function ProjectObligationsView() {
           <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
           <p className="text-muted-foreground mt-1 text-sm max-w-2xl">
             Allocation defines what should be paid. Funding sources define whether it can be paid
-            yet — obligations exist before revenue settles.
+            yet. Obligations exist before revenue settles.
           </p>
         </div>
         <div className="flex gap-2">
@@ -116,7 +116,7 @@ export function ProjectObligationsView() {
             <div>
               <CardTitle>Project obligations</CardTitle>
               <CardDescription>
-                Operational allocation — payout readiness follows funding sources and settlement
+                Operational allocation. Payout readiness follows funding sources and settlement
                 state.
               </CardDescription>
             </div>
@@ -136,7 +136,7 @@ export function ProjectObligationsView() {
           ) : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6">
               No obligations recorded for this project yet. They appear when participants are
-              allocated — funding sources affect payout readiness, not whether obligations exist.
+              allocated. Funding sources affect payout readiness, not whether obligations exist.
             </p>
           ) : (
             <Table>

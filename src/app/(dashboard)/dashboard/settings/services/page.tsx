@@ -257,7 +257,7 @@ export default function OrganizationServicesPage() {
       <div>
         <h1 className="text-3xl font-bold">Service catalog</h1>
         <p className="text-gray-600 mt-1">
-          Priced services for referral landing pages. Edits apply to future checkouts only — past invoices,
+          Priced services for referral landing pages. Edits apply to future checkouts only. Past invoices
           payment links, and commission snapshots stay immutable.
         </p>
         <p className="text-sm text-muted-foreground mt-2">

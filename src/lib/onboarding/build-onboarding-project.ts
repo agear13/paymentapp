@@ -76,6 +76,6 @@ export function buildOnboardingParticipant(input: {
     commissionKind: participationModel === 'revenue_share' ? 'pct_deal_value' : 'fixed_amount',
     commissionValue: participationModel === 'revenue_share' ? 10 : 0,
     enableCustomerAttribution: participationModel === 'customer_attribution',
-    notes: `${input.role} — added during onboarding`,
+    notes: `${input.role} · added during onboarding`,
   });
 }

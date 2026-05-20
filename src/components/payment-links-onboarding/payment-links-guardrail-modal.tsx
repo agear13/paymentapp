@@ -91,7 +91,7 @@ export function PaymentLinksGuardrailModal({
         </div>
         <div className="px-6 py-4">
           <p className="text-muted-foreground text-xs leading-relaxed">
-            Use the actions below — we’ll keep your invoice details as you entered them.
+            Use the actions below. Your invoice details stay as you entered them.
           </p>
         </div>
         <DialogFooter className="flex-col gap-2 border-t bg-muted/20 px-6 py-4 sm:flex-col sm:space-x-0">

@@ -20,7 +20,7 @@ export function ProjectPayoutsView() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Payout coordination for this project — obligations first, then disbursement.
+          Payout coordination for this project: obligations first, then disbursement.
         </p>
       </div>
 

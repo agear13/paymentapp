@@ -86,7 +86,7 @@ export function RevenueSummaryCard({
       <Card>
         <CardHeader>
           <CardTitle>Revenue Summary</CardTitle>
-          <CardDescription>Sample data for demo — live data unavailable</CardDescription>
+          <CardDescription>Sample data for demo. Live data unavailable.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-amber-700 mb-4">

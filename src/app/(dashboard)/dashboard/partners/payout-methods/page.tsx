@@ -236,7 +236,7 @@ export default function PayoutMethodsPage() {
                   placeholder="0.0.12345"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Format: 0.0.x — used for USDC/USDT/HBAR payouts via HashPack
+                  Format: 0.0.x, used for USDC/USDT/HBAR payouts via HashPack
                 </p>
               </div>
             ) : (

@@ -91,7 +91,7 @@ export function TokenBreakdownChart({
         <CardHeader>
           <CardTitle>Token Breakdown</CardTitle>
           <CardDescription>
-            Sample data for demo — live data unavailable
+            Sample data for demo. Live data unavailable.
           </CardDescription>
         </CardHeader>
         <CardContent>

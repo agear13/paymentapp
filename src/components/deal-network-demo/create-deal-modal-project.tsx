@@ -162,7 +162,7 @@ export function CreateDealModalProject({
                 id="dn-proj-name"
                 value={dealName}
                 onChange={(e) => setDealName(e.target.value)}
-                placeholder="e.g. Strait Experiences — March cohort"
+                placeholder="e.g. Strait Experiences, March cohort"
                 required
               />
             </div>

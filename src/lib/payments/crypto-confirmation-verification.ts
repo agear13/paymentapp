@@ -242,7 +242,7 @@ export function verifyCryptoConfirmationInput(params: {
       issues.push(`Payer network "${payerNet}" does not match requested network "${net}"`);
       hard += 1;
     } else if (fuzzy) {
-      issues.push(`Network matched loosely — confirm payer used the same chain as "${net}"`);
+      issues.push(`Network matched loosely. Confirm payer used the same chain as "${net}".`);
     }
   }
 
@@ -264,7 +264,7 @@ export function verifyCryptoConfirmationInput(params: {
   if (!amtOk) {
     if (amtFuzzy) {
       issues.push(
-        `Reported amount is close but not exact vs invoice ${params.invoiceAmount} ${params.invoiceCurrency} — verify manually`
+        `Reported amount is close but not exact vs invoice ${params.invoiceAmount} ${params.invoiceCurrency}. Verify manually.`
       );
     } else {
       issues.push(

@@ -227,7 +227,7 @@ export function InviteProjectParticipantModal({
 
       setAgreementLink(fullAgreementUrl);
       setStep('agreement');
-      toast.success(`${finalParticipant.name} added — share the agreement link`);
+      toast.success(`${finalParticipant.name} added. Share the agreement link.`);
     } catch {
       toast.error('Could not add participant. Try again.');
     } finally {

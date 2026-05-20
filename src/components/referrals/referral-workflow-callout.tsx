@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react';
 
 const STEPS = [
   'Create your project or program',
-  'Invite a participant — they accept',
+  'Invite a participant, they accept',
   'A referral link is created automatically',
   'Participant copies the link or QR and shares it',
   'Customer opens the link, picks a service, and pays',
@@ -18,7 +18,7 @@ export function ReferralWorkflowCallout({ audience }: { audience: 'operator' | '
         <CardDescription>
           {audience === 'operator'
             ? 'This is the operational chain your team and participants should follow.'
-            : 'Share your link below — when someone pays through it, you are attributed automatically.'}
+            : 'Share your link below. When someone pays through it, you are attributed automatically.'}
         </CardDescription>
       </CardHeader>
       <CardContent>

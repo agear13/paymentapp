@@ -156,7 +156,7 @@ export function DealNetworkCopilotPanel({
               <div>
                 <CardTitle className="text-base">Deal Network Copilot</CardTitle>
                 <CardDescription className="text-xs">
-                  Operator diagnostics for this deal — scoped to Deal Network only.
+                  Operator diagnostics for this deal, scoped to Deal Network only.
                 </CardDescription>
               </div>
             </div>

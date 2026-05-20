@@ -118,7 +118,7 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
     dealName: input.project.dealName,
     roleDetails:
       input.notes?.trim() ||
-      `${input.role} — ${participationModelLabel(input.participationModel)} on ${input.project.dealName}`,
+      `${input.role} · ${participationModelLabel(input.participationModel)} on ${input.project.dealName}`,
     payoutDueDate: input.payoutDueDate?.trim() || undefined,
     participantNotes: input.notes?.trim() || undefined,
     referralCommerce,

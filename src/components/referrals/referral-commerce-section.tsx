@@ -199,7 +199,7 @@ export function ReferralCommerceSection({
                   <p className="text-xs text-muted-foreground">Loading services…</p>
                 ) : services.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    No active services — add services in Settings → Services.
+                    No active services. Add services in Settings → Services.
                   </p>
                 ) : (
                   <>

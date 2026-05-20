@@ -293,7 +293,7 @@ export function buildExportPayoutRows(
     const paidAt = deal.paidAt ? formatExportDate(deal.paidAt) : undefined;
     const contractPaidStatus = dealIsPaid ? 'Contract Paid' : 'Contract Unpaid';
 
-    const contactPerson = deal.rhContactLine?.split(' — ')[0] ?? '-';
+    const contactPerson = deal.rhContactLine?.split(/\s[—·]\s/)[0] ?? '-';
 
     if (deal.platformFee != null) {
       out.push({
@@ -371,7 +371,7 @@ export function buildExportPayoutRows(
     out.push({
       dealName: deal.dealName,
       partner: deal.partner,
-      contactPerson: deal.rhContactLine?.split(' — ')[0] ?? '-',
+      contactPerson: deal.rhContactLine?.split(/\s[—·]\s/)[0] ?? '-',
       participant: p.name,
       email: p.email?.trim() ?? '',
       role: p.role,

@@ -7,7 +7,7 @@ const WORKFLOW_STEPS = [
     step: '1',
     title: 'Venue creates the event',
     description:
-      'Beach Club Bali opens Saturday Beach Event — date, venue entity, and ops owner assigned before tickets sell.',
+      'Beach Club Bali opens Saturday Beach Event with date, venue entity, and ops owner assigned before tickets sell.',
     bridge: null,
     footer: 'Project live · finance team notified.',
     preview: {
@@ -24,7 +24,7 @@ const WORKFLOW_STEPS = [
     step: '2',
     title: 'Participants are added',
     description:
-      'Promoter, DJ, supplier, contractor, affiliate, and venue management — each party linked to the event.',
+      'Promoter, DJ, supplier, contractor, affiliate, and venue management linked to the event.',
     bridge: 'Six parties on one event.',
     footer: 'Roles and payout terms recorded.',
     preview: {
@@ -43,7 +43,7 @@ const WORKFLOW_STEPS = [
     step: '3',
     title: 'Revenue is collected',
     description:
-      'Ticketing, bookings, sponsorship, and table sales post to the project — not a separate payments silo.',
+      'Ticketing, bookings, sponsorship, and table sales post to the project ledger.',
     bridge: 'Revenue posts against the event.',
     footer: '$66,500 collected · linked to project.',
     preview: {
@@ -61,7 +61,7 @@ const WORKFLOW_STEPS = [
     step: '4',
     title: 'Obligations are structured',
     description:
-      'Promoter share, DJ fee, supplier INV-1045, contractor %, and venue split — each line with a payout state.',
+      'Promoter share, DJ fee, supplier INV-1045, contractor %, and venue split each carry a payout state.',
     bridge: 'INV-1045 attached to the event.',
     footer: 'Obligations linked · payout states assigned.',
     preview: {
@@ -108,7 +108,7 @@ const FEATURES = [
     outcome: 'No more chasing payout spreadsheets',
     title: 'One register for every party on the event',
     description:
-      'Promoters, DJs, suppliers, contractors, and affiliates — obligations and amounts in one place instead of shared drives and message threads.',
+      'Promoters, DJs, suppliers, contractors, and affiliates with obligations and amounts in one register.',
     iconPaths: [
       'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z',
     ],
@@ -117,7 +117,7 @@ const FEATURES = [
     outcome: 'No more manual reconciliation checks',
     title: 'Xero sync tied to the event',
     description:
-      'Postings follow the project structure your finance team already uses — less end-of-week matching and fewer “which event was this?” emails.',
+      'Postings follow the project structure your finance team already uses. Less end-of-week matching and fewer “which event was this?” emails.',
     iconPaths: [
       'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z',
     ],
@@ -127,7 +127,7 @@ const FEATURES = [
     outcome: 'No more uncertainty around supplier obligations',
     title: 'Invoices and payouts on the same event',
     description:
-      'Supplier INV-1045 sits next to promoter commission and DJ fees — funded, unfunded, and approval status visible before you release payment.',
+      'Supplier INV-1045 sits next to promoter commission and DJ fees. Funded, unfunded, and approval status stay visible before you release payment.',
     iconPaths: [
       'M15 12a3 3 0 11-6 0 3 3 0 016 0z',
       'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z',
@@ -137,7 +137,7 @@ const FEATURES = [
     outcome: 'No more fragmented settlement tracking',
     title: 'Settlement queue per event',
     description:
-      'See partial payouts, pending approvals, onboarding holds, and reconciliation flags before money leaves — not after.',
+      'See partial payouts, pending approvals, onboarding holds, and reconciliation flags before money leaves.',
     iconPaths: [
       'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
     ],
@@ -456,15 +456,14 @@ export function PublicLandingPage() {
             </div>
 
             <h1 className="text-5xl lg:text-6xl font-bold tracking-tight leading-tight">
-              Know who is owed what
-              <br />
-              <span className="text-primary">— in real time</span>
+              Coordinate payouts in{' '}
+              <span className="text-primary">real time</span>
             </h1>
 
             <p className="text-xl text-muted-foreground leading-relaxed">
-              Coordinate obligations across venues, promoters, DJs, suppliers, and contractors —
-              with funded vs unfunded tracking, payout readiness, and Xero reconciliation in one
-              workspace. Built for finance and ops teams, not another payments dashboard.
+              Track what is funded, owed, and ready to settle across venues, promoters, DJs,
+              suppliers, and contractors. One workspace for obligations, payout readiness, and Xero
+              reconciliation. Built for finance and operations teams managing multi-party events.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4">
@@ -522,7 +521,7 @@ export function PublicLandingPage() {
               Beach club event lifecycle
             </h2>
             <p className="text-lg text-muted-foreground">
-              How a venue runs Saturday Beach Event from setup through settlement — with six parties,
+              How a venue runs Saturday Beach Event from setup through settlement: six parties,
               mixed payout states, and finance sign-off before release.
             </p>
           </div>
@@ -569,7 +568,7 @@ export function PublicLandingPage() {
 
           <p className="text-center text-sm text-muted-foreground mt-10 max-w-2xl mx-auto">
             Used by venues, event operators, and agencies that coordinate payouts across multiple
-            parties — not merchant-to-customer payments alone.
+            parties beyond merchant-to-customer payments alone.
           </p>
         </div>
       </section>
@@ -580,7 +579,7 @@ export function PublicLandingPage() {
             <h2 className="text-3xl lg:text-4xl font-bold mb-4">What your team stops doing manually</h2>
             <p className="text-lg text-muted-foreground">
               The work finance and ops teams currently spread across spreadsheets, inboxes, and
-              payment tools — handled in one operational register.
+              payment tools, handled in one operational register.
             </p>
           </div>
 
@@ -616,7 +615,7 @@ export function PublicLandingPage() {
             </h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
               Bring multi-party obligations, payout coordination, and reconciliation into one
-              workspace — the way your finance team already thinks about events.
+              workspace aligned with how your finance team runs events.
             </p>
             <Link
               href="/auth/signup"
