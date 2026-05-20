@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Loader2, Upload, X, Building2, AlertCircle, Info } from 'lucide-react';
+import { Loader2, Upload, X, Building2, AlertCircle, Info, ExternalLink } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { MaskedCredentialInput } from '@/components/dashboard/settings/masked-credential-input';
