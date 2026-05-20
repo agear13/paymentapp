@@ -100,3 +100,45 @@ export async function GET(
     return apiError('Failed to fetch organization', 500);
   }
 }
+
+// DELETE /api/organizations/[id] - Remove organization (OWNER only)
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return apiError('Unauthorized', 401);
+    }
+
+    const { id } = await params;
+
+    const userOrg = await prisma.user_organizations.findFirst({
+      where: {
+        user_id: user.id,
+        organization_id: id,
+      },
+    });
+
+    if (!userOrg) {
+      return apiError('Organization not found or access denied', 404);
+    }
+
+    if (userOrg.role.toUpperCase() !== 'OWNER') {
+      return apiError('Forbidden - only the organization owner can delete the organization', 403);
+    }
+
+    await prisma.organizations.delete({
+      where: { id },
+    });
+
+    log.info({ organizationId: id, userId: user.id }, 'Deleted organization');
+
+    return apiResponse({ deleted: true });
+  } catch (error) {
+    log.error({ error }, 'Failed to delete organization');
+    return apiError('Failed to delete organization', 500);
+  }
+}

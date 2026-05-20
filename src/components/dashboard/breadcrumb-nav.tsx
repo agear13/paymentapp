@@ -37,9 +37,12 @@ const pathTitles: Record<string, string> = {
   ledger: 'Ledger',
   transactions: 'Transactions',
   organization: 'Organization',
-  merchant: 'Collection & settlement',
+  merchant: 'Collection & settlement setup',
   team: 'Team',
   integrations: 'Integrations',
+  services: 'Service catalog',
+  notifications: 'Notifications',
+  privacy: 'Privacy',
   'deal-network': 'Coordination workspace',
   programs: 'Participants',
   commissions: 'Commissions',
@@ -48,6 +51,13 @@ const pathTitles: Record<string, string> = {
   activity: 'Activity',
   referrals: 'Referrals',
 };
+
+const SETTINGS_HOME = '/dashboard/settings/organization';
+
+function settingsPageTitle(segment: string | undefined): string {
+  if (!segment) return 'Settings';
+  return pathTitles[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
+}
 
 interface BreadcrumbNavProps {
   productProfile: DashboardProductProfile;
@@ -135,6 +145,45 @@ export function BreadcrumbNav({ productProfile }: BreadcrumbNavProps) {
   }
 
   const segments = pathname.split('/').filter(Boolean);
+  const settingsIdx = segments.indexOf('settings');
+
+  if (settingsIdx !== -1) {
+    const pageSegment = segments[settingsIdx + 1];
+    const settingsCrumbs = [
+      { href: '/dashboard', title: 'Home', isLast: false },
+      { href: SETTINGS_HOME, title: 'Settings', isLast: !pageSegment },
+      ...(pageSegment
+        ? [
+            {
+              href: '/' + segments.slice(0, settingsIdx + 2).join('/'),
+              title: settingsPageTitle(pageSegment),
+              isLast: true,
+            },
+          ]
+        : []),
+    ];
+
+    return (
+      <Breadcrumb>
+        <BreadcrumbList>
+          {settingsCrumbs.map((breadcrumb, index) => (
+            <React.Fragment key={breadcrumb.href}>
+              {index > 0 && <BreadcrumbSeparator />}
+              <BreadcrumbItem>
+                {breadcrumb.isLast ? (
+                  <BreadcrumbPage>{breadcrumb.title}</BreadcrumbPage>
+                ) : (
+                  <BreadcrumbLink asChild>
+                    <Link href={breadcrumb.href}>{breadcrumb.title}</Link>
+                  </BreadcrumbLink>
+                )}
+              </BreadcrumbItem>
+            </React.Fragment>
+          ))}
+        </BreadcrumbList>
+      </Breadcrumb>
+    );
+  }
 
   if (segments.length <= 1) {
     return null;

@@ -180,7 +180,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
           {error}
           {error.includes('No active Xero connection') && (
             <span className="block mt-2">
-              Please connect to Xero first in the Connection tab above.
+              Connect to Xero using the button above.
             </span>
           )}
         </AlertDescription>

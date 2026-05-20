@@ -8,11 +8,15 @@ import { getUserOrganization } from '@/lib/auth/get-org';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/server/prisma';
 import Link from 'next/link';
+import {
+  maskHederaAccountId,
+  maskStripeAccountId,
+  maskWiseProfileId,
+} from '@/lib/settings/mask-credential';
 
 export default async function IntegrationsPage() {
-  // Get current user's organization with proper data isolation
   const user = await getCurrentUser();
-  
+
   if (!user) {
     redirect('/auth/login');
   }
@@ -25,7 +29,6 @@ export default async function IntegrationsPage() {
 
   const organizationId = org.id;
 
-  // Fetch merchant settings to check Wise configuration
   const merchantSettings = await prisma.merchant_settings.findFirst({
     where: { organization_id: organizationId },
     select: {
@@ -41,121 +44,167 @@ export default async function IntegrationsPage() {
   const wiseConfigured = !!merchantSettings?.wise_enabled && !!merchantSettings?.wise_profile_id;
   const wiseEnabled = !!merchantSettings?.wise_enabled;
 
-  // Mask profile ID for display
-  const maskedWiseProfileId = merchantSettings?.wise_profile_id 
-    ? `${merchantSettings.wise_profile_id.slice(0, 4)}****`
+  const maskedStripe = merchantSettings?.stripe_account_id
+    ? maskStripeAccountId(merchantSettings.stripe_account_id)
+    : null;
+  const maskedHedera = merchantSettings?.hedera_account_id
+    ? maskHederaAccountId(merchantSettings.hedera_account_id)
+    : null;
+  const maskedWise = merchantSettings?.wise_profile_id
+    ? maskWiseProfileId(merchantSettings.wise_profile_id)
     : null;
 
+  const setupHref = '/dashboard/settings/merchant';
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
         <p className="text-muted-foreground">
-          Connect third-party services to extend functionality.
+          Connect payment rails and accounting systems for your organization.
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Stripe Integration */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="text-3xl">💳</div>
-                <div>
-                  <CardTitle>Stripe</CardTitle>
-                  <CardDescription className="mt-1">
-                    Accept fiat payments via credit card, debit card, and more.
-                  </CardDescription>
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Payment rails</h2>
+          <p className="text-sm text-muted-foreground">
+            Collection accounts configured in collection & settlement setup.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="text-2xl" aria-hidden>
+                    💳
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Stripe</CardTitle>
+                    <CardDescription className="mt-1">
+                      Card and fiat payments.
+                    </CardDescription>
+                  </div>
                 </div>
+                {stripeConfigured ? (
+                  <Badge variant="default" className="bg-green-600 shrink-0">
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="shrink-0">
+                    Not configured
+                  </Badge>
+                )}
               </div>
-              {stripeConfigured ? (
-                <Badge variant="default" className="bg-green-600">Connected</Badge>
-              ) : (
-                <Badge variant="secondary">Not Configured</Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Link href="/dashboard/settings/merchant?onboarding=continue" className="text-sm text-primary hover:underline">
-              Configure in Collection & Settlement Setup →
-            </Link>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {maskedStripe ? (
+                <p className="text-xs font-mono text-muted-foreground">{maskedStripe}</p>
+              ) : null}
+              <Link href={setupHref} className="text-sm text-primary hover:underline">
+                Configure in collection & settlement setup
+              </Link>
+            </CardContent>
+          </Card>
 
-        {/* Hedera Integration */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="text-3xl">₿</div>
-                <div>
-                  <CardTitle>Hedera</CardTitle>
-                  <CardDescription className="mt-1">
-                    Accept cryptocurrency payments via the Hedera network.
-                  </CardDescription>
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="text-2xl" aria-hidden>
+                    ₿
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Hedera</CardTitle>
+                    <CardDescription className="mt-1">
+                      Cryptocurrency payments on Hedera.
+                    </CardDescription>
+                  </div>
                 </div>
+                {hederaConfigured ? (
+                  <Badge variant="default" className="bg-green-600 shrink-0">
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="shrink-0">
+                    Not configured
+                  </Badge>
+                )}
               </div>
-              {hederaConfigured ? (
-                <Badge variant="default" className="bg-green-600">Connected</Badge>
-              ) : (
-                <Badge variant="secondary">Not Configured</Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Link href="/dashboard/settings/merchant?onboarding=continue" className="text-sm text-primary hover:underline">
-              Configure in Collection & Settlement Setup →
-            </Link>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {maskedHedera ? (
+                <p className="text-xs font-mono text-muted-foreground">{maskedHedera}</p>
+              ) : null}
+              <Link href={setupHref} className="text-sm text-primary hover:underline">
+                Configure in collection & settlement setup
+              </Link>
+            </CardContent>
+          </Card>
 
-        {/* Wise Integration */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="text-3xl">🏦</div>
-                <div>
-                  <CardTitle>Wise (Bank Transfer)</CardTitle>
-                  <CardDescription className="mt-1">
-                    Accept bank transfer payments via Wise multi-currency accounts.
-                  </CardDescription>
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="text-2xl" aria-hidden>
+                    🏦
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Wise</CardTitle>
+                    <CardDescription className="mt-1">
+                      Bank transfer via Wise.
+                    </CardDescription>
+                  </div>
                 </div>
+                {wiseConfigured ? (
+                  <Badge variant="default" className="bg-emerald-600 shrink-0">
+                    Connected
+                  </Badge>
+                ) : wiseEnabled ? (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500/40 text-amber-800 shrink-0"
+                  >
+                    Incomplete
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="shrink-0">
+                    Not configured
+                  </Badge>
+                )}
               </div>
-              {wiseConfigured ? (
-                <Badge variant="default" className="bg-emerald-600">Connected</Badge>
-              ) : wiseEnabled ? (
-                <Badge variant="outline" className="border-amber-500 text-amber-600">Enabled (Missing Profile ID)</Badge>
-              ) : (
-                <Badge variant="secondary">Not Configured</Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {wiseConfigured && maskedWiseProfileId && (
-              <p className="text-xs text-muted-foreground mb-2">
-                Profile ID: {maskedWiseProfileId}
-              </p>
-            )}
-            <Link href="/dashboard/settings/merchant?onboarding=continue" className="text-sm text-primary hover:underline">
-              Configure in Collection & Settlement Setup →
-            </Link>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {maskedWise ? (
+                <p className="text-xs font-mono text-muted-foreground">Profile {maskedWise}</p>
+              ) : null}
+              <Link href={setupHref} className="text-sm text-primary hover:underline">
+                Configure in collection & settlement setup
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
-        {/* Xero Integration */}
-        <Card className="md:col-span-2">
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Accounting</h2>
+          <p className="text-sm text-muted-foreground">
+            Sync invoices and payments with your books.
+          </p>
+        </div>
+        <Card className="border-primary/20">
           <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="text-3xl">📊</div>
-                <div>
-                  <CardTitle>Xero</CardTitle>
-                  <CardDescription className="mt-1">
-                    Sync payments and invoices with your Xero accounting software.
-                  </CardDescription>
-                </div>
+            <div className="flex items-center gap-3">
+              <div className="text-2xl" aria-hidden>
+                📊
+              </div>
+              <div>
+                <CardTitle>Xero</CardTitle>
+                <CardDescription className="mt-1">
+                  Accounting sync for invoices and settled payments.
+                </CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -163,26 +212,10 @@ export default async function IntegrationsPage() {
             <XeroConnection organizationId={organizationId} />
           </CardContent>
         </Card>
-      </div>
 
-      {/* Xero Account Mapping */}
-      <XeroAccountMapping organizationId={organizationId} />
-
-      {/* Xero Sync Queue */}
-      <XeroSyncQueue organizationId={organizationId} />
+        <XeroAccountMapping organizationId={organizationId} />
+        <XeroSyncQueue organizationId={organizationId} />
+      </section>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

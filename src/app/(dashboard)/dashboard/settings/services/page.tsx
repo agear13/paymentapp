@@ -256,13 +256,9 @@ export default function OrganizationServicesPage() {
     <div className="space-y-8 max-w-3xl">
       <div>
         <h1 className="text-3xl font-bold">Service catalog</h1>
-        <p className="text-gray-600 mt-1">
-          Priced services for referral landing pages. Edits apply to future checkouts only. Past invoices
-          payment links, and commission snapshots stay immutable.
-        </p>
-        <p className="text-sm text-muted-foreground mt-2">
-          Recurring templates do not reference catalog rows in the current schema; if you add that later,
-          generate invoices with frozen line items so archived services never break history.
+        <p className="text-gray-600 mt-1 max-w-2xl">
+          Add the services your referral partners can offer customers. Changes only affect future
+          checkouts. Past invoices are preserved automatically.
         </p>
       </div>
 
@@ -304,7 +300,7 @@ export default function OrganizationServicesPage() {
               </div>
             </div>
             <Button type="submit" disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save changes'}
             </Button>
           </form>
         </CardContent>

@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { MerchantSettingsForm } from '@/components/dashboard/settings/merchant-settings-form';
 import { OnboardingContinuationBanner } from '@/components/onboarding/onboarding-continuation-banner';
 import { getDashboardProductProfile } from '@/lib/auth/dashboard-product.server';
@@ -34,7 +34,7 @@ export default async function MerchantSettingsPage({
       {showOnboardingBanner ? <OnboardingContinuationBanner checklist={checklist} /> : null}
 
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Collection & Settlement Setup</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Collection & settlement setup</h1>
         <p className="text-muted-foreground">
           {isPilot
             ? 'Configure how your pilot workspace collects revenue and coordinates settlement.'
@@ -43,15 +43,7 @@ export default async function MerchantSettingsPage({
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Payment Configuration</CardTitle>
-          <CardDescription>
-            {isPilot
-              ? 'Set up Stripe, Wise, and HashPack details used for pilot invoice workflows (simplified shell).'
-              : 'Set up your payment accounts and default preferences.'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <MerchantSettingsForm variant={isPilot ? 'pilot' : 'full'} />
         </CardContent>
       </Card>

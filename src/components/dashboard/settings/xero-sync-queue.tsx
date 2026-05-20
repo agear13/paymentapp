@@ -1,16 +1,21 @@
 /**
- * Xero Sync Queue Status & Manual Trigger
- * Shows pending syncs and allows manual processing
+ * Xero payment sync status for operators.
  */
 
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { RefreshCw, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { RefreshCw, Clock, CheckCircle, XCircle, ChevronDown } from 'lucide-react';
 
 interface QueueStatus {
   pendingCount: number;
@@ -30,33 +35,34 @@ interface XeroSyncQueueProps {
 }
 
 export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
-  // organizationId is passed but not currently used - may be needed for filtering in future
-  console.log('XeroSyncQueue for organization:', organizationId);
   const [loading, setLoading] = React.useState(true);
+  const [loadFailed, setLoadFailed] = React.useState(false);
   const [processing, setProcessing] = React.useState(false);
   const [backfilling, setBackfilling] = React.useState(false);
+  const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [queueStatus, setQueueStatus] = React.useState<QueueStatus | null>(null);
 
-  // Fetch queue status
   const fetchStatus = React.useCallback(async () => {
+    setLoadFailed(false);
     try {
       const response = await fetch('/api/xero/queue/process-now');
-      
+
       if (!response.ok) {
-        throw new Error('Failed to fetch queue status');
+        setLoadFailed(true);
+        setQueueStatus(null);
+        return;
       }
 
       const data = await response.json();
       setQueueStatus(data);
-    } catch (error) {
-      console.error('Error fetching queue status:', error);
-      toast.error('Failed to load queue status');
+    } catch {
+      setLoadFailed(true);
+      setQueueStatus(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Process queue manually
   const processQueue = async () => {
     setProcessing(true);
     try {
@@ -69,23 +75,15 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
       }
 
       const result = await response.json();
-      
-      // Background processing - just notify that it started
-      toast.success(result.message || 'Queue processing started in background');
-      
-      // Refresh status after a short delay to show updated counts
-      setTimeout(async () => {
-        await fetchStatus();
-      }, 2000);
-    } catch (error) {
-      console.error('Error processing queue:', error);
-      toast.error('Failed to process queue');
+      toast.success(result.message || 'Sync started');
+      setTimeout(() => void fetchStatus(), 2000);
+    } catch {
+      toast.error('Could not run sync');
     } finally {
       setProcessing(false);
     }
   };
 
-  // Backfill missing syncs
   const backfillSyncs = async () => {
     setBackfilling(true);
     try {
@@ -102,49 +100,58 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
       }
 
       const result = await response.json();
-      
-      // Handle both response formats: top-level 'queued' or nested in 'results'
       const queuedCount = result.results?.queued ?? result.queued ?? 0;
-      
+
       if (queuedCount > 0) {
-        toast.success(
-          `Queued ${queuedCount} missed payments for syncing!`
-        );
+        toast.success(`Queued ${queuedCount} payment${queuedCount === 1 ? '' : 's'} for sync`);
       } else {
-        toast.info('No payments need backfilling');
+        toast.info('No additional payments needed syncing');
       }
 
-      // Refresh status
       await fetchStatus();
-    } catch (error) {
-      console.error('Error backfilling syncs:', error);
-      toast.error('Failed to backfill syncs');
+    } catch {
+      toast.error('Could not queue missed payments');
     } finally {
       setBackfilling(false);
     }
   };
 
-  // Fetch status on mount
   React.useEffect(() => {
-    fetchStatus();
+    void fetchStatus();
   }, [fetchStatus]);
 
-  // Auto-refresh every 30 seconds
   React.useEffect(() => {
-    const interval = setInterval(fetchStatus, 30000);
+    if (loadFailed) return;
+    const interval = setInterval(() => void fetchStatus(), 30000);
     return () => clearInterval(interval);
-  }, [fetchStatus]);
+  }, [fetchStatus, loadFailed]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return <Badge variant="outline" className="bg-yellow-50"><Clock className="w-3 h-3 mr-1" /> Pending</Badge>;
+        return (
+          <Badge variant="outline" className="bg-yellow-50">
+            <Clock className="w-3 h-3 mr-1" /> Pending
+          </Badge>
+        );
       case 'RETRYING':
-        return <Badge variant="outline" className="bg-blue-50"><RefreshCw className="w-3 h-3 mr-1" /> Retrying</Badge>;
+        return (
+          <Badge variant="outline" className="bg-blue-50">
+            <RefreshCw className="w-3 h-3 mr-1" /> Retrying
+          </Badge>
+        );
       case 'SUCCESS':
-        return <Badge variant="outline" className="bg-green-50"><CheckCircle className="w-3 h-3 mr-1" /> Success</Badge>;
+        return (
+          <Badge variant="outline" className="bg-green-50">
+            <CheckCircle className="w-3 h-3 mr-1" /> Success
+          </Badge>
+        );
       case 'FAILED':
-        return <Badge variant="outline" className="bg-red-50"><XCircle className="w-3 h-3 mr-1" /> Failed</Badge>;
+        return (
+          <Badge variant="outline" className="bg-red-50">
+            <XCircle className="w-3 h-3 mr-1" /> Failed
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -154,149 +161,134 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Xero Sync Queue</CardTitle>
-          <CardDescription>Loading queue status...</CardDescription>
+          <CardTitle>Xero payment sync</CardTitle>
+          <CardDescription>Loading sync status…</CardDescription>
         </CardHeader>
       </Card>
     );
   }
 
+  const pending = queueStatus?.pendingCount ?? 0;
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Xero Sync Queue</CardTitle>
-            <CardDescription>
-              Monitor and manually trigger Xero payment syncs
-            </CardDescription>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={backfillSyncs}
-              disabled={backfilling || loading}
-              size="sm"
-              variant="outline"
-            >
-              {backfilling ? (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Backfilling...
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-4 h-4 mr-2" />
-                  Queue Missed Payments
-                </>
-              )}
-            </Button>
-            <Button
-              onClick={processQueue}
-              disabled={processing || !queueStatus || queueStatus.pendingCount === 0}
-              size="sm"
-            >
-              {processing ? (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Process Queue ({queueStatus?.pendingCount || 0})
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
+        <CardTitle>Xero payment sync</CardTitle>
+        <CardDescription>
+          Payment syncs are processed automatically once Xero is connected.
+        </CardDescription>
       </CardHeader>
-      <CardContent>
-        {queueStatus && queueStatus.pendingCount > 0 && (
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-            <div className="text-sm text-yellow-800">
-              <strong>{queueStatus.pendingCount} payment(s)</strong> waiting to sync to Xero. 
-              Click &quot;Process Queue&quot; to sync them now.
-            </div>
-          </div>
-        )}
-
-        {queueStatus && queueStatus.pendingCount === 0 && queueStatus.recentSyncs.length === 0 && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-            <div className="text-sm text-blue-800">
-              <strong>No sync queue records found.</strong>
-              <p className="mt-1">
-                If you&apos;ve made payments, they should appear here after clicking
-                {' '}&quot;Process Queue&quot;.
+      <CardContent className="space-y-4">
+        {loadFailed ? (
+          <p className="text-sm text-muted-foreground rounded-lg border bg-muted/40 p-3">
+            Sync status temporarily unavailable.{' '}
+            <button
+              type="button"
+              className="text-primary hover:underline"
+              onClick={() => {
+                setLoading(true);
+                void fetchStatus();
+              }}
+            >
+              Try again
+            </button>
+          </p>
+        ) : (
+          <>
+            {pending > 0 ? (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{pending}</span> payment
+                {pending === 1 ? '' : 's'} waiting to sync to Xero.
               </p>
-            </div>
-          </div>
-        )}
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No payments are waiting to sync right now.
+              </p>
+            )}
 
-        {queueStatus && queueStatus.pendingCount === 0 && queueStatus.recentSyncs.length > 0 && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-green-600" />
-            <div className="text-sm text-green-800">
-              No pending syncs - recent syncs shown below
-            </div>
-          </div>
-        )}
-
-        {/* Recent Syncs */}
-        <div className="space-y-2">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Recent Syncs</h4>
-          {queueStatus && queueStatus.recentSyncs.length === 0 && (
-            <p className="text-sm text-gray-500">No sync records found</p>
-          )}
-          {queueStatus && queueStatus.recentSyncs.map((sync) => (
-            <div
-              key={sync.id}
-              className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
-            >
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  {getStatusBadge(sync.status)}
-                  <span className="text-sm text-gray-600 font-mono">
-                    {sync.payment_link_id.substring(0, 8)}...
-                  </span>
-                  {sync.retry_count > 0 && (
-                    <span className="text-xs text-gray-500">
-                      (Retry {sync.retry_count})
+            {queueStatus && queueStatus.recentSyncs.length > 0 ? (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Recent activity</h4>
+                {queueStatus.recentSyncs.slice(0, 5).map((sync) => (
+                  <div
+                    key={sync.id}
+                    className="flex items-center justify-between p-3 border rounded-lg text-sm"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {getStatusBadge(sync.status)}
+                        <span className="text-muted-foreground font-mono text-xs truncate">
+                          {sync.payment_link_id.substring(0, 8)}…
+                        </span>
+                      </div>
+                      {sync.error_message ? (
+                        <p className="text-xs text-red-600 mt-1 line-clamp-1">{sync.error_message}</p>
+                      ) : null}
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                      {new Date(sync.updated_at).toLocaleDateString()}
                     </span>
-                  )}
-                </div>
-                {sync.error_message && (
-                  <p className="text-xs text-red-600 mt-1 line-clamp-1">
-                    {sync.error_message}
-                  </p>
-                )}
+                  </div>
+                ))}
               </div>
-              <div className="text-xs text-gray-400">
-                {new Date(sync.updated_at).toLocaleString()}
-              </div>
-            </div>
-          ))}
-        </div>
+            ) : null}
+          </>
+        )}
 
-        {/* Info Box */}
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <strong>Note:</strong> For automatic syncing, you need to set up a cron job or background worker.
-            See the setup guide (XERO_SYNC_SETUP.md) for instructions.
-          </p>
-          <p className="text-xs text-blue-600 mt-2">
-            <a 
-              href="/api/xero/debug" 
-              target="_blank" 
-              className="underline hover:text-blue-800"
-            >
-              View detailed sync diagnostics →
-            </a>
-          </p>
-        </div>
+        <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground px-0">
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+              />
+              Advanced
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 pt-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => void backfillSyncs()}
+                disabled={backfilling || loadFailed}
+                size="sm"
+                variant="outline"
+              >
+                {backfilling ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Queueing…
+                  </>
+                ) : (
+                  'Queue missed payments'
+                )}
+              </Button>
+              <Button
+                onClick={() => void processQueue()}
+                disabled={processing || loadFailed || pending === 0}
+                size="sm"
+                variant="outline"
+              >
+                {processing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Processing…
+                  </>
+                ) : (
+                  `Process queue (${pending})`
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              <Link
+                href="/api/xero/debug"
+                target="_blank"
+                className="underline hover:text-foreground"
+              >
+                View detailed sync diagnostics
+              </Link>
+            </p>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );
 }
-

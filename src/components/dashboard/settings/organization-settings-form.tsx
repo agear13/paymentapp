@@ -25,7 +25,11 @@ const organizationSchema = z.object({
 
 type OrganizationFormValues = z.infer<typeof organizationSchema>;
 
-export function OrganizationSettingsForm() {
+type OrganizationSettingsFormProps = {
+  onOrganizationLoaded?: (org: { id: string; name: string }) => void;
+};
+
+export function OrganizationSettingsForm({ onOrganizationLoaded }: OrganizationSettingsFormProps) {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -54,9 +58,13 @@ export function OrganizationSettingsForm() {
         const orgs = await response.json();
         
         if (orgs && orgs.length > 0) {
+          const org = orgs[0] as { id?: string; name?: string };
           form.reset({
-            name: orgs[0].name || '',
+            name: org.name || '',
           });
+          if (organizationId && org.name) {
+            onOrganizationLoaded?.({ id: organizationId, name: org.name });
+          }
         }
       } catch (error) {
         console.error('Failed to fetch organization:', error);
@@ -121,7 +129,7 @@ export function OrganizationSettingsForm() {
                 <Input placeholder="Acme Corp" {...field} />
               </FormControl>
               <FormDescription>
-                This is your organization's visible name within the platform.
+                This name appears across your dashboard, invoices, and participant communications.
               </FormDescription>
               <FormMessage />
             </FormItem>

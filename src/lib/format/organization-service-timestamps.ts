@@ -22,6 +22,14 @@ export function serviceUpdatedAtIso(
   return null;
 }
 
+function formatServiceDate(d: Date): string {
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 /** Merchant-facing line under a service row. */
 export function formatServiceActivityLine(
   createdAtIso: string | null | undefined,
@@ -29,11 +37,11 @@ export function formatServiceActivityLine(
 ): string {
   const updated = updatedAtIso ? new Date(updatedAtIso) : null;
   if (updated && !Number.isNaN(updated.getTime())) {
-    return `Updated ${updated.toLocaleString()}`;
+    return `Updated ${formatServiceDate(updated)}`;
   }
   const created = createdAtIso ? new Date(createdAtIso) : null;
   if (created && !Number.isNaN(created.getTime())) {
-    return `Created ${created.toLocaleString()}`;
+    return `Created ${formatServiceDate(created)}`;
   }
   return 'Recently added';
 }

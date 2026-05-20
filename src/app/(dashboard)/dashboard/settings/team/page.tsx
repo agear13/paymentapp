@@ -7,9 +7,12 @@ export default function TeamSettingsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Team Management</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Team management</h1>
           <p className="text-muted-foreground">
             Manage your team members and their permissions.
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Assign finance, operations, or admin access when inviting team members.
           </p>
         </div>
         <Button>
@@ -27,7 +30,8 @@ export default function TeamSettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
-            No team members yet. Invite your first team member to get started.
+            No team members yet. Invite your first team member to get started. Assign finance,
+            operations, or admin access when you send the invite.
           </div>
         </CardContent>
       </Card>

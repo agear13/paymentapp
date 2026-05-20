@@ -25,8 +25,16 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Loader2, Upload, X, Building2, AlertCircle, ExternalLink } from 'lucide-react';
+import { Loader2, Upload, X, Building2, AlertCircle, Info } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { MaskedCredentialInput } from '@/components/dashboard/settings/masked-credential-input';
+import {
+  isStripeTestAccountId,
+  maskHederaAccountId,
+  maskStripeAccountId,
+  maskWiseProfileId,
+} from '@/lib/settings/mask-credential';
 
 // ISO 4217 Currency codes - common ones
 const currencies = [
@@ -416,9 +424,21 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
     );
   }
 
+  const stripeAccountId = form.watch('stripeAccountId');
+  const stripeTestMode = isStripeTestAccountId(stripeAccountId);
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-10">
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold">Branding</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Configure how your organization appears across payment pages and operational
+              workflows.
+            </p>
+          </div>
+
         <FormField
           control={form.control}
           name="displayName"
@@ -553,18 +573,50 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
             </FormItem>
           )}
         />
+        </div>
+
+        <div className="space-y-6 border-t pt-8">
+          <div>
+            <h3 className="text-lg font-semibold">Payment rails</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Configure the financial accounts used to collect and settle payments.
+            </p>
+          </div>
+
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              Changes to payment rail configuration can affect live payment processing.
+            </AlertDescription>
+          </Alert>
 
         <FormField
           control={form.control}
           name="stripeAccountId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Stripe Account ID</FormLabel>
+              <div className="flex flex-wrap items-center gap-2">
+                <FormLabel>Stripe account ID</FormLabel>
+                {stripeTestMode ? (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500/40 bg-amber-50 text-amber-900 text-xs font-normal"
+                  >
+                    Test mode
+                  </Badge>
+                ) : null}
+              </div>
               <FormControl>
-                <Input placeholder="acct_xxxxxxxxxxxxx" {...field} />
+                <MaskedCredentialInput
+                  id="stripe-account-id"
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  mask={maskStripeAccountId}
+                  placeholder="acct_xxxxxxxxxxxxx"
+                />
               </FormControl>
               <FormDescription>
-                Your Stripe Connect account ID (starts with &quot;acct_&quot;).
+                Your Stripe Connect account ID (starts with acct_).
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -576,9 +628,15 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
           name="hederaAccountId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Hedera Account ID</FormLabel>
+              <FormLabel>Hedera account ID</FormLabel>
               <FormControl>
-                <Input placeholder="0.0.12345" {...field} />
+                <MaskedCredentialInput
+                  id="hedera-account-id"
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  mask={maskHederaAccountId}
+                  placeholder="0.0.12345"
+                />
               </FormControl>
               <FormDescription>
                 Your Hedera account ID in the format 0.0.xxxxx.
@@ -588,11 +646,10 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
           )}
         />
 
-        {/* Wise (Bank Transfer) Section */}
-        <div className="border-t pt-6 mt-6">
-          <div className="flex items-center gap-2 mb-4">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
             <Building2 className="h-5 w-5 text-emerald-600" />
-            <h3 className="text-lg font-semibold">Wise (Bank Transfer)</h3>
+            <h4 className="text-base font-medium">Wise (bank transfer)</h4>
           </div>
 
           {!wiseGloballyEnabled ? (
@@ -708,11 +765,12 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
             </div>
           )}
         </div>
+        </div>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end border-t pt-6">
           <Button type="submit" disabled={form.formState.isSubmitting || isLoading}>
             {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {settingsId ? 'Update Settings' : 'Create Settings'}
+            Save changes
           </Button>
         </div>
       </form>
