@@ -6,6 +6,7 @@ import {
 } from '@/lib/deal-network-demo/participant-onboarding';
 import { getProjectDisplayName } from '@/lib/projects/get-project-display-name';
 import { formatOperationalStage } from '@/lib/projects/format-operational-stage';
+import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
 export type ProjectWorkspaceSummary = {
   id: string;
@@ -21,8 +22,22 @@ export type ProjectWorkspaceSummary = {
   participantsReady: number;
   participantsPending: number;
   fundingLabel: string;
+  fundingSubcopy: string;
   payoutLabel: string;
   needsAttention: boolean;
+  treasury?: Pick<
+    ProjectTreasurySummary,
+    | 'totalExpectedInflows'
+    | 'confirmedFunding'
+    | 'pendingFunding'
+    | 'forecastFunding'
+    | 'obligationsReady'
+    | 'obligationsAwaitingFunding'
+    | 'operationalReadiness'
+    | 'projectHealth'
+    | 'fundingSourceCount'
+    | 'hasFundingSources'
+  >;
 };
 
 function formatValue(deal: RecentDeal): string {
@@ -37,9 +52,30 @@ function participantsForDeal(deal: RecentDeal, participants: DemoParticipant[]):
   );
 }
 
+function legacyFundingLabel(deal: RecentDeal): { fundingLabel: string; fundingSubcopy: string } {
+  if (deal.paymentStatus === 'Paid') {
+    return {
+      fundingLabel: 'Confirmed revenue on file',
+      fundingSubcopy: 'Legacy settlement marker — add funding sources for full treasury visibility.',
+    };
+  }
+  if (deal.paymentLink) {
+    return {
+      fundingLabel: 'Pending revenue',
+      fundingSubcopy: 'Invoice or payment link attached — add as a funding source for coordination.',
+    };
+  }
+  return {
+    fundingLabel: 'No funding sources connected yet',
+    fundingSubcopy:
+      'Add invoices, payment links, sponsorships, ticketing revenue, or manual forecasts.',
+  };
+}
+
 export function summarizeProject(
   deal: RecentDeal,
-  participants: DemoParticipant[]
+  participants: DemoParticipant[],
+  treasury?: ProjectTreasurySummary
 ): ProjectWorkspaceSummary {
   const dealParticipants = participantsForDeal(deal, participants);
   const participantsReady = dealParticipants.filter((p) =>
@@ -48,12 +84,9 @@ export function summarizeProject(
   const participantCount = dealParticipants.length;
   const participantsPending = Math.max(0, participantCount - participantsReady);
 
-  const fundingLabel =
-    deal.paymentStatus === 'Paid'
-      ? 'Funded'
-      : deal.paymentLink
-        ? 'Awaiting payment'
-        : 'No funding linked';
+  const legacy = legacyFundingLabel(deal);
+  const fundingLabel = treasury?.fundingLabel ?? legacy.fundingLabel;
+  const fundingSubcopy = treasury?.fundingSubcopy ?? legacy.fundingSubcopy;
 
   const settlementStatus = deal.status;
   const payoutLabel =
@@ -63,11 +96,18 @@ export function summarizeProject(
         ? 'Ready to pay out'
         : deal.status;
 
+  const treasuryAttention =
+    treasury != null &&
+    (treasury.operationalReadiness === 'blocked' ||
+      treasury.operationalReadiness === 'awaiting_funding' ||
+      treasury.projectHealth === 'settlement_risk');
+
   const needsAttention =
-    deal.paymentStatus !== 'Paid' ||
+    treasuryAttention ||
     participantsPending > 0 ||
     deal.status === 'Pending' ||
-    deal.status === 'In Review';
+    deal.status === 'In Review' ||
+    (!treasury?.hasFundingSources && deal.paymentStatus !== 'Paid');
 
   return {
     id: deal.id,
@@ -83,8 +123,23 @@ export function summarizeProject(
     participantsReady,
     participantsPending,
     fundingLabel,
+    fundingSubcopy,
     payoutLabel,
     needsAttention,
+    treasury: treasury
+      ? {
+          totalExpectedInflows: treasury.totalExpectedInflows,
+          confirmedFunding: treasury.confirmedFunding,
+          pendingFunding: treasury.pendingFunding,
+          forecastFunding: treasury.forecastFunding,
+          obligationsReady: treasury.obligationsReady,
+          obligationsAwaitingFunding: treasury.obligationsAwaitingFunding,
+          operationalReadiness: treasury.operationalReadiness,
+          projectHealth: treasury.projectHealth,
+          fundingSourceCount: treasury.fundingSourceCount,
+          hasFundingSources: treasury.hasFundingSources,
+        }
+      : undefined,
   };
 }
 

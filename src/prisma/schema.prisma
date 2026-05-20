@@ -1065,8 +1065,65 @@ model deal_network_pilot_deals {
   obligations      deal_network_pilot_obligations[]
   pilot_payment_events payment_events[] @relation("PilotDealPaymentEvents")
   linked_payment_links payment_links[] @relation("PilotDealPaymentLinks")
+  funding_sources  project_funding_sources[]
 
   @@index([user_id])
+}
+
+/// Operational treasury: expected inflows per project (rail-agnostic; separate from obligation allocation).
+enum ProjectFundingSourceType {
+  invoice
+  payment_link
+  sponsorship
+  ticketing
+  table_booking
+  manual_forecast
+  bank_transfer
+  cash
+  accounting_sync
+  other
+}
+
+enum ProjectFundingSourceStatus {
+  forecast
+  pending
+  confirmed
+  cleared
+  reconciled
+}
+
+enum ProjectFundingConfidenceLevel {
+  low
+  medium
+  high
+}
+
+model project_funding_sources {
+  id                       String                        @id @default(uuid()) @db.Uuid
+  project_id               String                        @db.VarChar(255)
+  organization_id          String?                       @db.Uuid
+  user_id                  String                        @db.VarChar(255)
+  name                     String
+  description              String?                       @db.Text
+  source_type              ProjectFundingSourceType
+  amount                   Decimal                       @db.Decimal(18, 2)
+  currency                 String                        @default("USD") @db.Char(3)
+  status                   ProjectFundingSourceStatus    @default(forecast)
+  confidence_level         ProjectFundingConfidenceLevel @default(medium)
+  expected_settlement_date DateTime?                     @db.Timestamptz(6)
+  actual_settlement_date   DateTime?                     @db.Timestamptz(6)
+  linked_invoice_id        String?                       @db.Uuid
+  linked_payment_id        String?                       @db.Uuid
+  notes                    String?                       @db.Text
+  created_by               String                        @db.VarChar(255)
+  created_at               DateTime                      @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                      @updatedAt @db.Timestamptz(6)
+
+  deal deal_network_pilot_deals @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@index([user_id, project_id])
+  @@index([organization_id, project_id])
 }
 
 /// Derived commission obligations for Deal Network pilot (read from deal + participant JSON; refreshed server-side).

@@ -15,7 +15,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
+import { ProjectTreasuryMetrics } from '@/components/projects/project-treasury-metrics';
 import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
+import {
+  formatOperationalReadiness,
+  operationalReadinessBadgeVariant,
+} from '@/lib/projects/funding-sources/obligation-readiness';
+import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
 type ObligationRow = {
   id: string;
@@ -39,30 +45,41 @@ function formatMoney(amount: unknown, currency: string): string {
 }
 
 export function ProjectObligationsView() {
-  const { deal, summary } = useProjectWorkspace();
+  const { deal, summary, projectId } = useProjectWorkspace();
   const [rows, setRows] = React.useState<ObligationRow[]>([]);
+  const [treasury, setTreasury] = React.useState<ProjectTreasurySummary | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   const load = React.useCallback(async () => {
     if (!deal) return;
     setLoading(true);
     try {
-      const res = await fetch(
-        `/api/deal-network-pilot/obligations?dealId=${encodeURIComponent(deal.id)}`,
-        { credentials: 'include', cache: 'no-store' }
-      );
-      if (!res.ok) {
+      const [oblRes, treRes] = await Promise.all([
+        fetch(`/api/deal-network-pilot/obligations?dealId=${encodeURIComponent(deal.id)}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        }),
+        fetch(`/api/projects/${encodeURIComponent(projectId)}/treasury-summary`, {
+          credentials: 'include',
+          cache: 'no-store',
+        }),
+      ]);
+      if (oblRes.ok) {
+        const json = (await oblRes.json()) as { data: ObligationRow[] };
+        setRows(Array.isArray(json.data) ? json.data.filter((r) => r.deal_id === deal.id) : []);
+      } else {
         setRows([]);
-        return;
       }
-      const json = (await res.json()) as { data: ObligationRow[] };
-      setRows(Array.isArray(json.data) ? json.data.filter((r) => r.deal_id === deal.id) : []);
+      if (treRes.ok) {
+        const json = (await treRes.json()) as { data: ProjectTreasurySummary };
+        setTreasury(json.data ?? null);
+      }
     } catch {
       setRows([]);
     } finally {
       setLoading(false);
     }
-  }, [deal]);
+  }, [deal, projectId]);
 
   React.useEffect(() => {
     void load();
@@ -75,8 +92,9 @@ export function ProjectObligationsView() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Obligations and funding gaps for this project only.
+          <p className="text-muted-foreground mt-1 text-sm max-w-2xl">
+            Allocation defines what should be paid. Funding sources define whether it can be paid
+            yet — obligations exist before revenue settles.
           </p>
         </div>
         <div className="flex gap-2">
@@ -90,12 +108,24 @@ export function ProjectObligationsView() {
         </div>
       </div>
 
+      {treasury ? <ProjectTreasuryMetrics treasury={treasury} compact /> : null}
+
       <Card>
         <CardHeader>
-          <CardTitle>Project obligations</CardTitle>
-          <CardDescription>
-            Read-only view of who is owed what for this project. Settlement logic is unchanged.
-          </CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <CardTitle>Project obligations</CardTitle>
+              <CardDescription>
+                Operational allocation — payout readiness follows funding sources and settlement
+                state.
+              </CardDescription>
+            </div>
+            {treasury ? (
+              <Badge variant={operationalReadinessBadgeVariant(treasury.operationalReadiness)}>
+                {formatOperationalReadiness(treasury.operationalReadiness)}
+              </Badge>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -106,7 +136,7 @@ export function ProjectObligationsView() {
           ) : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6">
               No obligations recorded for this project yet. They appear when participants are
-              allocated and funding is linked.
+              allocated — funding sources affect payout readiness, not whether obligations exist.
             </p>
           ) : (
             <Table>
@@ -115,7 +145,7 @@ export function ProjectObligationsView() {
                   <TableHead>Participant</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Allocation status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { participantsForProject } from '@/lib/projects/participants-for-project';
+import { getProjectTreasurySummaryForUser } from '@/lib/projects/funding-sources/funding-sources.server';
 import { summarizeProject } from '@/lib/projects/project-workspace-summary';
 
 export async function getProjectWorkspaceSummaryForUser(userId: string, projectId: string) {
@@ -14,12 +15,14 @@ export async function getProjectWorkspaceSummaryForUser(userId: string, projectI
     };
   }
   const projectParticipants = participantsForProject(snapshot.participants, deal);
-  const summary = summarizeProject(deal, snapshot.participants);
+  const treasury = await getProjectTreasurySummaryForUser(userId, projectId);
+  const summary = summarizeProject(deal, snapshot.participants, treasury ?? undefined);
   const deals = snapshot.deals.filter((d) => !d.archived);
   return {
     found: true as const,
     deal,
     summary,
+    treasury,
     participantCount: projectParticipants.length,
     deals,
   };

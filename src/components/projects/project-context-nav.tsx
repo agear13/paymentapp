@@ -20,7 +20,7 @@ type ProjectContextNavProps = {
 const TABS = [
   { id: 'overview' as const, label: 'Overview' },
   { id: 'participants' as const, label: 'Participants' },
-  { id: 'funding' as const, label: 'Funding' },
+  { id: 'funding' as const, label: 'Funding sources' },
   { id: 'obligations' as const, label: 'Obligations' },
   { id: 'payouts' as const, label: 'Payouts' },
   { id: 'activity' as const, label: 'Activity' },

@@ -26,6 +26,7 @@ import {
   primaryConfirmedFundingEventIdForDeal,
   sumPilotFundingForDeal,
 } from '@/lib/deal-network-demo/pilot-project-funding.server';
+import { sumConfirmedFundingForProject } from '@/lib/projects/funding-sources/confirmed-funding.server';
 import { effectiveOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 
 function payoutLineToObligationStatus(
@@ -136,23 +137,24 @@ export async function refreshDealNetworkPilotObligationsForDeal(
   const fundingConfirmedEvtId = await primaryConfirmedFundingEventIdForDeal(deal.id);
   const legacyMoney = Boolean(fundingConfirmedEvtId) || dealHasLegacyFundingSnapshot(deal);
   const strait = isStraitProjectDeal(deal);
-  const fundedAmount = strait ? await sumPilotFundingForDeal(deal.id) : 0;
-  const straitFullyFunded =
-    strait && totalOwed > 0 && fundedAmount + 0.005 >= totalOwed;
-  const straitPartial =
-    strait &&
+  const railFunding = strait ? await sumPilotFundingForDeal(deal.id) : 0;
+  const confirmedFunding = await sumConfirmedFundingForProject(userId, deal.id, railFunding);
+
+  const fullyFunded =
+    totalOwed > 0 && confirmedFunding + 0.005 >= totalOwed;
+  const partiallyFunded =
     totalOwed > 0 &&
-    fundedAmount > 0 &&
-    fundedAmount + 0.005 < totalOwed &&
+    confirmedFunding > 0 &&
+    confirmedFunding + 0.005 < totalOwed &&
     !legacyMoney;
 
-  const moneyConfirmed = strait ? legacyMoney || straitFullyFunded : legacyMoney;
+  const moneyConfirmed = legacyMoney || fullyFunded;
 
   const anchorEventId = moneyConfirmed
     ? fundingConfirmedEvtId ?? (await fundingAnchorPaymentEventIdForDeal(deal.id))
     : null;
 
-  const unfundedRowStatus = straitPartial
+  const unfundedRowStatus = partiallyFunded
     ? DealNetworkPilotObligationStatus.PARTIALLY_FUNDED
     : DealNetworkPilotObligationStatus.UNFUNDED;
 

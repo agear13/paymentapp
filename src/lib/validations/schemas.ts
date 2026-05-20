@@ -765,6 +765,51 @@ export type PaginationParams = z.infer<typeof PaginationSchema>;
 export type PaymentLinkFilters = z.infer<typeof PaymentLinkFiltersSchema>;
 export type PaymentLinkStatusResponse = z.infer<typeof PaymentLinkStatusResponseSchema>;
 
+// ============================================================================
+// PROJECT FUNDING SOURCES (operational treasury)
+// ============================================================================
+
+export const ProjectFundingSourceTypeSchema = z.enum([
+  'invoice',
+  'payment_link',
+  'sponsorship',
+  'ticketing',
+  'table_booking',
+  'manual_forecast',
+  'bank_transfer',
+  'cash',
+  'accounting_sync',
+  'other',
+]);
+
+export const ProjectFundingSourceStatusSchema = z.enum([
+  'forecast',
+  'pending',
+  'confirmed',
+  'cleared',
+  'reconciled',
+]);
+
+export const ProjectFundingConfidenceLevelSchema = z.enum(['low', 'medium', 'high']);
+
+export const CreateProjectFundingSourceSchema = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().max(8000).optional().nullable(),
+  sourceType: ProjectFundingSourceTypeSchema,
+  amount: z.number().positive().multipleOf(0.01),
+  currency: z.string().length(3).transform((c) => c.toUpperCase()),
+  status: ProjectFundingSourceStatusSchema.optional().default('forecast'),
+  confidenceLevel: ProjectFundingConfidenceLevelSchema.optional().default('medium'),
+  expectedSettlementDate: z.string().datetime().optional().nullable(),
+  actualSettlementDate: z.string().datetime().optional().nullable(),
+  linkedInvoiceId: z.string().uuid().optional().nullable(),
+  linkedPaymentId: z.string().uuid().optional().nullable(),
+  notes: z.string().max(8000).optional().nullable(),
+  organizationId: z.string().uuid().optional().nullable(),
+});
+
+export const UpdateProjectFundingSourceSchema = CreateProjectFundingSourceSchema.partial();
+
 
 
 
