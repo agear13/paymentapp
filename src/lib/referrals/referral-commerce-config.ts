@@ -29,6 +29,8 @@ export function defaultReferralCommerce(): ParticipantReferralCommerce {
     commissionMode: 'project_revenue_share',
     commerceCommissionPct: 10,
     enabledServiceIds: [],
+    enabledPaymentRails: defaultReferralPaymentRails(),
+    allowCustomAmount: true,
   };
 }
 

@@ -1,9 +1,13 @@
 /**
  * Operator-configured payment rails for referral / customer checkout.
- * Stored on referral_links.checkout_config alongside referralCommerce.
+ * Stored on referral_links.checkout_config (referralCommerce.enabledPaymentRails).
  */
 
+import { parseReferralCommerceFromCheckoutConfig } from '@/lib/referrals/referral-commerce-config';
+
 export type ReferralPaymentRail = 'stripe' | 'wise' | 'hedera' | 'manual';
+
+const VALID_RAILS = new Set<ReferralPaymentRail>(['stripe', 'wise', 'hedera', 'manual']);
 
 export type ReferralPaymentRailOption = {
   id: ReferralPaymentRail;
@@ -32,21 +36,31 @@ export function defaultReferralPaymentRails(): ReferralPaymentRail[] {
   return ['stripe'];
 }
 
+function sanitizeRailList(raw: unknown): ReferralPaymentRail[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (r): r is ReferralPaymentRail => typeof r === 'string' && VALID_RAILS.has(r as ReferralPaymentRail)
+  );
+}
+
 export function parseReferralPaymentRailsFromCheckoutConfig(
   config: unknown
 ): ReferralPaymentRail[] | null {
   if (!config || typeof config !== 'object') return null;
-  const raw = (config as Record<string, unknown>)[CONFIG_KEY];
-  if (!Array.isArray(raw)) return null;
-  const allowed = new Set<ReferralPaymentRail>(['stripe', 'wise', 'hedera', 'manual']);
-  const rails = raw.filter((r): r is ReferralPaymentRail => typeof r === 'string' && allowed.has(r as ReferralPaymentRail));
-  return rails.length > 0 ? rails : null;
+  const top = sanitizeRailList((config as Record<string, unknown>)[CONFIG_KEY]);
+  if (top.length > 0) return top;
+
+  const commerce = parseReferralCommerceFromCheckoutConfig(config);
+  const fromCommerce = sanitizeRailList(commerce?.enabledPaymentRails);
+  return fromCommerce.length > 0 ? fromCommerce : null;
 }
 
 export function isCustomAmountAllowedOnCheckoutConfig(config: unknown): boolean {
   if (!config || typeof config !== 'object') return true;
   const raw = (config as Record<string, unknown>)[CUSTOM_AMOUNT_KEY];
   if (raw === false) return false;
+  const commerce = parseReferralCommerceFromCheckoutConfig(config);
+  if (commerce?.allowCustomAmount === false) return false;
   return true;
 }
 
@@ -55,7 +69,7 @@ export function mergeReferralPaymentRailsIntoCheckoutConfig(
   rails: ReferralPaymentRail[],
   options?: { allowCustomAmount?: boolean }
 ): Record<string, unknown> {
-  const unique = [...new Set(rails.filter((r) => REFERRAL_PAYMENT_RAIL_OPTIONS.some((o) => o.id === r)))];
+  const unique = sanitizeRailList(rails);
   const next: Record<string, unknown> = {
     ...base,
     [CONFIG_KEY]: unique.length > 0 ? unique : defaultReferralPaymentRails(),
@@ -73,18 +87,71 @@ export function getConfiguredReferralPaymentRails(checkoutConfig: unknown): Refe
   return parseReferralPaymentRailsFromCheckoutConfig(checkoutConfig) ?? defaultReferralPaymentRails();
 }
 
-/** Intersect operator selection with merchant account configuration. */
+function isRailAvailableAtMerchant(
+  rail: ReferralPaymentRail,
+  merchant: MerchantRailAvailability
+): boolean {
+  switch (rail) {
+    case 'stripe':
+      return merchant.stripe;
+    case 'wise':
+      return merchant.wise;
+    case 'hedera':
+      return merchant.hedera;
+    case 'manual':
+      return merchant.manual;
+    default:
+      return false;
+  }
+}
+
+/** Intersect operator selection with merchant capabilities; never throws. */
 export function resolveCustomerPaymentRails(input: {
   checkoutConfig: unknown;
   merchant: MerchantRailAvailability;
 }): ReferralPaymentRail[] {
-  const configured = getConfiguredReferralPaymentRails(input.checkoutConfig);
-  return configured.filter((rail) => {
-    if (rail === 'stripe') return input.merchant.stripe;
-    if (rail === 'wise') return input.merchant.wise;
-    if (rail === 'hedera') return input.merchant.hedera;
-    if (rail === 'manual') return input.merchant.manual;
-    return false;
+  return resolveAvailablePaymentRails(input);
+}
+
+/**
+ * Validate and resolve customer-visible payment rails.
+ * Returns [] when none are available (caller shows unavailable UI).
+ */
+export function resolveAvailablePaymentRails(input: {
+  checkoutConfig: unknown;
+  merchant: MerchantRailAvailability;
+}): ReferralPaymentRail[] {
+  try {
+    const configured = getConfiguredReferralPaymentRails(input.checkoutConfig);
+    const resolved = configured.filter((rail) => isRailAvailableAtMerchant(rail, input.merchant));
+    return [...new Set(resolved)];
+  } catch (error) {
+    console.warn('[ReferralPaymentRails] resolve failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
+
+export type ReferralRailResolutionLog = {
+  referralCode: string;
+  organizationId: string;
+  configuredRails: ReferralPaymentRail[];
+  resolvedRails: ReferralPaymentRail[];
+  merchantCapabilities: MerchantRailAvailability;
+  brandingFallback: boolean;
+  serviceCount: number;
+};
+
+export function logReferralCheckoutContext(context: ReferralRailResolutionLog): void {
+  console.info('[ReferralCheckout]', {
+    referralCode: context.referralCode,
+    organizationId: context.organizationId,
+    configuredRails: context.configuredRails,
+    resolvedRails: context.resolvedRails,
+    merchantCapabilities: context.merchantCapabilities,
+    brandingFallback: context.brandingFallback,
+    serviceCount: context.serviceCount,
   });
 }
 
@@ -106,5 +173,5 @@ export function referralRailToPaymentMethod(
 }
 
 export function customerRailLabel(rail: ReferralPaymentRail): string {
-  return REFERRAL_PAYMENT_RAIL_OPTIONS.find((o) => o.id === rail)?.label ?? rail;
+  return REFERRAL_PAYMENT_RAIL_OPTIONS.find((o) => o.id === rail)?.label ?? 'Payment';
 }

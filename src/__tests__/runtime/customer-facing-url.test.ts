@@ -2,7 +2,9 @@ import {
   buildCustomerFacingUrl,
   evaluateCustomerFacingDomain,
   getBrandedAppOrigin,
+  getBrandedAppOriginSafe,
   getClientBrandedOrigin,
+  getPublicAppUrl,
   getPaymentLinkUrl,
   isInfrastructureDomainAllowed,
   isInvalidCustomerHost,
@@ -44,6 +46,15 @@ describe('customer-facing URL resolver', () => {
     expect(() => getPaymentLinkUrl('Avn7eLPc')).toThrow(
       /Customer-facing domain is not configured correctly/i
     );
+  });
+
+  it('getPublicAppUrl and getBrandedAppOriginSafe never throw in production', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.NEXT_PUBLIC_APP_URL;
+
+    expect(getBrandedAppOriginSafe()).toBeNull();
+    expect(getPublicAppUrl()).toBe('');
+    expect(getPublicAppUrl('https://pay.example.com')).toBe('https://pay.example.com');
   });
 
   it('blocks onrender infrastructure hosts when override is disabled', () => {

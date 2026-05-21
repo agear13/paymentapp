@@ -296,6 +296,38 @@ export function resolveCustomerFacingOrigin(options?: CustomerFacingUrlOptions):
   };
 }
 
+/**
+ * Safe origin for SSR / customer pages — never throws.
+ */
+export function getBrandedAppOriginSafe(
+  requestOrigin?: string,
+  options?: Pick<CustomerFacingUrlOptions, 'infrastructureOverride'>
+): string | null {
+  const resolution = resolveCustomerFacingOrigin({
+    requestOrigin,
+    infrastructureOverride: options?.infrastructureOverride,
+  });
+  if (resolution.configured) return resolution.origin;
+  if (isDevelopmentEnvironment()) return 'http://localhost:3000';
+  return null;
+}
+
+/**
+ * Public app base URL for links and branding — never throws during render.
+ */
+export function getPublicAppUrl(
+  requestOrigin?: string,
+  options?: Pick<CustomerFacingUrlOptions, 'infrastructureOverride'>
+): string {
+  const safe = getBrandedAppOriginSafe(requestOrigin, options);
+  if (safe) return safe;
+  if (requestOrigin?.trim()) {
+    const normalized = normalizeOrigin(requestOrigin);
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
 export function getBrandedAppOrigin(
   requestOrigin?: string,
   options?: Pick<CustomerFacingUrlOptions, 'infrastructureOverride'>

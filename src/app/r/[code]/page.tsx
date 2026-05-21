@@ -3,16 +3,9 @@ import { notFound } from 'next/navigation';
 import { ReferralLandingClient } from '@/components/referrals/referral-landing-client';
 import { ReferralPayPageClient } from '@/components/referrals/referral-pay-page-client';
 import { ReferralCommissionLanding } from '@/components/referrals/referral-commission-landing';
-import { prisma } from '@/lib/server/prisma';
-import {
-  filterServicesForReferralConfig,
-  isCustomAmountAllowedOnCheckoutConfig,
-} from '@/lib/referrals/referral-commerce-config';
-import { resolveMerchantBranding } from '@/lib/branding/resolve-merchant-branding';
-import { getBrandedAppOrigin } from '@/lib/runtime/customer-facing-url';
-import {
-  resolveCustomerPaymentRails,
-} from '@/lib/referrals/referral-payment-rails';
+import { ReferralCheckoutUnavailable } from '@/components/referrals/referral-checkout-unavailable';
+import { ReferralCheckoutNoPaymentMethods } from '@/components/referrals/referral-checkout-no-payment-methods';
+import { loadReferralCommissionCheckoutPage } from '@/lib/referrals/referral-checkout-page.server';
 
 export default async function ReferralLandingPage({
   params,
@@ -26,109 +19,87 @@ export default async function ReferralLandingPage({
     notFound();
   }
 
-  const referralLink = await prisma.referral_links.findFirst({
-    where: {
-      code: referralCode,
-      status: 'ACTIVE',
-      OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }],
-    },
-    include: {
-      referral_rules: { orderBy: { created_at: 'desc' }, take: 1 },
-      referral_link_splits: { orderBy: { sort_order: 'asc' } },
-      organizations: {
-        include: {
-          merchant_settings: {
-            take: 1,
-          },
-        },
-      },
-    },
-  });
+  const checkout = await loadReferralCommissionCheckoutPage(referralCode);
 
-  const hasRules = referralLink && referralLink.referral_rules.length > 0;
-  const hasSplits = referralLink && referralLink.referral_link_splits.length > 0;
-  const isCommissionReferral = referralLink && (hasRules || hasSplits);
+  if (checkout.ok) {
+    if (checkout.paymentRails.length === 0) {
+      return (
+        <ReferralCheckoutNoPaymentMethods
+          merchantDisplayName={checkout.merchantDisplayName}
+          merchantLogoUrl={checkout.merchantLogoUrl}
+        />
+      );
+    }
 
-  if (isCommissionReferral && referralLink) {
-    const merchantSettings = referralLink.organizations.merchant_settings[0];
-    const branding = resolveMerchantBranding({
-      merchantName: merchantSettings?.display_name ?? 'Merchant',
-      logoSource: merchantSettings?.organization_logo_url ?? null,
-      runtimeOrigin: getBrandedAppOrigin(),
-    });
-
-    const paymentRails = resolveCustomerPaymentRails({
-      checkoutConfig: referralLink.checkout_config,
-      merchant: {
-        stripe: !!merchantSettings?.stripe_account_id,
-        wise: !!merchantSettings?.wise_enabled && !!merchantSettings?.wise_profile_id,
-        hedera: !!merchantSettings?.hedera_account_id,
-        manual: true,
-      },
-    });
-
-    const allowCustomAmount = isCustomAmountAllowedOnCheckoutConfig(referralLink.checkout_config);
-
-    const allServices = await prisma.organization_services.findMany({
-      where: { organization_id: referralLink.organization_id, active: true },
-      orderBy: { created_at: 'desc' },
-      take: 100,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        price: true,
-        currency: true,
-      },
-    });
-
-    const services = filterServicesForReferralConfig(allServices, referralLink.checkout_config);
-
-    if (services.length > 0) {
+    if (checkout.services.length > 0) {
       return (
         <ReferralCommissionLanding
-          referralCode={referralCode}
-          checkoutConfig={(referralLink.checkout_config ?? null) as Record<string, unknown> | null}
-          services={services.map((s) => ({
-            id: s.id,
-            name: s.name,
-            description: s.description,
-            price: Number(s.price),
-            currency: s.currency,
-          }))}
-          merchantDisplayName={branding.merchantName}
-          merchantLogoUrl={branding.logoUrl}
-          paymentRails={paymentRails.length > 0 ? paymentRails : ['stripe']}
-          allowCustomAmount={allowCustomAmount}
+          referralCode={checkout.referralCode}
+          checkoutConfig={checkout.checkoutConfig}
+          services={checkout.services}
+          merchantDisplayName={checkout.merchantDisplayName}
+          merchantLogoUrl={checkout.merchantLogoUrl}
+          paymentRails={checkout.paymentRails}
+          allowCustomAmount={checkout.allowCustomAmount}
+        />
+      );
+    }
+
+    if (checkout.allowCustomAmount) {
+      return (
+        <ReferralPayPageClient
+          referralCode={checkout.referralCode}
+          checkoutConfig={checkout.checkoutConfig}
+          merchantDisplayName={checkout.merchantDisplayName}
+          merchantLogoUrl={checkout.merchantLogoUrl}
+          paymentRails={checkout.paymentRails}
         />
       );
     }
 
     return (
-      <ReferralPayPageClient
-        referralCode={referralCode}
-        checkoutConfig={referralLink.checkout_config as Record<string, unknown> | null}
-        merchantDisplayName={branding.displayName}
-        merchantLogoUrl={branding.logoUrl}
-        paymentRails={paymentRails.length > 0 ? paymentRails : ['stripe']}
+      <ReferralCheckoutUnavailable
+        merchantDisplayName={checkout.merchantDisplayName}
+        merchantLogoUrl={checkout.merchantLogoUrl}
+        title="No services available"
+        message="There are no services available on this checkout link right now."
       />
     );
   }
 
+  if (checkout.reason === 'not_found') {
+    return loadLegacyProgramReferral(referralCode);
+  }
+
+  return (
+    <ReferralCheckoutUnavailable
+      merchantDisplayName={checkout.merchantDisplayName}
+      merchantLogoUrl={checkout.merchantLogoUrl}
+      title={
+        checkout.reason === 'inactive'
+          ? 'Link unavailable'
+          : checkout.reason === 'misconfigured'
+            ? 'Checkout not ready'
+            : 'Checkout unavailable'
+      }
+      message={checkout.message}
+    />
+  );
+}
+
+async function loadLegacyProgramReferral(referralCode: string) {
   let supabase;
   try {
     supabase = await createUserClient();
   } catch (error) {
-    console.error('Supabase configuration error:', error);
+    console.error('[ReferralCheckout] Supabase configuration error:', error);
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold text-red-600 mb-2">Configuration Error</h1>
-          <p className="text-gray-600">
-            Referral system is not properly configured. Please contact support.
-          </p>
-        </div>
-      </div>
+      <ReferralCheckoutUnavailable
+        merchantDisplayName="Merchant checkout"
+        title="Configuration error"
+        message="This referral program is not available right now. Please contact support."
+        showRetry={false}
+      />
     );
   }
 
@@ -150,7 +121,7 @@ export default async function ReferralLandingPage({
     .single();
 
   if (participantError) {
-    console.error('Participant lookup error:', participantError);
+    console.error('[ReferralCheckout] Participant lookup error:', participantError);
   }
 
   if (!participant || participant.status !== 'active') {
@@ -159,10 +130,10 @@ export default async function ReferralLandingPage({
 
   if (participant.referral_programs.status !== 'active') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Program Unavailable</h1>
-          <p className="mt-2 text-gray-600">This program is currently paused.</p>
+      <div className="min-h-screen flex items-center justify-center bg-muted/30">
+        <div className="text-center max-w-md px-4">
+          <h1 className="text-2xl font-bold">Program unavailable</h1>
+          <p className="mt-2 text-muted-foreground">This program is currently paused.</p>
         </div>
       </div>
     );

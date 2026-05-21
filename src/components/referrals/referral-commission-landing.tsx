@@ -75,6 +75,7 @@ export function ReferralCommissionLanding({
   };
 
   const onServiceCheckout = (serviceId: string) => {
+    if (paymentRails.length === 0) return;
     if (paymentRails.length === 1) {
       void startCheckout(serviceId, paymentRails[0]);
       return;
@@ -87,6 +88,10 @@ export function ReferralCommissionLanding({
     paymentRails.length === 1
       ? `Pay with ${customerRailLabel(paymentRails[0]).toLowerCase()}`
       : 'Continue to checkout';
+
+  if (paymentRails.length === 0) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-muted/30 p-4 pb-12">

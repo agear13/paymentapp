@@ -25,7 +25,7 @@ export function ReferralPayPageClient({
   referralCode,
   checkoutConfig,
   embedded = false,
-  merchantDisplayName,
+  merchantDisplayName = 'Merchant checkout',
   merchantLogoUrl,
   paymentRails = defaultReferralPaymentRails(),
 }: Props) {
@@ -84,12 +84,17 @@ export function ReferralPayPageClient({
   };
 
   const onPayClick = () => {
+    if (paymentRails.length === 0) return;
     if (paymentRails.length === 1) {
       void submitCheckout(paymentRails[0]);
       return;
     }
     setMethodDialogOpen(true);
   };
+
+  if (paymentRails.length === 0) {
+    return null;
+  }
 
   const payLabel =
     paymentRails.length === 1
