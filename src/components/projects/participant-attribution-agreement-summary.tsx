@@ -1,14 +1,24 @@
 'use client';
 
 import type { ParticipantReferralCommerce } from '@/lib/referrals/referral-commerce-config';
+import { ParticipantServiceCommissionTable } from '@/components/projects/participant-service-commission-table';
+import {
+  buildScopedServiceCommissionRows,
+  type ScopedServiceCommissionRow,
+} from '@/lib/projects/participant-compensation-copy';
 
 type Props = {
   commerce?: ParticipantReferralCommerce | null;
-  serviceNames?: string[];
+  serviceRows?: ScopedServiceCommissionRow[];
+  allServicesNote?: boolean;
 };
 
-/** Participant agreement view — operational attribution permissions (not customer checkout). */
-export function ParticipantAttributionAgreementSummary({ commerce, serviceNames }: Props) {
+/** Participant agreement view — earnings and attributable services (not customer checkout). */
+export function ParticipantAttributionAgreementSummary({
+  commerce,
+  serviceRows,
+  allServicesNote,
+}: Props) {
   if (!commerce || commerce.createReferralLink === false) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -17,37 +27,43 @@ export function ParticipantAttributionAgreementSummary({ commerce, serviceNames 
     );
   }
 
+  const rows =
+    serviceRows ??
+    (commerce.commissionMode === 'referral_commerce'
+      ? buildScopedServiceCommissionRows({
+          services: [],
+          commerce,
+          allServicesFallback: false,
+        })
+      : []);
+
+  const pct = commerce.commerceCommissionPct ?? 10;
+  const showAll =
+    allServicesNote ??
+    (commerce.commissionMode === 'referral_commerce' &&
+      (!commerce.enabledServiceIds || commerce.enabledServiceIds.length === 0));
+
   return (
-    <div className="rounded-md border p-3 bg-background space-y-2 text-sm">
-      <p className="font-medium">Attribution permissions</p>
+    <div className="rounded-md border p-3 bg-background space-y-3 text-sm">
+      <p className="font-medium">How you earn on customer purchases</p>
       {commerce.commissionMode === 'referral_commerce' ? (
         <>
-          <p className="text-muted-foreground">
-            After you approve participation, a trackable customer payment link will be issued.
-            You may earn revenue participation on attributable purchases through that link
-            {commerce.commerceCommissionPct != null
-              ? ` (${commerce.commerceCommissionPct}% on qualifying purchases).`
-              : '.'}
+          <p className="text-muted-foreground leading-relaxed">
+            After you approve, a trackable customer payment link is issued. You earn{' '}
+            <span className="font-medium text-foreground">{pct}%</span> on qualifying purchases
+            through that link. Customers do not see your commission terms.
           </p>
-          {commerce.enabledServiceIds && commerce.enabledServiceIds.length > 0 ? (
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                Scoped services
-              </p>
-              <ul className="list-disc pl-5 text-muted-foreground">
-                {(serviceNames ?? []).map((name) => (
-                  <li key={name}>{name}</li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">All active merchant services may be attributed.</p>
-          )}
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+              Services you earn on
+            </p>
+            <ParticipantServiceCommissionTable rows={rows} showAllServicesNote={showAll} />
+          </div>
         </>
       ) : (
-        <p className="text-muted-foreground">
-          Customer attribution tracking may be issued after approval. Project-level revenue
-          participation applies per your payout allocation above.
+        <p className="text-muted-foreground leading-relaxed">
+          Customer attribution may be issued after approval. Project-level payout terms above
+          apply to your participation. Payout release follows operator settlement schedules.
         </p>
       )}
     </div>

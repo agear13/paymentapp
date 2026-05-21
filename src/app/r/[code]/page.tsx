@@ -4,7 +4,15 @@ import { ReferralLandingClient } from '@/components/referrals/referral-landing-c
 import { ReferralPayPageClient } from '@/components/referrals/referral-pay-page-client';
 import { ReferralCommissionLanding } from '@/components/referrals/referral-commission-landing';
 import { prisma } from '@/lib/server/prisma';
-import { filterServicesForReferralConfig } from '@/lib/referrals/referral-commerce-config';
+import {
+  filterServicesForReferralConfig,
+  isCustomAmountAllowedOnCheckoutConfig,
+} from '@/lib/referrals/referral-commerce-config';
+import { resolveMerchantBranding } from '@/lib/branding/resolve-merchant-branding';
+import { getBrandedAppOrigin } from '@/lib/runtime/customer-facing-url';
+import {
+  resolveCustomerPaymentRails,
+} from '@/lib/referrals/referral-payment-rails';
 
 export default async function ReferralLandingPage({
   params,
@@ -27,6 +35,13 @@ export default async function ReferralLandingPage({
     include: {
       referral_rules: { orderBy: { created_at: 'desc' }, take: 1 },
       referral_link_splits: { orderBy: { sort_order: 'asc' } },
+      organizations: {
+        include: {
+          merchant_settings: {
+            take: 1,
+          },
+        },
+      },
     },
   });
 
@@ -35,6 +50,25 @@ export default async function ReferralLandingPage({
   const isCommissionReferral = referralLink && (hasRules || hasSplits);
 
   if (isCommissionReferral && referralLink) {
+    const merchantSettings = referralLink.organizations.merchant_settings[0];
+    const branding = resolveMerchantBranding({
+      merchantName: merchantSettings?.display_name ?? 'Merchant',
+      logoSource: merchantSettings?.organization_logo_url ?? null,
+      runtimeOrigin: getBrandedAppOrigin(),
+    });
+
+    const paymentRails = resolveCustomerPaymentRails({
+      checkoutConfig: referralLink.checkout_config,
+      merchant: {
+        stripe: !!merchantSettings?.stripe_account_id,
+        wise: !!merchantSettings?.wise_enabled && !!merchantSettings?.wise_profile_id,
+        hedera: !!merchantSettings?.hedera_account_id,
+        manual: true,
+      },
+    });
+
+    const allowCustomAmount = isCustomAmountAllowedOnCheckoutConfig(referralLink.checkout_config);
+
     const allServices = await prisma.organization_services.findMany({
       where: { organization_id: referralLink.organization_id, active: true },
       orderBy: { created_at: 'desc' },
@@ -62,6 +96,10 @@ export default async function ReferralLandingPage({
             price: Number(s.price),
             currency: s.currency,
           }))}
+          merchantDisplayName={branding.merchantName}
+          merchantLogoUrl={branding.logoUrl}
+          paymentRails={paymentRails.length > 0 ? paymentRails : ['stripe']}
+          allowCustomAmount={allowCustomAmount}
         />
       );
     }
@@ -70,6 +108,9 @@ export default async function ReferralLandingPage({
       <ReferralPayPageClient
         referralCode={referralCode}
         checkoutConfig={referralLink.checkout_config as Record<string, unknown> | null}
+        merchantDisplayName={branding.displayName}
+        merchantLogoUrl={branding.logoUrl}
+        paymentRails={paymentRails.length > 0 ? paymentRails : ['stripe']}
       />
     );
   }

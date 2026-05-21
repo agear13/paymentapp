@@ -275,6 +275,9 @@ export default function OrganizationServicesPage() {
             <div className="space-y-2">
               <Label htmlFor="svc-desc">Description</Label>
               <Input id="svc-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
+              <p className="text-xs text-muted-foreground">
+                This description appears on customer checkout pages.
+              </p>
             </div>
             <div className="flex gap-4">
               <div className="space-y-2 flex-1">
@@ -300,7 +303,7 @@ export default function OrganizationServicesPage() {
               </div>
             </div>
             <Button type="submit" disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save changes'}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add service'}
             </Button>
           </form>
         </CardContent>
@@ -355,10 +358,16 @@ export default function OrganizationServicesPage() {
                       </Badge>
                     </div>
                     <p className="text-sm text-gray-600 line-clamp-2 mt-1">{r.description || '—'}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {r.linkedInvoiceCount} linked invoice{r.linkedInvoiceCount === 1 ? '' : 's'} ·{' '}
-                      {formatServiceActivityLine(r.createdAt, r.updatedAt)}
-                    </p>
+                    {formatServiceActivityLine(r.createdAt, r.updatedAt) ? (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {r.linkedInvoiceCount} linked invoice{r.linkedInvoiceCount === 1 ? '' : 's'} ·{' '}
+                        {formatServiceActivityLine(r.createdAt, r.updatedAt)}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {r.linkedInvoiceCount} linked invoice{r.linkedInvoiceCount === 1 ? '' : 's'}
+                      </p>
+                    )}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-2 sm:ml-4">
                     <p className="font-semibold">

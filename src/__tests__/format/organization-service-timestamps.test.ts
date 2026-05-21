@@ -23,6 +23,11 @@ describe('organization-service-timestamps', () => {
   });
 
   it('formatServiceActivityLine handles missing strings', () => {
-    expect(formatServiceActivityLine(undefined, undefined)).toBe('Recently added');
+    expect(formatServiceActivityLine(undefined, undefined)).toBe('');
+  });
+
+  it('formatServiceActivityLine shows Created when updated matches created', () => {
+    const iso = '2024-06-01T12:00:00.000Z';
+    expect(formatServiceActivityLine(iso, iso)).toBe('Created 1 Jun 2024');
   });
 });

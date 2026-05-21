@@ -30,18 +30,30 @@ function formatServiceDate(d: Date): string {
   });
 }
 
+function isSameActivityMoment(created: Date, updated: Date): boolean {
+  return Math.abs(updated.getTime() - created.getTime()) < 60_000;
+}
+
 /** Merchant-facing line under a service row. */
 export function formatServiceActivityLine(
   createdAtIso: string | null | undefined,
   updatedAtIso: string | null | undefined
 ): string {
+  const created = createdAtIso ? new Date(createdAtIso) : null;
   const updated = updatedAtIso ? new Date(updatedAtIso) : null;
+
+  if (created && !Number.isNaN(created.getTime()) && updated && !Number.isNaN(updated.getTime())) {
+    if (isSameActivityMoment(created, updated)) {
+      return `Created ${formatServiceDate(created)}`;
+    }
+    return `Updated ${formatServiceDate(updated)}`;
+  }
+
   if (updated && !Number.isNaN(updated.getTime())) {
     return `Updated ${formatServiceDate(updated)}`;
   }
-  const created = createdAtIso ? new Date(createdAtIso) : null;
   if (created && !Number.isNaN(created.getTime())) {
     return `Created ${formatServiceDate(created)}`;
   }
-  return 'Recently added';
+  return '';
 }

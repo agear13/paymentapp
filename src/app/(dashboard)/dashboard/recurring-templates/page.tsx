@@ -170,10 +170,10 @@ export default function RecurringTemplatesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>New template</CardTitle>
+          <CardTitle>New recurring invoice</CardTitle>
           <CardDescription>
-            Generated invoices are invoice-only links (same as manual invoice-only mode). The
-            scheduler runs about every five minutes.
+            Recurring invoices are generated automatically on schedule. Each run creates a fresh
+            invoice-only payment link with your normal invoice numbering and accounting sync.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -218,6 +218,9 @@ export default function RecurringTemplatesPage() {
                 value={customerEmail}
                 onChange={(e) => setCustomerEmail(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                If provided, invoices will automatically be sent to this customer.
+              </p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
               <div className="grid gap-2">
@@ -279,7 +282,7 @@ export default function RecurringTemplatesPage() {
               </div>
             </div>
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Saving…' : 'Create template'}
+              {submitting ? 'Creating…' : 'Create recurring invoice'}
             </Button>
           </form>
         </CardContent>
@@ -287,14 +290,14 @@ export default function RecurringTemplatesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Templates</CardTitle>
-          <CardDescription>Active templates run automatically; paused templates are skipped.</CardDescription>
+          <CardTitle>Schedules</CardTitle>
+          <CardDescription>Active schedules run automatically; paused schedules are skipped.</CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : templates.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No templates yet.</p>
+            <p className="text-sm text-muted-foreground">No recurring invoices scheduled yet.</p>
           ) : (
             <Table>
               <TableHeader>

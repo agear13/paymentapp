@@ -13,6 +13,10 @@ import {
   sanitizeParticipantForAgreementView,
 } from '@/lib/projects/participant-entitlement';
 import { log } from '@/lib/logger';
+import { resolveOrganizationIdForPilotDeal } from '@/lib/referrals/ensure-referral-issuance';
+import { prisma } from '@/lib/server/prisma';
+import { filterServicesForReferralConfig } from '@/lib/referrals/referral-commerce-config';
+import { buildScopedServiceCommissionRows } from '@/lib/projects/participant-compensation-copy';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,12 +77,42 @@ export async function GET(
 
     const isProject = isProjectWorkspaceParticipant(participant);
 
+    let scopedServiceRows: ReturnType<typeof buildScopedServiceCommissionRows> = [];
+    const commerce = participant.referralCommerce;
+    if (commerce?.commissionMode === 'referral_commerce') {
+      const organizationId = await resolveOrganizationIdForPilotDeal(
+        refreshed.deal.user_id,
+        refreshed.deal_id
+      );
+      if (organizationId) {
+        const allServices = await prisma.organization_services.findMany({
+          where: { organization_id: organizationId, active: true },
+          select: { id: true, name: true, price: true, currency: true },
+          orderBy: { name: 'asc' },
+        });
+        const filtered = filterServicesForReferralConfig(allServices, {
+          referralCommerce: commerce,
+        });
+        scopedServiceRows = buildScopedServiceCommissionRows({
+          services: filtered.map((s) => ({
+            id: s.id,
+            name: s.name,
+            price: Number(s.price),
+            currency: s.currency,
+          })),
+          commerce,
+          allServicesFallback: true,
+        });
+      }
+    }
+
     return NextResponse.json({
       deal,
       participant: sanitizeParticipantForAgreementView(participant),
       dealParticipants,
       referralIssuance: isProject && refreshed.approval_status !== 'Approved' ? undefined : referralIssuance,
       workspaceSource: isProject ? 'project' : 'pilot',
+      scopedServiceRows,
     });
   } catch (e) {
     console.error('[deal-network-pilot/invites GET]', e);

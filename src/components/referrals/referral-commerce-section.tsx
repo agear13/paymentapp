@@ -9,6 +9,10 @@ import type {
   ParticipantReferralCommerce,
   ReferralCommissionMode,
 } from '@/lib/referrals/referral-commerce-config';
+import {
+  REFERRAL_PAYMENT_RAIL_OPTIONS,
+  type ReferralPaymentRail,
+} from '@/lib/referrals/referral-payment-rails';
 
 export type OrganizationServiceOption = {
   id: string;
@@ -143,8 +147,8 @@ export function ReferralCommerceSection({
                 </Label>
                 <p className="text-xs text-muted-foreground">
                   {operational
-                    ? 'Uses the fixed payout or revenue share configured above.'
-                    : 'Uses deal/project commission above (percentage or fixed).'}
+                    ? 'Uses the payout amount or revenue share percentage configured for this participant.'
+                    : 'Uses deal/project commission above (percentage or fixed amount with currency).'}
                 </p>
               </div>
             </div>
@@ -229,6 +233,51 @@ export function ReferralCommerceSection({
                     </ul>
                   </>
                 )}
+              </div>
+
+              <div className="space-y-2 pt-2 border-t">
+                <Label>Customer payment methods</Label>
+                <p className="text-xs text-muted-foreground">
+                  Choose which payment methods customers see on this participant&apos;s checkout link.
+                  Only methods configured in Collection &amp; settlement setup will be available.
+                </p>
+                <ul className="space-y-2">
+                  {REFERRAL_PAYMENT_RAIL_OPTIONS.map((rail) => {
+                    const rails = new Set(value.enabledPaymentRails ?? ['stripe']);
+                    return (
+                      <li key={rail.id} className="flex items-start gap-2 text-sm">
+                        <Checkbox
+                          id={`rail-${rail.id}`}
+                          checked={rails.has(rail.id)}
+                          disabled={disabled}
+                          onCheckedChange={(c) => {
+                            const next = new Set(value.enabledPaymentRails ?? ['stripe']);
+                            if (c) next.add(rail.id);
+                            else next.delete(rail.id);
+                            if (next.size === 0) next.add('stripe');
+                            patch({ enabledPaymentRails: [...next] as ReferralPaymentRail[] });
+                          }}
+                        />
+                        <label htmlFor={`rail-${rail.id}`} className="cursor-pointer">
+                          <span className="font-medium">{rail.label}</span>
+                          <span className="text-muted-foreground block text-xs">{rail.description}</span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="allow-custom-amount"
+                  checked={value.allowCustomAmount !== false}
+                  disabled={disabled}
+                  onCheckedChange={(c) => patch({ allowCustomAmount: c === true })}
+                />
+                <Label htmlFor="allow-custom-amount" className="font-normal cursor-pointer">
+                  Allow custom payment amounts on checkout
+                </Label>
               </div>
             </div>
           ) : null}

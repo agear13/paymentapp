@@ -15,6 +15,11 @@ import {
   commissionSnapshotToPrismaJson,
 } from '@/lib/referrals/commission-attribution-snapshot';
 import { isServiceAllowedForReferral } from '@/lib/referrals/referral-commerce-config';
+import {
+  referralRailToPaymentMethod,
+  type ReferralPaymentRail,
+} from '@/lib/referrals/referral-payment-rails';
+import { getPaymentLinkUrl } from '@/lib/runtime/customer-facing-url';
 
 export interface ReferralCheckoutResult {
   success: boolean;
@@ -35,6 +40,7 @@ export interface ReferralCheckoutParams {
   currency?: string;
   /** Override description. If not provided, uses checkout_config.description */
   description?: string;
+  paymentRail?: ReferralPaymentRail;
 }
 
 export interface ReferralServiceCheckoutParams {
@@ -82,6 +88,7 @@ export async function createReferralCheckoutSession(
     amount: amountOverride,
     currency: currencyOverride,
     description: descriptionOverride,
+    paymentRail = 'stripe',
   } = params;
 
   const code = referralCode.trim().toUpperCase();
@@ -108,9 +115,9 @@ export async function createReferralCheckoutSession(
     }
 
     const merchantSettings = referralLink.organizations.merchant_settings[0];
-    if (!merchantSettings?.stripe_account_id) {
+    if (paymentRail === 'stripe' && !merchantSettings?.stripe_account_id) {
       log.warn('Stripe not configured', { organizationId: referralLink.organization_id });
-      return { success: false, error: 'Stripe not configured for this merchant' };
+      return { success: false, error: 'Card payments are not configured for this merchant' };
     }
 
     const config = (referralLink.checkout_config as Record<string, unknown>) || {};
@@ -123,6 +130,8 @@ export async function createReferralCheckoutSession(
     const now = new Date();
 
     const snapshotMeta = buildCommissionAttributionMetadataFromReferralLink(referralLink);
+
+    const paymentMethod = referralRailToPaymentMethod(paymentRail);
 
     const paymentLink = await prisma.payment_links.create({
       data: {
@@ -137,6 +146,7 @@ export async function createReferralCheckoutSession(
         invoice_reference: `REF-${code}`,
         referral_link_id: referralLink.id,
         referral_code_id: referralLink.referral_code?.id ?? null,
+        payment_method: paymentMethod,
         attribution_referral_code: code,
         attributed_participant_user_id:
           referralLink.referral_code?.participant_user_id ?? referralLink.created_by_user_id ?? null,
@@ -146,6 +156,14 @@ export async function createReferralCheckoutSession(
         updated_at: now,
       },
     });
+
+    if (paymentRail !== 'stripe') {
+      return {
+        success: true,
+        url: getPaymentLinkUrl(shortCode),
+        paymentLinkId: paymentLink.id,
+      };
+    }
 
     const baseUrl = getBrandedAppOrigin();
     const defaultSuccessUrl = `${baseUrl}/pay/${shortCode}/success?session_id={CHECKOUT_SESSION_ID}`;
@@ -222,7 +240,14 @@ export async function createReferralCheckoutSession(
 export async function createReferralServiceCheckoutSession(
   params: ReferralServiceCheckoutParams
 ): Promise<ReferralCheckoutResult> {
-  const { referralCode, organizationServiceId, successUrl, cancelUrl, correlationId } = params;
+  const {
+    referralCode,
+    organizationServiceId,
+    successUrl,
+    cancelUrl,
+    correlationId,
+    paymentRail = 'stripe',
+  } = params;
   const code = referralCode.trim().toUpperCase();
   if (!code || !organizationServiceId?.trim()) {
     return { success: false, error: 'Invalid referral code or service' };
@@ -275,6 +300,12 @@ export async function createReferralServiceCheckoutSession(
     const now = new Date();
     const snapshotMeta = buildCommissionAttributionMetadataFromReferralLink(referralLink);
 
+    const paymentMethod = referralRailToPaymentMethod(paymentRail);
+
+    if (paymentRail === 'stripe' && !merchantSettings?.stripe_account_id) {
+      return { success: false, error: 'Card payments are not configured for this merchant' };
+    }
+
     const paymentLink = await prisma.payment_links.create({
       data: {
         id: randomUUID(),
@@ -289,6 +320,7 @@ export async function createReferralServiceCheckoutSession(
         referral_link_id: referralLink.id,
         referral_code_id: referralLink.referral_code?.id ?? null,
         organization_service_id: service.id,
+        payment_method: paymentMethod,
         attribution_referral_code: code,
         attributed_participant_user_id:
           referralLink.referral_code?.participant_user_id ?? referralLink.created_by_user_id ?? null,
@@ -298,6 +330,20 @@ export async function createReferralServiceCheckoutSession(
         updated_at: now,
       },
     });
+
+    if (paymentRail !== 'stripe') {
+      const payUrl = getPaymentLinkUrl(shortCode);
+      log.info('Referral service payment link created (multi-rail)', {
+        correlationId,
+        paymentLinkId: paymentLink.id,
+        paymentRail,
+      });
+      return {
+        success: true,
+        url: payUrl,
+        paymentLinkId: paymentLink.id,
+      };
+    }
 
     const baseUrl = getBrandedAppOrigin();
     const defaultSuccessUrl = `${baseUrl}/pay/${shortCode}/success?session_id={CHECKOUT_SESSION_ID}`;

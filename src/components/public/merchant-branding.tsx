@@ -89,7 +89,7 @@ export const MerchantBranding: React.FC<MerchantBrandingProps> = ({
       </div>
 
       <h1 className="text-2xl font-bold text-slate-900 mb-1">{merchantName}</h1>
-      <p className="text-sm text-slate-500">Payment request</p>
+      <p className="text-sm text-slate-500 sr-only">Payment request</p>
     </div>
   );
 };

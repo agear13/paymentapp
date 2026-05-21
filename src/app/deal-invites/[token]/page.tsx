@@ -46,6 +46,9 @@ export default function DealInviteApprovalPage() {
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [workspaceSource, setWorkspaceSource] = React.useState<'project' | 'pilot'>('pilot');
+  const [scopedServiceRows, setScopedServiceRows] = React.useState<
+    import('@/lib/projects/participant-compensation-copy').ScopedServiceCommissionRow[]
+  >([]);
 
   React.useEffect(() => {
     setReferralIssuance(null);
@@ -69,6 +72,7 @@ export default function DealInviteApprovalPage() {
           dealParticipants?: DemoParticipant[];
           referralIssuance?: { code: string; referralUrl: string };
           workspaceSource?: 'project' | 'pilot';
+          scopedServiceRows?: import('@/lib/projects/participant-compensation-copy').ScopedServiceCommissionRow[];
         }>;
       })
       .then((data) => {
@@ -82,6 +86,7 @@ export default function DealInviteApprovalPage() {
         );
         setApproved(data.participant.approvalStatus === 'Approved');
         setNote(data.participant.approvalNote ?? '');
+        setScopedServiceRows(data.scopedServiceRows ?? []);
         if (data.referralIssuance) {
           setReferralIssuance(data.referralIssuance);
         } else if (data.participant.customerCommerceUrl?.trim()) {
@@ -230,6 +235,7 @@ export default function DealInviteApprovalPage() {
           dealParticipants={dealParticipants}
           initialApproved={approved}
           initialReferralIssuance={referralIssuance}
+          initialScopedServiceRows={scopedServiceRows}
         />
       </div>
     );

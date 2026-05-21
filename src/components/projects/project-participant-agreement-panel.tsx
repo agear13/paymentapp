@@ -2,10 +2,12 @@
 
 import * as React from 'react';
 import { toast } from 'sonner';
+import { CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
@@ -18,7 +20,11 @@ import { ParticipantAttributionAgreementSummary } from '@/components/projects/pa
 import { ReferralSharePanel } from '@/components/referrals/referral-share-panel';
 import { buildReferralQrApiPath } from '@/lib/referrals/referral-share-url';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
-import { earningsStructureSummary } from '@/lib/projects/participant-entitlement';
+import {
+  formatParticipationEarningsSummary,
+  formatApprovalTimestamp,
+  type ScopedServiceCommissionRow,
+} from '@/lib/projects/participant-compensation-copy';
 import { shouldIssueReferralLink } from '@/lib/referrals/referral-commerce-config';
 import {
   isAttributionActive,
@@ -41,6 +47,7 @@ type InvitePayload = {
   participant: DemoParticipant;
   dealParticipants?: DemoParticipant[];
   referralIssuance?: CommerceLink;
+  scopedServiceRows?: ScopedServiceCommissionRow[];
 };
 
 async function fetchInviteState(token: string): Promise<InvitePayload | null> {
@@ -65,6 +72,7 @@ type Props = {
   dealParticipants: DemoParticipant[];
   initialApproved: boolean;
   initialReferralIssuance: CommerceLink | null;
+  initialScopedServiceRows?: ScopedServiceCommissionRow[];
 };
 
 export function ProjectParticipantAgreementPanel({
@@ -74,6 +82,7 @@ export function ProjectParticipantAgreementPanel({
   dealParticipants,
   initialApproved,
   initialReferralIssuance,
+  initialScopedServiceRows = [],
 }: Props) {
   const [participant, setParticipant] = React.useState(initialParticipant);
   const [approved, setApproved] = React.useState(initialApproved);
@@ -81,14 +90,17 @@ export function ProjectParticipantAgreementPanel({
   const [commerceLink, setCommerceLink] = React.useState<CommerceLink | null>(
     initialReferralIssuance
   );
+  const [scopedServiceRows, setScopedServiceRows] = React.useState(initialScopedServiceRows);
   const [issuingCommerce, setIssuingCommerce] = React.useState(false);
 
   const attribution = deriveAttributionStatus(participant);
   const expectsCommerce = shouldIssueReferralLink(participant.referralCommerce);
+  const approvalDateLabel = formatApprovalTimestamp(participant.approvedAt);
 
   const applyInvitePayload = React.useCallback((data: InvitePayload) => {
     setParticipant(data.participant);
     setApproved(data.participant.approvalStatus === 'Approved');
+    setScopedServiceRows(data.scopedServiceRows ?? []);
     const link = commerceFromPayload(data);
     if (link) setCommerceLink(link);
   }, []);
@@ -180,9 +192,11 @@ export function ProjectParticipantAgreementPanel({
       const data = (await res.json()) as {
         participant: DemoParticipant;
         referralIssuance?: CommerceLink;
+        scopedServiceRows?: ScopedServiceCommissionRow[];
       };
       setParticipant(data.participant);
       setApproved(true);
+      if (data.scopedServiceRows) setScopedServiceRows(data.scopedServiceRows);
 
       const immediate =
         data.referralIssuance ?? referralIssuanceFromParticipant(data.participant);
@@ -203,14 +217,15 @@ export function ProjectParticipantAgreementPanel({
   }
 
   const showCommerceAfterApproval = approved && !!commerceLink && expectsCommerce;
+  const earningsSummary = formatParticipationEarningsSummary(participant);
 
   return (
     <Card className="w-full max-w-2xl">
       <CardHeader>
         <CardTitle>Participant agreement</CardTitle>
         <CardDescription>
-          Review your operational role, payout allocation, and attribution permissions for this
-          project. Approving confirms your participation. Payout onboarding can be completed later.
+          Review what you earn, which services qualify, and when attribution begins. Approving
+          confirms your participation. Payout profile setup can be completed later.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -237,7 +252,7 @@ export function ProjectParticipantAgreementPanel({
             <div className="sm:col-span-2">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Attribution</p>
               <Badge variant={isAttributionActive(attribution) ? 'default' : 'outline'}>
-                {isAttributionActive(attribution) ? 'Active' : 'Inactive'}
+                {isAttributionActive(attribution) ? 'Active' : 'Inactive until approved'}
               </Badge>
             </div>
           ) : null}
@@ -251,59 +266,75 @@ export function ProjectParticipantAgreementPanel({
         ) : null}
 
         <div className="rounded-md border p-3 bg-background space-y-2">
-          <p className="text-sm font-medium">Payout allocation</p>
-          <p className="text-xs text-muted-foreground">{earningsStructureSummary(participant)}</p>
-          <p className="text-xs text-muted-foreground">{commissionStructureLabel}</p>
+          <p className="text-sm font-medium">Your earnings on this project</p>
+          <p className="text-sm font-medium text-foreground">{earningsSummary}</p>
+          {commissionStructureLabel && participant.participationModel !== 'fixed_payout' ? (
+            <p className="text-xs text-muted-foreground">Structure: {commissionStructureLabel}</p>
+          ) : null}
           {rolePayout && rolePayout.total > 0 ? (
-            <>
-              <p className="text-sm text-muted-foreground">{rolePayout.previewLine}</p>
-              <p className="font-semibold">Estimated allocation: ${rolePayout.total.toLocaleString()}</p>
-            </>
+            <p className="text-sm text-muted-foreground">{rolePayout.previewLine}</p>
           ) : null}
         </div>
 
-        <ParticipantAttributionAgreementSummary commerce={participant.referralCommerce} />
+        <ParticipantAttributionAgreementSummary
+          commerce={participant.referralCommerce}
+          serviceRows={scopedServiceRows}
+          allServicesNote={
+            !participant.referralCommerce?.enabledServiceIds?.length &&
+            participant.referralCommerce?.commissionMode === 'referral_commerce'
+          }
+        />
 
         {!approved ? (
-          <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-            Customer payment links are issued only after you approve participation. Attribution
-            tracking begins after approval; identity verification is required before payout release.
+          <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground leading-relaxed">
+            Approving activates attribution tracking on your customer payment link. Customers never
+            see your commission terms. Payout onboarding can be completed after approval when you are
+            ready to receive funds.
           </div>
         ) : null}
 
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!approved) void approve();
-          }}
-        >
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="agreement-note">
-              Optional confirmation note
-            </label>
-            <Textarea
-              id="agreement-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Internal note for the operator record"
-              disabled={approved}
-            />
-          </div>
-          <Button type="submit" disabled={approved}>
-            {approved ? 'Participation approved' : 'Approve participation'}
-          </Button>
-        </form>
+        {approved ? (
+          <Alert className="border-emerald-200 bg-emerald-50/80">
+            <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+            <AlertDescription className="text-emerald-900">
+              Participation approved
+              {approvalDateLabel ? ` on ${approvalDateLabel}` : ''}. Your agreement is confirmed.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {!approved ? (
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void approve();
+            }}
+          >
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="agreement-note">
+                Message to operator (optional)
+              </label>
+              <Textarea
+                id="agreement-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Add a note or question for the operator"
+              />
+            </div>
+            <Button type="submit">Approve participation</Button>
+          </form>
+        ) : null}
 
         {showCommerceAfterApproval ? (
           <div className="rounded-md border p-4 bg-background space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-medium">Trackable customer payment link</p>
-              <Badge>Active</Badge>
+              <Badge variant="default">Active</Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Share this link with customers for service checkout. Commission and payout mechanics
-              are not shown to customers.
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Share this link with customers for service checkout. Commission terms are not shown on
+              the customer page.
             </p>
             <ReferralSharePanel
               code={commerceLink.code}

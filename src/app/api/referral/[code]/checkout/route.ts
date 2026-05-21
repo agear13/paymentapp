@@ -35,6 +35,14 @@ export async function POST(
     const currency = typeof body.currency === 'string' ? body.currency : undefined;
     const description = typeof body.description === 'string' ? body.description : (typeof body.memo === 'string' ? body.memo : undefined);
 
+    const paymentRail =
+      body.paymentRail === 'stripe' ||
+      body.paymentRail === 'wise' ||
+      body.paymentRail === 'hedera' ||
+      body.paymentRail === 'manual'
+        ? body.paymentRail
+        : undefined;
+
     const result = await createReferralCheckoutSession({
       referralCode: code.trim().toUpperCase(),
       successUrl: typeof successUrl === 'string' ? successUrl : undefined,
@@ -42,6 +50,7 @@ export async function POST(
       amount,
       currency,
       description,
+      paymentRail,
     });
 
     if (!result.success) {

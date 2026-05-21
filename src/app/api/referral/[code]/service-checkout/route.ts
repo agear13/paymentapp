@@ -7,6 +7,7 @@ const BodySchema = z.object({
   organizationServiceId: z.string().uuid(),
   successUrl: z.string().url().optional(),
   cancelUrl: z.string().url().optional(),
+  paymentRail: z.enum(['stripe', 'wise', 'hedera', 'manual']).optional(),
 });
 
 export async function POST(
@@ -39,6 +40,7 @@ export async function POST(
       organizationServiceId: parsed.data.organizationServiceId,
       successUrl: parsed.data.successUrl,
       cancelUrl: parsed.data.cancelUrl,
+      paymentRail: parsed.data.paymentRail,
     });
 
     if (!result.success) {

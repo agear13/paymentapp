@@ -14,6 +14,10 @@ import {
   effectiveOnboardingStatus,
   isOnboardingComplete,
 } from '@/lib/deal-network-demo/participant-onboarding';
+import {
+  formatFixedPayoutLine,
+  formatRevenueShareLine,
+} from '@/lib/projects/participant-compensation-copy';
 
 export type ProjectParticipationModel =
   | 'fixed_payout'
@@ -134,11 +138,11 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
 export function participationModelLabel(model: ProjectParticipationModel): string {
   switch (model) {
     case 'fixed_payout':
-      return 'Fixed payout';
+      return 'Fixed payout amount';
     case 'revenue_share':
       return 'Revenue share';
     case 'customer_attribution':
-      return 'Customer attribution';
+      return 'Customer attribution earnings';
   }
 }
 
@@ -218,17 +222,24 @@ export function payoutStatusLabel(status: ParticipantPayoutStatus): string {
 }
 
 export function earningsStructureSummary(participant: DemoParticipant): string {
+  const currency = 'AUD';
+  if (participant.participationModel === 'fixed_payout') {
+    return formatFixedPayoutLine(participant.commissionValue, currency);
+  }
+  if (participant.participationModel === 'revenue_share') {
+    return formatRevenueShareLine(participant.commissionValue, currency);
+  }
+  if (participant.commissionKind === 'pct_deal_value') {
+    return formatRevenueShareLine(participant.commissionValue, currency);
+  }
+  if (participant.commissionKind === 'fixed_amount') {
+    return formatFixedPayoutLine(participant.commissionValue, currency);
+  }
   const model = participant.participationModel;
   if (model) return participationModelLabel(model);
   const kind =
     COMMISSION_STRUCTURE_OPTIONS.find((o) => o.value === participant.commissionKind)?.label ??
     participant.commissionKind;
-  if (participant.commissionKind === 'pct_deal_value') {
-    return `${participant.commissionValue}% revenue share`;
-  }
-  if (participant.commissionKind === 'fixed_amount') {
-    return `Fixed $${participant.commissionValue.toLocaleString()}`;
-  }
   return kind;
 }
 

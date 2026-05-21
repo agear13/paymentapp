@@ -4,6 +4,9 @@
 
 export type ReferralCommissionMode = 'project_revenue_share' | 'referral_commerce';
 
+import type { ReferralPaymentRail } from '@/lib/referrals/referral-payment-rails';
+import { defaultReferralPaymentRails } from '@/lib/referrals/referral-payment-rails';
+
 export type ParticipantReferralCommerce = {
   /** When false, no referral link is issued on approval. Default true when omitted (legacy). */
   createReferralLink?: boolean;
@@ -12,6 +15,10 @@ export type ParticipantReferralCommerce = {
   commerceCommissionPct?: number;
   /** When set (non-empty), only these organization_services are exposed on the referral landing. */
   enabledServiceIds?: string[];
+  /** Customer-facing payment methods on this participant's link. Defaults to card only. */
+  enabledPaymentRails?: ReferralPaymentRail[];
+  /** When false, hide custom-amount checkout on the referral landing. */
+  allowCustomAmount?: boolean;
 };
 
 const CONFIG_KEY = 'referralCommerce';
@@ -45,6 +52,10 @@ export function normalizeReferralCommerce(
   const mode =
     input.commissionMode === 'referral_commerce' ? 'referral_commerce' : 'project_revenue_share';
   const pct = Number(input.commerceCommissionPct);
+  const rails = Array.isArray(input.enabledPaymentRails)
+    ? [...new Set(input.enabledPaymentRails.filter((r) => typeof r === 'string'))]
+    : defaultReferralPaymentRails();
+
   return {
     createReferralLink: input.createReferralLink !== false,
     commissionMode: mode,
@@ -53,6 +64,8 @@ export function normalizeReferralCommerce(
     enabledServiceIds: Array.isArray(input.enabledServiceIds)
       ? [...new Set(input.enabledServiceIds.filter((id) => typeof id === 'string' && id.trim()))]
       : [],
+    enabledPaymentRails: rails.length > 0 ? (rails as ReferralPaymentRail[]) : defaultReferralPaymentRails(),
+    allowCustomAmount: input.allowCustomAmount !== false,
   };
 }
 
