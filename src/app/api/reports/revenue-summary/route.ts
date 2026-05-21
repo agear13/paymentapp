@@ -96,6 +96,11 @@ export async function GET(req: NextRequest) {
           revenue: 0,
           percentage: 0,
         },
+        wise: {
+          count: 0,
+          revenue: 0,
+          percentage: 0,
+        },
       },
     };
 
@@ -145,6 +150,8 @@ export async function GET(req: NextRequest) {
         (summary.breakdown.hedera_usdt.revenue / summary.totalRevenue) * 100;
       summary.breakdown.hedera_audd.percentage =
         (summary.breakdown.hedera_audd.revenue / summary.totalRevenue) * 100;
+      summary.breakdown.wise.percentage =
+        (summary.breakdown.wise.revenue / summary.totalRevenue) * 100;
     }
 
     return NextResponse.json(summary);

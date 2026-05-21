@@ -110,7 +110,7 @@ export function getOperatorNavSections(
       items: [
         { title: 'Overview', href: '/dashboard/reports' },
         { title: 'Ledger', href: REPORTS_LEDGER_HREF, icon: BookOpen },
-        { title: 'Exports', href: REPORTS_EXPORTS_HREF, icon: Download },
+        { title: 'Export Center', href: REPORTS_EXPORTS_HREF, icon: Download },
       ],
     },
     {

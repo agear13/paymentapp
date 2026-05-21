@@ -3,6 +3,10 @@ import { getUserOrganization } from '@/lib/auth/get-org'
 import { redirect } from 'next/navigation'
 import { ReportsPageClient } from '@/components/dashboard/reports/reports-page-client'
 
+export const metadata = {
+  title: 'Reports',
+};
+
 export default async function ReportsPage() {
   const user = await getCurrentUser()
   if (!user) {

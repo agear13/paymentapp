@@ -5,7 +5,7 @@ import {
   buildUnfundedObligationsInsight,
   getOperationalInsightsFromSnapshot,
 } from '@/lib/reports/operational-insights';
-import type { ReconciliationReportData } from '@/lib/reports/reconciliation-report.server';
+import type { ReconciliationReportData } from '@/lib/reports/reconciliation-types';
 
 function emptyReconciliation(
   overrides?: Partial<ReconciliationReportData['report']['stripe']>
@@ -19,6 +19,7 @@ function emptyReconciliation(
   return {
     report: {
       stripe: { ...zero, ...overrides },
+      wise: { ...zero },
       hedera_hbar: { ...zero },
       hedera_usdc: { ...zero },
       hedera_usdt: { ...zero },
@@ -56,7 +57,7 @@ describe('operational insights', () => {
 
   it('includes hedera balanced insight when all hedera rails reconcile', () => {
     const insight = buildHederaSettlementInsight(emptyReconciliation());
-    expect(insight?.message).toBe('Hedera settlement accounts balanced');
+    expect(insight?.message).toBe('Digital settlement rails balanced');
   });
 
   it('aggregates insights in stable order', () => {

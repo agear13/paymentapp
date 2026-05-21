@@ -1,26 +1,25 @@
 import { prisma } from '@/lib/server/prisma';
+import {
+  RECONCILIATION_TOLERANCE,
+  type ReconciliationRailKey,
+  type ReconciliationReportData,
+} from '@/lib/reports/reconciliation-types';
 
-export const RECONCILIATION_TOLERANCE = 0.01;
+export {
+  RECONCILIATION_TOLERANCE,
+  isRailBalanced,
+  type ReconciliationRailKey,
+  type ReconciliationRailItem,
+  type ReconciliationReportData,
+} from '@/lib/reports/reconciliation-types';
 
-export type ReconciliationRailKey =
-  | 'stripe'
-  | 'hedera_hbar'
-  | 'hedera_usdc'
-  | 'hedera_usdt'
-  | 'hedera_audd';
-
-export type ReconciliationRailItem = {
-  expectedRevenue: number;
-  ledgerBalance: number;
-  difference: number;
-  paymentCount: number;
-};
-
-export type ReconciliationReportData = {
-  report: Record<ReconciliationRailKey, ReconciliationRailItem>;
-  isReconciled: boolean;
-  totalDifference: number;
-  timestamp: string;
+const CLEARING_ACCOUNT_CODES: Record<ReconciliationRailKey, string> = {
+  stripe: '1050',
+  wise: '1055',
+  hedera_hbar: '1051',
+  hedera_usdc: '1052',
+  hedera_usdt: '1053',
+  hedera_audd: '1054',
 };
 
 const HEDERA_RAILS: ReconciliationRailKey[] = [
@@ -30,14 +29,12 @@ const HEDERA_RAILS: ReconciliationRailKey[] = [
   'hedera_audd',
 ];
 
-export function isRailBalanced(difference: number): boolean {
-  return Math.abs(difference) < RECONCILIATION_TOLERANCE;
-}
-
 export function areHederaRailsBalanced(
   report: ReconciliationReportData['report']
 ): boolean {
-  return HEDERA_RAILS.every((key) => isRailBalanced(report[key].difference));
+  return HEDERA_RAILS.every(
+    (key) => Math.abs(report[key].difference) < RECONCILIATION_TOLERANCE
+  );
 }
 
 /**
@@ -63,6 +60,12 @@ export async function buildReconciliationReport(
 
   const report: ReconciliationReportData['report'] = {
     stripe: {
+      expectedRevenue: 0,
+      ledgerBalance: 0,
+      difference: 0,
+      paymentCount: 0,
+    },
+    wise: {
       expectedRevenue: 0,
       ledgerBalance: 0,
       difference: 0,
@@ -98,7 +101,7 @@ export async function buildReconciliationReport(
     where: {
       organization_id: organizationId,
       code: {
-        in: ['1050', '1051', '1052', '1053', '1054'],
+        in: ['1050', '1051', '1052', '1053', '1054', '1055'],
       },
     },
     include: {
@@ -150,22 +153,18 @@ export async function buildReconciliationReport(
     }
   }
 
-  report.stripe.ledgerBalance = accountBalances['1050'] || 0;
-  report.hedera_hbar.ledgerBalance = accountBalances['1051'] || 0;
-  report.hedera_usdc.ledgerBalance = accountBalances['1052'] || 0;
-  report.hedera_usdt.ledgerBalance = accountBalances['1053'] || 0;
-  report.hedera_audd.ledgerBalance = accountBalances['1054'] || 0;
+  for (const key of Object.keys(CLEARING_ACCOUNT_CODES) as ReconciliationRailKey[]) {
+    report[key].ledgerBalance = accountBalances[CLEARING_ACCOUNT_CODES[key]] || 0;
+  }
 
   for (const key of Object.keys(report) as ReconciliationRailKey[]) {
     report[key].difference = report[key].expectedRevenue - report[key].ledgerBalance;
   }
 
-  const totalDifference =
-    Math.abs(report.stripe.difference) +
-    Math.abs(report.hedera_hbar.difference) +
-    Math.abs(report.hedera_usdc.difference) +
-    Math.abs(report.hedera_usdt.difference) +
-    Math.abs(report.hedera_audd.difference);
+  const totalDifference = (Object.keys(report) as ReconciliationRailKey[]).reduce(
+    (sum, key) => sum + Math.abs(report[key].difference),
+    0
+  );
 
   const isReconciled = totalDifference < RECONCILIATION_TOLERANCE;
 

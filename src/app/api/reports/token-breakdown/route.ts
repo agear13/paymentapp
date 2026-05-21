@@ -65,7 +65,14 @@ export async function GET(req: NextRequest) {
         value: 0,
         count: 0,
         revenue: 0,
-        color: '#635BFF', // Stripe brand color
+        color: '#635BFF',
+      },
+      {
+        label: 'Wise',
+        value: 0,
+        count: 0,
+        revenue: 0,
+        color: '#00B9FF',
       },
       {
         label: 'Hedera - HBAR',
@@ -117,17 +124,17 @@ export async function GET(req: NextRequest) {
         const tokenType = metadata?.tokenType || metadata?.token_type;
 
         if (tokenType === 'HBAR') {
-          breakdown[1].count++;
-          breakdown[1].revenue += amount;
-        } else if (tokenType === 'USDC') {
           breakdown[2].count++;
           breakdown[2].revenue += amount;
-        } else if (tokenType === 'USDT') {
+        } else if (tokenType === 'USDC') {
           breakdown[3].count++;
           breakdown[3].revenue += amount;
-        } else if (tokenType === 'AUDD') {
+        } else if (tokenType === 'USDT') {
           breakdown[4].count++;
           breakdown[4].revenue += amount;
+        } else if (tokenType === 'AUDD') {
+          breakdown[5].count++;
+          breakdown[5].revenue += amount;
         }
       }
     }

@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { formatCurrency } from '@/lib/formatters/format-currency';
 
 interface LedgerAccount {
   code: string;
@@ -24,18 +25,27 @@ interface LedgerAccount {
 interface LedgerBalanceData {
   clearingAccounts: {
     stripe: LedgerAccount | null;
+    wise: LedgerAccount | null;
     hedera_hbar: LedgerAccount | null;
     hedera_usdc: LedgerAccount | null;
     hedera_usdt: LedgerAccount | null;
     hedera_audd: LedgerAccount | null;
   };
   otherAccounts: LedgerAccount[];
-  allAccounts: LedgerAccount[];
 }
 
 interface LedgerBalanceReportProps {
   organizationId: string;
 }
+
+const CLEARING_ROWS: { key: keyof LedgerBalanceData['clearingAccounts']; label: string }[] = [
+  { key: 'stripe', label: 'Stripe' },
+  { key: 'wise', label: 'Wise' },
+  { key: 'hedera_hbar', label: 'HBAR' },
+  { key: 'hedera_usdc', label: 'USDC' },
+  { key: 'hedera_usdt', label: 'USDT' },
+  { key: 'hedera_audd', label: 'AUDD' },
+];
 
 export function LedgerBalanceReport({ organizationId }: LedgerBalanceReportProps) {
   const [loading, setLoading] = useState(true);
@@ -43,21 +53,21 @@ export function LedgerBalanceReport({ organizationId }: LedgerBalanceReportProps
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [organizationId]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await fetch(
         `/api/reports/ledger-balance?organizationId=${organizationId}`
       );
       if (!response.ok) throw new Error('Failed to fetch ledger balances');
-
-      const result = await response.json();
-      setData(result);
-    } catch (err: any) {
-      setError(err.message);
+      setData((await response.json()) as LedgerBalanceData);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load');
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -67,115 +77,81 @@ export function LedgerBalanceReport({ organizationId }: LedgerBalanceReportProps
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Ledger Balance Report</CardTitle>
-          <CardDescription>Loading...</CardDescription>
+          <CardTitle>Ledger balance report</CardTitle>
+          <CardDescription>Loading…</CardDescription>
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-48 w-full" />
         </CardContent>
       </Card>
     );
   }
-
-  const placeholderData: LedgerBalanceData = {
-    clearingAccounts: {
-      stripe: {
-        code: '1050',
-        name: 'Stripe Clearing',
-        accountType: 'ASSET',
-        balance: 1250,
-        entryCount: 12,
-      },
-      hedera_hbar: {
-        code: '1051',
-        name: 'Crypto Clearing - HBAR',
-        accountType: 'ASSET',
-        balance: 432,
-        entryCount: 4,
-      },
-      hedera_usdc: {
-        code: '1052',
-        name: 'Crypto Clearing - USDC',
-        accountType: 'ASSET',
-        balance: 528,
-        entryCount: 6,
-      },
-      hedera_usdt: null,
-      hedera_audd: {
-        code: '1054',
-        name: 'Crypto Clearing - AUDD',
-        accountType: 'ASSET',
-        balance: 96,
-        entryCount: 2,
-      },
-    },
-    otherAccounts: [
-      {
-        code: '1200',
-        name: 'Accounts Receivable',
-        accountType: 'ASSET',
-        balance: -2406,
-        entryCount: 24,
-      },
-    ],
-    allAccounts: [],
-  };
 
   if (error || !data) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Ledger Balance Report</CardTitle>
-          <CardDescription>
-            Sample data for demo. Live data unavailable.
-          </CardDescription>
+          <CardTitle>Ledger balance report</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-amber-700 mb-4">
-            {error ?? 'Could not load data.'} Showing sample data for demo.
-          </p>
-          <LedgerBalanceContent data={placeholderData} />
+          <p className="text-sm text-amber-800">{error ?? 'Ledger balances unavailable.'}</p>
         </CardContent>
       </Card>
     );
   }
 
-  const clearingAccountsArray = [
-    { key: 'Stripe', account: data.clearingAccounts.stripe },
-    { key: 'Hedera - HBAR', account: data.clearingAccounts.hedera_hbar },
-    { key: 'Hedera - USDC', account: data.clearingAccounts.hedera_usdc },
-    { key: 'Hedera - USDT', account: data.clearingAccounts.hedera_usdt },
-    { key: 'Hedera - AUDD', account: data.clearingAccounts.hedera_audd },
-  ].filter((item) => item.account !== null);
+  const hasClearingActivity = CLEARING_ROWS.some(
+    ({ key }) => data.clearingAccounts[key] !== null
+  );
+  const hasAnyEntries =
+    hasClearingActivity ||
+    data.otherAccounts.some((a) => a.entryCount > 0);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Ledger Balance Report</CardTitle>
-        <CardDescription>
-          Current balances across all ledger accounts
-        </CardDescription>
+        <CardTitle>Ledger balance report</CardTitle>
+        <CardDescription>Current balances across clearing and supporting accounts.</CardDescription>
       </CardHeader>
       <CardContent>
-        <LedgerBalanceContent data={data} />
+        {!hasAnyEntries ? (
+          <div className="rounded-lg border border-dashed bg-muted/30 px-6 py-8 text-center text-sm">
+            <p className="font-medium">No settlement activity yet</p>
+            <p className="mt-1 text-muted-foreground">
+              Ledger entries will appear after your first payment.
+            </p>
+          </div>
+        ) : (
+          <LedgerBalanceContent data={data} />
+        )}
       </CardContent>
     </Card>
   );
 }
 
 function LedgerBalanceContent({ data }: { data: LedgerBalanceData }) {
-  const clearingAccountsArray = [
-    { key: 'Stripe', account: data.clearingAccounts.stripe },
-    { key: 'Hedera - HBAR', account: data.clearingAccounts.hedera_hbar },
-    { key: 'Hedera - USDC', account: data.clearingAccounts.hedera_usdc },
-    { key: 'Hedera - USDT', account: data.clearingAccounts.hedera_usdt },
-    { key: 'Hedera - AUDD', account: data.clearingAccounts.hedera_audd },
-  ].filter((item): item is { key: string; account: LedgerAccount } => item.account !== null);
+  const clearingRows = CLEARING_ROWS.map(({ key, label }) => {
+    const account = data.clearingAccounts[key];
+    return {
+      label,
+      account,
+      displayBalance: account?.balance ?? 0,
+      displayCode: account?.code ?? (key === 'wise' ? '1055' : '—'),
+      displayName: account?.name ?? `${label} clearing`,
+      entryCount: account?.entryCount ?? 0,
+      provisioned: account !== null,
+    };
+  });
+
+  const hasClearingBalances = clearingRows.some((r) => r.provisioned && r.entryCount > 0);
 
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-semibold mb-3">Clearing Accounts</h3>
+        <h3 className="text-sm font-semibold mb-3">Clearing accounts</h3>
+        {!hasClearingBalances ? (
+          <p className="text-sm text-muted-foreground mb-3">No clearing balances recorded yet.</p>
+        ) : null}
         <Table>
           <TableHeader>
             <TableRow>
@@ -186,26 +162,24 @@ function LedgerBalanceContent({ data }: { data: LedgerBalanceData }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {clearingAccountsArray.map(({ key, account }) => (
-              <TableRow key={account.code}>
-                <TableCell className="font-medium">{key}</TableCell>
+            {clearingRows.map((row) => (
+              <TableRow key={row.label}>
+                <TableCell className="font-medium">{row.label}</TableCell>
                 <TableCell>
-                  <Badge variant="outline">{account.code}</Badge>
+                  <Badge variant="outline">{row.displayCode}</Badge>
                 </TableCell>
                 <TableCell className="text-right font-mono">
-                  ${account.balance.toFixed(2)}
+                  {formatCurrency(row.displayBalance, 'AUD')}
                 </TableCell>
-                <TableCell className="text-right">
-                  {account.entryCount}
-                </TableCell>
+                <TableCell className="text-right">{row.entryCount}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
-      {data.otherAccounts.length > 0 && (
+      {data.otherAccounts.length > 0 ? (
         <div>
-          <h3 className="text-sm font-semibold mb-3">Other Accounts</h3>
+          <h3 className="text-sm font-semibold mb-3">Other accounts</h3>
           <Table>
             <TableHeader>
               <TableRow>
@@ -227,24 +201,15 @@ function LedgerBalanceContent({ data }: { data: LedgerBalanceData }) {
                     <Badge variant="secondary">{account.accountType}</Badge>
                   </TableCell>
                   <TableCell className="text-right font-mono">
-                    ${account.balance.toFixed(2)}
+                    {formatCurrency(account.balance, 'AUD')}
                   </TableCell>
-                  <TableCell className="text-right">
-                    {account.entryCount}
-                  </TableCell>
+                  <TableCell className="text-right">{account.entryCount}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
-
-
-
-
-
-
-

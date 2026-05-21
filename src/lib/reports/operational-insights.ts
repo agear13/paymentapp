@@ -1,10 +1,6 @@
 import { formatCurrency } from '@/lib/formatters/format-currency';
-import {
-  areHederaRailsBalanced,
-  buildReconciliationReport,
-  isRailBalanced,
-  type ReconciliationReportData,
-} from '@/lib/reports/reconciliation-report.server';
+import { buildReconciliationReport, areHederaRailsBalanced } from '@/lib/reports/reconciliation-report.server';
+import { isRailBalanced, type ReconciliationReportData } from '@/lib/reports/reconciliation-types';
 import { prisma } from '@/lib/server/prisma';
 
 export type OperationalInsightSeverity = 'success' | 'warning' | 'error' | 'info';
@@ -74,7 +70,7 @@ export function buildHederaSettlementInsight(
   return {
     id: 'hedera-settlement-balanced',
     severity: 'success',
-    message: 'Hedera settlement accounts balanced',
+    message: 'Digital settlement rails balanced',
     metadata: 'Reconciliation report',
   };
 }

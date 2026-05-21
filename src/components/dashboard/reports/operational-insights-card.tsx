@@ -15,6 +15,7 @@ import type {
   OperationalInsightSeverity,
 } from '@/lib/reports/operational-insights';
 import { cn } from '@/lib/utils';
+import { formatReportDateTime } from '@/lib/format/format-report-datetime';
 
 interface OperationalInsightsSnapshot {
   insights: OperationalInsight[];
@@ -152,7 +153,7 @@ export function OperationalInsightsCard({ organizationId }: OperationalInsightsC
           insights.map((insight) => <InsightRow key={insight.id} insight={insight} />)
         )}
         <p className="pt-1 text-xs text-muted-foreground text-right">
-          Updated {new Date(snapshot.generatedAt).toLocaleString()}
+          Updated {formatReportDateTime(snapshot.generatedAt)}
         </p>
       </CardContent>
     </Card>

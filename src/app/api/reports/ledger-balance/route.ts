@@ -12,6 +12,7 @@ import { prisma } from '@/lib/server/prisma';
  * - Hedera USDC (1052)
  * - Hedera USDT (1053)
  * - Hedera AUDD (1054)
+ * - Wise (1055)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -84,16 +85,17 @@ export async function GET(req: NextRequest) {
 
     // Separate clearing accounts for reporting
     const clearingAccounts = balances.filter((b) =>
-      ['1050', '1051', '1052', '1053', '1054'].includes(b.code)
+      ['1050', '1051', '1052', '1053', '1054', '1055'].includes(b.code)
     );
 
     const otherAccounts = balances.filter(
-      (b) => !['1050', '1051', '1052', '1053', '1054'].includes(b.code)
+      (b) => !['1050', '1051', '1052', '1053', '1054', '1055'].includes(b.code)
     );
 
     return NextResponse.json({
       clearingAccounts: {
         stripe: clearingAccounts.find((a) => a.code === '1050') || null,
+        wise: clearingAccounts.find((a) => a.code === '1055') || null,
         hedera_hbar: clearingAccounts.find((a) => a.code === '1051') || null,
         hedera_usdc: clearingAccounts.find((a) => a.code === '1052') || null,
         hedera_usdt: clearingAccounts.find((a) => a.code === '1053') || null,
