@@ -6,7 +6,6 @@ import { Plus, RefreshCw, Download, ChevronRight } from 'lucide-react';
 import { useOrganization } from '@/hooks/use-organization';
 import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { formatPayoutCurrency } from '@/lib/payouts/format-payout-currency';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,6 +42,10 @@ import {
 } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { PAYOUTS_SETTLEMENTS_HREF } from '@/lib/navigation/operator-nav';
+import { PAYOUT_TRUST_COPY } from '@/lib/payouts/payout-trust-copy';
+import { PayoutEmptyState } from '@/components/payouts/payout-empty-state';
+import { cn } from '@/lib/utils';
+
 interface Batch {
   id: string;
   currency: string;
@@ -51,6 +54,48 @@ interface Batch {
   totalAmount: number;
   createdAt: string;
 }
+
+type EligibleObligation = {
+  status: string;
+  amount_owed: string | number;
+  currency: string;
+  participant_id: string | null;
+};
+
+function toNumber(v: unknown): number {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === 'number') return v;
+  const n = Number(String(v));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function computeEligiblePreview(
+  rows: EligibleObligation[],
+  currency: string,
+  minThreshold: number
+): { lineCount: number; participantCount: number; total: number } {
+  const byParticipant = new Map<string, number>();
+  let lineCount = 0;
+  for (const row of rows) {
+    if (row.status !== 'AVAILABLE_FOR_PAYOUT') continue;
+    if ((row.currency || '').toUpperCase() !== currency.toUpperCase()) continue;
+    lineCount += 1;
+    const pid = row.participant_id ?? `__none_${row.currency}`;
+    const amt = toNumber(row.amount_owed);
+    byParticipant.set(pid, (byParticipant.get(pid) ?? 0) + amt);
+  }
+  let participantCount = 0;
+  let total = 0;
+  for (const balance of byParticipant.values()) {
+    if (balance >= minThreshold) {
+      participantCount += 1;
+      total += balance;
+    }
+  }
+  return { lineCount, participantCount, total };
+}
+
+const SUPPORTED_CURRENCIES = ['AUD', 'USD', 'EUR', 'GBP'] as const;
 
 export function OperatorSettlementsWorkspace() {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
@@ -61,6 +106,12 @@ export function OperatorSettlementsWorkspace() {
   const [createLoading, setCreateLoading] = React.useState(false);
   const [createCurrency, setCreateCurrency] = React.useState(orgCurrency);
   const [createThreshold, setCreateThreshold] = React.useState('50');
+  const [eligiblePreview, setEligiblePreview] = React.useState<{
+    lineCount: number;
+    participantCount: number;
+    total: number;
+    loading: boolean;
+  }>({ lineCount: 0, participantCount: 0, total: 0, loading: false });
 
   React.useEffect(() => {
     setCreateCurrency(orgCurrency);
@@ -77,7 +128,7 @@ export function OperatorSettlementsWorkspace() {
       if (!res.ok) throw new Error(data.error || 'Failed to fetch');
       setBatches(data.data || []);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load settlement history');
+      toast.error(err instanceof Error ? err.message : 'Failed to load payout releases');
     } finally {
       setLoading(false);
     }
@@ -87,11 +138,46 @@ export function OperatorSettlementsWorkspace() {
     void fetchBatches();
   }, [fetchBatches]);
 
+  React.useEffect(() => {
+    if (!createOpen) return;
+    let cancelled = false;
+    const threshold = parseFloat(createThreshold);
+    const minThreshold = Number.isFinite(threshold) && threshold >= 0 ? threshold : 0;
+
+    void (async () => {
+      setEligiblePreview((p) => ({ ...p, loading: true }));
+      try {
+        const res = await fetch('/api/deal-network-pilot/obligations', {
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { data?: EligibleObligation[] };
+        const rows = json.data ?? [];
+        if (!cancelled) {
+          const preview = computeEligiblePreview(rows, createCurrency, minThreshold);
+          setEligiblePreview({ ...preview, loading: false });
+        }
+      } catch {
+        if (!cancelled) {
+          setEligiblePreview({ lineCount: 0, participantCount: 0, total: 0, loading: false });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen, createCurrency, createThreshold]);
+
   const handleCreateBatch = async () => {
     if (!organizationId) return;
     const threshold = parseFloat(createThreshold);
     if (isNaN(threshold) || threshold < 0) {
       toast.error('Enter a valid minimum threshold');
+      return;
+    }
+    if (eligiblePreview.participantCount === 0 && !eligiblePreview.loading) {
+      toast.error('No eligible payouts available for this currency and threshold');
       return;
     }
     setCreateLoading(true);
@@ -122,10 +208,20 @@ export function OperatorSettlementsWorkspace() {
     window.open(`/api/payout-batches/${batchId}/export`, '_blank', 'noopener');
   };
 
+  const pageHeader = (
+    <>
+      <h1 className="text-3xl font-bold tracking-tight">Payout releases</h1>
+      <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+        Review completed payout releases and participant payouts.
+      </p>
+      <p className="text-xs text-muted-foreground/60 mt-2">{PAYOUT_TRUST_COPY.releaseReviewable}</p>
+    </>
+  );
+
   if (isOrgLoading) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Settlement history</h1>
+        {pageHeader}
         <p className="text-muted-foreground">Loading…</p>
       </div>
     );
@@ -134,22 +230,24 @@ export function OperatorSettlementsWorkspace() {
   if (!organizationId) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Settlement history</h1>
+        {pageHeader}
         <p className="text-muted-foreground">No organization selected.</p>
       </div>
     );
   }
 
+  const previewAmountLabel = formatPayoutCurrency(
+    eligiblePreview.total,
+    createCurrency,
+    orgCurrency
+  );
+  const noEligible =
+    !eligiblePreview.loading && createOpen && eligiblePreview.participantCount === 0;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Settlement history</h1>
-          <p className="text-muted-foreground mt-1 max-w-2xl">
-            Review release batches, settlement dates, and payout status — your record of completed
-            participant releases.
-          </p>
-        </div>
+        <div>{pageHeader}</div>
         <div className="flex flex-wrap gap-2 shrink-0">
           <TooltipProvider>
             <Tooltip>
@@ -159,12 +257,12 @@ export function OperatorSettlementsWorkspace() {
                   size="icon"
                   onClick={() => void fetchBatches()}
                   disabled={loading}
-                  aria-label="Refresh settlement history"
+                  aria-label="Refresh payout releases"
                 >
                   <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Refresh settlement history</TooltipContent>
+              <TooltipContent>Refresh payout releases</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -174,14 +272,49 @@ export function OperatorSettlementsWorkspace() {
                 Create release batch
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
+            <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto gap-0">
+              <DialogHeader className="space-y-1 pb-4">
                 <DialogTitle>Create release batch</DialogTitle>
-                <DialogDescription>
-                  Bundle payout-ready obligations into a release batch for review and disbursement.
+                <DialogDescription className="text-sm">
+                  Group eligible participant payouts for review before release.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-2">
+              <div className="grid gap-5 py-1">
+                <div className="space-y-3 text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Release summary
+                  </p>
+                  {eligiblePreview.loading ? (
+                    <p className="text-muted-foreground">Calculating…</p>
+                  ) : (
+                    <dl className="space-y-2.5">
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Participants</dt>
+                        <dd className="font-semibold tabular-nums">
+                          {eligiblePreview.participantCount}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Eligible payouts</dt>
+                        <dd className="font-semibold tabular-nums">{eligiblePreview.lineCount}</dd>
+                      </div>
+                      <div className="flex justify-between gap-4 border-t border-border/20 pt-2.5">
+                        <dt className="text-muted-foreground">Total release amount</dt>
+                        <dd className="text-base font-semibold tabular-nums">{previewAmountLabel}</dd>
+                      </div>
+                    </dl>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                  {PAYOUT_TRUST_COPY.releaseReviewable}
+                </p>
+                {noEligible ? (
+                  <PayoutEmptyState
+                    iconVariant="release"
+                    title="No eligible payouts available"
+                    description="Adjust currency or threshold, or approve and fund obligations first."
+                  />
+                ) : null}
                 <div>
                   <Label htmlFor="currency">Currency</Label>
                   <Select value={createCurrency} onValueChange={setCreateCurrency}>
@@ -189,10 +322,11 @@ export function OperatorSettlementsWorkspace() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="AUD">AUD</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="GBP">GBP</SelectItem>
+                      {SUPPORTED_CURRENCIES.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -208,7 +342,7 @@ export function OperatorSettlementsWorkspace() {
                     placeholder="50"
                   />
                   <p className="text-muted-foreground mt-1 text-xs">
-                    Only include payees at or above this balance
+                    Only include participants owed at least this amount.
                   </p>
                 </div>
               </div>
@@ -216,7 +350,10 @@ export function OperatorSettlementsWorkspace() {
                 <Button variant="outline" onClick={() => setCreateOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={() => void handleCreateBatch()} disabled={createLoading}>
+                <Button
+                  onClick={() => void handleCreateBatch()}
+                  disabled={createLoading || noEligible || eligiblePreview.loading}
+                >
                   {createLoading ? 'Creating…' : 'Create release batch'}
                 </Button>
               </DialogFooter>
@@ -225,46 +362,56 @@ export function OperatorSettlementsWorkspace() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-          <div>
-            <CardTitle className="text-base">Payout batches</CardTitle>
-            <CardDescription>
-              Historical release batches and their settlement status.
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold">Release history</h2>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            Completed release batches and payout status. Technical references are in batch details.
+          </p>
+        </div>
+        <div>
           {loading ? (
             <p className="text-muted-foreground py-8 text-center text-sm">Loading…</p>
           ) : batches.length === 0 ? (
-            <div className="rounded-lg border border-dashed bg-muted/30 px-6 py-10 text-center text-sm">
-              <p className="font-medium">No release batches yet</p>
-              <p className="mt-1 text-muted-foreground">
-                Payout-ready obligations will appear here once you create a release batch.
-              </p>
-              <Button className="mt-4" size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create release batch
-              </Button>
-            </div>
+            <PayoutEmptyState
+              iconVariant="history"
+              title="No payout releases yet"
+              description="Release batches will appear here once obligations are approved and funded."
+              action={
+                <Button size="sm" onClick={() => setCreateOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create release batch
+                </Button>
+              }
+            />
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Settlement date</TableHead>
-                  <TableHead>Currency</TableHead>
-                  <TableHead>Payout status</TableHead>
-                  <TableHead className="text-right">Payouts</TableHead>
-                  <TableHead className="text-right">Total released</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                <TableRow className="hover:bg-transparent border-b border-border/20">
+                  <TableHead>Release batch</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Participants</TableHead>
+                  <TableHead className="text-right">Total amount</TableHead>
+                  <TableHead>Release status</TableHead>
+                  <TableHead className="text-right w-[88px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {batches.map((b) => (
-                  <TableRow key={b.id}>
-                    <TableCell>{new Date(b.createdAt).toLocaleDateString()}</TableCell>
-                    <TableCell>{b.currency}</TableCell>
+                  <TableRow
+                    key={b.id}
+                    className={cn(
+                      'border-b border-border/15 transition-colors hover:bg-muted/15 [&>td]:py-4'
+                    )}
+                  >
+                    <TableCell className="font-mono text-xs">{b.id.slice(0, 8)}</TableCell>
+                    <TableCell className="text-sm">
+                      {new Date(b.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{b.payoutCount}</TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {formatPayoutCurrency(b.totalAmount, b.currency, orgCurrency)}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={
@@ -274,26 +421,28 @@ export function OperatorSettlementsWorkspace() {
                               ? 'secondary'
                               : 'outline'
                         }
+                        className="text-[11px] font-normal"
                       >
-                        {b.status.replace(/_/g, ' ')}
+                        {b.status === 'COMPLETED'
+                          ? 'Completed'
+                          : b.status === 'SUBMITTED'
+                            ? 'Submitted'
+                            : b.status.replace(/_/g, ' ')}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">{b.payoutCount}</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {formatPayoutCurrency(b.totalAmount, b.currency, orgCurrency)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon"
+                          className="h-8 w-8"
                           onClick={() => handleExport(b.id)}
-                          aria-label="Export batch"
+                          aria-label="Export release batch"
                         >
                           <Download className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link href={batchDetailHref(b.id)} aria-label="View batch details">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                          <Link href={batchDetailHref(b.id)} aria-label="View release batch">
                             <ChevronRight className="h-4 w-4" />
                           </Link>
                         </Button>
@@ -304,8 +453,8 @@ export function OperatorSettlementsWorkspace() {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

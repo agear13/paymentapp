@@ -6,8 +6,12 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { PAYOUTS_HUB_HREF } from '@/lib/navigation/operator-nav';
+import { usePathname, useSearchParams } from 'next/navigation';
+import {
+  PAYOUTS_HUB_HREF,
+  PAYOUTS_SETTLEMENTS_HREF,
+} from '@/lib/navigation/operator-nav';
+import { PAYOUT_TRUST_COPY } from '@/lib/payouts/payout-trust-copy';
 import {
   Card,
   CardContent,
@@ -33,12 +37,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   RefreshCw,
   ArrowLeft,
-  HelpCircle,
+  ChevronDown,
   AlertTriangle,
   Clock,
   CircleDollarSign,
@@ -54,7 +64,26 @@ import {
 } from '@/lib/deal-network-demo/participant-onboarding';
 import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { formatPayoutCurrency } from '@/lib/payouts/format-payout-currency';
+import {
+  getObligationBlockingIssue,
+  getObligationNextAction,
+  operatorStatusLabel,
+} from '@/lib/payouts/obligation-status-labels';
+import {
+  readNeedsAttentionPreference,
+  writeNeedsAttentionPreference,
+} from '@/lib/payouts/payout-operator-preferences';
+import { PayoutEmptyState } from '@/components/payouts/payout-empty-state';
+import { useIsMobile } from '@/hooks/use-mobile';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { PayoutGlossaryTooltip } from '@/components/payouts/payout-glossary-tooltip';
+import { cn } from '@/lib/utils';
 import {
   Tooltip,
   TooltipContent,
@@ -157,18 +186,15 @@ function statusBadgeVariant(
 function statusRowAccent(s: DealNetworkPilotObligationStatus): string {
   switch (s) {
     case 'UNFUNDED':
-      return 'border-l-4 border-l-amber-500 bg-amber-50/40 dark:bg-amber-950/25';
     case 'PARTIALLY_FUNDED':
-      return 'border-l-4 border-l-amber-600 bg-amber-50/50 dark:bg-amber-950/30';
+      return 'border-l-2 border-l-amber-400/80';
     case 'PENDING_APPROVAL':
-      return 'border-l-4 border-l-sky-600 bg-sky-50/35 dark:bg-sky-950/25';
+      return 'border-l-2 border-l-sky-400/70';
     case 'AVAILABLE_FOR_PAYOUT':
-      return 'border-l-4 border-l-emerald-600 bg-emerald-50/35 dark:bg-emerald-950/25';
-    case 'PAID':
-      return 'bg-muted/30';
+      return 'border-l-2 border-l-emerald-500/90';
     case 'REJECTED':
     case 'REVERSED':
-      return 'border-l-4 border-l-red-500 bg-red-50/30 dark:bg-red-950/20';
+      return 'border-l-2 border-l-red-400/70';
     default:
       return '';
   }
@@ -192,9 +218,12 @@ function StatusBadge({ status }: { status: DealNetworkPilotObligationStatus }) {
     ) : null;
 
   return (
-    <Badge variant={variant} className="max-w-[200px] gap-1 font-normal">
+    <Badge
+      variant={variant}
+      className="max-w-[140px] gap-1 font-normal text-[11px] px-1.5 py-0 transition-colors"
+    >
       {icon}
-      <span className="truncate">{statusLabel(status)}</span>
+      <span className="truncate">{operatorStatusLabel(status)}</span>
     </Badge>
   );
 }
@@ -256,13 +285,119 @@ function computeKpis(rows: ObligationRow[]) {
   };
 }
 
-export default function DealNetworkObligationsPage() {
+function ObligationRowDetailPanel({
+  row,
+  orgCurrency,
+}: {
+  row: ObligationRow;
+  orgCurrency: string;
+}) {
+  const participantApprovedNotOnboarded =
+    row.participant &&
+    row.obligation_type !== 'PLATFORM_FEE' &&
+    isApprovedButNotOnboarded({
+      id: row.participant.id,
+      approvalStatus:
+        row.participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
+      onboardingStatus: row.participant.onboardingStatus,
+    });
+  const onboardingDone =
+    row.participant?.onboardingStatus != null
+      ? isOnboardingComplete(row.participant.onboardingStatus)
+      : true;
+  const roleLabel =
+    row.participant?.role ??
+    (row.obligation_type === 'PLATFORM_FEE' ? 'Platform fee' : '—');
+  const pe = row.payment_event;
+  const paymentLabel = pe?.source_type
+    ? String(pe.source_type).replace(/_/g, ' ')
+    : pe
+      ? 'Customer payment'
+      : 'Not linked';
+  const blocking = getObligationBlockingIssue(row);
+
+  return (
+    <dl className="grid gap-3 text-sm sm:grid-cols-2">
+      {blocking ? (
+        <div className="sm:col-span-2">
+          <dt className="text-muted-foreground text-xs">Blocking issue</dt>
+          <dd className="font-medium">{blocking}</dd>
+        </div>
+      ) : null}
+      <div>
+        <dt className="text-muted-foreground text-xs">Role</dt>
+        <dd>{roleLabel}</dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground text-xs">Participant readiness</dt>
+        <dd>
+          {row.obligation_type === 'PLATFORM_FEE'
+            ? '—'
+            : participantApprovedNotOnboarded
+              ? 'Setup required'
+              : row.participant
+                ? onboardingDone
+                  ? 'Ready'
+                  : 'Pending setup'
+                : '—'}
+        </dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground text-xs">Payment source</dt>
+        <dd>{paymentLabel}</dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground text-xs">Payout status</dt>
+        <dd>{operatorStatusLabel(row.status)}</dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground text-xs">Outstanding</dt>
+        <dd className="tabular-nums font-medium">
+          {formatMoney(toNumber(row.amount_owed), row.currency, orgCurrency)}
+        </dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground text-xs">Project reference</dt>
+        <dd className="font-mono text-xs break-all">{row.deal_id}</dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground text-xs">Line reference</dt>
+        <dd className="font-mono text-xs break-all">{row.id}</dd>
+      </div>
+      <div className="sm:col-span-2">
+        <dt className="text-muted-foreground text-xs mb-1">Calculation</dt>
+        <dd className="text-muted-foreground leading-relaxed text-xs">
+          {row.calculation_explanation}
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
+function matchesSearch(row: ObligationRow, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [
+    row.deal?.name,
+    row.deal_id,
+    row.participant?.name,
+    row.participant?.email,
+    row.participant?.role,
+    row.obligation_type,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
+function DealNetworkObligationsPageContent() {
   const { currency: orgCurrency } = useOrganizationCurrency();
   const pathname = usePathname();
-  const backHref = pathname?.startsWith('/dashboard/payouts')
-    ? PAYOUTS_HUB_HREF
-    : '/dashboard/partners/deal-network';
-  const backLabel = pathname?.startsWith('/dashboard/payouts') ? 'Back to Payouts' : 'Back to Deal Network';
+  const searchParams = useSearchParams();
+  const isPayoutsRoute = pathname?.startsWith('/dashboard/payouts') ?? false;
+  const backHref = isPayoutsRoute ? PAYOUTS_HUB_HREF : '/dashboard/partners/deal-network';
+  const backLabel = isPayoutsRoute ? 'Back to Payouts' : 'Back to Deal Network';
 
   const [allRows, setAllRows] = React.useState<ObligationRow[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -270,7 +405,37 @@ export default function DealNetworkObligationsPage() {
   const [dealFilter, setDealFilter] = React.useState<string>('__all__');
   const [statusFilter, setStatusFilter] = React.useState<string>('__all__');
   const [participantFilter, setParticipantFilter] = React.useState<string>('__all__');
-  const [needsActionOnly, setNeedsActionOnly] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [advancedOpen, setAdvancedOpen] = React.useState(false);
+  const [needsActionOnly, setNeedsActionOnly] = React.useState(isPayoutsRoute);
+  const [expandedRowId, setExpandedRowId] = React.useState<string | null>(null);
+  const [sheetRow, setSheetRow] = React.useState<ObligationRow | null>(null);
+  const isMobile = useIsMobile();
+
+  React.useEffect(() => {
+    const stored = readNeedsAttentionPreference();
+    if (stored !== null && isPayoutsRoute) {
+      setNeedsActionOnly(stored);
+    }
+    if (searchParams.get('needsAction') === '1') {
+      setNeedsActionOnly(true);
+    }
+    const status = searchParams.get('status');
+    if (status && STATUS_OPTIONS.includes(status as DealNetworkPilotObligationStatus)) {
+      setStatusFilter(status);
+      if (status !== '__all__') setNeedsActionOnly(false);
+    }
+    if (searchParams.get('focus') === 'unfunded') {
+      setNeedsActionOnly(true);
+      setStatusFilter('UNFUNDED');
+    }
+  }, [searchParams, isPayoutsRoute]);
+
+  const setNeedsAttention = React.useCallback((value: boolean) => {
+    setNeedsActionOnly(value);
+    writeNeedsAttentionPreference(value);
+    if (value) setStatusFilter('__all__');
+  }, []);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -310,9 +475,10 @@ export default function DealNetworkObligationsPage() {
       if (dealFilter !== '__all__' && r.deal_id !== dealFilter) return false;
       if (statusFilter !== '__all__' && r.status !== statusFilter) return false;
       if (participantFilter !== '__all__' && r.participant_id !== participantFilter) return false;
+      if (!matchesSearch(r, searchQuery)) return false;
       return true;
     });
-  }, [allRows, needsActionOnly, dealFilter, statusFilter, participantFilter]);
+  }, [allRows, needsActionOnly, dealFilter, statusFilter, participantFilter, searchQuery]);
 
   const kpi = React.useMemo(() => computeKpis(rows), [rows]);
 
@@ -364,7 +530,7 @@ export default function DealNetworkObligationsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
+    <div className="mx-auto max-w-7xl space-y-8 p-4 md:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <Button variant="ghost" size="sm" asChild className="mb-2 -ml-2 h-8 px-2">
@@ -414,121 +580,133 @@ export default function DealNetworkObligationsPage() {
             Payout cannot be executed until onboarding is complete
           </AlertTitle>
           <AlertDescription className="text-amber-900/95 dark:text-amber-100/90">
-            At least one obligation line has an <strong>approved</strong> participant who has not finished{' '}
+            At least one payout line has an <strong>approved</strong> participant who has not finished{' '}
             <strong>onboarding</strong>. Use Deal Network to mark onboarding complete before paying out.
           </AlertDescription>
         </Alert>
       ) : null}
 
-      {/* KPI strip — sums over the same filtered row set as the table */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <Card className="border-border/80 shadow-sm">
-          <CardHeader className="space-y-1 p-4 pb-2">
-            <CardDescription className="text-[10px] font-semibold uppercase tracking-wider">
-              Total owed
-            </CardDescription>
-            <CardTitle className="text-xl tabular-nums sm:text-2xl">
-              {loading ? '…' : formatKpiAmount(kpi.totalOwed)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-border/80 shadow-sm">
-          <CardHeader className="space-y-1 p-4 pb-2">
-            <CardDescription className="text-[10px] font-semibold uppercase tracking-wider">
-              Total paid
-            </CardDescription>
-            <CardTitle className="text-muted-foreground text-xl tabular-nums sm:text-2xl">
-              {loading ? '…' : formatKpiAmount(kpi.totalPaid)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-border/80 shadow-sm">
-          <CardHeader className="space-y-1 p-4 pb-2">
-            <CardDescription className="text-[10px] font-semibold uppercase tracking-wider">
-              Outstanding
-            </CardDescription>
-            <CardTitle className="text-xl tabular-nums sm:text-2xl">
+      <div className="space-y-5">
+        <div className="grid gap-6 sm:grid-cols-[1.15fr_1fr] sm:items-end">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Outstanding</p>
+            <p className="mt-1 text-4xl font-semibold tabular-nums tracking-tight sm:text-5xl">
               {loading ? '…' : formatKpiAmount(kpi.totalOutstanding)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-amber-200/80 bg-amber-50/50 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/20">
-          <CardHeader className="space-y-1 p-4 pb-2">
-            <CardDescription className="text-[10px] font-semibold uppercase tracking-wider text-amber-900 dark:text-amber-200/90">
-              Unfunded
-            </CardDescription>
-            <CardTitle className="text-xl tabular-nums text-amber-950 sm:text-2xl dark:text-amber-50">
-              {loading ? '…' : formatKpiAmount(kpi.totalUnfunded)}
-            </CardTitle>
-            <p className="text-[11px] leading-snug text-amber-900/80 dark:text-amber-200/80">
-              Sum of lines in <strong>Unfunded</strong> status
             </p>
-            {!loading && kpi.totalPartiallyFunded > 0 ? (
-              <p className="text-[11px] leading-snug text-amber-900/85 dark:text-amber-200/85">
-                Partially funded lines: {formatKpiAmount(kpi.totalPartiallyFunded)}
-              </p>
-            ) : null}
-          </CardHeader>
-        </Card>
-        <Card className="border-emerald-200/80 bg-emerald-50/40 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/20">
-          <CardHeader className="space-y-1 p-4 pb-2">
-            <CardDescription className="text-[10px] font-semibold uppercase tracking-wider text-emerald-900 dark:text-emerald-200/90">
-              Available for payout
-            </CardDescription>
-            <CardTitle className="text-xl tabular-nums text-emerald-950 sm:text-2xl dark:text-emerald-50">
+          </div>
+          <div className="sm:text-right sm:pb-1">
+            <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+              Ready for payout
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-800 dark:text-emerald-300 sm:text-3xl">
               {loading ? '…' : formatKpiAmount(kpi.availableForPayoutAmount)}
-            </CardTitle>
-            <p className="text-[11px] leading-snug text-emerald-900/80 dark:text-emerald-200/80">
-              {loading ? '…' : `${kpi.availableForPayoutCount} line${kpi.availableForPayoutCount === 1 ? '' : 's'} · status Available for payout`}
             </p>
-          </CardHeader>
-        </Card>
-        <Card className="border-border/80 shadow-sm">
-          <CardHeader className="space-y-1 p-4 pb-2">
-            <CardDescription className="text-[10px] font-semibold uppercase tracking-wider">
-              Obligation lines
-            </CardDescription>
-            <CardTitle className="text-xl tabular-nums sm:text-2xl">{loading ? '…' : rows.length}</CardTitle>
-            {kpi.mixedCurrency && rows.length > 0 ? (
-              <p className="text-muted-foreground text-[11px]">Multiple currencies. Amount totals hidden.</p>
+            {!loading ? (
+              kpi.availableForPayoutCount > 0 ? (
+                <>
+                  <p className="mt-1 text-xs text-emerald-800/70 dark:text-emerald-400/80">
+                    {kpi.availableForPayoutCount} payout
+                    {kpi.availableForPayoutCount === 1 ? '' : 's'} ready to release
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2 sm:justify-end">
+                    <Button size="sm" variant="default" className="h-8 shadow-sm" asChild>
+                      <Link href={PAYOUTS_SETTLEMENTS_HREF}>Create release batch</Link>
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8" asChild>
+                      <Link href={`${PAYOUTS_OBLIGATIONS_HREF}?status=AVAILABLE_FOR_PAYOUT`}>
+                        Review payouts
+                      </Link>
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">None ready to release</p>
+              )
             ) : null}
-          </CardHeader>
-        </Card>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground/90 border-t border-border/25 pt-3">
+          <span>
+            <span className="text-amber-800/80 dark:text-amber-400/90">Needs funding</span>{' '}
+            {loading ? '…' : formatKpiAmount(kpi.totalUnfunded)}
+          </span>
+          <span>
+            Total paid {loading ? '…' : formatKpiAmount(kpi.totalPaid)}
+          </span>
+          <span>
+            Payout lines {loading ? '…' : rows.length}
+          </span>
+          {kpi.mixedCurrency && rows.length > 0 ? (
+            <span className="text-amber-700/80 dark:text-amber-400/80">Multiple currencies</span>
+          ) : null}
+        </div>
+        <p className="text-xs text-muted-foreground/60">{PAYOUT_TRUST_COPY.activityRecorded}</p>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Filters</CardTitle>
-          <CardDescription>
-            Filter obligations by project, participant, or payout status.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
-          <div className="bg-muted/40 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <Label htmlFor="needs-action" className="text-sm font-medium">
-                Needs action
-              </Label>
-              <p className="text-muted-foreground max-w-xl text-xs leading-relaxed">
-                Show obligations that need your attention — unfunded, awaiting approval, or ready for
-                payout ({needsActionCount} currently).
-              </p>
-            </div>
-            <div className="flex items-center gap-2 sm:pr-2">
-              <Switch
-                id="needs-action"
-                checked={needsActionOnly}
-                onCheckedChange={setNeedsActionOnly}
-                aria-label="Show only obligations that need action"
-              />
-            </div>
+      <div className="sticky top-0 z-10 -mx-4 border-b border-border/25 bg-background/98 px-4 py-2 backdrop-blur-sm md:-mx-8 md:px-8">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+          <div
+            className={cn(
+              'flex items-center gap-2 shrink-0 rounded-md px-2 py-1 transition-colors',
+              needsActionOnly && 'bg-amber-500/8 ring-1 ring-amber-500/20'
+            )}
+          >
+            <Switch
+              id="needs-action"
+              checked={needsActionOnly}
+              onCheckedChange={setNeedsAttention}
+              aria-label="Show only obligations that need attention"
+            />
+            <Label htmlFor="needs-action" className="text-sm font-medium cursor-pointer whitespace-nowrap">
+              Needs attention
+              <span className="text-muted-foreground font-normal ml-1">({needsActionCount})</span>
+            </Label>
           </div>
-
-          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
-            <div className="min-w-[200px] flex-1 space-y-1">
-              <span className="text-muted-foreground text-xs font-medium">Project</span>
+          <Input
+            id="obligation-search"
+            className="h-9 flex-1"
+            placeholder="Search project or participant…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search obligations"
+          />
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => {
+              setStatusFilter(v);
+              if (v !== '__all__') {
+                setNeedsActionOnly(false);
+                writeNeedsAttentionPreference(false);
+              }
+            }}
+          >
+            <SelectTrigger className="h-9 w-full sm:w-[180px]">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All statuses</SelectItem>
+              {STATUS_OPTIONS.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {operatorStatusLabel(s)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+          <CollapsibleTrigger className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronDown
+              className={cn(
+                'h-3.5 w-3.5 transition-transform duration-200 ease-out',
+                advancedOpen && 'rotate-180'
+              )}
+            />
+            Advanced filters
+          </CollapsibleTrigger>
+          <CollapsibleContent className="overflow-hidden transition-all data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 duration-200">
+            <div className="flex flex-col gap-2 pt-2 sm:flex-row">
               <Select value={dealFilter} onValueChange={setDealFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-9">
                   <SelectValue placeholder="All projects" />
                 </SelectTrigger>
                 <SelectContent>
@@ -540,27 +718,8 @@ export default function DealNetworkObligationsPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="min-w-[200px] flex-1 space-y-1">
-              <span className="text-muted-foreground text-xs font-medium">Status</span>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All statuses</SelectItem>
-                  {STATUS_OPTIONS.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {statusLabel(s)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="min-w-[200px] flex-1 space-y-1">
-              <span className="text-muted-foreground text-xs font-medium">Participant</span>
               <Select value={participantFilter} onValueChange={setParticipantFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-9">
                   <SelectValue placeholder="All participants" />
                 </SelectTrigger>
                 <SelectContent>
@@ -573,148 +732,178 @@ export default function DealNetworkObligationsPage() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Obligation lines</CardTitle>
-          <CardDescription>
-            {loading
-              ? 'Loading…'
-              : rows.length === 0
-                ? 'No obligations match the current filters.'
-                : `${rows.length} obligation line${rows.length === 1 ? '' : 's'} in view`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="overflow-x-auto p-0 sm:p-6">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Project</TableHead>
-                <TableHead>Participant</TableHead>
-                <TableHead>
-                  <span className="inline-flex items-center gap-1">
-                    Participant readiness
-                    <PayoutGlossaryTooltip term="participantReadiness" />
-                  </span>
-                </TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead className="text-right">Owed</TableHead>
-                <TableHead className="text-right">Paid</TableHead>
-                <TableHead className="text-right">Outstanding</TableHead>
-                <TableHead>
-                  <span className="inline-flex items-center gap-1">
-                    Payout status
-                    <PayoutGlossaryTooltip term="payoutStatus" />
-                  </span>
-                </TableHead>
-                <TableHead>Payment / source</TableHead>
-                <TableHead className="w-[130px]">Why?</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!loading && rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-muted-foreground py-10 text-center text-sm">
-                    No obligations match the current filters. Your first customer payment will create obligation lines here.
-                  </TableCell>
+      <div className="space-y-3 pt-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-base font-semibold">Payout lines</h2>
+          <p className="text-muted-foreground text-xs">
+            {loading ? 'Loading…' : `${rows.length} in view`}
+          </p>
+        </div>
+        {!loading && rows.length === 0 ? (
+          <PayoutEmptyState
+            iconVariant="default"
+            title="No payout lines in this view"
+            description={
+              needsActionOnly
+                ? 'Nothing needs attention right now. Turn off Needs attention or adjust filters to see all payout lines.'
+                : 'Your first customer payment will create payout lines here.'
+            }
+            action={
+              needsActionOnly ? (
+                <Button variant="outline" size="sm" onClick={() => setNeedsAttention(false)}>
+                  Show all payout lines
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <div className="overflow-x-auto -mx-1 px-1">
+            <Table className="border-separate border-spacing-0">
+              <TableHeader>
+                <TableRow className="hover:bg-transparent border-b border-border/20">
+                  <TableHead className="w-8 hidden md:table-cell" />
+                  <TableHead>Project</TableHead>
+                  <TableHead>Participant</TableHead>
+                  <TableHead className="text-right">Outstanding</TableHead>
+                  <TableHead>Next action</TableHead>
+                  <TableHead className="hidden lg:table-cell">Blocking issue</TableHead>
+                  <TableHead className="w-[120px]">
+                    <span className="text-xs text-muted-foreground">Status</span>
+                  </TableHead>
                 </TableRow>
-              ) : null}
-              {!loading &&
-                rows.map((row) => {
-                  const { paid, outstanding } = paidAndOutstanding(row);
-                  const owed = toNumber(row.amount_owed);
-                  const participantLabel =
-                    row.participant?.name ??
-                    (row.obligation_type === 'PLATFORM_FEE' ? 'Platform' : '—');
-                  const participantApprovedNotOnboarded =
-                    row.participant &&
-                    row.obligation_type !== 'PLATFORM_FEE' &&
-                    isApprovedButNotOnboarded({
-                      id: row.participant.id,
-                      approvalStatus:
-                        row.participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
-                      onboardingStatus: row.participant.onboardingStatus,
-                    });
-                  const onboardingDone =
-                    row.participant?.onboardingStatus != null
-                      ? isOnboardingComplete(row.participant.onboardingStatus)
-                      : true;
-                  const roleLabel =
-                    row.participant?.role ??
-                    (row.obligation_type === 'PLATFORM_FEE' ? 'Platform fee' : '—');
-                  const dealLabel = row.deal?.name ?? row.deal_id;
-                  const pe = row.payment_event;
-                  const paymentLabel = pe?.source_type
-                    ? String(pe.source_type).replace(/_/g, ' ')
-                    : null;
+              </TableHeader>
+              <TableBody>
+                {!loading &&
+                  rows.map((row) => {
+                    const { outstanding } = paidAndOutstanding(row);
+                    const participantLabel =
+                      row.participant?.name ??
+                      (row.obligation_type === 'PLATFORM_FEE' ? 'Platform' : '—');
+                    const dealLabel = row.deal?.name ?? row.deal_id;
+                    const expanded = expandedRowId === row.id;
+                    const nextAction = getObligationNextAction(row);
+                    const blocking = getObligationBlockingIssue(row);
 
-                  return (
-                    <TableRow key={row.id} className={statusRowAccent(row.status)}>
-                      <TableCell className="max-w-[180px]">
-                        <div className="truncate font-medium" title={dealLabel}>
-                          {dealLabel}
-                        </div>
-                        <div className="text-muted-foreground truncate text-xs">{row.deal_id}</div>
-                      </TableCell>
-                      <TableCell className="max-w-[160px]">
-                        <div className="truncate" title={participantLabel}>
-                          {participantLabel}
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[160px] text-xs">
-                        {row.obligation_type === 'PLATFORM_FEE' ? (
-                          <span className="text-muted-foreground">—</span>
-                        ) : participantApprovedNotOnboarded ? (
-                          <span className="font-medium text-amber-800 dark:text-amber-300">
-                            Approved (not onboarded)
-                          </span>
-                        ) : row.participant ? (
-                          <span className={onboardingDone ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}>
-                            {onboardingDone ? 'Onboarding complete' : 'Pending onboarding'}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-[140px] truncate text-sm" title={roleLabel}>
-                        {roleLabel}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatMoney(owed, row.currency, orgCurrency)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {formatMoney(paid, row.currency, orgCurrency)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums font-medium">
-                        {formatMoney(outstanding, row.currency, orgCurrency)}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={row.status} />
-                      </TableCell>
-                      <TableCell className="max-w-[200px] text-xs text-muted-foreground">
-                        {paymentLabel ?? (pe ? 'Customer payment' : 'Not linked')}
-                      </TableCell>
-                      <TableCell>
-                        <details className="group text-xs">
-                          <summary className="text-primary hover:bg-primary/5 flex cursor-pointer list-none items-center gap-1.5 rounded-md py-1 pr-1 font-medium underline-offset-2 hover:underline [&::-webkit-details-marker]:hidden">
-                            <HelpCircle className="size-3.5 shrink-0 opacity-80" aria-hidden />
-                            <span>Why this line?</span>
-                          </summary>
-                          <p className="text-muted-foreground border-border/60 mt-2 max-w-sm rounded-md border bg-background/80 p-3 text-[13px] leading-relaxed shadow-sm">
-                            {row.calculation_explanation}
-                          </p>
-                        </details>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    const openDetail = () => {
+                      if (isMobile) {
+                        setSheetRow(row);
+                      } else {
+                        setExpandedRowId(expanded ? null : row.id);
+                      }
+                    };
+
+                    return (
+                      <React.Fragment key={row.id}>
+                        <TableRow
+                          className={cn(
+                            statusRowAccent(row.status),
+                            'cursor-pointer md:cursor-default border-b border-border/15',
+                            'transition-colors hover:bg-muted/20 [&>td]:py-5'
+                          )}
+                          onClick={() => {
+                            if (isMobile) openDetail();
+                          }}
+                        >
+                          <TableCell className="w-8 p-2 hidden md:table-cell">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              aria-label={expanded ? 'Collapse details' : 'Expand details'}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openDetail();
+                              }}
+                            >
+                              <ChevronDown
+                                className={cn(
+                                  'h-4 w-4 transition-transform',
+                                  expanded && 'rotate-180'
+                                )}
+                              />
+                            </Button>
+                          </TableCell>
+                          <TableCell className="max-w-[180px]">
+                            <div className="truncate font-medium" title={dealLabel}>
+                              {dealLabel}
+                            </div>
+                          </TableCell>
+                          <TableCell className="max-w-[160px]">
+                            <div className="truncate text-sm" title={participantLabel}>
+                              {participantLabel}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums font-semibold">
+                            {formatMoney(outstanding, row.currency, orgCurrency)}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm font-semibold text-foreground">
+                              {nextAction}
+                            </span>
+                            {blocking && isMobile ? (
+                              <p className="text-[11px] text-muted-foreground/70 mt-1 lg:hidden">
+                                {blocking}
+                              </p>
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-xs text-muted-foreground/75 max-w-[160px]">
+                            {blocking ?? '—'}
+                          </TableCell>
+                          <TableCell className="opacity-80">
+                            <StatusBadge status={row.status} />
+                          </TableCell>
+                        </TableRow>
+                        {expanded && !isMobile ? (
+                          <TableRow className="bg-muted/15 hover:bg-muted/15 border-0">
+                            <TableCell colSpan={7} className="py-4">
+                              <ObligationRowDetailPanel row={row} orgCurrency={orgCurrency} />
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </React.Fragment>
+                    );
+                  })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+
+      <Sheet open={sheetRow != null} onOpenChange={(open) => !open && setSheetRow(null)}>
+        <SheetContent side="bottom" className="max-h-[85vh] rounded-t-xl">
+          {sheetRow ? (
+            <>
+              <SheetHeader>
+                <SheetTitle className="text-left">
+                  {sheetRow.deal?.name ?? sheetRow.deal_id}
+                </SheetTitle>
+                <SheetDescription className="text-left">
+                  {sheetRow.participant?.name ?? 'Payout line details'}
+                </SheetDescription>
+              </SheetHeader>
+              <div className="mt-4 overflow-y-auto pb-6">
+                <ObligationRowDetailPanel row={sheetRow} orgCurrency={orgCurrency} />
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
+  );
+}
+
+export default function DealNetworkObligationsPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="mx-auto max-w-7xl p-8 text-muted-foreground text-sm">Loading obligations…</div>
+      }
+    >
+      <DealNetworkObligationsPageContent />
+    </React.Suspense>
   );
 }

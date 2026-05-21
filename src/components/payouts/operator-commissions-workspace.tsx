@@ -2,11 +2,11 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { RefreshCw, ChevronDown, ArrowRight } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useOrganization } from '@/hooks/use-organization';
 import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { formatPayoutCurrency } from '@/lib/payouts/format-payout-currency';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PAYOUT_TRUST_COPY } from '@/lib/payouts/payout-trust-copy';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -23,13 +23,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
+import {
+  PAYOUTS_OBLIGATIONS_HREF,
+  PAYOUTS_SETTLEMENTS_HREF,
+} from '@/lib/navigation/operator-nav';
+import { PayoutEmptyState } from '@/components/payouts/payout-empty-state';
+import type { PayoutEmptyIconVariant } from '@/components/payouts/payout-empty-state';
 import { cn } from '@/lib/utils';
 
 type PilotObligation = {
@@ -62,80 +62,117 @@ type OrgCommission = {
   shortCode?: string;
 };
 
-type PipelineStage = {
+type SectionEmphasis = 'primary' | 'caution' | 'muted' | 'default';
+
+type OperationalSection = {
   id: string;
   title: string;
   description: string;
   rows: PilotObligation[];
-  emptyLabel: string;
+  emptyTitle: string;
+  emptyDescription: string;
+  emptyAction?: React.ReactNode;
+  emptyIcon: PayoutEmptyIconVariant;
+  emphasis: SectionEmphasis;
 };
 
-function PipelineStageCard({
-  stage,
+function sectionSpacing(emphasis: SectionEmphasis): string {
+  switch (emphasis) {
+    case 'primary':
+      return 'pb-8 mb-2 border-b border-emerald-500/15';
+    case 'caution':
+      return 'pb-6';
+    case 'muted':
+      return 'pb-4 opacity-75';
+    default:
+      return 'pb-6';
+  }
+}
+
+function OperationalSectionBlock({
+  section,
   orgCurrency,
-  defaultOpen,
 }: {
-  stage: PipelineStage;
+  section: OperationalSection;
   orgCurrency: string;
-  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = React.useState(defaultOpen ?? stage.rows.length > 0);
+  const titleClass = cn(
+    section.emphasis === 'primary' && 'text-xl font-semibold tracking-tight',
+    section.emphasis === 'caution' && 'text-base font-semibold',
+    section.emphasis === 'muted' && 'text-sm font-medium text-muted-foreground',
+    section.emphasis === 'default' && 'text-base font-semibold'
+  );
 
   return (
-    <Card className="flex flex-col h-full">
-      <Collapsible open={open} onOpenChange={setOpen}>
-        <CardHeader className="pb-2">
-          <CollapsibleTrigger className="flex w-full items-start justify-between gap-2 text-left">
-            <div className="min-w-0 flex-1">
-              <CardTitle className="text-sm font-semibold">{stage.title}</CardTitle>
-              <CardDescription className="text-xs mt-0.5">{stage.description}</CardDescription>
-              <p className="text-muted-foreground text-xs mt-1 tabular-nums">
-                {stage.rows.length} obligation{stage.rows.length === 1 ? '' : 's'}
-              </p>
-            </div>
-            <ChevronDown
-              className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
-            />
-          </CollapsibleTrigger>
-        </CardHeader>
-        <CollapsibleContent>
-          <CardContent className="pt-0">
-            {stage.rows.length === 0 ? (
-              <p className="text-muted-foreground py-4 text-center text-xs leading-relaxed">
-                {stage.emptyLabel}
-              </p>
-            ) : (
-              <ul className="space-y-2 max-h-48 overflow-y-auto">
-                {stage.rows.slice(0, 8).map((row) => (
-                  <li
-                    key={row.id}
-                    className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs"
-                  >
-                    <span className="truncate font-medium">
-                      {row.participant?.name ?? row.deal?.name ?? '—'}
-                    </span>
-                    <span className="shrink-0 tabular-nums font-medium">
-                      {formatPayoutCurrency(
-                        typeof row.amount_owed === 'string'
-                          ? parseFloat(row.amount_owed)
-                          : row.amount_owed,
-                        row.currency,
-                        orgCurrency
-                      )}
-                    </span>
-                  </li>
-                ))}
-                {stage.rows.length > 8 ? (
-                  <li className="text-muted-foreground text-center text-xs pt-1">
-                    +{stage.rows.length - 8} more
-                  </li>
-                ) : null}
-              </ul>
-            )}
-          </CardContent>
-        </CollapsibleContent>
-      </Collapsible>
-    </Card>
+    <section id={section.id} className={sectionSpacing(section.emphasis)}>
+      <div className="mb-3">
+        <h2 className={titleClass}>
+          {section.title}
+          <span className="font-normal ml-2 tabular-nums text-muted-foreground">
+            ({section.rows.length})
+          </span>
+        </h2>
+        <p
+          className={cn(
+            'mt-0.5',
+            section.emphasis === 'muted' ? 'text-xs text-muted-foreground/70' : 'text-sm text-muted-foreground'
+          )}
+        >
+          {section.description}
+        </p>
+        {section.emphasis === 'primary' && section.rows.length > 0 ? (
+          <Button size="sm" className="mt-3 h-8" asChild>
+            <Link href={PAYOUTS_SETTLEMENTS_HREF}>Create release batch</Link>
+          </Button>
+        ) : null}
+      </div>
+      {section.rows.length === 0 ? (
+        <PayoutEmptyState
+          iconVariant={section.emptyIcon}
+          title={section.emptyTitle}
+          description={section.emptyDescription}
+          action={section.emptyAction}
+        />
+      ) : (
+        <ul className="divide-y divide-border/20">
+          {section.rows.slice(0, 12).map((row) => (
+            <li
+              key={row.id}
+              className="flex items-center justify-between gap-4 py-3 text-sm transition-colors hover:bg-muted/15 -mx-2 px-2 rounded-md"
+            >
+              <div className="min-w-0">
+                <p className="font-medium truncate">
+                  {row.participant?.name ?? row.deal?.name ?? '—'}
+                </p>
+                <p className="text-muted-foreground/80 text-xs truncate">
+                  {row.deal?.name ?? row.deal_id}
+                </p>
+              </div>
+              <span className="shrink-0 tabular-nums font-semibold">
+                {formatPayoutCurrency(
+                  typeof row.amount_owed === 'string'
+                    ? parseFloat(row.amount_owed)
+                    : row.amount_owed,
+                  row.currency,
+                  orgCurrency
+                )}
+              </span>
+            </li>
+          ))}
+          {section.rows.length > 12 ? (
+            <li className="py-2 text-xs text-muted-foreground">
+              +{section.rows.length - 12} more —{' '}
+              <Link
+                href={PAYOUTS_OBLIGATIONS_HREF}
+                className="text-primary underline-offset-2 hover:underline"
+              >
+                View in Obligations
+              </Link>
+            </li>
+          ) : null}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -158,18 +195,18 @@ export function OperatorCommissionsWorkspace() {
           : Promise.resolve(null),
       ]);
       const pilotJson = await pilotRes.json();
-      if (!pilotRes.ok) throw new Error(pilotJson.error || 'Failed to load commissions');
+      if (!pilotRes.ok) throw new Error(pilotJson.error || 'Failed to load earnings');
       setPilotRows(pilotJson.data ?? []);
 
       if (orgRes) {
         const orgJson = await orgRes.json();
-        if (!orgRes.ok) throw new Error(orgJson.error || 'Failed to load referral commissions');
+        if (!orgRes.ok) throw new Error(orgJson.error || 'Failed to load referral earnings');
         setOrgPosted(orgJson.data ?? []);
       } else {
         setOrgPosted([]);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load commissions');
+      toast.error(err instanceof Error ? err.message : 'Failed to load participant earnings');
     } finally {
       setLoading(false);
     }
@@ -179,20 +216,41 @@ export function OperatorCommissionsWorkspace() {
     void fetchAll();
   }, [fetchAll]);
 
-  const stages: PipelineStage[] = [
+  const reviewObligationsBtn = (
+    <Button variant="outline" size="sm" asChild>
+      <Link href={PAYOUTS_OBLIGATIONS_HREF}>Review obligations</Link>
+    </Button>
+  );
+
+  const sections: OperationalSection[] = [
     {
-      id: 'pending',
-      title: 'Pending allocations',
-      description: 'Waiting on funding, approval, or project linkage.',
+      id: 'ready-for-release',
+      title: 'Ready for release',
+      description: 'Eligible to include in the next release batch.',
+      rows: pilotRows.filter((r) => r.status === 'AVAILABLE_FOR_PAYOUT'),
+      emptyTitle: 'No payouts ready for release',
+      emptyDescription:
+        'Eligible participant payouts will appear here once funding and approvals are complete.',
+      emptyAction: reviewObligationsBtn,
+      emptyIcon: 'release',
+      emphasis: 'primary',
+    },
+    {
+      id: 'needs-funding',
+      title: 'Needs funding',
+      description: 'Earnings waiting on project funding or payout approval.',
       rows: pilotRows.filter((r) =>
         ['DRAFT', 'UNFUNDED', 'PARTIALLY_FUNDED', 'PENDING_APPROVAL'].includes(r.status)
       ),
-      emptyLabel:
-        'Pending allocations will appear when customer payments create commission obligations.',
+      emptyTitle: 'Nothing needs funding',
+      emptyDescription:
+        'Funding tasks will appear here when customer payments create participant earnings.',
+      emptyIcon: 'funding',
+      emphasis: 'caution',
     },
     {
-      id: 'onboarding',
-      title: 'Awaiting onboarding',
+      id: 'awaiting-onboarding',
+      title: 'Awaiting participant setup',
       description: 'Approved participants completing payout setup.',
       rows: pilotRows.filter(
         (r) =>
@@ -200,129 +258,122 @@ export function OperatorCommissionsWorkspace() {
           r.participant?.onboardingStatus &&
           r.participant.onboardingStatus !== 'Complete'
       ),
-      emptyLabel:
-        'Participants who need to finish payout onboarding will appear here after approval.',
+      emptyTitle: 'No participants awaiting setup',
+      emptyDescription:
+        'Participants who need to finish payout setup will appear here after approval.',
+      emptyIcon: 'participant',
+      emphasis: 'default',
     },
     {
-      id: 'ready',
-      title: 'Ready for payout',
-      description: 'Cleared for inclusion in a release batch.',
-      rows: pilotRows.filter((r) =>
-        ['AVAILABLE_FOR_PAYOUT', 'APPROVED'].includes(r.status)
-      ),
-      emptyLabel:
-        'Payout-ready obligations will appear here once funding and approvals are complete.',
-    },
-    {
-      id: 'released',
-      title: 'Released payouts',
-      description: 'Recently settled participant payouts.',
-      rows: pilotRows.filter((r) => ['PAID', 'REVERSED'].includes(r.status)).slice(0, 25),
-      emptyLabel: 'Released payouts will appear here after settlement batches are completed.',
+      id: 'recently-released',
+      title: 'Recently released',
+      description: 'Participant payouts from completed release batches.',
+      rows: pilotRows.filter((r) => r.status === 'PAID').slice(0, 25),
+      emptyTitle: 'No recent releases',
+      emptyDescription:
+        'Released participant payouts will appear here once release batches are completed.',
+      emptyIcon: 'history',
+      emphasis: 'muted',
     },
   ];
 
   if (isOrgLoading) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Commissions</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Participant earnings</h1>
         <p className="text-muted-foreground">Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Commissions</h1>
-          <p className="text-muted-foreground mt-1 max-w-2xl">
-            Track participant earnings and payout readiness across your projects.
+          <h1 className="text-3xl font-bold tracking-tight">Participant earnings</h1>
+          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+            Track what participants have earned and what is ready for payout release.
+          </p>
+          <p className="text-xs text-muted-foreground/60 mt-2">
+            {PAYOUT_TRUST_COPY.traceableAfterRelease}
           </p>
         </div>
-        <div className="flex gap-2 shrink-0">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => void fetchAll()}
-                  disabled={loading}
-                  aria-label="Refresh payout data"
-                >
-                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Refresh payout data</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                onClick={() => void fetchAll()}
+                disabled={loading}
+                aria-label="Refresh payout data"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Refresh payout data</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+
+      {loading ? (
+        <p className="text-muted-foreground text-sm">Loading…</p>
+      ) : (
+        <div className="space-y-2">
+          {sections.map((section) => (
+            <OperationalSectionBlock
+              key={section.id}
+              section={section}
+              orgCurrency={orgCurrency}
+            />
+          ))}
         </div>
-      </div>
+      )}
 
-      <div className="flex flex-wrap gap-2 text-sm">
-        <Button variant="outline" size="sm" asChild>
-          <Link href={PAYOUTS_OBLIGATIONS_HREF}>Review obligations</Link>
-        </Button>
-      </div>
-
-      <div className="hidden lg:flex items-center justify-center gap-1 text-muted-foreground px-2">
-        {stages.map((stage, i) => (
-          <React.Fragment key={stage.id}>
-            <span className="text-xs font-medium text-foreground">{stage.title}</span>
-            {i < stages.length - 1 ? <ArrowRight className="h-3.5 w-3.5 mx-1" /> : null}
-          </React.Fragment>
-        ))}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stages.map((stage, index) => (
-          <PipelineStageCard
-            key={stage.id}
-            stage={stage}
-            orgCurrency={orgCurrency}
-            defaultOpen={index === 2}
+      <section className="space-y-3 pt-8 mt-4 border-t border-border/20 opacity-70">
+        <div>
+          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
+            Referral earnings history
+          </h2>
+          <p className="text-xs text-muted-foreground/60 mt-1">
+            Archive — recorded referral earnings from customer payments.
+          </p>
+        </div>
+        {loading ? (
+          <p className="text-muted-foreground text-sm">Loading…</p>
+        ) : orgPosted.length === 0 ? (
+          <PayoutEmptyState
+            iconVariant="earnings"
+            title="No referral earnings yet"
+            description="Referral earnings will appear here after attributed customer payments are processed."
           />
-        ))}
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Referral commission activity</CardTitle>
-          <CardDescription>
-            Recorded referral commissions from attributed customer payments.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-muted-foreground py-6 text-center text-sm">Loading…</p>
-          ) : orgPosted.length === 0 ? (
-            <div className="rounded-lg border border-dashed bg-muted/30 px-6 py-8 text-center text-sm">
-              <p className="font-medium">No referral commissions yet</p>
-              <p className="mt-1 text-muted-foreground">
-                Referral commissions will appear here after customer payments are attributed.
-              </p>
-            </div>
-          ) : (
+        ) : (
+          <div className="overflow-x-auto -mx-1">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Referral</TableHead>
-                  <TableHead>Invoice</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Payout status</TableHead>
+                <TableRow className="hover:bg-transparent border-b border-border/15">
+                  <TableHead className="text-xs text-muted-foreground">Date</TableHead>
+                  <TableHead className="text-xs text-muted-foreground">Referral</TableHead>
+                  <TableHead className="text-xs text-muted-foreground">Invoice</TableHead>
+                  <TableHead className="text-right text-xs text-muted-foreground">Amount</TableHead>
+                  <TableHead className="text-xs text-muted-foreground">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {orgPosted.map((o) => (
-                  <TableRow key={o.id}>
-                    <TableCell>{new Date(o.createdAt).toLocaleDateString()}</TableCell>
-                    <TableCell className="font-mono text-xs">{o.referralCode}</TableCell>
-                    <TableCell className="text-muted-foreground">
+                  <TableRow
+                    key={o.id}
+                    className="border-b border-border/10 [&>td]:py-2.5 text-muted-foreground"
+                  >
+                    <TableCell className="text-xs">
+                      {new Date(o.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="font-mono text-[11px]">{o.referralCode}</TableCell>
+                    <TableCell className="text-xs">
                       {o.shortCode ? `#${o.shortCode}` : o.paymentLinkId.slice(0, 8)}
                     </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
+                    <TableCell className="text-right tabular-nums text-sm text-foreground/80">
                       {formatPayoutCurrency(
                         o.consultantAmount + o.bdPartnerAmount,
                         o.currency,
@@ -330,15 +381,17 @@ export function OperatorCommissionsWorkspace() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{o.status.replace(/_/g, ' ')}</Badge>
+                      <Badge variant="outline" className="text-[10px] font-normal opacity-80">
+                        {o.status.replace(/_/g, ' ')}
+                      </Badge>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

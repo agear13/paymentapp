@@ -91,12 +91,12 @@ export function getOperatorNavSections(
           icon: FileCheck,
         },
         {
-          title: 'Commissions',
+          title: 'Participant earnings',
           href: PAYOUTS_COMMISSIONS_HREF,
           icon: CircleDollarSign,
         },
         {
-          title: 'Settlement history',
+          title: 'Payout releases',
           href: PAYOUTS_SETTLEMENTS_HREF,
           icon: History,
         },

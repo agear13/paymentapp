@@ -2,9 +2,9 @@ export const PAYOUT_GLOSSARY = {
   obligation:
     'An amount owed to a participant after a customer payment — tracked until funded, approved, and released.',
   settlement:
-    'The process of grouping approved payout-ready obligations into a release batch and sending funds to participants.',
+    'A completed payout release — funds grouped in a release batch and sent to participants.',
   releaseBatch:
-    'A grouped payout release containing one or more participant payments approved for disbursement.',
+    'A grouped payout release containing one or more participant payments ready to send.',
   reconciled:
     'Payment records and ledger balances align — no discrepancy between expected and recorded amounts.',
   availableForPayout:
