@@ -1,9 +1,7 @@
 'use client';
 
 /**
- * Read-only operator view: pilot commission obligations (who is owed what).
- * Data: GET /api/deal-network-pilot/obligations — no writes from this screen.
- * KPIs and filters derive from loaded rows + authoritative status only (no payout math).
+ * Operator obligations view — who is owed what, funding status, and payout readiness.
  */
 
 import * as React from 'react';
@@ -54,6 +52,15 @@ import {
   isApprovedButNotOnboarded,
   isOnboardingComplete,
 } from '@/lib/deal-network-demo/participant-onboarding';
+import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
+import { formatPayoutCurrency } from '@/lib/payouts/format-payout-currency';
+import { PayoutGlossaryTooltip } from '@/components/payouts/payout-glossary-tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 type ObligationRow = {
   id: string;
@@ -113,16 +120,8 @@ function toNumber(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function formatMoney(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: currency.length === 3 ? currency : 'USD',
-      maximumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${amount.toFixed(2)} ${currency}`;
-  }
+function formatMoney(amount: number, currency: string, orgDefault: string): string {
+  return formatPayoutCurrency(amount, currency, orgDefault);
 }
 
 function statusLabel(s: DealNetworkPilotObligationStatus): string {
@@ -222,7 +221,8 @@ function computeKpis(rows: ObligationRow[]) {
   const currencies = new Set<string>();
 
   for (const r of rows) {
-    currencies.add(r.currency || 'USD');
+    const code = (r.currency || '').trim().toUpperCase();
+    if (code.length === 3) currencies.add(code);
     const owed = toNumber(r.amount_owed);
     const { paid, outstanding } = paidAndOutstanding(r);
     totalOwed += owed;
@@ -257,6 +257,7 @@ function computeKpis(rows: ObligationRow[]) {
 }
 
 export default function DealNetworkObligationsPage() {
+  const { currency: orgCurrency } = useOrganizationCurrency();
   const pathname = usePathname();
   const backHref = pathname?.startsWith('/dashboard/payouts')
     ? PAYOUTS_HUB_HREF
@@ -316,10 +317,9 @@ export default function DealNetworkObligationsPage() {
   const kpi = React.useMemo(() => computeKpis(rows), [rows]);
 
   const formatKpiAmount = (n: number) => {
-    if (rows.length === 0) return formatMoney(0, 'USD');
     if (kpi.mixedCurrency) return '—';
-    const ccy = kpi.singleCurrency ?? 'USD';
-    return formatMoney(n, ccy);
+    const ccy = kpi.singleCurrency ?? orgCurrency;
+    return formatMoney(n, ccy, orgCurrency);
   };
 
   const dealOptions = React.useMemo(() => {
@@ -373,16 +373,31 @@ export default function DealNetworkObligationsPage() {
               {backLabel}
             </Link>
           </Button>
-          <h1 className="text-2xl font-semibold tracking-tight">Financial obligations</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Obligations</h1>
+            <PayoutGlossaryTooltip term="obligation" />
+          </div>
           <p className="text-muted-foreground text-sm">
-            Operator view. Totals and rows reflect <strong>stored obligation lines</strong> and their
-            statuses only (same rules as the table below).
+            Track what is owed, what is funded, and what is ready for payout.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={`mr-2 size-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void load()}
+                disabled={loading}
+                aria-label="Refresh payout data"
+              >
+                <RefreshCw className={`mr-2 size-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Refresh payout data</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {error ? (
@@ -471,7 +486,7 @@ export default function DealNetworkObligationsPage() {
         <Card className="border-border/80 shadow-sm">
           <CardHeader className="space-y-1 p-4 pb-2">
             <CardDescription className="text-[10px] font-semibold uppercase tracking-wider">
-              Rows in view
+              Obligation lines
             </CardDescription>
             <CardTitle className="text-xl tabular-nums sm:text-2xl">{loading ? '…' : rows.length}</CardTitle>
             {kpi.mixedCurrency && rows.length > 0 ? (
@@ -485,8 +500,7 @@ export default function DealNetworkObligationsPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Filters</CardTitle>
           <CardDescription>
-            Combine <strong>Needs action</strong> with deal, status, or participant. All values come from
-            obligation rows as returned from the API.
+            Filter obligations by project, participant, or payout status.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
@@ -496,10 +510,8 @@ export default function DealNetworkObligationsPage() {
                 Needs action
               </Label>
               <p className="text-muted-foreground max-w-xl text-xs leading-relaxed">
-                Surfaces lines in <strong>Unfunded</strong>, <strong>Partially funded</strong>,{' '}
-                <strong>Pending approval</strong>, or <strong>Available for payout</strong> ({needsActionCount}{' '}
-                across all loaded rows). Excludes
-                Paid, Rejected, and Reversed.
+                Show obligations that need your attention — unfunded, awaiting approval, or ready for
+                payout ({needsActionCount} currently).
               </p>
             </div>
             <div className="flex items-center gap-2 sm:pr-2">
@@ -514,13 +526,13 @@ export default function DealNetworkObligationsPage() {
 
           <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
             <div className="min-w-[200px] flex-1 space-y-1">
-              <span className="text-muted-foreground text-xs font-medium">Deal</span>
+              <span className="text-muted-foreground text-xs font-medium">Project</span>
               <Select value={dealFilter} onValueChange={setDealFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="All deals" />
+                  <SelectValue placeholder="All projects" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All deals</SelectItem>
+                  <SelectItem value="__all__">All projects</SelectItem>
                   {dealOptions.map(([id, label]) => (
                     <SelectItem key={id} value={id}>
                       {label}
@@ -572,22 +584,32 @@ export default function DealNetworkObligationsPage() {
             {loading
               ? 'Loading…'
               : rows.length === 0
-                ? 'No obligation rows match the current filters.'
-                : `${rows.length} row${rows.length === 1 ? '' : 's'} in view`}
+                ? 'No obligations match the current filters.'
+                : `${rows.length} obligation line${rows.length === 1 ? '' : 's'} in view`}
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0 sm:p-6">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Deal</TableHead>
+                <TableHead>Project</TableHead>
                 <TableHead>Participant</TableHead>
-                <TableHead>Readiness</TableHead>
+                <TableHead>
+                  <span className="inline-flex items-center gap-1">
+                    Participant readiness
+                    <PayoutGlossaryTooltip term="participantReadiness" />
+                  </span>
+                </TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead className="text-right">Owed</TableHead>
                 <TableHead className="text-right">Paid</TableHead>
                 <TableHead className="text-right">Outstanding</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>
+                  <span className="inline-flex items-center gap-1">
+                    Payout status
+                    <PayoutGlossaryTooltip term="payoutStatus" />
+                  </span>
+                </TableHead>
                 <TableHead>Payment / source</TableHead>
                 <TableHead className="w-[130px]">Why?</TableHead>
               </TableRow>
@@ -596,7 +618,7 @@ export default function DealNetworkObligationsPage() {
               {!loading && rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={10} className="text-muted-foreground py-10 text-center text-sm">
-                    No rows match the current filters, or no obligations have been generated yet.
+                    No obligations match the current filters. Your first customer payment will create obligation lines here.
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -625,10 +647,9 @@ export default function DealNetworkObligationsPage() {
                     (row.obligation_type === 'PLATFORM_FEE' ? 'Platform fee' : '—');
                   const dealLabel = row.deal?.name ?? row.deal_id;
                   const pe = row.payment_event;
-                  const paymentBits = [
-                    pe?.source_type ? String(pe.source_type).replace(/_/g, ' ') : null,
-                    pe?.payment_link_id ? `link ${pe.payment_link_id.slice(0, 8)}…` : null,
-                  ].filter(Boolean);
+                  const paymentLabel = pe?.source_type
+                    ? String(pe.source_type).replace(/_/g, ' ')
+                    : null;
 
                   return (
                     <TableRow key={row.id} className={statusRowAccent(row.status)}>
@@ -662,30 +683,19 @@ export default function DealNetworkObligationsPage() {
                         {roleLabel}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatMoney(owed, row.currency)}
+                        {formatMoney(owed, row.currency, orgCurrency)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {formatMoney(paid, row.currency)}
+                        {formatMoney(paid, row.currency, orgCurrency)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium">
-                        {formatMoney(outstanding, row.currency)}
+                        {formatMoney(outstanding, row.currency, orgCurrency)}
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={row.status} />
                       </TableCell>
-                      <TableCell className="max-w-[200px] text-xs">
-                        {pe ? (
-                          <div className="space-y-0.5">
-                            <div className="truncate font-mono text-[11px]" title={pe.id}>
-                              evt {pe.id.slice(0, 8)}…
-                            </div>
-                            <div className="text-muted-foreground truncate">
-                              {paymentBits.length ? paymentBits.join(' · ') : '—'}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">Not linked</span>
-                        )}
+                      <TableCell className="max-w-[200px] text-xs text-muted-foreground">
+                        {paymentLabel ?? (pe ? 'Customer payment' : 'Not linked')}
                       </TableCell>
                       <TableCell>
                         <details className="group text-xs">
