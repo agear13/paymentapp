@@ -10,6 +10,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { formatErrorMessage } from './ErrorMessage';
 import {
   getOperationalErrorPresentation,
+  inferOperationalBoundaryScope,
   logOperationalError,
 } from '@/lib/operational/log-operational-error';
 
@@ -94,7 +95,10 @@ export class ErrorBoundary extends Component<
       }
 
       // Default fallback
-      const operational = getOperationalErrorPresentation(this.state.error);
+      const pathname =
+        typeof window !== 'undefined' ? window.location.pathname : '';
+      const scope = inferOperationalBoundaryScope(pathname);
+      const operational = getOperationalErrorPresentation(this.state.error, scope);
       const formatted =
         /is not defined/i.test(this.state.error.message) ||
         /can't find variable/i.test(this.state.error.message)

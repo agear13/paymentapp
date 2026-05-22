@@ -30,8 +30,10 @@ import { ParticipantCompensationDialog } from '@/components/projects/participant
 import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { countPayoutReadyParticipants } from '@/lib/participants/participant-readiness';
-import { normalizeParticipant } from '@/lib/operational/safe-operational-hydration';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
+import { safeOperationalRouteState } from '@/lib/operations/routing/draft-safe-routing';
+import { ProjectConfiguringBanner } from '@/components/projects/project-configuring-banner';
+import { normalizeParticipantEntity } from '@/lib/operations/guards/hydration-guards';
 
 const ONBOARDING_CHECKLIST = [
   'Add participants',
@@ -211,34 +213,60 @@ export function ProjectParticipantsView() {
     return <ProjectOperationalLoadingState variant="loading" />;
   }
 
+  const routeState = safeOperationalRouteState({
+    projectId: deal?.id ?? 'unknown',
+    deal,
+    participants: projectParticipants,
+    loading: loading && !deal,
+    notFound: !deal && !loading,
+  });
+
   if (!deal || !summary) {
     return (
       <ProjectOperationalLoadingState
         variant="configuring"
-        message="Participant management is loading or this project is still being configured."
+        message={routeState.project.guidance}
         onRetry={handleRefresh}
       />
     );
   }
 
-  const stats = participantSummaryMetrics(projectParticipants);
-  const payoutReadyCount = countPayoutReadyParticipants(projectParticipants);
-  const hasParticipants = projectParticipants.length > 0;
+  const safeParticipants = projectParticipants.map(normalizeParticipantEntity);
+  const stats = participantSummaryMetrics(safeParticipants);
+  const payoutReadyCount = countPayoutReadyParticipants(safeParticipants);
+  const hasParticipants = safeParticipants.length > 0;
   const sectionError = sectionErrors.participants;
+  const { project: routeProject, participants: routeParticipants } = routeState;
+
+  const focusFirstEarnings = () => {
+    const needsConfig = safeParticipants.find(
+      (p) => !p.compensationProfile?.configured
+    );
+    if (needsConfig) setCompensationParticipant(needsConfig);
+  };
 
   return (
     <ProjectSectionErrorBoundary
-      sectionTitle="Participants"
+      sectionTitle="Participant earnings"
+      boundaryScope="configuration"
       onRetry={() => {
         clearSectionError('participants');
         handleRefresh();
       }}
       fallbackMessage={
         sectionError ??
-        "We couldn't load participant payout configuration. Try refreshing or reopen participant management."
+        "We couldn't load this setup step yet. Your project information is still safe."
       }
     >
       <div className="space-y-6">
+        <ProjectConfiguringBanner
+          project={routeProject}
+          participants={routeParticipants}
+          onPrimaryAction={
+            routeParticipants.needsEarningsConfiguration ? focusFirstEarnings : undefined
+          }
+        />
+
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
@@ -350,7 +378,7 @@ export function ProjectParticipantsView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {projectParticipants.map((p) => (
+                  {safeParticipants.map((p) => (
                     <ProjectParticipantTableRow
                       key={p.id}
                       participant={p}

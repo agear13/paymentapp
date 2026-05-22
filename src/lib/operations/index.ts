@@ -18,3 +18,4 @@ export * from '@/lib/operations/selectors';
 export * from '@/lib/operations/explainability';
 export * from '@/lib/operations/severity';
 export * from '@/lib/operations/design-language';
+export * from '@/lib/operations/routing';

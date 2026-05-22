@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { formatErrorMessage } from '@/components/ui/error/ErrorMessage';
 import {
   getOperationalErrorPresentation,
+  inferOperationalBoundaryScope,
   logOperationalError,
 } from '@/lib/operational/log-operational-error';
 
@@ -25,7 +26,12 @@ export default function Error({
     logOperationalError(error, { digest: error.digest });
   }, [error]);
 
-  const operational = getOperationalErrorPresentation(error);
+  const pathname =
+    typeof window !== 'undefined' ? window.location.pathname : '';
+  const operational = getOperationalErrorPresentation(
+    error,
+    inferOperationalBoundaryScope(pathname)
+  );
   const formatted =
     /is not defined/i.test(error.message) || /can't find variable/i.test(error.message)
       ? operational

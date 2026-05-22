@@ -50,11 +50,64 @@ export function logOperationalError(error: Error, context: OperationalErrorConte
   return payload;
 }
 
-export function getOperationalErrorPresentation(error: Error): {
+export type OperationalBoundaryScope =
+  | 'default'
+  | 'onboarding'
+  | 'configuration'
+  | 'payouts'
+  | 'release';
+
+/** Infer softer error copy from the current operational route. */
+export function inferOperationalBoundaryScope(pathname: string): OperationalBoundaryScope {
+  if (pathname.includes('/onboarding')) return 'onboarding';
+  if (pathname.includes('/participants') || pathname.includes('/payment-links/settings')) {
+    return 'configuration';
+  }
+  if (
+    pathname.includes('/payouts') ||
+    pathname.includes('/obligations') ||
+    pathname.includes('/partners/payouts')
+  ) {
+    return 'payouts';
+  }
+  if (pathname.includes('/settlements') || pathname.includes('/release')) {
+    return 'release';
+  }
+  return 'default';
+}
+
+export function getOperationalErrorPresentation(
+  error: Error,
+  scope: OperationalBoundaryScope = 'default'
+): {
   title: string;
   message: string;
   suggestion?: string;
 } {
+  if (scope === 'onboarding' || scope === 'configuration') {
+    return {
+      title: "We couldn't load this setup step yet",
+      message: 'Your project information is still safe. Try refreshing, or return from onboarding to continue.',
+      suggestion: 'If this continues, use Retry or go back to workspace setup.',
+    };
+  }
+
+  if (scope === 'payouts') {
+    return {
+      title: 'Payout view temporarily unavailable',
+      message: 'Your payout data has not been changed. Refresh to try again.',
+      suggestion: 'Contact support only if this persists after a refresh.',
+    };
+  }
+
+  if (scope === 'release') {
+    return {
+      title: 'Release preview unavailable',
+      message: 'We could not show the release preview. No payout has been sent.',
+      suggestion: 'Review project setup, then try again.',
+    };
+  }
+
   if (isOperationalUiError(error.message)) {
     return {
       title: 'An operational UI error occurred',

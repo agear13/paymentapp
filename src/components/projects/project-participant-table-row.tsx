@@ -45,7 +45,6 @@ function ProjectParticipantTableRowComponent({
   onEdit,
   onConfigureCompensation,
 }: ProjectParticipantTableRowProps) {
-  const readiness = deriveParticipantReadiness(p);
   const invite = deriveInviteState(p);
   const participation = deriveParticipationLabel(p);
   const attribution = deriveAttributionStatus(p);

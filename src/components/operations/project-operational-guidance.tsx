@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { OperationalGuidanceRegion } from '@/components/operations/operational-guidance-region';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
+import { safeOperationalRouteState } from '@/lib/operations/routing/draft-safe-routing';
 
 function sectionTitle(pathname: string, projectName: string): string {
   if (pathname.includes('/participants')) return `${projectName} — Participant earnings`;
@@ -40,7 +41,7 @@ export function ProjectOperationalGuidance() {
     };
   }, [projectId, summary?.treasury?.fundingSourceCount]);
 
-  if (!deal && !summary) return null;
+  if (!deal) return null;
 
   const projectName = summary?.name ?? deal?.dealName ?? 'Project';
   const showRelease =
@@ -53,7 +54,7 @@ export function ProjectOperationalGuidance() {
       scope="project"
       scopeTitle={sectionTitle(pathname, projectName)}
       project={deal}
-      participants={projectParticipants}
+      participants={guidanceParticipants}
       treasury={treasury}
       previousProjectState={prevStateRef.current}
       showReleaseConfidence={showRelease}

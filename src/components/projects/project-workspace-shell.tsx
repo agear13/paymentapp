@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { ProjectContextNav } from '@/components/projects/project-context-nav';
 import { ProjectOperationalGuidance } from '@/components/operations/project-operational-guidance';
+import { safeProjectRouteContext } from '@/lib/operations/routing/draft-safe-routing';
+import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
 
 type ProjectWorkspaceShellProps = {
   projectId: string;
@@ -25,6 +27,31 @@ export function ProjectWorkspaceShell({ projectId, children }: ProjectWorkspaceS
     );
   }
 
+  const routeProject = safeProjectRouteContext({
+    projectId,
+    deal: ctx.deal,
+    loading: ctx.loading,
+    notFound: ctx.notFound || !ctx.deal,
+  });
+
+  if ((ctx.notFound || !ctx.deal) && routeProject.phase === 'configuring') {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" asChild>
+          <Link href="/dashboard/projects">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            All projects
+          </Link>
+        </Button>
+        <ProjectOperationalLoadingState
+          variant="configuring"
+          message={routeProject.guidance}
+          onRetry={() => void ctx.refresh({ scope: 'all', force: true })}
+        />
+      </div>
+    );
+  }
+
   if (ctx.notFound || !ctx.deal) {
     return (
       <div className="space-y-4">
@@ -37,10 +64,14 @@ export function ProjectWorkspaceShell({ projectId, children }: ProjectWorkspaceS
         <Card>
           <CardHeader>
             <CardTitle>Project not found</CardTitle>
-            <CardDescription>This project may have been removed or you may not have access.</CardDescription>
+            <CardDescription>
+              This project may still be syncing. Your workspace data is safe — try refresh or
+              return to onboarding.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button asChild>
+          <CardContent className="flex gap-2">
+            <Button onClick={() => void ctx.refresh({ scope: 'all', force: true })}>Refresh</Button>
+            <Button variant="outline" asChild>
               <Link href="/dashboard/projects">Back to projects</Link>
             </Button>
           </CardContent>
