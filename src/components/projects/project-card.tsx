@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { SafeOperationalLink } from '@/components/operations/safe-operational-link';
 import { ArrowRight, Users, Wallet, Banknote } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
   );
 
   return (
-    <Link href={`/dashboard/projects/${encodeURIComponent(project.id)}`}>
+    <SafeOperationalLink intent="open_project" projectId={project.id}>
       <Card
         className={`h-full transition-colors hover:bg-accent/40 ${
           project.needsAttention ? 'border-amber-500/35' : ''
@@ -70,6 +70,6 @@ export function ProjectCard({ project }: ProjectCardProps) {
           </div>
         </CardContent>
       </Card>
-    </Link>
+    </SafeOperationalLink>
   );
 }

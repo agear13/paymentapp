@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { RefreshCw, UserPlus, Users } from 'lucide-react';
+import { RefreshCw, UserPlus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,8 +33,12 @@ import type { ParticipantCompensationProfile } from '@/lib/participants/particip
 import { countPayoutReadyParticipants } from '@/lib/participants/participant-readiness';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { safeOperationalRouteState } from '@/lib/operations/routing/draft-safe-routing';
-import { ProjectConfiguringBanner } from '@/components/projects/project-configuring-banner';
+import { ProgressiveOperationalPanel } from '@/components/operations/progressive-operational-panel';
 import { normalizeParticipantEntity } from '@/lib/operations/guards/hydration-guards';
+import { EMPTY_STATE_COPY } from '@/lib/operations/design-language';
+import { opTypeBodySnug, opTypeMeta, opTypePageTitle } from '@/lib/design/operational-typography';
+import { opSurface } from '@/lib/design/operational-surfaces';
+import { OperatorEmptyState } from '@/components/operations/operator-empty-state';
 
 const ONBOARDING_CHECKLIST = [
   'Add participants',
@@ -259,13 +264,33 @@ export function ProjectParticipantsView() {
       }
     >
       <div className="space-y-6">
-        <ProjectConfiguringBanner
-          project={routeProject}
-          participants={routeParticipants}
-          onPrimaryAction={
-            routeParticipants.needsEarningsConfiguration ? focusFirstEarnings : undefined
-          }
-        />
+        {(routeProject.phase === 'configuring' || routeParticipants.needsEarningsConfiguration) &&
+        routeParticipants.total > 0 ? (
+          <ProgressiveOperationalPanel
+            title="Configure how each participant gets paid"
+            summary={routeParticipants.guidance}
+            missingItems={
+              routeParticipants.needsEarningsConfiguration
+                ? [`${routeParticipants.total - routeParticipants.configuredCount} earnings not configured`]
+                : undefined
+            }
+            detailLabel="Why does this matter?"
+          >
+            <p className="text-sm text-foreground/80">
+              {routeProject.guidance} This unlocks obligations and payout release when funding is
+              ready.
+            </p>
+            {routeParticipants.needsEarningsConfiguration ? (
+              <button
+                type="button"
+                className="text-sm font-medium text-primary underline-offset-2 hover:underline mt-2"
+                onClick={focusFirstEarnings}
+              >
+                Configure participant earnings
+              </button>
+            ) : null}
+          </ProgressiveOperationalPanel>
+        ) : null}
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -327,36 +352,32 @@ export function ProjectParticipantsView() {
         ) : null}
 
         {!hasParticipants ? (
-          <Card className="border-dashed">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Users className="h-5 w-5" />
-                No participants yet
-              </CardTitle>
-              <CardDescription className="max-w-xl">
-                Add stakeholders, define participation and payout allocation, then send agreement
-                links. Customer payment links activate only after approval.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+          <div className="space-y-4">
+            <OperatorEmptyState
+              title={EMPTY_STATE_COPY.participantEarnings.title}
+              body={EMPTY_STATE_COPY.participantEarnings.body}
+            />
+            <div className="flex justify-center -mt-2">
               <Button onClick={() => setInviteOpen(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />
-                Add participant
+                {EMPTY_STATE_COPY.participantEarnings.cta}
               </Button>
-              <ol className="grid gap-2 sm:grid-cols-2 text-sm text-muted-foreground">
+            </div>
+            <div className={opSurface('inset')}>
+              <ol className="grid gap-2 sm:grid-cols-2 text-sm text-foreground/75">
                 {ONBOARDING_CHECKLIST.map((step, index) => (
                   <li key={step} className="flex items-start gap-2">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-medium">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border/80 text-xs font-medium text-foreground/80">
                       {index + 1}
                     </span>
                     <span>{step}</span>
                   </li>
                 ))}
               </ol>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ) : (
-          <Card>
+          <Card className="border-border/80 shadow-sm">
             <CardHeader>
               <CardTitle>Project participants</CardTitle>
               <CardDescription>

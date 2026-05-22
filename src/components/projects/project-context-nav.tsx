@@ -49,7 +49,7 @@ export function ProjectContextNav({ projectId }: ProjectContextNavProps) {
 
   return (
     <nav
-      className="flex flex-wrap gap-1 border-b pb-px"
+      className="flex flex-wrap gap-0.5 border-b border-border/80 pb-px"
       aria-label="Project sections"
     >
       {TABS.map((tab) => {
@@ -60,10 +60,10 @@ export function ProjectContextNav({ projectId }: ProjectContextNavProps) {
             key={tab.id}
             href={href}
             className={cn(
-              'px-3 py-2 text-sm font-medium rounded-t-md transition-colors -mb-px border-b-2',
+              'px-3 py-2 text-sm font-medium rounded-t-md transition-colors duration-150 -mb-px border-b-2',
               isActive
                 ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
+                : 'border-transparent text-foreground/65 hover:text-foreground hover:border-border/80'
             )}
           >
             {tab.label}

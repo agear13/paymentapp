@@ -26,10 +26,10 @@ export function OperationalStatePill({
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
+        'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs sm:text-sm font-medium transition-colors duration-150',
         attention
-          ? 'border-amber-500/30 text-amber-900 dark:text-amber-200 bg-amber-500/5'
-          : 'border-border/70 text-muted-foreground bg-background',
+          ? 'border-amber-500/35 text-amber-950 dark:text-amber-100 bg-amber-500/8'
+          : 'border-border/80 text-foreground/75 bg-muted/30',
         className
       )}
     >

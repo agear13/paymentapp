@@ -1,18 +1,23 @@
 'use client';
 
-import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
 import type { OperationalGuidanceBundle } from '@/lib/operations/explainability';
 import type { AttentionItem } from '@/lib/operations/severity';
-import { countAttentionMetrics } from '@/lib/operations/severity';
-import {
-  labelSafeToRelease,
-  OPERATOR_LABELS,
-  WORKSPACE_PHASE_OPERATOR,
-} from '@/lib/operations/design-language';
+import { compressOperationalBlockers } from '@/lib/operations/explainability/deduplicate-operational-actions';
+import { labelSafeToRelease, OPERATOR_LABELS } from '@/lib/operations/design-language';
 import { OperationalStatePill } from '@/components/operations/operational-state-pill';
-import { OperationalTrustStrip } from '@/components/operations/operational-trust-strip';
+import { ProgressiveOperationalPanel } from '@/components/operations/progressive-operational-panel';
+import { ReleaseConfidenceSummary } from '@/components/operations/release-confidence-summary';
+import { SafeOperationalLink } from '@/components/operations/safe-operational-link';
+import {
+  opTypeLabel,
+  opTypeMeta,
+  opTypePageTitle,
+} from '@/lib/design/operational-typography';
+import { opSpace } from '@/lib/design/operational-spacing';
+import { opDivider, opSurface } from '@/lib/design/operational-surfaces';
+import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 import { Button } from '@/components/ui/button';
+import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type OperationalCommandCenterHeroProps = {
@@ -28,101 +33,87 @@ export function OperationalCommandCenterHero({
   workspacePhase,
   loading,
 }: OperationalCommandCenterHeroProps) {
-  const metrics = countAttentionMetrics(attentionItems);
+  const { activation } = useWorkspaceActivation();
   const action = guidance.actions[0];
   const conf = guidance.releaseConfidence.level;
-  const phaseLabel = WORKSPACE_PHASE_OPERATOR[workspacePhase] ?? guidance.explanation.phaseLabel;
+  const blockers = compressOperationalBlockers(guidance.explanation.blockers, action?.action);
+  const attentionCount = attentionItems.filter(
+    (i) => i.severity === 'CRITICAL' || i.severity === 'ACTION_REQUIRED'
+  ).length;
 
   if (loading) {
     return (
-      <header className="space-y-4 animate-pulse">
-        <div className="h-8 w-64 bg-muted rounded" />
-        <div className="h-4 w-full max-w-lg bg-muted rounded" />
+      <header className={cn(opSpace.heroY, 'animate-pulse')}>
+        <div className="h-8 w-56 bg-muted rounded" />
+        <div className="h-20 w-full bg-muted rounded" />
       </header>
     );
   }
 
-  return (
-    <header className="space-y-6 pb-6 border-b border-border/60">
-      <div className="space-y-2">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-          Operational coordination status
-        </h1>
-        <p className="text-muted-foreground text-sm max-w-2xl leading-relaxed">
-          Monitor funding, participant payout setup, payout obligations, and payout safety
-          across your workspace.
-        </p>
-      </div>
+  const missingBullets = blockers.slice(0, 3).map((b) => b.replace(/\.$/, ''));
 
+  return (
+    <header className={cn(opSpace.heroY, `pb-5 border-b ${opDivider}`)}>
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className={opTypePageTitle}>Workspace coordination</h1>
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <OperationalStatePill phase={workspacePhase} scope="workspace" />
-        <span className="text-xs text-muted-foreground">·</span>
-        <span className="text-xs text-muted-foreground">{phaseLabel}</span>
+        {attentionCount > 0 ? (
+          <span className={cn(opTypeMeta, 'text-amber-900 dark:text-amber-200')}>
+            · {attentionCount} need attention
+          </span>
+        ) : null}
       </div>
 
-      <dl className="grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-8">
-        <Metric label={OPERATOR_LABELS.safeToRelease} value={labelSafeToRelease(conf)} />
-        <Metric
-          label={OPERATOR_LABELS.needsAttention}
-          value={metrics.needsAttention > 0 ? String(metrics.needsAttention) : 'None'}
-          highlight={metrics.needsAttention > 0}
-        />
-        <Metric
-          label={OPERATOR_LABELS.fundingPending}
-          value={metrics.fundingPending > 0 ? String(metrics.fundingPending) : 'None'}
-        />
-        <Metric
-          label={OPERATOR_LABELS.participantsIncomplete}
-          value={
-            metrics.participantsIncomplete > 0 ? String(metrics.participantsIncomplete) : 'None'
-          }
-        />
-      </dl>
+      <div className={opSurface('raised', opSpace.surfacePad)}>
+        <ReleaseConfidenceSummary confidence={guidance.releaseConfidence} compact calmMode />
 
-      {guidance.explanation.blockers[0] ? (
-        <p className="text-sm text-foreground/90">{guidance.explanation.blockers[0]}</p>
-      ) : null}
-
-      {action ? (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-muted-foreground">Next step</p>
-            <p className="text-sm font-medium">{action.action}</p>
+        {conf === 'BLOCKED' || missingBullets.length > 0 ? (
+          <div className="mt-4">
+            <ProgressiveOperationalPanel
+              title={OPERATOR_LABELS.releaseBlocked}
+              summary={`${labelSafeToRelease(conf)} — complete setup to unlock payout release.`}
+              missingItems={missingBullets.length > 0 ? missingBullets : undefined}
+            >
+              <p className="text-sm text-foreground/80">
+                Align funding, participant earnings, and obligations before releasing payouts.
+              </p>
+            </ProgressiveOperationalPanel>
           </div>
-          <Button asChild size="sm" className="w-fit shrink-0">
-            <Link href={action.destination}>
-              {action.ctaLabel ?? 'Continue'}
-              <ChevronRight className="ml-1 h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
-      ) : null}
+        ) : null}
 
-      <OperationalTrustStrip signals={guidance.trustSignals} />
+        {action ? (
+          <div
+            className={cn(
+              'flex flex-col sm:flex-row sm:items-center gap-3 pt-4 mt-4 border-t',
+              opDivider
+            )}
+          >
+            <div className="min-w-0 flex-1">
+              <p className={opTypeLabel}>Next step</p>
+              <p className="text-sm font-semibold text-foreground mt-0.5">{action.action}</p>
+            </div>
+            <Button asChild size="sm" className="w-fit shrink-0">
+              <SafeOperationalLink
+                intent={
+                  /earnings|compensation/i.test(action.action)
+                    ? 'configure_earnings'
+                    : /obligation/i.test(action.action)
+                      ? 'review_obligations'
+                      : /provider/i.test(action.action)
+                        ? 'connect_provider'
+                        : 'resolve_issue'
+                }
+                projectId={activation?.primaryProjectId}
+              >
+                {action.ctaLabel ?? 'Continue'}
+                <ChevronRight className="ml-1 h-3.5 w-3.5" />
+              </SafeOperationalLink>
+            </Button>
+          </div>
+        ) : null}
+      </div>
     </header>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd
-        className={cn(
-          'text-lg font-semibold mt-1 tabular-nums',
-          highlight && 'text-amber-800 dark:text-amber-300'
-        )}
-      >
-        {value}
-      </dd>
-    </div>
   );
 }

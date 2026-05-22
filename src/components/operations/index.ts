@@ -8,6 +8,8 @@ export { OperationalTrustStrip } from '@/components/operations/operational-trust
 export { OperationalTimeline } from '@/components/operations/operational-timeline';
 export { OperationalGuidanceRegion } from '@/components/operations/operational-guidance-region';
 export { OperationalTransitionBanner } from '@/components/operations/operational-transition-banner';
+export { ProgressiveOperationalPanel } from '@/components/operations/progressive-operational-panel';
+export { SafeOperationalLink } from '@/components/operations/safe-operational-link';
 export { OperationalHomeCommandCenter } from '@/components/operations/operational-home-command-center';
 export { OperationalCommandCenterHero } from '@/components/operations/operational-command-center-hero';
 export { OperationalAttentionBoard } from '@/components/operations/operational-attention-board';

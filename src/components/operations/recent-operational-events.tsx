@@ -21,14 +21,23 @@ function humanizeEvent(event: TimelineEvent): string {
   return EVENT_LABELS[event.type] ?? event.title;
 }
 
-export function RecentOperationalEvents({ events }: { events: TimelineEvent[] }) {
-  const visible = [...events].reverse().slice(0, 8);
+export function RecentOperationalEvents({
+  events,
+  compact,
+}: {
+  events: TimelineEvent[];
+  compact?: boolean;
+}) {
+  const visible = [...events].reverse().slice(0, compact ? 5 : 8);
 
   return (
-    <section className="space-y-4 pt-6 border-t border-border/60" aria-label="Recent activity">
-      <h2 className="text-sm font-semibold">Recent activity</h2>
+    <section
+      className={compact ? 'space-y-2' : 'space-y-4 pt-6 border-t border-border/60'}
+      aria-label="Recent activity"
+    >
+      {!compact ? <h2 className="text-sm font-semibold text-foreground">Recent activity</h2> : null}
       {visible.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-foreground/70">
           Activity will appear as you connect providers, add participants, and create payout
           releases.
         </p>
@@ -37,7 +46,7 @@ export function RecentOperationalEvents({ events }: { events: TimelineEvent[] })
           {visible.map((event) => (
             <li key={event.id} className="text-sm">
               <p className="font-medium text-foreground/90">{humanizeEvent(event)}</p>
-              <p className="text-muted-foreground text-xs mt-0.5 leading-relaxed">
+              <p className="text-foreground/65 text-xs sm:text-sm mt-0.5 leading-snug">
                 {event.description}
               </p>
             </li>

@@ -1,7 +1,7 @@
 import type { OperationalAction } from '@/lib/operations/explainability/types';
 import type { OperationalExplainability } from '@/lib/operations/explainability/types';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
-import { projectParticipantsPath } from '@/lib/projects/project-routes';
+import { safeOperationalNavigation } from '@/lib/operations/routing/operational-route-recovery';
 import {
   PAYOUTS_OBLIGATIONS_HREF,
   PAYOUTS_SETTLEMENTS_HREF,
@@ -15,9 +15,7 @@ export function deriveNextOperationalActions(
   ctx: WorkspaceOperationalContext
 ): OperationalAction[] {
   const actions: OperationalAction[] = [];
-  const projectHref = ctx.primaryProjectId
-    ? projectParticipantsPath(ctx.primaryProjectId)
-    : '/dashboard/projects';
+  const projectHref = safeOperationalNavigation('configure_earnings', ctx.primaryProjectId);
 
   const participantsConfigured =
     ctx.participantCount > 0 &&
@@ -68,7 +66,7 @@ export function deriveNextOperationalActions(
       reason: 'Payout coordination requires tracked obligations',
       impact: 'Release batches cannot be created',
       urgency: 'medium',
-      destination: PAYOUTS_OBLIGATIONS_HREF,
+      destination: safeOperationalNavigation('review_obligations', ctx.primaryProjectId),
       ctaLabel: 'View obligations',
     });
   }

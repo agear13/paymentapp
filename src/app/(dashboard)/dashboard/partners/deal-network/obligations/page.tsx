@@ -749,8 +749,8 @@ function DealNetworkObligationsPageContent() {
             title="No payout lines in this view"
             description={
               needsActionOnly
-                ? 'Nothing needs attention right now. Turn off Needs attention or adjust filters to see all payout lines.'
-                : 'Your first customer payment will create payout lines here.'
+                ? 'No lines need attention. Turn off Needs attention or adjust filters to see all payout lines.'
+                : 'Participant payout obligations will appear here once earnings and funding are configured.'
             }
             action={
               needsActionOnly ? (

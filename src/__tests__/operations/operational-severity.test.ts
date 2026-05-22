@@ -21,7 +21,7 @@ describe('deriveOperationalSeverity', () => {
     expect(
       grouped.CRITICAL.length + grouped.ACTION_REQUIRED.length
     ).toBeGreaterThan(0);
-    expect(items.some((i) => i.whyBlocked)).toBe(true);
+    expect(items.some((i) => i.ctaHref?.includes('/participants'))).toBe(true);
   });
 
   it('never returns empty attention list', () => {

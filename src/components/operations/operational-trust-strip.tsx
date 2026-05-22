@@ -3,6 +3,7 @@
 import { CheckCircle2, AlertCircle, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TrustSignal } from '@/lib/operations/explainability';
+import { opTypeMeta } from '@/lib/design/operational-typography';
 
 export function OperationalTrustStrip({
   signals,
@@ -16,12 +17,12 @@ export function OperationalTrustStrip({
   return (
     <ul
       className={cn(
-        'flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground',
+        'flex flex-wrap gap-x-4 gap-y-2 text-sm text-foreground/70',
         className
       )}
       aria-label="Trust indicators"
     >
-      {signals.slice(0, 5).map((s) => {
+      {signals.slice(0, 4).map((s) => {
         const Icon =
           s.status === 'healthy'
             ? CheckCircle2
@@ -32,12 +33,12 @@ export function OperationalTrustStrip({
           <li key={s.id} className="flex items-center gap-1.5">
             <Icon
               className={cn(
-                'h-3.5 w-3.5 shrink-0',
-                s.status === 'healthy' && 'text-emerald-600/80',
-                (s.status === 'attention' || s.status === 'risk') && 'text-amber-600/80'
+                'h-4 w-4 shrink-0',
+                s.status === 'healthy' && 'text-emerald-700/90 dark:text-emerald-400',
+                (s.status === 'attention' || s.status === 'risk') && 'text-amber-700/80 dark:text-amber-400/90'
               )}
             />
-            <span>{s.label}</span>
+            <span className={opTypeMeta}>{s.label}</span>
           </li>
         );
       })}

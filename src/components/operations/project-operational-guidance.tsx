@@ -43,7 +43,16 @@ export function ProjectOperationalGuidance() {
 
   if (!deal) return null;
 
-  const projectName = summary?.name ?? deal?.dealName ?? 'Project';
+  // Participants page owns configuring UX — avoid duplicate guidance strip
+  if (pathname.includes('/participants')) return null;
+
+  const routeState = safeOperationalRouteState({
+    projectId,
+    deal,
+    participants: projectParticipants,
+  });
+
+  const projectName = summary?.name ?? deal.dealName ?? 'Project';
   const showRelease =
     pathname.includes('/payouts') ||
     Boolean(pathname.match(new RegExp(`/projects/${projectId}$`))) ||
@@ -54,13 +63,13 @@ export function ProjectOperationalGuidance() {
       scope="project"
       scopeTitle={sectionTitle(pathname, projectName)}
       project={deal}
-      participants={guidanceParticipants}
+      participants={routeState.participants.participants}
       treasury={treasury}
       previousProjectState={prevStateRef.current}
       showReleaseConfidence={showRelease}
-      showSimulation={showRelease}
+      showSimulation={false}
       showExplanation={false}
-      showTrust
+      showTrust={false}
     />
   );
 }

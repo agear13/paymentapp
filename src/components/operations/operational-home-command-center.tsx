@@ -2,23 +2,36 @@
 
 import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
 import { deriveOperationalSeverity } from '@/lib/operations/severity';
+import { deduplicateAttentionItems } from '@/lib/operations/explainability/deduplicate-operational-actions';
 import { OperationalCommandCenterHero } from '@/components/operations/operational-command-center-hero';
 import { OperationalAttentionBoard } from '@/components/operations/operational-attention-board';
 import { RecentOperationalEvents } from '@/components/operations/recent-operational-events';
-import { ReleaseConfidenceSummary } from '@/components/operations/release-confidence-summary';
-import { ReleaseSimulationPreview } from '@/components/operations/release-simulation-preview';
+import { opPage } from '@/lib/design/operational-spacing';
+import { opCollapsibleTrigger } from '@/lib/design/operational-surfaces';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
 
-/**
- * Home command center — live operational overview (replaces card-heavy home).
- */
 export function OperationalHomeCommandCenter() {
   const { guidance, loading, workspaceContext, activation } = useOperationalGuidance();
+  const primaryAction = guidance.actions[0] ?? null;
 
-  const attentionItems = deriveOperationalSeverity({
-    guidance,
-    workspace: workspaceContext,
-    projectName: undefined,
-  });
+  const attentionItems = deduplicateAttentionItems(
+    deriveOperationalSeverity({
+      guidance,
+      workspace: workspaceContext,
+      projectName: undefined,
+    }),
+    {
+      primaryActionLabel: primaryAction?.action ?? null,
+      primaryActionHref: primaryAction?.destination ?? null,
+      maxCritical: 3,
+      maxPerSeverity: 3,
+    }
+  );
 
   const workspacePhase =
     activation?.phase === 'ready_for_release'
@@ -30,7 +43,7 @@ export function OperationalHomeCommandCenter() {
           : 'CONFIGURING';
 
   return (
-    <div className="space-y-10">
+    <div className={opPage()}>
       <OperationalCommandCenterHero
         guidance={guidance}
         attentionItems={attentionItems}
@@ -38,14 +51,17 @@ export function OperationalHomeCommandCenter() {
         loading={loading}
       />
 
-      <div className="space-y-6">
-        <ReleaseConfidenceSummary confidence={guidance.releaseConfidence} />
-        <ReleaseSimulationPreview confidence={guidance.releaseConfidence} />
-      </div>
+      <OperationalAttentionBoard items={attentionItems} calmMode />
 
-      <OperationalAttentionBoard items={attentionItems} />
-
-      <RecentOperationalEvents events={guidance.timeline} />
+      <Collapsible>
+        <CollapsibleTrigger className={opCollapsibleTrigger}>
+          Recent activity
+          <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200" />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-3 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200">
+          <RecentOperationalEvents events={guidance.timeline} compact />
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }

@@ -242,9 +242,9 @@ export function OperatorCommissionsWorkspace() {
       rows: pilotRows.filter((r) =>
         ['DRAFT', 'UNFUNDED', 'PARTIALLY_FUNDED', 'PENDING_APPROVAL'].includes(r.status)
       ),
-      emptyTitle: 'Nothing needs funding',
+      emptyTitle: 'No funding tasks right now',
       emptyDescription:
-        'Funding tasks will appear here when customer payments create participant earnings.',
+        'Funding tasks will appear once customer payments or obligations are created.',
       emptyIcon: 'funding',
       emphasis: 'caution',
     },

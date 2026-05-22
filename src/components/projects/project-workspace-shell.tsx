@@ -6,9 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { ProjectContextNav } from '@/components/projects/project-context-nav';
+import { ProjectContextHeader } from '@/components/projects/project-context-header';
+import { opProjectWidth, opSpace } from '@/lib/design/operational-spacing';
 import { ProjectOperationalGuidance } from '@/components/operations/project-operational-guidance';
 import { safeProjectRouteContext } from '@/lib/operations/routing/draft-safe-routing';
 import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
+import { cn } from '@/lib/utils';
 
 type ProjectWorkspaceShellProps = {
   projectId: string;

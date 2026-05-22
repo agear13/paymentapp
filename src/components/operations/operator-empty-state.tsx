@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { opTypeAction, opTypeBodySnug, opTypeMeta } from '@/lib/design/operational-typography';
+import { opSpace } from '@/lib/design/operational-spacing';
+import { opCtaButton, opSurface } from '@/lib/design/operational-surfaces';
 import { cn } from '@/lib/utils';
 
 export function OperatorEmptyState({
@@ -18,11 +21,17 @@ export function OperatorEmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn('py-10 text-center space-y-3 max-w-md mx-auto', className)}>
-      <p className="text-sm font-medium">{title}</p>
-      <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
+    <div
+      className={cn(
+        opSurface('inset', cn(opSpace.emptyY, 'text-center max-w-lg mx-auto')),
+        className
+      )}
+    >
+      <p className={opTypeMeta}>Current state</p>
+      <p className={cn(opTypeAction, 'mt-1')}>{title}</p>
+      <p className={cn(opTypeBodySnug, 'mt-2')}>{body}</p>
       {ctaLabel && ctaHref ? (
-        <Button asChild variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm" className={cn('mt-4', opCtaButton)}>
           <Link href={ctaHref}>{ctaLabel}</Link>
         </Button>
       ) : null}

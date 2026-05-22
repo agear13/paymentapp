@@ -3,10 +3,8 @@
 import * as React from 'react';
 import type { OperationalGuidanceOptions } from '@/hooks/use-operational-guidance';
 import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
-import { OperationalStateExplanation } from '@/components/operations/operational-state-explanation';
-import { OperationalTrustStrip } from '@/components/operations/operational-trust-strip';
 import { ReleaseConfidenceSummary } from '@/components/operations/release-confidence-summary';
-import { ReleaseSimulationPreview } from '@/components/operations/release-simulation-preview';
+import { opCollapsibleTrigger } from '@/lib/design/operational-surfaces';
 import { cn } from '@/lib/utils';
 import {
   Collapsible,
@@ -24,12 +22,8 @@ export type OperationalGuidanceRegionProps = OperationalGuidanceOptions & {
   className?: string;
 };
 
-/**
- * Progressive disclosure — calm summary first, details on expand.
- */
+/** Progressive disclosure — calm summary first, details on expand. */
 export function OperationalGuidanceRegion({
-  showExplanation = false,
-  showTrust = true,
   showReleaseConfidence = false,
   showSimulation = false,
   className,
@@ -37,34 +31,24 @@ export function OperationalGuidanceRegion({
 }: OperationalGuidanceRegionProps) {
   const { guidance } = useOperationalGuidance(options);
 
+  if (!showReleaseConfidence && !showSimulation) return null;
+
   return (
-    <div className={cn('space-y-4', className)}>
+    <div className={cn('space-y-3', className)}>
       {showReleaseConfidence ? (
-        <ReleaseConfidenceSummary confidence={guidance.releaseConfidence} compact />
+        <ReleaseConfidenceSummary confidence={guidance.releaseConfidence} compact calmMode />
       ) : null}
 
       {showSimulation ? (
         <Collapsible>
-          <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground [&[data-state=open]>svg]:rotate-180">
+          <CollapsibleTrigger className={opCollapsibleTrigger}>
             If released now
-            <ChevronDown className="h-3.5 w-3.5 transition-transform" />
+            <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200" />
           </CollapsibleTrigger>
-          <CollapsibleContent className="pt-3">
-            <ReleaseSimulationPreview confidence={guidance.releaseConfidence} />
-          </CollapsibleContent>
-        </Collapsible>
-      ) : null}
-
-      {showTrust ? <OperationalTrustStrip signals={guidance.trustSignals} /> : null}
-
-      {showExplanation && guidance.stateExplanation ? (
-        <Collapsible>
-          <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground [&[data-state=open]>svg]:rotate-180">
-            Understand current status
-            <ChevronDown className="h-3.5 w-3.5 transition-transform" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2">
-            <OperationalStateExplanation explanation={guidance.stateExplanation} />
+          <CollapsibleContent className="pt-2 data-[state=open]:animate-in data-[state=closed]:animate-out duration-200">
+            <p className="text-sm text-foreground/75">
+              {guidance.releaseConfidence.explainability.headline}
+            </p>
           </CollapsibleContent>
         </Collapsible>
       ) : null}

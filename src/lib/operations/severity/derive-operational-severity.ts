@@ -6,7 +6,7 @@ import {
   humanizeOperatorText,
   OPERATOR_LABELS,
 } from '@/lib/operations/design-language';
-import { projectParticipantsPath } from '@/lib/projects/project-routes';
+import { safeOperationalNavigation } from '@/lib/operations/routing/operational-route-recovery';
 import { PAYOUTS_SETTLEMENTS_HREF, PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
 
 export type SeverityDerivationInput = {
@@ -25,48 +25,25 @@ function severityRank(s: OperationalSeverity): number {
 export function deriveOperationalSeverity(input: SeverityDerivationInput): AttentionItem[] {
   const { guidance, workspace } = input;
   const items: AttentionItem[] = [];
-  const projectHref = workspace.primaryProjectId
-    ? projectParticipantsPath(workspace.primaryProjectId)
-    : '/dashboard/projects';
+  const projectId = workspace.primaryProjectId ?? null;
+  const earningsHref = safeOperationalNavigation('configure_earnings', projectId);
+  const obligationsHref = safeOperationalNavigation('review_obligations', projectId);
   const conf = guidance.releaseConfidence.level;
-
-  if (conf === 'BLOCKED' || guidance.explanation.blockers.length > 0) {
-    for (const blocker of guidance.explanation.blockers) {
-      const human = humanizeOperatorText(blocker);
-      const isComp = /compensation|earnings|participant/i.test(blocker);
-      items.push({
-        id: `blocker-${blocker.slice(0, 24)}`,
-        severity: conf === 'BLOCKED' ? 'CRITICAL' : 'ACTION_REQUIRED',
-        title: isComp
-          ? `${OPERATOR_LABELS.releaseBlocked}: participant payout setup incomplete`
-          : `${OPERATOR_LABELS.releaseBlocked}: ${human}`,
-        explanation: human,
-        projectName: input.projectName,
-        ctaLabel: isComp ? 'Configure participant earnings' : 'Resolve issue',
-        ctaHref: isComp ? projectHref : projectHref,
-        confidenceImpact: 'Prevents safe payout release',
-        whyBlocked: human,
-        whatUnlocks: isComp
-          ? 'Each participant needs earnings configured and payout destination before funds can be released safely.'
-          : 'Resolve this item to restore release confidence.',
-        recommendedStep: guidance.actions[0]?.action,
-      });
-    }
-  }
 
   const participantsIncomplete =
     workspace.participantCount > 0 &&
     workspace.participantsConfiguredCount < workspace.participantCount;
-  if (participantsIncomplete && !items.some((i) => i.id.startsWith('participants-'))) {
+
+  if (participantsIncomplete) {
     const missing = workspace.participantCount - workspace.participantsConfiguredCount;
     items.push({
       id: 'participants-incomplete',
       severity: 'ACTION_REQUIRED',
-      title: `${missing} participant${missing === 1 ? '' : 's'} need payout setup`,
+      title: `${missing} participant${missing === 1 ? '' : 's'} — earnings still need setup`,
       explanation: 'Configure how each participant earns before tracking payout obligations.',
       projectName: input.projectName,
       ctaLabel: 'Configure participant earnings',
-      ctaHref: projectHref,
+      ctaHref: earningsHref,
       confidenceImpact: 'Blocks safe release',
       whyBlocked: `${missing} participant${missing === 1 ? ' has' : 's have'} not completed payout setup.`,
       whatUnlocks: 'Save earnings for each participant, then confirm payout destinations.',
@@ -112,15 +89,34 @@ export function deriveOperationalSeverity(input: SeverityDerivationInput): Atten
     });
   }
 
-  if (workspace.obligationCount === 0 && workspace.participantCount > 0 && participantsIncomplete === false) {
+  if (workspace.obligationCount === 0 && workspace.participantCount > 0 && !participantsIncomplete) {
     items.push({
       id: 'no-obligations',
       severity: 'INFORMATIONAL',
       title: 'No payout obligations tracked yet',
       explanation: 'Customer payments will create payout obligations automatically.',
-      ctaHref: PAYOUTS_OBLIGATIONS_HREF,
+      ctaHref: obligationsHref,
       ctaLabel: 'View obligations',
     });
+  }
+
+  if ((conf === 'BLOCKED' || guidance.explanation.blockers.length > 0) && !participantsIncomplete) {
+    for (const blocker of guidance.explanation.blockers) {
+      const human = humanizeOperatorText(blocker);
+      if (/compensation|earnings|participant payout/i.test(blocker)) continue;
+      items.push({
+        id: `blocker-${blocker.slice(0, 24)}`,
+        severity: conf === 'BLOCKED' ? 'CRITICAL' : 'ACTION_REQUIRED',
+        title: `${OPERATOR_LABELS.releaseBlocked}: ${human}`,
+        explanation: human,
+        projectName: input.projectName,
+        ctaLabel: 'Resolve issue',
+        ctaHref: earningsHref,
+        confidenceImpact: 'Prevents safe payout release',
+        whyBlocked: human,
+        whatUnlocks: 'Resolve this item to restore release confidence.',
+      });
+    }
   }
 
   for (const w of guidance.explanation.warnings) {

@@ -6,6 +6,7 @@ import type {
 } from '@/lib/operations/explainability/types';
 import type { TrustLevel } from '@/lib/operations/explainability/types';
 import { deriveNextOperationalActions } from '@/lib/operations/explainability/derive-next-operational-actions';
+import { deduplicateOperationalActions } from '@/lib/operations/explainability/deduplicate-operational-actions';
 import { deriveReleaseConfidence } from '@/lib/operations/explainability/release-confidence';
 import { buildOperationalTimeline } from '@/lib/operations/explainability/operational-timeline';
 import { deriveTrustSignals } from '@/lib/operations/explainability/trust-signals';
@@ -179,7 +180,9 @@ export function buildOperationalGuidance(
             explanation.blockers
           );
 
-    const actions = deriveNextOperationalActions(explanation, input.workspace);
+    const actions = deduplicateOperationalActions(
+      deriveNextOperationalActions(explanation, input.workspace)
+    );
     const trustSignals = deriveTrustSignals({
       workspace: input.workspace,
       treasury: input.treasury,
@@ -241,7 +244,9 @@ export function buildOperationalGuidance(
     return {
       explanation: fallbackExplanation,
       stateExplanation: explainWorkspaceState('DEGRADED', fallbackExplanation.blockers),
-      actions: deriveNextOperationalActions(fallbackExplanation, input.workspace),
+      actions: deduplicateOperationalActions(
+        deriveNextOperationalActions(fallbackExplanation, input.workspace)
+      ),
       trustSignals: deriveTrustSignals({ workspace: input.workspace }),
       releaseConfidence: deriveReleaseConfidence({
         workspace: input.workspace,
