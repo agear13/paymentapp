@@ -5,7 +5,6 @@ import { COMMISSION_STRUCTURE_OPTIONS } from '@/lib/deal-network-demo/commission
 import {
   defaultReferralCommerce,
   normalizeReferralCommerce,
-  shouldIssueReferralLink,
   type ParticipantReferralCommerce,
 } from '@/lib/referrals/referral-commerce-config';
 import type { OperationalParticipantRole } from '@/lib/projects/participants-for-project';
@@ -19,6 +18,7 @@ import {
   formatRevenueShareLine,
 } from '@/lib/projects/participant-compensation-copy';
 import { draftParticipantDefaults } from '@/lib/operations/guards/hydration-guards';
+import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
 
 export type ProjectParticipationModel =
   | 'fixed_payout'
@@ -99,7 +99,6 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
   const id = `proj-p-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const inviteToken = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
   const email = input.email?.trim() ?? '';
-  const hasEmail = email.length > 0;
   const referralCommerce =
     input.referralCommerce ??
     buildReferralCommerceForProject({
@@ -115,7 +114,6 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
     commissionKind: input.commissionKind,
     commissionValue: input.commissionValue,
     status: 'Pending',
-    inviteStatus: hasEmail ? 'Invited' : 'Invited',
     approvalStatus: 'Pending approval',
     onboardingStatus: 'NOT_STARTED',
     inviteToken,
@@ -129,10 +127,12 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
     referralCommerce,
     workspaceSource: 'project',
     participationModel: input.participationModel,
-    agreementUrl: participantAgreementPath(inviteToken),
     attributionStatus: 'inactive',
     inviteLink: undefined,
     customerCommerceUrl: undefined,
+    participantLifecycle: 'DRAFT',
+    agreementLifecycle: 'NOT_CREATED',
+    payoutOnboardingPhase: 'NOT_STARTED',
     ...draftParticipantDefaults(),
   };
 }
@@ -169,17 +169,15 @@ export function participationStateLabel(state: ParticipationState): string {
 export function deriveAttributionStatus(
   participant: DemoParticipant
 ): ParticipantAttributionStatus {
+  if (!canGenerateAttributionLink(participant)) return 'inactive';
   if (participant.attributionStatus === 'generating conversions') return 'generating conversions';
   if (participant.approvalStatus !== 'Approved') return 'inactive';
   if (
     participant.attributionStatus === 'active' ||
-    participant.customerCommerceUrl?.trim() ||
-    (participant.inviteLink?.trim() && isProjectWorkspaceParticipant(participant))
+    participant.customerCommerceUrl?.trim()
   ) {
     return 'active';
   }
-  const commerce = participant.referralCommerce;
-  if (commerce && shouldIssueReferralLink(commerce)) return 'inactive';
   return 'inactive';
 }
 

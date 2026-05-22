@@ -21,8 +21,8 @@ export function ParticipantAttributionAgreementSummary({
 }: Props) {
   if (!commerce || commerce.createReferralLink === false) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No customer attribution tracking is configured for this participation.
+      <p className="text-sm text-foreground/70">
+        This participant does not earn from customer purchases.
       </p>
     );
   }

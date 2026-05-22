@@ -5,22 +5,63 @@ import {
   type PilotParticipantOnboardingStatus,
 } from '@/lib/deal-network-demo/participant-onboarding';
 import {
-  deriveAttributionStatus,
-  type ParticipantAttributionStatus,
-} from '@/lib/projects/participant-entitlement';
+  deriveParticipantLifecycleState,
+  PARTICIPANT_LIFECYCLE_LABELS,
+  type ParticipantLifecycleState,
+} from '@/lib/operations/lifecycle/participant-lifecycle';
+import {
+  derivePayoutOnboardingPhase,
+  payoutOnboardingPlaceholderCopy,
+  type PayoutOnboardingPhase,
+} from '@/lib/operations/lifecycle/payout-lifecycle';
+import { isParticipantOperationallyApproved } from '@/lib/operations/truth/participant-truth';
+import { agreementTruthLabel } from '@/lib/operations/truth/agreement-truth';
+import { attributionTruthLabel } from '@/lib/operations/truth/attribution-truth';
+import { deriveAttributionStatus, type ParticipantAttributionStatus } from '@/lib/projects/participant-entitlement';
+import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
 
-/** Invite delivery / agreement progress (operator view). */
-export type ParticipantInviteState = 'sent' | 'opened' | 'approved';
+/** @deprecated Use ParticipantLifecycleState — kept for table column compatibility */
+export type ParticipantInviteState =
+  | 'draft'
+  | 'ready'
+  | 'generated'
+  | 'sent'
+  | 'opened'
+  | 'approved';
 
-export type ParticipantParticipationLabel = 'pending approval' | 'approved';
+export type ParticipantParticipationLabel =
+  | 'added'
+  | 'ready to invite'
+  | 'awaiting approval'
+  | 'approved';
 
 /** Payout profile readiness — separate from attribution. */
-export type PayoutOnboardingState = 'not started' | 'incomplete' | 'ready' | 'blocked';
+export type PayoutOnboardingState = 'not started' | 'invited' | 'in progress' | 'ready' | 'blocked';
+
+function lifecycleToInviteState(state: ParticipantLifecycleState): ParticipantInviteState {
+  switch (state) {
+    case 'DRAFT':
+    case 'READY_TO_INVITE':
+      return state === 'DRAFT' ? 'draft' : 'ready';
+    case 'INVITE_GENERATED':
+      return 'generated';
+    case 'INVITE_SENT':
+      return 'sent';
+    case 'INVITE_VIEWED':
+    case 'PENDING_APPROVAL':
+      return 'opened';
+    case 'APPROVED':
+    case 'ONBOARDING_REQUIRED':
+    case 'PAYOUT_READY':
+    case 'ACTIVE':
+      return 'approved';
+    default:
+      return 'draft';
+  }
+}
 
 export function deriveInviteState(participant: DemoParticipant): ParticipantInviteState {
-  if (participant.approvalStatus === 'Approved') return 'approved';
-  if (participant.inviteStatus === 'Opened') return 'opened';
-  return 'sent';
+  return lifecycleToInviteState(deriveParticipantLifecycleState(participant));
 }
 
 export function inviteStateLabel(state: ParticipantInviteState): string {
@@ -28,43 +69,87 @@ export function inviteStateLabel(state: ParticipantInviteState): string {
     case 'approved':
       return 'Approved';
     case 'opened':
-      return 'Opened';
+      return 'Agreement opened';
+    case 'sent':
+      return 'Agreement shared';
+    case 'generated':
+      return 'Agreement ready';
+    case 'ready':
+      return 'Ready to invite';
     default:
-      return 'Sent';
+      return 'Participant added';
   }
 }
 
 export function deriveParticipationLabel(
   participant: DemoParticipant
 ): ParticipantParticipationLabel {
-  return participant.approvalStatus === 'Approved' ? 'approved' : 'pending approval';
+  if (isParticipantOperationallyApproved(participant)) return 'approved';
+  const lifecycle = deriveParticipantLifecycleState(participant);
+  if (lifecycle === 'INVITE_VIEWED' || lifecycle === 'PENDING_APPROVAL') {
+    return 'awaiting approval';
+  }
+  if (lifecycle === 'READY_TO_INVITE' || lifecycle === 'INVITE_GENERATED') {
+    return 'ready to invite';
+  }
+  return 'added';
 }
 
 export function participationLabelText(label: ParticipantParticipationLabel): string {
-  return label === 'approved' ? 'Approved' : 'Pending approval';
+  switch (label) {
+    case 'approved':
+      return 'Approved';
+    case 'awaiting approval':
+      return 'Awaiting approval';
+    case 'ready to invite':
+      return 'Ready to invite';
+    default:
+      return 'Participant added';
+  }
 }
 
 export function derivePayoutOnboardingState(
   participant: DemoParticipant
 ): PayoutOnboardingState {
   if (participant.payoutBlocked) return 'blocked';
-  const onboarding = effectiveOnboardingStatus(participant);
-  if (isOnboardingComplete(onboarding)) return 'ready';
-  if (onboarding === 'INCOMPLETE') return 'incomplete';
+  const phase = derivePayoutOnboardingPhase(participant);
+  if (phase === 'COMPLETED' || isOnboardingComplete(effectiveOnboardingStatus(participant))) {
+    return 'ready';
+  }
+  if (phase === 'IN_PROGRESS') return 'in progress';
+  if (phase === 'INVITED') return 'invited';
   return 'not started';
 }
 
 export function payoutOnboardingLabel(state: PayoutOnboardingState): string {
   switch (state) {
     case 'ready':
-      return 'Ready';
-    case 'incomplete':
-      return 'Incomplete';
+      return 'Complete';
+    case 'in progress':
+      return 'In progress';
+    case 'invited':
+      return 'Invited';
     case 'blocked':
       return 'Blocked';
     default:
       return 'Not started';
   }
+}
+
+export function payoutOnboardingOperatorCopy(participant: DemoParticipant): string {
+  return payoutOnboardingPlaceholderCopy(derivePayoutOnboardingPhase(participant));
+}
+
+export function participantLifecycleDisplayLabel(participant: DemoParticipant): string {
+  return PARTICIPANT_LIFECYCLE_LABELS[deriveParticipantLifecycleState(participant)];
+}
+
+export function agreementDisplayLabel(participant: DemoParticipant): string {
+  return agreementTruthLabel(participant);
+}
+
+export function attributionDisplayLabel(participant: DemoParticipant): string {
+  return attributionTruthLabel(participant);
 }
 
 export type ParticipantSummaryMetrics = {
@@ -84,12 +169,20 @@ export function participantSummaryMetrics(
   let activeAttribution = 0;
 
   for (const p of participants) {
-    if (p.approvalStatus !== 'Approved') pendingAgreements += 1;
-    const payoutOb = derivePayoutOnboardingState(p);
-    if (payoutOb === 'incomplete' || payoutOb === 'not started' || payoutOb === 'blocked') {
-      if (p.approvalStatus === 'Approved') missingOnboarding += 1;
+    const lifecycle = deriveParticipantLifecycleState(p);
+    if (
+      lifecycle !== 'APPROVED' &&
+      lifecycle !== 'PAYOUT_READY' &&
+      lifecycle !== 'ACTIVE' &&
+      lifecycle !== 'ONBOARDING_REQUIRED'
+    ) {
+      pendingAgreements += 1;
     }
-    if (payoutOb === 'ready' && p.approvalStatus === 'Approved') readyForPayout += 1;
+    const payoutOb = derivePayoutOnboardingState(p);
+    if (payoutOb === 'in progress' || payoutOb === 'not started' || payoutOb === 'invited') {
+      if (isParticipantOperationallyApproved(p)) missingOnboarding += 1;
+    }
+    if (payoutOb === 'ready' && isParticipantOperationallyApproved(p)) readyForPayout += 1;
     if (deriveAttributionStatus(p) === 'active') activeAttribution += 1;
   }
 
@@ -118,18 +211,23 @@ export function applyOnboardingSelectValue(
       ...participant,
       payoutBlocked: true,
       onboardingStatus: 'INCOMPLETE',
+      payoutOnboardingPhase: 'IN_PROGRESS',
     };
   }
+  const phase: PayoutOnboardingPhase =
+    value === 'COMPLETE' ? 'COMPLETED' : value === 'INCOMPLETE' ? 'IN_PROGRESS' : 'NOT_STARTED';
   return {
     ...participant,
     payoutBlocked: false,
     onboardingStatus: value,
+    payoutOnboardingPhase: phase,
   };
 }
 
 export function referralIssuanceFromParticipant(
   participant: DemoParticipant
 ): { code: string; referralUrl: string } | null {
+  if (!canGenerateAttributionLink(participant)) return null;
   const url =
     participant.customerCommerceUrl?.trim() ||
     participant.inviteLink?.trim() ||

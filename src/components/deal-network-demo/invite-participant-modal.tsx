@@ -66,7 +66,7 @@ export interface DemoParticipant {
   commissionBaseParticipantId?: string;
   formulaExpression?: string;
   status: 'Pending' | 'Confirmed';
-  inviteStatus: 'Invited' | 'Opened';
+  inviteStatus?: 'Invited' | 'Opened';
   approvalStatus: 'Pending approval' | 'Approved';
   /** KYC / payout profile readiness — payout must not execute until COMPLETE. */
   onboardingStatus?: PilotParticipantOnboardingStatus;
@@ -119,6 +119,14 @@ export interface DemoParticipant {
   /** How this participant earns — orchestration metadata, not settlement engine. */
   compensationProfile?: import('@/lib/participants/participant-compensation-types').ParticipantCompensationProfile;
   operationalStatus?: import('@/lib/operational/operational-lifecycle-types').ParticipantOperationalStatus;
+  /** Canonical coordination lifecycle (see operations/lifecycle). */
+  participantLifecycle?: import('@/lib/operations/lifecycle/participant-lifecycle').ParticipantLifecycleState;
+  agreementLifecycle?: import('@/lib/operations/lifecycle/agreement-lifecycle').AgreementLifecycleState;
+  attributionLifecycle?: import('@/lib/operations/lifecycle/attribution-lifecycle').AttributionLifecycleState;
+  payoutOnboardingPhase?: import('@/lib/operations/lifecycle/payout-lifecycle').PayoutOnboardingPhase;
+  inviteSentAt?: string;
+  agreementSharedAt?: string;
+  agreementViewedAt?: string;
 }
 
 export interface InviteParticipantModalProps {

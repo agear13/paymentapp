@@ -36,6 +36,8 @@ export type ParticipantCompensationProfile = {
   configuredAt?: string;
   /** No payout — internal / unpaid role */
   exemptFromPayout?: boolean;
+  /** Enables customer purchase attribution links — explicit operator opt-in */
+  customerAttributionEnabled?: boolean;
 };
 
 export type AllocationStatus = 'missing' | 'configured' | 'exempt';

@@ -96,6 +96,12 @@ export function applyCompensationProfileToParticipant(
         profile.compensationType === 'COMMISSION' ? 'customer_attribution' : 'revenue_share';
       next.commissionKind = 'pct_deal_value';
       next.commissionValue = profile.percentage ?? 0;
+      if (profile.compensationType === 'COMMISSION' && profile.configured) {
+        next.compensationProfile = {
+          ...next.compensationProfile!,
+          customerAttributionEnabled: profile.customerAttributionEnabled ?? true,
+        };
+      }
       break;
     case 'FIXED_FEE':
     case 'REIMBURSEMENT':

@@ -25,6 +25,10 @@ import { ProjectParticipantTableRow } from '@/components/projects/project-partic
 import { EditProjectParticipantDialog } from '@/components/projects/edit-project-participant-dialog';
 import type { DemoParticipantRole } from '@/components/deal-network-demo/invite-participant-modal';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
+import {
+  applyParticipantAgreementGenerated,
+  applyParticipantAgreementShared,
+} from '@/lib/operations/lifecycle/participant-lifecycle';
 import { ProjectReadinessBreakdown } from '@/components/projects/project-readiness-breakdown';
 import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
 import { ParticipantCompensationDialog } from '@/components/projects/participant-compensation-dialog';
@@ -75,17 +79,30 @@ export function ProjectParticipantsView() {
     void refreshSilent('participants');
   }, [invalidate, refreshSilent]);
 
-  const copyAgreementLink = React.useCallback(async (p: DemoParticipant) => {
-    const path = p.agreementUrl ?? participantAgreementPath(p.inviteToken);
-    const url =
-      typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success('Agreement link copied');
-    } catch {
-      toast.error('Could not copy');
-    }
-  }, []);
+  const copyAgreementLink = React.useCallback(
+    async (p: DemoParticipant) => {
+      const path = p.agreementUrl ?? participantAgreementPath(p.inviteToken);
+      const url =
+        typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
+
+      let updated = p;
+      if (!p.agreementUrl) {
+        updated = applyParticipantAgreementGenerated(p, path);
+      }
+      updated = applyParticipantAgreementShared(updated);
+
+      const nextParticipants = allParticipants.map((x) => (x.id === p.id ? updated : x));
+      void saveSnapshot(allDeals, nextParticipants);
+
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Agreement link copied');
+      } catch {
+        toast.error('Could not copy');
+      }
+    },
+    [allDeals, allParticipants, saveSnapshot]
+  );
 
   const updateOnboarding = React.useCallback(
     async (participantId: string, value: PilotParticipantOnboardingStatus | 'BLOCKED') => {

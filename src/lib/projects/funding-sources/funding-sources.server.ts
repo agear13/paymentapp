@@ -5,6 +5,7 @@ import { prisma } from '@/lib/server/prisma';
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { sumObligationsAmountForDeal, sumPilotFundingForDeal } from '@/lib/deal-network-demo/pilot-project-funding.server';
 import { buildProjectTreasurySummary } from '@/lib/projects/funding-sources/treasury-summary';
+import { recalculateOperationalFundingState } from '@/lib/operations/lifecycle/funding-lifecycle';
 import type { ProjectFundingSourceDto, ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
 function toNumber(v: unknown): number {
@@ -215,10 +216,10 @@ export async function getProjectTreasurySummaryForUser(
   const legacyConfirmed =
     sources.length === 0 || legacyFunding > 0 ? legacyFunding : 0;
 
-  return buildProjectTreasurySummary({
+  return recalculateOperationalFundingState({
     fundingSources: sources,
     obligationsTotal,
     legacyConfirmedFunding: legacyConfirmed,
     defaultCurrency,
-  });
+  }).treasury;
 }

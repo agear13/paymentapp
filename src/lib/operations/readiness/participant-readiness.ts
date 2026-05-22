@@ -8,6 +8,10 @@ import { deriveCompensationReadiness } from '@/lib/operations/readiness/compensa
 import type { OperationalReadinessResult } from '@/lib/operations/types/readiness-result';
 import { emptyReadiness } from '@/lib/operations/types/readiness-result';
 import type { ParticipantState } from '@/lib/operations/states/participant-state';
+import {
+  payoutDestinationTruthMessage,
+  shouldShowPayoutDestinationBlocker,
+} from '@/lib/operations/truth/payout-truth';
 
 export type ParticipantPayoutReadiness = OperationalReadinessResult & {
   participantId: string;
@@ -35,8 +39,13 @@ export function deriveParticipantPayoutReadiness(
     const issues: string[] = [...comp.missingRequirements];
 
     if (!flags.hasPayoutDestination) {
-      if (!p.email?.trim()) issues.push('No payout destination configured');
-      else if (!flags.hasAgreement) issues.push('Payout onboarding incomplete');
+      if (shouldShowPayoutDestinationBlocker(p)) {
+        issues.push('No payout destination configured');
+      } else {
+        issues.push(payoutDestinationTruthMessage(p));
+      }
+    } else if (!flags.hasAgreement) {
+      issues.push('Payout onboarding incomplete');
     }
     if (!flags.hasAgreement && !p.compensationProfile?.exemptFromPayout) {
       issues.push('Agreement not approved');
@@ -133,7 +142,11 @@ export function summarizeProjectReadinessGaps(
       missingCompensation += 1;
     }
     if (
-      s.issues.some((r) => r.includes('Payout destination') || r.includes('onboarding'))
+      s.issues.some(
+        (r) =>
+          r.includes('Payout destination') ||
+          (r.includes('onboarding') && !r.includes('not started'))
+      )
     ) {
       missingPayoutDestinations += 1;
     }

@@ -22,12 +22,13 @@ import {
 import {
   deriveInviteState,
   deriveParticipationLabel,
-  derivePayoutOnboardingState,
   inviteStateLabel,
   onboardingSelectValue,
   participationLabelText,
-  payoutOnboardingLabel,
+  payoutOnboardingOperatorCopy,
+  attributionDisplayLabel,
 } from '@/lib/projects/participant-lifecycle';
+import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
 import type { PilotParticipantOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 
 export type ProjectParticipantTableRowProps = {
@@ -48,7 +49,6 @@ function ProjectParticipantTableRowComponent({
   const invite = deriveInviteState(p);
   const participation = deriveParticipationLabel(p);
   const attribution = deriveAttributionStatus(p);
-  const payoutOb = derivePayoutOnboardingState(p);
   return (
     <TableRow>
       <TableCell>
@@ -59,7 +59,11 @@ function ProjectParticipantTableRowComponent({
       <TableCell>
         <Badge
           variant={
-            invite === 'approved' ? 'default' : invite === 'opened' ? 'secondary' : 'outline'
+            invite === 'approved'
+              ? 'default'
+              : invite === 'opened' || invite === 'sent'
+                ? 'secondary'
+                : 'outline'
           }
         >
           {inviteStateLabel(invite)}
@@ -71,9 +75,13 @@ function ProjectParticipantTableRowComponent({
         </Badge>
       </TableCell>
       <TableCell>
-        <Badge variant={attribution === 'active' ? 'default' : 'secondary'}>
-          {attributionStatusLabel(attribution)}
-        </Badge>
+        {canGenerateAttributionLink(p) ? (
+          <Badge variant={attribution === 'active' ? 'default' : 'secondary'}>
+            {attributionStatusLabel(attribution)}
+          </Badge>
+        ) : (
+          <span className="text-xs text-foreground/70">{attributionDisplayLabel(p)}</span>
+        )}
       </TableCell>
       <TableCell onClick={(e) => e.stopPropagation()}>
         <Select
@@ -87,12 +95,12 @@ function ProjectParticipantTableRowComponent({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="NOT_STARTED">Not started</SelectItem>
-            <SelectItem value="INCOMPLETE">Incomplete</SelectItem>
-            <SelectItem value="COMPLETE">Ready</SelectItem>
+            <SelectItem value="INCOMPLETE">In progress</SelectItem>
+            <SelectItem value="COMPLETE">Complete</SelectItem>
             <SelectItem value="BLOCKED">Blocked</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-muted-foreground mt-1 text-[10px]">{payoutOnboardingLabel(payoutOb)}</p>
+        <p className="text-foreground/70 mt-1 text-xs">{payoutOnboardingOperatorCopy(p)}</p>
       </TableCell>
       <TableCell className="text-sm text-muted-foreground">
         <button

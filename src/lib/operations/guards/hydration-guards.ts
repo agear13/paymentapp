@@ -5,9 +5,10 @@ import type { CompensationState } from '@/lib/operations/states/compensation-sta
 import type { ParticipantState } from '@/lib/operations/states/participant-state';
 import type { ProjectState } from '@/lib/operations/states/project-state';
 import {
-  effectiveOnboardingStatus,
-  isOnboardingComplete,
-} from '@/lib/deal-network-demo/participant-onboarding';
+  derivePayoutOnboardingPhase,
+  PAYOUT_ONBOARDING_UI_IMPLEMENTED,
+} from '@/lib/operations/lifecycle/payout-lifecycle';
+import { isOnboardingComplete, effectiveOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 
 /**
  * Safe hydration — never trust DB completeness.
@@ -78,7 +79,6 @@ export function normalizeParticipantEntity(
       commissionKind: 'fixed_amount',
       commissionValue: 0,
       status: 'Pending',
-      inviteStatus: 'Invited',
       approvalStatus: 'Pending approval',
       onboardingStatus: 'NOT_STARTED',
       inviteToken: '',
@@ -97,7 +97,6 @@ export function normalizeParticipantEntity(
       ? participant.commissionValue
       : 0,
     approvalStatus: participant.approvalStatus ?? 'Pending approval',
-    inviteStatus: participant.inviteStatus ?? 'Invited',
     onboardingStatus: participant.onboardingStatus ?? 'NOT_STARTED',
     inviteToken: participant.inviteToken ?? '',
     attributionStatus: participant.attributionStatus ?? 'inactive',
@@ -132,7 +131,9 @@ export function deriveParticipantCapabilityFlags(
   const hasPayoutDestination =
     compState === 'CONFIGURED' && p.compensationProfile?.exemptFromPayout
       ? true
-      : hasEmail && onboardingComplete;
+      : PAYOUT_ONBOARDING_UI_IMPLEMENTED
+        ? hasEmail && onboardingComplete
+        : onboardingComplete || derivePayoutOnboardingPhase(p) === 'COMPLETED';
   const payoutReady =
     hasCompensation &&
     hasPayoutDestination &&
