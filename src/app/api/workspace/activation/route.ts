@@ -9,6 +9,7 @@ import {
   merchantRowToRailFlags,
 } from '@/lib/onboarding/workspace-activation-state';
 import { deriveNextRecommendedAction } from '@/lib/onboarding/next-recommended-action';
+import { evaluateWorkspaceCompensationReadiness } from '@/lib/participants/participant-compensation';
 
 /** GET /api/workspace/activation — derived activation snapshot for onboarding orchestration */
 export async function GET() {
@@ -24,6 +25,8 @@ export async function GET() {
       onboardingCompleted: false,
       projectCreated: false,
       participantCount: 0,
+      participantsConfigured: false,
+      participantsConfiguredCount: 0,
       obligationCount: 0,
       paymentLinkCount: 0,
       collectionPreferenceDecideLater: true,
@@ -33,6 +36,7 @@ export async function GET() {
       hederaConfigured: false,
       releaseEligibleCount: 0,
       releaseBatchCount: 0,
+      primaryProjectId: null,
     });
     return apiResponse({
       activation: empty,
@@ -88,6 +92,7 @@ export async function GET() {
     ...rails,
     releaseEligibleCount,
     releaseBatchCount,
+    primaryProjectId,
   });
 
   return apiResponse({

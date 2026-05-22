@@ -4,23 +4,55 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
+import {
+  deriveMerchantSettingsNextAction,
+  deriveNextRecommendedAction,
+} from '@/lib/onboarding/next-recommended-action';
 import { cn } from '@/lib/utils';
 
 type OnboardingNextActionCardProps = {
   className?: string;
   compact?: boolean;
+  /** On merchant settings page — avoid duplicate provider CTA */
+  variant?: 'default' | 'merchant-settings';
 };
 
-export function OnboardingNextActionCard({ className, compact }: OnboardingNextActionCardProps) {
-  const { nextAction, loading } = useWorkspaceActivation();
+export function OnboardingNextActionCard({
+  className,
+  compact,
+  variant = 'default',
+}: OnboardingNextActionCardProps) {
+  const { activation, loading } = useWorkspaceActivation();
 
-  if (loading || !nextAction) {
+  if (loading || !activation) {
+    return null;
+  }
+
+  const nextAction =
+    variant === 'merchant-settings'
+      ? deriveMerchantSettingsNextAction(activation)
+      : deriveNextRecommendedAction(activation);
+
+  if (!nextAction) {
     return null;
   }
 
   if (compact) {
+    if (nextAction.instructionalOnly) {
+      return (
+        <div className={cn('text-sm', className)}>
+          <p className="text-xs font-medium text-muted-foreground">Next step</p>
+          <p className="mt-0.5">{nextAction.description}</p>
+        </div>
+      );
+    }
     return (
-      <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between', className)}>
+      <div
+        className={cn(
+          'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between',
+          className
+        )}
+      >
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">Next recommended step</p>
           <p className="text-sm font-medium mt-0.5">{nextAction.title}</p>
@@ -48,12 +80,18 @@ export function OnboardingNextActionCard({ className, compact }: OnboardingNextA
           </ul>
         ) : null}
       </div>
-      <Button asChild>
-        <Link href={nextAction.href}>
-          {nextAction.ctaLabel}
-          <ArrowRight className="ml-2 h-4 w-4" />
-        </Link>
-      </Button>
+      {nextAction.instructionalOnly ? (
+        <p className="text-sm text-muted-foreground">
+          Complete provider setup in the form below.
+        </p>
+      ) : (
+        <Button asChild>
+          <Link href={nextAction.href}>
+            {nextAction.ctaLabel}
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
+      )}
     </div>
   );
 }

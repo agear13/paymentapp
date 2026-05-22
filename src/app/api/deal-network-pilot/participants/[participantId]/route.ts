@@ -8,6 +8,25 @@ import {
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { applyOnboardingSelectValue } from '@/lib/projects/participant-lifecycle';
 import type { PilotParticipantOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
+import {
+  PARTICIPANT_COMPENSATION_TYPES,
+} from '@/lib/participants/participant-compensation-types';
+import {
+  applyCompensationProfileToParticipant,
+} from '@/lib/participants/participant-compensation';
+
+const compensationProfileSchema = z.object({
+  compensationType: z.enum(PARTICIPANT_COMPENSATION_TYPES),
+  percentage: z.number().optional(),
+  fixedAmount: z.number().optional(),
+  revenueSources: z.array(z.string()).optional(),
+  minimumGuarantee: z.number().optional(),
+  payoutPriority: z.number().optional(),
+  notes: z.string().max(2000).optional(),
+  configured: z.boolean().optional(),
+  configuredAt: z.string().optional(),
+  exemptFromPayout: z.boolean().optional(),
+});
 
 const patchSchema = z
   .object({
@@ -17,6 +36,7 @@ const patchSchema = z
     role: z.enum(['Introducer', 'Connector', 'Closer', 'Contributor']).optional(),
     roleDetails: z.string().max(2000).optional(),
     agreementNotes: z.string().max(2000).optional(),
+    compensationProfile: compensationProfileSchema.optional(),
   })
   .refine(
     (body) =>
@@ -25,7 +45,8 @@ const patchSchema = z
       body.email != null ||
       body.role != null ||
       body.roleDetails != null ||
-      body.agreementNotes != null,
+      body.agreementNotes != null ||
+      body.compensationProfile != null,
     { message: 'No updates provided' }
   );
 
@@ -66,6 +87,19 @@ export async function PATCH(
     if (body.role != null) payloadPatch.role = body.role;
     if (body.roleDetails != null) payloadPatch.roleDetails = body.roleDetails;
     if (body.agreementNotes != null) payloadPatch.agreementNotes = body.agreementNotes;
+
+    if (body.compensationProfile) {
+      const profile = {
+        ...body.compensationProfile,
+        configured: body.compensationProfile.configured ?? true,
+        configuredAt: body.compensationProfile.configuredAt ?? new Date().toISOString(),
+      };
+      const merged = applyCompensationProfileToParticipant(working, profile);
+      payloadPatch.compensationProfile = merged.compensationProfile;
+      payloadPatch.participationModel = merged.participationModel;
+      payloadPatch.commissionKind = merged.commissionKind;
+      payloadPatch.commissionValue = merged.commissionValue;
+    }
 
     const persisted = await updatePilotParticipantPayload(participantId, user.id, payloadPatch);
 

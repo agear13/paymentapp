@@ -14,7 +14,7 @@ import {
   projectParticipantsPath,
   projectPayoutsPath,
 } from '@/lib/projects/project-routes';
-import { formatParticipantPayoutReadiness } from '@/lib/projects/format-participant-payout-readiness';
+import { ProjectReadinessBreakdown } from '@/components/projects/project-readiness-breakdown';
 import { formatTreasuryAmount } from '@/lib/projects/funding-sources/format-funding-source';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
@@ -23,7 +23,7 @@ type ProjectDetailHubProps = {
 };
 
 export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
-  const { summary, refresh } = useProjectWorkspace();
+  const { summary, refresh, projectParticipants } = useProjectWorkspace();
   const [treasury, setTreasury] = React.useState<ProjectTreasurySummary | null>(null);
 
   React.useEffect(() => {
@@ -103,11 +103,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
-            {summary.participantCount === 0
-              ? 'No participants added yet'
-              : summary.participantsPending > 0
-                ? `${participantLabel} · ${summary.participantsPending} still need payout readiness`
-                : participantLabel}
+            <ProjectReadinessBreakdown participants={projectParticipants} />
             <div>
               <Button asChild variant="outline" size="sm">
                 <Link href={participantsHref}>Manage participants</Link>

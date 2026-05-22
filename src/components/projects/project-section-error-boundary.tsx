@@ -38,7 +38,9 @@ export class ProjectSectionErrorBoundary extends React.Component<Props, State> {
             </CardTitle>
             <CardDescription>
               {this.props.fallbackMessage ??
-                'This section failed to load. The rest of the project workspace remains available.'}
+                (this.props.sectionTitle === 'Participants'
+                  ? "We couldn't load participant payout configuration. Try refreshing or reopen participant management."
+                  : 'This section failed to load. The rest of the project workspace remains available.')}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">

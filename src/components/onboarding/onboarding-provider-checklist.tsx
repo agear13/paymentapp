@@ -18,7 +18,7 @@ export function OnboardingProviderChecklist() {
   if (!activation) return null;
 
   const providerItems = activation.checklist.filter((item) =>
-    ['currency', 'provider', 'revenue'].includes(item.id)
+    ['compensation', 'provider', 'revenue'].includes(item.id)
   );
 
   if (providerItems.length === 0) return null;

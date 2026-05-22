@@ -5,11 +5,21 @@ import { participantSummaryMetrics } from '@/lib/projects/participant-lifecycle'
 
 export type { OperationalParticipantRole };
 
+export type OperationalParticipantRole =
+  | 'Contributor'
+  | 'Contractor'
+  | 'Referrer'
+  | 'Partner'
+  | 'Co-founder'
+  | 'Stakeholder';
+
 export const ROLE_TO_DEMO: Record<OperationalParticipantRole, DemoParticipant['role']> = {
   Contributor: 'Contributor',
   Contractor: 'Contributor',
   Referrer: 'Introducer',
   Partner: 'Connector',
+  'Co-founder': 'Connector',
+  Stakeholder: 'Contributor',
 };
 
 const DEMO_TO_OPERATIONAL_LABEL: Record<DemoParticipant['role'], string> = {

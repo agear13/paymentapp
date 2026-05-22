@@ -13,11 +13,11 @@ export function MerchantSettingsShell({ variant }: MerchantSettingsShellProps) {
     <div className="space-y-6">
       <Card className="border-primary/15 bg-primary/[0.02]">
         <CardContent className="pt-6">
-          <WorkspaceActivationBanner />
+          <WorkspaceActivationBanner nextActionVariant="merchant-settings" />
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="provider-setup">
         <CardContent className="pt-6">
           <MerchantSettingsForm variant={variant} />
         </CardContent>

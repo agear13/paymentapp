@@ -1,5 +1,6 @@
 import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
 import { PAYOUTS_OBLIGATIONS_HREF, PAYOUTS_SETTLEMENTS_HREF } from '@/lib/navigation/operator-nav';
+import { projectParticipantsPath } from '@/lib/projects/project-routes';
 
 export type NextRecommendedAction = {
   id: string;
@@ -8,7 +9,16 @@ export type NextRecommendedAction = {
   href: string;
   ctaLabel: string;
   blockers?: string[];
+  /** When true, show guidance text only (no duplicate CTA button) */
+  instructionalOnly?: boolean;
 };
+
+function participantsManagementHref(activation: WorkspaceActivationSnapshot): string {
+  if (activation.primaryProjectId) {
+    return projectParticipantsPath(activation.primaryProjectId);
+  }
+  return '/dashboard/projects';
+}
 
 export function deriveNextRecommendedAction(
   activation: WorkspaceActivationSnapshot
@@ -17,7 +27,8 @@ export function deriveNextRecommendedAction(
     return {
       id: 'workspace',
       title: 'Create your workspace',
-      description: 'Set up your workspace name and default currency to begin coordinating payouts.',
+      description:
+        'Set up your workspace name and default currency to begin coordinating economic relationships.',
       href: '/onboarding',
       ctaLabel: 'Continue setup',
     };
@@ -27,9 +38,31 @@ export function deriveNextRecommendedAction(
     return {
       id: 'project',
       title: 'Create your first project',
-      description: 'Projects organize participants, obligations, revenue, and payout releases.',
+      description: 'Projects organize participants, compensation, obligations, and payout releases.',
       href: '/onboarding',
       ctaLabel: 'Create project',
+    };
+  }
+
+  if (activation.participantCount === 0) {
+    return {
+      id: 'participants',
+      title: 'Add participants to your project',
+      description: 'Participants define who participates in revenue and settlement coordination.',
+      href: participantsManagementHref(activation),
+      ctaLabel: 'Add participants',
+    };
+  }
+
+  if (!activation.participantsConfigured) {
+    return {
+      id: 'compensation',
+      title: 'Configure participant earnings',
+      description:
+        'Define how each participant gets paid before tracking obligations and settlement readiness.',
+      href: participantsManagementHref(activation),
+      ctaLabel: 'Configure earnings',
+      blockers: activation.activationBlockers,
     };
   }
 
@@ -38,19 +71,9 @@ export function deriveNextRecommendedAction(
       id: 'provider',
       title: 'Connect your first payment provider',
       description: 'Connect Stripe or another provider to collect revenue into your workspace.',
-      href: '/dashboard/settings/merchant?onboarding=continue',
+      href: '/dashboard/settings/merchant?onboarding=continue#provider-setup',
       ctaLabel: 'Connect provider',
       blockers: activation.activationBlockers,
-    };
-  }
-
-  if (!activation.obligationsCreated) {
-    return {
-      id: 'obligations',
-      title: 'Add your first obligation',
-      description: 'Record what participants are owed so payout readiness can be tracked.',
-      href: PAYOUTS_OBLIGATIONS_HREF,
-      ctaLabel: 'Review obligations',
     };
   }
 
@@ -64,6 +87,17 @@ export function deriveNextRecommendedAction(
     };
   }
 
+  if (!activation.obligationsCreated) {
+    return {
+      id: 'obligations',
+      title: 'Add your first obligation',
+      description:
+        'Record what participants are owed now that earnings structures and collection are in place.',
+      href: PAYOUTS_OBLIGATIONS_HREF,
+      ctaLabel: 'Add obligation',
+    };
+  }
+
   if (activation.releaseEligible) {
     return {
       id: 'release',
@@ -74,21 +108,27 @@ export function deriveNextRecommendedAction(
     };
   }
 
-  if (activation.participantCount === 0) {
-    return {
-      id: 'participants',
-      title: 'Add participants to your project',
-      description: 'Participants define who receives payouts from your workspace.',
-      href: '/dashboard/projects',
-      ctaLabel: 'Add participants',
-    };
-  }
-
   return {
     id: 'review',
     title: 'Review settlement readiness',
-    description: 'Check funding, approvals, and participant setup before your next release.',
+    description: 'Check funding, compensation, and participant setup before your next release.',
     href: PAYOUTS_OBLIGATIONS_HREF,
     ctaLabel: 'Review obligations',
   };
+}
+
+/** Merchant settings: provider form is on-page — avoid duplicate CTA */
+export function deriveMerchantSettingsNextAction(
+  activation: WorkspaceActivationSnapshot
+): NextRecommendedAction | null {
+  const base = deriveNextRecommendedAction(activation);
+  if (base.id === 'provider') {
+    return {
+      ...base,
+      instructionalOnly: true,
+      description:
+        'Complete provider setup in the form below. Stripe, Wise, and Hedera connect here.',
+    };
+  }
+  return base;
 }

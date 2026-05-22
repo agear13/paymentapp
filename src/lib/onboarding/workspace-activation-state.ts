@@ -10,6 +10,8 @@ export type WorkspaceActivationInput = {
   onboardingCompleted: boolean;
   projectCreated: boolean;
   participantCount: number;
+  participantsConfigured: boolean;
+  participantsConfiguredCount: number;
   obligationCount: number;
   paymentLinkCount: number;
   collectionPreferenceDecideLater: boolean;
@@ -19,6 +21,7 @@ export type WorkspaceActivationInput = {
   hederaConfigured: boolean;
   releaseEligibleCount: number;
   releaseBatchCount: number;
+  primaryProjectId: string | null;
 };
 
 function phaseFromInput(input: WorkspaceActivationInput): {
@@ -31,8 +34,14 @@ function phaseFromInput(input: WorkspaceActivationInput): {
   if (input.releaseEligibleCount > 0) {
     return { phase: 'ready_for_release', label: 'Ready for payout release' };
   }
-  if (input.obligationCount > 0 || input.participantCount > 0) {
+  if (input.obligationCount > 0) {
     return { phase: 'ready_to_coordinate', label: 'Ready to coordinate payouts' };
+  }
+  if (input.participantsConfigured && input.providerConnected) {
+    return { phase: 'ready_to_collect', label: 'Ready to collect revenue' };
+  }
+  if (input.participantCount > 0 || input.projectCreated) {
+    return { phase: 'setup_in_progress', label: 'Workspace setup in progress' };
   }
   if (
     input.stripeConfigured ||
@@ -52,8 +61,6 @@ function buildChecklist(input: WorkspaceActivationInput): ActivationChecklistIte
     providerConnected ||
     input.paymentLinkCount > 0 ||
     !input.collectionPreferenceDecideLater;
-  const currencyConfigured = Boolean(input.defaultCurrency?.trim());
-
   return [
     { id: 'workspace', label: 'Workspace created', complete: input.hasOrganization },
     { id: 'project', label: 'First project created', complete: input.projectCreated },
@@ -63,9 +70,9 @@ function buildChecklist(input: WorkspaceActivationInput): ActivationChecklistIte
       complete: input.participantCount > 0,
     },
     {
-      id: 'currency',
-      label: 'Default currency configured',
-      complete: currencyConfigured,
+      id: 'compensation',
+      label: 'Participant compensation configured',
+      complete: input.participantsConfigured,
     },
     { id: 'provider', label: 'Payment provider connected', complete: providerConnected },
     { id: 'revenue', label: 'Revenue collection ready', complete: revenueConfigured },
@@ -101,7 +108,10 @@ export function deriveWorkspaceActivation(
   const { phase, label } = phaseFromInput(input);
 
   const activationBlockers: string[] = [];
-  if (!providerConnected) {
+  if (input.participantCount > 0 && !input.participantsConfigured) {
+    activationBlockers.push('Configure how each participant earns before tracking obligations');
+  }
+  if (!providerConnected && input.participantsConfigured) {
     activationBlockers.push('Connect a payment provider to collect revenue');
   }
   if (input.projectCreated && input.participantCount === 0) {
@@ -115,11 +125,18 @@ export function deriveWorkspaceActivation(
   if (!input.defaultCurrency?.trim()) {
     setupWarnings.push('Default currency not configured');
   }
+  if (input.participantCount > 0 && !input.participantsConfigured) {
+    setupWarnings.push(
+      `${input.participantCount - input.participantsConfiguredCount} participant(s) need compensation configuration`
+    );
+  }
 
   return {
     workspaceCreated: input.hasOrganization,
     projectCreated: input.projectCreated,
     participantCount: input.participantCount,
+    participantsConfigured: input.participantsConfigured,
+    participantsConfiguredCount: input.participantsConfiguredCount,
     obligationsCreated: input.obligationCount > 0,
     obligationCount: input.obligationCount,
     revenueConfigured,
@@ -136,6 +153,7 @@ export function deriveWorkspaceActivation(
     checklist,
     activationBlockers,
     setupWarnings,
+    primaryProjectId: input.primaryProjectId,
   };
 }
 

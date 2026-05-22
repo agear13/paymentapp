@@ -24,13 +24,18 @@ import { ProjectParticipantTableRow } from '@/components/projects/project-partic
 import { EditProjectParticipantDialog } from '@/components/projects/edit-project-participant-dialog';
 import type { DemoParticipantRole } from '@/components/deal-network-demo/invite-participant-modal';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
-import { formatParticipantPayoutSummary } from '@/lib/projects/format-participant-payout-readiness';
+import { ProjectReadinessBreakdown } from '@/components/projects/project-readiness-breakdown';
+import { ParticipantCompensationDialog } from '@/components/projects/participant-compensation-dialog';
+import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
+import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
+import { countPayoutReadyParticipants } from '@/lib/participants/participant-readiness';
+import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 
 const ONBOARDING_CHECKLIST = [
   'Add participants',
-  'Configure participation',
+  'Configure compensation structures',
   'Send agreements',
-  'Complete payout onboarding',
+  'Complete payout destinations',
 ] as const;
 
 export function ProjectParticipantsView() {
@@ -50,6 +55,9 @@ export function ProjectParticipantsView() {
   } = useProjectWorkspace();
   const { organizationId } = useOrganization();
   const [inviteOpen, setInviteOpen] = React.useState(false);
+  const [editParticipant, setEditParticipant] = React.useState<DemoParticipant | null>(null);
+  const [compensationParticipant, setCompensationParticipant] =
+    React.useState<DemoParticipant | null>(null);
 
   useProjectWorkspaceSmartPolling({ enabled: Boolean(deal?.id), scope: 'participants' });
 
@@ -157,6 +165,46 @@ export function ProjectParticipantsView() {
     [allDeals, allParticipants, saveSnapshot]
   );
 
+  const saveCompensation = React.useCallback(
+    async (participantId: string, profile: ParticipantCompensationProfile) => {
+      const prev = projectParticipants.find((p) => p.id === participantId);
+      if (!prev) return;
+
+      const optimistic = applyCompensationProfileToParticipant(prev, profile);
+      const nextParticipants = allParticipants.map((p) =>
+        p.id === participantId ? optimistic : p
+      );
+      void saveSnapshot(allDeals, nextParticipants);
+
+      try {
+        const res = await fetch(`/api/deal-network-pilot/participants/${participantId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ compensationProfile: profile }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { error?: string }).error || 'Update failed');
+        }
+        toast.success('Compensation structure saved');
+        notifyWorkspaceActivationRefresh();
+        invalidate('participants');
+        await refreshSilent('participants');
+      } catch (e: unknown) {
+        void saveSnapshot(allDeals, allParticipants);
+        toast.error(e instanceof Error ? e.message : 'Update failed');
+      }
+    },
+    [
+      allDeals,
+      allParticipants,
+      invalidate,
+      projectParticipants,
+      refreshSilent,
+      saveSnapshot,
+    ]
+  );
+
   if (loading && !deal) {
     return null;
   }
@@ -164,7 +212,7 @@ export function ProjectParticipantsView() {
   if (!deal || !summary) return null;
 
   const stats = participantSummaryMetrics(projectParticipants);
-  const payoutState = formatParticipantPayoutSummary(stats.readyForPayout, stats.total);
+  const payoutReadyCount = countPayoutReadyParticipants(projectParticipants);
   const hasParticipants = projectParticipants.length > 0;
   const sectionError = sectionErrors.participants;
 
@@ -175,17 +223,25 @@ export function ProjectParticipantsView() {
         clearSectionError('participants');
         handleRefresh();
       }}
-      fallbackMessage={sectionError}
+      fallbackMessage={
+        sectionError ??
+        "We couldn't load participant payout configuration. Try refreshing or reopen participant management."
+      }
     >
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {hasParticipants
-                ? `${stats.total} stakeholder${stats.total === 1 ? '' : 's'} · ${payoutState}`
-                : 'Add participants to begin payout coordination'}
-            </p>
+            {hasParticipants ? (
+              <ProjectReadinessBreakdown
+                participants={projectParticipants}
+                className="mt-2"
+              />
+            ) : (
+              <p className="text-muted-foreground mt-1 text-sm">
+                Add participants, then configure how each earns before obligations or payout release.
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefreshing}>
@@ -223,7 +279,7 @@ export function ProjectParticipantsView() {
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Ready for payout</CardDescription>
-                <CardTitle className="text-2xl">{stats.readyForPayout}</CardTitle>
+                <CardTitle className="text-2xl">{payoutReadyCount}</CardTitle>
               </CardHeader>
             </Card>
             <Card>
@@ -294,6 +350,7 @@ export function ProjectParticipantsView() {
                       onCopyAgreement={copyAgreementLink}
                       onUpdateOnboarding={updateOnboarding}
                       onEdit={setEditParticipant}
+                      onConfigureCompensation={setCompensationParticipant}
                     />
                   ))}
                 </TableBody>
@@ -301,6 +358,18 @@ export function ProjectParticipantsView() {
             </CardContent>
           </Card>
         )}
+
+        <ParticipantCompensationDialog
+          participant={compensationParticipant}
+          open={Boolean(compensationParticipant)}
+          onOpenChange={(open) => {
+            if (!open) setCompensationParticipant(null);
+          }}
+          onSave={async (profile) => {
+            if (!compensationParticipant) return;
+            await saveCompensation(compensationParticipant.id, profile);
+          }}
+        />
 
         <EditProjectParticipantDialog
           participant={editParticipant}

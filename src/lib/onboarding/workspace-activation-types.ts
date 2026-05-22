@@ -8,9 +8,10 @@ export type ActivationChecklistItemId =
   | 'workspace'
   | 'project'
   | 'participants'
-  | 'currency'
+  | 'compensation'
   | 'provider'
   | 'revenue'
+  | 'currency'
   | 'obligations'
   | 'release';
 
@@ -24,6 +25,8 @@ export type WorkspaceActivationSnapshot = {
   workspaceCreated: boolean;
   projectCreated: boolean;
   participantCount: number;
+  participantsConfigured: boolean;
+  participantsConfiguredCount: number;
   obligationsCreated: boolean;
   obligationCount: number;
   revenueConfigured: boolean;
@@ -40,4 +43,6 @@ export type WorkspaceActivationSnapshot = {
   checklist: ActivationChecklistItem[];
   activationBlockers: string[];
   setupWarnings: string[];
+  /** First project for participant/compensation CTAs */
+  primaryProjectId: string | null;
 };

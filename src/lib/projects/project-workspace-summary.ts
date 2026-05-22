@@ -1,9 +1,6 @@
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import {
-  effectiveOnboardingStatus,
-  isOnboardingComplete,
-} from '@/lib/deal-network-demo/participant-onboarding';
+import { countPayoutReadyParticipants } from '@/lib/participants/participant-readiness';
 import { getProjectDisplayName } from '@/lib/projects/get-project-display-name';
 import { formatOperationalStage } from '@/lib/projects/format-operational-stage';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
@@ -78,9 +75,7 @@ export function summarizeProject(
   treasury?: ProjectTreasurySummary
 ): ProjectWorkspaceSummary {
   const dealParticipants = participantsForDeal(deal, participants);
-  const participantsReady = dealParticipants.filter((p) =>
-    isOnboardingComplete(effectiveOnboardingStatus(p))
-  ).length;
+  const participantsReady = countPayoutReadyParticipants(dealParticipants);
   const participantCount = dealParticipants.length;
   const participantsPending = Math.max(0, participantCount - participantsReady);
 

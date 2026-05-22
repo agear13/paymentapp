@@ -54,7 +54,14 @@ type InviteProjectParticipantModalProps = {
 
 type ModalStep = 1 | 2 | 'agreement';
 
-const ROLES: OperationalParticipantRole[] = ['Contributor', 'Contractor', 'Referrer', 'Partner'];
+const ROLES: OperationalParticipantRole[] = [
+  'Partner',
+  'Co-founder',
+  'Stakeholder',
+  'Contributor',
+  'Contractor',
+  'Referrer',
+];
 
 const PARTICIPATION_MODELS: {
   id: ProjectParticipationModel;

@@ -10,11 +10,13 @@ import { cn } from '@/lib/utils';
 type WorkspaceActivationBannerProps = {
   projectName?: string;
   showProgress?: boolean;
+  nextActionVariant?: 'default' | 'merchant-settings';
 };
 
 export function WorkspaceActivationBanner({
   projectName,
   showProgress = true,
+  nextActionVariant = 'default',
 }: WorkspaceActivationBannerProps) {
   const { activation, loading } = useWorkspaceActivation();
 
@@ -66,7 +68,7 @@ export function WorkspaceActivationBanner({
         ))}
       </ul>
 
-      <OnboardingNextActionCard />
+      <OnboardingNextActionCard variant={nextActionVariant} />
 
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline" size="sm">

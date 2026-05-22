@@ -35,13 +35,17 @@ export type ProjectParticipantTableRowProps = {
   onCopyAgreement: (p: DemoParticipant) => void;
   onUpdateOnboarding: (id: string, value: PilotParticipantOnboardingStatus | 'BLOCKED') => void;
   onEdit: (p: DemoParticipant) => void;
+  onConfigureCompensation: (p: DemoParticipant) => void;
 };
 
 function ProjectParticipantTableRowComponent({
   participant: p,
   onCopyAgreement,
   onUpdateOnboarding,
+  onEdit,
+  onConfigureCompensation,
 }: ProjectParticipantTableRowProps) {
+  const readiness = deriveParticipantReadiness(p);
   const invite = deriveInviteState(p);
   const participation = deriveParticipationLabel(p);
   const attribution = deriveAttributionStatus(p);
@@ -92,12 +96,21 @@ function ProjectParticipantTableRowComponent({
         <p className="text-muted-foreground mt-1 text-[10px]">{payoutOnboardingLabel(payoutOb)}</p>
       </TableCell>
       <TableCell className="text-sm text-muted-foreground">
-        {earningsStructureSummary(p)}
+        <button
+          type="button"
+          className="text-left hover:text-foreground underline-offset-2 hover:underline"
+          onClick={() => onConfigureCompensation(p)}
+        >
+          {earningsStructureSummary(p)}
+        </button>
       </TableCell>
       <TableCell className="text-right">
         <div className="flex flex-col items-end gap-1">
-          <Button variant="ghost" size="sm" onClick={() => onEdit(p)}>
+          <Button variant="ghost" size="sm" onClick={() => onConfigureCompensation(p)}>
             <Pencil className="mr-1 h-3.5 w-3.5" />
+            Earnings
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => onEdit(p)}>
             Edit
           </Button>
           <Button variant="ghost" size="sm" onClick={() => onCopyAgreement(p)}>

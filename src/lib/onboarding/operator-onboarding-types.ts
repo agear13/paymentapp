@@ -48,6 +48,9 @@ export type { CollectionPreferenceId } from '@/lib/onboarding/collection-prefere
 export { COLLECTION_PREFERENCES } from '@/lib/onboarding/collection-preference';
 
 export const ONBOARDING_PARTICIPANT_ROLES = [
+  { value: 'Partner', label: 'Partner', description: 'Economic partner with negotiated allocation' },
+  { value: 'Co-founder', label: 'Co-founder', description: 'Equity or profit-share relationship' },
+  { value: 'Stakeholder', label: 'Stakeholder', description: 'Observer or beneficiary without direct payout' },
   { value: 'Contractor', label: 'Contractor', description: 'Delivers contracted services and deliverables' },
   { value: 'Supplier', label: 'Supplier', description: 'Receives invoice-based payouts' },
   { value: 'Promoter', label: 'Promoter', description: 'Earns revenue share on event or campaign sales' },

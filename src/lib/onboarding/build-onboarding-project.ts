@@ -30,6 +30,9 @@ export function buildOnboardingProject(input: {
 }
 
 const ROLE_TO_MODEL: Record<OnboardingParticipantRole, ProjectParticipationModel> = {
+  Partner: 'revenue_share',
+  'Co-founder': 'revenue_share',
+  Stakeholder: 'fixed_payout',
   Contractor: 'fixed_payout',
   Supplier: 'fixed_payout',
   Promoter: 'revenue_share',
@@ -44,14 +47,18 @@ export function mapOnboardingRoleToOperational(
   role: OnboardingParticipantRole
 ): OperationalParticipantRole {
   switch (role) {
+    case 'Partner':
+    case 'Co-founder':
+    case 'Promoter':
+    case 'Venue':
+      return 'Partner';
+    case 'Stakeholder':
+      return 'Contributor';
     case 'Contractor':
     case 'Staff':
     case 'Performer':
     case 'Supplier':
       return 'Contractor';
-    case 'Promoter':
-    case 'Venue':
-      return 'Partner';
     case 'Affiliate':
     case 'Referrer':
       return 'Referrer';
