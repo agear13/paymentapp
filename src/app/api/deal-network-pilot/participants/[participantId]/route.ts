@@ -9,9 +9,25 @@ import {
 import { applyOnboardingSelectValue } from '@/lib/projects/participant-lifecycle';
 import type { PilotParticipantOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 
-const patchSchema = z.object({
-  onboardingStatus: z.enum(['NOT_STARTED', 'INCOMPLETE', 'COMPLETE', 'BLOCKED']).optional(),
-});
+const patchSchema = z
+  .object({
+    onboardingStatus: z.enum(['NOT_STARTED', 'INCOMPLETE', 'COMPLETE', 'BLOCKED']).optional(),
+    name: z.string().min(1).max(255).optional(),
+    email: z.string().email().max(255).optional().or(z.literal('')),
+    role: z.enum(['Introducer', 'Connector', 'Closer', 'Contributor']).optional(),
+    roleDetails: z.string().max(2000).optional(),
+    agreementNotes: z.string().max(2000).optional(),
+  })
+  .refine(
+    (body) =>
+      body.onboardingStatus != null ||
+      body.name != null ||
+      body.email != null ||
+      body.role != null ||
+      body.roleDetails != null ||
+      body.agreementNotes != null,
+    { message: 'No updates provided' }
+  );
 
 /**
  * PATCH /api/deal-network-pilot/participants/[participantId]
@@ -26,25 +42,32 @@ export async function PATCH(
     const { participantId } = await context.params;
     const body = patchSchema.parse(await request.json());
 
-    if (!body.onboardingStatus) {
-      return NextResponse.json({ error: 'No updates provided' }, { status: 400 });
-    }
-
     const snapshot = await getPilotSnapshotForUser(user.id);
     const existing = snapshot.participants.find((p) => p.id === participantId);
     if (!existing) {
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
     }
 
-    const patched = applyOnboardingSelectValue(
-      existing,
-      body.onboardingStatus as PilotParticipantOnboardingStatus | 'BLOCKED'
-    );
+    let working = existing;
+    if (body.onboardingStatus) {
+      working = applyOnboardingSelectValue(
+        working,
+        body.onboardingStatus as PilotParticipantOnboardingStatus | 'BLOCKED'
+      );
+    }
 
-    const persisted = await updatePilotParticipantPayload(participantId, user.id, {
-      onboardingStatus: patched.onboardingStatus,
-      payoutBlocked: patched.payoutBlocked,
-    });
+    const payloadPatch: Parameters<typeof updatePilotParticipantPayload>[2] = {};
+    if (body.onboardingStatus) {
+      payloadPatch.onboardingStatus = working.onboardingStatus;
+      payloadPatch.payoutBlocked = working.payoutBlocked;
+    }
+    if (body.name != null) payloadPatch.name = body.name.trim();
+    if (body.email != null) payloadPatch.email = body.email.trim();
+    if (body.role != null) payloadPatch.role = body.role;
+    if (body.roleDetails != null) payloadPatch.roleDetails = body.roleDetails;
+    if (body.agreementNotes != null) payloadPatch.agreementNotes = body.agreementNotes;
+
+    const persisted = await updatePilotParticipantPayload(participantId, user.id, payloadPatch);
 
     if (!persisted) {
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 });

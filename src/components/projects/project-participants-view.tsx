@@ -21,6 +21,8 @@ import type { PilotParticipantOnboardingStatus } from '@/lib/deal-network-demo/p
 import { useProjectWorkspaceSmartPolling } from '@/hooks/use-project-workspace-refresh';
 import { ProjectSectionErrorBoundary } from '@/components/projects/project-section-error-boundary';
 import { ProjectParticipantTableRow } from '@/components/projects/project-participant-table-row';
+import { EditProjectParticipantDialog } from '@/components/projects/edit-project-participant-dialog';
+import type { DemoParticipantRole } from '@/components/deal-network-demo/invite-participant-modal';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import { formatParticipantPayoutSummary } from '@/lib/projects/format-participant-payout-readiness';
 
@@ -88,6 +90,61 @@ export function ProjectParticipantsView() {
       }
     },
     [invalidate, refreshSilent]
+  );
+
+  const updateParticipantDetails = React.useCallback(
+    async (
+      participantId: string,
+      patch: {
+        name: string;
+        email: string;
+        role: DemoParticipantRole;
+        roleDetails?: string;
+        agreementNotes?: string;
+      }
+    ) => {
+      const prev = projectParticipants.find((p) => p.id === participantId);
+      if (!prev) return;
+
+      const optimistic: DemoParticipant = {
+        ...prev,
+        name: patch.name,
+        email: patch.email,
+        role: patch.role,
+        roleDetails: patch.roleDetails,
+        agreementNotes: patch.agreementNotes,
+      };
+      const nextParticipants = allParticipants.map((p) =>
+        p.id === participantId ? optimistic : p
+      );
+      void saveSnapshot(allDeals, nextParticipants);
+
+      try {
+        const res = await fetch(`/api/deal-network-pilot/participants/${participantId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { error?: string }).error || 'Update failed');
+        }
+        toast.success('Participant updated');
+        invalidate('participants');
+        await refreshSilent('participants');
+      } catch (e: unknown) {
+        void saveSnapshot(allDeals, allParticipants);
+        toast.error(e instanceof Error ? e.message : 'Update failed');
+      }
+    },
+    [
+      allDeals,
+      allParticipants,
+      invalidate,
+      projectParticipants,
+      refreshSilent,
+      saveSnapshot,
+    ]
   );
 
   const handleInvite = React.useCallback(
@@ -236,6 +293,7 @@ export function ProjectParticipantsView() {
                       participant={p}
                       onCopyAgreement={copyAgreementLink}
                       onUpdateOnboarding={updateOnboarding}
+                      onEdit={setEditParticipant}
                     />
                   ))}
                 </TableBody>
@@ -243,6 +301,18 @@ export function ProjectParticipantsView() {
             </CardContent>
           </Card>
         )}
+
+        <EditProjectParticipantDialog
+          participant={editParticipant}
+          open={Boolean(editParticipant)}
+          onOpenChange={(open) => {
+            if (!open) setEditParticipant(null);
+          }}
+          onSave={async (patch) => {
+            if (!editParticipant) return;
+            await updateParticipantDetails(editParticipant.id, patch);
+          }}
+        />
 
         <InviteProjectParticipantModal
           open={inviteOpen}

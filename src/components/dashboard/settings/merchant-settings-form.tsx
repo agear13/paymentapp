@@ -36,17 +36,8 @@ import {
   maskWiseProfileId,
 } from '@/lib/settings/mask-credential';
 
-// ISO 4217 Currency codes - common ones
-const currencies = [
-  { code: 'USD', name: 'US Dollar' },
-  { code: 'EUR', name: 'Euro' },
-  { code: 'GBP', name: 'British Pound' },
-  { code: 'AUD', name: 'Australian Dollar' },
-  { code: 'CAD', name: 'Canadian Dollar' },
-  { code: 'JPY', name: 'Japanese Yen' },
-  { code: 'SGD', name: 'Singapore Dollar' },
-  { code: 'NZD', name: 'New Zealand Dollar' },
-];
+import { WORKSPACE_CURRENCIES, DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
+import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 
 const merchantSettingsSchema = z.object({
   displayName: z.string().min(2, 'Display name must be at least 2 characters').max(255),
@@ -118,7 +109,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
     defaultValues: {
       displayName: '',
       organizationLogoUrl: '',
-      defaultCurrency: 'USD',
+      defaultCurrency: DEFAULT_WORKSPACE_CURRENCY,
       stripeAccountId: '',
       hederaAccountId: '',
       wiseProfileId: '',
@@ -146,7 +137,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
             form.reset({
               displayName: settings.display_name || '',
               organizationLogoUrl: settings.organization_logo_url || '',
-              defaultCurrency: settings.default_currency || 'USD',
+              defaultCurrency: settings.default_currency || DEFAULT_WORKSPACE_CURRENCY,
               stripeAccountId: settings.stripe_account_id || '',
               hederaAccountId: settings.hedera_account_id || '',
               wiseProfileId: settings.wise_profile_id || '',
@@ -299,14 +290,15 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
           throw new Error('Failed to update settings');
         }
 
-        toast.success(isPilotVariant ? 'Settings saved' : 'Merchant settings updated successfully');
+        toast.success(isPilotVariant ? 'Settings saved' : 'Collection settings saved');
+        notifyWorkspaceActivationRefresh();
       } else {
         // Create new settings
         const createPayload = isPilotVariant
           ? {
               organizationId,
               displayName: 'Rabbit Hole Merchant',
-              defaultCurrency: 'USD',
+              defaultCurrency: DEFAULT_WORKSPACE_CURRENCY,
               stripeAccountId: data.stripeAccountId || undefined,
               wiseProfileId: data.wiseProfileId || undefined,
               hederaAccountId: data.hederaAccountId || undefined,
@@ -335,7 +327,8 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
 
         const result = await response.json();
         setSettingsId(result.id);
-        toast.success(isPilotVariant ? 'Settings saved' : 'Merchant settings created successfully');
+        toast.success(isPilotVariant ? 'Settings saved' : 'Collection settings saved');
+        notifyWorkspaceActivationRefresh();
       }
     } catch (error) {
       toast.error('Failed to save merchant settings');
@@ -559,7 +552,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {currencies.map((currency) => (
+                  {WORKSPACE_CURRENCIES.map((currency) => (
                     <SelectItem key={currency.code} value={currency.code}>
                       {currency.code} - {currency.name}
                     </SelectItem>
@@ -730,7 +723,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="__default__">Use default currency</SelectItem>
-                        {currencies.map((currency) => (
+                        {WORKSPACE_CURRENCIES.map((currency) => (
                           <SelectItem key={currency.code} value={currency.code}>
                             {currency.code} - {currency.name}
                           </SelectItem>

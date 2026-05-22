@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowRight, FileCheck, Link2, Settings, Wallet } from 'lucide-react';
-import { PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
+import { ArrowRight, Loader2 } from 'lucide-react';
+import { OnboardingNextActionCard } from '@/components/onboarding/onboarding-next-action-card';
+import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 import { getProjectDisplayName, UNTITLED_PROJECT_LABEL } from '@/lib/projects/get-project-display-name';
 
 const PREVIEW_ROWS = [
@@ -58,40 +59,15 @@ const FUNDING_BADGE = {
   red: 'text-red-700 bg-red-50 border-red-200',
 };
 
-const NEXT_STEPS = [
-  {
-    title: 'Connect your first payment provider',
-    description: 'Accept payments and fund obligations.',
-    href: '/dashboard/settings/merchant?onboarding=continue',
-    icon: Settings,
-  },
-  {
-    title: 'Add your first obligation',
-    description: 'Track what each participant is owed.',
-    href: PAYOUTS_OBLIGATIONS_HREF,
-    icon: FileCheck,
-  },
-  {
-    title: 'Create your first revenue entry',
-    description: 'Invoice clients or collect booking payments.',
-    href: '/dashboard/payment-links',
-    icon: Link2,
-  },
-  {
-    title: 'Review settlement readiness',
-    description: 'See what can and cannot be paid yet.',
-    href: PAYOUTS_OBLIGATIONS_HREF,
-    icon: Wallet,
-  },
-] as const;
-
 type OnboardingWorkspacePreviewProps = {
   projectName?: string;
 };
 
 export function OnboardingWorkspacePreview({ projectName }: OnboardingWorkspacePreviewProps) {
+  const { activation, nextAction, loading } = useWorkspaceActivation();
   const resolvedName = getProjectDisplayName({ dealName: projectName });
   const label = resolvedName !== UNTITLED_PROJECT_LABEL ? resolvedName : 'Your first project';
+  const phaseLabel = activation?.phaseLabel ?? 'Workspace setup in progress';
 
   return (
     <Card className="border-primary/25 bg-primary/[0.03]">
@@ -99,7 +75,7 @@ export function OnboardingWorkspacePreview({ projectName }: OnboardingWorkspaceP
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <Badge variant="secondary" className="mb-2">
-              Workspace ready
+              {loading ? 'Loading status…' : phaseLabel}
             </Badge>
             <CardTitle className="text-xl">
               Your operational coordination workspace is ready
@@ -164,22 +140,25 @@ export function OnboardingWorkspacePreview({ projectName }: OnboardingWorkspaceP
 
         <div>
           <h3 className="text-sm font-semibold mb-3">Suggested next steps</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {NEXT_STEPS.map((step) => (
-              <Link
-                key={step.title}
-                href={step.href}
-                className="flex gap-3 rounded-lg border bg-background p-4 transition-colors hover:bg-accent/40"
-              >
-                <step.icon className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{step.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 self-center" />
-              </Link>
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading recommendations…
+            </div>
+          ) : nextAction ? (
+            <Link
+              href={nextAction.href}
+              className="flex gap-3 rounded-lg border bg-background p-4 transition-colors hover:bg-accent/40"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{nextAction.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{nextAction.description}</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 self-center" />
+            </Link>
+          ) : (
+            <OnboardingNextActionCard />
+          )}
         </div>
       </CardContent>
     </Card>

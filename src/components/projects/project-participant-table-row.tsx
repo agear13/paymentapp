@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Copy } from 'lucide-react';
+import { Copy, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TableCell, TableRow } from '@/components/ui/table';
@@ -34,6 +34,7 @@ export type ProjectParticipantTableRowProps = {
   participant: DemoParticipant;
   onCopyAgreement: (p: DemoParticipant) => void;
   onUpdateOnboarding: (id: string, value: PilotParticipantOnboardingStatus | 'BLOCKED') => void;
+  onEdit: (p: DemoParticipant) => void;
 };
 
 function ProjectParticipantTableRowComponent({
@@ -95,6 +96,10 @@ function ProjectParticipantTableRowComponent({
       </TableCell>
       <TableCell className="text-right">
         <div className="flex flex-col items-end gap-1">
+          <Button variant="ghost" size="sm" onClick={() => onEdit(p)}>
+            <Pencil className="mr-1 h-3.5 w-3.5" />
+            Edit
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => onCopyAgreement(p)}>
             <Copy className="mr-1 h-3.5 w-3.5" />
             Agreement

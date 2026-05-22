@@ -13,7 +13,18 @@ import { COLLECTION_PREFERENCE_VALUES } from '@/lib/onboarding/collection-prefer
 const patchSchema = z.object({
   organizationId: z.string().uuid(),
   state: z.object({
-    step: z.enum(['use_case', 'project', 'participants', 'funding', 'payment_rails', 'complete']),
+    step: z.enum([
+      'workspace',
+      'use_case',
+      'project',
+      'participants',
+      'funding',
+      'payment_rails',
+      'complete',
+    ]),
+    workspace_name: z.string().optional(),
+    workspace_industry: z.string().optional(),
+    workspace_team_size: z.string().optional(),
     onboarding_use_case: z.string().optional(),
     onboarding_context: z.string().optional(),
     collection_preference: z.enum(COLLECTION_PREFERENCE_VALUES).optional(),

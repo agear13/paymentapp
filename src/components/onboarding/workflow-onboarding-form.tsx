@@ -60,21 +60,31 @@ import {
   onboardingStepLabel,
   onboardingStepTitle,
   onboardingStepSubtext,
+  normalizeOnboardingStep,
   type OnboardingStep,
   type OnboardingUseCaseId,
   type OnboardingParticipantRole,
   type CollectionPreferenceId,
 } from '@/lib/onboarding/operator-onboarding-types';
+import {
+  WORKSPACE_CURRENCIES,
+  DEFAULT_WORKSPACE_CURRENCY,
+} from '@/lib/currency/workspace-currencies';
+import {
+  OnboardingParticipantCard,
+  type OnboardingDraftParticipant,
+} from '@/components/onboarding/onboarding-participant-card';
+import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
+import { OnboardingProviderChecklist } from '@/components/onboarding/onboarding-provider-checklist';
 
 const STORAGE_KEY = 'provvypay.onboarding.draft';
 
-const currencies = [
-  { code: 'USD', name: 'US Dollar' },
-  { code: 'AUD', name: 'Australian Dollar' },
-  { code: 'EUR', name: 'Euro' },
-  { code: 'GBP', name: 'British Pound' },
-  { code: 'CAD', name: 'Canadian Dollar' },
-];
+const workspaceSchema = z.object({
+  workspaceName: z.string().min(2, 'Workspace name is required').max(255),
+  defaultCurrency: z.string().length(3),
+  industry: z.string().max(120).optional(),
+  teamSize: z.string().max(64).optional(),
+});
 
 const projectSchema = z.object({
   projectName: z.string().min(2, 'Project name is required').max(255),
@@ -91,11 +101,7 @@ const railsSchema = z.object({
 type ProjectFormValues = z.infer<typeof projectSchema>;
 type RailsFormValues = z.infer<typeof railsSchema>;
 
-type DraftParticipant = {
-  name: string;
-  email: string;
-  role: OnboardingParticipantRole;
-};
+type DraftParticipant = OnboardingDraftParticipant;
 
 const EMPTY_PARTICIPANT = (): DraftParticipant => ({
   name: '',
@@ -185,7 +191,7 @@ function CompactOnboardingHeader({ step }: { step: OnboardingStep }) {
 
 export function WorkflowOnboardingForm() {
   const router = useRouter();
-  const [step, setStep] = React.useState<OnboardingStep>('use_case');
+  const [step, setStep] = React.useState<OnboardingStep>('workspace');
   const [isLoading, setIsLoading] = React.useState(false);
   const [useCase, setUseCase] = React.useState<OnboardingUseCaseId | null>(null);
   const [selectedUseCase, setSelectedUseCase] = React.useState<OnboardingUseCaseId | null>(null);
@@ -207,13 +213,23 @@ export function WorkflowOnboardingForm() {
     setCopilotOpen(true);
   }
 
+  const workspaceForm = useForm<z.infer<typeof workspaceSchema>>({
+    resolver: zodResolver(workspaceSchema),
+    defaultValues: {
+      workspaceName: '',
+      defaultCurrency: DEFAULT_WORKSPACE_CURRENCY,
+      industry: '',
+      teamSize: '',
+    },
+  });
+
   const projectForm = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
     defaultValues: {
       projectName: '',
       description: '',
       estimatedValue: '',
-      defaultCurrency: 'USD',
+      defaultCurrency: DEFAULT_WORKSPACE_CURRENCY,
     },
   });
 
@@ -250,14 +266,16 @@ export function WorkflowOnboardingForm() {
           };
         };
         const payload = data.data ?? data;
-        if (!payload?.hasOrganization) return;
-
+        const hasOrg = Boolean(payload?.hasOrganization);
         if (payload.organizationId) {
           setOrganizationId(payload.organizationId);
           window.localStorage.setItem('provvypay.organizationId', payload.organizationId);
           setOrgCookie();
         }
         const state = payload.state;
+        if (state?.workspace_name) {
+          workspaceForm.setValue('workspaceName', state.workspace_name);
+        }
         if (state?.onboarding_use_case) {
           setUseCase(state.onboarding_use_case);
           setSelectedUseCase(state.onboarding_use_case);
@@ -268,7 +286,9 @@ export function WorkflowOnboardingForm() {
         if (state?.merchantSettingsId) setMerchantSettingsId(state.merchantSettingsId);
         if (state?.projectId) setProjectId(state.projectId);
         if (state?.step && state.step !== 'complete') {
-          setStep(state.step);
+          setStep(normalizeOnboardingStep(state.step, hasOrg));
+        } else if (!hasOrg) {
+          setStep('workspace');
         }
       } catch {
         /* resume optional */
@@ -277,7 +297,56 @@ export function WorkflowOnboardingForm() {
   }, []);
 
   const selectedUseCaseMeta = ONBOARDING_USE_CASES.find((u) => u.id === useCase);
-  const isWelcomeStep = step === 'use_case';
+  const isWelcomeStep = step === 'workspace' || step === 'use_case';
+
+  async function onWorkspaceSubmit(values: z.infer<typeof workspaceSchema>) {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/onboarding/bootstrap-workspace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceName: values.workspaceName,
+          defaultCurrency: values.defaultCurrency,
+          industry: values.industry,
+          teamSize: values.teamSize,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create workspace');
+      }
+      const payload = await res.json();
+      const data = payload.data ?? payload;
+      setOrganizationId(data.organizationId);
+      setMerchantSettingsId(data.merchantSettingsId);
+      window.localStorage.setItem('provvypay.organizationId', data.organizationId);
+      setOrgCookie();
+      projectForm.setValue('defaultCurrency', values.defaultCurrency);
+      toast.success('Workspace created');
+      await fetch('/api/onboarding', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: data.organizationId,
+          state: {
+            step: 'use_case',
+            workspace_name: values.workspaceName,
+            workspace_industry: values.industry,
+            workspace_team_size: values.teamSize,
+            organizationId: data.organizationId,
+            merchantSettingsId: data.merchantSettingsId,
+          },
+        }),
+      });
+      setStep('use_case');
+      notifyWorkspaceActivationRefresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to create workspace');
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   async function persistState(nextStep: OnboardingStep, extra?: Record<string, unknown>) {
     if (!organizationId) return;
@@ -329,15 +398,17 @@ export function WorkflowOnboardingForm() {
     }
     const params = new URLSearchParams({ workspace: 'ready' });
     if (projectName.trim()) params.set('project', projectName.trim());
+    notifyWorkspaceActivationRefresh();
     router.push(`/dashboard?${params.toString()}`);
     router.refresh();
   }
 
-  function handleUseCaseContinue() {
+  async function handleUseCaseContinue() {
     if (!selectedUseCase) return;
     setUseCase(selectedUseCase);
     const meta = ONBOARDING_USE_CASES.find((u) => u.id === selectedUseCase);
     saveDraft({ useCase: selectedUseCase, context: meta?.title });
+    await persistState('project');
     setStep('project');
   }
 
@@ -463,6 +534,8 @@ export function WorkflowOnboardingForm() {
     if (!res.ok) {
       throw new Error('Failed to save provider settings');
     }
+    notifyWorkspaceActivationRefresh();
+    toast.success('Provider settings saved');
   }
 
   async function finishOnboardingWithProviders() {
@@ -478,6 +551,90 @@ export function WorkflowOnboardingForm() {
 
   const stepBody = (
     <>
+      {step === 'workspace' && (
+        <div className="space-y-6">
+          <p className="text-muted-foreground text-sm">
+            This workspace coordinates revenue, obligations, approvals, and payouts across your
+            projects. You can create additional projects later.
+          </p>
+          <Form {...workspaceForm}>
+            <form
+              onSubmit={workspaceForm.handleSubmit(onWorkspaceSubmit)}
+              className="space-y-4"
+            >
+              <FormField
+                control={workspaceForm.control}
+                name="workspaceName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Workspace name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Island Events Co." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={workspaceForm.control}
+                name="defaultCurrency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Default currency</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select currency" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {WORKSPACE_CURRENCIES.map((c) => (
+                          <SelectItem key={c.code} value={c.code}>
+                            {c.code} — {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={workspaceForm.control}
+                name="industry"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Industry (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Events, agencies, marketplaces…" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={workspaceForm.control}
+                name="teamSize"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Team size (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="1–5, 6–20, 20+" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end pt-2">
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Continue
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </div>
+      )}
+
       {step === 'use_case' && (
         <div className="space-y-6">
           <div>
@@ -574,34 +731,11 @@ export function WorkflowOnboardingForm() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={projectForm.control}
-                  name="defaultCurrency"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Default currency</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {currencies.map((c) => (
-                            <SelectItem key={c.code} value={c.code}>
-                              {c.code} · {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        Currency can be changed later per invoice or payment.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
+              <p className="text-xs text-muted-foreground">
+                Default currency: {projectForm.watch('defaultCurrency')} (set in workspace setup).
+                Change it anytime under Collection & settlement setup.
+              </p>
               <div className="flex justify-between pt-2">
                 <Button type="button" variant="ghost" onClick={() => setStep('use_case')}>
                   Back
@@ -625,23 +759,20 @@ export function WorkflowOnboardingForm() {
           </p>
 
           {confirmedParticipants.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-2">
               {confirmedParticipants.map((p, index) => (
-                <Badge key={`${p.name}-${index}`} variant="secondary" className="gap-2 py-1.5 px-3">
-                  <span>
-                    {p.name} · {p.role}
-                  </span>
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() =>
-                      setConfirmedParticipants(confirmedParticipants.filter((_, i) => i !== index))
-                    }
-                    aria-label={`Remove ${p.name}`}
-                  >
-                    ×
-                  </button>
-                </Badge>
+                <OnboardingParticipantCard
+                  key={`${p.name}-${index}`}
+                  participant={p}
+                  onUpdate={(next) => {
+                    setConfirmedParticipants((prev) =>
+                      prev.map((row, i) => (i === index ? next : row))
+                    );
+                  }}
+                  onRemove={() =>
+                    setConfirmedParticipants(confirmedParticipants.filter((_, i) => i !== index))
+                  }
+                />
               ))}
             </div>
           ) : null}
@@ -749,6 +880,7 @@ export function WorkflowOnboardingForm() {
 
       {step === 'payment_rails' && (
         <div className="space-y-6">
+          <OnboardingProviderChecklist />
           <Card className="p-5 border-primary/20 bg-primary/[0.03]">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

@@ -36,6 +36,7 @@ export const ONBOARDING_USE_CASES = [
 export type OnboardingUseCaseId = (typeof ONBOARDING_USE_CASES)[number]['id'];
 
 export type OnboardingStep =
+  | 'workspace'
   | 'use_case'
   | 'project'
   | 'participants'
@@ -65,6 +66,9 @@ export const ONBOARDING_PARTICIPANT_ROLE_VALUES = ONBOARDING_PARTICIPANT_ROLES.m
 
 export type OperatorOnboardingState = {
   step: OnboardingStep;
+  workspace_name?: string;
+  workspace_industry?: string;
+  workspace_team_size?: string;
   onboarding_use_case?: OnboardingUseCaseId;
   onboarding_context?: string;
   collection_preference?: CollectionPreferenceId;
@@ -76,12 +80,32 @@ export type OperatorOnboardingState = {
 };
 
 export const ONBOARDING_STEP_ORDER: OnboardingStep[] = [
+  'workspace',
   'use_case',
   'project',
   'participants',
   'funding',
   'payment_rails',
 ];
+
+const LEGACY_STEP_MAP: Record<string, OnboardingStep> = {
+  use_case: 'use_case',
+  project: 'project',
+  participants: 'participants',
+  funding: 'funding',
+  payment_rails: 'payment_rails',
+  complete: 'complete',
+};
+
+/** Normalize persisted steps for users mid-migration */
+export function normalizeOnboardingStep(
+  step: string | undefined,
+  hasOrganization: boolean
+): OnboardingStep {
+  if (!hasOrganization) return 'workspace';
+  if (!step) return 'use_case';
+  return LEGACY_STEP_MAP[step] ?? 'use_case';
+}
 
 export function onboardingStepIndex(step: OnboardingStep): number {
   if (step === 'complete') return ONBOARDING_STEP_ORDER.length;
@@ -90,16 +114,18 @@ export function onboardingStepIndex(step: OnboardingStep): number {
 
 export function onboardingStepLabel(step: OnboardingStep): string {
   switch (step) {
+    case 'workspace':
+      return 'Create workspace';
     case 'use_case':
-      return 'Define use case';
+      return 'Choose workflow';
     case 'project':
       return 'Create project';
     case 'participants':
       return 'Add participants';
     case 'funding':
-      return 'How you collect revenue';
+      return 'Collection method';
     case 'payment_rails':
-      return 'Payment methods';
+      return 'Payment providers';
     case 'complete':
       return 'Complete';
   }
@@ -107,6 +133,8 @@ export function onboardingStepLabel(step: OnboardingStep): string {
 
 export function onboardingStepTitle(step: OnboardingStep): string {
   switch (step) {
+    case 'workspace':
+      return 'Create your workspace';
     case 'use_case':
       return 'What are you coordinating?';
     case 'project':
@@ -124,10 +152,12 @@ export function onboardingStepTitle(step: OnboardingStep): string {
 
 export function onboardingStepSubtext(step: OnboardingStep): string | null {
   switch (step) {
+    case 'workspace':
+      return 'This workspace coordinates revenue, obligations, approvals, and payouts across your projects. You can create additional projects later.';
     case 'funding':
-      return 'All collection methods feed into the same project settlement workspace.';
+      return 'All collection methods feed into the same project payout workspace.';
     case 'payment_rails':
-      return 'Connect providers when you are ready to collect and settle funds. You can configure these anytime in Settings.';
+      return 'Connect providers when you are ready to collect and release payouts. You can configure these anytime in Settings.';
     default:
       return null;
   }

@@ -4,26 +4,19 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
 import { prisma } from '@/lib/server/prisma';
-import { buildOnboardingProject } from '@/lib/onboarding/build-onboarding-project';
-import {
-  getPilotSnapshotForUser,
-  syncPilotSnapshotForUser,
-} from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { saveOperatorOnboardingState } from '@/lib/onboarding/operator-onboarding.server';
-import type { OnboardingUseCaseId } from '@/lib/onboarding/operator-onboarding-types';
+import { DEFAULT_WORKSPACE_CURRENCY, isWorkspaceCurrencyCode } from '@/lib/currency/workspace-currencies';
 
 const schema = z.object({
-  projectName: z.string().min(2).max(255),
-  description: z.string().max(2000).optional(),
-  estimatedValue: z.number().nonnegative().optional(),
+  workspaceName: z.string().min(2).max(255),
   defaultCurrency: z.string().length(3),
-  onboarding_use_case: z.string().optional(),
-  onboarding_context: z.string().optional(),
+  industry: z.string().max(120).optional(),
+  teamSize: z.string().max(64).optional(),
 });
 
 /**
- * POST /api/onboarding/bootstrap-project
- * Creates organization + merchant settings + first project, or adds project when org already exists.
+ * POST /api/onboarding/bootstrap-workspace
+ * Creates workspace (organization + merchant settings) before project setup.
  */
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -36,49 +29,44 @@ export async function POST(request: NextRequest) {
     return error;
   }
 
-  const project = buildOnboardingProject({
-    projectName: body.projectName,
-    description: body.description,
-    estimatedValue: body.estimatedValue,
-    currency: body.defaultCurrency as 'USD',
-  });
+  const currency = isWorkspaceCurrencyCode(body.defaultCurrency)
+    ? body.defaultCurrency
+    : DEFAULT_WORKSPACE_CURRENCY;
 
-  const useCaseLabel = body.onboarding_use_case as OnboardingUseCaseId | undefined;
   const existingOrg = await getOrganizationForAuthenticatedUser(user.id);
-
   if (existingOrg) {
-    const snapshot = await getPilotSnapshotForUser(user.id);
-    const deals = [...snapshot.deals.filter((d) => d.id !== project.id), project];
-    await syncPilotSnapshotForUser(user.id, deals, snapshot.participants);
-
     const settings = await prisma.merchant_settings.findFirst({
       where: { organization_id: existingOrg.id },
       select: { id: true },
     });
 
-    await saveOperatorOnboardingState(existingOrg.id, user.id, {
-      step: 'participants',
-      onboarding_use_case: useCaseLabel,
-      onboarding_context: body.onboarding_context,
-      organizationId: existingOrg.id,
-      merchantSettingsId: settings?.id,
-      projectId: project.id,
+    await prisma.merchant_settings.updateMany({
+      where: { organization_id: existingOrg.id },
+      data: {
+        display_name: body.workspaceName.trim(),
+        default_currency: currency,
+      },
     });
 
-    return apiResponse(
-      {
-        organizationId: existingOrg.id,
-        merchantSettingsId: settings?.id ?? null,
-        projectId: project.id,
-      },
-      200
-    );
+    await saveOperatorOnboardingState(existingOrg.id, user.id, {
+      step: 'use_case',
+      workspace_name: body.workspaceName.trim(),
+      workspace_industry: body.industry,
+      workspace_team_size: body.teamSize,
+      organizationId: existingOrg.id,
+      merchantSettingsId: settings?.id,
+    });
+
+    return apiResponse({
+      organizationId: existingOrg.id,
+      merchantSettingsId: settings?.id ?? null,
+    });
   }
 
   const result = await prisma.$transaction(async (tx) => {
     const organization = await tx.organizations.create({
       data: {
-        name: 'Workspace',
+        name: body.workspaceName.trim(),
         clerk_org_id: `onb_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       },
     });
@@ -94,30 +82,27 @@ export async function POST(request: NextRequest) {
     const settings = await tx.merchant_settings.create({
       data: {
         organization_id: organization.id,
-        display_name: 'Workspace',
-        default_currency: body.defaultCurrency,
+        display_name: body.workspaceName.trim(),
+        default_currency: currency,
       },
     });
 
     return { organization, settings };
   });
 
-  await syncPilotSnapshotForUser(user.id, [project], []);
-
   await saveOperatorOnboardingState(result.organization.id, user.id, {
-    step: 'participants',
-    onboarding_use_case: useCaseLabel,
-    onboarding_context: body.onboarding_context,
+    step: 'use_case',
+    workspace_name: body.workspaceName.trim(),
+    workspace_industry: body.industry,
+    workspace_team_size: body.teamSize,
     organizationId: result.organization.id,
     merchantSettingsId: result.settings.id,
-    projectId: project.id,
   });
 
   return apiResponse(
     {
       organizationId: result.organization.id,
       merchantSettingsId: result.settings.id,
-      projectId: project.id,
     },
     201
   );

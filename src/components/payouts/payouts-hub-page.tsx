@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, CircleDollarSign, FileCheck, History } from 'lucide-react';
 import { PayoutHowItWorksCard } from '@/components/payouts/payout-lifecycle-explainer';
+import { PayoutsHubActivationGuide } from '@/components/payouts/payouts-hub-activation-guide';
 import { PayoutsNeedsAttentionStrip } from '@/components/payouts/payouts-needs-attention-strip';
 import { PAYOUT_TRUST_COPY } from '@/lib/payouts/payout-trust-copy';
 import {
@@ -39,6 +40,8 @@ export function PayoutsHubPage() {
       </div>
 
       <PayoutsNeedsAttentionStrip />
+
+      <PayoutsHubActivationGuide />
 
       <nav className="divide-y divide-border/30" aria-label="Payout sections">
         {HUB_LINKS.map((link) => (
