@@ -1,16 +1,26 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
 import { prisma } from '@/lib/server/prisma';
-import { buildOnboardingProject } from '@/lib/onboarding/build-onboarding-project';
+import { buildOnboardingProjectWithId } from '@/lib/onboarding/build-onboarding-project';
 import {
   getPilotSnapshotForUser,
   syncPilotSnapshotForUser,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { saveOperatorOnboardingState } from '@/lib/onboarding/operator-onboarding.server';
 import type { OnboardingUseCaseId } from '@/lib/onboarding/operator-onboarding-types';
+import {
+  createOperationId,
+  recoverableFailure,
+  nonRecoverableFailure,
+  successResult,
+  toClientMutationResult,
+  classifyMutationError,
+  type MutationResult,
+} from '@/lib/onboarding/mutation-resilience';
+import { log } from '@/lib/logger';
 
 const schema = z.object({
   projectName: z.string().min(2).max(255),
@@ -19,61 +29,151 @@ const schema = z.object({
   defaultCurrency: z.string().length(3),
   onboarding_use_case: z.string().optional(),
   onboarding_context: z.string().optional(),
+  operationId: z.string().max(64).optional(),
+  existingProjectId: z.string().max(128).optional(),
 });
 
-/**
- * POST /api/onboarding/bootstrap-project
- * Creates organization + merchant settings + first project, or adds project when org already exists.
- */
-export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return apiError('Unauthorized', 401);
+type BootstrapPayload = {
+  organizationId: string;
+  merchantSettingsId: string | null;
+  projectId: string;
+};
+
+function logBootstrap(
+  operationId: string,
+  event: string,
+  meta?: Record<string, unknown>
+) {
+  log.info('onboarding.bootstrap-project', { operationId, event, ...meta });
+}
+
+async function safeOperationalDerivation(operationId: string): Promise<string | undefined> {
+  try {
+    const { deriveWorkspaceActivationFromOperations } = await import(
+      '@/lib/operations/orchestration/activation-bridge'
+    );
+    deriveWorkspaceActivationFromOperations({
+      hasOrganization: true,
+      onboardingCompleted: false,
+      projectCreated: true,
+      participantCount: 0,
+      participantsConfigured: false,
+      participantsConfiguredCount: 0,
+      obligationCount: 0,
+      paymentLinkCount: 0,
+      collectionPreferenceDecideLater: true,
+      defaultCurrency: null,
+      stripeConfigured: false,
+      wiseConfigured: false,
+      hederaConfigured: false,
+      releaseEligibleCount: 0,
+      releaseBatchCount: 0,
+      primaryProjectId: null,
+    });
+    return undefined;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logBootstrap(operationId, 'operational_derivation_degraded', { message });
+    return 'Operational status will update shortly — your project is saved.';
+  }
+}
+
+async function persistProjectForUser(
+  userId: string,
+  project: ReturnType<typeof buildOnboardingProjectWithId>,
+  operationId: string
+): Promise<{ warning?: string }> {
+  try {
+    const snapshot = await getPilotSnapshotForUser(userId);
+    const deals = [...snapshot.deals.filter((d) => d.id !== project.id), project];
+    await syncPilotSnapshotForUser(userId, deals, snapshot.participants);
+    return {};
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logBootstrap(operationId, 'pilot_sync_failed', { message });
+    return {
+      warning:
+        'Your project record was saved, but workspace sync is still finishing. Refresh or retry shortly.',
+    };
+  }
+}
+
+async function runBootstrap(
+  userId: string,
+  body: z.infer<typeof schema>,
+  operationId: string
+): Promise<{ mutation: MutationResult<BootstrapPayload>; httpStatus: number }> {
+  const useCaseLabel = body.onboarding_use_case as OnboardingUseCaseId | undefined;
+  const currency = body.defaultCurrency as 'USD' | 'EUR' | 'GBP' | 'AUD' | 'CAD' | 'JPY' | 'SGD' | 'NZD';
+
+  let existingProjectId = body.existingProjectId?.trim() || undefined;
+  if (!existingProjectId) {
+    try {
+      const snapshot = await getPilotSnapshotForUser(userId);
+      const match = snapshot.deals.find(
+        (d) => d.dealName === body.projectName.trim() && d.id.startsWith('onb-deal-')
+      );
+      if (match) existingProjectId = match.id;
+    } catch {
+      /* ignore */
+    }
   }
 
-  const { data: body, error } = await validateBody(request, schema);
-  if (error) {
-    return error;
-  }
-
-  const project = buildOnboardingProject({
+  const project = buildOnboardingProjectWithId({
     projectName: body.projectName,
     description: body.description,
     estimatedValue: body.estimatedValue,
-    currency: body.defaultCurrency as 'USD',
+    currency,
+    projectId: existingProjectId,
   });
 
-  const useCaseLabel = body.onboarding_use_case as OnboardingUseCaseId | undefined;
-  const existingOrg = await getOrganizationForAuthenticatedUser(user.id);
+  const warnings: string[] = [];
+  const existingOrg = await getOrganizationForAuthenticatedUser(userId);
 
   if (existingOrg) {
-    const snapshot = await getPilotSnapshotForUser(user.id);
-    const deals = [...snapshot.deals.filter((d) => d.id !== project.id), project];
-    await syncPilotSnapshotForUser(user.id, deals, snapshot.participants);
+    logBootstrap(operationId, 'existing_org_path', { organizationId: existingOrg.id });
+
+    const syncResult = await persistProjectForUser(userId, project, operationId);
+    if (syncResult.warning) warnings.push(syncResult.warning);
 
     const settings = await prisma.merchant_settings.findFirst({
       where: { organization_id: existingOrg.id },
       select: { id: true },
     });
 
-    await saveOperatorOnboardingState(existingOrg.id, user.id, {
-      step: 'participants',
-      onboarding_use_case: useCaseLabel,
-      onboarding_context: body.onboarding_context,
-      organizationId: existingOrg.id,
-      merchantSettingsId: settings?.id,
-      projectId: project.id,
-    });
-
-    return apiResponse(
-      {
+    try {
+      await saveOperatorOnboardingState(existingOrg.id, userId, {
+        step: 'participants',
+        onboarding_use_case: useCaseLabel,
+        onboarding_context: body.onboarding_context,
         organizationId: existingOrg.id,
-        merchantSettingsId: settings?.id ?? null,
+        merchantSettingsId: settings?.id,
         projectId: project.id,
-      },
-      200
-    );
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logBootstrap(operationId, 'onboarding_state_save_failed', { message });
+      warnings.push('Project created — onboarding progress will sync on retry.');
+    }
+
+    const opWarning = await safeOperationalDerivation(operationId);
+    if (opWarning) warnings.push(opWarning);
+
+    return {
+      httpStatus: 200,
+      mutation: successResult(
+        {
+          organizationId: existingOrg.id,
+          merchantSettingsId: settings?.id ?? null,
+          projectId: project.id,
+        },
+        operationId,
+        warnings.length ? { operationalWarning: warnings.join(' ') } : undefined
+      ),
+    };
   }
+
+  logBootstrap(operationId, 'new_org_path');
 
   const result = await prisma.$transaction(async (tx) => {
     const organization = await tx.organizations.create({
@@ -85,7 +185,7 @@ export async function POST(request: NextRequest) {
 
     await tx.user_organizations.create({
       data: {
-        user_id: user.id,
+        user_id: userId,
         organization_id: organization.id,
         role: 'OWNER',
       },
@@ -102,23 +202,120 @@ export async function POST(request: NextRequest) {
     return { organization, settings };
   });
 
-  await syncPilotSnapshotForUser(user.id, [project], []);
+  const syncResult = await persistProjectForUser(userId, project, operationId);
+  if (syncResult.warning) warnings.push(syncResult.warning);
 
-  await saveOperatorOnboardingState(result.organization.id, user.id, {
-    step: 'participants',
-    onboarding_use_case: useCaseLabel,
-    onboarding_context: body.onboarding_context,
-    organizationId: result.organization.id,
-    merchantSettingsId: result.settings.id,
-    projectId: project.id,
-  });
-
-  return apiResponse(
-    {
+  try {
+    await saveOperatorOnboardingState(result.organization.id, userId, {
+      step: 'participants',
+      onboarding_use_case: useCaseLabel,
+      onboarding_context: body.onboarding_context,
       organizationId: result.organization.id,
       merchantSettingsId: result.settings.id,
       projectId: project.id,
-    },
-    201
-  );
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logBootstrap(operationId, 'onboarding_state_save_failed', { message });
+    warnings.push('Workspace created — onboarding progress will sync on retry.');
+  }
+
+  const opWarning = await safeOperationalDerivation(operationId);
+  if (opWarning) warnings.push(opWarning);
+
+  return {
+    httpStatus: 201,
+    mutation: successResult(
+      {
+        organizationId: result.organization.id,
+        merchantSettingsId: result.settings.id,
+        projectId: project.id,
+      },
+      operationId,
+      warnings.length ? { operationalWarning: warnings.join(' ') } : undefined
+    ),
+  };
+}
+
+/**
+ * POST /api/onboarding/bootstrap-project
+ */
+export async function POST(request: NextRequest) {
+  const operationId = createOperationId();
+
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return apiError('Unauthorized', 401);
+    }
+
+    const { data: body, error } = await validateBody(request, schema);
+    if (error) {
+      return error;
+    }
+
+    const opId = body.operationId?.trim() || operationId;
+    logBootstrap(opId, 'started', { userId: user.id, projectName: body.projectName });
+
+    try {
+      const { mutation, httpStatus } = await runBootstrap(user.id, body, opId);
+      const clientMutation = toClientMutationResult(mutation);
+
+      logBootstrap(opId, mutation.status, { projectId: mutation.data?.projectId });
+
+      return apiResponse(
+        {
+          ...mutation.data,
+          mutation: clientMutation,
+        },
+        httpStatus
+      );
+    } catch (err) {
+      const { recoverable, internalCause } = classifyMutationError(err);
+      logBootstrap(opId, 'mutation_failed', { recoverable, internalCause });
+
+      const mutation = recoverable
+        ? recoverableFailure(
+            opId,
+            'We could not finish configuring your project yet. Your project details were preserved safely.',
+            internalCause
+          )
+        : nonRecoverableFailure(
+            opId,
+            'We could not complete workspace setup. Your details are preserved — contact support if this continues.',
+            internalCause
+          );
+
+      return NextResponse.json(
+        {
+          error: mutation.recoveryMessage,
+          mutation: toClientMutationResult(mutation),
+        },
+        { status: recoverable ? 503 : 422 }
+      );
+    }
+  } catch (err) {
+    const { recoverable, internalCause } = classifyMutationError(err);
+    log.error('onboarding.bootstrap-project.unhandled', { operationId, internalCause });
+
+    const mutation = recoverable
+      ? recoverableFailure(
+          operationId,
+          'We could not finish configuring your project yet. Your project details were preserved safely.',
+          internalCause
+        )
+      : nonRecoverableFailure(
+          operationId,
+          'We could not complete workspace setup. Your details are preserved — contact support if this continues.',
+          internalCause
+        );
+
+    return NextResponse.json(
+      {
+        error: mutation.recoveryMessage,
+        mutation: toClientMutationResult(mutation),
+      },
+      { status: recoverable ? 503 : 422 }
+    );
+  }
 }

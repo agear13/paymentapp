@@ -76,8 +76,16 @@ import {
 } from '@/components/onboarding/onboarding-participant-card';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { OnboardingProviderChecklist } from '@/components/onboarding/onboarding-provider-checklist';
-
-const STORAGE_KEY = 'provvypay.onboarding.draft';
+import {
+  OnboardingRecoveryPanel,
+  type OnboardingRecoveryMutation,
+} from '@/components/onboarding/onboarding-recovery-panel';
+import {
+  clearOnboardingDraft,
+  loadOnboardingDraft,
+  saveOnboardingDraft,
+} from '@/lib/onboarding/onboarding-draft-persistence';
+import { createOperationId } from '@/lib/onboarding/mutation-resilience';
 
 const workspaceSchema = z.object({
   workspaceName: z.string().min(2, 'Workspace name is required').max(255),
@@ -111,27 +119,6 @@ const EMPTY_PARTICIPANT = (): DraftParticipant => ({
 
 function setOrgCookie() {
   document.cookie = 'provvypay_has_org=true; path=/; max-age=31536000';
-}
-
-function loadDraft(): {
-  useCase?: OnboardingUseCaseId;
-  context?: string;
-} {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as { useCase?: OnboardingUseCaseId; context?: string };
-  } catch {
-    return {};
-  }
-}
-
-function saveDraft(draft: { useCase?: OnboardingUseCaseId; context?: string }) {
-  try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
-  } catch {
-    /* ignore */
-  }
 }
 
 function OnboardingProgress({ step }: { step: OnboardingStep }) {
@@ -207,6 +194,9 @@ export function WorkflowOnboardingForm() {
   const [advancedProvidersOpen, setAdvancedProvidersOpen] = React.useState(false);
   const [copilotOpen, setCopilotOpen] = React.useState(false);
   const [copilotTopic, setCopilotTopic] = React.useState<CopilotGuideTopic | null>(null);
+  const [bootstrapMutation, setBootstrapMutation] =
+    React.useState<OnboardingRecoveryMutation | null>(null);
+  const bootstrapOperationIdRef = React.useRef<string>(createOperationId());
 
   function openCopilotGuide(topic: CopilotGuideTopic) {
     setCopilotTopic(topic);
@@ -242,11 +232,26 @@ export function WorkflowOnboardingForm() {
   });
 
   React.useEffect(() => {
-    const draft = loadDraft();
+    const draft = loadOnboardingDraft();
     if (draft.useCase) {
       setUseCase(draft.useCase);
       setSelectedUseCase(draft.useCase);
     }
+    if (draft.project) {
+      projectForm.reset({
+        projectName: draft.project.projectName,
+        description: draft.project.description ?? '',
+        estimatedValue: draft.project.estimatedValue ?? '',
+        defaultCurrency: draft.project.defaultCurrency,
+      });
+      setProjectName(draft.project.projectName);
+    }
+    if (draft.organizationId) setOrganizationId(draft.organizationId);
+    if (draft.merchantSettingsId) setMerchantSettingsId(draft.merchantSettingsId);
+    if (draft.projectId) setProjectId(draft.projectId);
+    if (draft.participants?.length) setConfirmedParticipants(draft.participants);
+    if (draft.step) setStep(normalizeOnboardingStep(draft.step));
+    if (draft.lastOperationId) bootstrapOperationIdRef.current = draft.lastOperationId;
 
     (async () => {
       try {
@@ -391,11 +396,7 @@ export function WorkflowOnboardingForm() {
         }),
       });
     }
-    try {
-      sessionStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
+    clearOnboardingDraft();
     const params = new URLSearchParams({ workspace: 'ready' });
     if (projectName.trim()) params.set('project', projectName.trim());
     notifyWorkspaceActivationRefresh();
@@ -407,13 +408,47 @@ export function WorkflowOnboardingForm() {
     if (!selectedUseCase) return;
     setUseCase(selectedUseCase);
     const meta = ONBOARDING_USE_CASES.find((u) => u.id === selectedUseCase);
-    saveDraft({ useCase: selectedUseCase, context: meta?.title });
+    saveOnboardingDraft({ useCase: selectedUseCase, context: meta?.title, step: 'project' });
     await persistState('project');
     setStep('project');
   }
 
+  React.useEffect(() => {
+    const sub = projectForm.watch((values) => {
+      saveOnboardingDraft({
+        step: 'project',
+        useCase: useCase ?? undefined,
+        project: {
+          projectName: values.projectName ?? '',
+          description: values.description,
+          estimatedValue: values.estimatedValue,
+          defaultCurrency: values.defaultCurrency ?? DEFAULT_WORKSPACE_CURRENCY,
+        },
+        organizationId,
+        merchantSettingsId,
+        projectId,
+        participants: confirmedParticipants,
+      });
+    });
+    return () => sub.unsubscribe();
+  }, [projectForm, useCase, organizationId, merchantSettingsId, projectId, confirmedParticipants]);
+
   async function onProjectSubmit(values: ProjectFormValues) {
     setIsLoading(true);
+    setBootstrapMutation(null);
+
+    saveOnboardingDraft({
+      step: 'project',
+      project: {
+        projectName: values.projectName,
+        description: values.description,
+        estimatedValue: values.estimatedValue,
+        defaultCurrency: values.defaultCurrency,
+      },
+      useCase: useCase ?? undefined,
+      lastOperationId: bootstrapOperationIdRef.current,
+    });
+
     try {
       const estimatedValue =
         values.estimatedValue?.trim() !== ''
@@ -431,29 +466,101 @@ export function WorkflowOnboardingForm() {
           defaultCurrency: values.defaultCurrency,
           onboarding_use_case: useCase ?? undefined,
           onboarding_context: selectedUseCaseMeta?.title,
+          operationId: bootstrapOperationIdRef.current,
+          existingProjectId: projectId ?? undefined,
         }),
       });
 
+      const payload = await res.json().catch(() => ({}));
+      const data = payload.data ?? payload;
+      const mutation = (data.mutation ?? payload.mutation) as OnboardingRecoveryMutation | undefined;
+
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to create project');
+        const fallbackMutation: OnboardingRecoveryMutation = mutation ?? {
+          status: 'RECOVERABLE_FAILURE',
+          recoveryMessage:
+            payload.error ||
+            'We could not finish configuring your project yet. Your project details were preserved safely.',
+          retryRecommended: true,
+          safeToRetry: true,
+          preservedDraft: true,
+          operationReference: bootstrapOperationIdRef.current,
+        };
+        setBootstrapMutation(fallbackMutation);
+        saveOnboardingDraft({
+          lastMutationStatus: fallbackMutation.status,
+          lastOperationId: bootstrapOperationIdRef.current,
+        });
+        return;
       }
 
-      const payload = await res.json();
-      const data = payload.data ?? payload;
+      if (!data.organizationId || !data.projectId) {
+        setBootstrapMutation({
+          status: 'RECOVERABLE_FAILURE',
+          recoveryMessage:
+            'Your project may have been created, but the response was incomplete. Try again safely.',
+          retryRecommended: true,
+          safeToRetry: true,
+          preservedDraft: true,
+          operationReference: bootstrapOperationIdRef.current,
+        });
+        return;
+      }
+
+      const successMutation: OnboardingRecoveryMutation = mutation ?? {
+        status: 'SUCCESS',
+        recoveryMessage: 'Your project was created successfully.',
+        preservedDraft: true,
+        operationReference: bootstrapOperationIdRef.current,
+      };
+
+      if (successMutation.status === 'PARTIAL_SUCCESS') {
+        setBootstrapMutation(successMutation);
+      }
+
       setOrganizationId(data.organizationId);
-      setMerchantSettingsId(data.merchantSettingsId);
+      setMerchantSettingsId(data.merchantSettingsId ?? null);
       setProjectId(data.projectId);
       setProjectName(values.projectName);
       window.localStorage.setItem('provvypay.organizationId', data.organizationId);
       setOrgCookie();
-      toast.success('Project created');
+
+      saveOnboardingDraft({
+        organizationId: data.organizationId,
+        merchantSettingsId: data.merchantSettingsId,
+        projectId: data.projectId,
+        step: 'participants',
+        lastMutationStatus: successMutation.status,
+      });
+
+      notifyWorkspaceActivationRefresh();
+
+      if (successMutation.status === 'PARTIAL_SUCCESS') {
+        toast.message('Project created', {
+          description: successMutation.operationalWarning,
+        });
+      } else {
+        toast.success('Project created');
+      }
       setStep('participants');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to create project');
+    } catch {
+      setBootstrapMutation({
+        status: 'RECOVERABLE_FAILURE',
+        recoveryMessage:
+          'We could not reach the server. Your project details are preserved — check your connection and try again.',
+        retryRecommended: true,
+        safeToRetry: true,
+        preservedDraft: true,
+        operationReference: bootstrapOperationIdRef.current,
+      });
+      saveOnboardingDraft({ lastMutationStatus: 'RECOVERABLE_FAILURE' });
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function retryBootstrapProject() {
+    void projectForm.handleSubmit(onProjectSubmit)();
   }
 
   function commitDraftParticipant() {
@@ -736,6 +843,21 @@ export function WorkflowOnboardingForm() {
                 Default currency: {projectForm.watch('defaultCurrency')} (set in workspace setup).
                 Change it anytime under Collection & settlement setup.
               </p>
+              {bootstrapMutation &&
+              bootstrapMutation.status !== 'SUCCESS' ? (
+                <OnboardingRecoveryPanel
+                  mutation={bootstrapMutation}
+                  onRetry={
+                    bootstrapMutation.safeToRetry !== false ? retryBootstrapProject : undefined
+                  }
+                  onContinueLater={() => {
+                    saveOnboardingDraft({ step: 'project' });
+                    toast.message('Progress saved', {
+                      description: 'Return anytime to continue from this step.',
+                    });
+                  }}
+                />
+              ) : null}
               <div className="flex justify-between pt-2">
                 <Button type="button" variant="ghost" onClick={() => setStep('use_case')}>
                   Back

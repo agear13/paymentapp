@@ -30,8 +30,19 @@ export function buildOnboardingProject(input: {
     projectValueCurrency: input.currency === 'AUD' || input.currency === 'USD' ? input.currency : 'USD',
     currentStage: 'Introduced',
     nextStep: 'Add participants and funding',
-    ...draftProjectBootstrap(),
+    ...draftProjectDefaults(),
   };
+}
+
+/** Reuse existing project id on safe retry (idempotent bootstrap). */
+export function buildOnboardingProjectWithId(
+  input: Parameters<typeof buildOnboardingProject>[0] & { projectId?: string }
+): RecentDeal {
+  const project = buildOnboardingProject(input);
+  if (input.projectId?.trim()) {
+    return { ...project, id: input.projectId.trim() };
+  }
+  return project;
 }
 
 const ROLE_TO_MODEL: Record<OnboardingParticipantRole, ProjectParticipationModel> = {
