@@ -36,6 +36,8 @@ export function dealRowToRecentDeal(row: {
   return { ...payload, id: row.id };
 }
 
+import { normalizeParticipant } from '@/lib/operational/safe-operational-hydration';
+
 export function participantRowToDemo(row: {
   id: string;
   deal_id: string;
@@ -49,7 +51,7 @@ export function participantRowToDemo(row: {
     row.approval_status === 'Approved' || payload.approvalStatus === 'Approved'
       ? 'Approved'
       : 'Pending approval';
-  return {
+  return normalizeParticipant({
     ...payload,
     id: row.id,
     dealId: row.deal_id,
@@ -64,7 +66,7 @@ export function participantRowToDemo(row: {
           ? 'Opened'
           : payload.inviteStatus ?? 'Invited'
         : payload.inviteStatus ?? 'Invited',
-  };
+  });
 }
 
 export type ReferralIssuanceSummary = {

@@ -130,7 +130,7 @@ export function evaluateWorkspaceCompensationReadiness(
   return {
     participantCount: active.length,
     configuredCount,
-    participantsConfigured: active.length === 0 || unconfigured.length === 0,
+    participantsConfigured: active.length > 0 && unconfigured.length === 0,
     unconfiguredParticipantIds: unconfigured.map((p) => p.id),
   };
 }

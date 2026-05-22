@@ -3,6 +3,10 @@ import type { OnboardingParticipantRole } from '@/lib/onboarding/operator-onboar
 import { buildProjectParticipant } from '@/lib/projects/participant-entitlement';
 import type { ProjectParticipationModel } from '@/lib/projects/participant-entitlement';
 import type { OperationalParticipantRole } from '@/lib/projects/participants-for-project';
+import {
+  draftParticipantDefaults,
+  draftProjectDefaults,
+} from '@/lib/operations/guards/hydration-guards';
 
 export function buildOnboardingProject(input: {
   projectName: string;
@@ -26,6 +30,7 @@ export function buildOnboardingProject(input: {
     projectValueCurrency: input.currency === 'AUD' || input.currency === 'USD' ? input.currency : 'USD',
     currentStage: 'Introduced',
     nextStep: 'Add participants and funding',
+    ...draftProjectBootstrap(),
   };
 }
 
@@ -74,15 +79,18 @@ export function buildOnboardingParticipant(input: {
 }) {
   const participationModel = ROLE_TO_MODEL[input.role];
   const operationalRole = mapOnboardingRoleToOperational(input.role);
-  return buildProjectParticipant({
-    name: input.name,
-    email: input.email,
-    role: operationalRole,
-    project: input.deal,
-    participationModel,
-    commissionKind: participationModel === 'revenue_share' ? 'pct_deal_value' : 'fixed_amount',
-    commissionValue: participationModel === 'revenue_share' ? 10 : 0,
-    enableCustomerAttribution: participationModel === 'customer_attribution',
-    notes: `${input.role} · added during onboarding`,
-  });
+  return {
+    ...buildProjectParticipant({
+      name: input.name,
+      email: input.email,
+      role: operationalRole,
+      project: input.deal,
+      participationModel,
+      commissionKind: participationModel === 'revenue_share' ? 'pct_deal_value' : 'fixed_amount',
+      commissionValue: 0,
+      enableCustomerAttribution: participationModel === 'customer_attribution',
+      notes: `${input.role} · added during onboarding (draft — configure earnings)`,
+    }),
+    ...draftParticipantDefaults(),
+  };
 }

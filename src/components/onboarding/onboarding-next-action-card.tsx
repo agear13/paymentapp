@@ -5,6 +5,7 @@ import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 import {
+  createFallbackNextAction,
   deriveMerchantSettingsNextAction,
   deriveNextRecommendedAction,
 } from '@/lib/onboarding/next-recommended-action';
@@ -13,7 +14,6 @@ import { cn } from '@/lib/utils';
 type OnboardingNextActionCardProps = {
   className?: string;
   compact?: boolean;
-  /** On merchant settings page — avoid duplicate provider CTA */
   variant?: 'default' | 'merchant-settings';
 };
 
@@ -22,16 +22,18 @@ export function OnboardingNextActionCard({
   compact,
   variant = 'default',
 }: OnboardingNextActionCardProps) {
-  const { activation, loading } = useWorkspaceActivation();
+  const { activation, nextAction: apiNextAction, loading, degraded } = useWorkspaceActivation();
 
-  if (loading || !activation) {
+  if (loading) {
     return null;
   }
 
   const nextAction =
-    variant === 'merchant-settings'
-      ? deriveMerchantSettingsNextAction(activation)
-      : deriveNextRecommendedAction(activation);
+    activation && !degraded
+      ? variant === 'merchant-settings'
+        ? deriveMerchantSettingsNextAction(activation) ?? deriveNextRecommendedAction(activation)
+        : apiNextAction ?? deriveNextRecommendedAction(activation)
+      : createFallbackNextAction(activation?.primaryProjectId);
 
   if (!nextAction) {
     return null;

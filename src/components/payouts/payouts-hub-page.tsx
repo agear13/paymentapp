@@ -1,5 +1,10 @@
+'use client';
+
 import Link from 'next/link';
 import { ArrowRight, CircleDollarSign, FileCheck, History } from 'lucide-react';
+import { ReleaseConfidenceSummary } from '@/components/operations/release-confidence-summary';
+import { ReleaseSimulationPreview } from '@/components/operations/release-simulation-preview';
+import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
 import { PayoutHowItWorksCard } from '@/components/payouts/payout-lifecycle-explainer';
 import { PayoutsHubActivationGuide } from '@/components/payouts/payouts-hub-activation-guide';
 import { PayoutsNeedsAttentionStrip } from '@/components/payouts/payouts-needs-attention-strip';
@@ -30,6 +35,7 @@ const HUB_LINKS = [
 ] as const;
 
 export function PayoutsHubPage() {
+  const { guidance } = useOperationalGuidance();
   return (
     <div className="space-y-10">
       <div>
@@ -40,6 +46,11 @@ export function PayoutsHubPage() {
       </div>
 
       <PayoutsNeedsAttentionStrip />
+
+      <div className="space-y-4 pb-6 border-b border-border/60">
+        <ReleaseConfidenceSummary confidence={guidance.releaseConfidence} />
+        <ReleaseSimulationPreview confidence={guidance.releaseConfidence} />
+      </div>
 
       <PayoutsHubActivationGuide />
 

@@ -18,6 +18,7 @@ import {
   formatFixedPayoutLine,
   formatRevenueShareLine,
 } from '@/lib/projects/participant-compensation-copy';
+import { draftParticipantDefaults } from '@/lib/operations/guards/hydration-guards';
 
 export type ProjectParticipationModel =
   | 'fixed_payout'
@@ -132,6 +133,7 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
     attributionStatus: 'inactive',
     inviteLink: undefined,
     customerCommerceUrl: undefined,
+    ...draftParticipantDefaults(),
   };
 }
 
@@ -222,6 +224,9 @@ export function payoutStatusLabel(status: ParticipantPayoutStatus): string {
 }
 
 export function earningsStructureSummary(participant: DemoParticipant): string {
+  if (!participant?.compensationProfile?.configured && participant?.commissionValue === 0) {
+    return 'Earnings not configured';
+  }
   const currency = 'AUD';
   if (participant.participationModel === 'fixed_payout') {
     return formatFixedPayoutLine(participant.commissionValue, currency);

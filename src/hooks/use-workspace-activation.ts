@@ -3,6 +3,10 @@
 import * as React from 'react';
 import type { NextRecommendedAction } from '@/lib/onboarding/next-recommended-action';
 import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
+import {
+  createFallbackActivation,
+  createFallbackNextAction,
+} from '@/lib/onboarding/workspace-activation-fallback';
 
 export const WORKSPACE_ACTIVATION_REFRESH_EVENT = 'workspace-activation-refresh';
 
@@ -21,6 +25,7 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
   const enabled = options?.enabled !== false;
   const [data, setData] = React.useState<ActivationResponse | null>(null);
   const [loading, setLoading] = React.useState(enabled);
+  const [degraded, setDegraded] = React.useState(false);
   const [version, setVersion] = React.useState(0);
 
   const refresh = React.useCallback(() => {
@@ -36,11 +41,35 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
     void (async () => {
       try {
         const res = await fetch('/api/workspace/activation', { cache: 'no-store' });
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (!cancelled) {
+            setDegraded(true);
+            setData({
+              activation: createFallbackActivation(),
+              nextAction: createFallbackNextAction(),
+            });
+          }
+          return;
+        }
         const json = (await res.json()) as { data?: ActivationResponse };
         const payload = json.data ?? (json as unknown as ActivationResponse);
         if (!cancelled && payload?.activation) {
           setData(payload);
+          setDegraded(Boolean(payload.activation.degraded));
+        } else if (!cancelled) {
+          setDegraded(true);
+          setData({
+            activation: createFallbackActivation(),
+            nextAction: createFallbackNextAction(),
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setDegraded(true);
+          setData({
+            activation: createFallbackActivation(),
+            nextAction: createFallbackNextAction(),
+          });
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -63,6 +92,7 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
     activation: data?.activation ?? null,
     nextAction: data?.nextAction ?? null,
     loading,
+    degraded,
     refresh,
   };
 }

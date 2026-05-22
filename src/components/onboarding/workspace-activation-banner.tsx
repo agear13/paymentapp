@@ -5,6 +5,10 @@ import { Check, Circle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 import { OnboardingNextActionCard } from '@/components/onboarding/onboarding-next-action-card';
+import {
+  ACTIVATION_FALLBACK_CHECKLIST,
+  needsActivationGuidance,
+} from '@/lib/onboarding/workspace-activation-fallback';
 import { cn } from '@/lib/utils';
 
 type WorkspaceActivationBannerProps = {
@@ -18,39 +22,50 @@ export function WorkspaceActivationBanner({
   showProgress = true,
   nextActionVariant = 'default',
 }: WorkspaceActivationBannerProps) {
-  const { activation, loading } = useWorkspaceActivation();
+  const { activation, loading, degraded } = useWorkspaceActivation();
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground py-2 min-h-[4rem]">
         <Loader2 className="h-4 w-4 animate-spin" />
         Loading workspace status…
       </div>
     );
   }
 
-  if (!activation || activation.onboardingProgressPercent >= 100) {
+  const snapshot = activation;
+  const showGuidance =
+    !snapshot || needsActivationGuidance(snapshot) || degraded;
+
+  if (!showGuidance && snapshot) {
     return null;
   }
+
+  const checklist = snapshot?.checklist ?? ACTIVATION_FALLBACK_CHECKLIST;
+  const phaseLabel = snapshot?.phaseLabel ?? 'Workspace setup in progress';
+  const progress = snapshot?.onboardingProgressPercent ?? 0;
 
   const workspaceHref = projectName
     ? `/dashboard?workspace=ready&project=${encodeURIComponent(projectName)}`
     : '/dashboard?workspace=ready';
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-h-[4rem]">
+      {degraded ? (
+        <p className="text-xs text-amber-700/90 dark:text-amber-400/90">
+          Showing continued setup guidance while workspace status refreshes.
+        </p>
+      ) : null}
       <div className="space-y-1">
         <p className="text-xs font-medium text-muted-foreground">Workspace activation</p>
-        <h2 className="text-lg font-semibold">{activation.phaseLabel}</h2>
+        <h2 className="text-lg font-semibold">{phaseLabel}</h2>
         {showProgress ? (
-          <p className="text-sm text-muted-foreground">
-            {activation.onboardingProgressPercent}% complete
-          </p>
+          <p className="text-sm text-muted-foreground">{progress}% complete</p>
         ) : null}
       </div>
 
       <ul className="grid gap-1.5 sm:grid-cols-2">
-        {activation.checklist.map((item) => (
+        {checklist.map((item) => (
           <li
             key={item.id}
             className={cn(
@@ -59,7 +74,7 @@ export function WorkspaceActivationBanner({
             )}
           >
             {item.complete ? (
-              <Check className="h-4 w-4 text-emerald-600 shrink-0 animate-in zoom-in-50 duration-200" />
+              <Check className="h-4 w-4 text-emerald-600 shrink-0" />
             ) : (
               <Circle className="h-4 w-4 shrink-0" />
             )}

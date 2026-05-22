@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { ProjectContextNav } from '@/components/projects/project-context-nav';
+import { ProjectOperationalGuidance } from '@/components/operations/project-operational-guidance';
 
 type ProjectWorkspaceShellProps = {
   projectId: string;
@@ -58,6 +59,8 @@ export function ProjectWorkspaceShell({ projectId, children }: ProjectWorkspaceS
       </Button>
 
       <ProjectContextNav projectId={projectId} />
+
+      <ProjectOperationalGuidance />
 
       {children}
     </div>

@@ -45,4 +45,8 @@ export type WorkspaceActivationSnapshot = {
   setupWarnings: string[];
   /** First project for participant/compensation CTAs */
   primaryProjectId: string | null;
+  /** When true, show activation banner / guidance (never hide while incomplete) */
+  needsGuidance: boolean;
+  /** API or derivation used fallback snapshot */
+  degraded?: boolean;
 };

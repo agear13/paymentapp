@@ -121,6 +121,9 @@ export interface RecentDeal {
   projectDescription?: string;
   /** Project mode: display currency for value labels (numeric `value` unchanged). */
   projectValueCurrency?: 'AUD' | 'USD';
+  /** Orchestration lifecycle — draft until operator completes setup. */
+  setupStatus?: import('@/lib/operational/operational-lifecycle-types').ProjectSetupStatus;
+  operationalCompleteness?: import('@/lib/operational/operational-lifecycle-types').ProjectOperationalCompleteness;
   lastContactedAt?: string;
   /** Manual timeline entries */
   activityLog?: DealActivityEntry[];

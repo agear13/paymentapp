@@ -6,15 +6,26 @@ import { Banknote, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  ProjectStateChip,
+  ReleaseConfidenceChip,
+  RevenueSettlementChip,
+} from '@/components/operations/operational-chips';
+import { deriveReleaseConfidence } from '@/lib/operations/explainability';
+import { safeProjectState } from '@/lib/operations/guards/hydration-guards';
+import { defaultWorkspaceContext } from '@/lib/operations/types/operational-context';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { ProjectFundingSourcesPanel } from '@/components/projects/project-funding-sources-panel';
 import { ProjectTreasuryMetrics } from '@/components/projects/project-treasury-metrics';
+import { ProjectOperationalCompletenessCard } from '@/components/projects/project-operational-completeness-card';
+import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
 import {
   projectFundingPath,
   projectParticipantsPath,
   projectPayoutsPath,
 } from '@/lib/projects/project-routes';
 import { ProjectReadinessBreakdown } from '@/components/projects/project-readiness-breakdown';
+import { safeProjectOperationalState } from '@/lib/operational/safe-operational-hydration';
 import { formatTreasuryAmount } from '@/lib/projects/funding-sources/format-funding-source';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
@@ -23,7 +34,17 @@ type ProjectDetailHubProps = {
 };
 
 export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
-  const { summary, refresh, projectParticipants } = useProjectWorkspace();
+  const {
+    summary,
+    deal,
+    refresh,
+    projectParticipants,
+    loading,
+    notFound,
+    sectionErrors,
+    refreshSilent,
+    invalidate,
+  } = useProjectWorkspace();
   const [treasury, setTreasury] = React.useState<ProjectTreasurySummary | null>(null);
 
   React.useEffect(() => {
@@ -46,21 +67,60 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
     };
   }, [projectId, summary?.treasury?.fundingSourceCount]);
 
-  if (!summary) return null;
+  if (loading && !summary) {
+    return <ProjectOperationalLoadingState variant="loading" />;
+  }
+
+  if (notFound) {
+    return (
+      <ProjectOperationalLoadingState
+        variant="error"
+        message="This project could not be found. It may still be syncing from onboarding."
+      />
+    );
+  }
+
+  if (!summary || !deal) {
+    return (
+      <ProjectOperationalLoadingState
+        variant="configuring"
+        message="This project is still being configured."
+        onRetry={() => {
+          invalidate('all');
+          void refresh({ scope: 'all', force: true });
+        }}
+      />
+    );
+  }
 
   const participantsHref = projectParticipantsPath(projectId);
   const fundingHref = projectFundingPath(projectId);
   const payoutsHref = projectPayoutsPath(projectId);
-
-  const participantLabel = formatParticipantPayoutReadiness(
-    summary.participantsReady,
-    summary.participantCount
-  );
-
-  const currency = treasury?.currency ?? 'USD';
+  const currency = treasury?.currency ?? 'AUD';
+  const opState = safeProjectOperationalState(deal, projectParticipants, {
+    revenueConfigured: treasury?.hasFundingSources ?? false,
+    obligationCount: summary.treasury?.obligationsReady ?? 0,
+  });
+  const projectState = safeProjectState(deal);
+  const releaseConfidence = deriveReleaseConfidence({
+    workspace: defaultWorkspaceContext(),
+    participants: projectParticipants,
+    treasury,
+    currency,
+  });
 
   return (
     <div className="space-y-8">
+      {opState.guidance ? (
+        <ProjectOperationalLoadingState variant="configuring" message={opState.guidance} />
+      ) : null}
+
+      {sectionErrors.participants ? (
+        <p className="text-sm text-amber-700/90 dark:text-amber-400/90">
+          Participant data is temporarily unavailable. Other project views remain open.
+        </p>
+      ) : null}
+
       <div className="flex flex-col gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{summary.name}</h1>
@@ -69,17 +129,33 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
           ) : (
             <p className="text-muted-foreground mt-1 max-w-2xl">
               Coordinate participants, funding, obligations, and payouts for this project.
-              Operational allocation and settlement execution stay in separate views.
+              Configure how each participant earns before tracking obligations or releases.
             </p>
           )}
         </div>
         <Button asChild className="w-fit">
-          <Link href={participantsHref}>Invite participants</Link>
+          <Link href={participantsHref}>Manage participants</Link>
         </Button>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Badge variant="secondary">{summary.operationalStageLabel}</Badge>
+        <ProjectStateChip state={projectState} />
+        <ReleaseConfidenceChip level={releaseConfidence.level} />
+        {treasury ? (
+          <RevenueSettlementChip
+            label={treasury.fundingLabel}
+            health={
+              treasury.projectHealth === 'settlement_risk'
+                ? 'risk'
+                : treasury.projectHealth === 'ready_for_payout'
+                  ? 'healthy'
+                  : 'pending'
+            }
+          />
+        ) : (
+          <Badge variant="secondary">{summary.operationalStageLabel}</Badge>
+        )}
+        <Badge variant="outline">{opState.setupStatus}</Badge>
         <Badge variant="outline">{summary.settlementStatus}</Badge>
         <Badge variant="outline">{summary.currencyLabel}</Badge>
         {summary.needsAttention ? (
@@ -88,6 +164,13 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
           </Badge>
         ) : null}
       </div>
+
+      <ProjectOperationalCompletenessCard
+        project={deal}
+        participants={projectParticipants}
+        revenueConfigured={treasury?.hasFundingSources ?? false}
+        obligationCount={summary.treasury?.obligationsReady ?? 0}
+      />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>

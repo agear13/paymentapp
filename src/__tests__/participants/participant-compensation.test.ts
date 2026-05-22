@@ -67,6 +67,12 @@ describe('participant compensation readiness', () => {
     expect(readiness.participantsConfigured).toBe(false);
     expect(readiness.configuredCount).toBe(1);
   });
+
+  it('does not treat zero participants as compensation configured', () => {
+    const readiness = evaluateWorkspaceCompensationReadiness([]);
+    expect(readiness.participantsConfigured).toBe(false);
+    expect(readiness.participantCount).toBe(0);
+  });
 });
 
 describe('next recommended action order', () => {
@@ -91,6 +97,7 @@ describe('next recommended action order', () => {
     });
     const next = deriveNextRecommendedAction(activation);
     expect(next.id).toBe('compensation');
+    expect(activation.needsGuidance).toBe(true);
     expect(next.title).toContain('Configure participant earnings');
   });
 

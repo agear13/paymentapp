@@ -5,6 +5,7 @@ import {
   deriveParticipantReadiness,
   summarizeProjectReadinessGaps,
 } from '@/lib/participants/participant-readiness';
+import { normalizeParticipant } from '@/lib/operational/safe-operational-hydration';
 import { formatParticipantPayoutReadiness } from '@/lib/projects/format-participant-payout-readiness';
 
 type ProjectReadinessBreakdownProps = {
@@ -16,7 +17,8 @@ export function ProjectReadinessBreakdown({
   participants,
   className,
 }: ProjectReadinessBreakdownProps) {
-  const gaps = summarizeProjectReadinessGaps(participants);
+  const safeList = participants.map(normalizeParticipant);
+  const gaps = summarizeProjectReadinessGaps(safeList);
 
   if (gaps.total === 0) {
     return (

@@ -25,10 +25,12 @@ import { EditProjectParticipantDialog } from '@/components/projects/edit-project
 import type { DemoParticipantRole } from '@/components/deal-network-demo/invite-participant-modal';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import { ProjectReadinessBreakdown } from '@/components/projects/project-readiness-breakdown';
+import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
 import { ParticipantCompensationDialog } from '@/components/projects/participant-compensation-dialog';
 import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { countPayoutReadyParticipants } from '@/lib/participants/participant-readiness';
+import { normalizeParticipant } from '@/lib/operational/safe-operational-hydration';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 
 const ONBOARDING_CHECKLIST = [
@@ -206,10 +208,18 @@ export function ProjectParticipantsView() {
   );
 
   if (loading && !deal) {
-    return null;
+    return <ProjectOperationalLoadingState variant="loading" />;
   }
 
-  if (!deal || !summary) return null;
+  if (!deal || !summary) {
+    return (
+      <ProjectOperationalLoadingState
+        variant="configuring"
+        message="Participant management is loading or this project is still being configured."
+        onRetry={handleRefresh}
+      />
+    );
+  }
 
   const stats = participantSummaryMetrics(projectParticipants);
   const payoutReadyCount = countPayoutReadyParticipants(projectParticipants);
@@ -233,10 +243,7 @@ export function ProjectParticipantsView() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
             {hasParticipants ? (
-              <ProjectReadinessBreakdown
-                participants={projectParticipants}
-                className="mt-2"
-              />
+              <ProjectReadinessBreakdown participants={safeParticipants} className="mt-2" />
             ) : (
               <p className="text-muted-foreground mt-1 text-sm">
                 Add participants, then configure how each earns before obligations or payout release.

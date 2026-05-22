@@ -27,10 +27,8 @@ import {
   type ParticipantCompensationProfile,
   type ParticipantCompensationType,
 } from '@/lib/participants/participant-compensation-types';
-import {
-  applyCompensationProfileToParticipant,
-  defaultCompensationProfile,
-} from '@/lib/participants/participant-compensation';
+import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
+import { safeDefaultCompensationProfile } from '@/lib/operational/safe-operational-hydration';
 
 const COMPENSATION_LABELS: Record<ParticipantCompensationType, string> = {
   FIXED_FEE: 'Fixed fee',
@@ -56,14 +54,16 @@ export function ParticipantCompensationDialog({
   onSave,
 }: ParticipantCompensationDialogProps) {
   const [saving, setSaving] = React.useState(false);
-  const [draft, setDraft] = React.useState<ParticipantCompensationProfile>(
-    defaultCompensationProfile({} as DemoParticipant)
-  );
+  const [draft, setDraft] = React.useState<ParticipantCompensationProfile>({
+    compensationType: 'FIXED_FEE',
+    configured: false,
+    revenueSources: [],
+  });
 
   React.useEffect(() => {
     if (!participant) return;
     setDraft(
-      participant.compensationProfile ?? defaultCompensationProfile(participant)
+      participant.compensationProfile ?? safeDefaultCompensationProfile(participant)
     );
   }, [participant]);
 

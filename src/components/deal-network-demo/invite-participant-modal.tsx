@@ -118,6 +118,7 @@ export interface DemoParticipant {
   payoutBlocked?: boolean;
   /** How this participant earns — orchestration metadata, not settlement engine. */
   compensationProfile?: import('@/lib/participants/participant-compensation-types').ParticipantCompensationProfile;
+  operationalStatus?: import('@/lib/operational/operational-lifecycle-types').ParticipantOperationalStatus;
 }
 
 export interface InviteParticipantModalProps {
