@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
+import { RefreshCw, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,9 +38,9 @@ import type { ParticipantCompensationProfile } from '@/lib/participants/particip
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { safeOperationalRouteState } from '@/lib/operations/routing/draft-safe-routing';
 import { ProgressiveOperationalPanel } from '@/components/operations/progressive-operational-panel';
-import { normalizeParticipantEntity } from '@/lib/operations/guards/hydration-guards';
+import { SafeParticipantBoundary } from '@/components/operations/safe-participant-boundary';
+import { hydrateOperationalParticipants } from '@/lib/operations/hydration/hydrate-operational-participant';
 import { EMPTY_STATE_COPY } from '@/lib/operations/design-language';
-import { opTypeBodySnug, opTypeMeta, opTypePageTitle } from '@/lib/design/operational-typography';
 import { opSurface } from '@/lib/design/operational-surfaces';
 import { OperatorEmptyState } from '@/components/operations/operator-empty-state';
 
@@ -259,17 +260,53 @@ export function ProjectParticipantsView() {
     ]
   );
 
+  const hydratedParticipants = React.useMemo(
+    () => hydrateOperationalParticipants(projectParticipants),
+    [projectParticipants]
+  );
+
+  const displayParticipants = React.useMemo(() => {
+    if (!pinnedOrder) return hydratedParticipants;
+    const order = new Map(pinnedOrder.map((id, i) => [id, i]));
+    return [...hydratedParticipants].sort(
+      (a, b) => (order.get(a.id) ?? 999) - (order.get(b.id) ?? 999)
+    );
+  }, [hydratedParticipants, pinnedOrder]);
+
+  const stats = React.useMemo(
+    () => participantSummaryMetrics(hydratedParticipants),
+    [hydratedParticipants]
+  );
+
+  const attributionEnabled = React.useMemo(
+    () =>
+      hydratedParticipants.some(
+        (p) => p.compensationProfile?.customerAttributionEnabled === true
+      ),
+    [hydratedParticipants]
+  );
+
+  React.useEffect(() => {
+    if (!focusParticipantId) return;
+    const el = document.getElementById(`participant-${focusParticipantId}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focusParticipantId, displayParticipants.length]);
+
+  const routeState = React.useMemo(
+    () =>
+      safeOperationalRouteState({
+        projectId: deal?.id ?? projectId ?? 'unknown',
+        deal,
+        participants: hydratedParticipants,
+        loading: loading && !deal,
+        notFound: !deal && !loading,
+      }),
+    [deal, projectId, hydratedParticipants, loading]
+  );
+
   if (loading && !deal) {
     return <ProjectOperationalLoadingState variant="loading" />;
   }
-
-  const routeState = safeOperationalRouteState({
-    projectId: deal?.id ?? 'unknown',
-    deal,
-    participants: projectParticipants,
-    loading: loading && !deal,
-    notFound: !deal && !loading,
-  });
 
   if (!deal || !summary) {
     return (
@@ -281,27 +318,9 @@ export function ProjectParticipantsView() {
     );
   }
 
-  const safeParticipants = projectParticipants.map(normalizeParticipantEntity);
-  const displayParticipants = React.useMemo(() => {
-    if (!pinnedOrder) return safeParticipants;
-    const order = new Map(pinnedOrder.map((id, i) => [id, i]));
-    return [...safeParticipants].sort(
-      (a, b) => (order.get(a.id) ?? 999) - (order.get(b.id) ?? 999)
-    );
-  }, [safeParticipants, pinnedOrder]);
-  const stats = participantSummaryMetrics(safeParticipants);
+  const safeParticipants = hydratedParticipants;
   const payoutReadyCount = stats.readyForPayout;
   const hasParticipants = safeParticipants.length > 0;
-  const attributionEnabled = safeParticipants.some(
-    (p) => p.compensationProfile?.customerAttributionEnabled === true
-  );
-
-  React.useEffect(() => {
-    if (!focusParticipantId) return;
-    const el = document.getElementById(`participant-${focusParticipantId}`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [focusParticipantId, displayParticipants.length]);
-
   const sectionError = sectionErrors.participants;
   const { project: routeProject, participants: routeParticipants } = routeState;
 
@@ -473,15 +492,21 @@ export function ProjectParticipantsView() {
                 </TableHeader>
                 <TableBody>
                   {displayParticipants.map((p) => (
-                    <ProjectParticipantTableRow
+                    <SafeParticipantBoundary
                       key={p.id}
-                      participant={p}
-                      highlighted={recentlySavedParticipantId === p.id}
-                      onCopyAgreement={openAgreementShare}
-                      onPayoutVerificationChange={updatePayoutVerification}
-                      onEdit={setEditParticipant}
-                      onConfigureCompensation={setCompensationParticipant}
-                    />
+                      participantId={p.id}
+                      participantName={p.name}
+                      onRetry={handleRefresh}
+                    >
+                      <ProjectParticipantTableRow
+                        participant={p}
+                        highlighted={recentlySavedParticipantId === p.id}
+                        onCopyAgreement={openAgreementShare}
+                        onPayoutVerificationChange={updatePayoutVerification}
+                        onEdit={setEditParticipant}
+                        onConfigureCompensation={setCompensationParticipant}
+                      />
+                    </SafeParticipantBoundary>
                   ))}
                 </TableBody>
               </Table>

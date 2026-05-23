@@ -72,9 +72,21 @@ export function ParticipantCompensationDialog({
 
   React.useEffect(() => {
     if (!participant) return;
-    setDraft(
-      participant.compensationProfile ?? safeDefaultCompensationProfile(participant)
-    );
+    setServiceQuery('');
+    try {
+      setDraft(
+        participant.compensationProfile ?? safeDefaultCompensationProfile(participant)
+      );
+    } catch {
+      setDraft({
+        compensationType: 'FIXED_FEE',
+        configured: false,
+        revenueSources: [],
+        customerAttributionEnabled: false,
+        commissionSourceMode: 'all_active',
+        commissionServiceIds: [],
+      });
+    }
   }, [participant]);
 
   React.useEffect(() => {
@@ -135,10 +147,16 @@ export function ParticipantCompensationDialog({
 
   if (!participant) return null;
 
-  const preview = applyCompensationProfileToParticipant(participant, {
-    ...draft,
-    configured: true,
-  });
+  const preview = React.useMemo(() => {
+    try {
+      return applyCompensationProfileToParticipant(participant, {
+        ...draft,
+        configured: true,
+      });
+    } catch {
+      return participant;
+    }
+  }, [participant, draft]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

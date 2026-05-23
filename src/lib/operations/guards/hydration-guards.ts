@@ -4,6 +4,7 @@ import type { CompensationStructure } from '@/lib/operations/states/compensation
 import type { CompensationState } from '@/lib/operations/states/compensation-state';
 import type { ParticipantState } from '@/lib/operations/states/participant-state';
 import type { ProjectState } from '@/lib/operations/states/project-state';
+import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
 /**
  * Safe hydration — never trust DB completeness.
  * All UI and orchestration must read entities through these helpers.
@@ -64,38 +65,7 @@ export function safeCompensationState(
 export function normalizeParticipantEntity(
   participant: DemoParticipant | null | undefined
 ): DemoParticipant {
-  if (!participant) {
-    return {
-      id: 'unknown',
-      name: 'Unnamed participant',
-      email: '',
-      role: 'Contributor',
-      commissionKind: 'fixed_amount',
-      commissionValue: 0,
-      status: 'Pending',
-      approvalStatus: 'Pending approval',
-      onboardingStatus: 'NOT_STARTED',
-      inviteToken: '',
-      workspaceSource: 'project',
-      operationalStatus: 'draft',
-    };
-  }
-  return {
-    ...participant,
-    id: participant.id ?? `draft-${Date.now()}`,
-    name: participant.name?.trim() || 'Unnamed participant',
-    email: participant.email ?? '',
-    role: participant.role ?? 'Contributor',
-    commissionKind: participant.commissionKind ?? 'fixed_amount',
-    commissionValue: Number.isFinite(participant.commissionValue)
-      ? participant.commissionValue
-      : 0,
-    approvalStatus: participant.approvalStatus ?? 'Pending approval',
-    onboardingStatus: participant.onboardingStatus ?? 'NOT_STARTED',
-    inviteToken: participant.inviteToken ?? '',
-    attributionStatus: participant.attributionStatus ?? 'inactive',
-    workspaceSource: participant.workspaceSource ?? 'project',
-  };
+  return hydrateOperationalParticipant(participant);
 }
 
 export function deriveParticipantState(

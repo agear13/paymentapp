@@ -21,6 +21,7 @@ import { attributionTruthLabel } from '@/lib/operations/truth/attribution-truth'
 import { deriveAgreementLifecycleState } from '@/lib/operations/lifecycle/agreement-lifecycle';
 import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
 import type { ParticipantAttributionStatus } from '@/lib/projects/participant-entitlement';
+import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
 
 /** @deprecated Use ParticipantLifecycleState — kept for table column compatibility */
 export type ParticipantInviteState =
@@ -169,7 +170,13 @@ export function participantSummaryMetrics(
   let readyForPayout = 0;
   let activeAttribution = 0;
 
-  for (const p of participants) {
+  for (const raw of participants) {
+    let p: DemoParticipant;
+    try {
+      p = hydrateOperationalParticipant(raw);
+    } catch {
+      continue;
+    }
     const agreementApproved = deriveAgreementLifecycleState(p) === 'APPROVED';
     if (!agreementApproved) pendingAgreements += 1;
 

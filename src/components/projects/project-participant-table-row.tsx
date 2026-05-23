@@ -28,6 +28,7 @@ import {
   PAYOUT_CONFIRMATION_LABELS,
 } from '@/lib/operations/merchant-operational-copy';
 import { cn } from '@/lib/utils';
+import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
 
 export type ProjectParticipantTableRowProps = {
   participant: DemoParticipant;
@@ -39,13 +40,14 @@ export type ProjectParticipantTableRowProps = {
 };
 
 function ProjectParticipantTableRowComponent({
-  participant: p,
+  participant,
   highlighted = false,
   onCopyAgreement,
   onPayoutVerificationChange,
   onEdit,
   onConfigureCompensation,
 }: ProjectParticipantTableRowProps) {
+  const p = React.useMemo(() => hydrateOperationalParticipant(participant), [participant]);
   const invite = deriveInviteState(p);
   const participation = deriveParticipationLabel(p);
   const attribution = deriveAttributionStatus(p);
