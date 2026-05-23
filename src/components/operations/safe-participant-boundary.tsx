@@ -36,7 +36,7 @@ export class SafeParticipantBoundary extends React.Component<Props, State> {
       const label = this.props.participantName?.trim() || 'Participant';
       return (
         <TableRow>
-          <TableCell colSpan={8} className="py-4">
+          <TableCell colSpan={7} className="py-4">
             <div className="flex flex-col gap-2 rounded-md border border-amber-500/25 bg-amber-500/5 p-3 text-sm">
               <div className="flex items-center gap-2 font-medium text-amber-900 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 shrink-0" />

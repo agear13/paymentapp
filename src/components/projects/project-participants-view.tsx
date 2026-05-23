@@ -24,6 +24,7 @@ import { ProjectParticipantTableRow } from '@/components/projects/project-partic
 import { EditProjectParticipantDialog } from '@/components/projects/edit-project-participant-dialog';
 import { ParticipantAgreementShareDialog } from '@/components/projects/participant-agreement-share-dialog';
 import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-guidance';
+import { OperatorPayoutVerificationInfo } from '@/components/projects/operator-payout-verification-info';
 import type { DemoParticipantRole } from '@/components/deal-network-demo/invite-participant-modal';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import {
@@ -468,48 +469,51 @@ export function ProjectParticipantsView() {
               attributionEnabled={attributionEnabled}
             />
           <Card className="border-border/80 shadow-sm">
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle>Project participants</CardTitle>
               <CardDescription>
-                Invite delivery, agreement, attribution, and operator payout confirmation are tracked
-                separately.
+                Agreement, attribution, payout confirmation, and earnings — one row per participant.
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0 sm:p-0">
-              <div ref={tableScrollRef} className="max-h-[70vh] overflow-y-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Participant</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Invite</TableHead>
-                    <TableHead>Participation</TableHead>
-                    <TableHead>Attribution</TableHead>
-                    <TableHead>Operator payout confirmation</TableHead>
-                    <TableHead>Earnings structure</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayParticipants.map((p) => (
-                    <SafeParticipantBoundary
-                      key={p.id}
-                      participantId={p.id}
-                      participantName={p.name}
-                      onRetry={handleRefresh}
-                    >
-                      <ProjectParticipantTableRow
-                        participant={p}
-                        highlighted={recentlySavedParticipantId === p.id}
-                        onCopyAgreement={openAgreementShare}
-                        onPayoutVerificationChange={updatePayoutVerification}
-                        onEdit={setEditParticipant}
-                        onConfigureCompensation={setCompensationParticipant}
-                      />
-                    </SafeParticipantBoundary>
-                  ))}
-                </TableBody>
-              </Table>
+            <CardContent className="space-y-3 p-4 sm:p-6 pt-0">
+              <OperatorPayoutVerificationInfo />
+              <div
+                ref={tableScrollRef}
+                className="max-h-[70vh] overflow-x-auto overflow-y-auto -mx-1 px-1"
+              >
+                <Table className="min-w-[880px] table-fixed w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[22%]">Participant</TableHead>
+                      <TableHead className="w-[10%]">Role</TableHead>
+                      <TableHead className="w-[12%]">Agreement</TableHead>
+                      <TableHead className="w-[11%]">Attribution</TableHead>
+                      <TableHead className="w-[15%]">Payout</TableHead>
+                      <TableHead className="w-[18%]">Earnings</TableHead>
+                      <TableHead className="w-[12%] text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {displayParticipants.map((p) => (
+                      <SafeParticipantBoundary
+                        key={p.id}
+                        participantId={p.id}
+                        participantName={p.name}
+                        onRetry={handleRefresh}
+                      >
+                        <ProjectParticipantTableRow
+                          participant={p}
+                          highlighted={recentlySavedParticipantId === p.id}
+                          onCopyAgreement={openAgreementShare}
+                          onShareAgreement={openAgreementShare}
+                          onPayoutVerificationChange={updatePayoutVerification}
+                          onEdit={setEditParticipant}
+                          onConfigureCompensation={setCompensationParticipant}
+                        />
+                      </SafeParticipantBoundary>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </CardContent>
           </Card>

@@ -1,10 +1,17 @@
 'use client';
 
 import * as React from 'react';
-import { Copy, Pencil } from 'lucide-react';
+import { Copy, ExternalLink, MoreHorizontal, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { TableCell, TableRow } from '@/components/ui/table';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
@@ -14,26 +21,22 @@ import {
   earningsStructureSummary,
 } from '@/lib/projects/participant-entitlement';
 import {
-  deriveInviteState,
-  deriveParticipationLabel,
-  inviteStateLabel,
-  payoutOnboardingLabel,
+  agreementDisplayLabel,
   derivePayoutOnboardingState,
+  payoutOnboardingLabel,
   attributionDisplayLabel,
-  participationLabelText,
 } from '@/lib/projects/participant-lifecycle';
 import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
-import {
-  OPERATOR_PAYOUT_DISCLAIMER,
-  PAYOUT_CONFIRMATION_LABELS,
-} from '@/lib/operations/merchant-operational-copy';
+import { PAYOUT_CONFIRMATION_LABELS } from '@/lib/operations/merchant-operational-copy';
 import { cn } from '@/lib/utils';
 import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
+import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 
 export type ProjectParticipantTableRowProps = {
   participant: DemoParticipant;
   highlighted?: boolean;
   onCopyAgreement: (p: DemoParticipant) => void;
+  onShareAgreement?: (p: DemoParticipant) => void;
   onPayoutVerificationChange: (id: string, confirmed: boolean) => void;
   onEdit: (p: DemoParticipant) => void;
   onConfigureCompensation: (p: DemoParticipant) => void;
@@ -43,102 +46,127 @@ function ProjectParticipantTableRowComponent({
   participant,
   highlighted = false,
   onCopyAgreement,
+  onShareAgreement,
   onPayoutVerificationChange,
   onEdit,
   onConfigureCompensation,
 }: ProjectParticipantTableRowProps) {
   const p = React.useMemo(() => hydrateOperationalParticipant(participant), [participant]);
-  const invite = deriveInviteState(p);
-  const participation = deriveParticipationLabel(p);
   const attribution = deriveAttributionStatus(p);
   const payoutState = derivePayoutOnboardingState(p);
   const exempt = p.compensationProfile?.exemptFromPayout === true;
   const verified = p.payoutVerificationConfirmed === true;
+  const earnings = earningsStructureSummary(p);
+  const share = onShareAgreement ?? onCopyAgreement;
+
+  const viewAgreement = () => {
+    const path = p.agreementUrl ?? participantAgreementPath(p.inviteToken);
+    if (typeof window !== 'undefined') {
+      window.open(path, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   return (
     <TableRow
       id={`participant-${p.id}`}
       className={cn(
-        highlighted && 'animate-pulse bg-emerald-500/10 transition-colors duration-700'
+        highlighted && 'bg-emerald-500/10 transition-colors duration-700',
+        'align-middle'
       )}
     >
-      <TableCell>
-        <div className="font-medium">{p.name}</div>
-        <div className="text-xs text-muted-foreground">{p.email?.trim() || 'No email'}</div>
+      <TableCell className="min-w-[140px] max-w-[220px]">
+        <div className="font-medium truncate" title={p.name}>
+          {p.name}
+        </div>
+        <div className="text-xs text-muted-foreground truncate" title={p.email?.trim() || undefined}>
+          {p.email?.trim() || 'No email'}
+        </div>
       </TableCell>
-      <TableCell>{operationalRoleLabel(p)}</TableCell>
-      <TableCell>
-        <Badge
-          variant={
-            invite === 'approved'
-              ? 'default'
-              : invite === 'opened' || invite === 'sent'
-                ? 'secondary'
-                : 'outline'
-          }
-        >
-          {inviteStateLabel(invite)}
+      <TableCell className="w-[100px] whitespace-nowrap text-sm">
+        {operationalRoleLabel(p)}
+      </TableCell>
+      <TableCell className="w-[120px]">
+        <Badge variant="outline" className="whitespace-nowrap text-xs">
+          {agreementDisplayLabel(p)}
         </Badge>
       </TableCell>
-      <TableCell>
-        <Badge variant={participation === 'approved' ? 'default' : 'outline'}>
-          {participationLabelText(participation)}
-        </Badge>
-      </TableCell>
-      <TableCell>
+      <TableCell className="w-[110px]">
         {canGenerateAttributionLink(p) ? (
-          <Badge variant={attribution === 'active' ? 'default' : 'secondary'}>
+          <Badge
+            variant={attribution === 'active' ? 'default' : 'secondary'}
+            className="whitespace-nowrap text-xs"
+          >
             {attributionStatusLabel(attribution)}
           </Badge>
         ) : (
-          <span className="text-xs text-foreground/70">{attributionDisplayLabel(p)}</span>
+          <span
+            className="text-xs text-foreground/70 truncate block max-w-[100px]"
+            title={attributionDisplayLabel(p)}
+          >
+            {attributionDisplayLabel(p)}
+          </span>
         )}
       </TableCell>
-      <TableCell onClick={(e) => e.stopPropagation()}>
+      <TableCell className="w-[148px]" onClick={(e) => e.stopPropagation()}>
         {exempt ? (
-          <span className="text-xs text-muted-foreground">No payout</span>
+          <span className="text-xs text-muted-foreground whitespace-nowrap">No payout</span>
         ) : (
-          <div className="space-y-2 max-w-[220px]">
-            <Badge variant={verified ? 'default' : 'outline'}>
+          <div className="space-y-1">
+            <Badge variant={verified ? 'default' : 'outline'} className="whitespace-nowrap text-xs">
               {payoutOnboardingLabel(payoutState)}
             </Badge>
-            <label className="flex items-start gap-2 text-xs cursor-pointer leading-snug">
+            <label className="flex items-center gap-1.5 cursor-pointer">
               <Checkbox
                 checked={verified}
                 onCheckedChange={(v) => onPayoutVerificationChange(p.id, v === true)}
-                className="mt-0.5"
+                className="h-3.5 w-3.5"
               />
-              <span>{PAYOUT_CONFIRMATION_LABELS.toggleLabel}</span>
+              <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                {PAYOUT_CONFIRMATION_LABELS.toggleLabel}
+              </span>
             </label>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              {OPERATOR_PAYOUT_DISCLAIMER}
-            </p>
           </div>
         )}
       </TableCell>
-      <TableCell className="text-sm text-muted-foreground">
+      <TableCell className="min-w-[120px] max-w-[180px]">
         <button
           type="button"
-          className="text-left hover:text-foreground underline-offset-2 hover:underline"
+          className="text-left text-sm text-muted-foreground hover:text-foreground truncate block w-full underline-offset-2 hover:underline"
+          title={earnings}
           onClick={() => onConfigureCompensation(p)}
         >
-          {earningsStructureSummary(p)}
+          {earnings}
         </button>
       </TableCell>
-      <TableCell className="text-right">
-        <div className="flex flex-col items-end gap-1">
-          <Button variant="ghost" size="sm" onClick={() => onConfigureCompensation(p)}>
-            <Pencil className="mr-1 h-3.5 w-3.5" />
-            Earnings
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => onEdit(p)}>
-            Edit
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => onCopyAgreement(p)}>
-            <Copy className="mr-1 h-3.5 w-3.5" />
-            Agreement
-          </Button>
-        </div>
+      <TableCell className="w-12 text-right">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Participant actions">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => onConfigureCompensation(p)}>
+              <Pencil className="mr-2 h-3.5 w-3.5" />
+              Configure earnings
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEdit(p)}>
+              Edit participant
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onCopyAgreement(p)}>
+              <Copy className="mr-2 h-3.5 w-3.5" />
+              Copy agreement
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => share(p)}>
+              Share agreement
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={viewAgreement}>
+              <ExternalLink className="mr-2 h-3.5 w-3.5" />
+              View agreement
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </TableCell>
     </TableRow>
   );

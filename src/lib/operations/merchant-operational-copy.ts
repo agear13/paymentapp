@@ -5,8 +5,10 @@ export const OPERATOR_PAYOUT_DISCLAIMER =
 
 export const PAYOUT_CONFIRMATION_LABELS = {
   notConfirmed: 'Not confirmed',
-  confirmed: 'Confirmed by operator',
-  toggleLabel: 'Participant payout details verified externally',
+  confirmed: 'Confirmed',
+  toggleLabel: 'Verified externally',
+  helperLine:
+    'Operator confirms payout details were collected outside Provvypay.',
 } as const;
 
 export const AGREEMENT_SHARE_HELPER =

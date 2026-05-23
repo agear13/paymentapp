@@ -3,6 +3,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { MerchantSettingsForm } from '@/components/dashboard/settings/merchant-settings-form';
 import { WorkspaceActivationBanner } from '@/components/onboarding/workspace-activation-banner';
+import { PaymentRailsFocusSection } from '@/components/settings/payment-rails-focus-section';
 
 type MerchantSettingsShellProps = {
   variant: 'pilot' | 'full';
@@ -17,11 +18,13 @@ export function MerchantSettingsShell({ variant }: MerchantSettingsShellProps) {
         </CardContent>
       </Card>
 
-      <Card id="provider-setup">
-        <CardContent className="pt-6">
-          <MerchantSettingsForm variant={variant} />
-        </CardContent>
-      </Card>
+      <PaymentRailsFocusSection>
+        <Card>
+          <CardContent className="pt-6">
+            <MerchantSettingsForm variant={variant} />
+          </CardContent>
+        </Card>
+      </PaymentRailsFocusSection>
     </div>
   );
 }

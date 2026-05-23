@@ -126,7 +126,7 @@ export function derivePayoutOnboardingState(
 export function payoutOnboardingLabel(state: PayoutOnboardingState): string {
   switch (state) {
     case 'ready':
-      return 'Confirmed by operator';
+      return 'Confirmed';
     case 'in progress':
     case 'invited':
     case 'not started':

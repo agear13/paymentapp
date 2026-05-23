@@ -1020,7 +1020,9 @@ export function WorkflowOnboardingForm() {
                   </p>
                 </div>
                 <Button asChild className="shrink-0">
-                  <Link href="/dashboard/settings/merchant?onboarding=continue">Connect Stripe</Link>
+                  <Link href="/dashboard/settings/merchant?onboarding=continue#payment-rails">
+                    Connect Stripe
+                  </Link>
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">

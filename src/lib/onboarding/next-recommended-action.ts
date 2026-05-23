@@ -71,8 +71,8 @@ export function deriveNextRecommendedAction(
       id: 'provider',
       title: 'Connect your first payment provider',
       description: 'Connect Stripe or another provider to collect revenue into your workspace.',
-      href: '/dashboard/settings/merchant?onboarding=continue#provider-setup',
-      ctaLabel: 'Connect provider',
+      href: '/dashboard/settings/merchant?onboarding=continue#payment-rails',
+      ctaLabel: 'Set up payment rails',
       blockers: activation.activationBlockers,
     };
   }

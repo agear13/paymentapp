@@ -22,3 +22,4 @@ export * from '@/lib/operations/routing';
 export * from '@/lib/operations/lifecycle';
 export * from '@/lib/operations/truth';
 export * from '@/lib/operations/hydration';
+export * from '@/lib/operations/guidance/contextual-next-step';

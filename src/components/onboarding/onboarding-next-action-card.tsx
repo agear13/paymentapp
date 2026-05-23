@@ -1,14 +1,19 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 import {
   createFallbackNextAction,
-  deriveMerchantSettingsNextAction,
   deriveNextRecommendedAction,
 } from '@/lib/onboarding/next-recommended-action';
+import {
+  collectionSettlementHref,
+  resolveContextualNextStep,
+  shouldPrioritizePaymentRailsContext,
+} from '@/lib/operations/guidance/contextual-next-step';
 import { cn } from '@/lib/utils';
 
 type OnboardingNextActionCardProps = {
@@ -22,24 +27,45 @@ export function OnboardingNextActionCard({
   compact,
   variant = 'default',
 }: OnboardingNextActionCardProps) {
+  const pathname = usePathname() ?? '';
   const { activation, nextAction: apiNextAction, loading, degraded } = useWorkspaceActivation();
 
   if (loading) {
     return null;
   }
 
+  const globalAction =
+    activation && !degraded
+      ? apiNextAction ?? deriveNextRecommendedAction(activation)
+      : createFallbackNextAction(activation?.primaryProjectId);
+
   const nextAction =
     activation && !degraded
-      ? variant === 'merchant-settings'
-        ? deriveMerchantSettingsNextAction(activation) ?? deriveNextRecommendedAction(activation)
-        : apiNextAction ?? deriveNextRecommendedAction(activation)
-      : createFallbackNextAction(activation?.primaryProjectId);
+      ? resolveContextualNextStep({
+          currentRoute: pathname,
+          workspaceState: activation,
+          operationalGuidance: globalAction,
+        }) ?? globalAction
+      : globalAction;
 
   if (!nextAction) {
     return null;
   }
 
+  const onPaymentRailsPage = shouldPrioritizePaymentRailsContext(pathname, activation);
+  const ctaHref = onPaymentRailsPage ? collectionSettlementHref() : nextAction.href;
+  const showInlineCta = !nextAction.instructionalOnly || !onPaymentRailsPage;
+
   if (compact) {
+    if (nextAction.instructionalOnly && onPaymentRailsPage) {
+      return (
+        <div className={cn('text-sm', className)}>
+          <p className="text-xs font-medium text-muted-foreground">Next step</p>
+          <p className="mt-0.5 font-medium">{nextAction.title}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{nextAction.description}</p>
+        </div>
+      );
+    }
     if (nextAction.instructionalOnly) {
       return (
         <div className={cn('text-sm', className)}>
@@ -60,7 +86,7 @@ export function OnboardingNextActionCard({
           <p className="text-sm font-medium mt-0.5">{nextAction.title}</p>
         </div>
         <Button size="sm" className="shrink-0" asChild>
-          <Link href={nextAction.href}>{nextAction.ctaLabel}</Link>
+          <Link href={ctaHref}>{nextAction.ctaLabel}</Link>
         </Button>
       </div>
     );
@@ -82,18 +108,24 @@ export function OnboardingNextActionCard({
           </ul>
         ) : null}
       </div>
-      {nextAction.instructionalOnly ? (
+      {nextAction.instructionalOnly && onPaymentRailsPage ? (
+        <Button asChild variant="outline" size="sm">
+          <Link href={collectionSettlementHref()}>{nextAction.ctaLabel}</Link>
+        </Button>
+      ) : nextAction.instructionalOnly ? (
         <p className="text-sm text-muted-foreground">
-          Complete provider setup in the form below.
+          {variant === 'merchant-settings'
+            ? 'Complete payment rail setup in the form below.'
+            : nextAction.description}
         </p>
-      ) : (
+      ) : showInlineCta ? (
         <Button asChild>
-          <Link href={nextAction.href}>
+          <Link href={ctaHref}>
             {nextAction.ctaLabel}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Link>
         </Button>
-      )}
+      ) : null}
     </div>
   );
 }
