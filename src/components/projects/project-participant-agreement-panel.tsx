@@ -21,7 +21,6 @@ import { ReferralSharePanel } from '@/components/referrals/referral-share-panel'
 import { buildReferralQrApiPath } from '@/lib/referrals/referral-share-url';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import {
-  formatParticipationEarningsSummary,
   formatApprovalTimestamp,
   type ScopedServiceCommissionRow,
 } from '@/lib/projects/participant-compensation-copy';
@@ -31,6 +30,10 @@ import {
   referralIssuanceFromParticipant,
 } from '@/lib/projects/participant-lifecycle';
 import { deriveAttributionStatus } from '@/lib/projects/participant-entitlement';
+import {
+  deriveCommissionScope,
+  isCatalogScopedCommission,
+} from '@/lib/operations/derivations/commission-scope';
 
 function roleAmountsFromDeal(deal: RecentDeal) {
   return {
@@ -217,7 +220,14 @@ export function ProjectParticipantAgreementPanel({
   }
 
   const showCommerceAfterApproval = approved && !!commerceLink && expectsCommerce;
-  const earningsSummary = formatParticipationEarningsSummary(participant);
+  const commissionScope = React.useMemo(
+    () =>
+      deriveCommissionScope(participant, {
+        catalogItems: scopedServiceRows.map((r) => ({ id: r.id, name: r.name })),
+      }),
+    [participant, scopedServiceRows]
+  );
+  const catalogCommission = isCatalogScopedCommission(participant);
 
   return (
     <Card className="w-full max-w-2xl">
@@ -277,19 +287,24 @@ export function ProjectParticipantAgreementPanel({
 
         <div className="rounded-md border p-3 bg-background space-y-2">
           <p className="text-sm font-medium">Your earnings on this project</p>
-          <p className="text-sm font-medium text-foreground">{earningsSummary}</p>
-          {commissionStructureLabel && participant.participationModel !== 'fixed_payout' ? (
+          <p className="text-sm font-medium text-foreground">{commissionScope.earningsPrimary}</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {commissionScope.scopeDescription}
+          </p>
+          {!catalogCommission && commissionStructureLabel && participant.participationModel !== 'fixed_payout' ? (
             <p className="text-xs text-muted-foreground">Structure: {commissionStructureLabel}</p>
           ) : null}
-          {rolePayout && rolePayout.total > 0 ? (
+          {!catalogCommission && rolePayout && rolePayout.total > 0 ? (
             <p className="text-sm text-muted-foreground">{rolePayout.previewLine}</p>
           ) : null}
         </div>
 
         <ParticipantAttributionAgreementSummary
+          participant={participant}
           commerce={participant.referralCommerce}
           serviceRows={scopedServiceRows}
           approved={approved}
+          catalogItems={scopedServiceRows.map((r) => ({ id: r.id, name: r.name }))}
           allServicesNote={
             !participant.referralCommerce?.enabledServiceIds?.length &&
             participant.referralCommerce?.commissionMode === 'referral_commerce'

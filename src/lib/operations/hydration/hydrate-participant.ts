@@ -9,6 +9,7 @@ import {
 } from '@/lib/operations/contracts/participant-contract';
 import { deriveAttributionState } from '@/lib/operations/derivations/derive-attribution-state';
 import { deriveCompensationState } from '@/lib/operations/derivations/derive-compensation-state';
+import type { CommissionScopeContext } from '@/lib/operations/derivations/commission-scope';
 import { deriveParticipantReadiness } from '@/lib/operations/derivations/derive-participant-readiness';
 import {
   detectParticipantEntitySource,
@@ -21,13 +22,18 @@ import { deriveAttributionLifecycleState } from '@/lib/operations/lifecycle/attr
 import { deriveParticipantLifecycleState } from '@/lib/operations/lifecycle/participant-lifecycle';
 import { derivePayoutOnboardingPhase } from '@/lib/operations/lifecycle/payout-lifecycle';
 
-function emptyHydratedParticipant(): HydratedParticipant {
+export type HydrateParticipantContext = CommissionScopeContext;
+
+function emptyHydratedParticipant(context: HydrateParticipantContext = {}): HydratedParticipant {
   const entity = hydrateOperationalParticipant(null);
-  return buildHydratedParticipant(entity);
+  return buildHydratedParticipant(entity, context);
 }
 
-function buildHydratedParticipant(entity: DemoParticipant): HydratedParticipant {
-  const compensation = deriveCompensationState(entity);
+function buildHydratedParticipant(
+  entity: DemoParticipant,
+  context: HydrateParticipantContext = {}
+): HydratedParticipant {
+  const compensation = deriveCompensationState(entity, context);
   const attribution = deriveAttributionState(entity);
   const operational = deriveParticipantReadiness(entity);
   const participantLifecycle = deriveParticipantLifecycleState(entity);
@@ -61,6 +67,13 @@ function buildHydratedParticipant(entity: DemoParticipant): HydratedParticipant 
       attributionEnabled: compensation.attributionEnabled,
       commissionSource: compensation.commissionSource,
       selectedCatalogItemIds: compensation.selectedCatalogItemIds,
+      settlementBasis: compensation.settlementBasis,
+      scopeLabel: compensation.scopeLabel,
+      scopeDescription: compensation.scopeDescription,
+      earningsPrimary: compensation.earningsPrimary,
+      earningsSecondary: compensation.earningsSecondary,
+      earningsTitle: compensation.earningsTitle,
+      eligibleCatalogItems: compensation.eligibleCatalogItems,
       earningsSummary: compensation.earningsSummary,
     },
     payout: {
@@ -92,15 +105,16 @@ function buildHydratedParticipant(entity: DemoParticipant): HydratedParticipant 
  * Never throws.
  */
 export function hydrateParticipant(
-  raw: DemoParticipant | Record<string, unknown> | null | undefined
+  raw: DemoParticipant | Record<string, unknown> | null | undefined,
+  context: HydrateParticipantContext = {}
 ): HydratedParticipant {
   try {
     const adapted = adaptParticipantInput(raw);
-    if (!adapted) return emptyHydratedParticipant();
+    if (!adapted) return emptyHydratedParticipant(context);
     const source = detectParticipantEntitySource(adapted, true);
     auditParticipantInput(adapted);
     const entity = hydrateOperationalParticipant(adapted);
-    const hydrated = buildHydratedParticipant(entity);
+    const hydrated = buildHydratedParticipant(entity, context);
     return {
       ...hydrated,
       metadata: {
@@ -114,15 +128,16 @@ export function hydrateParticipant(
         ? raw.id
         : undefined;
     warnHydrationFailure('participant', id, error);
-    return emptyHydratedParticipant();
+    return emptyHydratedParticipant(context);
   }
 }
 
 export function hydrateParticipants(
-  rawList: (DemoParticipant | Record<string, unknown>)[] | null | undefined
+  rawList: (DemoParticipant | Record<string, unknown>)[] | null | undefined,
+  context: HydrateParticipantContext = {}
 ): HydratedParticipant[] {
   if (!Array.isArray(rawList)) return [];
-  return rawList.map((raw) => hydrateParticipant(raw));
+  return rawList.map((raw) => hydrateParticipant(raw, context));
 }
 
 /** Access hydrated storage entity for mutations only. */

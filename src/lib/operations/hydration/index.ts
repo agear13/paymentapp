@@ -9,6 +9,7 @@ export {
   hydrateParticipant,
   hydrateParticipants,
   participantEntity,
+  type HydrateParticipantContext,
 } from '@/lib/operations/hydration/hydrate-participant';
 
 export { hydrateProject, type HydrateProjectContext } from '@/lib/operations/hydration/hydrate-project';

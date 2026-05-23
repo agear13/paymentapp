@@ -18,7 +18,7 @@ import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import { PAYOUT_CONFIRMATION_LABELS } from '@/lib/operations/merchant-operational-copy';
 import { cn } from '@/lib/utils';
-import { hydrateParticipant, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
+import { hydrateParticipant, participantEntity, type HydrateParticipantContext } from '@/lib/operations/hydration/hydrate-participant';
 import {
   agreementLabelFromContract,
   agreementSecondaryFromContract,
@@ -55,6 +55,7 @@ function StackedOperationalCell({
 
 export type ProjectParticipantTableRowProps = {
   participant: DemoParticipant;
+  catalogContext?: HydrateParticipantContext;
   highlighted?: boolean;
   onCopyAgreement: (p: DemoParticipant) => void;
   onShareAgreement?: (p: DemoParticipant) => void;
@@ -65,6 +66,7 @@ export type ProjectParticipantTableRowProps = {
 
 function ProjectParticipantTableRowComponent({
   participant,
+  catalogContext,
   highlighted = false,
   onCopyAgreement,
   onShareAgreement,
@@ -72,7 +74,10 @@ function ProjectParticipantTableRowComponent({
   onEdit,
   onConfigureCompensation,
 }: ProjectParticipantTableRowProps) {
-  const hydrated = React.useMemo(() => hydrateParticipant(participant), [participant]);
+  const hydrated = React.useMemo(
+    () => hydrateParticipant(participant, catalogContext),
+    [participant, catalogContext]
+  );
   const entity = hydrated._entity;
   const share = onShareAgreement ?? onCopyAgreement;
   const exempt = hydrated.compensation.exemptFromPayout;
@@ -186,11 +191,16 @@ function ProjectParticipantTableRowComponent({
       <TableCell className={participantTableCellClass('earnings')}>
         <button
           type="button"
-          className="text-left text-sm font-medium text-foreground/90 hover:text-foreground line-clamp-2 w-full underline-offset-2 hover:underline leading-snug"
-          title={hydrated.compensation.earningsSummary}
+          className="flex flex-col items-start gap-1 leading-tight text-left w-full underline-offset-2 hover:underline"
+          title={hydrated.compensation.earningsTitle}
           onClick={openCompensation}
         >
-          {hydrated.compensation.earningsSummary}
+          <span className="text-sm font-medium text-foreground/90 whitespace-nowrap">
+            {hydrated.compensation.earningsPrimary}
+          </span>
+          <span className="text-xs text-muted-foreground leading-snug whitespace-normal">
+            {hydrated.compensation.earningsSecondary}
+          </span>
         </button>
       </TableCell>
 

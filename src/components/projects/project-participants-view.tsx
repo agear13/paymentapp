@@ -91,10 +91,39 @@ export function ProjectParticipantsView() {
     string | null
   >(null);
   const [pinnedOrder, setPinnedOrder] = React.useState<string[] | null>(null);
+  const [catalogItems, setCatalogItems] = React.useState<Array<{ id: string; name: string }>>([]);
   const tableScrollRef = React.useRef<HTMLDivElement>(null);
   const savedScrollTop = React.useRef(0);
+  const catalogContext = React.useMemo(() => ({ catalogItems }), [catalogItems]);
 
   useProjectWorkspaceSmartPolling({ enabled: Boolean(deal?.id), scope: 'participants' });
+
+  React.useEffect(() => {
+    if (!organizationId) {
+      setCatalogItems([]);
+      return;
+    }
+    let cancelled = false;
+    void fetch(
+      `/api/organization-services?organizationId=${encodeURIComponent(organizationId)}&status=active`
+    )
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((json: { data?: Array<{ id: string; name: string }> }) => {
+        if (!cancelled) {
+          setCatalogItems(
+            Array.isArray(json.data)
+              ? json.data.map((s) => ({ id: s.id, name: s.name }))
+              : []
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId]);
 
   React.useEffect(() => {
     if (!recentlySavedParticipantId) return;
@@ -299,8 +328,8 @@ export function ProjectParticipantsView() {
   );
 
   const hydratedParticipants = React.useMemo(
-    () => hydrateParticipants(projectParticipants),
-    [projectParticipants]
+    () => hydrateParticipants(projectParticipants, catalogContext),
+    [projectParticipants, catalogContext]
   );
 
   const displayParticipants = React.useMemo(() => {
@@ -568,6 +597,7 @@ export function ProjectParticipantsView() {
                       >
                         <ProjectParticipantTableRow
                           participant={p}
+                          catalogContext={catalogContext}
                           highlighted={recentlySavedParticipantId === p.id}
                           onCopyAgreement={openAgreementShare}
                           onShareAgreement={openAgreementShare}

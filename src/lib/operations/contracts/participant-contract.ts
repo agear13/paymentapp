@@ -5,6 +5,7 @@ import type { ParticipantLifecycleState } from '@/lib/operations/lifecycle/parti
 import type { PayoutOnboardingPhase } from '@/lib/operations/lifecycle/payout-lifecycle';
 import type { ParticipantCompensationType } from '@/lib/participants/participant-compensation-types';
 import type { OperationalAttributionContract } from '@/lib/operations/contracts/attribution-contract';
+import type { CommissionSettlementBasis, CatalogItemRef } from '@/lib/operations/derivations/commission-scope';
 
 export type CommissionSource = 'all_active' | 'selected';
 
@@ -39,6 +40,14 @@ export type HydratedParticipant = {
     attributionEnabled: boolean;
     commissionSource: CommissionSource;
     selectedCatalogItemIds: string[];
+    settlementBasis: CommissionSettlementBasis;
+    scopeLabel: string;
+    scopeDescription: string;
+    earningsPrimary: string;
+    earningsSecondary: string;
+    earningsTitle: string;
+    eligibleCatalogItems: CatalogItemRef[];
+    /** @deprecated use earningsPrimary */
     earningsSummary: string;
   };
 

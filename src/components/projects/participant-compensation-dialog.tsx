@@ -36,6 +36,7 @@ import {
   logCompensationConfigDiagnostic,
 } from '@/lib/participants/initialize-compensation-draft';
 import { hydrateParticipant, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
+import { deriveCompensationPreviewText } from '@/lib/operations/derivations/commission-scope';
 import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-guidance';
 
 type CatalogService = { id: string; name: string; price?: number; currency?: string };
@@ -82,17 +83,16 @@ export function ParticipantCompensationDialog({
   );
   const entity = hydratedParticipant ? participantEntity(hydratedParticipant) : null;
 
-  const preview = React.useMemo(() => {
+  const previewText = React.useMemo(() => {
     if (!entity) return null;
-    try {
-      return applyCompensationProfileToParticipant(entity, {
-        ...draft,
-        configured: true,
-      });
-    } catch {
-      return entity;
-    }
-  }, [entity, draft]);
+    const draftEntity = applyCompensationProfileToParticipant(entity, {
+      ...draft,
+      configured: true,
+    });
+    return deriveCompensationPreviewText(draftEntity, {
+      catalogItems: catalogServices.map((s) => ({ id: s.id, name: s.name })),
+    });
+  }, [entity, draft, catalogServices]);
 
   React.useEffect(() => {
     if (!open || !entity) return;
@@ -409,11 +409,11 @@ export function ParticipantCompensationDialog({
                 />
               </div>
 
-              <p className="text-xs text-muted-foreground rounded-md border border-border/30 px-3 py-2">
+              <p className="text-xs text-muted-foreground rounded-md border border-border/30 px-3 py-2 leading-relaxed">
                 Preview:{' '}
                 {isExempt
                   ? 'No payout — internal or unpaid role'
-                  : `${preview?.participationModel ?? '—'} · stored for readiness only (no settlement calc)`}
+                  : previewText ?? 'Compensation preview unavailable'}
               </p>
             </div>
             <DialogFooter>

@@ -29,8 +29,8 @@ export function ParticipantServiceCommissionTable({ rows, showAllServicesNote }:
   if (rows.length === 0 && showAllServicesNote) {
     return (
       <p className="text-sm text-muted-foreground">
-        You may earn on purchases across all active merchant services at the revenue share shown
-        above.
+        You may earn commission on purchases across all active customer-facing catalog items at the
+        rate shown above.
       </p>
     );
   }
@@ -42,7 +42,7 @@ export function ParticipantServiceCommissionTable({ rows, showAllServicesNote }:
           <TableRow>
             <TableHead>Service</TableHead>
             <TableHead className="text-right">Customer price</TableHead>
-            <TableHead className="text-right">Revenue share</TableHead>
+            <TableHead className="text-right">Commission</TableHead>
             <TableHead className="text-right">Estimated earnings</TableHead>
           </TableRow>
         </TableHeader>
