@@ -40,7 +40,11 @@ import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activati
 import { safeOperationalRouteState } from '@/lib/operations/routing/draft-safe-routing';
 import { ProgressiveOperationalPanel } from '@/components/operations/progressive-operational-panel';
 import { SafeParticipantBoundary } from '@/components/operations/safe-participant-boundary';
-import { hydrateOperationalParticipants } from '@/lib/operations/hydration/hydrate-operational-participant';
+import { hydrateParticipants, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
+import {
+  logCompensationConfigDiagnostic,
+  prepareParticipantForCompensationEdit,
+} from '@/lib/participants/initialize-compensation-draft';
 import { EMPTY_STATE_COPY } from '@/lib/operations/design-language';
 import { opSurface } from '@/lib/design/operational-surfaces';
 import { OperatorEmptyState } from '@/components/operations/operator-empty-state';
@@ -94,6 +98,33 @@ export function ProjectParticipantsView() {
     }, 4000);
     return () => window.clearTimeout(timer);
   }, [recentlySavedParticipantId]);
+
+  const openCompensationConfig = React.useCallback(
+    (participant: DemoParticipant) => {
+      try {
+        const prepared = prepareParticipantForCompensationEdit(participant);
+        logCompensationConfigDiagnostic('open', {
+          participantId: prepared.id,
+          projectId,
+          reason: 'participant-table-action',
+        });
+        setCompensationParticipant(prepared);
+      } catch (err) {
+        logCompensationConfigDiagnostic(
+          'init-failure',
+          { participantId: participant.id, projectId },
+          err
+        );
+        toast.error('Unable to open compensation settings right now.', {
+          action: {
+            label: 'Retry',
+            onClick: () => openCompensationConfig(participant),
+          },
+        });
+      }
+    },
+    [projectId]
+  );
 
   const handleRefresh = React.useCallback(() => {
     invalidate('participants');
@@ -262,28 +293,26 @@ export function ProjectParticipantsView() {
   );
 
   const hydratedParticipants = React.useMemo(
-    () => hydrateOperationalParticipants(projectParticipants),
+    () => hydrateParticipants(projectParticipants),
     [projectParticipants]
   );
 
   const displayParticipants = React.useMemo(() => {
-    if (!pinnedOrder) return hydratedParticipants;
+    const entities = hydratedParticipants.map(participantEntity);
+    if (!pinnedOrder) return entities;
     const order = new Map(pinnedOrder.map((id, i) => [id, i]));
-    return [...hydratedParticipants].sort(
+    return [...entities].sort(
       (a, b) => (order.get(a.id) ?? 999) - (order.get(b.id) ?? 999)
     );
   }, [hydratedParticipants, pinnedOrder]);
 
   const stats = React.useMemo(
-    () => participantSummaryMetrics(hydratedParticipants),
+    () => participantSummaryMetrics(hydratedParticipants.map(participantEntity)),
     [hydratedParticipants]
   );
 
   const attributionEnabled = React.useMemo(
-    () =>
-      hydratedParticipants.some(
-        (p) => p.compensationProfile?.customerAttributionEnabled === true
-      ),
+    () => hydratedParticipants.some((p) => p.compensation.attributionEnabled),
     [hydratedParticipants]
   );
 
@@ -293,16 +322,21 @@ export function ProjectParticipantsView() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [focusParticipantId, displayParticipants.length]);
 
+  const participantEntities = React.useMemo(
+    () => hydratedParticipants.map(participantEntity),
+    [hydratedParticipants]
+  );
+
   const routeState = React.useMemo(
     () =>
       safeOperationalRouteState({
         projectId: deal?.id ?? projectId ?? 'unknown',
         deal,
-        participants: hydratedParticipants,
+        participants: participantEntities,
         loading: loading && !deal,
         notFound: !deal && !loading,
       }),
-    [deal, projectId, hydratedParticipants, loading]
+    [deal, projectId, participantEntities, loading]
   );
 
   if (loading && !deal) {
@@ -319,23 +353,21 @@ export function ProjectParticipantsView() {
     );
   }
 
-  const safeParticipants = hydratedParticipants;
-  const payoutReadyCount = stats.readyForPayout;
-  const hasParticipants = safeParticipants.length > 0;
+  const hasParticipants = participantEntities.length > 0;
   const sectionError = sectionErrors.participants;
   const { project: routeProject, participants: routeParticipants } = routeState;
 
   const focusFirstEarnings = () => {
-    const needsConfig = safeParticipants.find(
-      (p) => !p.compensationProfile?.configured
-    );
-    if (needsConfig) setCompensationParticipant(needsConfig);
+    const needsConfig = hydratedParticipants.find((p) => !p.compensation.configured);
+    if (needsConfig) openCompensationConfig(participantEntity(needsConfig));
+    else if (participantEntities[0]) openCompensationConfig(participantEntities[0]);
   };
 
   return (
+    <>
     <ProjectSectionErrorBoundary
       sectionTitle="Participant earnings"
-      boundaryScope="configuration"
+      boundaryScope="default"
       onRetry={() => {
         clearSectionError('participants');
         handleRefresh();
@@ -379,7 +411,7 @@ export function ProjectParticipantsView() {
             <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
             {hasParticipants ? (
               <ProjectReadinessBreakdown
-                participants={safeParticipants}
+                participants={participantEntities}
                 projectId={projectId}
                 className="mt-2"
               />
@@ -425,7 +457,7 @@ export function ProjectParticipantsView() {
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Ready for payout</CardDescription>
-                <CardTitle className="text-2xl">{payoutReadyCount}</CardTitle>
+                <CardTitle className="text-2xl">{stats.readyForPayout}</CardTitle>
               </CardHeader>
             </Card>
             <Card>
@@ -508,7 +540,7 @@ export function ProjectParticipantsView() {
                           onShareAgreement={openAgreementShare}
                           onPayoutVerificationChange={updatePayoutVerification}
                           onEdit={setEditParticipant}
-                          onConfigureCompensation={setCompensationParticipant}
+                          onConfigureCompensation={openCompensationConfig}
                         />
                       </SafeParticipantBoundary>
                     ))}
@@ -519,9 +551,12 @@ export function ProjectParticipantsView() {
           </Card>
           </>
         )}
+      </div>
+    </ProjectSectionErrorBoundary>
 
         <ParticipantCompensationDialog
           participant={compensationParticipant}
+          projectId={projectId}
           organizationId={organizationId}
           open={Boolean(compensationParticipant)}
           onOpenChange={(open) => {
@@ -568,7 +603,6 @@ export function ProjectParticipantsView() {
           organizationId={organizationId}
           onSubmit={handleInvite}
         />
-      </div>
-    </ProjectSectionErrorBoundary>
+    </>
   );
 }

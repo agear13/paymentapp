@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { summarizeProjectReadinessGaps } from '@/lib/participants/participant-readiness';
-import { hydrateOperationalParticipants } from '@/lib/operations/hydration/hydrate-operational-participant';
+import { hydrateParticipants, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
 import { formatParticipantPayoutReadiness } from '@/lib/projects/format-participant-payout-readiness';
 import { deriveParticipantPayoutBlockers } from '@/lib/operations/blockers/payout-blockers';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ export function ProjectReadinessBreakdown({
   projectId,
   className,
 }: ProjectReadinessBreakdownProps) {
-  const safeList = hydrateOperationalParticipants(participants);
+  const safeList = hydrateParticipants(participants).map(participantEntity);
   const gaps = summarizeProjectReadinessGaps(safeList);
 
   if (gaps.total === 0) {

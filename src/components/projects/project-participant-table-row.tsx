@@ -15,22 +15,17 @@ import {
 import { TableCell, TableRow } from '@/components/ui/table';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
-import {
-  attributionStatusLabel,
-  deriveAttributionStatus,
-  earningsStructureSummary,
-} from '@/lib/projects/participant-entitlement';
-import {
-  agreementDisplayLabel,
-  derivePayoutOnboardingState,
-  payoutOnboardingLabel,
-  attributionDisplayLabel,
-} from '@/lib/projects/participant-lifecycle';
-import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
+import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import { PAYOUT_CONFIRMATION_LABELS } from '@/lib/operations/merchant-operational-copy';
 import { cn } from '@/lib/utils';
-import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
-import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
+import { hydrateParticipant, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
+import {
+  agreementLabelFromContract,
+  attributionLabelFromContract,
+  participantDisplayName,
+  participantEmail,
+  payoutVerificationLabelFromContract,
+} from '@/lib/operations/contracts/participant-presentation';
 
 export type ProjectParticipantTableRowProps = {
   participant: DemoParticipant;
@@ -51,59 +46,74 @@ function ProjectParticipantTableRowComponent({
   onEdit,
   onConfigureCompensation,
 }: ProjectParticipantTableRowProps) {
-  const p = React.useMemo(() => hydrateOperationalParticipant(participant), [participant]);
-  const attribution = deriveAttributionStatus(p);
-  const payoutState = derivePayoutOnboardingState(p);
-  const exempt = p.compensationProfile?.exemptFromPayout === true;
-  const verified = p.payoutVerificationConfirmed === true;
-  const earnings = earningsStructureSummary(p);
+  const hydrated = React.useMemo(() => hydrateParticipant(participant), [participant]);
+  const entity = hydrated._entity;
   const share = onShareAgreement ?? onCopyAgreement;
+  const exempt = hydrated.compensation.exemptFromPayout;
+  const verified = hydrated.payout.verifiedExternally;
 
   const viewAgreement = () => {
-    const path = p.agreementUrl ?? participantAgreementPath(p.inviteToken);
+    const path = entity.agreementUrl ?? participantAgreementPath(entity.inviteToken);
     if (typeof window !== 'undefined') {
       window.open(path, '_blank', 'noopener,noreferrer');
     }
   };
 
+  const openCompensation = () => onConfigureCompensation(participantEntity(hydrated));
+  const openEdit = () => onEdit(participantEntity(hydrated));
+  const openShare = () => share(participantEntity(hydrated));
+  const openCopy = () => onCopyAgreement(participantEntity(hydrated));
+
   return (
     <TableRow
-      id={`participant-${p.id}`}
+      id={`participant-${hydrated.id}`}
       className={cn(
         highlighted && 'bg-emerald-500/10 transition-colors duration-700',
         'align-middle'
       )}
     >
       <TableCell className="min-w-[140px] max-w-[220px]">
-        <div className="font-medium truncate" title={p.name}>
-          {p.name}
+        <div className="font-medium truncate" title={participantDisplayName(hydrated)}>
+          {participantDisplayName(hydrated)}
         </div>
-        <div className="text-xs text-muted-foreground truncate" title={p.email?.trim() || undefined}>
-          {p.email?.trim() || 'No email'}
+        <div
+          className="text-xs text-muted-foreground truncate"
+          title={hydrated.identity.email ?? undefined}
+        >
+          {participantEmail(hydrated)}
         </div>
       </TableCell>
       <TableCell className="w-[100px] whitespace-nowrap text-sm">
-        {operationalRoleLabel(p)}
+        {operationalRoleLabel(entity)}
       </TableCell>
       <TableCell className="w-[120px]">
         <Badge variant="outline" className="whitespace-nowrap text-xs">
-          {agreementDisplayLabel(p)}
+          {agreementLabelFromContract(hydrated.lifecycle.agreement)}
         </Badge>
       </TableCell>
       <TableCell className="w-[110px]">
-        {canGenerateAttributionLink(p) ? (
+        {hydrated.attribution.enabled ? (
           <Badge
-            variant={attribution === 'active' ? 'default' : 'secondary'}
+            variant={hydrated.attribution.active ? 'default' : 'secondary'}
             className="whitespace-nowrap text-xs"
           >
-            {attributionStatusLabel(attribution)}
+            {attributionLabelFromContract(
+              hydrated.attribution.lifecycle,
+              hydrated.attribution.enabled
+            )}
           </Badge>
         ) : (
           <span
             className="text-xs text-foreground/70 truncate block max-w-[100px]"
-            title={attributionDisplayLabel(p)}
+            title={attributionLabelFromContract(
+              hydrated.attribution.lifecycle,
+              hydrated.attribution.enabled
+            )}
           >
-            {attributionDisplayLabel(p)}
+            {attributionLabelFromContract(
+              hydrated.attribution.lifecycle,
+              hydrated.attribution.enabled
+            )}
           </span>
         )}
       </TableCell>
@@ -113,12 +123,16 @@ function ProjectParticipantTableRowComponent({
         ) : (
           <div className="space-y-1">
             <Badge variant={verified ? 'default' : 'outline'} className="whitespace-nowrap text-xs">
-              {payoutOnboardingLabel(payoutState)}
+              {payoutVerificationLabelFromContract(
+                hydrated.lifecycle.payoutVerification,
+                verified,
+                hydrated.payout.blocked
+              )}
             </Badge>
             <label className="flex items-center gap-1.5 cursor-pointer">
               <Checkbox
                 checked={verified}
-                onCheckedChange={(v) => onPayoutVerificationChange(p.id, v === true)}
+                onCheckedChange={(v) => onPayoutVerificationChange(hydrated.id, v === true)}
                 className="h-3.5 w-3.5"
               />
               <span className="text-[11px] text-muted-foreground whitespace-nowrap">
@@ -132,10 +146,10 @@ function ProjectParticipantTableRowComponent({
         <button
           type="button"
           className="text-left text-sm text-muted-foreground hover:text-foreground truncate block w-full underline-offset-2 hover:underline"
-          title={earnings}
-          onClick={() => onConfigureCompensation(p)}
+          title={hydrated.compensation.earningsSummary}
+          onClick={openCompensation}
         >
-          {earnings}
+          {hydrated.compensation.earningsSummary}
         </button>
       </TableCell>
       <TableCell className="w-12 text-right">
@@ -146,19 +160,17 @@ function ProjectParticipantTableRowComponent({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => onConfigureCompensation(p)}>
+            <DropdownMenuItem onClick={openCompensation}>
               <Pencil className="mr-2 h-3.5 w-3.5" />
               Configure earnings
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onEdit(p)}>
-              Edit participant
-            </DropdownMenuItem>
+            <DropdownMenuItem onClick={openEdit}>Edit participant</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onCopyAgreement(p)}>
+            <DropdownMenuItem onClick={openCopy}>
               <Copy className="mr-2 h-3.5 w-3.5" />
               Copy agreement
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => share(p)}>
+            <DropdownMenuItem onClick={openShare}>
               Share agreement
             </DropdownMenuItem>
             <DropdownMenuItem onClick={viewAgreement}>

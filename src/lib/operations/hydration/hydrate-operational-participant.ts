@@ -6,12 +6,17 @@ import type {
   CommissionSourceMode,
   ParticipantCompensationProfile,
 } from '@/lib/participants/participant-compensation-types';
+import {
+  warnMissingParticipantFields,
+  warnLegacyParticipantShape,
+  warnHydrationFailure,
+} from '@/lib/operations/dev/operational-diagnostics';
 
 const DEV = process.env.NODE_ENV === 'development';
 
 function warnMissingField(field: string, participantId: string | undefined): void {
   if (!DEV) return;
-  console.warn('[Operational Hydration] Missing participant field:', field, participantId ?? 'unknown');
+  warnMissingParticipantFields({ id: participantId ?? 'unknown' } as DemoParticipant, [field]);
 }
 
 function defaultCompensationDraft(
@@ -69,6 +74,7 @@ export function backfillOperationalParticipantState(
   if (participant.agreementLifecycle === undefined) {
     warnMissingField('agreementLifecycle', participant.id);
   }
+  warnLegacyParticipantShape(participant);
 
   const payoutOnboardingPhase: PayoutOnboardingPhase =
     participant.payoutVerificationConfirmed === true
@@ -129,9 +135,7 @@ export function hydrateOperationalParticipant(
   try {
     return backfillOperationalParticipantState(participant);
   } catch (e) {
-    if (DEV) {
-      console.warn('[Operational Hydration] Failed to hydrate participant', participant.id, e);
-    }
+    warnHydrationFailure('participant-storage', participant?.id, e);
     return createEmptyOperationalParticipant();
   }
 }
