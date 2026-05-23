@@ -108,7 +108,7 @@ export function ProjectObligationsView() {
         </div>
       </div>
 
-      {treasury ? <ProjectTreasuryMetrics treasury={treasury} compact /> : null}
+      {treasury ? <ProjectTreasuryMetrics treasury={treasury} /> : null}
 
       <Card>
         <CardHeader>

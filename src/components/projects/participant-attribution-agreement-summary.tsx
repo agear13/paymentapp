@@ -11,6 +11,7 @@ type Props = {
   commerce?: ParticipantReferralCommerce | null;
   serviceRows?: ScopedServiceCommissionRow[];
   allServicesNote?: boolean;
+  approved?: boolean;
 };
 
 /** Participant agreement view — earnings and attributable services (not customer checkout). */
@@ -18,6 +19,7 @@ export function ParticipantAttributionAgreementSummary({
   commerce,
   serviceRows,
   allServicesNote,
+  approved = false,
 }: Props) {
   if (!commerce || commerce.createReferralLink === false) {
     return (
@@ -42,29 +44,36 @@ export function ParticipantAttributionAgreementSummary({
     allServicesNote ??
     (commerce.commissionMode === 'referral_commerce' &&
       (!commerce.enabledServiceIds || commerce.enabledServiceIds.length === 0));
+  const hasLinkedServices = rows.length > 0 && !showAll;
 
   return (
     <div className="rounded-md border p-3 bg-background space-y-3 text-sm">
-      <p className="font-medium">How you earn on customer purchases</p>
-      {commerce.commissionMode === 'referral_commerce' ? (
+      <p className="font-medium">Customer attribution</p>
+      {!approved ? (
+        <p className="text-muted-foreground leading-relaxed">
+          Customer attribution activates after approval. Your trackable customer payment link will be
+          issued once you approve participation.
+        </p>
+      ) : (
         <>
           <p className="text-muted-foreground leading-relaxed">
-            After you approve, a trackable customer payment link is issued. You earn{' '}
-            <span className="font-medium text-foreground">{pct}%</span> on qualifying purchases
-            through that link. Customers do not see your commission terms.
+            Active tracking is enabled on your customer payment link. You earn{' '}
+            <span className="font-medium text-foreground">{pct}%</span> on qualifying purchases.
+            Customers do not see your commission terms.
           </p>
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-              Services you earn on
+              Eligible services & attribution scope
             </p>
-            <ParticipantServiceCommissionTable rows={rows} showAllServicesNote={showAll} />
+            {hasLinkedServices ? (
+              <ParticipantServiceCommissionTable rows={rows} showAllServicesNote={showAll} />
+            ) : (
+              <p className="text-muted-foreground">
+                No services/products currently assigned for attribution.
+              </p>
+            )}
           </div>
         </>
-      ) : (
-        <p className="text-muted-foreground leading-relaxed">
-          Customer attribution may be issued after approval. Project-level payout terms above
-          apply to your participation. Payout release follows operator settlement schedules.
-        </p>
       )}
     </div>
   );

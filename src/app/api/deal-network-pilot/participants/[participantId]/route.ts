@@ -6,8 +6,9 @@ import {
   syncPilotSnapshotForUser,
   updatePilotParticipantPayload,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
-import { applyOnboardingSelectValue } from '@/lib/projects/participant-lifecycle';
-import type { PilotParticipantOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
+import {
+  applyPayoutVerificationConfirmed,
+} from '@/lib/projects/participant-lifecycle';
 import {
   PARTICIPANT_COMPENSATION_TYPES,
 } from '@/lib/participants/participant-compensation-types';
@@ -26,11 +27,14 @@ const compensationProfileSchema = z.object({
   configured: z.boolean().optional(),
   configuredAt: z.string().optional(),
   exemptFromPayout: z.boolean().optional(),
+  customerAttributionEnabled: z.boolean().optional(),
+  commissionSourceMode: z.enum(['all_active', 'selected']).optional(),
+  commissionServiceIds: z.array(z.string()).optional(),
 });
 
 const patchSchema = z
   .object({
-    onboardingStatus: z.enum(['NOT_STARTED', 'INCOMPLETE', 'COMPLETE', 'BLOCKED']).optional(),
+    payoutVerificationConfirmed: z.boolean().optional(),
     name: z.string().min(1).max(255).optional(),
     email: z.string().email().max(255).optional().or(z.literal('')),
     role: z.enum(['Introducer', 'Connector', 'Closer', 'Contributor']).optional(),
@@ -40,7 +44,7 @@ const patchSchema = z
   })
   .refine(
     (body) =>
-      body.onboardingStatus != null ||
+      body.payoutVerificationConfirmed != null ||
       body.name != null ||
       body.email != null ||
       body.role != null ||
@@ -52,7 +56,7 @@ const patchSchema = z
 
 /**
  * PATCH /api/deal-network-pilot/participants/[participantId]
- * Operator updates payout onboarding tracking (project + pilot snapshot sync).
+ * Operator updates participant coordination state (project + pilot snapshot sync).
  */
 export async function PATCH(
   request: Request,
@@ -70,16 +74,16 @@ export async function PATCH(
     }
 
     let working = existing;
-    if (body.onboardingStatus) {
-      working = applyOnboardingSelectValue(
-        working,
-        body.onboardingStatus as PilotParticipantOnboardingStatus | 'BLOCKED'
-      );
+    if (body.payoutVerificationConfirmed != null) {
+      working = applyPayoutVerificationConfirmed(working, body.payoutVerificationConfirmed);
     }
 
     const payloadPatch: Parameters<typeof updatePilotParticipantPayload>[2] = {};
-    if (body.onboardingStatus) {
+    if (body.payoutVerificationConfirmed != null) {
+      payloadPatch.payoutVerificationConfirmed = working.payoutVerificationConfirmed;
+      payloadPatch.payoutVerificationConfirmedAt = working.payoutVerificationConfirmedAt;
       payloadPatch.onboardingStatus = working.onboardingStatus;
+      payloadPatch.payoutOnboardingPhase = working.payoutOnboardingPhase;
       payloadPatch.payoutBlocked = working.payoutBlocked;
     }
     if (body.name != null) payloadPatch.name = body.name.trim();

@@ -124,6 +124,9 @@ export interface DemoParticipant {
   agreementLifecycle?: import('@/lib/operations/lifecycle/agreement-lifecycle').AgreementLifecycleState;
   attributionLifecycle?: import('@/lib/operations/lifecycle/attribution-lifecycle').AttributionLifecycleState;
   payoutOnboardingPhase?: import('@/lib/operations/lifecycle/payout-lifecycle').PayoutOnboardingPhase;
+  /** Operator confirms payout details collected externally — not Provvypay KYC */
+  payoutVerificationConfirmed?: boolean;
+  payoutVerificationConfirmedAt?: string;
   inviteSentAt?: string;
   agreementSharedAt?: string;
   agreementViewedAt?: string;

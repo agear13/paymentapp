@@ -1,0 +1,20 @@
+/** Operator-facing copy — merchant-realistic, non-custodial payout semantics. */
+
+export const OPERATOR_PAYOUT_DISCLAIMER =
+  'Provvypay does not currently facilitate regulated payout onboarding or KYC collection. Operators are responsible for collecting required payout and tax information according to local regulations before making payouts.';
+
+export const PAYOUT_CONFIRMATION_LABELS = {
+  notConfirmed: 'Not confirmed',
+  confirmed: 'Confirmed by operator',
+  toggleLabel: 'Participant payout details verified externally',
+} as const;
+
+export const AGREEMENT_SHARE_HELPER =
+  'You may also share this agreement link through SMS, WhatsApp, or other messaging platforms.';
+
+export const SERVICE_CATALOG_ATTRIBUTION_WARNING = {
+  title: 'Customer attribution is enabled, but no services or products are available for tracked purchases.',
+  description:
+    'Participants can only earn commission on catalog items available to customers.',
+  cta: 'Add services',
+} as const;

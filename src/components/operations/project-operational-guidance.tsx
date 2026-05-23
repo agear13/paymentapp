@@ -4,6 +4,8 @@ import * as React from 'react';
 import { usePathname } from 'next/navigation';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { OperationalGuidanceRegion } from '@/components/operations/operational-guidance-region';
+import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-guidance';
+import { useOrganization } from '@/hooks/use-organization';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 import { safeOperationalRouteState } from '@/lib/operations/routing/draft-safe-routing';
 
@@ -18,6 +20,7 @@ function sectionTitle(pathname: string, projectName: string): string {
 export function ProjectOperationalGuidance() {
   const pathname = usePathname() ?? '';
   const { deal, summary, projectParticipants, projectId } = useProjectWorkspace();
+  const { organizationId } = useOrganization();
   const [treasury, setTreasury] = React.useState<ProjectTreasurySummary | null>(null);
   const prevStateRef = React.useRef<string | null>(null);
 
@@ -58,8 +61,18 @@ export function ProjectOperationalGuidance() {
     Boolean(pathname.match(new RegExp(`/projects/${projectId}$`))) ||
     pathname.includes('/funding');
 
+  const attributionEnabled = routeState.participants.participants.some(
+    (p) => p.compensationProfile?.customerAttributionEnabled === true
+  );
+
   return (
-    <OperationalGuidanceRegion
+    <>
+      <ServiceCatalogGuidance
+        organizationId={organizationId}
+        attributionEnabled={attributionEnabled}
+        className="mb-4"
+      />
+      <OperationalGuidanceRegion
       scope="project"
       scopeTitle={sectionTitle(pathname, projectName)}
       project={deal}
@@ -71,5 +84,6 @@ export function ProjectOperationalGuidance() {
       showExplanation={false}
       showTrust={false}
     />
+    </>
   );
 }

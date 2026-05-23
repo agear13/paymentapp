@@ -1,20 +1,22 @@
 'use client';
 
+import Link from 'next/link';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import {
-  deriveParticipantReadiness,
-  summarizeProjectReadinessGaps,
-} from '@/lib/participants/participant-readiness';
+import { summarizeProjectReadinessGaps } from '@/lib/participants/participant-readiness';
 import { normalizeParticipant } from '@/lib/operational/safe-operational-hydration';
 import { formatParticipantPayoutReadiness } from '@/lib/projects/format-participant-payout-readiness';
+import { deriveParticipantPayoutBlockers } from '@/lib/operations/blockers/payout-blockers';
+import { Button } from '@/components/ui/button';
 
 type ProjectReadinessBreakdownProps = {
   participants: DemoParticipant[];
+  projectId?: string;
   className?: string;
 };
 
 export function ProjectReadinessBreakdown({
   participants,
+  projectId,
   className,
 }: ProjectReadinessBreakdownProps) {
   const safeList = participants.map(normalizeParticipant);
@@ -27,6 +29,8 @@ export function ProjectReadinessBreakdown({
       </p>
     );
   }
+
+  const blockers = safeList.flatMap((p) => deriveParticipantPayoutBlockers(p, projectId));
 
   return (
     <div className={className ?? 'space-y-3'}>
@@ -43,20 +47,20 @@ export function ProjectReadinessBreakdown({
           </ul>
         </div>
       ) : null}
-      {gaps.payoutReadyCount < gaps.total ? (
-        <ul className="space-y-1.5 text-xs border-t border-border/25 pt-2">
-          {participants
-            .map((p) => deriveParticipantReadiness(p))
-            .filter((r) => !r.isPayoutReady && r.primaryIssue)
-            .slice(0, 6)
-            .map((r) => (
-              <li key={r.participantId} className="flex flex-col">
-                <span className="font-medium text-foreground/90">{r.name}</span>
-                <span className="text-amber-700/90 dark:text-amber-400/90">
-                  ⚠ {r.primaryIssue}
-                </span>
-              </li>
-            ))}
+      {blockers.length > 0 ? (
+        <ul className="space-y-3 text-xs border-t border-border/25 pt-2">
+          {blockers.slice(0, 6).map((b) => (
+            <li key={`${b.participantId}-${b.title}`} className="space-y-1">
+              <span className="font-medium text-foreground/90">{b.participantName}</span>
+              <p className="font-medium text-amber-800/90 dark:text-amber-400/90">{b.title}</p>
+              <p className="text-muted-foreground leading-relaxed">{b.description}</p>
+              {b.ctaHref !== '#' ? (
+                <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
+                  <Link href={b.ctaHref}>{b.ctaLabel}</Link>
+                </Button>
+              ) : null}
+            </li>
+          ))}
         </ul>
       ) : null}
     </div>

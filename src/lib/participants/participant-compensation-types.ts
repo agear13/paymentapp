@@ -23,6 +23,8 @@ export const REVENUE_SOURCE_OPTIONS = [
   { id: 'other', label: 'Other' },
 ] as const;
 
+export type CommissionSourceMode = 'all_active' | 'selected';
+
 export type ParticipantCompensationProfile = {
   compensationType: ParticipantCompensationType;
   percentage?: number;
@@ -38,6 +40,9 @@ export type ParticipantCompensationProfile = {
   exemptFromPayout?: boolean;
   /** Enables customer purchase attribution links — explicit operator opt-in */
   customerAttributionEnabled?: boolean;
+  /** Which catalog items commission applies to (COMMISSION type) */
+  commissionSourceMode?: CommissionSourceMode;
+  commissionServiceIds?: string[];
 };
 
 export type AllocationStatus = 'missing' | 'configured' | 'exempt';

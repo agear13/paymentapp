@@ -7,27 +7,30 @@ export const PAYOUT_ONBOARDING_PHASES = [
 
 export type PayoutOnboardingPhase = (typeof PAYOUT_ONBOARDING_PHASES)[number];
 
+/** @deprecated Use operator payout confirmation labels */
 export const PAYOUT_ONBOARDING_LABELS: Record<PayoutOnboardingPhase, string> = {
-  NOT_STARTED: 'Payout onboarding not started',
-  INVITED: 'Invited to complete payout onboarding',
-  IN_PROGRESS: 'Payout onboarding in progress',
-  COMPLETED: 'Payout onboarding complete',
+  NOT_STARTED: 'Operator payout confirmation pending',
+  INVITED: 'Operator payout confirmation pending',
+  IN_PROGRESS: 'Operator payout confirmation pending',
+  COMPLETED: 'Confirmed by operator',
 };
 
 export const PAYOUT_ONBOARDING_MEANING: Record<PayoutOnboardingPhase, string> = {
-  NOT_STARTED: 'Payout details will be collected during participant onboarding.',
-  INVITED: 'Participant invited to complete payout onboarding.',
-  IN_PROGRESS: 'Participant is completing payout onboarding.',
-  COMPLETED: 'Payout destination and onboarding are complete.',
+  NOT_STARTED: 'Operator has not confirmed external payout details yet.',
+  INVITED: 'Operator has not confirmed external payout details yet.',
+  IN_PROGRESS: 'Operator has not confirmed external payout details yet.',
+  COMPLETED: 'Operator confirmed payout details were collected externally.',
 };
 
-/** Full banking/payout collection UI is not live yet — avoid false "missing destination" blockers. */
+/** Regulated payout/KYC collection UI is not live — operators confirm externally. */
 export const PAYOUT_ONBOARDING_UI_IMPLEMENTED = false;
 
 export function derivePayoutOnboardingPhase(participant: {
+  payoutVerificationConfirmed?: boolean;
   payoutOnboardingPhase?: PayoutOnboardingPhase;
   onboardingStatus?: string;
 }): PayoutOnboardingPhase {
+  if (participant.payoutVerificationConfirmed === true) return 'COMPLETED';
   if (participant.payoutOnboardingPhase) return participant.payoutOnboardingPhase;
   const s = participant.onboardingStatus;
   if (s === 'COMPLETE') return 'COMPLETED';
@@ -38,13 +41,9 @@ export function derivePayoutOnboardingPhase(participant: {
 export function payoutOnboardingPlaceholderCopy(phase: PayoutOnboardingPhase): string {
   switch (phase) {
     case 'COMPLETED':
-      return 'Payout onboarding complete';
-    case 'IN_PROGRESS':
-      return 'Participant payout onboarding in progress';
-    case 'INVITED':
-      return 'Invite participant to complete payout onboarding';
+      return 'Payout details confirmed externally';
     default:
-      return 'Participant payout onboarding has not started';
+      return 'Operator payout confirmation pending';
   }
 }
 
@@ -60,8 +59,8 @@ export type PayoutLifecycleState = (typeof PAYOUT_LIFECYCLE_STATES)[number];
 
 export const PAYOUT_LIFECYCLE_LABELS: Record<PayoutLifecycleState, string> = {
   NOT_APPLICABLE: 'No payout configured',
-  ONBOARDING_PENDING: 'Payout onboarding not started',
-  ONBOARDING_IN_PROGRESS: 'Payout onboarding in progress',
+  ONBOARDING_PENDING: 'Operator confirmation pending',
+  ONBOARDING_IN_PROGRESS: 'Operator confirmation pending',
   READY: 'Payout ready',
   BLOCKED: 'Payout blocked',
 };

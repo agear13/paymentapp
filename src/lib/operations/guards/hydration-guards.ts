@@ -4,12 +4,6 @@ import type { CompensationStructure } from '@/lib/operations/states/compensation
 import type { CompensationState } from '@/lib/operations/states/compensation-state';
 import type { ParticipantState } from '@/lib/operations/states/participant-state';
 import type { ProjectState } from '@/lib/operations/states/project-state';
-import {
-  derivePayoutOnboardingPhase,
-  PAYOUT_ONBOARDING_UI_IMPLEMENTED,
-} from '@/lib/operations/lifecycle/payout-lifecycle';
-import { isOnboardingComplete, effectiveOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
-
 /**
  * Safe hydration — never trust DB completeness.
  * All UI and orchestration must read entities through these helpers.
@@ -114,7 +108,7 @@ export function deriveParticipantState(
   if (!caps.hasCompensation) return 'COMPENSATION_PENDING';
   if (!caps.hasPayoutDestination) return 'PAYOUT_DETAILS_PENDING';
   if (!caps.hasAgreement && p.inviteStatus === 'Invited') return 'INVITED';
-  if (!isOnboardingComplete(effectiveOnboardingStatus(p))) return 'ONBOARDING';
+  if (!caps.hasAgreement) return 'ONBOARDING';
   return 'COMPENSATION_PENDING';
 }
 
@@ -125,15 +119,11 @@ export function deriveParticipantCapabilityFlags(
   const compState = safeCompensationState(p);
   const hasCompensation = compState === 'CONFIGURED';
   const hasIdentity = Boolean(p.name?.trim());
-  const hasEmail = Boolean(p.email?.trim());
-  const onboardingComplete = isOnboardingComplete(effectiveOnboardingStatus(p));
   const hasAgreement = p.approvalStatus === 'Approved';
   const hasPayoutDestination =
     compState === 'CONFIGURED' && p.compensationProfile?.exemptFromPayout
       ? true
-      : PAYOUT_ONBOARDING_UI_IMPLEMENTED
-        ? hasEmail && onboardingComplete
-        : onboardingComplete || derivePayoutOnboardingPhase(p) === 'COMPLETED';
+      : p.payoutVerificationConfirmed === true;
   const payoutReady =
     hasCompensation &&
     hasPayoutDestination &&

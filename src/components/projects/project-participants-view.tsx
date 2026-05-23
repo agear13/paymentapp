@@ -1,8 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { RefreshCw, UserPlus } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,11 +17,12 @@ import { InviteProjectParticipantModal } from '@/components/projects/invite-proj
 import { useOrganization } from '@/hooks/use-organization';
 import { participantSummaryMetrics } from '@/lib/projects/participant-lifecycle';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import type { PilotParticipantOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 import { useProjectWorkspaceSmartPolling } from '@/hooks/use-project-workspace-refresh';
 import { ProjectSectionErrorBoundary } from '@/components/projects/project-section-error-boundary';
 import { ProjectParticipantTableRow } from '@/components/projects/project-participant-table-row';
 import { EditProjectParticipantDialog } from '@/components/projects/edit-project-participant-dialog';
+import { ParticipantAgreementShareDialog } from '@/components/projects/participant-agreement-share-dialog';
+import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-guidance';
 import type { DemoParticipantRole } from '@/components/deal-network-demo/invite-participant-modal';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import {
@@ -34,7 +34,6 @@ import { ProjectOperationalLoadingState } from '@/components/projects/project-op
 import { ParticipantCompensationDialog } from '@/components/projects/participant-compensation-dialog';
 import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
-import { countPayoutReadyParticipants } from '@/lib/participants/participant-readiness';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { safeOperationalRouteState } from '@/lib/operations/routing/draft-safe-routing';
 import { ProgressiveOperationalPanel } from '@/components/operations/progressive-operational-panel';
@@ -48,13 +47,14 @@ const ONBOARDING_CHECKLIST = [
   'Add participants',
   'Configure compensation structures',
   'Send agreements',
-  'Complete payout destinations',
+  'Confirm payout details externally',
 ] as const;
 
 export function ProjectParticipantsView() {
   const {
     deal,
     summary,
+    projectId,
     projectParticipants,
     allDeals,
     allParticipants,
@@ -67,19 +67,38 @@ export function ProjectParticipantsView() {
     clearSectionError,
   } = useProjectWorkspace();
   const { organizationId } = useOrganization();
+  const searchParams = useSearchParams();
+  const focusParticipantId = searchParams.get('participant');
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [editParticipant, setEditParticipant] = React.useState<DemoParticipant | null>(null);
   const [compensationParticipant, setCompensationParticipant] =
     React.useState<DemoParticipant | null>(null);
+  const [agreementShareParticipant, setAgreementShareParticipant] =
+    React.useState<DemoParticipant | null>(null);
+  const [recentlySavedParticipantId, setRecentlySavedParticipantId] = React.useState<
+    string | null
+  >(null);
+  const [pinnedOrder, setPinnedOrder] = React.useState<string[] | null>(null);
+  const tableScrollRef = React.useRef<HTMLDivElement>(null);
+  const savedScrollTop = React.useRef(0);
 
   useProjectWorkspaceSmartPolling({ enabled: Boolean(deal?.id), scope: 'participants' });
+
+  React.useEffect(() => {
+    if (!recentlySavedParticipantId) return;
+    const timer = window.setTimeout(() => {
+      setRecentlySavedParticipantId(null);
+      setPinnedOrder(null);
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [recentlySavedParticipantId]);
 
   const handleRefresh = React.useCallback(() => {
     invalidate('participants');
     void refreshSilent('participants');
   }, [invalidate, refreshSilent]);
 
-  const copyAgreementLink = React.useCallback(
+  const openAgreementShare = React.useCallback(
     async (p: DemoParticipant) => {
       const path = p.agreementUrl ?? participantAgreementPath(p.inviteToken);
       const url =
@@ -93,24 +112,18 @@ export function ProjectParticipantsView() {
 
       const nextParticipants = allParticipants.map((x) => (x.id === p.id ? updated : x));
       void saveSnapshot(allDeals, nextParticipants);
-
-      try {
-        await navigator.clipboard.writeText(url);
-        toast.success('Agreement link copied');
-      } catch {
-        toast.error('Could not copy');
-      }
+      setAgreementShareParticipant(updated);
     },
     [allDeals, allParticipants, saveSnapshot]
   );
 
-  const updateOnboarding = React.useCallback(
-    async (participantId: string, value: PilotParticipantOnboardingStatus | 'BLOCKED') => {
+  const updatePayoutVerification = React.useCallback(
+    async (participantId: string, confirmed: boolean) => {
       try {
         const res = await fetch(`/api/deal-network-pilot/participants/${participantId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ onboardingStatus: value }),
+          body: JSON.stringify({ payoutVerificationConfirmed: confirmed }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -118,7 +131,9 @@ export function ProjectParticipantsView() {
         }
         invalidate('participants');
         await refreshSilent('participants');
-        toast.success('Payout onboarding updated');
+        toast.success(
+          confirmed ? 'Payout details confirmed externally' : 'Payout confirmation cleared'
+        );
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : 'Update failed');
       }
@@ -196,6 +211,10 @@ export function ProjectParticipantsView() {
       const prev = projectParticipants.find((p) => p.id === participantId);
       if (!prev) return;
 
+      if (tableScrollRef.current) {
+        savedScrollTop.current = tableScrollRef.current.scrollTop;
+      }
+
       const optimistic = applyCompensationProfileToParticipant(prev, profile);
       const nextParticipants = allParticipants.map((p) =>
         p.id === participantId ? optimistic : p
@@ -212,10 +231,19 @@ export function ProjectParticipantsView() {
           const err = await res.json().catch(() => ({}));
           throw new Error((err as { error?: string }).error || 'Update failed');
         }
-        toast.success('Compensation structure saved');
+        toast.success('Compensation structure saved', {
+          description: 'Agreement terms updated successfully.',
+        });
+        setRecentlySavedParticipantId(participantId);
+        setPinnedOrder(projectParticipants.map((p) => p.id));
         notifyWorkspaceActivationRefresh();
         invalidate('participants');
         await refreshSilent('participants');
+        requestAnimationFrame(() => {
+          if (tableScrollRef.current) {
+            tableScrollRef.current.scrollTop = savedScrollTop.current;
+          }
+        });
       } catch (e: unknown) {
         void saveSnapshot(allDeals, allParticipants);
         toast.error(e instanceof Error ? e.message : 'Update failed');
@@ -254,9 +282,26 @@ export function ProjectParticipantsView() {
   }
 
   const safeParticipants = projectParticipants.map(normalizeParticipantEntity);
+  const displayParticipants = React.useMemo(() => {
+    if (!pinnedOrder) return safeParticipants;
+    const order = new Map(pinnedOrder.map((id, i) => [id, i]));
+    return [...safeParticipants].sort(
+      (a, b) => (order.get(a.id) ?? 999) - (order.get(b.id) ?? 999)
+    );
+  }, [safeParticipants, pinnedOrder]);
   const stats = participantSummaryMetrics(safeParticipants);
-  const payoutReadyCount = countPayoutReadyParticipants(safeParticipants);
+  const payoutReadyCount = stats.readyForPayout;
   const hasParticipants = safeParticipants.length > 0;
+  const attributionEnabled = safeParticipants.some(
+    (p) => p.compensationProfile?.customerAttributionEnabled === true
+  );
+
+  React.useEffect(() => {
+    if (!focusParticipantId) return;
+    const el = document.getElementById(`participant-${focusParticipantId}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focusParticipantId, displayParticipants.length]);
+
   const sectionError = sectionErrors.participants;
   const { project: routeProject, participants: routeParticipants } = routeState;
 
@@ -313,7 +358,11 @@ export function ProjectParticipantsView() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
             {hasParticipants ? (
-              <ProjectReadinessBreakdown participants={safeParticipants} className="mt-2" />
+              <ProjectReadinessBreakdown
+                participants={safeParticipants}
+                projectId={projectId}
+                className="mt-2"
+              />
             ) : (
               <p className="text-muted-foreground mt-1 text-sm">
                 Add participants, then configure how each earns before obligations or payout release.
@@ -349,7 +398,7 @@ export function ProjectParticipantsView() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Missing onboarding</CardDescription>
+                <CardDescription>Missing confirmation</CardDescription>
                 <CardTitle className="text-2xl">{stats.missingOnboarding}</CardTitle>
               </CardHeader>
             </Card>
@@ -394,14 +443,21 @@ export function ProjectParticipantsView() {
             </div>
           </div>
         ) : (
+          <>
+            <ServiceCatalogGuidance
+              organizationId={organizationId}
+              attributionEnabled={attributionEnabled}
+            />
           <Card className="border-border/80 shadow-sm">
             <CardHeader>
               <CardTitle>Project participants</CardTitle>
               <CardDescription>
-                Invite delivery, agreement, attribution, and payout onboarding are tracked separately.
+                Invite delivery, agreement, attribution, and operator payout confirmation are tracked
+                separately.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 sm:p-0">
+              <div ref={tableScrollRef} className="max-h-[70vh] overflow-y-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -410,30 +466,34 @@ export function ProjectParticipantsView() {
                     <TableHead>Invite</TableHead>
                     <TableHead>Participation</TableHead>
                     <TableHead>Attribution</TableHead>
-                    <TableHead>Payout onboarding</TableHead>
+                    <TableHead>Operator payout confirmation</TableHead>
                     <TableHead>Earnings structure</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {safeParticipants.map((p) => (
+                  {displayParticipants.map((p) => (
                     <ProjectParticipantTableRow
                       key={p.id}
                       participant={p}
-                      onCopyAgreement={copyAgreementLink}
-                      onUpdateOnboarding={updateOnboarding}
+                      highlighted={recentlySavedParticipantId === p.id}
+                      onCopyAgreement={openAgreementShare}
+                      onPayoutVerificationChange={updatePayoutVerification}
                       onEdit={setEditParticipant}
                       onConfigureCompensation={setCompensationParticipant}
                     />
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
+          </>
         )}
 
         <ParticipantCompensationDialog
           participant={compensationParticipant}
+          organizationId={organizationId}
           open={Boolean(compensationParticipant)}
           onOpenChange={(open) => {
             if (!open) setCompensationParticipant(null);
@@ -441,6 +501,22 @@ export function ProjectParticipantsView() {
           onSave={async (profile) => {
             if (!compensationParticipant) return;
             await saveCompensation(compensationParticipant.id, profile);
+          }}
+        />
+
+        <ParticipantAgreementShareDialog
+          participant={agreementShareParticipant}
+          agreementUrl={
+            agreementShareParticipant
+              ? `${typeof window !== 'undefined' ? window.location.origin : ''}${
+                  agreementShareParticipant.agreementUrl ??
+                  participantAgreementPath(agreementShareParticipant.inviteToken)
+                }`
+              : null
+          }
+          open={Boolean(agreementShareParticipant)}
+          onOpenChange={(open) => {
+            if (!open) setAgreementShareParticipant(null);
           }}
         />
 

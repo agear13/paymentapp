@@ -16,7 +16,6 @@ import { safeProjectState } from '@/lib/operations/guards/hydration-guards';
 import { defaultWorkspaceContext } from '@/lib/operations/types/operational-context';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { ProjectFundingSourcesPanel } from '@/components/projects/project-funding-sources-panel';
-import { ProjectTreasuryMetrics } from '@/components/projects/project-treasury-metrics';
 import { ProjectOperationalCompletenessCard } from '@/components/projects/project-operational-completeness-card';
 import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
 import {
@@ -26,7 +25,6 @@ import {
 } from '@/lib/projects/project-routes';
 import { ProjectReadinessBreakdown } from '@/components/projects/project-readiness-breakdown';
 import { safeProjectOperationalState } from '@/lib/operational/safe-operational-hydration';
-import { formatTreasuryAmount } from '@/lib/projects/funding-sources/format-funding-source';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
 type ProjectDetailHubProps = {
@@ -186,7 +184,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <ProjectReadinessBreakdown participants={projectParticipants} />
+            <ProjectReadinessBreakdown participants={projectParticipants} projectId={projectId} />
             <div>
               <Button asChild variant="outline" size="sm">
                 <Link href={participantsHref}>Manage participants</Link>
@@ -204,14 +202,6 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm text-muted-foreground">{summary.fundingSubcopy}</p>
-            {treasury && treasury.hasFundingSources ? (
-              <p className="text-sm">
-                Confirmed:{' '}
-                <span className="font-medium">
-                  {formatTreasuryAmount(treasury.confirmedFunding, currency)}
-                </span>
-              </p>
-            ) : null}
             <Button asChild variant="outline" size="sm">
               <Link href={fundingHref}>Manage funding</Link>
             </Button>
@@ -232,8 +222,6 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
           </CardContent>
         </Card>
       </div>
-
-      {treasury ? <ProjectTreasuryMetrics treasury={treasury} compact /> : null}
 
       <ProjectFundingSourcesPanel
         projectId={projectId}

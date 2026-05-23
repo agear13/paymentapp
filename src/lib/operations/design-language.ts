@@ -9,7 +9,7 @@ export const OPERATOR_LABELS = {
   safeToRelease: 'Safe to release',
   releaseBlocked: 'Release not ready',
   awaitingFunding: 'Awaiting funding',
-  participantSetup: 'Participant payout setup',
+  participantSetup: 'Operator payout confirmation',
   fundingConfirmed: 'Funding confirmed',
   releaseCanProceed: 'Ready to release safely',
   actionRequired: 'Setup needed before release',
@@ -130,5 +130,8 @@ export function humanizeOperatorText(text: string): string {
     .replace(/orchestration/gi, 'coordination')
     .replace(/obligation row/gi, 'payout obligation')
     .replace(/operational treasury/gi, 'funding status')
+    .replace(/Payout onboarding/gi, 'Operator payout confirmation')
+    .replace(/payout verification required/gi, 'Operator payout confirmation pending')
+    .replace(/compliance incomplete/gi, 'Operator confirmation pending')
     .replace(/Configure participant earnings before obligations/gi, 'Set up participant earnings first');
 }

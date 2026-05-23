@@ -4,14 +4,8 @@ import * as React from 'react';
 import { Copy, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { TableCell, TableRow } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import {
@@ -23,34 +17,49 @@ import {
   deriveInviteState,
   deriveParticipationLabel,
   inviteStateLabel,
-  onboardingSelectValue,
-  participationLabelText,
-  payoutOnboardingOperatorCopy,
+  payoutOnboardingLabel,
+  derivePayoutOnboardingState,
   attributionDisplayLabel,
+  participationLabelText,
 } from '@/lib/projects/participant-lifecycle';
 import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
-import type { PilotParticipantOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
+import {
+  OPERATOR_PAYOUT_DISCLAIMER,
+  PAYOUT_CONFIRMATION_LABELS,
+} from '@/lib/operations/merchant-operational-copy';
+import { cn } from '@/lib/utils';
 
 export type ProjectParticipantTableRowProps = {
   participant: DemoParticipant;
+  highlighted?: boolean;
   onCopyAgreement: (p: DemoParticipant) => void;
-  onUpdateOnboarding: (id: string, value: PilotParticipantOnboardingStatus | 'BLOCKED') => void;
+  onPayoutVerificationChange: (id: string, confirmed: boolean) => void;
   onEdit: (p: DemoParticipant) => void;
   onConfigureCompensation: (p: DemoParticipant) => void;
 };
 
 function ProjectParticipantTableRowComponent({
   participant: p,
+  highlighted = false,
   onCopyAgreement,
-  onUpdateOnboarding,
+  onPayoutVerificationChange,
   onEdit,
   onConfigureCompensation,
 }: ProjectParticipantTableRowProps) {
   const invite = deriveInviteState(p);
   const participation = deriveParticipationLabel(p);
   const attribution = deriveAttributionStatus(p);
+  const payoutState = derivePayoutOnboardingState(p);
+  const exempt = p.compensationProfile?.exemptFromPayout === true;
+  const verified = p.payoutVerificationConfirmed === true;
+
   return (
-    <TableRow>
+    <TableRow
+      id={`participant-${p.id}`}
+      className={cn(
+        highlighted && 'animate-pulse bg-emerald-500/10 transition-colors duration-700'
+      )}
+    >
       <TableCell>
         <div className="font-medium">{p.name}</div>
         <div className="text-xs text-muted-foreground">{p.email?.trim() || 'No email'}</div>
@@ -84,23 +93,26 @@ function ProjectParticipantTableRowComponent({
         )}
       </TableCell>
       <TableCell onClick={(e) => e.stopPropagation()}>
-        <Select
-          value={onboardingSelectValue(p)}
-          onValueChange={(v) =>
-            onUpdateOnboarding(p.id, v as PilotParticipantOnboardingStatus | 'BLOCKED')
-          }
-        >
-          <SelectTrigger className="h-8 w-[140px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="NOT_STARTED">Not started</SelectItem>
-            <SelectItem value="INCOMPLETE">In progress</SelectItem>
-            <SelectItem value="COMPLETE">Complete</SelectItem>
-            <SelectItem value="BLOCKED">Blocked</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-foreground/70 mt-1 text-xs">{payoutOnboardingOperatorCopy(p)}</p>
+        {exempt ? (
+          <span className="text-xs text-muted-foreground">No payout</span>
+        ) : (
+          <div className="space-y-2 max-w-[220px]">
+            <Badge variant={verified ? 'default' : 'outline'}>
+              {payoutOnboardingLabel(payoutState)}
+            </Badge>
+            <label className="flex items-start gap-2 text-xs cursor-pointer leading-snug">
+              <Checkbox
+                checked={verified}
+                onCheckedChange={(v) => onPayoutVerificationChange(p.id, v === true)}
+                className="mt-0.5"
+              />
+              <span>{PAYOUT_CONFIRMATION_LABELS.toggleLabel}</span>
+            </label>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {OPERATOR_PAYOUT_DISCLAIMER}
+            </p>
+          </div>
+        )}
       </TableCell>
       <TableCell className="text-sm text-muted-foreground">
         <button

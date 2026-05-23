@@ -224,11 +224,17 @@ export function ProjectParticipantAgreementPanel({
       <CardHeader>
         <CardTitle>Participant agreement</CardTitle>
         <CardDescription>
-          Review what you earn, which services qualify, and when attribution begins. Approving
-          confirms your participation. Payout profile setup can be completed later.
+          Review what you earn, which services qualify, and when attribution begins.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-1">
+          <p className="text-base font-medium">Hi {participant.name},</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            You are reviewing participation details for this project. If you received this in error,
+            contact the operator before approving.
+          </p>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Project</p>
@@ -252,7 +258,11 @@ export function ProjectParticipantAgreementPanel({
             <div className="sm:col-span-2">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Attribution</p>
               <Badge variant={isAttributionActive(attribution) ? 'default' : 'outline'}>
-                {isAttributionActive(attribution) ? 'Active' : 'Inactive until approved'}
+                {approved
+                  ? isAttributionActive(attribution)
+                    ? 'Active tracking'
+                    : 'Pending link issuance'
+                  : 'Activates after approval'}
               </Badge>
             </div>
           ) : null}
@@ -279,6 +289,7 @@ export function ProjectParticipantAgreementPanel({
         <ParticipantAttributionAgreementSummary
           commerce={participant.referralCommerce}
           serviceRows={scopedServiceRows}
+          approved={approved}
           allServicesNote={
             !participant.referralCommerce?.enabledServiceIds?.length &&
             participant.referralCommerce?.commissionMode === 'referral_commerce'
@@ -287,9 +298,9 @@ export function ProjectParticipantAgreementPanel({
 
         {!approved ? (
           <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground leading-relaxed">
-            Approving activates attribution tracking on your customer payment link. Customers never
-            see your commission terms. Payout onboarding can be completed after approval when you are
-            ready to receive funds.
+            Approving confirms your participation. Customer attribution activates after approval.
+            Payout details are confirmed separately by the operator — Provvypay does not collect bank
+            or KYC information at this stage.
           </div>
         ) : null}
 

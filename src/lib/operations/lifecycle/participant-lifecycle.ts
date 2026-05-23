@@ -44,7 +44,7 @@ export const PARTICIPANT_LIFECYCLE_LABELS: Record<ParticipantLifecycleState, str
   INVITE_VIEWED: 'Agreement opened',
   PENDING_APPROVAL: 'Awaiting approval',
   APPROVED: 'Approved',
-  ONBOARDING_REQUIRED: 'Payout onboarding required',
+  ONBOARDING_REQUIRED: 'Operator confirmation pending',
   PAYOUT_READY: 'Payout ready',
   ACTIVE: 'Active participant',
 };
@@ -57,8 +57,8 @@ export const PARTICIPANT_LIFECYCLE_MEANING: Record<ParticipantLifecycleState, st
   INVITE_VIEWED: 'Participant opened the agreement.',
   PENDING_APPROVAL: 'Participant action received; operator approval pending.',
   APPROVED: 'Operator approved this participant for coordination.',
-  ONBOARDING_REQUIRED: 'Payout onboarding has not completed.',
-  PAYOUT_READY: 'Payout destination and earnings are ready.',
+  ONBOARDING_REQUIRED: 'Operator has not confirmed external payout details.',
+  PAYOUT_READY: 'Operator confirmed payout details; ready for release coordination.',
   ACTIVE: 'Participant is operationally active on this project.',
 };
 
@@ -70,9 +70,12 @@ export function deriveParticipantLifecycleState(
   }
 
   if (participant.approvalStatus === 'Approved') {
+    if (participant.payoutVerificationConfirmed === true) {
+      return 'PAYOUT_READY';
+    }
     const onboarding = participant.payoutOnboardingPhase ?? 'NOT_STARTED';
     if (onboarding === 'COMPLETED' || participant.onboardingStatus === 'COMPLETE') {
-      return participant.payoutOnboardingPhase === 'COMPLETED' ? 'PAYOUT_READY' : 'ACTIVE';
+      return 'PAYOUT_READY';
     }
     return 'ONBOARDING_REQUIRED';
   }

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -26,9 +27,13 @@ import {
   REVENUE_SOURCE_OPTIONS,
   type ParticipantCompensationProfile,
   type ParticipantCompensationType,
+  type CommissionSourceMode,
 } from '@/lib/participants/participant-compensation-types';
 import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
 import { safeDefaultCompensationProfile } from '@/lib/operational/safe-operational-hydration';
+import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-guidance';
+
+type CatalogService = { id: string; name: string; price?: number; currency?: string };
 
 const COMPENSATION_LABELS: Record<ParticipantCompensationType, string> = {
   FIXED_FEE: 'Fixed fee',
@@ -42,6 +47,7 @@ const COMPENSATION_LABELS: Record<ParticipantCompensationType, string> = {
 
 type ParticipantCompensationDialogProps = {
   participant: DemoParticipant | null;
+  organizationId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (profile: ParticipantCompensationProfile) => Promise<void>;
@@ -49,11 +55,15 @@ type ParticipantCompensationDialogProps = {
 
 export function ParticipantCompensationDialog({
   participant,
+  organizationId,
   open,
   onOpenChange,
   onSave,
 }: ParticipantCompensationDialogProps) {
   const [saving, setSaving] = React.useState(false);
+  const [serviceQuery, setServiceQuery] = React.useState('');
+  const [catalogServices, setCatalogServices] = React.useState<CatalogService[]>([]);
+  const [catalogLoading, setCatalogLoading] = React.useState(false);
   const [draft, setDraft] = React.useState<ParticipantCompensationProfile>({
     compensationType: 'FIXED_FEE',
     configured: false,
@@ -67,6 +77,28 @@ export function ParticipantCompensationDialog({
     );
   }, [participant]);
 
+  React.useEffect(() => {
+    if (!open || !organizationId || draft.compensationType !== 'COMMISSION') return;
+    let cancelled = false;
+    setCatalogLoading(true);
+    void fetch(
+      `/api/organization-services?organizationId=${encodeURIComponent(organizationId)}&status=active`
+    )
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((json: { data?: CatalogService[] }) => {
+        if (!cancelled) setCatalogServices(Array.isArray(json.data) ? json.data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogServices([]);
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, organizationId, draft.compensationType]);
+
   const showPercentage =
     draft.compensationType === 'REVENUE_SHARE' ||
     draft.compensationType === 'COMMISSION' ||
@@ -79,6 +111,11 @@ export function ParticipantCompensationDialog({
   const showRevenueSources =
     draft.compensationType === 'REVENUE_SHARE' || draft.compensationType === 'HYBRID';
   const isExempt = draft.compensationType === 'UNPAID_INTERNAL';
+  const showCommissionSource = draft.compensationType === 'COMMISSION';
+  const commissionMode = draft.commissionSourceMode ?? 'all_active';
+  const filteredServices = catalogServices.filter((s) =>
+    s.name.toLowerCase().includes(serviceQuery.toLowerCase())
+  );
 
   async function handleSave() {
     setSaving(true);
@@ -197,6 +234,102 @@ export function ParticipantCompensationDialog({
                   );
                 })}
               </div>
+            </div>
+          ) : null}
+
+          {!isExempt && showCommissionSource ? (
+            <div className="space-y-3 rounded-md border border-border/40 p-3">
+              <Label>Commission source</Label>
+              <div className="space-y-2 text-sm">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="commission-source"
+                    checked={commissionMode === 'all_active'}
+                    onChange={() =>
+                      setDraft({
+                        ...draft,
+                        commissionSourceMode: 'all_active' as CommissionSourceMode,
+                      })
+                    }
+                  />
+                  All active services
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="commission-source"
+                    checked={commissionMode === 'selected'}
+                    onChange={() =>
+                      setDraft({
+                        ...draft,
+                        commissionSourceMode: 'selected' as CommissionSourceMode,
+                      })
+                    }
+                  />
+                  Selected services/products
+                </label>
+              </div>
+              {commissionMode === 'selected' ? (
+                catalogLoading ? (
+                  <p className="text-xs text-muted-foreground">Loading service catalog…</p>
+                ) : catalogServices.length === 0 ? (
+                  <div className="rounded-md border border-amber-500/25 bg-amber-500/5 p-3 text-xs space-y-2">
+                    <p>No services/products available yet.</p>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href="/dashboard/settings/services">Add services</Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Search services…"
+                      value={serviceQuery}
+                      onChange={(e) => setServiceQuery(e.target.value)}
+                    />
+                    <div className="max-h-36 overflow-y-auto space-y-1">
+                      {filteredServices.map((s) => {
+                        const checked = draft.commissionServiceIds?.includes(s.id) ?? false;
+                        return (
+                          <label
+                            key={s.id}
+                            className="flex items-center gap-2 text-sm cursor-pointer"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(v) => {
+                                const set = new Set(draft.commissionServiceIds ?? []);
+                                if (v) set.add(s.id);
+                                else set.delete(s.id);
+                                setDraft({ ...draft, commissionServiceIds: [...set] });
+                              }}
+                            />
+                            {s.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )
+              ) : null}
+            </div>
+          ) : null}
+
+          {!isExempt ? (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox
+                  checked={draft.customerAttributionEnabled === true}
+                  onCheckedChange={(v) =>
+                    setDraft({ ...draft, customerAttributionEnabled: v === true })
+                  }
+                />
+                Enable customer purchase attribution
+              </label>
+              <ServiceCatalogGuidance
+                organizationId={organizationId}
+                attributionEnabled={draft.customerAttributionEnabled === true}
+              />
             </div>
           ) : null}
 

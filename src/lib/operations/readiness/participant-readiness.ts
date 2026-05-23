@@ -10,7 +10,6 @@ import { emptyReadiness } from '@/lib/operations/types/readiness-result';
 import type { ParticipantState } from '@/lib/operations/states/participant-state';
 import {
   payoutDestinationTruthMessage,
-  shouldShowPayoutDestinationBlocker,
 } from '@/lib/operations/truth/payout-truth';
 
 export type ParticipantPayoutReadiness = OperationalReadinessResult & {
@@ -39,13 +38,9 @@ export function deriveParticipantPayoutReadiness(
     const issues: string[] = [...comp.missingRequirements];
 
     if (!flags.hasPayoutDestination) {
-      if (shouldShowPayoutDestinationBlocker(p)) {
-        issues.push('No payout destination configured');
-      } else {
-        issues.push(payoutDestinationTruthMessage(p));
-      }
+      issues.push(payoutDestinationTruthMessage(p));
     } else if (!flags.hasAgreement) {
-      issues.push('Payout onboarding incomplete');
+      issues.push('Agreement not approved');
     }
     if (!flags.hasAgreement && !p.compensationProfile?.exemptFromPayout) {
       issues.push('Agreement not approved');
@@ -144,8 +139,9 @@ export function summarizeProjectReadinessGaps(
     if (
       s.issues.some(
         (r) =>
-          r.includes('Payout destination') ||
-          (r.includes('onboarding') && !r.includes('not started'))
+          r.includes('Payout details') ||
+          r.includes('Operator payout') ||
+          r.includes('not confirmed')
       )
     ) {
       missingPayoutDestinations += 1;
@@ -157,8 +153,8 @@ export function summarizeProjectReadinessGaps(
 
   const gapLabels: string[] = [];
   if (missingCompensation > 0) gapLabels.push('Compensation structures');
-  if (missingPayoutDestinations > 0) gapLabels.push('Payout destinations');
-  if (missingCompliance > 0) gapLabels.push('Compliance details');
+  if (missingPayoutDestinations > 0) gapLabels.push('Operator payout confirmation');
+  if (missingCompliance > 0) gapLabels.push('Agreement approval');
 
   return {
     missingCompensation,

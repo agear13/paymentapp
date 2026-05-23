@@ -19,6 +19,8 @@ export type ReferralServiceRow = {
   currency: string;
 };
 
+type PurchaseMode = 'catalog' | 'custom';
+
 interface Props {
   referralCode: string;
   checkoutConfig?: Record<string, unknown> | null;
@@ -38,6 +40,11 @@ export function ReferralCommissionLanding({
   paymentRails,
   allowCustomAmount = true,
 }: Props) {
+  const hasCatalog = services.length > 0;
+  const hasBothOptions = hasCatalog && allowCustomAmount;
+  const defaultMode: PurchaseMode = hasCatalog ? 'catalog' : 'custom';
+
+  const [purchaseMode, setPurchaseMode] = useState<PurchaseMode>(defaultMode);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [pendingServiceId, setPendingServiceId] = useState<string | null>(null);
@@ -93,6 +100,9 @@ export function ReferralCommissionLanding({
     return null;
   }
 
+  const showCatalog = hasBothOptions ? purchaseMode === 'catalog' : hasCatalog;
+  const showCustom = hasBothOptions ? purchaseMode === 'custom' : allowCustomAmount && !hasCatalog;
+
   return (
     <div className="min-h-screen bg-muted/30 p-4 pb-12">
       <div className="max-w-3xl mx-auto space-y-10">
@@ -108,51 +118,81 @@ export function ReferralCommissionLanding({
           </div>
         ) : null}
 
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">Choose a service</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Select what you would like to purchase. Prices are shown in the merchant currency.
-            </p>
-          </div>
+        {hasBothOptions ? (
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold tracking-tight">Choose purchase type</h2>
+            <div className="flex flex-col gap-2 text-sm sm:flex-row sm:gap-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="purchase-mode"
+                  checked={purchaseMode === 'custom'}
+                  onChange={() => setPurchaseMode('custom')}
+                />
+                Pay custom amount
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="purchase-mode"
+                  checked={purchaseMode === 'catalog'}
+                  onChange={() => setPurchaseMode('catalog')}
+                />
+                Select service/product
+              </label>
+            </div>
+          </section>
+        ) : null}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {services.map((s) => (
-              <Card key={s.id} className="flex flex-col border shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg leading-snug">{s.name}</CardTitle>
-                  <CardDescription className="line-clamp-3 min-h-[2.5rem]">
-                    {s.description?.trim() || 'Service provided by the merchant.'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="mt-auto pt-0 space-y-3">
-                  <p className="text-xl font-semibold tabular-nums">
-                    {formatCurrency(s.price, s.currency)}
-                  </p>
-                  <Button
-                    className="w-full"
-                    disabled={!!loadingId}
-                    onClick={() => onServiceCheckout(s.id)}
-                  >
-                    {loadingId === s.id ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Starting checkout…
-                      </>
-                    ) : (
-                      checkoutCta
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
-
-        {allowCustomAmount ? (
-          <section className="space-y-4 border-t pt-10">
+        {showCatalog ? (
+          <section className="space-y-4">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight">Or pay a custom amount</h2>
+              <h2 className="text-lg font-semibold tracking-tight">Select service/product</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Choose what you would like to purchase. Prices are shown in the merchant currency.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {services.map((s) => (
+                <Card key={s.id} className="flex flex-col border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg leading-snug">{s.name}</CardTitle>
+                    <CardDescription className="line-clamp-3 min-h-[2.5rem]">
+                      {s.description?.trim() || 'Service provided by the merchant.'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="mt-auto pt-0 space-y-3">
+                    <p className="text-xl font-semibold tabular-nums">
+                      {formatCurrency(s.price, s.currency)}
+                    </p>
+                    <Button
+                      className="w-full"
+                      disabled={!!loadingId}
+                      onClick={() => onServiceCheckout(s.id)}
+                    >
+                      {loadingId === s.id ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Starting checkout…
+                        </>
+                      ) : (
+                        checkoutCta
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {showCustom ? (
+          <section className={`space-y-4 ${showCatalog ? 'border-t pt-10' : ''}`}>
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">
+                {hasBothOptions ? 'Pay custom amount' : 'Complete your payment'}
+              </h2>
               <p className="text-sm text-muted-foreground mt-1">
                 Enter an amount if you are paying outside a listed service.
               </p>

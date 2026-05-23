@@ -15,10 +15,12 @@ import {
   type PayoutOnboardingPhase,
 } from '@/lib/operations/lifecycle/payout-lifecycle';
 import { isParticipantOperationallyApproved } from '@/lib/operations/truth/participant-truth';
+import { isParticipantPayoutReady } from '@/lib/operations/truth/payout-truth';
 import { agreementTruthLabel } from '@/lib/operations/truth/agreement-truth';
 import { attributionTruthLabel } from '@/lib/operations/truth/attribution-truth';
-import { deriveAttributionStatus, type ParticipantAttributionStatus } from '@/lib/projects/participant-entitlement';
+import { deriveAgreementLifecycleState } from '@/lib/operations/lifecycle/agreement-lifecycle';
 import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
+import type { ParticipantAttributionStatus } from '@/lib/projects/participant-entitlement';
 
 /** @deprecated Use ParticipantLifecycleState — kept for table column compatibility */
 export type ParticipantInviteState =
@@ -112,10 +114,9 @@ export function derivePayoutOnboardingState(
   participant: DemoParticipant
 ): PayoutOnboardingState {
   if (participant.payoutBlocked) return 'blocked';
+  if (participant.payoutVerificationConfirmed === true) return 'ready';
   const phase = derivePayoutOnboardingPhase(participant);
-  if (phase === 'COMPLETED' || isOnboardingComplete(effectiveOnboardingStatus(participant))) {
-    return 'ready';
-  }
+  if (phase === 'COMPLETED') return 'ready';
   if (phase === 'IN_PROGRESS') return 'in progress';
   if (phase === 'INVITED') return 'invited';
   return 'not started';
@@ -124,15 +125,15 @@ export function derivePayoutOnboardingState(
 export function payoutOnboardingLabel(state: PayoutOnboardingState): string {
   switch (state) {
     case 'ready':
-      return 'Complete';
+      return 'Confirmed by operator';
     case 'in progress':
-      return 'In progress';
     case 'invited':
-      return 'Invited';
+    case 'not started':
+      return 'Not confirmed';
     case 'blocked':
       return 'Blocked';
     default:
-      return 'Not started';
+      return 'Not confirmed';
   }
 }
 
@@ -169,21 +170,23 @@ export function participantSummaryMetrics(
   let activeAttribution = 0;
 
   for (const p of participants) {
-    const lifecycle = deriveParticipantLifecycleState(p);
+    const agreementApproved = deriveAgreementLifecycleState(p) === 'APPROVED';
+    if (!agreementApproved) pendingAgreements += 1;
+
+    const needsPayoutConfirmation =
+      !p.compensationProfile?.exemptFromPayout && Boolean(p.compensationProfile?.configured);
+    if (agreementApproved && needsPayoutConfirmation && p.payoutVerificationConfirmed !== true) {
+      missingOnboarding += 1;
+    }
+
+    if (isParticipantPayoutReady(p)) readyForPayout += 1;
+
     if (
-      lifecycle !== 'APPROVED' &&
-      lifecycle !== 'PAYOUT_READY' &&
-      lifecycle !== 'ACTIVE' &&
-      lifecycle !== 'ONBOARDING_REQUIRED'
+      p.compensationProfile?.customerAttributionEnabled === true &&
+      agreementApproved
     ) {
-      pendingAgreements += 1;
+      activeAttribution += 1;
     }
-    const payoutOb = derivePayoutOnboardingState(p);
-    if (payoutOb === 'in progress' || payoutOb === 'not started' || payoutOb === 'invited') {
-      if (isParticipantOperationallyApproved(p)) missingOnboarding += 1;
-    }
-    if (payoutOb === 'ready' && isParticipantOperationallyApproved(p)) readyForPayout += 1;
-    if (deriveAttributionStatus(p) === 'active') activeAttribution += 1;
   }
 
   return {
@@ -192,6 +195,20 @@ export function participantSummaryMetrics(
     missingOnboarding,
     readyForPayout,
     activeAttribution,
+  };
+}
+
+export function applyPayoutVerificationConfirmed(
+  participant: DemoParticipant,
+  confirmed: boolean
+): DemoParticipant {
+  return {
+    ...participant,
+    payoutVerificationConfirmed: confirmed,
+    payoutVerificationConfirmedAt: confirmed ? new Date().toISOString() : undefined,
+    onboardingStatus: confirmed ? 'COMPLETE' : 'NOT_STARTED',
+    payoutOnboardingPhase: confirmed ? 'COMPLETED' : 'NOT_STARTED',
+    payoutBlocked: confirmed ? false : participant.payoutBlocked,
   };
 }
 
@@ -246,3 +263,4 @@ export function referralIssuanceFromParticipant(
 export function isAttributionActive(status: ParticipantAttributionStatus): boolean {
   return status === 'active' || status === 'generating conversions';
 }
+
