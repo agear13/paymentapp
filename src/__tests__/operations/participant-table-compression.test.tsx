@@ -60,12 +60,19 @@ describe('compressed participant table UX', () => {
     expect(text).not.toContain(OPERATOR_PAYOUT_DISCLAIMER);
   });
 
-  it('renders compact payout confirmation chip', () => {
+  it('renders stacked attribution explanation without crushing copy', () => {
+    const { container } = renderRow();
+    expect(container.textContent).toContain('Inactive');
+    expect(container.textContent).toContain('Attribution not enabled');
+  });
+
+  it('renders stacked agreement and payout cells', () => {
     const { container } = renderRow({
       ...baseParticipant,
       payoutVerificationConfirmed: false,
     });
     expect(container.textContent).toContain('Not confirmed');
+    expect(container.textContent).toContain('Ready to send to participant');
   });
 
   it('uses dropdown actions instead of stacked buttons', () => {

@@ -34,6 +34,11 @@ import {
 import { ProjectReadinessBreakdown } from '@/components/projects/project-readiness-breakdown';
 import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
 import { ParticipantCompensationDialog } from '@/components/projects/participant-compensation-dialog';
+import {
+  PARTICIPANT_TABLE_COLUMNS,
+  PARTICIPANT_TABLE_MIN_WIDTH,
+  participantTableHeadClass,
+} from '@/components/projects/participant-table-layout';
 import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
@@ -48,6 +53,7 @@ import {
 import { EMPTY_STATE_COPY } from '@/lib/operations/design-language';
 import { opSurface } from '@/lib/design/operational-surfaces';
 import { OperatorEmptyState } from '@/components/operations/operator-empty-state';
+import { cn } from '@/lib/utils';
 
 const ONBOARDING_CHECKLIST = [
   'Add participants',
@@ -513,16 +519,43 @@ export function ProjectParticipantsView() {
                 ref={tableScrollRef}
                 className="max-h-[70vh] overflow-x-auto overflow-y-auto -mx-1 px-1"
               >
-                <Table className="min-w-[880px] table-fixed w-full">
+                <Table
+                  className="table-fixed w-full"
+                  style={{ minWidth: PARTICIPANT_TABLE_MIN_WIDTH }}
+                >
+                  <colgroup>
+                    {PARTICIPANT_TABLE_COLUMNS.map((col) => (
+                      <col
+                        key={col.key}
+                        style={{ width: col.width, minWidth: col.minWidth }}
+                      />
+                    ))}
+                  </colgroup>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[22%]">Participant</TableHead>
-                      <TableHead className="w-[10%]">Role</TableHead>
-                      <TableHead className="w-[12%]">Agreement</TableHead>
-                      <TableHead className="w-[11%]">Attribution</TableHead>
-                      <TableHead className="w-[15%]">Payout</TableHead>
-                      <TableHead className="w-[18%]">Earnings</TableHead>
-                      <TableHead className="w-[12%] text-right">Actions</TableHead>
+                    <TableRow className="align-top">
+                      {PARTICIPANT_TABLE_COLUMNS.map((col, index) => (
+                        <TableHead
+                          key={col.key}
+                          className={cn(
+                            'align-top py-3 whitespace-nowrap',
+                            participantTableHeadClass(index)
+                          )}
+                        >
+                          {col.key === 'participant'
+                            ? 'Participant'
+                            : col.key === 'role'
+                              ? 'Role'
+                              : col.key === 'agreement'
+                                ? 'Agreement'
+                                : col.key === 'attribution'
+                                  ? 'Attribution'
+                                  : col.key === 'payout'
+                                    ? 'Payout'
+                                    : col.key === 'earnings'
+                                      ? 'Earnings'
+                                      : 'Actions'}
+                        </TableHead>
+                      ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
