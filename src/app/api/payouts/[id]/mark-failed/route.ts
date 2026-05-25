@@ -13,6 +13,7 @@ import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { log } from '@/lib/logger';
+import { z } from 'zod';
 import {
   orchestrateOperationalMutation,
   operationalSyncJson,
@@ -55,7 +56,7 @@ export async function POST(
     const parsed = MarkFailedSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'failed_reason is required', details: parsed.error.errors },
+        { error: 'failed_reason is required', details: parsed.error.issues },
         { status: 400 }
       );
     }
@@ -92,14 +93,11 @@ export async function POST(
       });
     });
 
-    log.info(
-      {
-        organizationId: payout.organization_id,
-        payoutId: id,
-        failedReason: failed_reason,
-      },
-      'Payout marked failed, obligation lines unassigned'
-    );
+    log.info('Payout marked failed, obligation lines unassigned', {
+      organizationId: payout.organization_id,
+      payoutId: id,
+      failedReason: failed_reason,
+    });
 
     const operationalSync = await orchestrateOperationalMutation({
       userId: user.id,

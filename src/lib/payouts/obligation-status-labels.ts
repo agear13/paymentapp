@@ -8,7 +8,17 @@ import type { FundingCoordinationStage } from '@/lib/operations/truth/funding-co
 import {
   isApprovedButNotOnboarded,
   isOnboardingComplete,
+  type PilotParticipantOnboardingStatus,
 } from '@/lib/deal-network-demo/participant-onboarding';
+
+function asPilotOnboardingStatus(
+  value?: string
+): PilotParticipantOnboardingStatus | undefined {
+  if (value === 'NOT_STARTED' || value === 'INCOMPLETE' || value === 'COMPLETE') {
+    return value;
+  }
+  return undefined;
+}
 
 function unfundedLabel(stage?: FundingCoordinationStage | null): string {
   if (!stage) return 'Funding not reserved';
@@ -116,15 +126,13 @@ export function getObligationNextAction(row: NextActionInput): string {
         id: row.participant.id,
         approvalStatus:
           row.participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
-        onboardingStatus: row.participant.onboardingStatus,
+        onboardingStatus: asPilotOnboardingStatus(row.participant.onboardingStatus),
       })
     ) {
       return 'Complete onboarding';
     }
-    if (
-      row.participant.onboardingStatus != null &&
-      !isOnboardingComplete(row.participant.onboardingStatus)
-    ) {
+    const onboardingStatus = asPilotOnboardingStatus(row.participant.onboardingStatus);
+    if (onboardingStatus != null && !isOnboardingComplete(onboardingStatus)) {
       return 'Complete onboarding';
     }
   }
@@ -159,15 +167,13 @@ export function getObligationBlockingIssue(row: NextActionInput): string | null 
         id: row.participant.id,
         approvalStatus:
           row.participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
-        onboardingStatus: row.participant.onboardingStatus,
+        onboardingStatus: asPilotOnboardingStatus(row.participant.onboardingStatus),
       })
     ) {
       return 'Participant setup incomplete';
     }
-    if (
-      row.participant.onboardingStatus != null &&
-      !isOnboardingComplete(row.participant.onboardingStatus)
-    ) {
+    const onboardingStatus = asPilotOnboardingStatus(row.participant.onboardingStatus);
+    if (onboardingStatus != null && !isOnboardingComplete(onboardingStatus)) {
       return 'Participant setup incomplete';
     }
   }

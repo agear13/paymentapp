@@ -1,10 +1,7 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
-import {
-  adaptProjectInput,
-  countConfiguredParticipants,
-  detectProjectPhase,
-} from '@/lib/operations/adapters/project-adapter';
+import { adaptProjectInput } from '@/lib/operations/adapters/participant-adapter';
+import { countConfiguredParticipants, detectProjectPhase } from '@/lib/operations/adapters/project-adapter';
 import {
   PROJECT_CONTRACT_VERSION,
   type HydratedProject,
@@ -63,7 +60,9 @@ export function hydrateProject(
     const configuredCount = countConfiguredParticipants(participants);
     const total = participants.length;
     const phase = detectProjectPhase(adapted);
-    const setupStatus = adapted.setupStatus ?? adapted.operationalCompleteness ?? 'configuring';
+    const setupStatus = String(
+      adapted.setupStatus ?? adapted.operationalCompleteness ?? 'configuring'
+    );
 
     return {
       id: adapted.id,
@@ -74,7 +73,9 @@ export function hydrateProject(
       },
       lifecycle: {
         setupStatus,
-        operationalCompleteness: adapted.operationalCompleteness,
+        operationalCompleteness: adapted.operationalCompleteness
+          ? String(adapted.operationalCompleteness)
+          : undefined,
         phase,
       },
       treasury: {

@@ -13,7 +13,6 @@ import {
   normalizeParticipantEntity,
   deriveParticipantCapabilityFlags,
 } from '@/lib/operations/guards/hydration-guards';
-import { deriveParticipantCapabilityFlags } from '@/lib/operations/guards/hydration-guards';
 import type { OperationalReadinessResult } from '@/lib/operations/types/readiness-result';
 import { emptyReadiness } from '@/lib/operations/types/readiness-result';
 

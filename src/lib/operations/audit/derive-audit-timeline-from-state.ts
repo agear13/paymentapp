@@ -60,13 +60,13 @@ export function deriveAuditTimelineFromParticipants(
       });
     }
 
-    if (p.compensationProfile?.configured && p.compensationProfile.updatedAt) {
+    if (p.compensationProfile?.configured && p.compensationProfile.configuredAt) {
       entries.push({
-        id: `compensation_updated-${p.id}-${p.compensationProfile.updatedAt}`,
+        id: `compensation_updated-${p.id}-${p.compensationProfile.configuredAt}`,
         type: 'compensation_updated',
         title: 'Participant compensation updated',
         description: `Earnings configured for ${p.name}.`,
-        timestamp: p.compensationProfile.updatedAt,
+        timestamp: p.compensationProfile.configuredAt,
         ...base,
       });
     }
@@ -82,7 +82,7 @@ export function deriveAuditTimelineFromParticipants(
       });
     }
 
-    if (p.referralLinkUrl || p.customerCommerceUrl) {
+    if (p.inviteLink || p.customerCommerceUrl) {
       entries.push({
         id: `attribution_configured-${p.id}`,
         type: 'attribution_configured',

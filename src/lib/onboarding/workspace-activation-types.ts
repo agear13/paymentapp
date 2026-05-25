@@ -13,6 +13,7 @@ export type ActivationChecklistItemId =
   | 'revenue'
   | 'currency'
   | 'obligations'
+  | 'funding'
   | 'release';
 
 export type ActivationChecklistItem = {

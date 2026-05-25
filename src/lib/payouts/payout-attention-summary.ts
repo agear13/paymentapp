@@ -1,6 +1,16 @@
 import {
   isApprovedButNotOnboarded,
+  type PilotParticipantOnboardingStatus,
 } from '@/lib/deal-network-demo/participant-onboarding';
+
+function asPilotOnboardingStatus(
+  value?: string
+): PilotParticipantOnboardingStatus | undefined {
+  if (value === 'NOT_STARTED' || value === 'INCOMPLETE' || value === 'COMPLETE') {
+    return value;
+  }
+  return undefined;
+}
 import type { DealNetworkPilotObligationStatus } from '@prisma/client';
 
 export type ObligationRowLike = {
@@ -56,14 +66,14 @@ export function computePayoutAttentionSummary(
         id: row.participant.id,
         approvalStatus:
           row.participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
-        onboardingStatus: row.participant.onboardingStatus,
+        onboardingStatus: asPilotOnboardingStatus(row.participant.onboardingStatus),
       })
     ) {
       awaitingOnboardingCount++;
     } else if (
       status === 'APPROVED' &&
       row.participant?.onboardingStatus &&
-      row.participant.onboardingStatus !== 'Complete'
+      asPilotOnboardingStatus(row.participant.onboardingStatus) !== 'COMPLETE'
     ) {
       awaitingOnboardingCount++;
     }

@@ -11,6 +11,7 @@ import {
   type WorkspaceRefreshOptions,
   type WorkspaceRefreshScope,
 } from '@/lib/projects/workspace-refresh-controller';
+import type { WorkspaceCacheScope } from '@/lib/projects/workspace-query-cache';
 import {
   fetchWorkspaceFullSnapshot,
   persistWorkspaceFullSnapshot,
@@ -108,7 +109,7 @@ export function useProjectContext(projectId: string): ProjectContextValue {
       onRefreshingChange: setIsRefreshing,
       onLoadingChange: setLoading,
       onLastRefresh: setLastRefreshAt,
-      onError: (scope: 'summary' | 'participants', error: Error) => {
+      onError: (scope: WorkspaceCacheScope, error: Error) => {
         const section: ProjectSectionKey =
           scope === 'participants' ? 'participants' : 'obligations';
         setSectionErrors((prev) => ({ ...prev, [section]: error.message }));

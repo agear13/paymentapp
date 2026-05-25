@@ -1,0 +1,30 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "lib/operations/**/*.ts",
+    "lib/operations/**/*.tsx",
+    "components/operations/**/*.tsx",
+    "lib/payouts/obligation-status-labels.ts",
+    "lib/payouts/payout-attention-summary.ts",
+    "hooks/use-operational-guidance.ts",
+    "hooks/use-operational-audit-store.ts",
+    "hooks/use-global-operational-sync.ts",
+    "app/api/operations/**/*.ts",
+    "app/api/payouts/**/mark-paid/route.ts",
+    "app/api/payouts/**/mark-failed/route.ts",
+    "app/api/payout-batches/create/route.ts",
+    "app/api/payout-batches/**/submit/route.ts",
+    "app/api/payout-batches/**/hedera/confirm/route.ts",
+    "app/api/deal-network-pilot/**/*.ts",
+    "app/api/onboarding/bootstrap-project/route.ts",
+    "app/api/onboarding/participants/route.ts",
+    "app/api/projects/**/funding-sources/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

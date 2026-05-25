@@ -8,10 +8,11 @@ export function projectEntityForMutation(project: RecentDeal): RecentDeal {
 export function detectProjectPhase(
   project: RecentDeal
 ): 'configuring' | 'ready' | 'active' | 'unknown' {
-  const status = project.setupStatus ?? project.operationalCompleteness;
+  const status = String(project.setupStatus ?? project.operationalCompleteness ?? '');
   if (status === 'ready' || status === 'complete') return 'ready';
   if (status === 'configuring' || status === 'draft') return 'configuring';
-  if (project.status === 'Active' || project.status === 'Closed Won') return 'active';
+  const dealStatus = String(project.status ?? '');
+  if (dealStatus === 'Active' || dealStatus === 'Closed Won') return 'active';
   return 'unknown';
 }
 

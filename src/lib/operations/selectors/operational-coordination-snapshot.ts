@@ -126,8 +126,10 @@ export function getOperationalCoordinationSnapshot(
         (o) => o.operational.releaseReady || o.readiness === 'ready'
       ),
       compensationConfigured,
-      attributionEnabled: participant.attributionEnabled === true,
-      referralLinkPresent: Boolean(participant.referralLinkUrl),
+      attributionEnabled: participant.compensationProfile?.customerAttributionEnabled === true,
+      referralLinkPresent: Boolean(
+        participant.inviteLink || participant.customerCommerceUrl || participant.referralCode
+      ),
       agreementApproved:
         agreementApproval === 'participant_approved' || agreementApproval === 'fully_approved',
       syncCompleted: true,

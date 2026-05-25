@@ -52,10 +52,10 @@ export function OperationalGraphDiagnostics() {
           <pre className="whitespace-pre-wrap break-all text-[10px] bg-muted/40 p-2 rounded max-h-40 overflow-auto">
             {JSON.stringify(
               graph.participants.map((p) => ({
-                id: p.participantId,
-                name: p.name,
-                releaseReady: p.releaseReady,
-                payoutReady: p.payoutReady,
+                id: p.participant.id,
+                name: p.participant.name,
+                releaseReady: p.releaseReadiness.releaseReady,
+                payoutReady: p.payoutReadiness.payoutReady,
                 hierarchy: p.readinessHierarchy,
                 blockers: p.blockers.length,
               })),

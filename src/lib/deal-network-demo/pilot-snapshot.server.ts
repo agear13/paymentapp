@@ -6,6 +6,7 @@ import 'server-only';
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
+import { log } from '@/lib/logger';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
@@ -314,7 +315,7 @@ export async function updatePilotParticipantPayload(
           ? new Date(next.approvedAt)
           : row.approved_at
         : row.approved_at,
-    participant_payload: next as unknown as Prisma.InputJsonValue,
+    participant_payload: next as unknown as Prisma.JsonValue,
   });
 }
 

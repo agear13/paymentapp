@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     const parsed = CreateBatchSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Validation error', details: parsed.error.errors },
+        { error: 'Validation error', details: parsed.error.issues },
         { status: 400 }
       );
     }
@@ -225,18 +225,15 @@ export async function POST(request: NextRequest) {
       return [batch];
     });
 
-    log.info(
-      {
-        correlationId,
-        organizationId,
-        batchId: batch.id,
-        payoutCount: payeesAboveThreshold.length,
-        totalAmount,
-        currency: currencyUpper,
-        graphEligibleCount: eligibility.participantCount,
-      },
-      'Payout batch created'
-    );
+    log.info('Payout batch created', {
+      correlationId,
+      organizationId,
+      batchId: batch.id,
+      payoutCount: payeesAboveThreshold.length,
+      totalAmount,
+      currency: currencyUpper,
+      graphEligibleCount: eligibility.participantCount,
+    });
 
     assertBatchInvariants({
       batchCreated: true,
@@ -265,7 +262,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';
-    log.error({ error: message }, 'Payout batch creation failed');
+    log.error('Payout batch creation failed', message);
     try {
       const body = await request.clone().json().catch(() => ({}));
       const orgId = (body as { organizationId?: string }).organizationId;

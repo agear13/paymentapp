@@ -57,7 +57,7 @@ export async function POST(
     const parsed = MarkPaidSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'external_reference is required', details: parsed.error.errors },
+        { error: 'external_reference is required', details: parsed.error.issues },
         { status: 400 }
       );
     }
@@ -107,15 +107,12 @@ export async function POST(
       });
     });
 
-    log.info(
-      {
-        organizationId: payout.organization_id,
-        payoutId: id,
-        batchId: payout.batch_id,
-        externalReference: external_reference,
-      },
-      'Payout marked paid'
-    );
+    log.info('Payout marked paid', {
+      organizationId: payout.organization_id,
+      payoutId: id,
+      batchId: payout.batch_id,
+      externalReference: external_reference,
+    });
 
     const operationalSync = await orchestrateOperationalMutation({
       userId: user.id,

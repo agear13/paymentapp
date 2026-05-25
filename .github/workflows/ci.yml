@@ -4,14 +4,19 @@ on:
   push:
     branches: [main, master]
   pull_request:
-    branches: [main, master]
 
 defaults:
   run:
     working-directory: src
 
+env:
+  RELAX_ENV_VALIDATION: '1'
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/paymentlink_test
+  DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/paymentlink_test
+
 jobs:
-  test:
+  build-integrity:
+    name: Build integrity
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -28,15 +33,12 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/paymentlink_test
-      DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/paymentlink_test
-      RELAX_ENV_VALIDATION: '1'
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
@@ -45,14 +47,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prisma migrate
+      - name: Lint
+        run: npm run lint -- .
+
+      - name: Typecheck (operational graph)
+        run: npm run typecheck
+
+      - name: Duplicate import scan
+        run: npm run check:duplicate-imports
+
+      - name: Circular dependency scan
+        run: npm run check:circular-deps
+
+      - name: Operational architecture tests
+        run: npm run test:operations
+
+      - name: Prisma migrate (build prerequisite)
         run: npx prisma migrate deploy
 
-      - name: Unit & integration tests
-        run: npm test
-
-      - name: Install Playwright browsers
-        run: npx playwright install chromium --with-deps
-
-      - name: E2E smoke
-        run: npm run test:e2e
+      - name: Production build
+        run: npm run build

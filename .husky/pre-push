@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "Running operational graph pre-push checks..."
+cd src && npm run check:pre-push

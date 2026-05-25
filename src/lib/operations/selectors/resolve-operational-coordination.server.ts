@@ -32,12 +32,27 @@ function pilotStatusToReadiness(status: DealNetworkPilotObligationStatus): Oblig
   }
 }
 
+function amountFundedFromStatus(
+  amountOwed: unknown,
+  status: DealNetworkPilotObligationStatus
+): number {
+  const owed = Number(amountOwed) || 0;
+  switch (status) {
+    case DealNetworkPilotObligationStatus.AVAILABLE_FOR_PAYOUT:
+    case DealNetworkPilotObligationStatus.PAID:
+      return owed;
+    case DealNetworkPilotObligationStatus.PARTIALLY_FUNDED:
+      return owed;
+    default:
+      return 0;
+  }
+}
+
 function obligationsFromRows(
   rows: Array<{
     id: string;
     participant_id: string | null;
     amount_owed: unknown;
-    amount_funded: unknown;
     currency: string | null;
     status: DealNetworkPilotObligationStatus;
   }>
@@ -46,7 +61,7 @@ function obligationsFromRows(
     id: row.id,
     participantId: row.participant_id,
     amount: Number(row.amount_owed) || 0,
-    amountFunded: Number(row.amount_funded) || 0,
+    amountFunded: amountFundedFromStatus(row.amount_owed, row.status),
     currency: row.currency ?? 'AUD',
     readiness: pilotStatusToReadiness(row.status),
   }));
@@ -96,7 +111,6 @@ export async function resolveOperationalCoordinationSnapshot(
       id: true,
       participant_id: true,
       amount_owed: true,
-      amount_funded: true,
       currency: true,
       status: true,
     },
@@ -104,7 +118,7 @@ export async function resolveOperationalCoordinationSnapshot(
 
   for (const row of obligationRows) {
     const owed = Number(row.amount_owed) || 0;
-    const funded = Number(row.amount_funded) || 0;
+    const funded = amountFundedFromStatus(row.amount_owed, row.status);
     obligationsTotal += owed;
     obligationsFunded += funded;
   }

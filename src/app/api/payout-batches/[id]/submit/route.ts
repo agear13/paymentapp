@@ -89,16 +89,12 @@ export async function POST(
       });
     });
 
-    loggers.payment.info(
-      {
-        msg: 'Payout operation',
-        userId: user.id,
-        organizationId,
-        batchId: id,
-        externalReference,
-      },
-      'Payout batch submitted'
-    );
+    loggers.payment.info('Payout batch submitted', {
+      userId: user.id,
+      organizationId,
+      batchId: id,
+      externalReference,
+    });
 
     const operationalSync = await orchestrateOperationalMutation({
       userId: user.id,

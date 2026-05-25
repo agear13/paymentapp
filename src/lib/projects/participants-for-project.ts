@@ -1,9 +1,7 @@
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { buildProjectParticipant, type OperationalParticipantRole } from '@/lib/projects/participant-entitlement';
+import { buildProjectParticipant } from '@/lib/projects/participant-entitlement';
 import { participantSummaryMetrics } from '@/lib/projects/participant-lifecycle';
-
-export type { OperationalParticipantRole };
 
 export type OperationalParticipantRole =
   | 'Contributor'
