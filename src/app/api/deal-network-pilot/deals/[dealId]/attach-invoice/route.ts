@@ -14,6 +14,10 @@ import {
 } from '@/lib/deal-network-demo/pilot-deal-invoice-link.server';
 import { refreshDealNetworkPilotObligationsForDeal } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,7 +87,13 @@ export async function POST(
       await refreshDealNetworkPilotObligationsForDeal(user.id, deal, snapshot.participants);
     }
 
-    return NextResponse.json({ ok: true, paymentLinkId: link.id });
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'funding_update',
+      projectId: dealId,
+    });
+
+    return NextResponse.json({ ok: true, paymentLinkId: link.id, ...operationalSyncJson(operationalSync) });
   } catch (e: unknown) {
     const err = e as { statusCode?: number; message?: string; name?: string };
     if (err.statusCode === 401) {

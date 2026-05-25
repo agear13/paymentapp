@@ -3,16 +3,24 @@
 import * as React from 'react';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
+import type { OperationalGuidanceBundle } from '@/lib/operations/explainability';
+import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
 import {
-  buildOperationalGuidance,
-  type ExplainReadinessInput,
-  type OperationalGuidanceBundle,
-} from '@/lib/operations/explainability';
-import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
-import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
-import { defaultWorkspaceContext } from '@/lib/operations/types/operational-context';
+  appendOperationalAuditEntry,
+  setOperationalAuditEntries,
+  useOperationalAuditStore,
+} from '@/hooks/use-operational-audit-store';
+import {
+  guidanceFromOperationalGraph,
+  workspaceContextFromGraph,
+} from '@/lib/operations/selectors/operational-graph-adapter';
+import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 import { createFallbackActivation } from '@/lib/onboarding/workspace-activation-fallback';
+import { defaultWorkspaceContext } from '@/lib/operations/types/operational-context';
+import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
+import { subscribeProjectOperationalEvents } from '@/lib/operations/orchestration/operational-sync-client';
+import { dispatchOperationalEvent } from '@/lib/operations/orchestration/operational-event-bus';
 
 export type OperationalGuidanceOptions = {
   enabled?: boolean;
@@ -24,56 +32,132 @@ export type OperationalGuidanceOptions = {
   previousProjectState?: string | null;
 };
 
-function activationToWorkspaceContext(
-  activation: ReturnType<typeof createFallbackActivation>
-): WorkspaceOperationalContext {
-  const provider = activation.providerConnected;
+type GraphSummary = Pick<
+  OperationalCoordinationSnapshot,
+  'summary' | 'funding' | 'participants' | 'obligations'
+>;
+
+function emptyGraph(): GraphSummary {
   return {
-    hasOrganization: activation.workspaceCreated,
-    onboardingCompleted: activation.onboardingCompleted,
-    defaultCurrency: activation.defaultCurrency,
-    stripeConfigured: provider,
-    wiseConfigured: false,
-    hederaConfigured: false,
-    projectCount: activation.projectCreated ? 1 : 0,
-    primaryProjectId: activation.primaryProjectId,
-    participantCount: activation.participantCount,
-    participantsConfiguredCount: activation.participantsConfiguredCount,
-    obligationCount: activation.obligationCount,
-    paymentLinkCount: 0,
-    collectionPreferenceDecideLater: !activation.revenueConfigured,
-    releaseEligibleCount: activation.releaseEligibleCount,
-    releaseBatchCount: activation.firstReleaseCompleted ? 1 : 0,
+    summary: {
+      participantCount: 0,
+      payoutReadyCount: 0,
+      releaseReadyCount: 0,
+      blockerCount: 0,
+      allBlockers: [],
+    },
+    funding: { allocated: false, stage: null },
+    participants: [],
+    obligations: [],
   };
 }
 
+/** Client hook — loads authoritative operational graph and derives guidance from it. */
 export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
   const { activation, nextAction, loading, degraded, refresh } = useWorkspaceActivation({
     enabled: options?.enabled !== false,
   });
+  const projectId = options?.project?.id ?? activation?.primaryProjectId ?? null;
+  const [graph, setGraph] = React.useState<GraphSummary>(emptyGraph);
+  const auditTimeline = useOperationalAuditStore({
+    projectId: projectId ?? undefined,
+  });
+  const [graphLoading, setGraphLoading] = React.useState(false);
+
+  const loadGraph = React.useCallback(async () => {
+    if (options?.enabled === false) return;
+    setGraphLoading(true);
+    try {
+      const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+      const res = await fetch(`/api/operations/coordination-snapshot${qs}`, {
+        cache: 'no-store',
+        credentials: 'include',
+      });
+      if (!res.ok) return;
+      const json = (await res.json()) as {
+        data?: {
+          summary: GraphSummary['summary'];
+          funding: GraphSummary['funding'];
+          participants: GraphSummary['participants'];
+          obligationCount: number;
+          auditTimeline?: OperationalAuditEntry[];
+        };
+      };
+      if (!json.data) return;
+      if (json.data.auditTimeline?.length) {
+        setOperationalAuditEntries(json.data.auditTimeline);
+      }
+      setGraph({
+        summary: json.data.summary,
+        funding: json.data.funding,
+        participants: json.data.participants as GraphSummary['participants'],
+        obligations: [],
+      });
+    } finally {
+      setGraphLoading(false);
+    }
+  }, [options?.enabled, projectId]);
+
+  React.useEffect(() => {
+    void loadGraph();
+  }, [loadGraph]);
+
+  React.useEffect(() => {
+    if (!projectId) return;
+    return subscribeProjectOperationalEvents(projectId, {
+      invalidate: () => undefined,
+      refreshSilent: async () => {
+        await loadGraph();
+        await refresh();
+      },
+      onAudit: appendOperationalAuditEntry,
+    });
+  }, [projectId, loadGraph, refresh]);
 
   const guidance = React.useMemo((): OperationalGuidanceBundle => {
     const act = activation ?? createFallbackActivation();
-    const workspace = activationToWorkspaceContext(act);
-    const input: ExplainReadinessInput = {
+    const snapshot = graph as OperationalCoordinationSnapshot;
+    const workspace = workspaceContextFromGraph(snapshot, {
+      hasOrganization: act.workspaceCreated,
+      onboardingCompleted: act.onboardingCompleted,
+      projectCreated: act.projectCreated,
+      participantCount: act.participantCount,
+      participantsConfigured: act.participantsConfigured,
+      participantsConfiguredCount: act.participantsConfiguredCount,
+      obligationCount: snapshot.obligations.length,
+      paymentLinkCount: 0,
+      collectionPreferenceDecideLater: !act.revenueConfigured,
+      defaultCurrency: act.defaultCurrency,
+      stripeConfigured: act.providerConnected,
+      wiseConfigured: false,
+      hederaConfigured: false,
+      releaseEligibleCount: snapshot.summary.releaseReadyCount,
+      releaseBatchCount: act.firstReleaseCompleted ? 1 : 0,
+      primaryProjectId: act.primaryProjectId,
+    });
+
+    return guidanceFromOperationalGraph({
+      snapshot,
       workspace,
       scope: options?.scope ?? (options?.project ? 'project' : 'workspace'),
       scopeTitle: options?.scopeTitle ?? act.phaseLabel,
-      project: options?.project,
-      participants: options?.participants,
-      treasury: options?.treasury,
-      previousProjectState: options?.previousProjectState,
+      auditTimeline,
+    });
+  }, [activation, auditTimeline, graph, options?.scope, options?.scopeTitle, options?.project]);
+
+  const appendAudit = React.useCallback((entry: OperationalAuditEntry | null | undefined) => {
+    if (!entry) return;
+    appendOperationalAuditEntry(entry);
+  }, []);
+
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { auditEntry?: OperationalAuditEntry };
+      appendAudit(detail?.auditEntry);
     };
-    return buildOperationalGuidance(input);
-  }, [
-    activation,
-    options?.scope,
-    options?.scopeTitle,
-    options?.project,
-    options?.participants,
-    options?.treasury,
-    options?.previousProjectState,
-  ]);
+    window.addEventListener('operational-sync', handler);
+    return () => window.removeEventListener('operational-sync', handler);
+  }, [appendAudit]);
 
   const primaryAction = guidance.actions[0] ?? null;
   const nextRecommended =
@@ -92,12 +176,48 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
   return {
     guidance,
     activation,
+    graph,
+    auditTimeline,
     nextAction: nextRecommended,
-    loading,
+    loading: loading || graphLoading,
     degraded: degraded || guidance.degraded,
-    refresh,
+    refresh: async () => {
+      await Promise.all([refresh(), loadGraph()]);
+    },
+    appendAudit,
     workspaceContext: activation
-      ? activationToWorkspaceContext(activation)
+      ? workspaceContextFromGraph(graph as OperationalCoordinationSnapshot, {
+          hasOrganization: activation.workspaceCreated,
+          onboardingCompleted: activation.onboardingCompleted,
+          projectCreated: activation.projectCreated,
+          participantCount: activation.participantCount,
+          participantsConfigured: activation.participantsConfigured,
+          participantsConfiguredCount: activation.participantsConfiguredCount,
+          obligationCount: graph.summary.participantCount,
+          paymentLinkCount: 0,
+          collectionPreferenceDecideLater: !activation.revenueConfigured,
+          defaultCurrency: activation.defaultCurrency,
+          stripeConfigured: activation.providerConnected,
+          wiseConfigured: false,
+          hederaConfigured: false,
+          releaseEligibleCount: graph.summary.releaseReadyCount,
+          releaseBatchCount: activation.firstReleaseCompleted ? 1 : 0,
+          primaryProjectId: activation.primaryProjectId,
+        })
       : defaultWorkspaceContext(),
   };
+}
+
+export function dispatchOperationalAudit(entry: OperationalAuditEntry): void {
+  dispatchOperationalEvent({
+    type: 'SYNCHRONIZATION_COMPLETED',
+    timestamp: entry.timestamp,
+    source: 'client',
+    projectId: entry.projectId,
+    participantId: entry.participantId,
+    payload: { auditEntry: entry },
+  });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('operational-sync', { detail: { auditEntry: entry } }));
+  }
 }

@@ -6,6 +6,23 @@ import {
   linkLatestConfirmedPaymentFromPaymentLinkToPilotDeal,
   linkPaymentEventToPilotDeal,
 } from '@/lib/deal-network-demo/pilot-deal-payment-events.server';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+
+async function respondWithFundingSync(
+  userId: string,
+  dealId: string,
+  body: Record<string, unknown>
+) {
+  const operationalSync = await orchestrateOperationalMutation({
+    userId,
+    mutation: 'funding_update',
+    projectId: dealId,
+  });
+  return NextResponse.json({ ...body, ...operationalSyncJson(operationalSync) });
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -58,7 +75,7 @@ export async function POST(
         return NextResponse.json({ error: r.error }, { status: 404 });
       }
       await refreshDealNetworkPilotObligationsForUser(user.id);
-      return NextResponse.json({ ok: true, paymentEvent: r.paymentEvent });
+      return respondWithFundingSync(user.id, id, { ok: true, paymentEvent: r.paymentEvent });
     }
 
     if (mode === 'link_payment_link') {
@@ -75,7 +92,7 @@ export async function POST(
         return NextResponse.json({ error: r.error }, { status: 404 });
       }
       await refreshDealNetworkPilotObligationsForUser(user.id);
-      return NextResponse.json({ ok: true, paymentEvent: r.paymentEvent });
+      return respondWithFundingSync(user.id, id, { ok: true, paymentEvent: r.paymentEvent });
     }
 
     const amount = body.amount;
@@ -107,7 +124,7 @@ export async function POST(
       return NextResponse.json({ error: r.error }, { status: 404 });
     }
     await refreshDealNetworkPilotObligationsForUser(user.id);
-    return NextResponse.json({ ok: true, paymentEvent: r.paymentEvent });
+    return respondWithFundingSync(user.id, id, { ok: true, paymentEvent: r.paymentEvent });
   } catch (e: unknown) {
     const err = e as { statusCode?: number; message?: string };
     if (err.statusCode === 401) {

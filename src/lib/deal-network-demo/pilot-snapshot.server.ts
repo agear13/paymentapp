@@ -20,7 +20,7 @@ import {
   type ParticipantReferralCommerce,
 } from '@/lib/referrals/referral-commerce-config';
 import { isProjectWorkspaceParticipant } from '@/lib/projects/participant-entitlement';
-import { log } from '@/lib/logger';
+import { canParticipantApproveAgreement } from '@/lib/operations/contracts/canonical-agreement-lifecycle';
 import { referralTrace } from '@/lib/referrals/referral-trace';
 import {
   shouldIssueAttributionForParticipant,
@@ -108,7 +108,12 @@ async function resolveAttributionCatalogContext(
   const selectedIds = profileIds.length > 0 ? profileIds : commerceIds;
 
   if (selectedIds.length > 0) {
-    return selectedIds.map((id) => ({ id, name: id }));
+    const services = await prisma.organization_services.findMany({
+      where: { id: { in: selectedIds } },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(services.map((s) => [s.id, s.name] as const));
+    return selectedIds.map((id) => ({ id, name: nameById.get(id) ?? id }));
   }
 
   if (!isAllActiveCatalogSource(participant)) {
@@ -472,8 +477,12 @@ export async function approveParticipantByInviteToken(
   });
   if (!row) return null;
 
-  const now = new Date().toISOString();
   const cur = row.participant_payload as unknown as DemoParticipant;
+  if (!canParticipantApproveAgreement(cur)) {
+    throw new Error('AGREEMENT_NOT_APPROVABLE');
+  }
+
+  const now = new Date().toISOString();
   const next: DemoParticipant = {
     ...cur,
     status: 'Confirmed',

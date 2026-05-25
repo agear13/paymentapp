@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { refreshDealNetworkPilotObligationsForUser } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
 import { linkPaymentEventToPilotDeal } from '@/lib/deal-network-demo/pilot-deal-payment-events.server';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +40,12 @@ export async function PATCH(
       return NextResponse.json({ error: r.error }, { status: 404 });
     }
     await refreshDealNetworkPilotObligationsForUser(user.id);
-    return NextResponse.json({ ok: true, paymentEvent: r.paymentEvent });
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'funding_update',
+      projectId: dealId,
+    });
+    return NextResponse.json({ ok: true, paymentEvent: r.paymentEvent, ...operationalSyncJson(operationalSync) });
   } catch (e: unknown) {
     const err = e as { statusCode?: number; message?: string };
     if (err.statusCode === 401) {

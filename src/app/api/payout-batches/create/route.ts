@@ -14,6 +14,14 @@ import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { log } from '@/lib/logger';
 import { z } from 'zod';
+import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selectors/resolve-operational-coordination.server';
+import { deriveReleaseBatchEligibility } from '@/lib/operations/selectors/derive-release-batch-eligibility';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+import { assertBatchInvariants } from '@/lib/operations/dev/operational-invariants';
+import { pilotReleaseBatchPreferred } from '@/lib/operations/orchestration/pilot-release-batch.server';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -65,6 +73,36 @@ export async function POST(request: NextRequest) {
 
     const currencyUpper = currency.toUpperCase();
 
+    const graph = await resolveOperationalCoordinationSnapshot({ userId: user.id });
+    const eligibility = deriveReleaseBatchEligibility(graph, {
+      currency: currencyUpper,
+      minThreshold,
+    });
+
+    if (eligibility.participantCount === 0) {
+      return NextResponse.json(
+        {
+          error: 'No release-eligible participants',
+          message: `No participants pass canonical release eligibility for ${currencyUpper}. Resolve blockers in coordination workspace first.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const pilotBatch = await pilotReleaseBatchPreferred({
+      userId: user.id,
+      organizationId,
+      projectId: graph.projectId ?? undefined,
+      currency: currencyUpper,
+      minThreshold,
+    });
+
+    assertBatchInvariants({
+      batchCreated: false,
+      eligibleParticipantCount: eligibility.participantCount,
+      includedParticipantCount: pilotBatch.lines.length > 0 ? pilotBatch.eligibleCount : 0,
+    });
+
     const lines = await prisma.commission_obligation_lines.findMany({
       where: {
         status: 'POSTED',
@@ -113,7 +151,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'No payees above threshold',
-          message: `No unpaid obligations >= ${minThreshold} ${currencyUpper}. Try lowering minThreshold or check for posted commissions.`,
+          message: `No unpaid obligations >= ${minThreshold} ${currencyUpper}. ${eligibility.participantCount} participant(s) are release-eligible in the operational graph — verify ledger lines are posted.`,
         },
         { status: 400 }
       );
@@ -195,9 +233,22 @@ export async function POST(request: NextRequest) {
         payoutCount: payeesAboveThreshold.length,
         totalAmount,
         currency: currencyUpper,
+        graphEligibleCount: eligibility.participantCount,
       },
       'Payout batch created'
     );
+
+    assertBatchInvariants({
+      batchCreated: true,
+      eligibleParticipantCount: eligibility.participantCount,
+      includedParticipantCount: payeesAboveThreshold.length,
+    });
+
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'release_batch_generated',
+      projectId: graph.projectId ?? undefined,
+    });
 
     return NextResponse.json(
       {
@@ -208,6 +259,7 @@ export async function POST(request: NextRequest) {
           payoutCount: batch.payout_count,
           totalAmount: Number(batch.total_amount),
         },
+        ...operationalSyncJson(operationalSync),
       },
       { status: 201 }
     );

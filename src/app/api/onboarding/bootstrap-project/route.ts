@@ -21,6 +21,10 @@ import {
   type MutationResult,
 } from '@/lib/onboarding/mutation-resilience';
 import { log } from '@/lib/logger';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 
 const schema = z.object({
   projectName: z.string().min(2).max(255),
@@ -263,10 +267,23 @@ export async function POST(request: NextRequest) {
 
       logBootstrap(opId, mutation.status, { projectId: mutation.data?.projectId });
 
+      let operationalSync;
+      if (
+        (mutation.status === 'SUCCESS' || mutation.status === 'PARTIAL_SUCCESS') &&
+        mutation.data?.projectId
+      ) {
+        operationalSync = await orchestrateOperationalMutation({
+          userId: user.id,
+          mutation: 'snapshot_persist',
+          projectId: mutation.data.projectId,
+        });
+      }
+
       return apiResponse(
         {
           ...mutation.data,
           mutation: clientMutation,
+          ...(operationalSync ? operationalSyncJson(operationalSync) : {}),
         },
         httpStatus
       );

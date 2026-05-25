@@ -15,6 +15,10 @@ import {
   getOperatorOnboardingState,
   saveOperatorOnboardingState,
 } from '@/lib/onboarding/operator-onboarding.server';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 
 const participantSchema = z.object({
   name: z.string().min(1).max(255),
@@ -74,5 +78,11 @@ export async function POST(request: NextRequest) {
     organizationId: org.id,
   });
 
-  return apiResponse({ added: newParticipants.length, projectId: deal.id });
+  const operationalSync = await orchestrateOperationalMutation({
+    userId: user.id,
+    mutation: 'snapshot_persist',
+    projectId: deal.id,
+  });
+
+  return apiResponse({ added: newParticipants.length, projectId: deal.id, ...operationalSyncJson(operationalSync) });
 }

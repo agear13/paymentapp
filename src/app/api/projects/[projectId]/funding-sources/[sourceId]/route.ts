@@ -7,6 +7,10 @@ import {
   deleteProjectFundingSource,
   updateProjectFundingSource,
 } from '@/lib/projects/funding-sources/funding-sources.server';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +60,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Funding source not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ data: updated });
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'funding_update',
+      projectId,
+    });
+
+    return NextResponse.json({ data: updated, ...operationalSyncJson(operationalSync) });
   } catch (e: unknown) {
     const err = e as { statusCode?: number };
     if (err.statusCode === 401) {
@@ -84,7 +94,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Funding source not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ ok: true });
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'funding_update',
+      projectId,
+    });
+
+    return NextResponse.json({ ok: true, ...operationalSyncJson(operationalSync) });
   } catch (e: unknown) {
     const err = e as { statusCode?: number };
     if (err.statusCode === 401) {

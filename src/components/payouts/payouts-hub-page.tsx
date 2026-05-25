@@ -9,6 +9,7 @@ import { ReleaseConfidenceSummary } from '@/components/operations/release-confid
 import { OperationalAttentionBoard } from '@/components/operations/operational-attention-board';
 import { SafeOperationalLink } from '@/components/operations/safe-operational-link';
 import { PayoutHowItWorksCard } from '@/components/payouts/payout-lifecycle-explainer';
+import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import { opTypeBodySnug, opTypePageTitle } from '@/lib/design/operational-typography';
 import { opPage } from '@/lib/design/operational-spacing';
 import { opCollapsibleTrigger, opDivider, opSurface } from '@/lib/design/operational-surfaces';
@@ -99,6 +100,12 @@ export function PayoutsHubPage() {
           <PayoutHowItWorksCard />
         </CollapsibleContent>
       </Collapsible>
+
+      <OperationalActivitySection
+        title="Payout activity"
+        emptyMessage="Release, funding, and coordination events appear here as payouts progress."
+        defaultOpen={false}
+      />
     </div>
   );
 }

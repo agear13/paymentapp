@@ -81,3 +81,15 @@ export function participantDisplayName(hydrated: HydratedParticipant): string {
 export function participantEmail(hydrated: HydratedParticipant): string {
   return hydrated.identity.email?.trim() || 'No email';
 }
+
+export function participantApprovalNoteSecondary(hydrated: HydratedParticipant): string | null {
+  const note = hydrated._entity.approvalNote?.trim();
+  if (!note) return null;
+  return `Participant note: ${note}`;
+}
+
+export function agreementSecondaryWithNote(hydrated: HydratedParticipant): string {
+  const base = agreementSecondaryFromContract(hydrated.lifecycle.agreement);
+  const note = participantApprovalNoteSecondary(hydrated);
+  return note ? `${base} · ${note}` : base;
+}

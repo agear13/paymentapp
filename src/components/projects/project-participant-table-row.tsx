@@ -16,12 +16,12 @@ import { TableCell, TableRow } from '@/components/ui/table';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
-import { PAYOUT_CONFIRMATION_LABELS } from '@/lib/operations/merchant-operational-copy';
+import { AGREEMENT_ACTION_COPY, PAYOUT_CONFIRMATION_LABELS } from '@/lib/operations/merchant-operational-copy';
 import { cn } from '@/lib/utils';
 import { hydrateParticipant, participantEntity, type HydrateParticipantContext } from '@/lib/operations/hydration/hydrate-participant';
 import {
   agreementLabelFromContract,
-  agreementSecondaryFromContract,
+  agreementSecondaryWithNote,
   attributionChipLabelFromContract,
   attributionSecondaryFromContract,
   participantDisplayName,
@@ -127,7 +127,7 @@ function ProjectParticipantTableRowComponent({
       <TableCell className={participantTableCellClass('agreement')}>
         <StackedOperationalCell
           chip={agreementLabelFromContract(hydrated.lifecycle.agreement)}
-          secondary={agreementSecondaryFromContract(hydrated.lifecycle.agreement)}
+          secondary={agreementSecondaryWithNote(hydrated)}
         />
       </TableCell>
 
@@ -224,14 +224,25 @@ function ProjectParticipantTableRowComponent({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={openEdit}>Edit participant</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={openCopy}>
+              <DropdownMenuItem
+                onClick={openCopy}
+                title={AGREEMENT_ACTION_COPY.copyLink.tooltip}
+              >
                 <Copy className="mr-2 h-3.5 w-3.5" />
-                Copy agreement
+                {AGREEMENT_ACTION_COPY.copyLink.label}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={openShare}>Share agreement</DropdownMenuItem>
-              <DropdownMenuItem onClick={viewAgreement}>
+              <DropdownMenuItem
+                onClick={openShare}
+                title={AGREEMENT_ACTION_COPY.shareForApproval.tooltip}
+              >
+                {AGREEMENT_ACTION_COPY.shareForApproval.label}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={viewAgreement}
+                title={AGREEMENT_ACTION_COPY.preview.tooltip}
+              >
                 <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                View agreement
+                {AGREEMENT_ACTION_COPY.preview.label}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

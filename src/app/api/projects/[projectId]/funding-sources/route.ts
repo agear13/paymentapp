@@ -7,6 +7,10 @@ import {
   createProjectFundingSource,
   listProjectFundingSources,
 } from '@/lib/projects/funding-sources/funding-sources.server';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,7 +79,13 @@ export async function POST(
       organizationId: parsed.data.organizationId,
     });
 
-    return NextResponse.json({ data: created }, { status: 201 });
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'funding_update',
+      projectId,
+    });
+
+    return NextResponse.json({ data: created, ...operationalSyncJson(operationalSync) }, { status: 201 });
   } catch (e: unknown) {
     const err = e as { statusCode?: number };
     if (err.statusCode === 401) {

@@ -29,6 +29,7 @@ import {
   PAYOUTS_SETTLEMENTS_HREF,
 } from '@/lib/navigation/operator-nav';
 import { PayoutEmptyState } from '@/components/payouts/payout-empty-state';
+import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import type { PayoutEmptyIconVariant } from '@/components/payouts/payout-empty-state';
 import { cn } from '@/lib/utils';
 
@@ -392,6 +393,12 @@ export function OperatorCommissionsWorkspace() {
           </div>
         )}
       </section>
+
+      <OperationalActivitySection
+        title="Participant payout activity"
+        emptyMessage="Earnings configuration, obligations, and release events appear here."
+        defaultOpen={false}
+      />
     </div>
   );
 }

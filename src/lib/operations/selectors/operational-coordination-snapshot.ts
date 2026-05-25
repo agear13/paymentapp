@@ -10,13 +10,21 @@ import {
 } from '@/lib/operations/derivations/derive-approval-state';
 import type { CatalogItemRef } from '@/lib/operations/derivations/commission-scope';
 import { deriveObligationState, type RawObligationInput } from '@/lib/operations/derivations/derive-obligation-state';
-import {
-  derivePayoutReleaseReadiness,
-  derivePayoutReleaseReadinessBatch,
-} from '@/lib/operations/readiness/derive-payout-release-readiness';
+import { countReleaseEligibleParticipants } from '@/lib/operations/readiness/derive-participant-release-eligibility';
+import { derivePayoutReleaseReadiness } from '@/lib/operations/readiness/derive-payout-release-readiness';
 import { deriveParticipantPayoutReadiness } from '@/lib/operations/readiness/participant-readiness';
 import { hydrateOperationalParticipants } from '@/lib/operations/hydration/hydrate-operational-participant';
+import { assertOperationalInvariants } from '@/lib/operations/dev/operational-invariants';
+import {
+  classifyParticipantCompensation,
+  compensationGeneratesObligations,
+} from '@/lib/operations/contracts/compensation-classification';
 import { warnOperationalInconsistency } from '@/lib/operations/dev/operational-diagnostics';
+import { deriveOperationalReadinessHierarchy } from '@/lib/operations/readiness/readiness-hierarchy';
+import {
+  deriveFundingCoordinationStage,
+  type FundingCoordinationInput,
+} from '@/lib/operations/truth/funding-coordination-semantics';
 
 export type OperationalCoordinationSnapshot = {
   participants: Array<{
@@ -24,6 +32,7 @@ export type OperationalCoordinationSnapshot = {
     agreementApproval: ReturnType<typeof deriveAgreementApprovalState>;
     payoutReadiness: ReturnType<typeof deriveParticipantPayoutReadiness>;
     releaseReadiness: ReturnType<typeof derivePayoutReleaseReadiness>;
+    readinessHierarchy: ReturnType<typeof deriveOperationalReadinessHierarchy>;
     blockers: OperationalBlockerDetail[];
   }>;
   obligations: ReturnType<typeof deriveObligationState>[];
@@ -36,7 +45,10 @@ export type OperationalCoordinationSnapshot = {
   };
   funding: {
     allocated: boolean;
+    stage: ReturnType<typeof deriveFundingCoordinationStage> | null;
   };
+  projectCurrency?: string;
+  serviceCurrencies?: string[];
 };
 
 export type OperationalCoordinationInput = {
@@ -44,7 +56,10 @@ export type OperationalCoordinationInput = {
   obligations?: RawObligationInput[];
   projectId?: string;
   fundingAllocated?: boolean;
+  funding?: FundingCoordinationInput;
   catalogItemsByParticipant?: Record<string, CatalogItemRef[]>;
+  projectCurrency?: string;
+  serviceCurrencies?: string[];
 };
 
 /** Authoritative coordination truth — future screens must consume this selector. */
@@ -54,16 +69,40 @@ export function getOperationalCoordinationSnapshot(
   const participants = hydrateOperationalParticipants(input.participants);
   const obligations = (input.obligations ?? []).map((o) => deriveObligationState(o));
 
+  const fundingStage = input.funding
+    ? deriveFundingCoordinationStage(input.funding)
+    : null;
+  const effectiveFundingAllocated =
+    fundingStage?.releaseFunded ?? input.fundingAllocated ?? false;
+
   const participantSnapshots = participants.map((participant) => {
     const catalogItems = input.catalogItemsByParticipant?.[participant.id];
+    const participantObligations = obligations.filter(
+      (o) => o.participantId === participant.id
+    );
     const agreementApproval = deriveAgreementApprovalState(participant);
     const payoutReadiness = deriveParticipantPayoutReadiness(participant);
     const releaseReadiness = derivePayoutReleaseReadiness(participant, {
       projectId: input.projectId,
-      fundingAllocated: input.fundingAllocated,
+      fundingAllocated: effectiveFundingAllocated,
       catalogItems,
+      projectCurrency: input.projectCurrency,
+      serviceCurrencies: input.serviceCurrencies,
     });
-    const blockers = deriveOperationalBlocker(participant, input.projectId);
+    const readinessHierarchy = deriveOperationalReadinessHierarchy({
+      participant,
+      projectId: input.projectId,
+      funding: input.funding,
+      obligationCount: participantObligations.length,
+      obligationStatus: participantObligations[0]?.readiness,
+      catalogItems,
+      projectCurrency: input.projectCurrency,
+      serviceCurrencies: input.serviceCurrencies,
+    });
+    const blockers = [
+      ...deriveOperationalBlocker(participant, input.projectId),
+      ...readinessHierarchy.currencyBlockers,
+    ];
 
     warnOperationalInconsistency({
       participant,
@@ -73,19 +112,44 @@ export function getOperationalCoordinationSnapshot(
       catalogItems,
     });
 
+    const compensationClass = classifyParticipantCompensation(participant);
+    const compensationConfigured =
+      compensationGeneratesObligations(compensationClass) &&
+      participant.compensationProfile?.configured === true;
+
+    assertOperationalInvariants({
+      participantId: participant.id,
+      payoutReady: payoutReadiness.payoutReady,
+      releaseReady: readinessHierarchy.releaseReady,
+      obligationCount: participantObligations.length,
+      obligationsFunded: participantObligations.some(
+        (o) => o.operational.releaseReady || o.readiness === 'ready'
+      ),
+      compensationConfigured,
+      attributionEnabled: participant.attributionEnabled === true,
+      referralLinkPresent: Boolean(participant.referralLinkUrl),
+      agreementApproved:
+        agreementApproval === 'participant_approved' || agreementApproval === 'fully_approved',
+      syncCompleted: true,
+      currencyConsistent: readinessHierarchy.currencyBlockers.length === 0,
+    });
+
     return {
       participant,
       agreementApproval,
       payoutReadiness,
       releaseReadiness,
+      readinessHierarchy,
       blockers,
     };
   });
 
-  const releaseReadinessBatch = derivePayoutReleaseReadinessBatch(participants, {
+  const releaseReadyCount = countReleaseEligibleParticipants(participants, {
     projectId: input.projectId,
-    fundingAllocated: input.fundingAllocated,
+    fundingAllocated: effectiveFundingAllocated,
     catalogItemsByParticipant: input.catalogItemsByParticipant,
+    projectCurrency: input.projectCurrency,
+    serviceCurrencies: input.serviceCurrencies,
   });
 
   const allBlockers = participantSnapshots.flatMap((s) => s.blockers);
@@ -96,12 +160,15 @@ export function getOperationalCoordinationSnapshot(
     summary: {
       participantCount: participants.length,
       payoutReadyCount: participantSnapshots.filter((s) => s.payoutReadiness.payoutReady).length,
-      releaseReadyCount: releaseReadinessBatch.filter((r) => r.releaseReady).length,
+      releaseReadyCount,
       blockerCount: allBlockers.length,
       allBlockers,
     },
     funding: {
-      allocated: input.fundingAllocated ?? false,
+      allocated: effectiveFundingAllocated,
+      stage: fundingStage,
     },
+    projectCurrency: input.projectCurrency,
+    serviceCurrencies: input.serviceCurrencies,
   };
 }

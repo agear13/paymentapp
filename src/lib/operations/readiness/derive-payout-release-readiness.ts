@@ -6,9 +6,13 @@ import {
   deriveObligationApprovalState,
   obligationApprovalLabel,
 } from '@/lib/operations/derivations/derive-approval-state';
+import { deriveCurrencyConsistencyWarnings } from '@/lib/operations/derivations/derive-currency-consistency';
 import type { CatalogItemRef } from '@/lib/operations/derivations/commission-scope';
 import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
-import { normalizeParticipantEntity } from '@/lib/operations/guards/hydration-guards';
+import {
+  normalizeParticipantEntity,
+  deriveParticipantCapabilityFlags,
+} from '@/lib/operations/guards/hydration-guards';
 import { deriveParticipantCapabilityFlags } from '@/lib/operations/guards/hydration-guards';
 import type { OperationalReadinessResult } from '@/lib/operations/types/readiness-result';
 import { emptyReadiness } from '@/lib/operations/types/readiness-result';
@@ -28,6 +32,8 @@ export type PayoutReleaseContext = {
   obligationStatus?: string;
   fundingAllocated?: boolean;
   catalogItems?: CatalogItemRef[];
+  projectCurrency?: string;
+  serviceCurrencies?: string[];
 };
 
 /**
@@ -63,18 +69,28 @@ export function derivePayoutReleaseReadiness(
   }
 
   if (context.fundingAllocated === false) {
-    obligationBlockers.push('Waiting for funding confirmation');
+    obligationBlockers.push('Funding not yet reserved against obligations');
   }
+
+  const currencyWarnings = deriveCurrencyConsistencyWarnings({
+    projectCurrency: context.projectCurrency,
+    serviceCurrencies: context.serviceCurrencies,
+  });
+  const currencyBlockers = currencyWarnings
+    .filter((w) => w.severity === 'blocking')
+    .map((w) => w.message);
 
   const blockers = [
     ...operationalBlockers.map((b) => b.explanation),
     ...obligationBlockers,
+    ...currencyBlockers,
   ];
 
   const releaseReady =
     flags.payoutReady &&
     operationalBlockers.length === 0 &&
-    obligationBlockers.length === 0;
+    obligationBlockers.length === 0 &&
+    currencyBlockers.length === 0;
 
   const readinessLevel = releaseReady
     ? 'ready'

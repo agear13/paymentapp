@@ -11,10 +11,12 @@ import {
   ReleaseConfidenceChip,
   RevenueSettlementChip,
 } from '@/components/operations/operational-chips';
-import { deriveReleaseConfidence } from '@/lib/operations/explainability';
 import { safeProjectState } from '@/lib/operations/guards/hydration-guards';
-import { defaultWorkspaceContext } from '@/lib/operations/types/operational-context';
+import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
+import { OperationalGraphDiagnostics } from '@/components/operations/operational-graph-diagnostics';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
+import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { ProjectFundingSourcesPanel } from '@/components/projects/project-funding-sources-panel';
 import { ProjectOperationalCompletenessCard } from '@/components/projects/project-operational-completeness-card';
 import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
@@ -44,6 +46,14 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
     invalidate,
   } = useProjectWorkspace();
   const [treasury, setTreasury] = React.useState<ProjectTreasurySummary | null>(null);
+  const { guidance, graph } = useOperationalGuidance({
+    scope: 'project',
+    project: deal ?? undefined,
+    participants: projectParticipants,
+    treasury,
+    scopeTitle: summary?.name,
+    enabled: Boolean(deal),
+  });
 
   React.useEffect(() => {
     let cancelled = false;
@@ -100,12 +110,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
     obligationCount: summary.treasury?.obligationsReady ?? 0,
   });
   const projectState = safeProjectState(deal);
-  const releaseConfidence = deriveReleaseConfidence({
-    workspace: defaultWorkspaceContext(),
-    participants: projectParticipants,
-    treasury,
-    currency,
-  });
+  const releaseConfidence = guidance.releaseConfidence;
 
   return (
     <div className="space-y-8">
@@ -184,7 +189,12 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <ProjectReadinessBreakdown participants={projectParticipants} projectId={projectId} />
+            <ProjectReadinessBreakdown
+              participants={projectParticipants}
+              projectId={projectId}
+              graphParticipants={graph.participants}
+              graphSummary={graph.summary}
+            />
             <div>
               <Button asChild variant="outline" size="sm">
                 <Link href={participantsHref}>Manage participants</Link>
@@ -226,8 +236,15 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
       <ProjectFundingSourcesPanel
         projectId={projectId}
         defaultCurrency={currency}
-        onTreasuryChange={() => void refresh({ scope: 'all', silent: true, force: true })}
+        onTreasuryChange={() => {
+          notifyWorkspaceActivationRefresh();
+          void refresh({ scope: 'all', silent: true, force: true });
+        }}
       />
+
+      <OperationalActivitySection projectId={projectId} defaultOpen={false} />
+
+      <OperationalGraphDiagnostics />
     </div>
   );
 }

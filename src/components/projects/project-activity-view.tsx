@@ -1,42 +1,44 @@
 'use client';
 
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
+import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export function ProjectActivityView() {
-  const { deal, summary } = useProjectWorkspace();
-  if (!deal || !summary) return null;
+  const { deal, summary, projectParticipants, projectId } = useProjectWorkspace();
+  useOperationalGuidance({
+    scope: 'project',
+    project: deal ?? undefined,
+    participants: projectParticipants,
+    enabled: Boolean(deal),
+  });
 
-  const entries = deal.activityLog ?? [];
+  if (!deal || !summary) return null;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
-        <p className="text-muted-foreground mt-1 text-sm">Recent activity for this project.</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Operational audit timeline for this project — canonical coordination events.
+        </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Activity</CardTitle>
-          <CardDescription>Operational timeline for this project container.</CardDescription>
+          <CardTitle>Operational activity</CardTitle>
+          <CardDescription>
+            Agreement, funding, obligation, and release events from the coordination graph.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {entries.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No activity logged yet. Updates from funding, participants, and payouts will appear
-              here as the project progresses.
-            </p>
-          ) : (
-            <ul className="space-y-4">
-              {entries.map((entry, i) => (
-                <li key={`${entry.at}-${i}`} className="border-l-2 pl-4">
-                  <p className="text-sm font-medium">{entry.text}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{entry.at}</p>
-                </li>
-              ))}
-            </ul>
-          )}
+          <OperationalActivitySection
+            projectId={projectId}
+            title="Project timeline"
+            defaultOpen
+            maxItems={20}
+          />
         </CardContent>
       </Card>
     </div>

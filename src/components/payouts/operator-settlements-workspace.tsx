@@ -44,6 +44,11 @@ import { toast } from 'sonner';
 import { PAYOUTS_SETTLEMENTS_HREF } from '@/lib/navigation/operator-nav';
 import { PAYOUT_TRUST_COPY } from '@/lib/payouts/payout-trust-copy';
 import { PayoutEmptyState } from '@/components/payouts/payout-empty-state';
+import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
+import {
+  applyGlobalOperationalSync,
+  useGlobalOperationalSyncHandlers,
+} from '@/hooks/use-global-operational-sync';
 import { cn } from '@/lib/utils';
 
 interface Batch {
@@ -55,51 +60,12 @@ interface Batch {
   createdAt: string;
 }
 
-type EligibleObligation = {
-  status: string;
-  amount_owed: string | number;
-  currency: string;
-  participant_id: string | null;
-};
-
-function toNumber(v: unknown): number {
-  if (v === null || v === undefined) return 0;
-  if (typeof v === 'number') return v;
-  const n = Number(String(v));
-  return Number.isFinite(n) ? n : 0;
-}
-
-function computeEligiblePreview(
-  rows: EligibleObligation[],
-  currency: string,
-  minThreshold: number
-): { lineCount: number; participantCount: number; total: number } {
-  const byParticipant = new Map<string, number>();
-  let lineCount = 0;
-  for (const row of rows) {
-    if (row.status !== 'AVAILABLE_FOR_PAYOUT') continue;
-    if ((row.currency || '').toUpperCase() !== currency.toUpperCase()) continue;
-    lineCount += 1;
-    const pid = row.participant_id ?? `__none_${row.currency}`;
-    const amt = toNumber(row.amount_owed);
-    byParticipant.set(pid, (byParticipant.get(pid) ?? 0) + amt);
-  }
-  let participantCount = 0;
-  let total = 0;
-  for (const balance of byParticipant.values()) {
-    if (balance >= minThreshold) {
-      participantCount += 1;
-      total += balance;
-    }
-  }
-  return { lineCount, participantCount, total };
-}
-
 const SUPPORTED_CURRENCIES = ['AUD', 'USD', 'EUR', 'GBP'] as const;
 
 export function OperatorSettlementsWorkspace() {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const { currency: orgCurrency } = useOrganizationCurrency();
+  const syncHandlers = useGlobalOperationalSyncHandlers();
   const [batches, setBatches] = React.useState<Batch[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -147,15 +113,25 @@ export function OperatorSettlementsWorkspace() {
     void (async () => {
       setEligiblePreview((p) => ({ ...p, loading: true }));
       try {
-        const res = await fetch('/api/deal-network-pilot/obligations', {
+        const qs = new URLSearchParams({
+          currency: createCurrency,
+          minThreshold: String(minThreshold),
+        });
+        const res = await fetch(`/api/operations/release-batch-eligibility?${qs}`, {
           credentials: 'include',
         });
         if (!res.ok) return;
-        const json = (await res.json()) as { data?: EligibleObligation[] };
-        const rows = json.data ?? [];
-        if (!cancelled) {
-          const preview = computeEligiblePreview(rows, createCurrency, minThreshold);
-          setEligiblePreview({ ...preview, loading: false });
+        const json = (await res.json()) as {
+          data?: { lineCount: number; participantCount: number; total: number };
+        };
+        const preview = json.data;
+        if (!cancelled && preview) {
+          setEligiblePreview({
+            lineCount: preview.lineCount,
+            participantCount: preview.participantCount,
+            total: preview.total,
+            loading: false,
+          });
         }
       } catch {
         if (!cancelled) {
@@ -193,6 +169,7 @@ export function OperatorSettlementsWorkspace() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'Failed to create batch');
+      applyGlobalOperationalSync(syncHandlers, data);
       toast.success('Release batch created');
       setCreateOpen(false);
       void fetchBatches();
@@ -455,6 +432,12 @@ export function OperatorSettlementsWorkspace() {
           )}
         </div>
       </div>
+
+      <OperationalActivitySection
+        title="Release activity"
+        emptyMessage="Batch creation, funding, and release events appear here."
+        defaultOpen={false}
+      />
     </div>
   );
 }

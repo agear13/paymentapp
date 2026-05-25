@@ -4,17 +4,31 @@ import {
   deriveObligationApprovalState,
   obligationApprovalLabel,
 } from '@/lib/operations/derivations/derive-approval-state';
+import type { FundingCoordinationStage } from '@/lib/operations/truth/funding-coordination-semantics';
 import {
   isApprovedButNotOnboarded,
   isOnboardingComplete,
 } from '@/lib/deal-network-demo/participant-onboarding';
 
+function unfundedLabel(stage?: FundingCoordinationStage | null): string {
+  if (!stage) return 'Funding not reserved';
+  if (!stage.fundingSourceConnected) return 'No funding source connected';
+  if (!stage.fundingReserved) return 'Funding source connected — awaiting reservation';
+  if (!stage.fundingSettled) return 'Funding reserved — awaiting settlement';
+  return stage.blockerLabel ?? 'Obligations not yet fully funded for release';
+}
+
+function partiallyFundedLabel(stage?: FundingCoordinationStage | null): string {
+  if (stage?.blockerLabel) return stage.blockerLabel;
+  return 'Partially funded — allocation incomplete';
+}
+
 export const OPERATOR_OBLIGATION_STATUS_LABELS: Record<
   DealNetworkPilotObligationStatus,
   string
 > = {
-  UNFUNDED: 'Needs funding',
-  PARTIALLY_FUNDED: 'Partially funded',
+  UNFUNDED: 'Funding not reserved',
+  PARTIALLY_FUNDED: 'Partially funded — allocation incomplete',
   DRAFT: 'Draft',
   PENDING_APPROVAL: 'Waiting for participant agreement approval',
   APPROVED: 'Approved',
@@ -26,9 +40,16 @@ export const OPERATOR_OBLIGATION_STATUS_LABELS: Record<
 
 export function operatorStatusLabel(
   status: DealNetworkPilotObligationStatus | string,
-  participant?: DemoParticipant | null
+  participant?: DemoParticipant | null,
+  fundingStage?: FundingCoordinationStage | null
 ): string {
   const key = status as DealNetworkPilotObligationStatus;
+  if (key === 'UNFUNDED') {
+    return unfundedLabel(fundingStage);
+  }
+  if (key === 'PARTIALLY_FUNDED') {
+    return partiallyFundedLabel(fundingStage);
+  }
   if (key === 'PENDING_APPROVAL' && participant) {
     return obligationApprovalLabel(
       deriveObligationApprovalState({ obligationStatus: key, participant }),
@@ -47,11 +68,15 @@ type NextActionInput = {
     approvalStatus?: string;
     onboardingStatus?: string;
   } | null;
+  fundingStage?: FundingCoordinationStage | null;
 };
 
 export function getObligationNextAction(row: NextActionInput): string {
-  if (row.status === 'UNFUNDED' || row.status === 'PARTIALLY_FUNDED') {
-    return 'Add funding';
+  if (row.status === 'UNFUNDED') {
+    return unfundedLabel(row.fundingStage);
+  }
+  if (row.status === 'PARTIALLY_FUNDED') {
+    return partiallyFundedLabel(row.fundingStage);
   }
   if (row.status === 'PENDING_APPROVAL') {
     const participant = row.participant
@@ -112,7 +137,7 @@ export function getObligationNextAction(row: NextActionInput): string {
 /** Operator-facing blocker — empty when nothing is blocking release. */
 export function getObligationBlockingIssue(row: NextActionInput): string | null {
   if (row.status === 'UNFUNDED' || row.status === 'PARTIALLY_FUNDED') {
-    return 'Waiting for funding confirmation';
+    return unfundedLabel(row.fundingStage);
   }
   if (row.status === 'PENDING_APPROVAL') {
     const participant = row.participant

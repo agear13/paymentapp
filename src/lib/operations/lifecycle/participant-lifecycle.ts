@@ -149,6 +149,11 @@ export function applyParticipantAgreementShared(participant: DemoParticipant): D
   };
 }
 
+/** View-only — never mutates lifecycle (copy/preview). */
+export function applyParticipantAgreementCopied(participant: DemoParticipant): DemoParticipant {
+  return participant;
+}
+
 export function applyParticipantAgreementViewed(participant: DemoParticipant): DemoParticipant {
   return {
     ...participant,

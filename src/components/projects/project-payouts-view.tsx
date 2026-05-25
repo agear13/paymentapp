@@ -10,9 +10,17 @@ import {
   projectObligationsPath,
   projectParticipantsPath,
 } from '@/lib/projects/project-routes';
+import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
+import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
 
 export function ProjectPayoutsView() {
-  const { projectId, summary } = useProjectWorkspace();
+  const { projectId, summary, deal, projectParticipants } = useProjectWorkspace();
+  useOperationalGuidance({
+    scope: 'project',
+    project: deal ?? undefined,
+    participants: projectParticipants,
+    enabled: Boolean(deal),
+  });
   if (!summary) return null;
 
   return (
@@ -57,6 +65,8 @@ export function ProjectPayoutsView() {
           </CardContent>
         </Card>
       </div>
+
+      <OperationalActivitySection projectId={projectId} defaultOpen={false} />
     </div>
   );
 }

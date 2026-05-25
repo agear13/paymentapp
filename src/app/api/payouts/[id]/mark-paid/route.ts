@@ -13,6 +13,10 @@ import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { log } from '@/lib/logger';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import { z } from 'zod';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
@@ -113,8 +117,14 @@ export async function POST(
       'Payout marked paid'
     );
 
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'payout_released',
+    });
+
     return NextResponse.json({
       data: { id: payout.id, status: 'PAID', paidAt: paidAtDate },
+      ...operationalSyncJson(operationalSync),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';

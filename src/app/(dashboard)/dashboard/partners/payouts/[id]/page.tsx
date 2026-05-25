@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useParams, usePathname } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { PAYOUTS_SETTLEMENTS_HREF } from '@/lib/navigation/operator-nav';
 import { ArrowLeft, Copy, Check, Download, CheckCircle2, XCircle, Wallet } from 'lucide-react';
 import { useOrganization } from '@/hooks/use-organization';
@@ -30,6 +30,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { sendTransactionBytesForPayout } from '@/lib/hedera/wallet-client';
+import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
+import {
+  applyGlobalOperationalSync,
+  useGlobalOperationalSyncHandlers,
+} from '@/hooks/use-global-operational-sync';
 
 interface Payout {
   id: string;
@@ -80,6 +85,7 @@ export default function PayoutBatchDetailPage() {
     tokenSymbol: string;
   } | null>(null);
   const [hederaSigning, setHederaSigning] = React.useState(false);
+  const syncHandlers = useGlobalOperationalSyncHandlers();
 
   const fetchData = React.useCallback(async () => {
     if (!organizationId || !id) return;
@@ -133,6 +139,7 @@ export default function PayoutBatchDetailPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to mark paid');
+      applyGlobalOperationalSync(syncHandlers, data);
       toast.success('Payout marked as paid');
       setMarkPaidPayout(null);
       setExternalRef('');
@@ -155,6 +162,7 @@ export default function PayoutBatchDetailPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to mark failed');
+      applyGlobalOperationalSync(syncHandlers, data);
       toast.success('Payout marked as failed');
       setMarkFailedPayout(null);
       setFailedReason('');
@@ -177,6 +185,7 @@ export default function PayoutBatchDetailPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to submit');
+      applyGlobalOperationalSync(syncHandlers, data);
       toast.success('Batch submitted');
       fetchData();
     } catch (err) {
@@ -393,6 +402,12 @@ export default function PayoutBatchDetailPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <OperationalActivitySection
+        title="Release activity"
+        emptyMessage="Payout release and funding events appear here as this batch progresses."
+        defaultOpen={false}
+      />
 
       <Dialog open={!!markPaidPayout} onOpenChange={(o) => !o && setMarkPaidPayout(null)}>
         <DialogContent>

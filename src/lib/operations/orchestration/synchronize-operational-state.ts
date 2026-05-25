@@ -1,5 +1,5 @@
 /**
- * Operational state synchronization — recompute derivations after approval and related events.
+ * Operational state synchronization — recompute derivations after mutations.
  */
 
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
@@ -13,8 +13,17 @@ import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrat
 
 export type OperationalSyncScope = 'participant' | 'obligation' | 'payout' | 'funding' | 'all';
 
+export type OperationalMutationKind =
+  | 'agreement_approval'
+  | 'participant_earnings_save'
+  | 'funding_update'
+  | 'payout_verification'
+  | 'attribution_update'
+  | 'snapshot_persist'
+  | 'release_batch_generated'
+  | 'payout_released';
+
 export type OperationalRefreshInput = OperationalCoordinationInput & {
-  /** When set, maps to workspace cache invalidation scope on the client. */
   projectId: string;
 };
 
@@ -31,6 +40,17 @@ const INVALIDATE_MAP: Record<OperationalSyncScope, OperationalSyncScope[]> = {
   all: ['participant', 'obligation', 'payout', 'funding'],
 };
 
+const MUTATION_SCOPE: Record<OperationalMutationKind, OperationalSyncScope> = {
+  agreement_approval: 'all',
+  participant_earnings_save: 'all',
+  funding_update: 'all',
+  payout_verification: 'all',
+  attribution_update: 'all',
+  snapshot_persist: 'all',
+  release_batch_generated: 'all',
+  payout_released: 'all',
+};
+
 /** Marks operational readiness caches stale — client controllers call workspace invalidate after this. */
 export function invalidateOperationalReadiness(scope: OperationalSyncScope = 'all'): OperationalSyncScope[] {
   return INVALIDATE_MAP[scope] ?? INVALIDATE_MAP.all;
@@ -43,6 +63,38 @@ export function refreshOperationalDerivations(
   return getOperationalCoordinationSnapshot(input);
 }
 
+/** Canonical synchronization entrypoint for ALL operational mutations. */
+export function synchronizeOperationalState(input: {
+  mutation: OperationalMutationKind;
+  projectId: string;
+  participants: DemoParticipant[];
+  focusParticipant?: DemoParticipant;
+  obligations?: OperationalCoordinationInput['obligations'];
+  fundingAllocated?: boolean;
+  funding?: OperationalCoordinationInput['funding'];
+  catalogItemsByParticipant?: Record<string, CatalogItemRef[]>;
+}): OperationalSyncResult {
+  const focusId = input.focusParticipant?.id;
+  const participants = input.participants.map((p) => {
+    const raw = focusId && p.id === focusId ? input.focusParticipant! : p;
+    return hydrateOperationalParticipant(raw);
+  });
+
+  const snapshot = refreshOperationalDerivations({
+    participants,
+    projectId: input.projectId,
+    obligations: input.obligations,
+    fundingAllocated: input.fundingAllocated,
+    funding: input.funding,
+    catalogItemsByParticipant: input.catalogItemsByParticipant,
+  });
+
+  return {
+    snapshot,
+    invalidatedScopes: invalidateOperationalReadiness(MUTATION_SCOPE[input.mutation] ?? 'all'),
+  };
+}
+
 /** After agreement approval — persist participant, recompute snapshot, return scopes to invalidate. */
 export function synchronizeOperationalStateAfterApproval(input: {
   projectId: string;
@@ -52,33 +104,30 @@ export function synchronizeOperationalStateAfterApproval(input: {
   fundingAllocated?: boolean;
   catalogItemsByParticipant?: Record<string, CatalogItemRef[]>;
 }): OperationalSyncResult {
-  const hydrated = hydrateOperationalParticipant(input.participant);
-  const participants = input.participants?.map((p) =>
-    p.id === hydrated.id ? hydrated : hydrateOperationalParticipant(p)
-  ) ?? [hydrated];
-
-  const snapshot = refreshOperationalDerivations({
-    participants,
+  return synchronizeOperationalState({
+    mutation: 'agreement_approval',
     projectId: input.projectId,
+    participants: input.participants ?? [input.participant],
+    focusParticipant: input.participant,
     obligations: input.obligations,
     fundingAllocated: input.fundingAllocated,
     catalogItemsByParticipant: input.catalogItemsByParticipant,
   });
-
-  return {
-    snapshot,
-    invalidatedScopes: invalidateOperationalReadiness('all'),
-  };
 }
 
 /** Client helper — invalidate workspace cache scopes after operational events. */
 export function workspaceScopesFromOperationalSync(
   scopes: OperationalSyncScope[]
 ): ('all' | 'summary' | 'participants')[] {
-  if (scopes.includes('all') || scopes.includes('participant') || scopes.includes('obligation')) {
+  if (
+    scopes.includes('all') ||
+    scopes.includes('participant') ||
+    scopes.includes('obligation') ||
+    scopes.includes('funding')
+  ) {
     return ['all'];
   }
-  if (scopes.includes('payout') || scopes.includes('funding')) {
+  if (scopes.includes('payout')) {
     return ['summary', 'participants'];
   }
   return ['participants'];

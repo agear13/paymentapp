@@ -12,6 +12,10 @@ import {
   participantRowToDemo,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { log } from '@/lib/logger';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import { prisma } from '@/lib/server/prisma';
 
 /**
@@ -95,10 +99,18 @@ export async function POST(
       );
     }
 
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: row.deal.user_id,
+      mutation: 'attribution_update',
+      projectId: row.deal_id,
+      focusParticipant: activated.participant,
+    });
+
     return NextResponse.json({
       participant: activated.participant,
       referralIssuance: activated.referralIssuance,
       deal: dealRowToRecentDeal(row.deal),
+      ...operationalSyncJson(operationalSync),
     });
   } catch (e: unknown) {
     const err = e as { statusCode?: number };

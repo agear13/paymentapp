@@ -13,6 +13,10 @@ import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { loggers } from '@/lib/logger';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -96,8 +100,14 @@ export async function POST(
       'Payout batch submitted'
     );
 
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'release_batch_generated',
+    });
+
     return NextResponse.json({
       data: { id: batch.id, status: 'SUBMITTED', submittedAt: now },
+      ...operationalSyncJson(operationalSync),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';

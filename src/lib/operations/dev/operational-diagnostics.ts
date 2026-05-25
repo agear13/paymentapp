@@ -138,6 +138,27 @@ export function warnOperationalInconsistency(input: {
       null
     );
   }
+
+  const hasCatalogSelection =
+    (participant.compensationProfile?.commissionServiceIds?.length ?? 0) > 0;
+  if (hasCatalogSelection && participant.compensationProfile?.customerAttributionEnabled !== true) {
+    devWarn(
+      PREFIX,
+      `Eligible services selected without attribution enabled (${participant.id})`,
+      { serviceIds: participant.compensationProfile?.commissionServiceIds }
+    );
+  }
+
+  if (
+    participant.compensationProfile?.customerAttributionEnabled &&
+    participant.participationModel === 'revenue_share'
+  ) {
+    devWarn(
+      PREFIX,
+      `Attribution enabled on revenue share participant (${participant.id})`,
+      null
+    );
+  }
 }
 
 export function detectParticipantEntitySource(

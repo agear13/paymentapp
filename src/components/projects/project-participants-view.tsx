@@ -42,6 +42,13 @@ import {
 import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
+import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
+import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
+import {
+  applyOperationalSyncRefresh,
+  parseOperationalSync,
+} from '@/lib/operations/orchestration/operational-sync-client';
 import { safeOperationalRouteState } from '@/lib/operations/routing/draft-safe-routing';
 import { ProgressiveOperationalPanel } from '@/components/operations/progressive-operational-panel';
 import { SafeParticipantBoundary } from '@/components/operations/safe-participant-boundary';
@@ -78,6 +85,21 @@ export function ProjectParticipantsView() {
     invalidate,
     clearSectionError,
   } = useProjectWorkspace();
+  const { graph } = useOperationalGuidance({
+    scope: 'project',
+    project: deal ?? undefined,
+    participants: projectParticipants,
+    enabled: Boolean(deal),
+  });
+  const syncHandlers = React.useMemo(
+    () => ({
+      invalidate,
+      refreshSilent,
+      notifyActivation: notifyWorkspaceActivationRefresh,
+      onAudit: appendOperationalAuditEntry,
+    }),
+    [invalidate, refreshSilent]
+  );
   const { organizationId } = useOrganization();
   const searchParams = useSearchParams();
   const focusParticipantId = searchParams.get('participant');
@@ -197,8 +219,8 @@ export function ProjectParticipantsView() {
           const err = await res.json().catch(() => ({}));
           throw new Error((err as { error?: string }).error || 'Update failed');
         }
-        invalidate('participants');
-        await refreshSilent('participants');
+        const json = await res.json();
+        applyOperationalSyncRefresh(syncHandlers, parseOperationalSync(json));
         toast.success(
           confirmed ? 'Payout details confirmed externally' : 'Payout confirmation cleared'
         );
@@ -247,8 +269,8 @@ export function ProjectParticipantsView() {
           throw new Error((err as { error?: string }).error || 'Update failed');
         }
         toast.success('Participant updated');
-        invalidate('participants');
-        await refreshSilent('participants');
+        const json = await res.json();
+        applyOperationalSyncRefresh(syncHandlers, parseOperationalSync(json));
       } catch (e: unknown) {
         void saveSnapshot(allDeals, allParticipants);
         toast.error(e instanceof Error ? e.message : 'Update failed');
@@ -299,14 +321,13 @@ export function ProjectParticipantsView() {
           const err = await res.json().catch(() => ({}));
           throw new Error((err as { error?: string }).error || 'Update failed');
         }
+        const json = await res.json();
+        applyOperationalSyncRefresh(syncHandlers, parseOperationalSync(json));
         toast.success('Compensation structure saved', {
           description: 'Agreement terms updated successfully.',
         });
         setRecentlySavedParticipantId(participantId);
         setPinnedOrder(projectParticipants.map((p) => p.id));
-        notifyWorkspaceActivationRefresh();
-        invalidate('participants');
-        await refreshSilent('participants');
         requestAnimationFrame(() => {
           if (tableScrollRef.current) {
             tableScrollRef.current.scrollTop = savedScrollTop.current;
@@ -449,6 +470,8 @@ export function ProjectParticipantsView() {
                 participants={participantEntities}
                 projectId={projectId}
                 className="mt-2"
+                graphParticipants={graph.participants}
+                graphSummary={graph.summary}
               />
             ) : (
               <p className="text-muted-foreground mt-1 text-sm">
@@ -658,6 +681,8 @@ export function ProjectParticipantsView() {
             await updateParticipantDetails(editParticipant.id, patch);
           }}
         />
+
+        <OperationalActivitySection projectId={projectId} participantId={focusParticipantId ?? undefined} />
 
         <InviteProjectParticipantModal
           open={inviteOpen}

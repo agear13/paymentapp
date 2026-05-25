@@ -13,8 +13,11 @@ import {
   PARTICIPANT_COMPENSATION_TYPES,
 } from '@/lib/participants/participant-compensation-types';
 import {
-  applyCompensationProfileToParticipant,
-} from '@/lib/participants/participant-compensation';
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+import { normalizeCompensationAttributionSemantics } from '@/lib/operations/derivations/derive-currency-consistency';
+import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
 
 const compensationProfileSchema = z.object({
   compensationType: z.enum(PARTICIPANT_COMPENSATION_TYPES),
@@ -98,7 +101,8 @@ export async function PATCH(
         configured: body.compensationProfile.configured ?? true,
         configuredAt: body.compensationProfile.configuredAt ?? new Date().toISOString(),
       };
-      const merged = applyCompensationProfileToParticipant(working, profile);
+      const normalized = normalizeCompensationAttributionSemantics(working, profile);
+      const merged = applyCompensationProfileToParticipant(working, normalized.profile);
       payloadPatch.compensationProfile = merged.compensationProfile;
       payloadPatch.participationModel = merged.participationModel;
       payloadPatch.commissionKind = merged.commissionKind;
@@ -116,7 +120,23 @@ export async function PATCH(
     );
     await syncPilotSnapshotForUser(user.id, snapshot.deals, nextParticipants);
 
-    return NextResponse.json({ participant: persisted });
+    const mutation = body.compensationProfile
+      ? 'participant_earnings_save'
+      : body.payoutVerificationConfirmed != null
+        ? 'payout_verification'
+        : 'snapshot_persist';
+
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation,
+      projectId: persisted.dealId ?? snapshot.deals[0]?.id,
+      focusParticipant: persisted,
+    });
+
+    return NextResponse.json({
+      participant: persisted,
+      ...operationalSyncJson(operationalSync),
+    });
   } catch (e: unknown) {
     const err = e as { statusCode?: number; message?: string };
     if (err.statusCode === 401) {

@@ -13,7 +13,10 @@ import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { log } from '@/lib/logger';
-import { z } from 'zod';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -98,9 +101,15 @@ export async function POST(
       'Payout marked failed, obligation lines unassigned'
     );
 
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'payout_released',
+    });
+
     return NextResponse.json({
       data: { id: payout.id, status: 'FAILED' },
       message: 'Obligation lines unassigned for re-batching',
+      ...operationalSyncJson(operationalSync),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';

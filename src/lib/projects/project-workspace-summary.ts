@@ -5,6 +5,17 @@ import { getProjectDisplayName } from '@/lib/projects/get-project-display-name';
 import { formatOperationalStage } from '@/lib/projects/format-operational-stage';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
+/** Graph-derived overrides — when provided, replaces all local counting logic. */
+export type GraphSummaryOverride = {
+  releaseReadyCount: number;
+  payoutReadyCount?: number;
+  participantCount: number;
+  blockerCount?: number;
+  fundingLabel?: string;
+  fundingSubcopy?: string;
+  needsAttention?: boolean;
+};
+
 export type ProjectWorkspaceSummary = {
   id: string;
   name: string;
@@ -72,25 +83,20 @@ function legacyFundingLabel(deal: RecentDeal): { fundingLabel: string; fundingSu
 export function summarizeProject(
   deal: RecentDeal,
   participants: DemoParticipant[],
-  treasury?: ProjectTreasurySummary
+  treasury?: ProjectTreasurySummary,
+  graph?: GraphSummaryOverride
 ): ProjectWorkspaceSummary {
   const dealParticipants = participantsForDeal(deal, participants);
-  const participantsReady = countPayoutReadyParticipants(dealParticipants);
-  const participantCount = dealParticipants.length;
+  const participantCount = graph?.participantCount ?? dealParticipants.length;
+  const participantsReady =
+    graph?.releaseReadyCount ?? countPayoutReadyParticipants(dealParticipants);
   const participantsPending = Math.max(0, participantCount - participantsReady);
 
   const legacy = legacyFundingLabel(deal);
-  const fundingLabel = treasury?.fundingLabel ?? legacy.fundingLabel;
-  const fundingSubcopy = treasury?.fundingSubcopy ?? legacy.fundingSubcopy;
+  const fundingLabel = graph?.fundingLabel ?? treasury?.fundingLabel ?? legacy.fundingLabel;
+  const fundingSubcopy = graph?.fundingSubcopy ?? treasury?.fundingSubcopy ?? legacy.fundingSubcopy;
 
   const settlementStatus = deal.status;
-  const payoutLabel =
-    deal.status === 'Paid'
-      ? 'Settled'
-      : deal.status === 'Approved'
-        ? 'Ready to pay out'
-        : deal.status;
-
   const treasuryAttention =
     treasury != null &&
     (treasury.operationalReadiness === 'blocked' ||
@@ -98,11 +104,21 @@ export function summarizeProject(
       treasury.projectHealth === 'settlement_risk');
 
   const needsAttention =
-    treasuryAttention ||
-    participantsPending > 0 ||
-    deal.status === 'Pending' ||
-    deal.status === 'In Review' ||
-    (!treasury?.hasFundingSources && deal.paymentStatus !== 'Paid');
+    graph?.needsAttention ??
+    (treasuryAttention ||
+      participantsPending > 0 ||
+      deal.status === 'Pending' ||
+      deal.status === 'In Review' ||
+      (!treasury?.hasFundingSources && deal.paymentStatus !== 'Paid'));
+
+  const payoutLabel =
+    graph && graph.releaseReadyCount > 0
+      ? `${graph.releaseReadyCount} release-ready`
+      : deal.status === 'Paid'
+        ? 'Settled'
+        : deal.status === 'Approved'
+          ? 'Ready to pay out'
+          : deal.status;
 
   return {
     id: deal.id,

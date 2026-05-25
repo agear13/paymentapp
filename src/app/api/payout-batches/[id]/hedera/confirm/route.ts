@@ -16,6 +16,10 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { CURRENT_NETWORK } from '@/lib/hedera/constants';
 import { log } from '@/lib/logger';
 import { z } from 'zod';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -166,8 +170,14 @@ export async function POST(
       payoutCount: includedPayoutIds.length,
     });
 
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'payout_released',
+    });
+
     return NextResponse.json({
       data: { batchId, transactionId: normalizedTxId, payoutIds: includedPayoutIds, status: 'PAID' },
+      ...operationalSyncJson(operationalSync),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';

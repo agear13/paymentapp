@@ -7,8 +7,11 @@ import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.
 import { merchantRowToRailFlags } from '@/lib/onboarding/workspace-activation-state';
 import { evaluateWorkspaceCompensationReadiness } from '@/lib/participants/participant-compensation';
 import { safeDeriveActivationResponse } from '@/lib/onboarding/workspace-activation-fallback';
+import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selectors/resolve-operational-coordination.server';
+import { activationFromOperationalGraph } from '@/lib/operations/selectors/operational-graph-adapter';
+import { deriveNextRecommendedAction } from '@/lib/onboarding/next-recommended-action';
 
-/** GET /api/workspace/activation — derived activation snapshot for onboarding orchestration */
+/** GET /api/workspace/activation — derived activation snapshot from canonical operational graph */
 export async function GET() {
   try {
     const user = await getCurrentUser();
@@ -43,9 +46,7 @@ export async function GET() {
       merchant,
       onboardingState,
       snapshot,
-      obligationCount,
       paymentLinkCount,
-      releaseEligibleCount,
       releaseBatchCount,
     ] = await Promise.all([
       prisma.merchant_settings.findFirst({
@@ -60,15 +61,7 @@ export async function GET() {
       }),
       getOperatorOnboardingState(org.id),
       getPilotSnapshotForUser(user.id).catch(() => ({ deals: [], participants: [] })),
-      prisma.deal_network_pilot_obligations
-        .count({ where: { organization_id: org.id } })
-        .catch(() => 0),
       prisma.payment_links.count({ where: { organization_id: org.id } }).catch(() => 0),
-      prisma.deal_network_pilot_obligations
-        .count({
-          where: { organization_id: org.id, status: 'AVAILABLE_FOR_PAYOUT' },
-        })
-        .catch(() => 0),
       prisma.payout_batches.count({ where: { organization_id: org.id } }).catch(() => 0),
     ]);
 
@@ -77,36 +70,36 @@ export async function GET() {
     const compensation = evaluateWorkspaceCompensationReadiness(snapshot.participants);
     const primaryProjectId =
       onboardingState?.projectId ?? snapshot.deals[0]?.id ?? null;
-    const providerConnected =
-      rails.stripeConfigured || rails.wiseConfigured || rails.hederaConfigured;
-    const revenueConfigured =
-      providerConnected ||
-      paymentLinkCount > 0 ||
-      !(
-        onboardingState?.collection_preference === 'decide_later' ||
-        onboardingState?.collection_preference == null
-      );
 
-    const { activation, nextAction } = safeDeriveActivationResponse({
+    const graph = await resolveOperationalCoordinationSnapshot({
+      userId: user.id,
+      projectId: primaryProjectId,
+      participants: snapshot.participants,
+    });
+
+    const activationInput = {
       hasOrganization: true,
       onboardingCompleted: onboardingState?.completed === true,
       projectCreated,
       participantCount: compensation.participantCount,
       participantsConfigured: compensation.participantsConfigured,
       participantsConfiguredCount: compensation.configuredCount,
-      obligationCount,
+      obligationCount: graph.obligations.length,
       paymentLinkCount,
       collectionPreferenceDecideLater:
         onboardingState?.collection_preference === 'decide_later' ||
         onboardingState?.collection_preference == null,
       defaultCurrency: merchant?.default_currency ?? null,
       ...rails,
-      releaseEligibleCount,
+      releaseEligibleCount: graph.summary.releaseReadyCount,
       releaseBatchCount,
       primaryProjectId,
-    });
+    };
 
-    return apiResponse({ activation, nextAction });
+    const activation = activationFromOperationalGraph(graph, activationInput);
+    const nextAction = deriveNextRecommendedAction(activation);
+
+    return apiResponse({ activation, nextAction, operationalGraph: { summary: graph.summary, funding: graph.funding } });
   } catch (e) {
     console.error('[workspace/activation GET]', e);
     const { activation, nextAction } = safeDeriveActivationResponse({

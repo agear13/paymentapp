@@ -14,6 +14,22 @@ export const PAYOUT_CONFIRMATION_LABELS = {
 export const AGREEMENT_SHARE_HELPER =
   'You may also share this agreement link through SMS, WhatsApp, or other messaging platforms.';
 
+export const AGREEMENT_ACTION_COPY = {
+  copyLink: {
+    label: 'Copy agreement link',
+    tooltip: 'Copies the agreement URL for operator reference. Does not enable participant approval.',
+  },
+  shareForApproval: {
+    label: 'Share for approval',
+    tooltip:
+      'Generates a participant approval link/token. This is the only action that enables agreement approval.',
+  },
+  preview: {
+    label: 'Preview agreement (read-only)',
+    tooltip: 'Operator-only preview. Participants cannot approve from this view.',
+  },
+} as const;
+
 export const SERVICE_CATALOG_ATTRIBUTION_WARNING = {
   title: 'Customer attribution is enabled, but no services or products are available for tracked purchases.',
   description:

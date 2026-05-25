@@ -13,6 +13,7 @@ import { ProjectCard } from '@/components/projects/project-card';
 import {
   sortProjectsForWorkspace,
   summarizeProject,
+  type ProjectWorkspaceSummary,
 } from '@/lib/projects/project-workspace-summary';
 import { useDealNetworkExperience } from '@/components/deal-network-demo/deal-network-experience-provider';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +25,7 @@ export function ProjectsWorkspaceIndex() {
   const [loading, setLoading] = React.useState(true);
   const [deals, setDeals] = React.useState<RecentDeal[]>([]);
   const [participants, setParticipants] = React.useState<DemoParticipant[]>([]);
+  const [summaries, setSummaries] = React.useState<ProjectWorkspaceSummary[]>([]);
   const [createOpen, setCreateOpen] = React.useState(false);
 
   const reload = React.useCallback(async () => {
@@ -46,10 +48,56 @@ export function ProjectsWorkspaceIndex() {
     void reload();
   }, [reload]);
 
-  const summaries = React.useMemo(() => {
-    const items = deals.map((d) => summarizeProject(d, participants));
-    return sortProjectsForWorkspace(items);
-  }, [deals, participants]);
+  React.useEffect(() => {
+    if (loading) return;
+    if (deals.length === 0) {
+      setSummaries([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const items = await Promise.all(
+        deals.map(async (d) => {
+          try {
+            const res = await fetch(
+              `/api/operations/coordination-snapshot?projectId=${encodeURIComponent(d.id)}`,
+              { cache: 'no-store', credentials: 'include' }
+            );
+            if (res.ok) {
+              const json = (await res.json()) as {
+                data?: {
+                  summary?: {
+                    releaseReadyCount: number;
+                    payoutReadyCount: number;
+                    participantCount: number;
+                    blockerCount: number;
+                  };
+                };
+              };
+              const s = json.data?.summary;
+              if (s) {
+                return summarizeProject(d, participants, undefined, {
+                  releaseReadyCount: s.releaseReadyCount,
+                  payoutReadyCount: s.payoutReadyCount,
+                  participantCount: s.participantCount,
+                  blockerCount: s.blockerCount,
+                  needsAttention:
+                    s.blockerCount > 0 || s.releaseReadyCount < s.participantCount,
+                });
+              }
+            }
+          } catch {
+            /* graph unavailable — legacy fallback */
+          }
+          return summarizeProject(d, participants);
+        })
+      );
+      if (!cancelled) setSummaries(sortProjectsForWorkspace(items));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deals, participants, loading]);
 
   const handleCreateProject = React.useCallback(
     async (deal: RecentDeal) => {

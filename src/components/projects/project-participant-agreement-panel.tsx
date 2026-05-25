@@ -34,6 +34,17 @@ import {
   deriveCommissionScope,
   isCatalogScopedCommission,
 } from '@/lib/operations/derivations/commission-scope';
+import {
+  hydrateEligibleCatalogServices,
+  catalogRefsFromHydrated,
+} from '@/lib/operations/hydration/hydrate-eligible-catalog-services';
+import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
+import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
+import {
+  applyOperationalSyncRefresh,
+  parseOperationalSync,
+} from '@/lib/operations/orchestration/operational-sync-client';
+import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 
 function roleAmountsFromDeal(deal: RecentDeal) {
   return {
@@ -96,9 +107,21 @@ export function ProjectParticipantAgreementPanel({
   const [scopedServiceRows, setScopedServiceRows] = React.useState(initialScopedServiceRows);
   const [issuingCommerce, setIssuingCommerce] = React.useState(false);
 
+  const hydratedServices = React.useMemo(
+    () =>
+      hydrateEligibleCatalogServices(
+        participant.compensationProfile?.commissionServiceIds ?? [],
+        scopedServiceRows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          currency: r.currency,
+        }))
+      ),
+    [participant.compensationProfile?.commissionServiceIds, scopedServiceRows]
+  );
   const catalogItems = React.useMemo(
-    () => scopedServiceRows.map((r) => ({ id: r.id, name: r.name })),
-    [scopedServiceRows]
+    () => catalogRefsFromHydrated(hydratedServices),
+    [hydratedServices]
   );
   const attributionEligible = canGenerateAttributionLink(participant, { catalogItems });
   const attributionExplanation = deriveAttributionExplanation(participant, { catalogItems });
@@ -197,17 +220,18 @@ export function ProjectParticipantAgreementPanel({
               : 'Approval failed')
         );
       }
-      const data = (await res.json()) as {
+      const json = (await res.json()) as {
         participant: DemoParticipant;
         referralIssuance?: CommerceLink;
         scopedServiceRows?: ScopedServiceCommissionRow[];
+        operationalSync?: unknown;
       };
-      setParticipant(data.participant);
+      setParticipant(json.participant);
       setApproved(true);
-      if (data.scopedServiceRows) setScopedServiceRows(data.scopedServiceRows);
+      if (json.scopedServiceRows) setScopedServiceRows(json.scopedServiceRows);
 
       const immediate =
-        data.referralIssuance ?? referralIssuanceFromParticipant(data.participant);
+        json.referralIssuance ?? referralIssuanceFromParticipant(json.participant);
       if (immediate) {
         setCommerceLink(immediate);
       } else if (expectsCommerce) {
@@ -219,6 +243,15 @@ export function ProjectParticipantAgreementPanel({
       }
 
       toast.success('Participation approved');
+      applyOperationalSyncRefresh(
+        {
+          invalidate: () => {},
+          refreshSilent: async () => {},
+          notifyActivation: notifyWorkspaceActivationRefresh,
+          onAudit: appendOperationalAuditEntry,
+        },
+        parseOperationalSync(json)
+      );
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Approval failed');
     }
@@ -235,6 +268,7 @@ export function ProjectParticipantAgreementPanel({
   const catalogCommission = isCatalogScopedCommission(participant);
 
   return (
+    <>
     <Card className="w-full max-w-2xl">
       <CardHeader>
         <CardTitle>Participant agreement</CardTitle>
@@ -334,6 +368,15 @@ export function ProjectParticipantAgreementPanel({
           </Alert>
         ) : null}
 
+        {approved && participant.approvalNote?.trim() ? (
+          <div className="rounded-md border p-3 bg-muted/30 text-sm space-y-1">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Message to operator
+            </p>
+            <p className="whitespace-pre-wrap">{participant.approvalNote.trim()}</p>
+          </div>
+        ) : null}
+
         {!approved ? (
           <form
             className="space-y-4"
@@ -383,5 +426,13 @@ export function ProjectParticipantAgreementPanel({
         ) : null}
       </CardContent>
     </Card>
+
+    <OperationalActivitySection
+      projectId={deal.id}
+      participantId={participant.id}
+      title="Agreement history"
+      defaultOpen={false}
+    />
+    </>
   );
 }

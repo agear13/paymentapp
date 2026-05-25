@@ -5,6 +5,10 @@ import {
   refreshDealNetworkPilotObligationsForUser,
 } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,11 +30,20 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Deal not found for this user' }, { status: 404 });
       }
       await refreshDealNetworkPilotObligationsForDeal(user.id, deal, participants);
-    } else {
-      await refreshDealNetworkPilotObligationsForUser(user.id);
+      const operationalSync = await orchestrateOperationalMutation({
+        userId: user.id,
+        mutation: 'snapshot_persist',
+        projectId: dealId,
+      });
+      return NextResponse.json({ ok: true, ...operationalSyncJson(operationalSync) });
     }
 
-    return NextResponse.json({ ok: true });
+    await refreshDealNetworkPilotObligationsForUser(user.id);
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'snapshot_persist',
+    });
+    return NextResponse.json({ ok: true, ...operationalSyncJson(operationalSync) });
   } catch (e: unknown) {
     const err = e as { statusCode?: number; message?: string };
     if (err.statusCode === 401) {

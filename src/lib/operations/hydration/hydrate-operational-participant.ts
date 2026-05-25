@@ -119,6 +119,8 @@ export function backfillOperationalParticipantState(
     payoutVerificationConfirmedAt: participant.payoutVerificationConfirmedAt ?? undefined,
     agreementUrl: participant.agreementUrl ?? undefined,
     agreementSharedAt: participant.agreementSharedAt ?? undefined,
+    approvalNote: participant.approvalNote ?? undefined,
+    approvedAt: participant.approvedAt ?? undefined,
     participantNotes: participant.participantNotes ?? '',
     compensationProfile: hydrateCompensationProfile(participant),
     payoutBlocked: participant.payoutBlocked ?? false,

@@ -17,6 +17,9 @@ import {
 } from '@/lib/projects/workspace-fetch';
 import { invalidateWorkspaceCache } from '@/lib/projects/workspace-query-cache';
 import { devRecordWorkspaceMount, devRecordWorkspaceRender } from '@/lib/projects/workspace-dev-diagnostics';
+import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
+import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
+import { subscribeProjectOperationalEvents } from '@/lib/operations/orchestration/operational-sync-client';
 import { setProjectDisplayNameRegistry } from '@/lib/projects/project-display-name-registry';
 
 export type { WorkspaceRefreshOptions, WorkspaceRefreshScope };
@@ -120,7 +123,18 @@ export function useProjectContext(projectId: string): ProjectContextValue {
     controllerRef.current = controller;
     void controller.refresh({ scope: 'all', silent: false, force: true });
 
+    const unsubscribeEvents = subscribeProjectOperationalEvents(projectId, {
+      invalidate: (scope) => {
+        invalidateWorkspaceCache(projectId, scope ?? 'all');
+        controller.invalidate(scope);
+      },
+      refreshSilent: (scope) => controller.refreshSilent(scope ?? 'all'),
+      notifyActivation: notifyWorkspaceActivationRefresh,
+      onAudit: appendOperationalAuditEntry,
+    });
+
     return () => {
+      unsubscribeEvents();
       controller.dispose();
       controllerRef.current = null;
     };

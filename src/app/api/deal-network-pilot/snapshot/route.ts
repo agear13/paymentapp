@@ -4,7 +4,10 @@ import {
   getPilotSnapshotForUser,
   syncPilotSnapshotForUser,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
-import { refreshDealNetworkPilotObligationsForUser } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 
@@ -35,8 +38,12 @@ export async function POST(request: Request) {
     const deals = Array.isArray(body.deals) ? body.deals : [];
     const participants = Array.isArray(body.participants) ? body.participants : [];
     await syncPilotSnapshotForUser(user.id, deals, participants);
-    await refreshDealNetworkPilotObligationsForUser(user.id);
-    return NextResponse.json({ ok: true });
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'snapshot_persist',
+      projectId: deals[0]?.id,
+    });
+    return NextResponse.json({ ok: true, ...operationalSyncJson(operationalSync) });
   } catch (e: unknown) {
     const err = e as { statusCode?: number; message?: string };
     if (err.statusCode === 401) {

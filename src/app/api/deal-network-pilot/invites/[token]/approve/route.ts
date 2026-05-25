@@ -3,7 +3,10 @@ import { approveParticipantByInviteToken } from '@/lib/deal-network-demo/pilot-s
 import { ReferralIssuanceError } from '@/lib/referrals/ensure-referral-issuance';
 import { shouldIssueAttributionForParticipant } from '@/lib/operations/truth/attribution-truth';
 import { log } from '@/lib/logger';
-import { refreshDealNetworkPilotObligationsForUser } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { referralTrace } from '@/lib/referrals/referral-trace';
@@ -63,8 +66,14 @@ export async function POST(
       where: { id: result.deal.id },
       select: { user_id: true },
     });
+    let operationalSync;
     if (owner?.user_id) {
-      await refreshDealNetworkPilotObligationsForUser(owner.user_id);
+      operationalSync = await orchestrateOperationalMutation({
+        userId: owner.user_id,
+        mutation: 'agreement_approval',
+        projectId: result.deal.id,
+        focusParticipant: result.participant,
+      });
     }
     referralTrace('api.approveInvite.response', {
       inviteToken: token,
@@ -74,8 +83,20 @@ export async function POST(
       participantInviteLink: result.participant.inviteLink ?? null,
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      ...(operationalSync ? operationalSyncJson(operationalSync) : {}),
+    });
   } catch (e) {
+    if (e instanceof Error && e.message === 'AGREEMENT_NOT_APPROVABLE') {
+      return NextResponse.json(
+        {
+          error:
+            'This agreement cannot be approved yet. The operator must share the participation agreement first.',
+        },
+        { status: 409 }
+      );
+    }
     if (e instanceof ReferralIssuanceError) {
       log.error('approve participation referral issuance failed', undefined, {
         code: e.code,
