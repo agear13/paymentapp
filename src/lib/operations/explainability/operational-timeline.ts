@@ -84,7 +84,7 @@ export function buildOperationalTimeline(input: TimelineInput): TimelineEvent[] 
       description:
         w.releaseEligibleCount > 0
           ? `${w.releaseEligibleCount} ready for release.`
-          : 'Awaiting approval or funding.',
+          : 'Waiting for funding confirmation or agreement approval.',
       timestamp: null,
       completed: w.releaseEligibleCount > 0,
     });

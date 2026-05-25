@@ -12,7 +12,13 @@ export { isAgreementActuallyShared } from '@/lib/operations/truth/agreement-trut
 export {
   canGenerateAttributionLink,
   isAttributionOperationallyEnabled,
+  shouldIssueAttributionForParticipant,
+  deriveAttributionExplanation,
 } from '@/lib/operations/truth/attribution-truth';
+export {
+  isAttributionEnabled,
+  hasEligibleCatalogItems,
+} from '@/lib/operations/truth/attribution-eligibility';
 export { isParticipantPayoutReady } from '@/lib/operations/truth/payout-truth';
 export {
   isFundingOperationallyAllocated,

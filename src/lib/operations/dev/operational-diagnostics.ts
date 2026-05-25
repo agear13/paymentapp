@@ -76,6 +76,70 @@ export function warnHydrationFailure(
   devWarn(PREFIX, `Hydration failure for ${entityType} (${entityId ?? 'unknown'})`, error);
 }
 
+export function warnOperationalInconsistency(input: {
+  participant: DemoParticipant;
+  agreementApproval: string;
+  payoutReadiness: { payoutReady: boolean; issues: string[] };
+  releaseReadiness: { releaseReady: boolean; blockers: string[]; attributionEligible: boolean };
+  catalogItems?: Array<{ id: string; name: string }>;
+}): void {
+  if (!DEV) return;
+  const { participant, agreementApproval, payoutReadiness, releaseReadiness, catalogItems } =
+    input;
+
+  if (
+    releaseReadiness.attributionEligible &&
+    participant.customerCommerceUrl?.trim() &&
+    participant.compensationProfile?.customerAttributionEnabled !== true &&
+    participant.participationModel !== 'customer_attribution'
+  ) {
+    devWarn(
+      PREFIX,
+      `Attribution link present while attribution disabled (${participant.id})`,
+      { url: participant.customerCommerceUrl }
+    );
+  }
+
+  if (payoutReadiness.payoutReady && agreementApproval === 'draft') {
+    devWarn(
+      PREFIX,
+      `Payout ready while agreement unapproved (${participant.id})`,
+      { agreementApproval }
+    );
+  }
+
+  if (
+    (agreementApproval === 'participant_approved' || agreementApproval === 'fully_approved') &&
+    payoutReadiness.issues.some((i) => i.includes('agreement'))
+  ) {
+    devWarn(
+      PREFIX,
+      `Approved agreement but stale agreement blocker (${participant.id})`,
+      { issues: payoutReadiness.issues }
+    );
+  }
+
+  if (releaseReadiness.releaseReady && releaseReadiness.blockers.length > 0) {
+    devWarn(
+      PREFIX,
+      `Release ready with active blockers (${participant.id})`,
+      { blockers: releaseReadiness.blockers }
+    );
+  }
+
+  if (
+    participant.compensationProfile?.customerAttributionEnabled &&
+    (catalogItems?.length ?? 0) === 0 &&
+    Boolean(participant.customerCommerceUrl?.trim())
+  ) {
+    devWarn(
+      PREFIX,
+      `Attribution link without eligible catalog items (${participant.id})`,
+      null
+    );
+  }
+}
+
 export function detectParticipantEntitySource(
   participant: DemoParticipant,
   /** When true, inspect pre-hydration raw shape (before lifecycle backfill). */

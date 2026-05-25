@@ -5,7 +5,7 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import { summarizeProjectReadinessGaps } from '@/lib/participants/participant-readiness';
 import { hydrateParticipants, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
 import { formatParticipantPayoutReadiness } from '@/lib/projects/format-participant-payout-readiness';
-import { deriveParticipantPayoutBlockers } from '@/lib/operations/blockers/payout-blockers';
+import { deriveParticipantOperationalBlockers } from '@/lib/operations/blockers/payout-blockers';
 import { Button } from '@/components/ui/button';
 
 type ProjectReadinessBreakdownProps = {
@@ -30,7 +30,7 @@ export function ProjectReadinessBreakdown({
     );
   }
 
-  const blockers = safeList.flatMap((p) => deriveParticipantPayoutBlockers(p, projectId));
+  const blockers = safeList.flatMap((p) => deriveParticipantOperationalBlockers(p, projectId));
 
   return (
     <div className={className ?? 'space-y-3'}>
@@ -50,13 +50,20 @@ export function ProjectReadinessBreakdown({
       {blockers.length > 0 ? (
         <ul className="space-y-3 text-xs border-t border-border/25 pt-2">
           {blockers.slice(0, 6).map((b) => (
-            <li key={`${b.participantId}-${b.title}`} className="space-y-1">
+            <li key={b.id} className="space-y-1">
               <span className="font-medium text-foreground/90">{b.participantName}</span>
-              <p className="font-medium text-amber-800/90 dark:text-amber-400/90">{b.title}</p>
-              <p className="text-muted-foreground leading-relaxed">{b.description}</p>
-              {b.ctaHref !== '#' ? (
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Blocked by</p>
+              <p className="font-medium text-amber-800/90 dark:text-amber-400/90">{b.requiredAction}</p>
+              <p className="text-muted-foreground">
+                <span className="font-medium text-foreground/80">Who must act:</span> {b.ownerLabel}
+              </p>
+              <p className="text-muted-foreground leading-relaxed">{b.explanation}</p>
+              <p className="text-muted-foreground">
+                <span className="font-medium text-foreground/80">Unlocks:</span> {b.unlocks}
+              </p>
+              {b.resolutionRoute !== '#' ? (
                 <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
-                  <Link href={b.ctaHref}>{b.ctaLabel}</Link>
+                  <Link href={b.resolutionRoute}>{b.ctaLabel ?? 'Review'}</Link>
                 </Button>
               ) : null}
             </li>

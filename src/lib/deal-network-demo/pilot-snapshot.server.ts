@@ -22,6 +22,13 @@ import {
 import { isProjectWorkspaceParticipant } from '@/lib/projects/participant-entitlement';
 import { log } from '@/lib/logger';
 import { referralTrace } from '@/lib/referrals/referral-trace';
+import {
+  shouldIssueAttributionForParticipant,
+} from '@/lib/operations/truth/attribution-truth';
+import {
+  isAllActiveCatalogSource,
+  type CatalogItemRef,
+} from '@/lib/operations/derivations/commission-scope';
 
 export interface PilotSnapshotPayload {
   deals: RecentDeal[];
@@ -92,6 +99,29 @@ function resolveReferralCommerceForIssuance(
   return normalizeReferralCommerce({ ...base, commissionMode });
 }
 
+async function resolveAttributionCatalogContext(
+  participant: DemoParticipant,
+  organizationId: string
+): Promise<CatalogItemRef[]> {
+  const profileIds = participant.compensationProfile?.commissionServiceIds ?? [];
+  const commerceIds = participant.referralCommerce?.enabledServiceIds ?? [];
+  const selectedIds = profileIds.length > 0 ? profileIds : commerceIds;
+
+  if (selectedIds.length > 0) {
+    return selectedIds.map((id) => ({ id, name: id }));
+  }
+
+  if (!isAllActiveCatalogSource(participant)) {
+    return [];
+  }
+
+  const services = await prisma.organization_services.findMany({
+    where: { organization_id: organizationId, active: true },
+    select: { id: true, name: true },
+  });
+  return services.map((s) => ({ id: s.id, name: s.name ?? s.id }));
+}
+
 /** Issue (or reuse) customer commerce + persist on participant row. */
 export async function issueAndPersistParticipantAttribution(input: {
   row: {
@@ -107,14 +137,10 @@ export async function issueAndPersistParticipantAttribution(input: {
   const { row, participant } = input;
   const deal = dealRowToRecentDeal(row.deal);
   const referralCommerce = resolveReferralCommerceForIssuance(participant);
-
-  if (!shouldIssueReferralLink(referralCommerce ?? participant.referralCommerce)) {
-    log.info('referral issuance skipped: createReferralLink disabled', {
-      pilotParticipantId: row.id,
-      dealId: row.deal_id,
-    });
-    return { participant };
-  }
+  const participantForGate: DemoParticipant = {
+    ...participant,
+    referralCommerce: referralCommerce ?? participant.referralCommerce,
+  };
 
   log.info('referral issuance started', {
     pilotParticipantId: row.id,
@@ -129,6 +155,16 @@ export async function issueAndPersistParticipantAttribution(input: {
       'ORGANIZATION_NOT_FOUND',
       { pilotParticipantId: row.id, dealId: row.deal_id, operatorUserId: row.deal.user_id }
     );
+  }
+
+  const catalogItems = await resolveAttributionCatalogContext(participantForGate, organizationId);
+  if (!shouldIssueAttributionForParticipant(participantForGate, { catalogItems })) {
+    log.info('referral issuance skipped: attribution not eligible', {
+      pilotParticipantId: row.id,
+      dealId: row.deal_id,
+      catalogItemCount: catalogItems.length,
+    });
+    return { participant };
   }
 
   let issued;

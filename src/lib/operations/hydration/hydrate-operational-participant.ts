@@ -76,6 +76,18 @@ export function backfillOperationalParticipantState(
   }
   warnLegacyParticipantShape(participant);
 
+  // Hydration precedence: persisted approval > derived fallback > legacy raw fields
+  const persistedApproved =
+    participant.approvalStatus === 'Approved' ||
+    (participant as DemoParticipant & { approval_status?: string }).approval_status === 'Approved';
+  const approvalStatus: DemoParticipant['approvalStatus'] = persistedApproved
+    ? 'Approved'
+    : participant.approvalStatus ?? 'Pending approval';
+
+  const agreementLifecycle: AgreementLifecycleState = persistedApproved
+    ? 'APPROVED'
+    : ((participant.agreementLifecycle ?? 'NOT_CREATED') as AgreementLifecycleState);
+
   const payoutOnboardingPhase: PayoutOnboardingPhase =
     participant.payoutVerificationConfirmed === true
       ? 'COMPLETED'
@@ -92,15 +104,16 @@ export function backfillOperationalParticipantState(
       ? participant.commissionValue
       : 0,
     status: participant.status ?? 'Pending',
-    approvalStatus: participant.approvalStatus ?? 'Pending approval',
+    approvalStatus,
     onboardingStatus: participant.onboardingStatus ?? 'NOT_STARTED',
     inviteToken: participant.inviteToken ?? '',
     attributionStatus: participant.attributionStatus ?? 'inactive',
     workspaceSource: participant.workspaceSource ?? 'project',
     operationalStatus: participant.operationalStatus ?? 'draft',
-    participantLifecycle: (participant.participantLifecycle ?? 'DRAFT') as ParticipantLifecycleState,
-    agreementLifecycle: (participant.agreementLifecycle ??
-      'NOT_CREATED') as AgreementLifecycleState,
+    participantLifecycle: persistedApproved
+      ? 'APPROVED'
+      : ((participant.participantLifecycle ?? 'DRAFT') as ParticipantLifecycleState),
+    agreementLifecycle,
     payoutOnboardingPhase,
     payoutVerificationConfirmed: participant.payoutVerificationConfirmed ?? false,
     payoutVerificationConfirmedAt: participant.payoutVerificationConfirmedAt ?? undefined,

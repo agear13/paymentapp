@@ -11,6 +11,10 @@ import type { ParticipantState } from '@/lib/operations/states/participant-state
 import {
   payoutDestinationTruthMessage,
 } from '@/lib/operations/truth/payout-truth';
+import {
+  deriveApprovalBlockingReason,
+  deriveAgreementApprovalState,
+} from '@/lib/operations/derivations/derive-approval-state';
 
 export type ParticipantPayoutReadiness = OperationalReadinessResult & {
   participantId: string;
@@ -39,11 +43,13 @@ export function deriveParticipantPayoutReadiness(
 
     if (!flags.hasPayoutDestination) {
       issues.push(payoutDestinationTruthMessage(p));
-    } else if (!flags.hasAgreement) {
-      issues.push('Agreement not approved');
     }
     if (!flags.hasAgreement && !p.compensationProfile?.exemptFromPayout) {
-      issues.push('Agreement not approved');
+      const agreementState = deriveAgreementApprovalState(p);
+      issues.push(
+        deriveApprovalBlockingReason({ agreementState, participant: p }) ??
+          'Waiting for participant agreement approval'
+      );
     }
     if (context?.obligationsLinked === false) {
       issues.push('Obligations not linked');

@@ -34,11 +34,11 @@ function buildHydratedParticipant(
   context: HydrateParticipantContext = {}
 ): HydratedParticipant {
   const compensation = deriveCompensationState(entity, context);
-  const attribution = deriveAttributionState(entity);
+  const attribution = deriveAttributionState(entity, context);
   const operational = deriveParticipantReadiness(entity);
   const participantLifecycle = deriveParticipantLifecycleState(entity);
   const agreementLifecycle = deriveAgreementLifecycleState(entity);
-  const attributionLifecycle = deriveAttributionLifecycleState(entity);
+  const attributionLifecycle = deriveAttributionLifecycleState(entity, context);
   const payoutVerification = derivePayoutOnboardingPhase(entity);
 
   warnInvalidLifecycleCombination(entity.id, {

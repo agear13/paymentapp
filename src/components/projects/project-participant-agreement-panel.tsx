@@ -24,7 +24,7 @@ import {
   formatApprovalTimestamp,
   type ScopedServiceCommissionRow,
 } from '@/lib/projects/participant-compensation-copy';
-import { shouldIssueReferralLink } from '@/lib/referrals/referral-commerce-config';
+import { shouldIssueAttributionForParticipant, canGenerateAttributionLink, deriveAttributionExplanation } from '@/lib/operations/truth/attribution-truth';
 import {
   isAttributionActive,
   referralIssuanceFromParticipant,
@@ -96,8 +96,13 @@ export function ProjectParticipantAgreementPanel({
   const [scopedServiceRows, setScopedServiceRows] = React.useState(initialScopedServiceRows);
   const [issuingCommerce, setIssuingCommerce] = React.useState(false);
 
-  const attribution = deriveAttributionStatus(participant);
-  const expectsCommerce = shouldIssueReferralLink(participant.referralCommerce);
+  const catalogItems = React.useMemo(
+    () => scopedServiceRows.map((r) => ({ id: r.id, name: r.name })),
+    [scopedServiceRows]
+  );
+  const attributionEligible = canGenerateAttributionLink(participant, { catalogItems });
+  const attributionExplanation = deriveAttributionExplanation(participant, { catalogItems });
+  const expectsCommerce = attributionEligible;
   const approvalDateLabel = formatApprovalTimestamp(participant.approvedAt);
 
   const applyInvitePayload = React.useCallback((data: InvitePayload) => {
@@ -219,7 +224,7 @@ export function ProjectParticipantAgreementPanel({
     }
   }
 
-  const showCommerceAfterApproval = approved && !!commerceLink && expectsCommerce;
+  const showCommerceAfterApproval = approved && !!commerceLink && shouldIssueAttributionForParticipant(participant, { catalogItems });
   const commissionScope = React.useMemo(
     () =>
       deriveCommissionScope(participant, {
@@ -264,15 +269,15 @@ export function ProjectParticipantAgreementPanel({
               {approved ? 'Approved' : 'Pending your approval'}
             </Badge>
           </div>
-          {expectsCommerce ? (
+          {attributionEligible ? (
             <div className="sm:col-span-2">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Attribution</p>
-              <Badge variant={isAttributionActive(attribution) ? 'default' : 'outline'}>
+              <Badge variant={approved && isAttributionActive(deriveAttributionStatus(participant)) ? 'default' : 'outline'}>
                 {approved
-                  ? isAttributionActive(attribution)
+                  ? isAttributionActive(deriveAttributionStatus(participant))
                     ? 'Active tracking'
                     : 'Pending link issuance'
-                  : 'Activates after approval'}
+                  : attributionExplanation.label}
               </Badge>
             </div>
           ) : null}
@@ -311,7 +316,7 @@ export function ProjectParticipantAgreementPanel({
           }
         />
 
-        {!approved ? (
+        {!approved && attributionEligible ? (
           <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground leading-relaxed">
             Approving confirms your participation. Customer attribution activates after approval.
             Payout details are confirmed separately by the operator — Provvypay does not collect bank

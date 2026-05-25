@@ -3,6 +3,7 @@ import {
   deriveParticipantLifecycleState,
   type ParticipantLifecycleState,
 } from '@/lib/operations/lifecycle/participant-lifecycle';
+import { participantLifecycleApprovalLabel } from '@/lib/operations/derivations/derive-approval-state';
 
 export function isParticipantActuallyInvited(participant: DemoParticipant): boolean {
   const state = deriveParticipantLifecycleState(participant);
@@ -25,15 +26,18 @@ export function isParticipantOperationallyApproved(participant: DemoParticipant)
 
 export function participantLifecycleLabel(participant: DemoParticipant): string {
   const state = deriveParticipantLifecycleState(participant);
+  if (state === 'PENDING_APPROVAL') {
+    return participantLifecycleApprovalLabel(participant);
+  }
   const labels: Record<ParticipantLifecycleState, string> = {
     DRAFT: 'Participant added',
     READY_TO_INVITE: 'Ready to invite',
     INVITE_GENERATED: 'Agreement not shared',
     INVITE_SENT: 'Agreement shared',
     INVITE_VIEWED: 'Agreement opened',
-    PENDING_APPROVAL: 'Awaiting approval',
+    PENDING_APPROVAL: participantLifecycleApprovalLabel(participant),
     APPROVED: 'Approved',
-    ONBOARDING_REQUIRED: 'Payout onboarding required',
+    ONBOARDING_REQUIRED: 'Waiting for operator payout confirmation',
     PAYOUT_READY: 'Payout ready',
     ACTIVE: 'Active',
   };

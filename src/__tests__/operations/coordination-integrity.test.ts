@@ -120,8 +120,12 @@ describe('coordination integrity', () => {
       configured: true,
       revenueSources: [],
       customerAttributionEnabled: true,
+      commissionSourceMode: 'selected',
+      commissionServiceIds: ['svc-1'],
     });
-    expect(canGenerateAttributionLink(configured)).toBe(true);
+    expect(canGenerateAttributionLink(configured, {
+      catalogItems: [{ id: 'svc-1', name: 'Early Bird Tickets' }],
+    })).toBe(true);
   });
 
   it('funding updates obligations via recalculateOperationalFundingState', () => {

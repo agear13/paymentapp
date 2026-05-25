@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { approveParticipantByInviteToken } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { ReferralIssuanceError } from '@/lib/referrals/ensure-referral-issuance';
-import { shouldIssueReferralLink } from '@/lib/referrals/referral-commerce-config';
+import { shouldIssueAttributionForParticipant } from '@/lib/operations/truth/attribution-truth';
 import { log } from '@/lib/logger';
 import { refreshDealNetworkPilotObligationsForUser } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
 import { prisma } from '@/lib/server/prisma';
@@ -42,7 +42,7 @@ export async function POST(
       );
     }
 
-    const expectsIssuance = shouldIssueReferralLink(result.participant.referralCommerce);
+    const expectsIssuance = shouldIssueAttributionForParticipant(result.participant);
     if (expectsIssuance && !result.referralIssuance?.referralUrl) {
       log.warn('approve participation completed without customer commerce link', {
         inviteToken: token,

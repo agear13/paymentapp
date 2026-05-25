@@ -7,7 +7,7 @@ import {
   getPilotParticipantsForDeal,
   issueAndPersistParticipantAttribution,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
-import { shouldIssueReferralLink } from '@/lib/referrals/referral-commerce-config';
+import { shouldIssueAttributionForParticipant } from '@/lib/operations/truth/attribution-truth';
 import {
   isProjectWorkspaceParticipant,
   sanitizeParticipantForAgreementView,
@@ -54,10 +54,7 @@ export async function GET(
 
     let referralIssuance: { code: string; referralUrl: string; created: boolean } | undefined;
 
-    if (
-      refreshed.approval_status === 'Approved' &&
-      shouldIssueReferralLink(participant.referralCommerce)
-    ) {
+    if (refreshed.approval_status === 'Approved') {
       try {
         const activated = await issueAndPersistParticipantAttribution({
           row: refreshed,

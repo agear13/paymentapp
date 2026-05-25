@@ -42,7 +42,7 @@ export const PARTICIPANT_LIFECYCLE_LABELS: Record<ParticipantLifecycleState, str
   INVITE_GENERATED: 'Agreement generated',
   INVITE_SENT: 'Agreement shared',
   INVITE_VIEWED: 'Agreement opened',
-  PENDING_APPROVAL: 'Awaiting approval',
+  PENDING_APPROVAL: 'Waiting for participant agreement approval',
   APPROVED: 'Approved',
   ONBOARDING_REQUIRED: 'Operator confirmation pending',
   PAYOUT_READY: 'Payout ready',

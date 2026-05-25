@@ -1,5 +1,8 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
+import {
+  canGenerateAttributionLink,
+  type CommissionScopeContext,
+} from '@/lib/operations/truth/attribution-eligibility';
 
 export const ATTRIBUTION_LIFECYCLE_STATES = [
   'NOT_ENABLED',
@@ -39,12 +42,13 @@ export const ATTRIBUTION_LIFECYCLE_MEANING: Record<AttributionLifecycleState, st
 };
 
 export function deriveAttributionLifecycleState(
-  participant: DemoParticipant
+  participant: DemoParticipant,
+  context: CommissionScopeContext = {}
 ): AttributionLifecycleState {
   if (participant.attributionLifecycle) {
     return participant.attributionLifecycle;
   }
-  if (!canGenerateAttributionLink(participant)) return 'NOT_ENABLED';
+  if (!canGenerateAttributionLink(participant, context)) return 'NOT_ENABLED';
   if (
     participant.customerCommerceUrl?.trim() ||
     participant.inviteLink?.trim() ||

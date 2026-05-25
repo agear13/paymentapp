@@ -77,7 +77,7 @@ export function isProjectWideRevenueShare(participant: DemoParticipant): boolean
   return false;
 }
 
-function isAllActiveCatalogSource(participant: DemoParticipant): boolean {
+export function isAllActiveCatalogSource(participant: DemoParticipant): boolean {
   const profile = profileOf(participant);
   if (profile?.commissionSourceMode === 'selected') return false;
   if (profile?.commissionSourceMode === 'all_active') return true;
