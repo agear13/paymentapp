@@ -2,10 +2,10 @@ import 'server-only';
 
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
-  refreshDealNetworkPilotObligationsForDeal,
   refreshDealNetworkPilotObligationsForUser,
 } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import { reserveFundingAgainstObligations } from '@/lib/operations/funding/reserve-funding-against-obligations.server';
 import { executeStrictOperationalOrchestration } from '@/lib/operations/orchestration/strict-operational-orchestration';
 import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selectors/resolve-operational-coordination.server';
 import type { OperationalMutationKind, OperationalSyncScope } from '@/lib/operations/orchestration/synchronize-operational-state';
@@ -38,10 +38,16 @@ export async function orchestrateOperationalMutation(input: {
   const snapshot = await getPilotSnapshotForUser(input.userId);
   const projectId = input.projectId ?? input.focusParticipant?.dealId ?? snapshot.deals[0]?.id;
 
+  let fundingReservation: Awaited<ReturnType<typeof reserveFundingAgainstObligations>> | null = null;
+
   if (projectId) {
     const deal = snapshot.deals.find((d) => d.id === projectId);
     if (deal) {
-      await refreshDealNetworkPilotObligationsForDeal(input.userId, deal, snapshot.participants);
+      fundingReservation = await reserveFundingAgainstObligations({
+        userId: input.userId,
+        deal,
+        participants: snapshot.participants,
+      });
     } else {
       await refreshDealNetworkPilotObligationsForUser(input.userId);
     }
@@ -81,6 +87,7 @@ export async function orchestrateOperationalMutation(input: {
       releaseEligibleObligationCount: graph.obligations.filter((o) => o.operational.releaseReady)
         .length,
       payoutReadyCount: graph.summary.payoutReadyCount,
+      fundingReservation,
     },
   });
 

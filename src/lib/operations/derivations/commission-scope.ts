@@ -1,6 +1,11 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { formatFixedPayoutLine } from '@/lib/projects/participant-compensation-copy';
+import {
+  catalogRefsFromHydrated,
+  hydrateEligibleCatalogServices,
+} from '@/lib/operations/hydration/hydrate-eligible-catalog-services';
+import { assertAgreementHydrationInvariants } from '@/lib/operations/dev/operational-invariants';
 
 export type CommissionSettlementBasis =
   | 'qualifying_catalog_purchases'
@@ -102,14 +107,13 @@ export function deriveCommissionEligibleCatalogItems(
   const ids = selectedCatalogIds(participant);
   if (ids.length === 0) return [];
 
-  const nameById = new Map(
-    (context.catalogItems ?? []).map((item) => [item.id, item.name] as const)
+  const hydrated = hydrateEligibleCatalogServices(
+    ids,
+    (context.catalogItems ?? []).map((item) => ({ id: item.id, name: item.name }))
   );
-
-  return ids.map((id) => ({
-    id,
-    name: nameById.get(id) ?? id,
-  }));
+  const refs = catalogRefsFromHydrated(hydrated);
+  assertAgreementHydrationInvariants({ renderedServiceLabels: refs.map((r) => r.name) });
+  return refs;
 }
 
 export function deriveCommissionSettlementBasis(

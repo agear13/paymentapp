@@ -4,6 +4,7 @@
 
 export const OPERATIONAL_EVENT_TYPES = [
   'FUNDING_SOURCE_UPDATED',
+  'FUNDING_ALLOCATION_RESERVED',
   'PARTICIPANT_COMPENSATION_UPDATED',
   'AGREEMENT_APPROVED',
   'AGREEMENT_SHARED',
@@ -40,7 +41,7 @@ export type OperationalMutationKind =
 export const MUTATION_TO_OPERATIONAL_EVENT: Record<OperationalMutationKind, OperationalEventType> = {
   agreement_approval: 'AGREEMENT_APPROVED',
   participant_earnings_save: 'PARTICIPANT_COMPENSATION_UPDATED',
-  funding_update: 'FUNDING_SOURCE_UPDATED',
+  funding_update: 'FUNDING_ALLOCATION_RESERVED',
   payout_verification: 'PAYOUT_STATE_UPDATED',
   attribution_update: 'ATTRIBUTION_CONFIGURATION_UPDATED',
   snapshot_persist: 'SNAPSHOT_PERSISTED',

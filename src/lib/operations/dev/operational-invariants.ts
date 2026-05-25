@@ -139,3 +139,105 @@ export function assertSyncFreshness(input: SyncInvariantInput): void {
     );
   }
 }
+
+export type GraphGuidanceInvariantInput = {
+  releaseReadyCount?: number;
+  blockerCount?: number;
+  fundingBlocker?: string | null;
+  fundingReserved?: boolean;
+  confirmedFunding?: number;
+  guidanceHeadline?: string;
+};
+
+export type FundingGraphInvariantInput = {
+  confirmedFunding?: number;
+  obligationsFunded?: number;
+  fundingReserved?: boolean;
+  invoicePaid?: boolean;
+};
+
+export type AgreementHydrationInvariantInput = {
+  renderedServiceLabels?: string[];
+};
+
+export type CapabilityInvariantInput = {
+  releaseActionVisible?: boolean;
+  canCreateReleaseBatch?: boolean;
+};
+
+const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Development-only graph consistency checks for guidance, funding, hydration, and capabilities. */
+export function assertGraphGuidanceInvariants(input: GraphGuidanceInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if ((input.releaseReadyCount ?? 0) > 0 && (input.blockerCount ?? 0) > 0) {
+    throw new OperationalInvariantViolation(
+      'GUIDANCE_CONTRADICTS_BLOCKERS',
+      'Release-ready count is positive while operational blockers remain'
+    );
+  }
+
+  if (
+    input.guidanceHeadline?.toLowerCase().includes('ready for payout release') &&
+    (input.blockerCount ?? 0) > 0
+  ) {
+    throw new OperationalInvariantViolation(
+      'GUIDANCE_CONTRADICTS_BLOCKERS',
+      'Guidance headline claims release readiness while blockers exist'
+    );
+  }
+}
+
+export function assertFundingGraphInvariants(input: FundingGraphInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if ((input.confirmedFunding ?? 0) > 0 && input.fundingReserved === false) {
+    throw new OperationalInvariantViolation(
+      'FUNDING_EXISTS_WITHOUT_RESERVATION',
+      'Confirmed funding exists but reservation state is false'
+    );
+  }
+
+  if (input.invoicePaid && (input.confirmedFunding ?? 0) > 0 && (input.obligationsFunded ?? 0) === 0) {
+    throw new OperationalInvariantViolation(
+      'PAID_INVOICE_NOT_ALLOCATED_TO_FUNDING',
+      'Paid invoice funding was not allocated to obligations'
+    );
+  }
+}
+
+export function assertAgreementHydrationInvariants(input: AgreementHydrationInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+  for (const label of input.renderedServiceLabels ?? []) {
+    if (UUID_LIKE.test(label.trim())) {
+      throw new OperationalInvariantViolation(
+        'RAW_SERVICE_IDS_RENDERED',
+        `Raw service UUID reached agreement render layer: ${label}`
+      );
+    }
+  }
+}
+
+export function assertCapabilityInvariants(input: CapabilityInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+  if (input.releaseActionVisible && input.canCreateReleaseBatch === false) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_ACTION_VISIBLE_WITHOUT_CAPABILITY',
+      'Release action is visible without operational capability'
+    );
+  }
+}
+
+export function assertReleaseReadyWithBlockers(input: {
+  releaseReady?: boolean;
+  blockingObligationCount?: number;
+}): void {
+  if (process.env.NODE_ENV !== 'development') return;
+  if (input.releaseReady && (input.blockingObligationCount ?? 0) > 0) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_READY_WITH_BLOCKING_OBLIGATIONS',
+      'Release marked ready while blocking obligations remain'
+    );
+  }
+}

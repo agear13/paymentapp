@@ -10,6 +10,7 @@ import {
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { referralTrace } from '@/lib/referrals/referral-trace';
+import { hydrateAgreementEligibleServices } from '@/lib/operations/hydration/hydrate-agreement-eligible-services.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,6 +86,13 @@ export async function POST(
 
     return NextResponse.json({
       ...result,
+      eligibleServices: owner?.user_id
+        ? await hydrateAgreementEligibleServices({
+            participant: result.participant,
+            dealUserId: owner.user_id,
+            dealId: result.deal.id,
+          })
+        : [],
       ...(operationalSync ? operationalSyncJson(operationalSync) : {}),
     });
   } catch (e) {

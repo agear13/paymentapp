@@ -6,6 +6,7 @@ export const OPERATIONAL_AUDIT_EVENT_TYPES = [
   'agreement_approved',
   'participant_note_added',
   'funding_linked',
+  'funding_reserved_against_obligations',
   'obligations_generated',
   'obligations_funded',
   'payout_eligible',
@@ -33,6 +34,7 @@ const EVENT_TO_AUDIT: Partial<Record<OperationalEventType, OperationalAuditEvent
   AGREEMENT_VIEWED: 'agreement_viewed',
   AGREEMENT_APPROVED: 'agreement_approved',
   FUNDING_SOURCE_UPDATED: 'funding_linked',
+  FUNDING_ALLOCATION_RESERVED: 'funding_reserved_against_obligations',
   PARTICIPANT_COMPENSATION_UPDATED: 'compensation_updated',
   ATTRIBUTION_CONFIGURATION_UPDATED: 'attribution_configured',
   PAYOUT_STATE_UPDATED: 'payout_state_updated',
@@ -45,6 +47,7 @@ const AUDIT_TITLES: Record<OperationalAuditEventType, string> = {
   agreement_approved: 'Participation agreement approved',
   participant_note_added: 'Participant note received',
   funding_linked: 'Funding source updated',
+  funding_reserved_against_obligations: 'Funding reserved against obligations',
   obligations_generated: 'Obligations regenerated',
   obligations_funded: 'Obligations funded',
   payout_eligible: 'Participant payout eligible',
@@ -80,6 +83,8 @@ function describeAuditEvent(type: OperationalAuditEventType, event: OperationalE
       return `Obligation count: ${event.payload?.obligationCount ?? 'updated'}`;
     case 'funding_linked':
       return 'Funding source changed — obligations and readiness recomputed.';
+    case 'funding_reserved_against_obligations':
+      return 'Funding allocated and reserved against payout obligations.';
     case 'compensation_updated':
       return 'Earnings configuration saved — obligations regenerated.';
     default:

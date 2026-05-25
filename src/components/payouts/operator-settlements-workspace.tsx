@@ -50,6 +50,7 @@ import {
   useGlobalOperationalSyncHandlers,
 } from '@/hooks/use-global-operational-sync';
 import { cn } from '@/lib/utils';
+import type { OperationalCapabilities } from '@/lib/operations/capabilities/derive-operational-capabilities';
 
 interface Batch {
   id: string;
@@ -62,7 +63,13 @@ interface Batch {
 
 const SUPPORTED_CURRENCIES = ['AUD', 'USD', 'EUR', 'GBP'] as const;
 
-export function OperatorSettlementsWorkspace() {
+type OperatorSettlementsWorkspaceProps = {
+  releaseCapabilities?: OperationalCapabilities;
+};
+
+export function OperatorSettlementsWorkspace({
+  releaseCapabilities,
+}: OperatorSettlementsWorkspaceProps) {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const { currency: orgCurrency } = useOrganizationCurrency();
   const syncHandlers = useGlobalOperationalSyncHandlers();
@@ -145,8 +152,16 @@ export function OperatorSettlementsWorkspace() {
     };
   }, [createOpen, createCurrency, createThreshold]);
 
+  const capabilities = releaseCapabilities ?? {
+    canCreateReleaseBatch: true,
+    canSubmitRelease: true,
+    canUseBetaSettlementFeatures: true,
+    disabledReason: null,
+  };
+
   const handleCreateBatch = async () => {
     if (!organizationId) return;
+    if (!capabilities.canCreateReleaseBatch) return;
     const threshold = parseFloat(createThreshold);
     if (isNaN(threshold) || threshold < 0) {
       toast.error('Enter a valid minimum threshold');
@@ -243,12 +258,28 @@ export function OperatorSettlementsWorkspace() {
             </Tooltip>
           </TooltipProvider>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create release batch
-              </Button>
-            </DialogTrigger>
+            {capabilities.canCreateReleaseBatch ? (
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create release batch
+                </Button>
+              </DialogTrigger>
+            ) : (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0}>
+                      <Button disabled>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create release batch
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{capabilities.disabledReason}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto gap-0">
               <DialogHeader className="space-y-1 pb-4">
                 <DialogTitle>Create release batch</DialogTitle>
@@ -329,7 +360,12 @@ export function OperatorSettlementsWorkspace() {
                 </Button>
                 <Button
                   onClick={() => void handleCreateBatch()}
-                  disabled={createLoading || noEligible || eligiblePreview.loading}
+                  disabled={
+                    createLoading ||
+                    noEligible ||
+                    eligiblePreview.loading ||
+                    !capabilities.canCreateReleaseBatch
+                  }
                 >
                   {createLoading ? 'Creating…' : 'Create release batch'}
                 </Button>

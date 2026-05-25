@@ -33,6 +33,7 @@ import {
   InvalidPaymentLinkTransitionError,
 } from '@/lib/payments/state-machine';
 import { validateLedgerInvariant } from '@/lib/ledger/invariant-checker';
+import { orchestrateFundingAfterInvoiceSettlement } from '@/lib/operations/funding/bridge-invoice-settlement.server';
 
 export interface ConfirmPaymentParams {
   paymentLinkId: string;
@@ -708,6 +709,18 @@ export async function confirmPayment(
             error: commissionErr instanceof Error ? commissionErr.message : String(commissionErr),
           }
         );
+      }
+    }
+
+    if (result.success && result.paymentEventId && result.alreadyProcessed === false) {
+      try {
+        await orchestrateFundingAfterInvoiceSettlement(result.paymentEventId);
+      } catch (orchErr: unknown) {
+        log.warn('Operational funding orchestration failed (non-blocking)', {
+          correlationId,
+          paymentEventId: result.paymentEventId,
+          error: orchErr instanceof Error ? orchErr.message : String(orchErr),
+        });
       }
     }
 

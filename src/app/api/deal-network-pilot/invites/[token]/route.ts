@@ -17,6 +17,7 @@ import { resolveOrganizationIdForPilotDeal } from '@/lib/referrals/ensure-referr
 import { prisma } from '@/lib/server/prisma';
 import { filterServicesForReferralConfig } from '@/lib/referrals/referral-commerce-config';
 import { buildScopedServiceCommissionRows } from '@/lib/projects/participant-compensation-copy';
+import { hydrateAgreementEligibleServices } from '@/lib/operations/hydration/hydrate-agreement-eligible-services.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,12 +76,20 @@ export async function GET(
     const isProject = isProjectWorkspaceParticipant(participant);
 
     let scopedServiceRows: ReturnType<typeof buildScopedServiceCommissionRows> = [];
+    let eligibleServices: Awaited<ReturnType<typeof hydrateAgreementEligibleServices>> = [];
     const commerce = participant.referralCommerce;
+    const organizationId = await resolveOrganizationIdForPilotDeal(
+      refreshed.deal.user_id,
+      refreshed.deal_id
+    );
+
+    eligibleServices = await hydrateAgreementEligibleServices({
+      participant,
+      dealUserId: refreshed.deal.user_id,
+      dealId: refreshed.deal_id,
+    });
+
     if (commerce?.commissionMode === 'referral_commerce') {
-      const organizationId = await resolveOrganizationIdForPilotDeal(
-        refreshed.deal.user_id,
-        refreshed.deal_id
-      );
       if (organizationId) {
         const allServices = await prisma.organization_services.findMany({
           where: { organization_id: organizationId, active: true },
@@ -103,6 +112,22 @@ export async function GET(
       }
     }
 
+    if (scopedServiceRows.length === 0 && eligibleServices.length > 0) {
+      const pct =
+        participant.referralCommerce?.commerceCommissionPct ??
+        participant.compensationProfile?.percentage ??
+        0;
+      scopedServiceRows = eligibleServices.map((s) => ({
+        id: s.id,
+        name: s.name,
+        customerPrice: 0,
+        currency: s.currency,
+        revenueSharePct: pct,
+        estimatedEarnings: 0,
+        earningsLabel: '—',
+      }));
+    }
+
     return NextResponse.json({
       deal,
       participant: sanitizeParticipantForAgreementView(participant),
@@ -110,6 +135,7 @@ export async function GET(
       referralIssuance: isProject && refreshed.approval_status !== 'Approved' ? undefined : referralIssuance,
       workspaceSource: isProject ? 'project' : 'pilot',
       scopedServiceRows,
+      eligibleServices,
     });
   } catch (e) {
     console.error('[deal-network-pilot/invites GET]', e);

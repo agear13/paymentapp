@@ -148,9 +148,10 @@ export async function refreshDealNetworkPilotObligationsForDeal(
     confirmedFunding + 0.005 < totalOwed &&
     !legacyMoney;
 
+  const fundingReserved = confirmedFunding > 0 || legacyMoney;
   const moneyConfirmed = legacyMoney || fullyFunded;
 
-  const anchorEventId = moneyConfirmed
+  const anchorEventId = fundingReserved
     ? fundingConfirmedEvtId ?? (await fundingAnchorPaymentEventIdForDeal(deal.id))
     : null;
 

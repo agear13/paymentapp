@@ -14,6 +14,7 @@ import { paymentEventBlocksReopenAfterPaid } from '@/lib/payments/payment-link-e
 import { revalidatePath } from 'next/cache';
 import config from '@/lib/config/env';
 import { queueXeroSync } from '@/lib/xero/queue-service';
+import { orchestrateFundingAfterManualInvoiceSettlement } from '@/lib/operations/funding/bridge-invoice-settlement.server';
 
 const bodySchema = z.object({
   action: z.enum(['mark_paid', 'reopen']),
@@ -122,6 +123,14 @@ export async function POST(
             }
           );
         }
+      }
+      try {
+        await orchestrateFundingAfterManualInvoiceSettlement(link.id);
+      } catch (orchErr: unknown) {
+        loggers.api.warn('Operational funding orchestration after manual mark paid failed', {
+          paymentLinkId: link.id,
+          error: orchErr instanceof Error ? orchErr.message : String(orchErr),
+        });
       }
     } else {
       if (

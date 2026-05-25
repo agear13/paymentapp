@@ -72,8 +72,11 @@ export function getOperationalCoordinationSnapshot(
   const fundingStage = input.funding
     ? deriveFundingCoordinationStage(input.funding)
     : null;
-  const effectiveFundingAllocated =
-    fundingStage?.releaseFunded ?? input.fundingAllocated ?? false;
+  const effectiveFundingAllocated = Boolean(
+    fundingStage?.releaseFunded ||
+      fundingStage?.fundingReserved ||
+      input.fundingAllocated
+  );
 
   const participantSnapshots = participants.map((participant) => {
     const catalogItems = input.catalogItemsByParticipant?.[participant.id];

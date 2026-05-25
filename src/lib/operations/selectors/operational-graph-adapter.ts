@@ -16,6 +16,7 @@ import { deriveTrustSignals } from '@/lib/operations/explainability/trust-signal
 import type { ReleaseConfidenceSnapshot, TimelineEvent, OperationalExplainability, OperationalGuidanceBundle } from '@/lib/operations/explainability/types';
 import { deduplicateOperationalActions } from '@/lib/operations/explainability/deduplicate-operational-actions';
 import { deriveNextOperationalActions } from '@/lib/operations/explainability/derive-next-operational-actions';
+import { deriveOperationalBlockingActions } from '@/lib/operations/explainability/derive-operational-blocking-actions';
 import { explainWorkspaceState } from '@/lib/operations/explainability/state-explanations';
 import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
@@ -25,6 +26,10 @@ function mapGraphPhase(snapshot: OperationalCoordinationSnapshot): {
   phase: WorkspaceActivationPhase;
   label: string;
 } {
+  const blocking = deriveOperationalBlockingActions(snapshot);
+  if (blocking.blockers.length > 0) {
+    return { phase: 'ready_to_coordinate', label: 'Coordination blocked' };
+  }
   if (snapshot.summary.releaseReadyCount > 0) {
     return { phase: 'ready_for_release', label: 'Ready for payout release' };
   }
@@ -164,9 +169,11 @@ export function workspaceContextFromGraph(
 
 function explainabilityFromGraph(
   snapshot: OperationalCoordinationSnapshot,
-  scopeTitle: string
+  scopeTitle: string,
+  workspace?: WorkspaceOperationalContext
 ): OperationalExplainability {
-  const blockers = snapshot.summary.allBlockers.map((b) => b.explanation);
+  const blocking = deriveOperationalBlockingActions(snapshot, workspace);
+  const blockers = blocking.blockers.map((b) => b.explanation);
   const missing: string[] = [];
   for (const p of snapshot.participants) {
     if (!p.readinessHierarchy.participant.ready) {
@@ -178,10 +185,10 @@ function explainabilityFromGraph(
   }
 
   const readinessLevel =
-    snapshot.summary.releaseReadyCount > 0
-      ? 'ready'
-      : blockers.length > 0
-        ? 'blocked'
+    blockers.length > 0
+      ? 'blocked'
+      : snapshot.summary.releaseReadyCount > 0
+        ? 'ready'
         : 'partial';
 
   return {
@@ -194,19 +201,23 @@ function explainabilityFromGraph(
               100
           ),
     blockers,
-    warnings: [],
+    warnings: blocking.warnings,
     missingRequirements: [...new Set(missing)].slice(0, 8),
-    confidence: snapshot.summary.releaseReadyCount > 0 ? 'HIGH' : blockers.length > 0 ? 'BLOCKED' : 'MEDIUM',
-    nextRecommendedActions: [],
-    explainability: {
-      headline:
-        blockers.length > 0
-          ? 'Release blocked because:'
-          : snapshot.summary.releaseReadyCount > 0
-            ? 'Ready for payout release'
-            : 'Coordination in progress',
-      bullets: blockers.length > 0 ? blockers : ['Continue configuring participants and funding'],
-    },
+    confidence:
+      blockers.length > 0
+        ? 'BLOCKED'
+        : snapshot.summary.releaseReadyCount > 0
+          ? 'HIGH'
+          : 'MEDIUM',
+    nextRecommendedActions: blocking.nextActions.map((a) => ({
+      id: a.id,
+      title: a.title,
+      description: a.description,
+      href: a.href ?? '#',
+      ctaLabel: a.ctaLabel ?? 'Continue',
+      priority: 1,
+    })),
+    explainability: blocking.readinessExplanation,
     trustState: blockers.length > 0 ? 'attention' : 'healthy',
     phaseLabel: mapGraphPhase(snapshot).label,
     scopeTitle,
@@ -224,7 +235,8 @@ export function guidanceFromOperationalGraph(input: {
   const scope = input.scope ?? 'workspace';
   const explanation = explainabilityFromGraph(
     input.snapshot,
-    input.scopeTitle ?? (scope === 'project' ? 'Project' : 'Workspace')
+    input.scopeTitle ?? (scope === 'project' ? 'Project' : 'Workspace'),
+    input.workspace
   );
 
   const fundingState = deriveCanonicalFundingLifecycle(input.snapshot.funding.stage);
