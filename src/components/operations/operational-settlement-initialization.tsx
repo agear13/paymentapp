@@ -5,10 +5,12 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import type { OperationalOnboardingState } from '@/lib/operations/onboarding/operational-onboarding-phases';
+import type { OperationalInitializationSnapshot } from '@/lib/operations/onboarding/operational-transition-types';
 import { onboardingInitializationProgress } from '@/lib/operations/onboarding/operational-onboarding-phases';
 
 type OperationalSettlementInitializationProps = {
   onboarding: OperationalOnboardingState | null | undefined;
+  initialization?: OperationalInitializationSnapshot | null;
   loading?: boolean;
   children: React.ReactNode;
 };
@@ -16,10 +18,16 @@ type OperationalSettlementInitializationProps = {
 /** Blocks settlement rail projections until OPERATIONAL_GRAPH_READY. */
 export function OperationalSettlementInitialization({
   onboarding,
+  initialization,
   loading = false,
   children,
 }: OperationalSettlementInitializationProps) {
   const [refreshing, setRefreshing] = React.useState(false);
+  const [recoveryError, setRecoveryError] = React.useState<string | null>(null);
+
+  const effectiveOnboarding = initialization?.onboarding ?? onboarding;
+  const correlationId = initialization?.correlationId ?? effectiveOnboarding?.correlationId;
+  const retryable = initialization?.retryable ?? true;
 
   if (loading) {
     return (
@@ -30,16 +38,32 @@ export function OperationalSettlementInitialization({
     );
   }
 
-  if (!onboarding || onboarding.graphReady) {
+  if (!effectiveOnboarding || effectiveOnboarding.graphReady) {
     return <>{children}</>;
   }
 
-  const progress = onboardingInitializationProgress(onboarding);
+  const progress = onboardingInitializationProgress(effectiveOnboarding);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    notifyWorkspaceActivationRefresh();
-    window.setTimeout(() => setRefreshing(false), 1200);
+    setRecoveryError(null);
+    try {
+      if (retryable) {
+        const res = await fetch('/api/operations/initialization/resume', {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (!res.ok) {
+          const json = (await res.json()) as { error?: string };
+          setRecoveryError(json.error ?? 'Recovery orchestration did not complete.');
+        }
+      }
+      notifyWorkspaceActivationRefresh();
+    } catch {
+      setRecoveryError('Could not reach initialization recovery service.');
+    } finally {
+      window.setTimeout(() => setRefreshing(false), 800);
+    }
   };
 
   return (
@@ -76,8 +100,8 @@ export function OperationalSettlementInitialization({
 
       {effectiveOnboarding.blockers.length > 0 ? (
         <ul className="text-xs text-amber-800/90 dark:text-amber-300/90 space-y-1">
-          {effectiveOnboarding.blockers.map((b) => (
-            <li key={b}>• {b}</li>
+          {effectiveOnboarding.blockers.map((blocker: string) => (
+            <li key={blocker}>• {blocker}</li>
           ))}
         </ul>
       ) : null}
@@ -88,7 +112,7 @@ export function OperationalSettlementInitialization({
           size="sm"
           variant="outline"
           disabled={refreshing}
-          onClick={handleRefresh}
+          onClick={() => void handleRefresh()}
         >
           <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Reload coordination snapshot

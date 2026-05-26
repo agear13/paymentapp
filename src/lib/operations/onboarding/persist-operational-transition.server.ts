@@ -1,11 +1,16 @@
 import 'server-only';
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import type {
   OperationalTransitionRecord,
   OperationalTransitionStatus,
   OperationalTransitionType,
 } from '@/lib/operations/onboarding/operational-transition-types';
+
+function asInputJsonValue(value: Record<string, unknown>): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
+}
 
 function rowToRecord(row: {
   id: string;
@@ -164,7 +169,7 @@ export async function persistOperationalTransition(input: {
       correlation_id: input.correlationId,
       trigger_source: input.triggerSource,
       user_id: input.userId ?? null,
-      metadata: input.metadata ?? undefined,
+      metadata: input.metadata ? asInputJsonValue(input.metadata) : undefined,
       orchestration_event_id: input.orchestrationEventId ?? null,
     },
   });
