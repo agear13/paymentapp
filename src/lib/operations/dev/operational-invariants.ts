@@ -250,6 +250,7 @@ export type OnboardingGraphInvariantInput = {
   projectId?: string | null;
   organizationId?: string | null;
   graphReady?: boolean;
+  graphSummaryConsumedBeforeReady?: boolean;
 };
 
 export function assertOnboardingGraphInvariants(input: OnboardingGraphInvariantInput): void {
@@ -287,6 +288,13 @@ export function assertOnboardingGraphInvariants(input: OnboardingGraphInvariantI
     throw new OperationalInvariantViolation(
       'OPERATIONAL_GRAPH_RESOLUTION_BEFORE_INITIALIZATION',
       'Graph resolution attempted before initialization barriers passed'
+    );
+  }
+
+  if (input.graphSummaryConsumedBeforeReady) {
+    throw new OperationalInvariantViolation(
+      'GRAPH_SUMMARY_CONSUMED_BEFORE_READY',
+      'Graph summary projection consumed before OPERATIONAL_GRAPH_READY'
     );
   }
 }

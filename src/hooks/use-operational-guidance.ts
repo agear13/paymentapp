@@ -15,9 +15,11 @@ import {
   workspaceContextFromGraph,
 } from '@/lib/operations/selectors/operational-graph-adapter';
 import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
+import { parseCoordinationSnapshotProjection } from '@/lib/operations/selectors/operational-coordination-snapshot';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 import { createFallbackActivation } from '@/lib/onboarding/workspace-activation-fallback';
 import { defaultWorkspaceContext } from '@/lib/operations/types/operational-context';
+import type { OperationalOnboardingState } from '@/lib/operations/onboarding/operational-onboarding-phases';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 import { subscribeProjectOperationalEvents } from '@/lib/operations/orchestration/operational-sync-client';
 import { dispatchOperationalEvent } from '@/lib/operations/orchestration/operational-event-bus';
@@ -52,12 +54,65 @@ function emptyGraph(): GraphSummary {
   };
 }
 
+function isGraphReadyForProjection(onboarding: OperationalOnboardingState | null | undefined): boolean {
+  if (!onboarding) return false;
+  return onboarding.graphReady === true || onboarding.phase === 'OPERATIONAL_GRAPH_READY';
+}
+
+function degradedGuidance(recoveryMessage?: string | null): OperationalGuidanceBundle {
+  return {
+    explanation: {
+      readinessLevel: 'blocked',
+      readinessScore: 0,
+      blockers: recoveryMessage ? [recoveryMessage] : ['Settlement infrastructure is initializing'],
+      warnings: [],
+      missingRequirements: [],
+      confidence: 'BLOCKED',
+      nextRecommendedActions: [],
+      explainability: {
+        headline: 'Operational coordination initializing',
+        bullets: [
+          recoveryMessage ??
+            'Your payment rails were connected successfully. Operational coordination is being prepared.',
+        ],
+      },
+      trustState: 'attention',
+      phaseLabel: 'Settlement infrastructure initializing',
+      scopeTitle: 'Workspace',
+    },
+    stateExplanation: null,
+    actions: [],
+    trustSignals: [],
+    releaseConfidence: {
+      level: 'BLOCKED',
+      score: 0,
+      currency: 'AUD',
+      collectedRevenue: 0,
+      reservedObligations: 0,
+      readyToRelease: 0,
+      heldBack: 0,
+      heldBackReasons: [],
+      blockedParticipantCount: 0,
+      riskWarnings: [],
+      releasableObligationCount: 0,
+      totalObligationCount: 0,
+      explainability: { headline: 'Initializing', bullets: [] },
+    },
+    timeline: [],
+    transition: null,
+    degraded: true,
+  };
+}
+
 /** Client hook — loads authoritative operational graph and derives guidance from it. */
 export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
-  const { activation, nextAction, loading, degraded, refresh, operationalOnboarding } =
+  const { activation, nextAction, loading, degraded, refresh, operationalOnboarding, operationalInitialization } =
     useWorkspaceActivation({
     enabled: options?.enabled !== false,
   });
+  const graphReadyForProjection =
+    isGraphReadyForProjection(operationalOnboarding) ||
+    operationalInitialization?.graphReady === true;
   const projectId = options?.project?.id ?? activation?.primaryProjectId ?? null;
   const [graph, setGraph] = React.useState<GraphSummary>(emptyGraph);
   const auditTimeline = useOperationalAuditStore({
@@ -67,7 +122,7 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
 
   const loadGraph = React.useCallback(async () => {
     if (options?.enabled === false) return;
-    if (operationalOnboarding && !operationalOnboarding.graphReady) {
+    if (!graphReadyForProjection) {
       setGraph(emptyGraph());
       return;
     }
@@ -81,27 +136,33 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
       if (!res.ok) return;
       const json = (await res.json()) as {
         data?: {
-          summary: GraphSummary['summary'];
-          funding: GraphSummary['funding'];
+          graphReady?: boolean;
+          summary: GraphSummary['summary'] | null;
+          funding: GraphSummary['funding'] | null;
           participants: GraphSummary['participants'];
           obligationCount: number;
           auditTimeline?: OperationalAuditEntry[];
         };
       };
       if (!json.data) return;
-      if (json.data.auditTimeline?.length) {
-        setOperationalAuditEntries(json.data.auditTimeline);
-      }
-      setGraph({
+      const projection = parseCoordinationSnapshotProjection({
+        graphReady: json.data.graphReady,
         summary: json.data.summary,
         funding: json.data.funding,
         participants: json.data.participants as GraphSummary['participants'],
-        obligations: [],
       });
+      if (!projection) {
+        setGraph(emptyGraph());
+        return;
+      }
+      if (json.data.auditTimeline?.length) {
+        setOperationalAuditEntries(json.data.auditTimeline);
+      }
+      setGraph(projection);
     } finally {
       setGraphLoading(false);
     }
-  }, [options?.enabled, projectId, operationalOnboarding]);
+  }, [options?.enabled, projectId, graphReadyForProjection]);
 
   React.useEffect(() => {
     void loadGraph();
@@ -120,6 +181,12 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
   }, [projectId, loadGraph, refresh]);
 
   const guidance = React.useMemo((): OperationalGuidanceBundle => {
+    if (!graphReadyForProjection) {
+      return degradedGuidance(
+        operationalOnboarding?.recoveryMessage ?? operationalInitialization?.onboarding.recoveryMessage
+      );
+    }
+
     const act = activation ?? createFallbackActivation();
     const snapshot = graph as OperationalCoordinationSnapshot;
     const workspace = workspaceContextFromGraph(snapshot, {
@@ -148,7 +215,17 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
       scopeTitle: options?.scopeTitle ?? act.phaseLabel,
       auditTimeline,
     });
-  }, [activation, auditTimeline, graph, options?.scope, options?.scopeTitle, options?.project]);
+  }, [
+    activation,
+    auditTimeline,
+    graph,
+    graphReadyForProjection,
+    operationalInitialization?.onboarding.recoveryMessage,
+    operationalOnboarding?.recoveryMessage,
+    options?.scope,
+    options?.scopeTitle,
+    options?.project,
+  ]);
 
   const appendAudit = React.useCallback((entry: OperationalAuditEntry | null | undefined) => {
     if (!entry) return;
@@ -185,7 +262,10 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     auditTimeline,
     nextAction: nextRecommended,
     loading: loading || graphLoading,
-    degraded: degraded || guidance.degraded || Boolean(operationalOnboarding && !operationalOnboarding.graphReady),
+    degraded:
+      degraded ||
+      guidance.degraded ||
+      !graphReadyForProjection,
     refresh: async () => {
       await Promise.all([refresh(), loadGraph()]);
     },

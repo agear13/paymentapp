@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { deriveAuditTimelineFromGraph } from '@/lib/operations/audit/derive-audit-timeline-from-state';
+import {
+  emptyOperationalGraphFunding,
+  emptyOperationalGraphSummary,
+} from '@/lib/operations/selectors/operational-coordination-snapshot';
 import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selectors/resolve-operational-coordination.server';
 import { resolveOperationalInitializationSnapshot } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
 import { listOperationalTransitions } from '@/lib/operations/onboarding/persist-operational-transition.server';
@@ -31,8 +35,8 @@ export async function GET(request: Request) {
           operationalOnboarding: onboarding.onboarding,
           operationalInitialization: onboarding,
           correlationId: onboarding.correlationId,
-          summary: null,
-          funding: null,
+          summary: emptyOperationalGraphSummary(),
+          funding: emptyOperationalGraphFunding(),
           obligationCount: 0,
           auditTimeline: mergeInitializationAuditTimeline([], transitions),
           participants: [],

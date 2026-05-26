@@ -11,6 +11,12 @@ import {
 import { buildProjectParticipant } from '@/lib/projects/participant-entitlement';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import { onboardingInitializationProgress, isOperationalGraphReady } from '@/lib/operations/onboarding/operational-onboarding-phases';
+import {
+  parseCoordinationSnapshotProjection,
+  emptyOperationalGraphSummary,
+} from '@/lib/operations/selectors/operational-coordination-snapshot';
+import { guidanceFromOperationalGraph } from '@/lib/operations/selectors/operational-graph-adapter';
+import { defaultWorkspaceContext } from '@/lib/operations/types/operational-context';
 
 jest.mock('@/lib/server/prisma', () => ({
   prisma: {
@@ -140,5 +146,54 @@ describe('onboarding graph safety', () => {
     });
     expect(progress.steps.find((s: { id: string }) => s.id === 'graph')?.complete).toBe(false);
     expect(progress.steps.find((s: { id: string }) => s.id === 'stripe')?.complete).toBe(true);
+  });
+
+  it('parseCoordinationSnapshotProjection rejects pre-ready null summary (Stripe redirect window)', () => {
+    const projection = parseCoordinationSnapshotProjection({
+      graphReady: false,
+      summary: null,
+      funding: null,
+      participants: [],
+    });
+    expect(projection).toBeNull();
+  });
+
+  it('parseCoordinationSnapshotProjection accepts degraded empty summary when explicitly not ready', () => {
+    const projection = parseCoordinationSnapshotProjection({
+      graphReady: false,
+      summary: emptyOperationalGraphSummary(),
+      funding: { allocated: false, stage: null },
+      participants: [],
+    });
+    expect(projection).toBeNull();
+  });
+
+  it('guidanceFromOperationalGraph does not throw when summary uses empty degraded shape', () => {
+    const snapshot = {
+      participants: [],
+      obligations: [],
+      summary: emptyOperationalGraphSummary(),
+      funding: { allocated: false, stage: null },
+    };
+    expect(() =>
+      guidanceFromOperationalGraph({
+        snapshot,
+        workspace: defaultWorkspaceContext(),
+      })
+    ).not.toThrow();
+    const bundle = guidanceFromOperationalGraph({
+      snapshot,
+      workspace: defaultWorkspaceContext(),
+    });
+    expect(bundle.releaseConfidence.readyToRelease).toBe(0);
+  });
+
+  it('throws GRAPH_SUMMARY_CONSUMED_BEFORE_READY in development', () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    expect(() =>
+      assertOnboardingGraphInvariants({ graphSummaryConsumedBeforeReady: true })
+    ).toThrow(OperationalInvariantViolation);
+    process.env.NODE_ENV = prev;
   });
 });

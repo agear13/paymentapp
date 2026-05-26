@@ -177,3 +177,39 @@ export function getOperationalCoordinationSnapshot(
     serviceCurrencies: input.serviceCurrencies,
   };
 }
+
+/** Deterministic degraded summary — safe for pre-OPERATIONAL_GRAPH_READY projection boundaries. */
+export function emptyOperationalGraphSummary(): OperationalCoordinationSnapshot['summary'] {
+  return {
+    participantCount: 0,
+    payoutReadyCount: 0,
+    releaseReadyCount: 0,
+    blockerCount: 0,
+    allBlockers: [],
+  };
+}
+
+export function emptyOperationalGraphFunding(): OperationalCoordinationSnapshot['funding'] {
+  return { allocated: false, stage: null };
+}
+
+export type CoordinationSnapshotProjectionPayload = {
+  graphReady?: boolean;
+  summary: OperationalCoordinationSnapshot['summary'] | null;
+  funding: OperationalCoordinationSnapshot['funding'] | null;
+  participants?: OperationalCoordinationSnapshot['participants'];
+};
+
+/** Returns null when graph projections must not be consumed (pre-convergence). */
+export function parseCoordinationSnapshotProjection(
+  payload: CoordinationSnapshotProjectionPayload
+): Pick<OperationalCoordinationSnapshot, 'summary' | 'funding' | 'participants' | 'obligations'> | null {
+  if (payload.graphReady === false) return null;
+  if (payload.summary == null || payload.funding == null) return null;
+  return {
+    summary: payload.summary,
+    funding: payload.funding,
+    participants: payload.participants ?? [],
+    obligations: [],
+  };
+}

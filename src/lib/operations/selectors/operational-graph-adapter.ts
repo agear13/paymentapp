@@ -19,24 +19,43 @@ import { deriveNextOperationalActions } from '@/lib/operations/explainability/de
 import { deriveOperationalBlockingActions } from '@/lib/operations/explainability/derive-operational-blocking-actions';
 import { explainWorkspaceState } from '@/lib/operations/explainability/state-explanations';
 import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
+import { emptyOperationalGraphFunding, emptyOperationalGraphSummary } from '@/lib/operations/selectors/operational-coordination-snapshot';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
+import { assertOnboardingGraphInvariants } from '@/lib/operations/dev/operational-invariants';
+
+function projectableSummary(snapshot: OperationalCoordinationSnapshot) {
+  if (snapshot.summary == null) {
+    assertOnboardingGraphInvariants({ graphSummaryConsumedBeforeReady: true });
+    return emptyOperationalGraphSummary();
+  }
+  return snapshot.summary;
+}
+
+function projectableFunding(snapshot: OperationalCoordinationSnapshot) {
+  if (snapshot.funding == null) {
+    assertOnboardingGraphInvariants({ graphSummaryConsumedBeforeReady: true });
+    return emptyOperationalGraphFunding();
+  }
+  return snapshot.funding;
+}
 
 function mapGraphPhase(snapshot: OperationalCoordinationSnapshot): {
   phase: WorkspaceActivationPhase;
   label: string;
 } {
+  const summary = projectableSummary(snapshot);
   const blocking = deriveOperationalBlockingActions(snapshot);
   if (blocking.blockers.length > 0) {
     return { phase: 'ready_to_coordinate', label: 'Coordination blocked' };
   }
-  if (snapshot.summary.releaseReadyCount > 0) {
+  if (summary.releaseReadyCount > 0) {
     return { phase: 'ready_for_release', label: 'Ready for payout release' };
   }
-  if (snapshot.obligations.length > 0 || snapshot.summary.payoutReadyCount > 0) {
+  if (snapshot.obligations.length > 0 || summary.payoutReadyCount > 0) {
     return { phase: 'ready_to_coordinate', label: 'Ready to coordinate payouts' };
   }
-  if (snapshot.summary.participantCount > 0) {
+  if (summary.participantCount > 0) {
     return { phase: 'setup_in_progress', label: 'Workspace setup in progress' };
   }
   return { phase: 'setup_in_progress', label: 'Workspace setup in progress' };
@@ -87,6 +106,7 @@ export function activationFromOperationalGraph(
   snapshot: OperationalCoordinationSnapshot,
   input: WorkspaceActivationInput
 ): WorkspaceActivationSnapshot {
+  const summary = projectableSummary(snapshot);
   const { phase, label } = mapGraphPhase(snapshot);
   const provider =
     input.stripeConfigured || input.wiseConfigured || input.hederaConfigured;
@@ -95,7 +115,7 @@ export function activationFromOperationalGraph(
     input.paymentLinkCount > 0 ||
     !input.collectionPreferenceDecideLater;
 
-  const blockers = snapshot.summary.allBlockers.map((b) => b.explanation);
+  const blockers = summary.allBlockers.map((b) => b.explanation);
   const fundingState = deriveCanonicalFundingLifecycle(snapshot.funding.stage);
   const fundingBlocker = fundingLifecycleBlocker(fundingState);
   if (fundingBlocker && !blockers.includes(fundingBlocker)) {
@@ -103,14 +123,14 @@ export function activationFromOperationalGraph(
   }
 
   const progress =
-    snapshot.summary.participantCount === 0
+    summary.participantCount === 0
       ? 10
       : Math.min(
           100,
           Math.round(
-            ((snapshot.summary.payoutReadyCount / Math.max(1, snapshot.summary.participantCount)) *
+            ((summary.payoutReadyCount / Math.max(1, summary.participantCount)) *
               50 +
-              (snapshot.summary.releaseReadyCount > 0 ? 50 : snapshot.obligations.length > 0 ? 25 : 0))
+              (summary.releaseReadyCount > 0 ? 50 : snapshot.obligations.length > 0 ? 25 : 0))
           )
         );
 
@@ -125,8 +145,8 @@ export function activationFromOperationalGraph(
     revenueConfigured: revenue,
     providerConnected: provider,
     payoutMethodConfigured: provider,
-    releaseEligible: snapshot.summary.releaseReadyCount > 0,
-    releaseEligibleCount: snapshot.summary.releaseReadyCount,
+    releaseEligible: summary.releaseReadyCount > 0,
+    releaseEligibleCount: summary.releaseReadyCount,
     firstReleaseCompleted: input.releaseBatchCount > 0,
     onboardingCompleted: input.onboardingCompleted,
     defaultCurrency: input.defaultCurrency,
@@ -137,7 +157,7 @@ export function activationFromOperationalGraph(
     activationBlockers: blockers,
     setupWarnings: [],
     primaryProjectId: input.primaryProjectId,
-    needsGuidance: blockers.length > 0 || snapshot.summary.releaseReadyCount === 0,
+    needsGuidance: blockers.length > 0 || summary.releaseReadyCount === 0,
     degraded: false,
   };
 }
@@ -146,6 +166,7 @@ export function workspaceContextFromGraph(
   snapshot: OperationalCoordinationSnapshot,
   input: WorkspaceActivationInput
 ): WorkspaceOperationalContext {
+  const summary = projectableSummary(snapshot);
   const provider =
     input.stripeConfigured || input.wiseConfigured || input.hederaConfigured;
   return {
@@ -162,7 +183,7 @@ export function workspaceContextFromGraph(
     obligationCount: snapshot.obligations.length,
     paymentLinkCount: input.paymentLinkCount,
     collectionPreferenceDecideLater: input.collectionPreferenceDecideLater,
-    releaseEligibleCount: snapshot.summary.releaseReadyCount,
+    releaseEligibleCount: summary.releaseReadyCount,
     releaseBatchCount: input.releaseBatchCount,
   };
 }
@@ -172,6 +193,7 @@ function explainabilityFromGraph(
   scopeTitle: string,
   workspace?: WorkspaceOperationalContext
 ): OperationalExplainability {
+  const summary = projectableSummary(snapshot);
   const blocking = deriveOperationalBlockingActions(snapshot, workspace);
   const blockers = blocking.blockers.map((b) => b.explanation);
   const missing: string[] = [];
@@ -187,17 +209,17 @@ function explainabilityFromGraph(
   const readinessLevel =
     blockers.length > 0
       ? 'blocked'
-      : snapshot.summary.releaseReadyCount > 0
+      : summary.releaseReadyCount > 0
         ? 'ready'
         : 'partial';
 
   return {
     readinessLevel,
     readinessScore:
-      snapshot.summary.participantCount === 0
+      summary.participantCount === 0
         ? 0
         : Math.round(
-            (snapshot.summary.releaseReadyCount / Math.max(1, snapshot.summary.participantCount)) *
+            (summary.releaseReadyCount / Math.max(1, summary.participantCount)) *
               100
           ),
     blockers,
@@ -206,7 +228,7 @@ function explainabilityFromGraph(
     confidence:
       blockers.length > 0
         ? 'BLOCKED'
-        : snapshot.summary.releaseReadyCount > 0
+        : summary.releaseReadyCount > 0
           ? 'HIGH'
           : 'MEDIUM',
     nextRecommendedActions: blocking.nextActions.map((a) => ({
@@ -232,6 +254,7 @@ export function guidanceFromOperationalGraph(input: {
   scopeTitle?: string;
   auditTimeline?: OperationalAuditEntry[];
 }): OperationalGuidanceBundle {
+  const summary = projectableSummary(input.snapshot);
   const scope = input.scope ?? 'workspace';
   const explanation = explainabilityFromGraph(
     input.snapshot,
@@ -247,10 +270,10 @@ export function guidanceFromOperationalGraph(input: {
     currency: input.workspace.defaultCurrency ?? 'AUD',
     collectedRevenue: 0,
     reservedObligations: input.snapshot.obligations.length,
-    readyToRelease: input.snapshot.summary.releaseReadyCount,
+    readyToRelease: summary.releaseReadyCount,
     heldBack: Math.max(
       0,
-      input.snapshot.summary.participantCount - input.snapshot.summary.releaseReadyCount
+      summary.participantCount - summary.releaseReadyCount
     ),
     heldBackReasons: explanation.blockers,
     blockedParticipantCount: input.snapshot.participants.filter(
@@ -275,7 +298,7 @@ export function guidanceFromOperationalGraph(input: {
   return {
     explanation,
     stateExplanation: explainWorkspaceState(
-      input.snapshot.summary.releaseReadyCount > 0 ? 'ACTIVE' : 'CONFIGURING',
+      summary.releaseReadyCount > 0 ? 'ACTIVE' : 'CONFIGURING',
       explanation.blockers
     ),
     actions: deduplicateOperationalActions(

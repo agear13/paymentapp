@@ -231,7 +231,7 @@ export function OperatorSettlementsWorkspace({
     );
   }
 
-  if (activationLoading || (operationalOnboarding != null && !operationalOnboarding.graphReady)) {
+  if (activationLoading || !operationalOnboarding?.graphReady) {
     return (
       <div className="space-y-6">
         {pageHeader}
