@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { deriveAuditTimelineFromGraph } from '@/lib/operations/audit/derive-audit-timeline-from-state';
 import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selectors/resolve-operational-coordination.server';
+import { resolveOperationalInitializationSnapshot } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
+import { listOperationalTransitions } from '@/lib/operations/onboarding/persist-operational-transition.server';
+import { mergeInitializationAuditTimeline } from '@/lib/operations/audit/derive-audit-timeline-from-transitions';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,18 +13,58 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const user = await requireAuth();
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    const onboarding = org
+      ? await resolveOperationalInitializationSnapshot({
+          userId: user.id,
+          organizationId: org.id,
+        })
+      : null;
+
+    if (onboarding && !onboarding.graphReady) {
+      const transitions = org
+        ? await listOperationalTransitions({ organizationId: org.id, correlationId: onboarding.correlationId })
+        : [];
+      return NextResponse.json({
+        data: {
+          graphReady: false,
+          operationalOnboarding: onboarding.onboarding,
+          operationalInitialization: onboarding,
+          correlationId: onboarding.correlationId,
+          summary: null,
+          funding: null,
+          obligationCount: 0,
+          auditTimeline: mergeInitializationAuditTimeline([], transitions),
+          participants: [],
+        },
+      });
+    }
+
     const { searchParams } = new URL(request.url);
-    const projectId = searchParams.get('projectId')?.trim() || undefined;
+    const projectId =
+      searchParams.get('projectId')?.trim() ||
+      onboarding?.onboarding.primaryProjectId ||
+      undefined;
 
     const graph = await resolveOperationalCoordinationSnapshot({
       userId: user.id,
       projectId,
     });
 
-    const auditTimeline = deriveAuditTimelineFromGraph(graph, graph.projectId ?? undefined);
+    const transitions = org
+      ? await listOperationalTransitions({
+          organizationId: org.id,
+          correlationId: onboarding?.correlationId,
+        })
+      : [];
+    const auditTimeline = mergeInitializationAuditTimeline(
+      deriveAuditTimelineFromGraph(graph, graph.projectId ?? undefined),
+      transitions
+    );
 
     return NextResponse.json({
       data: {
+        graphReady: true,
         summary: graph.summary,
         funding: graph.funding,
         obligationCount: graph.obligations.length,

@@ -54,7 +54,8 @@ function emptyGraph(): GraphSummary {
 
 /** Client hook — loads authoritative operational graph and derives guidance from it. */
 export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
-  const { activation, nextAction, loading, degraded, refresh } = useWorkspaceActivation({
+  const { activation, nextAction, loading, degraded, refresh, operationalOnboarding } =
+    useWorkspaceActivation({
     enabled: options?.enabled !== false,
   });
   const projectId = options?.project?.id ?? activation?.primaryProjectId ?? null;
@@ -66,6 +67,10 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
 
   const loadGraph = React.useCallback(async () => {
     if (options?.enabled === false) return;
+    if (operationalOnboarding && !operationalOnboarding.graphReady) {
+      setGraph(emptyGraph());
+      return;
+    }
     setGraphLoading(true);
     try {
       const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
@@ -96,7 +101,7 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     } finally {
       setGraphLoading(false);
     }
-  }, [options?.enabled, projectId]);
+  }, [options?.enabled, projectId, operationalOnboarding]);
 
   React.useEffect(() => {
     void loadGraph();
@@ -180,7 +185,7 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     auditTimeline,
     nextAction: nextRecommended,
     loading: loading || graphLoading,
-    degraded: degraded || guidance.degraded,
+    degraded: degraded || guidance.degraded || Boolean(operationalOnboarding && !operationalOnboarding.graphReady),
     refresh: async () => {
       await Promise.all([refresh(), loadGraph()]);
     },

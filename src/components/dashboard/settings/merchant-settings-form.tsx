@@ -325,8 +325,15 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
           throw new Error('Failed to create settings');
         }
 
-        const result = await response.json();
-        setSettingsId(result.id);
+        const json = (await response.json()) as {
+          settings?: { id?: string };
+          id?: string;
+          operationalOnboarding?: unknown;
+        };
+        const settings = json.settings ?? json;
+        if (settings?.id) {
+          setSettingsId(settings.id);
+        }
         toast.success(isPilotVariant ? 'Settings saved' : 'Collection settings saved');
         notifyWorkspaceActivationRefresh();
       }

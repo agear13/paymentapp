@@ -71,39 +71,40 @@ export function deriveOperationalBlockingActions(
   }
 
   for (const p of snapshot.participants) {
-    for (const b of p.readinessHierarchy.participant.blockers) {
+    const participantId = p.participant?.id ?? 'unknown';
+    for (const b of p.readinessHierarchy?.participant?.blockers ?? []) {
       causes.push({
-        code: `participant-${p.participant.id}`,
+        code: `participant-${participantId}`,
         explanation: b,
         layer: 'participant',
         severity: 'blocking',
       });
     }
-    for (const b of p.readinessHierarchy.obligation.blockers) {
+    for (const b of p.readinessHierarchy?.obligation?.blockers ?? []) {
       causes.push({
-        code: `obligation-${p.participant.id}`,
+        code: `obligation-${participantId}`,
         explanation: b,
         layer: 'obligation',
         severity: 'blocking',
       });
     }
-    for (const b of p.readinessHierarchy.funding.blockers) {
+    for (const b of p.readinessHierarchy?.funding?.blockers ?? []) {
       causes.push({
-        code: `funding-${p.participant.id}`,
+        code: `funding-${participantId}`,
         explanation: b,
         layer: 'funding',
         severity: 'blocking',
       });
     }
-    for (const b of p.readinessHierarchy.release.blockers) {
+    for (const b of p.readinessHierarchy?.release?.blockers ?? []) {
       causes.push({
-        code: `release-${p.participant.id}`,
+        code: `release-${participantId}`,
         explanation: b,
         layer: 'release',
         severity: 'blocking',
       });
     }
-    for (const detail of p.blockers) {
+    for (const detail of p.blockers ?? []) {
       causes.push(blockerFromDetail(detail));
     }
   }
@@ -161,12 +162,14 @@ export function deriveOperationalBlockingActions(
     });
   }
 
-  assertGraphGuidanceInvariants({
-    releaseReadyCount: snapshot.summary.releaseReadyCount,
-    blockerCount: blockers.length,
-    fundingBlocker,
-    guidanceHeadline: readinessExplanation.headline,
-  });
+  if (typeof window === 'undefined') {
+    assertGraphGuidanceInvariants({
+      releaseReadyCount: snapshot.summary?.releaseReadyCount ?? 0,
+      blockerCount: blockers.length,
+      fundingBlocker,
+      guidanceHeadline: readinessExplanation.headline,
+    });
+  }
 
   return {
     blockers,

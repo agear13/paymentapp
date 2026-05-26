@@ -241,3 +241,107 @@ export function assertReleaseReadyWithBlockers(input: {
     );
   }
 }
+
+export type OnboardingGraphInvariantInput = {
+  graphResolutionAttempted?: boolean;
+  graphProjectionBeforeBootstrap?: boolean;
+  settlementRailRenderedBeforeReady?: boolean;
+  stripeConnectedWithoutPaymentRail?: boolean;
+  projectId?: string | null;
+  organizationId?: string | null;
+  graphReady?: boolean;
+};
+
+export function assertOnboardingGraphInvariants(input: OnboardingGraphInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.graphProjectionBeforeBootstrap) {
+    throw new OperationalInvariantViolation(
+      'GRAPH_PROJECTION_BEFORE_BOOTSTRAP',
+      'Operational graph projection attempted before bootstrap completion'
+    );
+  }
+
+  if (input.settlementRailRenderedBeforeReady) {
+    throw new OperationalInvariantViolation(
+      'SETTLEMENT_RAIL_RENDERED_BEFORE_READY',
+      'Settlement rail UI rendered before OPERATIONAL_GRAPH_READY'
+    );
+  }
+
+  if (input.stripeConnectedWithoutPaymentRail) {
+    throw new OperationalInvariantViolation(
+      'STRIPE_CONNECTED_WITHOUT_PAYMENT_RAIL',
+      'Stripe connected while payment rail initialization incomplete'
+    );
+  }
+
+  if (input.graphResolutionAttempted && !input.projectId) {
+    throw new OperationalInvariantViolation(
+      'MISSING_PROJECT_DURING_SETTLEMENT_BOOTSTRAP',
+      'Operational graph resolution attempted without bootstrapped project'
+    );
+  }
+
+  if (input.graphResolutionAttempted && input.graphReady === false) {
+    throw new OperationalInvariantViolation(
+      'OPERATIONAL_GRAPH_RESOLUTION_BEFORE_INITIALIZATION',
+      'Graph resolution attempted before initialization barriers passed'
+    );
+  }
+}
+
+export type ConvergenceInvariantInput = {
+  initializationCompletedWithoutGraph?: boolean;
+  graphReadyWithoutSettlementRails?: boolean;
+  settlementReadyWithoutProject?: boolean;
+  partialBootstrapWithReadyPhase?: boolean;
+  multipleActiveInitializationChains?: boolean;
+  graphProjectionBeforeConvergenceValidation?: boolean;
+};
+
+export function assertConvergenceInvariants(input: ConvergenceInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.initializationCompletedWithoutGraph) {
+    throw new OperationalInvariantViolation(
+      'INITIALIZATION_COMPLETED_WITHOUT_GRAPH',
+      'Initialization marked complete without operational graph ready'
+    );
+  }
+
+  if (input.graphReadyWithoutSettlementRails) {
+    throw new OperationalInvariantViolation(
+      'GRAPH_READY_WITHOUT_SETTLEMENT_RAILS',
+      'Graph ready while settlement rails uninitialized'
+    );
+  }
+
+  if (input.settlementReadyWithoutProject) {
+    throw new OperationalInvariantViolation(
+      'SETTLEMENT_READY_WITHOUT_PROJECT',
+      'Settlement ready without bootstrapped project'
+    );
+  }
+
+  if (input.partialBootstrapWithReadyPhase) {
+    throw new OperationalInvariantViolation(
+      'PARTIAL_BOOTSTRAP_WITH_READY_PHASE',
+      'Ready phase recorded with incomplete bootstrap prerequisites'
+    );
+  }
+
+  if (input.multipleActiveInitializationChains) {
+    throw new OperationalInvariantViolation(
+      'MULTIPLE_ACTIVE_INITIALIZATION_CHAINS',
+      'Multiple active operational initialization chains detected'
+    );
+  }
+
+  if (input.graphProjectionBeforeConvergenceValidation) {
+    throw new OperationalInvariantViolation(
+      'GRAPH_PROJECTION_BEFORE_CONVERGENCE_VALIDATION',
+      'Graph projection attempted before convergence validation'
+    );
+  }
+}

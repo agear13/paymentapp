@@ -51,6 +51,8 @@ import {
 } from '@/hooks/use-global-operational-sync';
 import { cn } from '@/lib/utils';
 import type { OperationalCapabilities } from '@/lib/operations/capabilities/derive-operational-capabilities';
+import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
+import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
 
 interface Batch {
   id: string;
@@ -71,6 +73,7 @@ export function OperatorSettlementsWorkspace({
   releaseCapabilities,
 }: OperatorSettlementsWorkspaceProps) {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
+  const { operationalOnboarding, operationalInitialization, loading: activationLoading } = useWorkspaceActivation();
   const { currency: orgCurrency } = useOrganizationCurrency();
   const syncHandlers = useGlobalOperationalSyncHandlers();
   const [batches, setBatches] = React.useState<Batch[]>([]);
@@ -224,6 +227,21 @@ export function OperatorSettlementsWorkspace({
       <div className="space-y-6">
         {pageHeader}
         <p className="text-muted-foreground">No organization selected.</p>
+      </div>
+    );
+  }
+
+  if (activationLoading || (operationalOnboarding != null && !operationalOnboarding.graphReady)) {
+    return (
+      <div className="space-y-6">
+        {pageHeader}
+        <OperationalSettlementInitialization
+          onboarding={operationalOnboarding}
+          initialization={operationalInitialization}
+          loading={activationLoading}
+        >
+          {null}
+        </OperationalSettlementInitialization>
       </div>
     );
   }

@@ -16,9 +16,8 @@ import {
   saveOperatorOnboardingState,
 } from '@/lib/onboarding/operator-onboarding.server';
 import {
-  orchestrateOperationalMutation,
-  operationalSyncJson,
-} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+  runOperationalInitializationConvergence,
+} from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
 
 const participantSchema = z.object({
   name: z.string().min(1).max(255),
@@ -78,11 +77,19 @@ export async function POST(request: NextRequest) {
     organizationId: org.id,
   });
 
-  const operationalSync = await orchestrateOperationalMutation({
+  const convergence = await runOperationalInitializationConvergence({
     userId: user.id,
-    mutation: 'snapshot_persist',
+    organizationId: org.id,
     projectId: deal.id,
+    triggerSource: 'onboarding-participants',
+    orchestrate: false,
   });
 
-  return apiResponse({ added: newParticipants.length, projectId: deal.id, ...operationalSyncJson(operationalSync) });
+  return apiResponse({
+    added: newParticipants.length,
+    projectId: deal.id,
+    correlationId: convergence.correlationId,
+    operationalInitialization: convergence.snapshot,
+    operationalOnboarding: convergence.onboarding,
+  });
 }

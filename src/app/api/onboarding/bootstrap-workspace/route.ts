@@ -6,6 +6,7 @@ import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { saveOperatorOnboardingState } from '@/lib/onboarding/operator-onboarding.server';
 import { DEFAULT_WORKSPACE_CURRENCY, isWorkspaceCurrencyCode } from '@/lib/currency/workspace-currencies';
+import { runOperationalInitializationConvergence } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
 
 const schema = z.object({
   workspaceName: z.string().min(2).max(255),
@@ -57,9 +58,17 @@ export async function POST(request: NextRequest) {
       merchantSettingsId: settings?.id,
     });
 
+    const convergence = await runOperationalInitializationConvergence({
+      userId: user.id,
+      organizationId: existingOrg.id,
+      triggerSource: 'bootstrap-workspace',
+    });
+
     return apiResponse({
       organizationId: existingOrg.id,
       merchantSettingsId: settings?.id ?? null,
+      correlationId: convergence.correlationId,
+      operationalInitialization: convergence.snapshot,
     });
   }
 
@@ -99,10 +108,18 @@ export async function POST(request: NextRequest) {
     merchantSettingsId: result.settings.id,
   });
 
+  const convergence = await runOperationalInitializationConvergence({
+    userId: user.id,
+    organizationId: result.organization.id,
+    triggerSource: 'bootstrap-workspace',
+  });
+
   return apiResponse(
     {
       organizationId: result.organization.id,
       merchantSettingsId: result.settings.id,
+      correlationId: convergence.correlationId,
+      operationalInitialization: convergence.snapshot,
     },
     201
   );

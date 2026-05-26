@@ -10,6 +10,8 @@ import { safeDeriveActivationResponse } from '@/lib/onboarding/workspace-activat
 import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selectors/resolve-operational-coordination.server';
 import { activationFromOperationalGraph } from '@/lib/operations/selectors/operational-graph-adapter';
 import { deriveNextRecommendedAction } from '@/lib/onboarding/next-recommended-action';
+import { resolveOperationalInitializationSnapshot } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
+import { assertOnboardingGraphInvariants } from '@/lib/operations/dev/operational-invariants';
 
 /** GET /api/workspace/activation — derived activation snapshot from canonical operational graph */
 export async function GET() {
@@ -42,9 +44,15 @@ export async function GET() {
       return apiResponse({ activation, nextAction });
     }
 
+    const initSnapshot = await resolveOperationalInitializationSnapshot({
+      userId: user.id,
+      organizationId: org.id,
+    });
+    const onboardingState = initSnapshot.onboarding;
+
     const [
       merchant,
-      onboardingState,
+      persistedOnboarding,
       snapshot,
       paymentLinkCount,
       releaseBatchCount,
@@ -66,10 +74,60 @@ export async function GET() {
     ]);
 
     const rails = merchantRowToRailFlags(merchant);
-    const projectCreated = snapshot.deals.length > 0 || Boolean(onboardingState?.projectId);
+    const projectCreated =
+      snapshot.deals.length > 0 ||
+      Boolean(onboardingState.projectReady || persistedOnboarding?.projectId);
     const compensation = evaluateWorkspaceCompensationReadiness(snapshot.participants);
     const primaryProjectId =
-      onboardingState?.projectId ?? snapshot.deals[0]?.id ?? null;
+      onboardingState.primaryProjectId ??
+      persistedOnboarding?.projectId ??
+      snapshot.deals[0]?.id ??
+      null;
+
+    if (!onboardingState.graphReady) {
+      assertOnboardingGraphInvariants({
+        graphProjectionBeforeBootstrap: !onboardingState.projectReady && Boolean(primaryProjectId),
+        settlementRailRenderedBeforeReady: false,
+        stripeConnectedWithoutPaymentRail:
+          onboardingState.stripeConnected && !onboardingState.paymentRailsReady,
+      });
+
+      const { activation, nextAction } = safeDeriveActivationResponse({
+        hasOrganization: true,
+        onboardingCompleted: persistedOnboarding?.completed === true,
+        projectCreated,
+        participantCount: compensation.participantCount,
+        participantsConfigured: compensation.participantsConfigured,
+        participantsConfiguredCount: compensation.configuredCount,
+        obligationCount: 0,
+        paymentLinkCount,
+        collectionPreferenceDecideLater:
+          persistedOnboarding?.collection_preference === 'decide_later' ||
+          persistedOnboarding?.collection_preference == null,
+        defaultCurrency: merchant?.default_currency ?? null,
+        ...rails,
+        releaseEligibleCount: 0,
+        releaseBatchCount,
+        primaryProjectId,
+      });
+
+      return apiResponse({
+        activation: {
+          ...activation,
+          phaseLabel: onboardingState.recoveryMessage ?? activation.phaseLabel,
+          activationBlockers: onboardingState.blockers,
+          needsGuidance: true,
+          degraded: true,
+          providerConnected: rails.stripeConfigured || rails.wiseConfigured || rails.hederaConfigured,
+          payoutMethodConfigured:
+            rails.stripeConfigured || rails.wiseConfigured || rails.hederaConfigured,
+        },
+        nextAction,
+        operationalOnboarding: onboardingState,
+        operationalInitialization: initSnapshot,
+        correlationId: initSnapshot.correlationId,
+      });
+    }
 
     const graph = await resolveOperationalCoordinationSnapshot({
       userId: user.id,
@@ -79,7 +137,7 @@ export async function GET() {
 
     const activationInput = {
       hasOrganization: true,
-      onboardingCompleted: onboardingState?.completed === true,
+      onboardingCompleted: persistedOnboarding?.completed === true,
       projectCreated,
       participantCount: compensation.participantCount,
       participantsConfigured: compensation.participantsConfigured,
@@ -87,8 +145,8 @@ export async function GET() {
       obligationCount: graph.obligations.length,
       paymentLinkCount,
       collectionPreferenceDecideLater:
-        onboardingState?.collection_preference === 'decide_later' ||
-        onboardingState?.collection_preference == null,
+        persistedOnboarding?.collection_preference === 'decide_later' ||
+        persistedOnboarding?.collection_preference == null,
       defaultCurrency: merchant?.default_currency ?? null,
       ...rails,
       releaseEligibleCount: graph.summary.releaseReadyCount,
@@ -99,7 +157,14 @@ export async function GET() {
     const activation = activationFromOperationalGraph(graph, activationInput);
     const nextAction = deriveNextRecommendedAction(activation);
 
-    return apiResponse({ activation, nextAction, operationalGraph: { summary: graph.summary, funding: graph.funding } });
+    return apiResponse({
+      activation,
+      nextAction,
+      operationalOnboarding: onboardingState,
+      operationalInitialization: initSnapshot,
+      correlationId: initSnapshot.correlationId,
+      operationalGraph: { summary: graph.summary, funding: graph.funding },
+    });
   } catch (e) {
     console.error('[workspace/activation GET]', e);
     const { activation, nextAction } = safeDeriveActivationResponse({
@@ -120,6 +185,14 @@ export async function GET() {
       releaseBatchCount: 0,
       primaryProjectId: null,
     });
-    return apiResponse({ activation, nextAction });
+    return apiResponse({
+      activation: {
+        ...activation,
+        phaseLabel:
+          'Settlement infrastructure is still initializing. Your payment rails were connected successfully. Operational coordination is being prepared.',
+        degraded: true,
+      },
+      nextAction,
+    });
   }
 }

@@ -198,6 +198,32 @@ model organizations {
   recurring_templates          recurring_templates[]
   organization_services        organization_services[]
   referral_codes               referral_codes[]
+  operational_onboarding_transitions operational_onboarding_transitions[]
+}
+
+/// Immutable operational onboarding / bootstrap / graph initialization transitions.
+model operational_onboarding_transitions {
+  id                     String         @id @default(uuid()) @db.Uuid
+  organization_id        String?        @db.Uuid
+  project_id             String?        @db.VarChar(128)
+  record_kind            String         @default("transition") @db.VarChar(64)
+  phase                  String         @db.VarChar(64)
+  previous_phase         String?        @db.VarChar(64)
+  status                 String         @db.VarChar(32)
+  started_at             DateTime       @default(now()) @db.Timestamptz(6)
+  completed_at           DateTime?      @db.Timestamptz(6)
+  failed_at              DateTime?      @db.Timestamptz(6)
+  correlation_id         String         @db.VarChar(255)
+  trigger_source         String         @db.VarChar(128)
+  user_id                String?        @db.VarChar(255)
+  metadata               Json?
+  orchestration_event_id String?        @db.VarChar(255)
+  organizations          organizations? @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id, started_at(sort: Desc)])
+  @@index([correlation_id])
+  @@index([organization_id, phase, status])
+  @@index([organization_id, correlation_id])
 }
 
 model user_organizations {

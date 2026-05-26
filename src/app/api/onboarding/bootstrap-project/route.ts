@@ -22,9 +22,8 @@ import {
 } from '@/lib/onboarding/mutation-resilience';
 import { log } from '@/lib/logger';
 import {
-  orchestrateOperationalMutation,
-  operationalSyncJson,
-} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+  runOperationalInitializationConvergence,
+} from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
 
 const schema = z.object({
   projectName: z.string().min(2).max(255),
@@ -267,15 +266,17 @@ export async function POST(request: NextRequest) {
 
       logBootstrap(opId, mutation.status, { projectId: mutation.data?.projectId });
 
-      let operationalSync;
+      let convergence;
       if (
         (mutation.status === 'SUCCESS' || mutation.status === 'PARTIAL_SUCCESS') &&
         mutation.data?.projectId
       ) {
-        operationalSync = await orchestrateOperationalMutation({
+        convergence = await runOperationalInitializationConvergence({
           userId: user.id,
-          mutation: 'snapshot_persist',
+          organizationId: mutation.data.organizationId,
           projectId: mutation.data.projectId,
+          triggerSource: 'bootstrap-project',
+          orchestrate: false,
         });
       }
 
@@ -283,7 +284,9 @@ export async function POST(request: NextRequest) {
         {
           ...mutation.data,
           mutation: clientMutation,
-          ...(operationalSync ? operationalSyncJson(operationalSync) : {}),
+          correlationId: convergence?.correlationId,
+          operationalInitialization: convergence?.snapshot,
+          operationalOnboarding: convergence?.onboarding,
         },
         httpStatus
       );

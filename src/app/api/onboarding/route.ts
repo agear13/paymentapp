@@ -7,6 +7,7 @@ import {
   getOperatorOnboardingState,
   saveOperatorOnboardingState,
 } from '@/lib/onboarding/operator-onboarding.server';
+import { resumeOperationalInitialization } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
 import type { OperatorOnboardingState } from '@/lib/onboarding/operator-onboarding-types';
 import { COLLECTION_PREFERENCE_VALUES } from '@/lib/onboarding/collection-preference';
 
@@ -74,5 +75,16 @@ export async function PATCH(request: NextRequest) {
   }
 
   await saveOperatorOnboardingState(org.id, user.id, body.state as OperatorOnboardingState);
-  return apiResponse({ ok: true });
+
+  let operationalInitialization;
+  if (body.state.step === 'complete' || body.state.completed) {
+    const convergence = await resumeOperationalInitialization({
+      userId: user.id,
+      organizationId: org.id,
+      triggerSource: 'finish-onboarding',
+    });
+    operationalInitialization = convergence.snapshot;
+  }
+
+  return apiResponse({ ok: true, operationalInitialization });
 }

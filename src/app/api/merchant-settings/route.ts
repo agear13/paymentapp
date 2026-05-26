@@ -7,6 +7,7 @@ import { log } from '@/lib/logger';
 import config from '@/lib/config/env';
 import { resolveWiseFieldsForCreate } from '@/lib/merchant-settings/resolve-wise-create-fields';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
+import { runOperationalInitializationConvergence } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
 
 const createMerchantSettingsSchema = z.object({
   organizationId: z.string().uuid(),
@@ -123,7 +124,28 @@ export async function POST(request: NextRequest) {
       `Created merchant settings: ${settings.id} for org ${body.organizationId} (wise_enabled=${wiseFields.wise_enabled}, wise_profile_id=${wiseFields.wise_profile_id ? 'set' : 'null'})`
     );
 
-    return apiResponse(settings, 201);
+    const railIncluded =
+      Boolean(body.stripeAccountId) ||
+      Boolean(body.hederaAccountId) ||
+      Boolean(body.wiseProfileId) ||
+      wiseFields.wise_enabled;
+
+    let operationalOnboarding;
+    let operationalInitialization;
+    let correlationId;
+    if (railIncluded) {
+      const convergence = await runOperationalInitializationConvergence({
+        userId: user.id,
+        organizationId: body.organizationId,
+        triggerSource: 'merchant-settings-create',
+        orchestrate: true,
+      });
+      operationalOnboarding = convergence.onboarding;
+      operationalInitialization = convergence.snapshot;
+      correlationId = convergence.correlationId;
+    }
+
+    return apiResponse({ settings, operationalOnboarding, operationalInitialization, correlationId }, 201);
   } catch (error) {
     log.error(`Failed to create merchant settings: ${error}`);
     return apiError('Failed to create merchant settings', 500);

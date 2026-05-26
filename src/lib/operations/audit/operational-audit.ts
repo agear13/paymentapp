@@ -14,6 +14,13 @@ export const OPERATIONAL_AUDIT_EVENT_TYPES = [
   'compensation_updated',
   'attribution_configured',
   'payout_state_updated',
+  'workspace_created',
+  'project_initialized',
+  'payment_rails_connected',
+  'stripe_connected',
+  'operational_graph_initialized',
+  'settlement_infrastructure_ready',
+  'operational_graph_initialization_failed',
 ] as const;
 
 export type OperationalAuditEventType = (typeof OPERATIONAL_AUDIT_EVENT_TYPES)[number];
@@ -39,6 +46,12 @@ const EVENT_TO_AUDIT: Partial<Record<OperationalEventType, OperationalAuditEvent
   ATTRIBUTION_CONFIGURATION_UPDATED: 'attribution_configured',
   PAYOUT_STATE_UPDATED: 'payout_state_updated',
   OBLIGATION_STATE_UPDATED: 'obligations_generated',
+  WORKSPACE_BOOTSTRAPPED: 'workspace_created',
+  PROJECT_BOOTSTRAPPED: 'project_initialized',
+  PAYMENT_RAIL_INITIALIZED: 'payment_rails_connected',
+  STRIPE_CONNECT_COMPLETED: 'stripe_connected',
+  OPERATIONAL_GRAPH_INITIALIZED: 'operational_graph_initialized',
+  SETTLEMENT_INFRASTRUCTURE_READY: 'settlement_infrastructure_ready',
 };
 
 const AUDIT_TITLES: Record<OperationalAuditEventType, string> = {
@@ -55,6 +68,13 @@ const AUDIT_TITLES: Record<OperationalAuditEventType, string> = {
   compensation_updated: 'Participant compensation updated',
   attribution_configured: 'Attribution configuration updated',
   payout_state_updated: 'Payout state updated',
+  workspace_created: 'Workspace created',
+  project_initialized: 'Project initialized',
+  payment_rails_connected: 'Payment rails connected',
+  stripe_connected: 'Stripe connected',
+  operational_graph_initialized: 'Operational graph initialized',
+  settlement_infrastructure_ready: 'Settlement infrastructure ready',
+  operational_graph_initialization_failed: 'Operational graph initialization failed',
 };
 
 export function auditEntryFromOperationalEvent(event: OperationalEvent): OperationalAuditEntry | null {

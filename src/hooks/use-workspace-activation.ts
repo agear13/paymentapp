@@ -3,6 +3,8 @@
 import * as React from 'react';
 import type { NextRecommendedAction } from '@/lib/onboarding/next-recommended-action';
 import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
+import type { OperationalOnboardingState } from '@/lib/operations/onboarding/operational-onboarding-phases';
+import type { OperationalInitializationSnapshot } from '@/lib/operations/onboarding/operational-transition-types';
 import {
   createFallbackActivation,
   createFallbackNextAction,
@@ -19,6 +21,9 @@ export function notifyWorkspaceActivationRefresh() {
 type ActivationResponse = {
   activation: WorkspaceActivationSnapshot;
   nextAction: NextRecommendedAction;
+  operationalOnboarding?: OperationalOnboardingState;
+  operationalInitialization?: OperationalInitializationSnapshot;
+  correlationId?: string;
 };
 
 export function useWorkspaceActivation(options?: { enabled?: boolean }) {
@@ -51,10 +56,29 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
           }
           return;
         }
-        const json = (await res.json()) as { data?: ActivationResponse };
-        const payload = json.data ?? (json as unknown as ActivationResponse);
-        if (!cancelled && payload?.activation) {
-          setData(payload);
+        const json = (await res.json()) as {
+          activation?: WorkspaceActivationSnapshot;
+          nextAction?: NextRecommendedAction;
+          operationalOnboarding?: OperationalOnboardingState;
+          operationalInitialization?: OperationalInitializationSnapshot;
+          correlationId?: string;
+          data?: ActivationResponse;
+        };
+        const payload = json.data ?? {
+          activation: json.activation,
+          nextAction: json.nextAction,
+          operationalOnboarding: json.operationalOnboarding,
+          operationalInitialization: json.operationalInitialization,
+          correlationId: json.correlationId,
+        };
+        if (!cancelled && payload?.activation && payload?.nextAction) {
+          setData({
+            activation: payload.activation,
+            nextAction: payload.nextAction,
+            operationalOnboarding: payload.operationalOnboarding,
+            operationalInitialization: payload.operationalInitialization,
+            correlationId: payload.correlationId,
+          });
           setDegraded(Boolean(payload.activation.degraded));
         } else if (!cancelled) {
           setDegraded(true);
@@ -91,6 +115,9 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
   return {
     activation: data?.activation ?? null,
     nextAction: data?.nextAction ?? null,
+    operationalOnboarding: data?.operationalOnboarding ?? null,
+    operationalInitialization: data?.operationalInitialization ?? null,
+    correlationId: data?.correlationId ?? null,
     loading,
     degraded,
     refresh,

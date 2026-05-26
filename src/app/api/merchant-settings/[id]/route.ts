@@ -5,6 +5,8 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
+import { runOperationalInitializationConvergence } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
+import { operationalInitializationEvent } from '@/lib/operations/onboarding/operational-initialization-events';
 
 const updateMerchantSettingsSchema = z.object({
   displayName: z.string().min(2).max(255).optional(),
@@ -119,7 +121,41 @@ export async function PATCH(
 
     log.info(`Updated merchant settings: ${id} by user ${user.id}`);
 
-    return apiResponse(settings);
+    const railUpdated =
+      body.stripeAccountId !== undefined ||
+      body.hederaAccountId !== undefined ||
+      body.wiseProfileId !== undefined ||
+      body.wiseEnabled !== undefined;
+
+    let operationalOnboarding;
+    let operationalInitialization;
+    let correlationId;
+    if (railUpdated) {
+      if (body.stripeAccountId !== undefined) {
+        const stripeEvent = operationalInitializationEvent('STRIPE_CONNECT_COMPLETED', {
+          organizationId: existing.organization_id,
+          correlationId: `stripe-${id}`,
+          payload: { merchantSettingsId: id },
+        });
+        log.info(`[operational-onboarding] ${stripeEvent.type}`, stripeEvent.payload);
+      }
+      const convergence = await runOperationalInitializationConvergence({
+        userId: user.id,
+        organizationId: existing.organization_id,
+        triggerSource: 'merchant-settings-patch',
+        orchestrate: true,
+      });
+      operationalOnboarding = convergence.onboarding;
+      operationalInitialization = convergence.snapshot;
+      correlationId = convergence.correlationId;
+    }
+
+    return apiResponse({
+      settings,
+      operationalOnboarding,
+      operationalInitialization,
+      correlationId,
+    });
   } catch (error) {
     log.error(`Failed to update merchant settings: ${error}`);
     return apiError('Failed to update merchant settings', 500);
