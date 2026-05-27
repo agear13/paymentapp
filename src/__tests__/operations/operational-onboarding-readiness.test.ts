@@ -196,4 +196,73 @@ describe('onboarding graph safety', () => {
     ).toThrow(OperationalInvariantViolation);
     process.env.NODE_ENV = prev;
   });
+
+  it('guidanceFromOperationalGraph with graphReady false returns initializing blockers without throwing', () => {
+    const snapshot = {
+      participants: [],
+      obligations: [],
+      summary: emptyOperationalGraphSummary(),
+      funding: { allocated: false, stage: null },
+    };
+    expect(() =>
+      guidanceFromOperationalGraph({
+        snapshot,
+        workspace: defaultWorkspaceContext(),
+        graphReady: false,
+        initializationRecoveryMessage: 'Coordination snapshot still converging.',
+      })
+    ).not.toThrow();
+    const bundle = guidanceFromOperationalGraph({
+      snapshot,
+      workspace: defaultWorkspaceContext(),
+      graphReady: false,
+      initializationRecoveryMessage: 'Coordination snapshot still converging.',
+    });
+    expect(bundle.degraded).toBe(false);
+    expect(bundle.releaseBlockers[0]?.category).toBe('operational_graph_initializing');
+    expect(bundle.releaseConfidence.level).toBe('BLOCKED');
+  });
+
+  it('guidanceFromOperationalGraph tolerates API-shaped participant projections before full hydration', () => {
+    const snapshot = {
+      participants: [
+        {
+          participantId: 'p-1',
+          name: 'Alex',
+          agreementApproval: 'participant_approved',
+          payoutReady: true,
+          releaseReady: false,
+          readinessHierarchy: {
+            participant: { ready: true, blockers: [] },
+            obligation: { ready: true, blockers: [] },
+            funding: { ready: false, blockers: ['Awaiting funding allocation'] },
+            release: { ready: false, blockers: ['Funding not allocated'] },
+            releaseReady: false,
+          },
+          blockers: [],
+        },
+      ] as unknown as ReturnType<typeof getOperationalCoordinationSnapshot>['participants'],
+      obligations: [],
+      summary: {
+        participantCount: 1,
+        payoutReadyCount: 1,
+        releaseReadyCount: 0,
+        blockerCount: 1,
+        allBlockers: [],
+      },
+      funding: { allocated: false, stage: { blockerLabel: 'Funding not confirmed' } },
+    };
+    expect(() =>
+      guidanceFromOperationalGraph({
+        snapshot,
+        workspace: {
+          ...defaultWorkspaceContext(),
+          participantCount: 1,
+          participantsConfiguredCount: 1,
+          primaryProjectId: 'proj-1',
+          stripeConfigured: true,
+        },
+      })
+    ).not.toThrow();
+  });
 });

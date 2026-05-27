@@ -53,6 +53,8 @@ import { cn } from '@/lib/utils';
 import type { OperationalCapabilities } from '@/lib/operations/capabilities/derive-operational-capabilities';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
+import { useReleaseInteractionCapability } from '@/hooks/use-release-interaction-capability';
+import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
 
 interface Batch {
   id: string;
@@ -74,6 +76,7 @@ export function OperatorSettlementsWorkspace({
 }: OperatorSettlementsWorkspaceProps) {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const { operationalOnboarding, operationalInitialization, loading: activationLoading } = useWorkspaceActivation();
+  const releaseInteraction = useReleaseInteractionCapability(releaseCapabilities);
   const { currency: orgCurrency } = useOrganizationCurrency();
   const syncHandlers = useGlobalOperationalSyncHandlers();
   const [batches, setBatches] = React.useState<Batch[]>([]);
@@ -96,26 +99,34 @@ export function OperatorSettlementsWorkspace({
   const batchDetailHref = (id: string) => `${PAYOUTS_SETTLEMENTS_HREF}/${id}`;
 
   const fetchBatches = React.useCallback(async () => {
-    if (!organizationId) return;
+    if (!organizationId || !releaseInteraction.canQueryReleaseHistory) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/payout-batches?organizationId=${organizationId}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to fetch');
+      if (!res.ok) {
+        if (res.status === 403) return;
+        throw new Error(data.error || 'Failed to fetch');
+      }
       setBatches(data.data || []);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load payout releases');
     } finally {
       setLoading(false);
     }
-  }, [organizationId]);
+  }, [organizationId, releaseInteraction.canQueryReleaseHistory]);
 
   React.useEffect(() => {
+    if (!releaseInteraction.canQueryReleaseHistory) {
+      setBatches([]);
+      setLoading(false);
+      return;
+    }
     void fetchBatches();
-  }, [fetchBatches]);
+  }, [fetchBatches, releaseInteraction.canQueryReleaseHistory]);
 
   React.useEffect(() => {
-    if (!createOpen) return;
+    if (!createOpen || !releaseInteraction.canPreviewReleaseEligibility) return;
     let cancelled = false;
     const threshold = parseFloat(createThreshold);
     const minThreshold = Number.isFinite(threshold) && threshold >= 0 ? threshold : 0;
@@ -153,17 +164,17 @@ export function OperatorSettlementsWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [createOpen, createCurrency, createThreshold]);
+  }, [createOpen, createCurrency, createThreshold, releaseInteraction.canPreviewReleaseEligibility]);
 
-  const capabilities = releaseCapabilities ?? {
-    canCreateReleaseBatch: true,
-    canSubmitRelease: true,
-    canUseBetaSettlementFeatures: true,
-    disabledReason: null,
+  const capabilities = {
+    canCreateReleaseBatch: releaseInteraction.canCreateReleaseBatch,
+    canSubmitRelease: releaseInteraction.canSubmitRelease,
+    canUseBetaSettlementFeatures: releaseInteraction.releaseInteractionEnabled,
+    disabledReason: releaseInteraction.disabledReason,
   };
 
   const handleCreateBatch = async () => {
-    if (!organizationId) return;
+    if (!organizationId || !releaseInteraction.releaseInteractionEnabled) return;
     if (!capabilities.canCreateReleaseBatch) return;
     const threshold = parseFloat(createThreshold);
     if (isNaN(threshold) || threshold < 0) {
@@ -199,7 +210,7 @@ export function OperatorSettlementsWorkspace({
   };
 
   const handleExport = (batchId: string) => {
-    if (!organizationId) return;
+    if (!organizationId || !releaseInteraction.canQueryReleaseHistory) return;
     window.open(`/api/payout-batches/${batchId}/export`, '_blank', 'noopener');
   };
 
@@ -262,20 +273,32 @@ export function OperatorSettlementsWorkspace({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => void fetchBatches()}
-                  disabled={loading}
-                  aria-label="Refresh payout releases"
-                >
-                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                </Button>
+                <span tabIndex={releaseInteraction.canQueryReleaseHistory ? undefined : 0}>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => void fetchBatches()}
+                    disabled={loading || !releaseInteraction.canQueryReleaseHistory}
+                    aria-label="Refresh payout releases"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                  </Button>
+                </span>
               </TooltipTrigger>
-              <TooltipContent>Refresh payout releases</TooltipContent>
+              <TooltipContent>
+                {releaseInteraction.canQueryReleaseHistory
+                  ? 'Refresh payout releases'
+                  : (releaseInteraction.interactionGuidance ?? 'Release refresh unavailable')}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <Dialog
+            open={createOpen}
+            onOpenChange={(open) => {
+              if (open && !releaseInteraction.canCreateReleaseBatch) return;
+              setCreateOpen(open);
+            }}
+          >
             {capabilities.canCreateReleaseBatch ? (
               <DialogTrigger asChild>
                 <Button>
@@ -393,6 +416,10 @@ export function OperatorSettlementsWorkspace({
         </div>
       </div>
 
+      {!releaseInteraction.releaseInteractionEnabled ? (
+        <ReleaseInteractionNotice state={releaseInteraction} />
+      ) : null}
+
       <div className="space-y-3">
         <div>
           <h2 className="text-base font-semibold">Release history</h2>
@@ -407,12 +434,35 @@ export function OperatorSettlementsWorkspace({
             <PayoutEmptyState
               iconVariant="history"
               title="No payout releases yet"
-              description="Release batches will appear here once obligations are approved and funded."
+              description={
+                releaseInteraction.releaseInteractionEnabled
+                  ? 'Release batches will appear here once obligations are approved and funded.'
+                  : (releaseInteraction.interactionGuidance ??
+                    'Release history will appear here once release actions are available.')
+              }
               action={
-                <Button size="sm" onClick={() => setCreateOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create release batch
-                </Button>
+                capabilities.canCreateReleaseBatch ? (
+                  <Button size="sm" onClick={() => setCreateOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create release batch
+                  </Button>
+                ) : (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button size="sm" disabled>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Create release batch
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {capabilities.disabledReason ?? 'Release actions unavailable'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )
               }
             />
           ) : (
@@ -468,6 +518,7 @@ export function OperatorSettlementsWorkspace({
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => handleExport(b.id)}
+                          disabled={!releaseInteraction.canQueryReleaseHistory}
                           aria-label="Export release batch"
                         >
                           <Download className="h-4 w-4" />

@@ -198,11 +198,11 @@ function explainabilityFromGraph(
   const blockers = blocking.blockers.map((b) => b.explanation);
   const missing: string[] = [];
   for (const p of snapshot.participants) {
-    if (!p.readinessHierarchy.participant.ready) {
-      missing.push(...p.readinessHierarchy.participant.blockers);
+    if (!p.readinessHierarchy?.participant?.ready) {
+      missing.push(...(p.readinessHierarchy?.participant?.blockers ?? []));
     }
-    if (!p.readinessHierarchy.obligation.ready) {
-      missing.push(...p.readinessHierarchy.obligation.blockers);
+    if (!p.readinessHierarchy?.obligation?.ready) {
+      missing.push(...(p.readinessHierarchy?.obligation?.blockers ?? []));
     }
   }
 
@@ -253,17 +253,23 @@ export function guidanceFromOperationalGraph(input: {
   scope?: 'workspace' | 'project';
   scopeTitle?: string;
   auditTimeline?: OperationalAuditEntry[];
+  graphReady?: boolean;
+  initializationRecoveryMessage?: string | null;
 }): OperationalGuidanceBundle {
   const summary = projectableSummary(input.snapshot);
+  const funding = projectableFunding(input.snapshot);
   const scope = input.scope ?? 'workspace';
   const explanation = explainabilityFromGraph(
     input.snapshot,
     input.scopeTitle ?? (scope === 'project' ? 'Project' : 'Workspace'),
     input.workspace
   );
-  const blocking = deriveOperationalBlockingActions(input.snapshot, input.workspace);
+  const blocking = deriveOperationalBlockingActions(input.snapshot, input.workspace, {
+    graphReady: input.graphReady ?? true,
+    initializationRecoveryMessage: input.initializationRecoveryMessage,
+  });
 
-  const fundingState = deriveCanonicalFundingLifecycle(input.snapshot.funding.stage);
+  const fundingState = deriveCanonicalFundingLifecycle(funding.stage);
 
   const releaseConfidence: ReleaseConfidenceSnapshot = {
     level: explanation.confidence,
@@ -278,7 +284,7 @@ export function guidanceFromOperationalGraph(input: {
     ),
     heldBackReasons: explanation.blockers,
     blockedParticipantCount: input.snapshot.participants.filter(
-      (p) => !p.readinessHierarchy.release.ready
+      (p) => !p.readinessHierarchy?.release?.ready
     ).length,
     riskWarnings: [],
     releasableObligationCount: input.snapshot.obligations.filter((o) => o.operational.releaseReady)

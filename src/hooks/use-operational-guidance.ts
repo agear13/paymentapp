@@ -152,15 +152,23 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     operationalInitialization?.graphReady === true;
   const projectId = options?.project?.id ?? activation?.primaryProjectId ?? null;
   const [graph, setGraph] = React.useState<GraphSummary>(emptyGraph);
+  const [graphSnapshotConverged, setGraphSnapshotConverged] = React.useState(false);
   const auditTimeline = useOperationalAuditStore({
     projectId: projectId ?? undefined,
   });
   const [graphLoading, setGraphLoading] = React.useState(false);
 
+  React.useEffect(() => {
+    if (!graphReadyForProjection) {
+      setGraphSnapshotConverged(false);
+    }
+  }, [graphReadyForProjection]);
+
   const loadGraph = React.useCallback(async () => {
     if (options?.enabled === false) return;
     if (!graphReadyForProjection) {
       setGraph(emptyGraph());
+      setGraphSnapshotConverged(false);
       return;
     }
     setGraphLoading(true);
@@ -170,7 +178,10 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
         cache: 'no-store',
         credentials: 'include',
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setGraphSnapshotConverged(false);
+        return;
+      }
       const json = (await res.json()) as {
         data?: {
           graphReady?: boolean;
@@ -181,21 +192,26 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
           auditTimeline?: OperationalAuditEntry[];
         };
       };
-      if (!json.data) return;
+      if (!json.data) {
+        setGraphSnapshotConverged(false);
+        return;
+      }
       const projection = parseCoordinationSnapshotProjection({
         graphReady: json.data.graphReady,
         summary: json.data.summary,
         funding: json.data.funding,
         participants: json.data.participants as GraphSummary['participants'],
       });
-      if (!projection) {
+      if (!projection || json.data.graphReady !== true) {
         setGraph(emptyGraph());
+        setGraphSnapshotConverged(false);
         return;
       }
       if (json.data.auditTimeline?.length) {
         setOperationalAuditEntries(json.data.auditTimeline);
       }
       setGraph(projection);
+      setGraphSnapshotConverged(true);
     } finally {
       setGraphLoading(false);
     }
@@ -217,11 +233,12 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     });
   }, [projectId, loadGraph, refresh]);
 
+  const initializationRecoveryMessage =
+    operationalOnboarding?.recoveryMessage ?? operationalInitialization?.onboarding.recoveryMessage;
+
   const guidance = React.useMemo((): OperationalGuidanceBundle => {
-    if (!graphReadyForProjection) {
-      return degradedGuidance(
-        operationalOnboarding?.recoveryMessage ?? operationalInitialization?.onboarding.recoveryMessage
-      );
+    if (!graphReadyForProjection || !graphSnapshotConverged) {
+      return degradedGuidance(initializationRecoveryMessage);
     }
 
     const act = activation ?? createFallbackActivation();
@@ -257,8 +274,8 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     auditTimeline,
     graph,
     graphReadyForProjection,
-    operationalInitialization?.onboarding.recoveryMessage,
-    operationalOnboarding?.recoveryMessage,
+    graphSnapshotConverged,
+    initializationRecoveryMessage,
     options?.scope,
     options?.scopeTitle,
     options?.project,
@@ -302,7 +319,11 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     degraded:
       degraded ||
       guidance.degraded ||
-      !graphReadyForProjection,
+      !graphReadyForProjection ||
+      !graphSnapshotConverged,
+    graphSnapshotConverged,
+    operationalOnboarding,
+    operationalInitialization,
     refresh: async () => {
       await Promise.all([refresh(), loadGraph()]);
     },

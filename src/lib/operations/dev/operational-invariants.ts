@@ -173,6 +173,95 @@ export type CapabilityInvariantInput = {
   canCreateReleaseBatch?: boolean;
 };
 
+export type ReleaseInteractionInvariantInput = {
+  releaseInteractionEnabled?: boolean;
+  graphReady?: boolean;
+  graphSnapshotConverged?: boolean;
+  canCreateReleaseBatch?: boolean;
+  betaSettlementAllowed?: boolean;
+  mutationAttempted?: boolean;
+  releaseActionEnabled?: boolean;
+  forbiddenResponseObserved?: boolean;
+  expectedInitializationWindow?: boolean;
+};
+
+export function assertReleaseInteractionInvariants(
+  input: ReleaseInteractionInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (
+    input.releaseInteractionEnabled === true &&
+    input.graphSnapshotConverged === false
+  ) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_INTERACTION_ENABLED_BEFORE_GRAPH_CONVERGENCE',
+      'Release interaction enabled before coordination snapshot converged'
+    );
+  }
+
+  if (
+    input.releaseInteractionEnabled === true &&
+    input.graphReady === false
+  ) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_INTERACTION_ENABLED_BEFORE_GRAPH_CONVERGENCE',
+      'Release interaction enabled before operational graph ready'
+    );
+  }
+
+  if (
+    input.expectedInitializationWindow &&
+    input.mutationAttempted
+  ) {
+    throw new OperationalInvariantViolation(
+      'FORBIDDEN_RELEASE_MUTATION_DURING_EXPECTED_INITIALIZATION',
+      'Release mutation attempted during expected initialization window'
+    );
+  }
+
+  if (
+    !input.releaseInteractionEnabled &&
+    input.releaseActionEnabled
+  ) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_ACTION_RENDERED_WHILE_CAPABILITY_DISABLED',
+      'Interactive release action rendered while release interaction is disabled'
+    );
+  }
+
+  if (
+    !input.releaseInteractionEnabled &&
+    input.mutationAttempted
+  ) {
+    throw new OperationalInvariantViolation(
+      'BETA_DISABLED_RELEASE_TRIGGERED_MUTATION',
+      'Release mutation attempted while release interaction is disabled'
+    );
+  }
+
+  if (
+    input.forbiddenResponseObserved &&
+    input.expectedInitializationWindow
+  ) {
+    throw new OperationalInvariantViolation(
+      'FORBIDDEN_RELEASE_MUTATION_DURING_EXPECTED_INITIALIZATION',
+      'Forbidden release response observed during expected initialization window'
+    );
+  }
+
+  if (
+    input.releaseActionEnabled &&
+    input.canCreateReleaseBatch === false &&
+    input.betaSettlementAllowed === false
+  ) {
+    throw new OperationalInvariantViolation(
+      'CAPABILITY_STATE_CONTRADICTS_RENDERED_ACTIONS',
+      'Release action enabled while beta settlement capability is disabled'
+    );
+  }
+}
+
 const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type ParticipantSetupGuidanceInvariantInput = {
@@ -502,6 +591,31 @@ export function assertAttributionConvergenceInvariants(
 export type FoundationalSemanticsInvariantInput = {
   foundationalSemanticsLayerImportViolation?: boolean;
 };
+
+export type OperationalPresentationInvariantInput = {
+  compensationSummaryOverflowingOperationalTable?: boolean;
+  attributionScopeMissingFromDraftAgreement?: boolean;
+};
+
+export function assertOperationalPresentationInvariants(
+  input: OperationalPresentationInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.compensationSummaryOverflowingOperationalTable) {
+    throw new OperationalInvariantViolation(
+      'COMPENSATION_SUMMARY_OVERFLOWING_OPERATIONAL_TABLE',
+      'Operational table earnings summary is too verbose for dense table surfaces'
+    );
+  }
+
+  if (input.attributionScopeMissingFromDraftAgreement) {
+    throw new OperationalInvariantViolation(
+      'ATTRIBUTION_SCOPE_MISSING_FROM_DRAFT_AGREEMENT',
+      'Draft agreement missing attribution catalog scope while attribution is enabled'
+    );
+  }
+}
 
 export function assertFoundationalSemanticsLayerInvariants(
   input: FoundationalSemanticsInvariantInput

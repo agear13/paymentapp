@@ -71,6 +71,7 @@ function buildHydratedParticipant(
       scopeLabel: compensation.scopeLabel,
       scopeDescription: compensation.scopeDescription,
       earningsPrimary: compensation.earningsPrimary,
+      earningsPrimaryCompact: compensation.earningsPrimaryCompact,
       earningsSecondary: compensation.earningsSecondary,
       earningsTitle: compensation.earningsTitle,
       eligibleCatalogItems: compensation.eligibleCatalogItems,

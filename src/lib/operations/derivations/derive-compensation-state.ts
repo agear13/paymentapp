@@ -2,6 +2,7 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import type { CommissionSource } from '@/lib/operations/contracts/participant-contract';
 import {
   deriveCommissionScope,
+  formatCompactOperationalEarnings,
   type CatalogItemRef,
   type CommissionScopeContext,
   type CommissionSettlementBasis,
@@ -20,6 +21,7 @@ export type DerivedCompensationState = {
   scopeLabel: string;
   scopeDescription: string;
   earningsPrimary: string;
+  earningsPrimaryCompact: string;
   earningsSecondary: string;
   earningsTitle: string;
   eligibleCatalogItems: CatalogItemRef[];
@@ -49,10 +51,11 @@ export function deriveCompensationState(
     scopeLabel: scope.scopeLabel,
     scopeDescription: scope.scopeDescription,
     earningsPrimary: scope.earningsPrimary,
+    earningsPrimaryCompact: formatCompactOperationalEarnings(scope, participant, context),
     earningsSecondary: scope.earningsSecondary,
     earningsTitle: scope.earningsTitle,
     eligibleCatalogItems: scope.eligibleCatalogItems,
-    earningsSummary: scope.earningsPrimary,
+    earningsSummary: formatCompactOperationalEarnings(scope, participant, context),
     storageState,
   };
 }

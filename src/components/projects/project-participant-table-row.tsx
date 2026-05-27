@@ -195,8 +195,8 @@ function ProjectParticipantTableRowComponent({
           title={hydrated.compensation.earningsTitle}
           onClick={openCompensation}
         >
-          <span className="text-sm font-medium text-foreground/90 whitespace-nowrap">
-            {hydrated.compensation.earningsPrimary}
+          <span className="text-sm font-medium text-foreground/90 break-words max-w-full leading-snug">
+            {hydrated.compensation.earningsPrimaryCompact}
           </span>
           <span className="text-xs text-muted-foreground leading-snug whitespace-normal">
             {hydrated.compensation.earningsSecondary}

@@ -44,10 +44,11 @@ export type HydratedParticipant = {
     scopeLabel: string;
     scopeDescription: string;
     earningsPrimary: string;
+    earningsPrimaryCompact: string;
     earningsSecondary: string;
     earningsTitle: string;
     eligibleCatalogItems: CatalogItemRef[];
-    /** @deprecated use earningsPrimary */
+    /** @deprecated use earningsPrimaryCompact in dense table surfaces */
     earningsSummary: string;
   };
 

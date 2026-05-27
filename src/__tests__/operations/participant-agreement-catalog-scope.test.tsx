@@ -94,6 +94,35 @@ describe('participant agreement catalog scope', () => {
     expect(container.textContent).toContain('All active catalog items available to customers');
   });
 
+  it('lists eligible services in agreement summary before approval', () => {
+    const { container } = render(
+      <ParticipantAttributionAgreementSummary
+        participant={participant}
+        commerce={participant.referralCommerce}
+        approved={false}
+        catalogItems={[
+          { id: 'svc-1', name: 'Early Bird Tickets' },
+          { id: 'svc-2', name: 'VIP Package' },
+        ]}
+        serviceRows={[
+          {
+            id: 'svc-1',
+            name: 'Early Bird Tickets',
+            customerPrice: 100,
+            currency: 'AUD',
+            revenueSharePct: 10,
+            estimatedEarnings: 10,
+            earningsLabel: 'A$10.00',
+          },
+        ]}
+      />
+    );
+    const text = container.textContent ?? '';
+    expect(text).toContain('Early Bird Tickets');
+    expect(text).toContain('activate after you approve');
+    expect(text).not.toContain('Active tracking is enabled');
+  });
+
   it('shows hybrid attribution in agreement summary without referralCommerce object', () => {
     const hybrid = applyCompensationProfileToParticipant(
       {

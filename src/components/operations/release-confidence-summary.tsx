@@ -64,7 +64,7 @@ export function ReleaseConfidenceSummary({
             missingItems={heldReasons}
           >
             <p className={opTypeBodySnug}>
-              {confidence.explainability.bullets[0] ??
+              {confidence.explainability?.bullets[0] ??
                 'Complete participant earnings and confirm funding before releasing payouts.'}
             </p>
           </ProgressiveOperationalPanel>

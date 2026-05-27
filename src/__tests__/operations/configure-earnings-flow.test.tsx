@@ -112,7 +112,7 @@ describe('configure earnings flow', () => {
     it('opens compensation locally for draft participant via earnings cell', () => {
       const onConfigure = jest.fn();
       renderRow(unconfiguredDraftParticipant(), onConfigure);
-      fireEvent.click(screen.getByRole('button', { name: /Earnings not configured/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Not configured/i }));
       expect(onConfigure).toHaveBeenCalledTimes(1);
       expect(onConfigure.mock.calls[0][0].name).toBe('Draft Alex');
     });
@@ -122,7 +122,7 @@ describe('configure earnings flow', () => {
       const p = prepareParticipantForCompensationEdit(unconfiguredDraftParticipant());
       expect(p.agreementLifecycle).toBe('NOT_CREATED');
       renderRow(p, onConfigure);
-      fireEvent.click(screen.getByRole('button', { name: /Earnings not configured/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Not configured/i }));
       expect(onConfigure).toHaveBeenCalledTimes(1);
     });
 
@@ -139,7 +139,7 @@ describe('configure earnings flow', () => {
         },
       };
       renderRow(p, onConfigure);
-      fireEvent.click(screen.getByRole('button', { name: /Earnings not configured/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Not configured/i }));
       expect(onConfigure).toHaveBeenCalledTimes(1);
       expect(onConfigure.mock.calls[0][0].compensationProfile?.customerAttributionEnabled).toBe(
         false

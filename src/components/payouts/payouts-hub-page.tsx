@@ -7,6 +7,7 @@ import { deduplicateAttentionItems } from '@/lib/operations/explainability/dedup
 import { deriveOperationalSeverity } from '@/lib/operations/severity';
 import { ReleaseConfidenceSummary } from '@/components/operations/release-confidence-summary';
 import { OperationalAttentionBoard } from '@/components/operations/operational-attention-board';
+import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
 import { SafeOperationalLink } from '@/components/operations/safe-operational-link';
 import { PayoutHowItWorksCard } from '@/components/payouts/payout-lifecycle-explainer';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
@@ -32,8 +33,15 @@ const HUB_LINKS = [
   { title: 'Payout releases', href: PAYOUTS_SETTLEMENTS_HREF, icon: History },
 ] as const;
 
-export function PayoutsHubPage() {
-  const { guidance, workspaceContext, activation } = useOperationalGuidance();
+function PayoutsHubContent({
+  guidance,
+  workspaceContext,
+  activation,
+}: {
+  guidance: ReturnType<typeof useOperationalGuidance>['guidance'];
+  workspaceContext: ReturnType<typeof useOperationalGuidance>['workspaceContext'];
+  activation: ReturnType<typeof useOperationalGuidance>['activation'];
+}) {
   const primary = guidance.actions[0];
 
   const attentionItems = deduplicateAttentionItems(
@@ -47,14 +55,7 @@ export function PayoutsHubPage() {
   );
 
   return (
-    <div className={opPage()}>
-      <header>
-        <h1 className={opTypePageTitle}>Payouts</h1>
-        <p className={cn(opTypeBodySnug, 'mt-1 max-w-xl')}>
-          Coordinate what is owed, what is ready, and what has been released.
-        </p>
-      </header>
-
+    <>
       <div className={opSurface('raised', 'space-y-3')}>
         <ReleaseConfidenceSummary confidence={guidance.releaseConfidence} compact calmMode />
         {primary ? (
@@ -106,6 +107,42 @@ export function PayoutsHubPage() {
         emptyMessage="Release, funding, and coordination events appear here as payouts progress."
         defaultOpen={false}
       />
+    </>
+  );
+}
+
+export function PayoutsHubPage() {
+  const {
+    guidance,
+    workspaceContext,
+    activation,
+    loading,
+    operationalOnboarding,
+    operationalInitialization,
+  } = useOperationalGuidance();
+
+  return (
+    <div className={opPage()}>
+      <header>
+        <h1 className={opTypePageTitle}>Payouts</h1>
+        <p className={cn(opTypeBodySnug, 'mt-1 max-w-xl')}>
+          Coordinate what is owed, what is ready, and what has been released.
+        </p>
+      </header>
+
+      <OperationalSettlementInitialization
+        onboarding={operationalOnboarding}
+        initialization={operationalInitialization}
+        loading={loading}
+      >
+        <div className="space-y-6">
+          <PayoutsHubContent
+            guidance={guidance}
+            workspaceContext={workspaceContext}
+            activation={activation}
+          />
+        </div>
+      </OperationalSettlementInitialization>
     </div>
   );
 }

@@ -73,7 +73,7 @@ function uniqueBlockers(causes: OperationalBlockingCause[]): OperationalBlocking
 
 /** True when funding + all participants converge to release-ready through the graph. */
 export function isSettlementReleaseReady(snapshot: OperationalCoordinationSnapshot): boolean {
-  const fundingReady = !snapshot.funding.stage?.blockerLabel;
+  const fundingReady = !snapshot.funding?.stage?.blockerLabel;
   const allParticipantsReady =
     snapshot.summary.participantCount > 0 &&
     snapshot.summary.releaseReadyCount === snapshot.summary.participantCount;

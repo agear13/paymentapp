@@ -12,9 +12,10 @@ import {
   deriveAgreementEligibleServicesCopy,
   deriveCommissionLinkRoutingLabel,
   deriveCommissionScope,
-  isCatalogScopedCommission,
+  isAllActiveCatalogSource,
+  resolveAgreementCatalogItems,
 } from '@/lib/operations/derivations/commission-scope';
-import { isAttributionEnabled } from '@/lib/operations/truth/attribution-eligibility';
+import { isAttributionEnabled, isCatalogScopedCommission } from '@/lib/operations/truth/attribution-eligibility';
 
 type Props = {
   participant?: DemoParticipant;
@@ -37,7 +38,15 @@ export function ParticipantAttributionAgreementSummary({
   workspaceCurrency,
 }: Props) {
   const subject = participant ?? ({ referralCommerce: commerce } as DemoParticipant);
-  const scope = deriveCommissionScope(subject, { catalogItems, workspaceCurrency });
+  const resolvedCatalogItems = resolveAgreementCatalogItems(
+    subject,
+    (serviceRows ?? []).map((row) => ({ id: row.id, name: row.name })),
+    { catalogItems, workspaceCurrency }
+  );
+  const scope = deriveCommissionScope(subject, {
+    catalogItems: resolvedCatalogItems,
+    workspaceCurrency,
+  });
   const catalogEnabled = isCatalogScopedCommission(subject);
   const attributionEnabled = isAttributionEnabled(subject);
 
@@ -61,7 +70,7 @@ export function ParticipantAttributionAgreementSummary({
     serviceRows ??
     (commerce?.commissionMode === 'referral_commerce'
       ? buildScopedServiceCommissionRows({
-          services: catalogItems.map((s) => ({
+          services: resolvedCatalogItems.map((s) => ({
             id: s.id,
             name: s.name,
             price: 0,
@@ -78,61 +87,64 @@ export function ParticipantAttributionAgreementSummary({
   const showAll =
     allServicesNote ??
     (scope.isAllActiveCatalog ||
+      isAllActiveCatalogSource(subject) ||
       (commerce?.commissionMode === 'referral_commerce' &&
         (!commerce.enabledServiceIds || commerce.enabledServiceIds.length === 0)));
   const eligibleCopy = deriveAgreementEligibleServicesCopy(
     subject,
-    { catalogItems },
+    { catalogItems: resolvedCatalogItems },
     rows.map((r) => ({ id: r.id, name: r.name }))
   );
-  const linkRouting = deriveCommissionLinkRoutingLabel(subject, { catalogItems });
+  const linkRouting = approved
+    ? deriveCommissionLinkRoutingLabel(subject, { catalogItems: resolvedCatalogItems })
+    : null;
 
   return (
     <div className="rounded-md border p-3 bg-background space-y-3 text-sm">
       <p className="font-medium">Customer attribution</p>
       <p className="text-xs text-muted-foreground leading-relaxed">
-        Participant earns from customer purchases on qualifying catalog items.
+        You earn commission only on qualifying customer purchases — not on total project or deal
+        value. Customers do not see your commission terms.
       </p>
       {!approved ? (
         <p className="text-muted-foreground leading-relaxed">
-          Customer attribution activates after approval. Your trackable customer payment link will be
-          issued once you approve participation.
+          Review the eligible services below before approving. Customer attribution and your
+          trackable payment link activate after you approve participation.
         </p>
       ) : (
-        <>
-          <p className="text-muted-foreground leading-relaxed">
-            Active tracking is enabled on your customer payment link. You earn{' '}
-            <span className="font-medium text-foreground">{pctLabel} commission</span> on qualifying
-            catalog purchases only — not on total project or deal value. Customers do not see your
-            commission terms.
-          </p>
-          <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-              Eligible services & attribution scope
-            </p>
-            <p className="text-xs font-medium text-foreground/80 mb-2">{eligibleCopy.heading}</p>
-            {eligibleCopy.items.length > 0 ? (
-              <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
-                {eligibleCopy.items.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-muted-foreground">{eligibleCopy.emptyMessage}</p>
-            )}
-            {rows.length > 0 && !showAll ? (
-              <div className="mt-3">
-                <ParticipantServiceCommissionTable rows={rows} showAllServicesNote={showAll} />
-              </div>
-            ) : null}
-          </div>
-          {linkRouting ? (
-            <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/30 pt-2">
-              {linkRouting}
-            </p>
-          ) : null}
-        </>
+        <p className="text-muted-foreground leading-relaxed">
+          Active tracking is enabled on your customer payment link. You earn{' '}
+          <span className="font-medium text-foreground">{pctLabel} commission</span> on the qualifying
+          catalog purchases listed below.
+        </p>
       )}
+
+      <div>
+        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+          Eligible services & attribution scope
+        </p>
+        <p className="text-xs font-medium text-foreground/80 mb-2">{eligibleCopy.heading}</p>
+        {eligibleCopy.items.length > 0 ? (
+          <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
+            {eligibleCopy.items.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-muted-foreground">{eligibleCopy.emptyMessage}</p>
+        )}
+        {rows.length > 0 && !showAll ? (
+          <div className="mt-3">
+            <ParticipantServiceCommissionTable rows={rows} showAllServicesNote={showAll} />
+          </div>
+        ) : null}
+      </div>
+
+      {linkRouting ? (
+        <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/30 pt-2">
+          {linkRouting}
+        </p>
+      ) : null}
     </div>
   );
 }

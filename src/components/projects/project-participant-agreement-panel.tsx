@@ -32,12 +32,10 @@ import {
 import { deriveAttributionStatus } from '@/lib/projects/participant-entitlement';
 import {
   deriveCommissionScope,
+  isAllActiveCatalogSource,
   isCatalogScopedCommission,
+  resolveAgreementCatalogItems,
 } from '@/lib/operations/derivations/commission-scope';
-import {
-  hydrateEligibleCatalogServices,
-  catalogRefsFromHydrated,
-} from '@/lib/operations/hydration/hydrate-eligible-catalog-services';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
 import {
@@ -107,21 +105,13 @@ export function ProjectParticipantAgreementPanel({
   const [scopedServiceRows, setScopedServiceRows] = React.useState(initialScopedServiceRows);
   const [issuingCommerce, setIssuingCommerce] = React.useState(false);
 
-  const hydratedServices = React.useMemo(
-    () =>
-      hydrateEligibleCatalogServices(
-        participant.compensationProfile?.commissionServiceIds ?? [],
-        scopedServiceRows.map((r) => ({
-          id: r.id,
-          name: r.name,
-          currency: r.currency,
-        }))
-      ),
-    [participant.compensationProfile?.commissionServiceIds, scopedServiceRows]
-  );
   const catalogItems = React.useMemo(
-    () => catalogRefsFromHydrated(hydratedServices),
-    [hydratedServices]
+    () =>
+      resolveAgreementCatalogItems(
+        participant,
+        scopedServiceRows.map((row) => ({ id: row.id, name: row.name }))
+      ),
+    [participant, scopedServiceRows]
   );
   const attributionEligible = canGenerateAttributionLink(participant, { catalogItems });
   const attributionExplanation = deriveAttributionExplanation(participant, { catalogItems });
@@ -345,8 +335,9 @@ export function ProjectParticipantAgreementPanel({
           approved={approved}
           catalogItems={scopedServiceRows.map((r) => ({ id: r.id, name: r.name }))}
           allServicesNote={
-            !participant.referralCommerce?.enabledServiceIds?.length &&
-            participant.referralCommerce?.commissionMode === 'referral_commerce'
+            isAllActiveCatalogSource(participant) ||
+            (!participant.referralCommerce?.enabledServiceIds?.length &&
+              participant.referralCommerce?.commissionMode === 'referral_commerce')
           }
         />
 

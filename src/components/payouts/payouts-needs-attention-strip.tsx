@@ -15,6 +15,7 @@ import {
   PAYOUTS_SETTLEMENTS_HREF,
 } from '@/lib/navigation/operator-nav';
 import { cn } from '@/lib/utils';
+import { useReleaseInteractionCapability } from '@/hooks/use-release-interaction-capability';
 
 function InlineSegment({
   href,
@@ -47,6 +48,7 @@ function Separator() {
 export function PayoutsNeedsAttentionStrip() {
   const { organizationId } = useOrganization();
   const { currency: orgCurrency } = useOrganizationCurrency();
+  const releaseInteraction = useReleaseInteractionCapability();
   const [loading, setLoading] = React.useState(true);
   const [summary, setSummary] = React.useState(computePayoutAttentionSummary([]));
   const [lastReleaseAt, setLastReleaseAt] = React.useState<string | null>(null);
@@ -59,7 +61,7 @@ export function PayoutsNeedsAttentionStrip() {
       try {
         const [obligationsRes, batchesRes] = await Promise.all([
           fetch('/api/deal-network-pilot/obligations', { credentials: 'include' }),
-          organizationId
+          organizationId && releaseInteraction.canQueryReleaseHistory
             ? fetch(`/api/payout-batches?organizationId=${organizationId}`)
             : Promise.resolve(null),
         ]);
@@ -101,7 +103,7 @@ export function PayoutsNeedsAttentionStrip() {
     return () => {
       cancelled = true;
     };
-  }, [organizationId]);
+  }, [organizationId, releaseInteraction.canQueryReleaseHistory]);
 
   const fundingLabel =
     summary.unfundedCount === 1

@@ -104,7 +104,7 @@ function countStaleObligationRows(snapshot: OperationalCoordinationSnapshot): nu
   for (const row of snapshot.obligations) {
     if (!row.participantId || !row.allocationStatus) continue;
     const participant = snapshot.participants.find(
-      (p) => p.participant.id === row.participantId
+      (p) => p.participant?.id === row.participantId
     )?.participant;
     if (!participant) continue;
     const approval = deriveObligationApprovalState({
@@ -125,7 +125,7 @@ function fundingBlockerDetail(
   snapshot: OperationalCoordinationSnapshot,
   projectId?: string | null
 ): OperationalReleaseBlockerDetail | null {
-  const label = snapshot.funding.stage?.blockerLabel;
+  const label = snapshot.funding?.stage?.blockerLabel;
   if (!label) return null;
 
   const isReconciliation = /allocation|reserved|settled/i.test(label);
@@ -237,7 +237,7 @@ export function deriveOperationalReleaseBlockers(
 
   for (const p of snapshot.participants) {
     const participant = normalizeParticipantEntity(p.participant);
-    if (p.readinessHierarchy.releaseReady) continue;
+    if (p.readinessHierarchy?.releaseReady) continue;
 
     for (const blocker of deriveOperationalBlocker(participant, projectId ?? undefined)) {
       details.push(detailFromOperationalBlocker(blocker, projectId));

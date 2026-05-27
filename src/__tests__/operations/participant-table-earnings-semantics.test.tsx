@@ -57,7 +57,7 @@ describe('participant table earnings semantics', () => {
       { id: 'svc-early', name: 'Early Bird Tickets' },
     ]);
     const text = container.textContent ?? '';
-    expect(text).toContain('10% catalog commission');
+    expect(text).toContain('10% catalog');
     expect(text).toContain('Eligible: Early Bird Tickets');
     expect(text).not.toMatch(/revenue share/i);
     expect(text).not.toMatch(/deal value/i);

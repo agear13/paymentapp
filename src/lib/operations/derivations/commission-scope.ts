@@ -1,6 +1,7 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { formatFixedPayoutLine } from '@/lib/projects/participant-compensation-copy';
+import { formatCurrency } from '@/lib/formatters/format-currency';
 import {
   isCatalogScopedCommission,
   isAllActiveCatalogSource,
@@ -323,6 +324,88 @@ export function deriveCommissionScope(
     isAllActiveCatalog: false,
     percentage: pct,
   };
+}
+
+const OPERATIONAL_TABLE_EARNINGS_MAX_LENGTH = 48;
+
+function compactFixedAmountLabel(amount: number, currency: string): string {
+  return `${formatCurrency(amount, currency, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })} fixed`;
+}
+
+/** Dense table-surface earnings label — preserves meaning without verbose phrasing. */
+export function formatCompactOperationalEarnings(
+  scope: CommissionScope,
+  participant: DemoParticipant,
+  context: CommissionScopeContext = {}
+): string {
+  const profile = profileOf(participant);
+  const currency = context.workspaceCurrency ?? DEFAULT_WORKSPACE_CURRENCY;
+  const pct = scope.percentage;
+
+  if (scope.settlementBasis === 'qualifying_catalog_purchases') {
+    const pctPart = pct != null ? `${pct}% commission` : 'Catalog commission';
+    if (profile?.compensationType === 'HYBRID' && profile.fixedAmount != null) {
+      return `${pctPart} + ${compactFixedAmountLabel(profile.fixedAmount, currency)}`;
+    }
+    return pct != null ? `${pct}% catalog` : 'Catalog commission';
+  }
+
+  if (scope.settlementBasis === 'hybrid') {
+    const parts: string[] = [];
+    if (pct != null) parts.push(`${pct}%`);
+    if (profile?.fixedAmount != null && Number.isFinite(profile.fixedAmount)) {
+      parts.push(compactFixedAmountLabel(profile.fixedAmount, currency));
+    }
+    return parts.length > 0 ? `Hybrid · ${parts.join(' + ')}` : 'Hybrid';
+  }
+
+  if (scope.settlementBasis === 'project_settlement_allocation') {
+    return pct != null ? `${pct}% revenue share` : 'Revenue share';
+  }
+
+  if (scope.settlementBasis === 'fixed_fee') {
+    const amount = profile?.fixedAmount ?? participant.commissionValue ?? 0;
+    return compactFixedAmountLabel(amount, currency);
+  }
+
+  if (scope.settlementBasis === 'unpaid') return 'No payout';
+  if (scope.settlementBasis === 'not_configured') return 'Not configured';
+
+  return scope.scopeLabel;
+}
+
+export function isCompensationSummaryOverflowingOperationalTable(summary: string): boolean {
+  if (summary.includes('Fixed payout:')) return true;
+  if (summary.length > OPERATIONAL_TABLE_EARNINGS_MAX_LENGTH) return true;
+  return false;
+}
+
+/** Resolve catalog items for agreement review — independent of approval state. */
+export function resolveAgreementCatalogItems(
+  participant: DemoParticipant,
+  scopedRows: Array<{ id: string; name: string }> = [],
+  context: CommissionScopeContext = {}
+): CatalogItemRef[] {
+  if (!isCatalogScopedCommission(participant)) return [];
+
+  const rowRefs = scopedRows
+    .filter((row) => row.id && row.name)
+    .map((row) => ({ id: row.id, name: row.name }));
+
+  if (isAllActiveCatalogSource(participant)) {
+    if (rowRefs.length > 0) return rowRefs;
+    return context.catalogItems ?? [];
+  }
+
+  const eligible = deriveCommissionEligibleCatalogItems(participant, {
+    ...context,
+    catalogItems: rowRefs.length > 0 ? rowRefs : context.catalogItems,
+  });
+  if (eligible.length > 0) return eligible;
+  return rowRefs;
 }
 
 export function deriveCompensationPreviewText(
