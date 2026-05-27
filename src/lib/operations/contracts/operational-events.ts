@@ -32,6 +32,12 @@ export type OperationalEvent = {
   timestamp: string;
   source: 'server' | 'client';
   payload?: Record<string, unknown>;
+  /** Replay-safe correlation identifier when emitted by orchestration. */
+  correlationId?: string;
+  /** Assigned during deterministic replay — do not set at mutation sites. */
+  sequence?: number;
+  /** Stable dedupe key — assigned during replay normalization. */
+  dedupeKey?: string;
 };
 
 export type OperationalMutationKind =

@@ -1,5 +1,13 @@
 /**
  * Operator obligations — canonical route under Payouts (not gated partners layout).
- * Reuses the deal-network obligations UI and APIs unchanged.
  */
-export { default } from '../../partners/deal-network/obligations/page';
+import DealNetworkObligationsPage from '../../partners/deal-network/obligations/page';
+import { ProjectSectionErrorBoundary } from '@/components/projects/project-section-error-boundary';
+
+export default function PayoutsObligationsPage() {
+  return (
+    <ProjectSectionErrorBoundary sectionTitle="Payout obligations" boundaryScope="payouts">
+      <DealNetworkObligationsPage />
+    </ProjectSectionErrorBoundary>
+  );
+}

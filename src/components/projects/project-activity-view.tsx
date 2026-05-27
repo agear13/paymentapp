@@ -3,6 +3,8 @@
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
+import { OperationalTimeline } from '@/components/operations/operational-timeline';
+import { useOperationalTimelineProjection } from '@/hooks/use-operational-timeline-projection';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export function ProjectActivityView() {
@@ -11,6 +13,10 @@ export function ProjectActivityView() {
     scope: 'project',
     project: deal ?? undefined,
     participants: projectParticipants,
+    enabled: Boolean(deal),
+  });
+  const timelineProjection = useOperationalTimelineProjection({
+    projectId,
     enabled: Boolean(deal),
   });
 
@@ -32,7 +38,8 @@ export function ProjectActivityView() {
             Agreement, funding, obligation, and release events from the coordination graph.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          <OperationalTimeline events={timelineProjection.timeline} maxItems={12} />
           <OperationalActivitySection
             projectId={projectId}
             title="Project timeline"

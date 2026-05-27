@@ -4,6 +4,10 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Plus, RefreshCw, Download, ChevronRight } from 'lucide-react';
 import { useOrganization } from '@/hooks/use-organization';
+import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
+import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,34 +42,53 @@ interface Batch {
 
 export default function PartnerPayoutsPage() {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
+  const { currency: orgCurrency } = useOrganizationCurrency();
+  const {
+    settlementInitialization,
+    releaseInteraction,
+    operationalOnboarding,
+    operationalInitialization,
+    loading: activationLoading,
+    guidance,
+    graphSnapshotConverged,
+  } = useOperationalCoordinationState();
   const [batches, setBatches] = React.useState<Batch[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [createLoading, setCreateLoading] = React.useState(false);
-  const [createCurrency, setCreateCurrency] = React.useState('AUD');
+  const [createCurrency, setCreateCurrency] = React.useState(orgCurrency);
   const [createThreshold, setCreateThreshold] = React.useState('50');
   const [createRoleFilter, setCreateRoleFilter] = React.useState<string>(''); // '' = all, CONSULTANT (Partner 1), BD_PARTNER (Partner 2)
 
+  React.useEffect(() => {
+    setCreateCurrency(orgCurrency);
+  }, [orgCurrency]);
+
   const fetchBatches = React.useCallback(async () => {
-    if (!organizationId) return;
+    if (!organizationId || !releaseInteraction.canQueryReleaseHistory) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/payout-batches?organizationId=${organizationId}`);
       const data = await res.json();
+      if (res.status === 403) return;
       if (!res.ok) throw new Error(data.error || 'Failed to fetch');
       setBatches(data.data || []);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load batches');
+      if (releaseInteraction.releaseInteractionEnabled) {
+        toast.error(err instanceof Error ? err.message : 'Failed to load batches');
+      }
     } finally {
       setLoading(false);
     }
-  }, [organizationId]);
+  }, [organizationId, releaseInteraction.canQueryReleaseHistory, releaseInteraction.releaseInteractionEnabled]);
 
   React.useEffect(() => {
-    fetchBatches();
-  }, [fetchBatches]);
+    if (releaseInteraction.canQueryReleaseHistory) {
+      void fetchBatches();
+    }
+  }, [fetchBatches, releaseInteraction.canQueryReleaseHistory]);
 
   const handleCreateBatch = async () => {
-    if (!organizationId) return;
+    if (!organizationId || !releaseInteraction.canCreateReleaseBatch) return;
     const threshold = parseFloat(createThreshold);
     if (isNaN(threshold) || threshold < 0) {
       toast.error('Enter a valid minimum threshold');
@@ -86,11 +109,14 @@ export default function PartnerPayoutsPage() {
         }),
       });
       const data = await res.json();
+      if (res.status === 403) return;
       if (!res.ok) throw new Error(data.error || data.message || 'Failed to create batch');
       toast.success('Payout batch created');
-      fetchBatches();
+      void fetchBatches();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create batch');
+      if (releaseInteraction.releaseInteractionEnabled) {
+        toast.error(err instanceof Error ? err.message : 'Failed to create batch');
+      }
     } finally {
       setCreateLoading(false);
     }
@@ -123,6 +149,23 @@ export default function PartnerPayoutsPage() {
     );
   }
 
+  if (settlementInitialization.showInitializationShell) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold tracking-tight">Payouts</h1>
+        <OperationalSettlementInitialization
+          onboarding={operationalOnboarding}
+          initialization={operationalInitialization}
+          loading={activationLoading}
+          graphSnapshotConverged={graphSnapshotConverged}
+          nextActions={guidance.actions}
+        >
+          {null}
+        </OperationalSettlementInitialization>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -134,6 +177,10 @@ export default function PartnerPayoutsPage() {
           Compliance only applies when a partner wants to receive their payout. Until then, we track attribution and earnings in the ledger—no compliance step required to earn.
         </p>
       </div>
+
+      {!releaseInteraction.releaseInteractionEnabled ? (
+        <ReleaseInteractionNotice state={releaseInteraction} />
+      ) : null}
 
       {/* Partners & compliance (demo) */}
       <Card>
@@ -241,7 +288,10 @@ export default function PartnerPayoutsPage() {
                   </Select>
                 </div>
               </div>
-              <Button onClick={handleCreateBatch} disabled={createLoading}>
+              <Button
+                onClick={handleCreateBatch}
+                disabled={createLoading || !releaseInteraction.canCreateReleaseBatch}
+              >
                 {createLoading ? 'Creating...' : (
                   <>
                     <Plus className="h-4 w-4 mr-2" />
@@ -253,7 +303,12 @@ export default function PartnerPayoutsPage() {
 
             <TabsContent value="batches" className="space-y-4 mt-0">
               <div className="flex justify-end">
-                <Button variant="outline" size="icon" onClick={fetchBatches} disabled={loading}>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => void fetchBatches()}
+                  disabled={loading || !releaseInteraction.canQueryReleaseHistory}
+                >
                   <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               </div>

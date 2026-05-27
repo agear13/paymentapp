@@ -6,6 +6,7 @@ import {
   summarizeProjectReadinessGaps,
 } from '@/lib/operations/readiness/participant-readiness';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
+import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-operational-workspace-currency';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 
 export type ReleaseConfidenceInput = {
@@ -27,7 +28,10 @@ function scoreToLevel(score: number, blocked: boolean): ReleaseConfidenceLevel {
  * Does NOT execute payout logic or alter settlement math.
  */
 export function deriveReleaseConfidence(input: ReleaseConfidenceInput): ReleaseConfidenceSnapshot {
-  const currency = input.treasury?.currency ?? input.currency ?? input.workspace.defaultCurrency ?? 'AUD';
+  const currency = resolveOperationalWorkspaceCurrency({
+    projectCurrency: input.treasury?.currency ?? input.currency,
+    workspaceDefaultCurrency: input.workspace.defaultCurrency,
+  });
   const participants = input.participants ?? [];
   const gaps = summarizeProjectReadinessGaps(participants);
   const payoutReady = countPayoutReadyParticipants(participants);

@@ -75,8 +75,8 @@ function uniqueBlockers(causes: OperationalBlockingCause[]): OperationalBlocking
 export function isSettlementReleaseReady(snapshot: OperationalCoordinationSnapshot): boolean {
   const fundingReady = !snapshot.funding?.stage?.blockerLabel;
   const allParticipantsReady =
-    snapshot.summary.participantCount > 0 &&
-    snapshot.summary.releaseReadyCount === snapshot.summary.participantCount;
+    (snapshot.summary?.participantCount ?? 0) > 0 &&
+    (snapshot.summary?.releaseReadyCount ?? 0) === (snapshot.summary?.participantCount ?? 0);
   return fundingReady && allParticipantsReady;
 }
 
@@ -99,7 +99,7 @@ export function deriveOperationalBlockingActions(
   });
   const blockers = uniqueBlockers(detailedBlockers.map(blockerFromDetail));
   const settlementReady = isSettlementReleaseReady(snapshot);
-  const releaseReady = snapshot.summary.releaseReadyCount > 0;
+  const releaseReady = (snapshot.summary?.releaseReadyCount ?? 0) > 0;
   const hasBlockers = blockers.length > 0;
   const blockingLayer = hasBlockers ? blockers[0]?.layer ?? null : null;
   const releaseBlockedReason = hasBlockers ? detailedBlockers[0]?.reason ?? null : null;
@@ -115,6 +115,8 @@ export function deriveOperationalBlockingActions(
     )
   ).map((c) => c.explanation);
 
+  const releaseReadyCount = snapshot.summary?.releaseReadyCount ?? 0;
+
   const readinessExplanation = {
     headline:
       settlementReady || (releaseReady && !hasBlockers)
@@ -127,21 +129,21 @@ export function deriveOperationalBlockingActions(
     bullets:
       settlementReady || (releaseReady && !hasBlockers)
         ? [
-            `${snapshot.summary.releaseReadyCount} participant${snapshot.summary.releaseReadyCount === 1 ? '' : 's'} ready for release`,
+            `${releaseReadyCount} participant${releaseReadyCount === 1 ? '' : 's'} ready for release`,
           ]
         : hasBlockers
           ? releaseBlockerSummaryLines(detailedBlockers)
           : releaseReady
-            ? [`${snapshot.summary.releaseReadyCount} participant${snapshot.summary.releaseReadyCount === 1 ? '' : 's'} ready for release`]
+            ? [`${releaseReadyCount} participant${releaseReadyCount === 1 ? '' : 's'} ready for release`]
             : ['Continue configuring participants and funding'],
   };
 
   const nextActions = detailedBlockers.slice(0, 4).map(actionFromDetail);
-  const fundingBlocker = snapshot.funding.stage?.blockerLabel;
+  const fundingBlocker = snapshot.funding?.stage?.blockerLabel;
 
   if (typeof window === 'undefined') {
     assertGraphGuidanceInvariants({
-      releaseReadyCount: snapshot.summary?.releaseReadyCount ?? 0,
+      releaseReadyCount,
       blockerCount: blockers.length,
       fundingBlocker,
       guidanceHeadline: readinessExplanation.headline,
@@ -149,7 +151,7 @@ export function deriveOperationalBlockingActions(
     assertSettlementReleaseInvariants({
       settlementReady,
       releaseBlocked: hasBlockers,
-      releaseReadyCount: snapshot.summary.releaseReadyCount,
+      releaseReadyCount,
       guidanceHeadline: readinessExplanation.headline,
       fundingBlocker,
     });

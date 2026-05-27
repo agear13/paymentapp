@@ -11,6 +11,7 @@ import { OperationalSettlementInitialization } from '@/components/operations/ope
 import { SafeOperationalLink } from '@/components/operations/safe-operational-link';
 import { PayoutHowItWorksCard } from '@/components/payouts/payout-lifecycle-explainer';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
+import { OperationalTimeline } from '@/components/operations/operational-timeline';
 import { opTypeBodySnug, opTypePageTitle } from '@/lib/design/operational-typography';
 import { opPage } from '@/lib/design/operational-spacing';
 import { opCollapsibleTrigger, opDivider, opSurface } from '@/lib/design/operational-surfaces';
@@ -26,6 +27,7 @@ import {
 } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ProjectSectionErrorBoundary } from '@/components/projects/project-section-error-boundary';
 
 const HUB_LINKS = [
   { title: 'Obligations', href: PAYOUTS_OBLIGATIONS_HREF, icon: FileCheck },
@@ -102,6 +104,16 @@ function PayoutsHubContent({
         </CollapsibleContent>
       </Collapsible>
 
+      <Collapsible>
+        <CollapsibleTrigger className={opCollapsibleTrigger}>
+          Coordination timeline
+          <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200" />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-3 data-[state=open]:animate-in data-[state=closed]:animate-out duration-200">
+          <OperationalTimeline events={guidance.timeline} maxItems={6} />
+        </CollapsibleContent>
+      </Collapsible>
+
       <OperationalActivitySection
         title="Payout activity"
         emptyMessage="Release, funding, and coordination events appear here as payouts progress."
@@ -119,30 +131,35 @@ export function PayoutsHubPage() {
     loading,
     operationalOnboarding,
     operationalInitialization,
+    graphSnapshotConverged,
   } = useOperationalGuidance();
 
   return (
-    <div className={opPage()}>
-      <header>
-        <h1 className={opTypePageTitle}>Payouts</h1>
-        <p className={cn(opTypeBodySnug, 'mt-1 max-w-xl')}>
-          Coordinate what is owed, what is ready, and what has been released.
-        </p>
-      </header>
+    <ProjectSectionErrorBoundary sectionTitle="Payouts" boundaryScope="payouts">
+      <div className={opPage()}>
+        <header>
+          <h1 className={opTypePageTitle}>Payouts</h1>
+          <p className={cn(opTypeBodySnug, 'mt-1 max-w-xl')}>
+            Coordinate what is owed, what is ready, and what has been released.
+          </p>
+        </header>
 
-      <OperationalSettlementInitialization
-        onboarding={operationalOnboarding}
-        initialization={operationalInitialization}
-        loading={loading}
-      >
-        <div className="space-y-6">
-          <PayoutsHubContent
-            guidance={guidance}
-            workspaceContext={workspaceContext}
-            activation={activation}
-          />
-        </div>
-      </OperationalSettlementInitialization>
-    </div>
+        <OperationalSettlementInitialization
+          onboarding={operationalOnboarding}
+          initialization={operationalInitialization}
+          loading={loading}
+          graphSnapshotConverged={graphSnapshotConverged}
+          nextActions={guidance.actions.slice(0, 3)}
+        >
+          <div className="space-y-6">
+            <PayoutsHubContent
+              guidance={guidance}
+              workspaceContext={workspaceContext}
+              activation={activation}
+            />
+          </div>
+        </OperationalSettlementInitialization>
+      </div>
+    </ProjectSectionErrorBoundary>
   );
 }

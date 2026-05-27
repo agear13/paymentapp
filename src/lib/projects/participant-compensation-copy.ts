@@ -32,8 +32,11 @@ export function formatRevenueShareLine(pct: number, currency?: string): string {
   return currency ? `${base} (${currency})` : base;
 }
 
-export function formatParticipationEarningsSummary(participant: DemoParticipant): string {
-  const currency = 'AUD';
+export function formatParticipationEarningsSummary(
+  participant: DemoParticipant,
+  workspaceCurrency?: string
+): string {
+  const currency = workspaceCurrency ?? DEFAULT_WORKSPACE_CURRENCY;
   if (participant.participationModel === 'fixed_payout') {
     return formatFixedPayoutLine(participant.commissionValue, currency);
   }

@@ -17,6 +17,7 @@ import {
   formatFixedPayoutLine,
   formatRevenueShareLine,
 } from '@/lib/projects/participant-compensation-copy';
+import { DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
 import { draftParticipantDefaults } from '@/lib/operations/guards/hydration-guards';
 import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
 
@@ -221,11 +222,14 @@ export function payoutStatusLabel(status: ParticipantPayoutStatus): string {
   }
 }
 
-export function earningsStructureSummary(participant: DemoParticipant): string {
+export function earningsStructureSummary(
+  participant: DemoParticipant,
+  workspaceCurrency?: string
+): string {
   if (!participant?.compensationProfile?.configured && participant?.commissionValue === 0) {
     return 'Earnings not configured';
   }
-  const currency = 'AUD';
+  const currency = workspaceCurrency ?? DEFAULT_WORKSPACE_CURRENCY;
   if (participant.participationModel === 'fixed_payout') {
     return formatFixedPayoutLine(participant.commissionValue, currency);
   }

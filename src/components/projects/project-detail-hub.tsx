@@ -12,6 +12,7 @@ import {
   RevenueSettlementChip,
 } from '@/components/operations/operational-chips';
 import { safeProjectState } from '@/lib/operations/guards/hydration-guards';
+import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-operational-workspace-currency';
 import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import { OperationalGraphDiagnostics } from '@/components/operations/operational-graph-diagnostics';
@@ -46,7 +47,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
     invalidate,
   } = useProjectWorkspace();
   const [treasury, setTreasury] = React.useState<ProjectTreasurySummary | null>(null);
-  const { guidance, graph } = useOperationalGuidance({
+  const { guidance, graph, workspaceContext } = useOperationalGuidance({
     scope: 'project',
     project: deal ?? undefined,
     participants: projectParticipants,
@@ -104,7 +105,10 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
   const participantsHref = projectParticipantsPath(projectId);
   const fundingHref = projectFundingPath(projectId);
   const payoutsHref = projectPayoutsPath(projectId);
-  const currency = treasury?.currency ?? 'AUD';
+  const currency = resolveOperationalWorkspaceCurrency({
+    projectCurrency: treasury?.currency,
+    workspaceDefaultCurrency: workspaceContext.defaultCurrency,
+  });
   const opState = safeProjectOperationalState(deal, projectParticipants, {
     revenueConfigured: treasury?.hasFundingSources ?? false,
     obligationCount: summary.treasury?.obligationsReady ?? 0,

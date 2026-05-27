@@ -6,12 +6,17 @@ import { Button } from '@/components/ui/button';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import type { OperationalOnboardingState } from '@/lib/operations/onboarding/operational-onboarding-phases';
 import type { OperationalInitializationSnapshot } from '@/lib/operations/onboarding/operational-transition-types';
-import { onboardingInitializationProgress } from '@/lib/operations/onboarding/operational-onboarding-phases';
+import type { OperationalAction } from '@/lib/operations/explainability/types';
+import { deriveSettlementInitializationState } from '@/lib/operations/coordination/derive-settlement-initialization-state';
+import { OperationalMilestoneStrip } from '@/components/operations/operational-milestone-strip';
+import { useOperationalTimelineProjection } from '@/hooks/use-operational-timeline-projection';
 
 type OperationalSettlementInitializationProps = {
   onboarding: OperationalOnboardingState | null | undefined;
   initialization?: OperationalInitializationSnapshot | null;
   loading?: boolean;
+  graphSnapshotConverged?: boolean;
+  nextActions?: OperationalAction[];
   children: React.ReactNode;
 };
 
@@ -20,16 +25,28 @@ export function OperationalSettlementInitialization({
   onboarding,
   initialization,
   loading = false,
+  graphSnapshotConverged = false,
+  nextActions = [],
   children,
 }: OperationalSettlementInitializationProps) {
   const [refreshing, setRefreshing] = React.useState(false);
   const [recoveryError, setRecoveryError] = React.useState<string | null>(null);
 
+  const settlementInit = deriveSettlementInitializationState({
+    activationLoading: loading,
+    operationalOnboarding: onboarding,
+    operationalInitialization: initialization,
+    graphSnapshotConverged,
+    nextActions,
+  });
+  const timelineProjection = useOperationalTimelineProjection({ enabled: !loading });
+
   const effectiveOnboarding = initialization?.onboarding ?? onboarding;
   const correlationId = initialization?.correlationId ?? effectiveOnboarding?.correlationId;
   const retryable = initialization?.retryable ?? true;
+  const displayActions = settlementInit.nextActions.length > 0 ? settlementInit.nextActions : nextActions;
 
-  if (loading) {
+  if (loading && settlementInit.showInitializationShell) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
         <Loader2 className="h-4 w-4 animate-spin" />
@@ -38,11 +55,9 @@ export function OperationalSettlementInitialization({
     );
   }
 
-  if (!effectiveOnboarding || effectiveOnboarding.graphReady) {
+  if (!settlementInit.showInitializationShell) {
     return <>{children}</>;
   }
-
-  const progress = onboardingInitializationProgress(effectiveOnboarding);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -72,9 +87,9 @@ export function OperationalSettlementInitialization({
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Settlement infrastructure initializing
         </p>
-        <h3 className="text-lg font-semibold">{progress.headline}</h3>
+        <h3 className="text-lg font-semibold">{settlementInit.headline}</h3>
         <p className="text-sm text-muted-foreground max-w-2xl">
-          {effectiveOnboarding.recoveryMessage ??
+          {settlementInit.recoveryMessage ??
             'Your payment rails were connected successfully. Operational coordination is being prepared.'}
         </p>
         {initialization?.failedPhase ? (
@@ -88,7 +103,7 @@ export function OperationalSettlementInitialization({
       </div>
 
       <ul className="grid gap-2 sm:grid-cols-2">
-        {progress.steps.map((step) => (
+        {settlementInit.progressSteps.map((step) => (
           <li
             key={step.id}
             className={`text-sm ${step.complete ? 'text-foreground' : 'text-muted-foreground'}`}
@@ -98,12 +113,43 @@ export function OperationalSettlementInitialization({
         ))}
       </ul>
 
-      {effectiveOnboarding.blockers.length > 0 ? (
+      <OperationalMilestoneStrip
+        milestones={timelineProjection.milestones}
+        confidence={timelineProjection.confidence}
+      />
+
+      {timelineProjection.blockers.length > 0 ? (
         <ul className="text-xs text-amber-800/90 dark:text-amber-300/90 space-y-1">
-          {effectiveOnboarding.blockers.map((blocker: string) => (
+          {timelineProjection.blockers.map((blocker) => (
+            <li key={blocker.id}>
+              • {blocker.reason} — {blocker.remediation}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {settlementInit.blockers.length > 0 ? (
+        <ul className="text-xs text-amber-800/90 dark:text-amber-300/90 space-y-1">
+          {settlementInit.blockers.map((blocker: string) => (
             <li key={blocker}>• {blocker}</li>
           ))}
         </ul>
+      ) : null}
+
+      {displayActions.length > 0 ? (
+        <div className="space-y-2 border-t border-border/30 pt-3">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Next operational steps
+          </p>
+          <ul className="space-y-2">
+            {displayActions.map((action) => (
+              <li key={action.id} className="text-sm">
+                <p className="font-medium text-foreground">{action.action}</p>
+                <p className="text-muted-foreground text-xs mt-0.5">{action.reason}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">

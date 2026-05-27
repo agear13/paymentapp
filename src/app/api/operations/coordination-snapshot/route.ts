@@ -79,7 +79,7 @@ export async function GET(request: Request) {
           name: p.participant.name,
           agreementApproval: p.agreementApproval,
           payoutReady: p.payoutReadiness.payoutReady,
-          releaseReady: p.readinessHierarchy.release.ready,
+          releaseReady: p.readinessHierarchy?.release?.ready ?? false,
           readinessHierarchy: p.readinessHierarchy,
           blockers: p.blockers,
         })),

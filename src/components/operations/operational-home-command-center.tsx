@@ -62,6 +62,8 @@ export function OperationalHomeCommandCenter() {
         <CollapsibleContent className="pt-3 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200">
           {auditTimeline.length > 0 ? (
             <OperationalAuditTimeline entries={auditTimeline} />
+          ) : guidance.timeline.length > 0 ? (
+            <RecentOperationalEvents events={guidance.timeline} compact />
           ) : (
             <RecentOperationalEvents events={guidance.timeline} compact />
           )}

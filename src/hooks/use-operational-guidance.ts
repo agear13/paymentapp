@@ -11,7 +11,6 @@ import {
   useOperationalAuditStore,
 } from '@/hooks/use-operational-audit-store';
 import {
-  guidanceFromOperationalGraph,
   workspaceContextFromGraph,
 } from '@/lib/operations/selectors/operational-graph-adapter';
 import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
@@ -22,8 +21,16 @@ import { defaultWorkspaceContext } from '@/lib/operations/types/operational-cont
 import type { OperationalOnboardingState } from '@/lib/operations/onboarding/operational-onboarding-phases';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 import { deriveOperationalReleaseBlockers } from '@/lib/operations/explainability/derive-operational-release-blockers';
+import { deriveOperationalNextActions } from '@/lib/operations/explainability/derive-operational-next-actions';
+import { assertOperationalProjectionInvariants } from '@/lib/operations/dev/operational-invariants';
 import { subscribeProjectOperationalEvents } from '@/lib/operations/orchestration/operational-sync-client';
 import { dispatchOperationalEvent } from '@/lib/operations/orchestration/operational-event-bus';
+import { isGraphReadyForProjection } from '@/lib/operations/coordination/derive-operational-readiness-state';
+import {
+  emptyOperationalGraphProjection,
+  safeOperationalProjection,
+} from '@/lib/operations/coordination/safe-operational-projection';
+import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-operational-workspace-currency';
 
 export type OperationalGuidanceOptions = {
   enabled?: boolean;
@@ -41,39 +48,28 @@ type GraphSummary = Pick<
 >;
 
 function emptyGraph(): GraphSummary {
-  return {
-    summary: {
-      participantCount: 0,
-      payoutReadyCount: 0,
-      releaseReadyCount: 0,
-      blockerCount: 0,
-      allBlockers: [],
-    },
-    funding: { allocated: false, stage: null },
-    participants: [],
-    obligations: [],
-  };
+  return emptyOperationalGraphProjection();
 }
 
-function isGraphReadyForProjection(onboarding: OperationalOnboardingState | null | undefined): boolean {
-  if (!onboarding) return false;
-  return onboarding.graphReady === true || onboarding.phase === 'OPERATIONAL_GRAPH_READY';
-}
-
-function degradedGuidance(recoveryMessage?: string | null): OperationalGuidanceBundle {
+function degradedGuidance(
+  recoveryMessage?: string | null,
+  workspace = defaultWorkspaceContext(),
+  operationalOnboarding?: OperationalOnboardingState | null
+): OperationalGuidanceBundle {
   const releaseBlockers = deriveOperationalReleaseBlockers({
     snapshot: {
       participants: [],
       obligations: [],
       summary: {
-        participantCount: 0,
+        participantCount: workspace.participantCount,
         payoutReadyCount: 0,
-        releaseReadyCount: 0,
+        releaseReadyCount: workspace.releaseEligibleCount,
         blockerCount: 1,
         allBlockers: [],
       },
       funding: { allocated: false, stage: null },
     },
+    workspace,
     graphReady: false,
     initializationRecoveryMessage: recoveryMessage,
   });
@@ -83,42 +79,57 @@ function degradedGuidance(recoveryMessage?: string | null): OperationalGuidanceB
     primary?.remediation ??
     'Your payment rails were connected successfully. Operational coordination is being prepared.';
 
-  return {
-    explanation: {
-      readinessLevel: 'blocked',
-      readinessScore: 0,
-      blockers: [headline],
-      warnings: [],
-      missingRequirements: [],
-      confidence: 'BLOCKED',
-      nextRecommendedActions: primary
-        ? [
-            {
-              id: primary.id,
-              title: primary.remediation,
-              description: primary.unlockCondition,
-              href: primary.ctaHref,
-              ctaLabel: primary.ctaLabel,
-              priority: 1,
-            },
-          ]
-        : [],
-      explainability: {
-        headline: 'Operational coordination initializing',
-        bullets: [headline, remediation],
-      },
-      trustState: 'attention',
-      phaseLabel: 'Settlement infrastructure initializing',
-      scopeTitle: 'Workspace',
+  const explanation = {
+    readinessLevel: 'blocked' as const,
+    readinessScore: 0,
+    blockers: [headline],
+    warnings: [] as string[],
+    missingRequirements: [] as string[],
+    confidence: 'BLOCKED' as const,
+    nextRecommendedActions: primary
+      ? [
+          {
+            id: primary.id,
+            title: primary.remediation,
+            description: primary.unlockCondition,
+            href: primary.ctaHref,
+            ctaLabel: primary.ctaLabel,
+            priority: 1,
+          },
+        ]
+      : [],
+    explainability: {
+      headline: 'Settlement infrastructure initializing',
+      bullets: [headline, remediation],
     },
+    trustState: 'attention' as const,
+    phaseLabel: 'Settlement infrastructure initializing',
+    scopeTitle: 'Workspace',
+  };
+
+  const actions = deriveOperationalNextActions({
+    explanation,
+    workspace,
+    releaseBlockers,
+    graphReady: isGraphReadyForProjection(operationalOnboarding),
+    graphSnapshotConverged: false,
+    operationalOnboarding,
+  });
+
+  const currency = resolveOperationalWorkspaceCurrency({
+    workspaceDefaultCurrency: workspace.defaultCurrency,
+  });
+
+  return {
+    explanation,
     stateExplanation: null,
-    actions: [],
+    actions,
     trustSignals: [],
     releaseBlockers,
     releaseConfidence: {
       level: 'BLOCKED',
       score: 0,
-      currency: 'AUD',
+      currency,
       collectedRevenue: 0,
       reservedObligations: 0,
       readyToRelease: 0,
@@ -147,9 +158,10 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     useWorkspaceActivation({
     enabled: options?.enabled !== false,
   });
-  const graphReadyForProjection =
-    isGraphReadyForProjection(operationalOnboarding) ||
-    operationalInitialization?.graphReady === true;
+  const graphReadyForProjection = isGraphReadyForProjection(
+    operationalOnboarding,
+    operationalInitialization
+  );
   const projectId = options?.project?.id ?? activation?.primaryProjectId ?? null;
   const [graph, setGraph] = React.useState<GraphSummary>(emptyGraph);
   const [graphSnapshotConverged, setGraphSnapshotConverged] = React.useState(false);
@@ -237,38 +249,57 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     operationalOnboarding?.recoveryMessage ?? operationalInitialization?.onboarding.recoveryMessage;
 
   const guidance = React.useMemo((): OperationalGuidanceBundle => {
+    const act = activation ?? createFallbackActivation();
+    const workspace = activation
+      ? workspaceContextFromGraph(graph as OperationalCoordinationSnapshot, {
+          hasOrganization: act.workspaceCreated,
+          onboardingCompleted: act.onboardingCompleted,
+          projectCreated: act.projectCreated,
+          participantCount: act.participantCount,
+          participantsConfigured: act.participantsConfigured,
+          participantsConfiguredCount: act.participantsConfiguredCount,
+          obligationCount: graph.obligations?.length ?? 0,
+          paymentLinkCount: 0,
+          collectionPreferenceDecideLater: !act.revenueConfigured,
+          defaultCurrency: act.defaultCurrency,
+          stripeConfigured: act.providerConnected,
+          wiseConfigured: false,
+          hederaConfigured: false,
+          releaseEligibleCount: graph.summary?.releaseReadyCount ?? 0,
+          releaseBatchCount: act.firstReleaseCompleted ? 1 : 0,
+          primaryProjectId: act.primaryProjectId,
+        })
+      : defaultWorkspaceContext();
+
     if (!graphReadyForProjection || !graphSnapshotConverged) {
-      return degradedGuidance(initializationRecoveryMessage);
+      return degradedGuidance(initializationRecoveryMessage, workspace, operationalOnboarding);
     }
 
-    const act = activation ?? createFallbackActivation();
-    const snapshot = graph as OperationalCoordinationSnapshot;
-    const workspace = workspaceContextFromGraph(snapshot, {
-      hasOrganization: act.workspaceCreated,
-      onboardingCompleted: act.onboardingCompleted,
-      projectCreated: act.projectCreated,
-      participantCount: act.participantCount,
-      participantsConfigured: act.participantsConfigured,
-      participantsConfiguredCount: act.participantsConfiguredCount,
-      obligationCount: snapshot.obligations.length,
-      paymentLinkCount: 0,
-      collectionPreferenceDecideLater: !act.revenueConfigured,
-      defaultCurrency: act.defaultCurrency,
-      stripeConfigured: act.providerConnected,
-      wiseConfigured: false,
-      hederaConfigured: false,
-      releaseEligibleCount: snapshot.summary.releaseReadyCount,
-      releaseBatchCount: act.firstReleaseCompleted ? 1 : 0,
-      primaryProjectId: act.primaryProjectId,
-    });
-
-    return guidanceFromOperationalGraph({
-      snapshot,
-      workspace,
-      scope: options?.scope ?? (options?.project ? 'project' : 'workspace'),
-      scopeTitle: options?.scopeTitle ?? act.phaseLabel,
-      auditTimeline,
-    });
+    try {
+      const safe = safeOperationalProjection({
+        payload: {
+          graphReady: true,
+          summary: graph.summary,
+          funding: graph.funding,
+          participants: graph.participants,
+        },
+        workspace,
+        scope: options?.scope ?? (options?.project ? 'project' : 'workspace'),
+        scopeTitle: options?.scopeTitle ?? act.phaseLabel,
+        auditTimeline,
+        operationalOnboarding: operationalOnboarding ?? undefined,
+        fallbackGuidance: () =>
+          degradedGuidance(initializationRecoveryMessage, workspace, operationalOnboarding),
+      });
+      return safe.guidance;
+    } catch (error) {
+      assertOperationalProjectionInvariants({
+        projectionThrew: true,
+        expectedInitializationWindow: !graphSnapshotConverged,
+      });
+      console.error('[useOperationalGuidance] projection failed; degrading guidance', error);
+      return degradedGuidance(initializationRecoveryMessage, workspace, operationalOnboarding);
+    }
   }, [
     activation,
     auditTimeline,
@@ -276,6 +307,7 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     graphReadyForProjection,
     graphSnapshotConverged,
     initializationRecoveryMessage,
+    operationalOnboarding,
     options?.scope,
     options?.scopeTitle,
     options?.project,
@@ -297,8 +329,7 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
 
   const primaryAction = guidance.actions[0] ?? null;
   const nextRecommended =
-    nextAction ??
-    (primaryAction
+    graphSnapshotConverged && primaryAction
       ? {
           id: primaryAction.id,
           title: primaryAction.action,
@@ -307,7 +338,17 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
           ctaLabel: primaryAction.ctaLabel ?? 'Continue',
           blockers: guidance.explanation.blockers,
         }
-      : null);
+      : nextAction ??
+        (primaryAction
+          ? {
+              id: primaryAction.id,
+              title: primaryAction.action,
+              description: primaryAction.reason,
+              href: primaryAction.destination,
+              ctaLabel: primaryAction.ctaLabel ?? 'Continue',
+              blockers: guidance.explanation.blockers,
+            }
+          : null);
 
   return {
     guidance,

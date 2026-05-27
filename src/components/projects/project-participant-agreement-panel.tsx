@@ -43,6 +43,7 @@ import {
   parseOperationalSync,
 } from '@/lib/operations/orchestration/operational-sync-client';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
+import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 
 function roleAmountsFromDeal(deal: RecentDeal) {
   return {
@@ -96,6 +97,7 @@ export function ProjectParticipantAgreementPanel({
   initialReferralIssuance,
   initialScopedServiceRows = [],
 }: Props) {
+  const { currency: workspaceCurrency } = useOrganizationCurrency();
   const [participant, setParticipant] = React.useState(initialParticipant);
   const [approved, setApproved] = React.useState(initialApproved);
   const [note, setNote] = React.useState(initialParticipant.approvalNote ?? '');
@@ -252,8 +254,9 @@ export function ProjectParticipantAgreementPanel({
     () =>
       deriveCommissionScope(participant, {
         catalogItems: scopedServiceRows.map((r) => ({ id: r.id, name: r.name })),
+        workspaceCurrency,
       }),
-    [participant, scopedServiceRows]
+    [participant, scopedServiceRows, workspaceCurrency]
   );
   const catalogCommission = isCatalogScopedCommission(participant);
 
@@ -334,6 +337,7 @@ export function ProjectParticipantAgreementPanel({
           serviceRows={scopedServiceRows}
           approved={approved}
           catalogItems={scopedServiceRows.map((r) => ({ id: r.id, name: r.name }))}
+          workspaceCurrency={workspaceCurrency}
           allServicesNote={
             isAllActiveCatalogSource(participant) ||
             (!participant.referralCommerce?.enabledServiceIds?.length &&

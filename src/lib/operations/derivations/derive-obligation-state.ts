@@ -2,6 +2,7 @@ import type { HydratedObligation } from '@/lib/operations/contracts/obligation-c
 import { OBLIGATION_CONTRACT_VERSION } from '@/lib/operations/contracts/obligation-contract';
 import { obligationStateFromReadiness } from '@/lib/operations/lifecycle/obligation-lifecycle';
 import type { ObligationOperationalReadiness } from '@/lib/projects/funding-sources/types';
+import { PLATFORM_FALLBACK_CURRENCY } from '@/lib/currency/resolve-operational-workspace-currency';
 
 export type RawObligationInput = {
   id?: string;
@@ -28,7 +29,7 @@ export function deriveObligationState(input: RawObligationInput): HydratedObliga
     allocationStatus: input.allocationStatus,
     amount,
     amountFunded,
-    currency: input.currency ?? 'AUD',
+    currency: input.currency ?? PLATFORM_FALLBACK_CURRENCY,
     participantId: input.participantId ?? null,
     operational: {
       releaseReady: readiness === 'ready' && amountFunded + 0.005 >= amount,

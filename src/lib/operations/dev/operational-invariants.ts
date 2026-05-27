@@ -689,3 +689,409 @@ export function assertConvergenceInvariants(input: ConvergenceInvariantInput): v
     );
   }
 }
+
+export type CompensationCurrencyInvariantInput = {
+  workspaceCurrency?: string;
+  renderedCurrency?: string;
+  compensationConfigured?: boolean;
+};
+
+export function assertCompensationCurrencyInvariants(
+  input: CompensationCurrencyInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+  if (!input.compensationConfigured) return;
+  if (!input.workspaceCurrency || !input.renderedCurrency) return;
+  if (input.workspaceCurrency === input.renderedCurrency) return;
+  throw new OperationalInvariantViolation(
+    'COMPENSATION_CURRENCY_CONTRADICTS_WORKSPACE_CURRENCY',
+    `Compensation rendered as ${input.renderedCurrency} while workspace currency is ${input.workspaceCurrency}`
+  );
+}
+
+export type BetaReleaseErrorInvariantInput = {
+  expectedBetaLockdown?: boolean;
+  fatalReleaseErrorObserved?: boolean;
+  releaseInteractionEnabled?: boolean;
+};
+
+export function assertBetaReleaseErrorInvariants(input: BetaReleaseErrorInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+  if (
+    input.expectedBetaLockdown &&
+    input.fatalReleaseErrorObserved &&
+    !input.releaseInteractionEnabled
+  ) {
+    throw new OperationalInvariantViolation(
+      'EXPECTED_BETA_LOCKDOWN_TRIGGERED_FATAL_RELEASE_ERROR',
+      'Fatal release error surfaced during expected beta lockdown window'
+    );
+  }
+}
+
+export type OperationalProjectionInvariantInput = {
+  projectionThrew?: boolean;
+  expectedInitializationWindow?: boolean;
+};
+
+export function assertOperationalProjectionInvariants(
+  input: OperationalProjectionInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+  if (input.projectionThrew && input.expectedInitializationWindow) {
+    throw new OperationalInvariantViolation(
+      'OPERATIONAL_PROJECTION_THROW_DURING_EXPECTED_INITIALIZATION',
+      'Operational projection threw during expected initialization window'
+    );
+  }
+}
+
+export type OnboardingGuidanceInvariantInput = {
+  graphReady?: boolean;
+  graphSnapshotConverged?: boolean;
+  nextActionCount?: number;
+  hasStripeConnected?: boolean;
+  participantCount?: number;
+  guidanceHeadline?: string;
+};
+
+export function assertOnboardingGuidanceInvariants(
+  input: OnboardingGuidanceInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (
+    input.hasStripeConnected &&
+    input.graphReady &&
+    input.graphSnapshotConverged &&
+    (input.participantCount ?? 0) > 0 &&
+    (input.nextActionCount ?? 0) === 0
+  ) {
+    throw new OperationalInvariantViolation(
+      'ONBOARDING_GUIDANCE_MISSING_NEXT_ACTION',
+      'Stripe-connected workspace has participants but no actionable next step'
+    );
+  }
+
+  if (
+    input.graphReady &&
+    input.graphSnapshotConverged &&
+    input.guidanceHeadline?.toLowerCase().includes('initializing')
+  ) {
+    throw new OperationalInvariantViolation(
+      'ONBOARDING_GUIDANCE_CONTRADICTS_OPERATIONAL_GRAPH',
+      'Guidance reports initializing while operational graph is ready and converged'
+    );
+  }
+}
+
+export type OperationalReadinessInvariantInput = {
+  phase?: string;
+  graphReadyForProjection?: boolean;
+  graphSnapshotConverged?: boolean;
+  releaseInteractionEnabled?: boolean;
+  uiDerivesReadinessDirectly?: boolean;
+  duplicatedReadinessDerivation?: boolean;
+};
+
+export function assertOperationalReadinessInvariants(
+  input: OperationalReadinessInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (
+    input.releaseInteractionEnabled === true &&
+    input.graphSnapshotConverged === false
+  ) {
+    throw new OperationalInvariantViolation(
+      'READINESS_STATE_BYPASSES_CANONICAL_SELECTOR',
+      'Release interaction enabled before graph snapshot converged'
+    );
+  }
+
+  if (input.uiDerivesReadinessDirectly) {
+    throw new OperationalInvariantViolation(
+      'UI_DERIVING_OPERATIONAL_STATE_DIRECTLY',
+      'UI component derives operational readiness outside canonical selectors'
+    );
+  }
+
+  if (input.duplicatedReadinessDerivation) {
+    throw new OperationalInvariantViolation(
+      'DUPLICATED_OPERATIONAL_READINESS_DERIVATION',
+      'Operational readiness derived outside canonical selector chain'
+    );
+  }
+}
+
+export type ProjectableSnapshotInvariantInput = {
+  summaryPresent?: boolean;
+  fundingPresent?: boolean;
+  projectionThrewDuringConvergence?: boolean;
+  partialHydrationFatalRender?: boolean;
+  unguardedGraphConsumption?: boolean;
+};
+
+export function assertProjectableSnapshotInvariants(
+  input: ProjectableSnapshotInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (!input.summaryPresent || !input.fundingPresent) {
+    throw new OperationalInvariantViolation(
+      'UNGUARDED_OPERATIONAL_GRAPH_CONSUMPTION',
+      'Operational graph consumed without projectable summary and funding'
+    );
+  }
+
+  if (input.projectionThrewDuringConvergence) {
+    throw new OperationalInvariantViolation(
+      'OPERATIONAL_PROJECTION_THROW_DURING_CONVERGENCE',
+      'Operational projection threw during convergence window'
+    );
+  }
+
+  if (input.partialHydrationFatalRender) {
+    throw new OperationalInvariantViolation(
+      'PARTIAL_HYDRATION_FATAL_RENDER',
+      'Partial hydration caused fatal operational render'
+    );
+  }
+}
+
+export type ReleaseCapabilityInvariantInput = {
+  releaseFetchOutsideGate?: boolean;
+  forbiddenDuringExpectedLockdown?: boolean;
+  releaseMutationBeforeConvergence?: boolean;
+  releaseInteractionEnabled?: boolean;
+  mutationAttempted?: boolean;
+};
+
+export function assertReleaseCapabilityInvariants(
+  input: ReleaseCapabilityInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.releaseFetchOutsideGate) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_FETCH_OUTSIDE_CAPABILITY_GATE',
+      'Release data fetched outside releaseInteractionEnabled gate'
+    );
+  }
+
+  if (input.forbiddenDuringExpectedLockdown) {
+    throw new OperationalInvariantViolation(
+      'FORBIDDEN_RESPONSE_DURING_EXPECTED_LOCKDOWN',
+      'Forbidden response surfaced during expected beta lockdown'
+    );
+  }
+
+  if (input.releaseMutationBeforeConvergence && !input.releaseInteractionEnabled) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_MUTATION_BEFORE_CONVERGENCE',
+      'Release mutation attempted before operational convergence'
+    );
+  }
+
+  if (!input.releaseInteractionEnabled && input.mutationAttempted) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_MUTATION_BEFORE_CONVERGENCE',
+      'Release mutation attempted while release interaction disabled'
+    );
+  }
+}
+
+export type OperationalCurrencyInvariantInput = {
+  workspaceCurrency?: string;
+  renderedCurrency?: string;
+  usedFallbackCurrency?: boolean;
+  bypassedResolutionChain?: boolean;
+  workspaceCurrencyNotPropagated?: boolean;
+};
+
+export function assertOperationalCurrencyInvariants(
+  input: OperationalCurrencyInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.usedFallbackCurrency && input.workspaceCurrency && input.renderedCurrency) {
+    if (input.workspaceCurrency !== input.renderedCurrency) {
+      throw new OperationalInvariantViolation(
+        'OPERATIONAL_AMOUNT_RENDERED_WITH_FALLBACK_CURRENCY',
+        `Amount rendered as ${input.renderedCurrency} while workspace currency is ${input.workspaceCurrency}`
+      );
+    }
+  }
+
+  if (input.bypassedResolutionChain) {
+    throw new OperationalInvariantViolation(
+      'CURRENCY_RESOLUTION_CHAIN_BYPASSED',
+      'Operational amount bypassed resolveOperationalWorkspaceCurrency chain'
+    );
+  }
+
+  if (input.workspaceCurrencyNotPropagated) {
+    throw new OperationalInvariantViolation(
+      'WORKSPACE_CURRENCY_NOT_PROPAGATED',
+      'Workspace currency not propagated to operational rendering surface'
+    );
+  }
+
+  if (
+    input.workspaceCurrency &&
+    input.renderedCurrency &&
+    input.workspaceCurrency !== input.renderedCurrency
+  ) {
+    throw new OperationalInvariantViolation(
+      'COMPENSATION_CURRENCY_CONTRADICTS_WORKSPACE_CURRENCY',
+      `Rendered currency ${input.renderedCurrency} contradicts workspace ${input.workspaceCurrency}`
+    );
+  }
+}
+
+export type FoundationalOperationalLayerInvariantInput = {
+  coordinationImportsUi?: boolean;
+  truthImportsImproperDerivation?: boolean;
+  orchestrationDependsOnPresentation?: boolean;
+  capabilityHookPerformsMutation?: boolean;
+  initializationWithoutNextAction?: boolean;
+  guidanceWithoutResolutionPath?: boolean;
+  onboardingStageContradictsGraph?: boolean;
+};
+
+export function assertFoundationalOperationalLayerInvariants(
+  input: FoundationalOperationalLayerInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.coordinationImportsUi) {
+    throw new OperationalInvariantViolation(
+      'FOUNDATIONAL_OPERATIONAL_LAYER_VIOLATION',
+      'Foundational coordination layer imports UI modules'
+    );
+  }
+
+  if (input.initializationWithoutNextAction) {
+    throw new OperationalInvariantViolation(
+      'INITIALIZATION_STATE_WITHOUT_NEXT_ACTION',
+      'Initialization state rendered without actionable next step'
+    );
+  }
+
+  if (input.guidanceWithoutResolutionPath) {
+    throw new OperationalInvariantViolation(
+      'OPERATIONAL_GUIDANCE_WITHOUT_RESOLUTION_PATH',
+      'Operational guidance rendered without resolution path'
+    );
+  }
+
+  if (input.onboardingStageContradictsGraph) {
+    throw new OperationalInvariantViolation(
+      'ONBOARDING_STAGE_CONTRADICTS_GRAPH_STATE',
+      'Onboarding stage contradicts operational graph state'
+    );
+  }
+}
+
+export type EventReplayInvariantInput = {
+  inputCount?: number;
+  outputCount?: number;
+  sequencesMonotonic?: boolean;
+  duplicateSequenceDetected?: boolean;
+};
+
+export function assertEventReplayInvariants(input: EventReplayInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.sequencesMonotonic === false) {
+    throw new OperationalInvariantViolation(
+      'EVENT_REPLAY_NON_MONOTONIC_SEQUENCE',
+      'Operational event replay produced non-monotonic sequence numbers'
+    );
+  }
+
+  if (input.duplicateSequenceDetected) {
+    throw new OperationalInvariantViolation(
+      'EVENT_REPLAY_DUPLICATE_SEQUENCE',
+      'Operational event replay assigned duplicate sequence numbers'
+    );
+  }
+}
+
+export type EventProjectionInvariantInput = {
+  timelineDerivedOutsideEventLayer?: boolean;
+  replayFingerprintEmpty?: boolean;
+  nonDeterministicReplay?: boolean;
+  projectionThrewDuringConvergence?: boolean;
+};
+
+export function assertEventProjectionInvariants(input: EventProjectionInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.timelineDerivedOutsideEventLayer) {
+    throw new OperationalInvariantViolation(
+      'TIMELINE_DERIVED_OUTSIDE_EVENT_LAYER',
+      'Operational timeline derived outside canonical event projection layer'
+    );
+  }
+
+  if (input.replayFingerprintEmpty) {
+    throw new OperationalInvariantViolation(
+      'EVENT_PROJECTION_EMPTY_FINGERPRINT',
+      'Event projection produced events but empty replay fingerprint'
+    );
+  }
+
+  if (input.nonDeterministicReplay) {
+    throw new OperationalInvariantViolation(
+      'EVENT_PROJECTION_NON_DETERMINISTIC',
+      'Operational event replay is non-deterministic for identical input streams'
+    );
+  }
+
+  if (input.projectionThrewDuringConvergence) {
+    throw new OperationalInvariantViolation(
+      'EVENT_PROJECTION_THROW_DURING_CONVERGENCE',
+      'Event projection threw during expected convergence window'
+    );
+  }
+}
+
+export type EventLayerInvariantInput = {
+  eventLayerImportsUi?: boolean;
+  uiDerivesTimelineDirectly?: boolean;
+  blockerExplainabilityBypassesEvents?: boolean;
+  confidenceScoredOutsideEventLayer?: boolean;
+};
+
+export function assertEventLayerInvariants(input: EventLayerInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.eventLayerImportsUi) {
+    throw new OperationalInvariantViolation(
+      'EVENT_LAYER_ARCHITECTURE_VIOLATION',
+      'Event timeline layer imports UI modules'
+    );
+  }
+
+  if (input.uiDerivesTimelineDirectly) {
+    throw new OperationalInvariantViolation(
+      'UI_DERIVING_TIMELINE_OUTSIDE_EVENT_PROJECTION',
+      'UI derives operational timeline outside event projection layer'
+    );
+  }
+
+  if (input.blockerExplainabilityBypassesEvents) {
+    throw new OperationalInvariantViolation(
+      'BLOCKER_EXPLAINABILITY_BYPASSES_EVENTS',
+      'Blocker explainability bypassed canonical event derivation'
+    );
+  }
+
+  if (input.confidenceScoredOutsideEventLayer) {
+    throw new OperationalInvariantViolation(
+      'CONFIDENCE_SCORED_OUTSIDE_EVENT_LAYER',
+      'Operational confidence scored outside event projection layer'
+    );
+  }
+}

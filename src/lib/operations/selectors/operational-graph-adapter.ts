@@ -16,13 +16,17 @@ import { deriveTrustSignals } from '@/lib/operations/explainability/trust-signal
 import type { ReleaseConfidenceSnapshot, TimelineEvent, OperationalExplainability, OperationalGuidanceBundle } from '@/lib/operations/explainability/types';
 import { deduplicateOperationalActions } from '@/lib/operations/explainability/deduplicate-operational-actions';
 import { deriveNextOperationalActions } from '@/lib/operations/explainability/derive-next-operational-actions';
+import { deriveOperationalNextActions } from '@/lib/operations/explainability/derive-operational-next-actions';
 import { deriveOperationalBlockingActions } from '@/lib/operations/explainability/derive-operational-blocking-actions';
 import { explainWorkspaceState } from '@/lib/operations/explainability/state-explanations';
+import { safeEventProjection } from '@/lib/operations/timeline/safe-event-projection';
 import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
 import { emptyOperationalGraphFunding, emptyOperationalGraphSummary } from '@/lib/operations/selectors/operational-coordination-snapshot';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
+import { PLATFORM_FALLBACK_CURRENCY } from '@/lib/currency/resolve-operational-workspace-currency';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 import { assertOnboardingGraphInvariants } from '@/lib/operations/dev/operational-invariants';
+import type { OperationalOnboardingState } from '@/lib/operations/onboarding/operational-onboarding-phases';
 
 function projectableSummary(snapshot: OperationalCoordinationSnapshot) {
   if (snapshot.summary == null) {
@@ -71,7 +75,7 @@ function buildChecklist(
     provider ||
     input.paymentLinkCount > 0 ||
     !input.collectionPreferenceDecideLater;
-  const fundingState = deriveCanonicalFundingLifecycle(snapshot.funding.stage);
+  const fundingState = deriveCanonicalFundingLifecycle(projectableFunding(snapshot).stage);
   return [
     { id: 'workspace', label: 'Workspace created', complete: input.hasOrganization },
     { id: 'project', label: 'First project created', complete: input.projectCreated },
@@ -116,7 +120,7 @@ export function activationFromOperationalGraph(
     !input.collectionPreferenceDecideLater;
 
   const blockers = summary.allBlockers.map((b) => b.explanation);
-  const fundingState = deriveCanonicalFundingLifecycle(snapshot.funding.stage);
+  const fundingState = deriveCanonicalFundingLifecycle(projectableFunding(snapshot).stage);
   const fundingBlocker = fundingLifecycleBlocker(fundingState);
   if (fundingBlocker && !blockers.includes(fundingBlocker)) {
     blockers.push(fundingBlocker);
@@ -254,7 +258,9 @@ export function guidanceFromOperationalGraph(input: {
   scopeTitle?: string;
   auditTimeline?: OperationalAuditEntry[];
   graphReady?: boolean;
+  graphSnapshotConverged?: boolean;
   initializationRecoveryMessage?: string | null;
+  operationalOnboarding?: OperationalOnboardingState | null;
 }): OperationalGuidanceBundle {
   const summary = projectableSummary(input.snapshot);
   const funding = projectableFunding(input.snapshot);
@@ -271,10 +277,32 @@ export function guidanceFromOperationalGraph(input: {
 
   const fundingState = deriveCanonicalFundingLifecycle(funding.stage);
 
+  const timelineProjection = safeEventProjection({
+    auditTimeline: input.auditTimeline,
+    workspace: input.workspace,
+    graphSnapshotConverged: input.graphSnapshotConverged ?? input.graphReady ?? true,
+  });
+
+  const timeline: TimelineEvent[] = timelineProjection.degraded
+    ? (input.auditTimeline ?? []).map((e) => ({
+        id: e.id,
+        type: 'state_transition' as const,
+        title: e.title,
+        description: e.description,
+        timestamp: e.timestamp,
+        completed: true,
+      }))
+    : timelineProjection.timeline;
+
+  const eventBlockerBullets = timelineProjection.blockers.map((b) => b.reason);
+  if (eventBlockerBullets.length > 0) {
+    explanation.blockers = [...new Set([...eventBlockerBullets, ...explanation.blockers])];
+  }
+
   const releaseConfidence: ReleaseConfidenceSnapshot = {
-    level: explanation.confidence,
-    score: explanation.readinessScore,
-    currency: input.workspace.defaultCurrency ?? 'AUD',
+    level: timelineProjection.confidence.level,
+    score: timelineProjection.confidence.score,
+    currency: input.workspace.defaultCurrency ?? PLATFORM_FALLBACK_CURRENCY,
     collectedRevenue: 0,
     reservedObligations: input.snapshot.obligations.length,
     readyToRelease: summary.releaseReadyCount,
@@ -287,20 +315,18 @@ export function guidanceFromOperationalGraph(input: {
       (p) => !p.readinessHierarchy?.release?.ready
     ).length,
     riskWarnings: [],
-    releasableObligationCount: input.snapshot.obligations.filter((o) => o.operational.releaseReady)
-      .length,
+    releasableObligationCount: input.snapshot.obligations.filter(
+      (o) => o.operational?.releaseReady
+    ).length,
     totalObligationCount: input.snapshot.obligations.length,
-    explainability: explanation.explainability,
+    explainability: {
+      headline: timelineProjection.confidence.explainability.headline,
+      bullets: [
+        ...timelineProjection.confidence.explainability.bullets,
+        ...explanation.explainability.bullets,
+      ],
+    },
   };
-
-  const timeline: TimelineEvent[] = (input.auditTimeline ?? []).map((e) => ({
-    id: e.id,
-    type: 'state_transition',
-    title: e.title,
-    description: e.description,
-    timestamp: e.timestamp,
-    completed: true,
-  }));
 
   return {
     explanation,
@@ -309,7 +335,14 @@ export function guidanceFromOperationalGraph(input: {
       explanation.blockers
     ),
     actions: deduplicateOperationalActions(
-      deriveNextOperationalActions(explanation, input.workspace)
+      deriveOperationalNextActions({
+        explanation,
+        workspace: input.workspace,
+        releaseBlockers: blocking.detailedBlockers,
+        graphReady: input.graphReady ?? true,
+        graphSnapshotConverged: input.graphSnapshotConverged ?? input.graphReady ?? true,
+        operationalOnboarding: input.operationalOnboarding,
+      })
     ),
     trustSignals: deriveTrustSignals({ workspace: input.workspace }),
     releaseConfidence,
@@ -328,10 +361,13 @@ export function projectParticipantsReadyFromGraph(
   const dealIds = new Set(
     participants.filter((p) => p.dealId === deal.id || p.dealName === deal.dealName).map((p) => p.id)
   );
-  const scoped = snapshot.participants.filter((p) => dealIds.has(p.participant.id));
+  const scoped = snapshot.participants.filter((p) => {
+    const participantId = p.participant?.id;
+    return participantId != null && dealIds.has(participantId);
+  });
   return {
-    releaseReadyCount: scoped.filter((p) => p.readinessHierarchy.release.ready).length,
-    payoutReadyCount: scoped.filter((p) => p.payoutReadiness.payoutReady).length,
+    releaseReadyCount: scoped.filter((p) => p.readinessHierarchy?.release?.ready).length,
+    payoutReadyCount: scoped.filter((p) => p.payoutReadiness?.payoutReady).length,
     participantCount: scoped.length,
   };
 }
@@ -339,7 +375,8 @@ export function projectParticipantsReadyFromGraph(
 export function treasuryFundingLabelFromGraph(
   snapshot: OperationalCoordinationSnapshot
 ): { fundingLabel: string; fundingSubcopy: string } {
-  const state = deriveCanonicalFundingLifecycle(snapshot.funding.stage);
+  const funding = projectableFunding(snapshot);
+  const state = deriveCanonicalFundingLifecycle(funding.stage);
   const blocker = fundingLifecycleBlocker(state);
   return {
     fundingLabel: fundingLifecycleLabel(state),

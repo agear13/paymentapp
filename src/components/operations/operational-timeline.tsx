@@ -36,6 +36,11 @@ export function OperationalTimeline({
           />
           <p className="text-sm font-medium">{event.title}</p>
           <p className="text-xs text-muted-foreground mt-0.5">{event.description}</p>
+          {event.timestamp ? (
+            <p className="text-[10px] text-muted-foreground/70 mt-1">
+              {new Date(event.timestamp).toLocaleString()}
+            </p>
+          ) : null}
         </li>
       ))}
     </ol>

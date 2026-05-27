@@ -57,6 +57,7 @@ type ParticipantCompensationDialogProps = {
   participant: DemoParticipant | null;
   projectId?: string;
   organizationId?: string | null;
+  workspaceCurrency?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (profile: ParticipantCompensationProfile) => Promise<void>;
@@ -66,6 +67,7 @@ export function ParticipantCompensationDialog({
   participant,
   projectId,
   organizationId,
+  workspaceCurrency,
   open,
   onOpenChange,
   onSave,
@@ -93,8 +95,9 @@ export function ParticipantCompensationDialog({
     });
     return deriveCompensationPreviewText(draftEntity, {
       catalogItems: catalogServices.map((s) => ({ id: s.id, name: s.name })),
+      workspaceCurrency,
     });
-  }, [entity, draft, catalogServices]);
+  }, [entity, draft, catalogServices, workspaceCurrency]);
 
   React.useEffect(() => {
     if (!open || !entity) return;

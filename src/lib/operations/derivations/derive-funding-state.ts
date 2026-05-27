@@ -1,6 +1,7 @@
 import type { HydratedFunding } from '@/lib/operations/contracts/funding-contract';
 import { FUNDING_CONTRACT_VERSION } from '@/lib/operations/contracts/funding-contract';
 import { deriveFundingLifecycleState } from '@/lib/operations/lifecycle/funding-lifecycle';
+import { PLATFORM_FALLBACK_CURRENCY } from '@/lib/currency/resolve-operational-workspace-currency';
 
 export type RawFundingInput = {
   confirmedFunding?: number;
@@ -31,7 +32,7 @@ export function deriveFundingState(input: RawFundingInput): HydratedFunding {
     confirmedAmount,
     pendingAmount,
     obligationsTotal,
-    currency: input.currency ?? 'AUD',
+    currency: input.currency ?? PLATFORM_FALLBACK_CURRENCY,
     fullyAllocated:
       obligationsTotal > 0 && confirmedAmount + 0.005 >= obligationsTotal,
     metadata: {

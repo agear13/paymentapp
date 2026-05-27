@@ -14,11 +14,13 @@ import {
   resolveObligationAmountFunded,
   resolveObligationOperationalReadiness,
 } from '@/lib/operations/derivations/derive-obligation-allocation-status';
+import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-operational-workspace-currency';
 import {
   getOperationalCoordinationSnapshot,
   type OperationalCoordinationInput,
   type OperationalCoordinationSnapshot,
 } from '@/lib/operations/selectors/operational-coordination-snapshot';
+
 function obligationsFromRows(
   rows: Array<{
     id: string;
@@ -28,7 +30,8 @@ function obligationsFromRows(
     status: DealNetworkPilotObligationStatus;
     payment_event_id?: string | null;
   }>,
-  participantsById: Map<string, DemoParticipant>
+  participantsById: Map<string, DemoParticipant>,
+  projectCurrency: string
 ): RawObligationInput[] {
   return rows.map((row) => {
     const amount = Number(row.amount_owed) || 0;
@@ -52,7 +55,7 @@ function obligationsFromRows(
       participantId: row.participant_id,
       amount,
       amountFunded,
-      currency: row.currency ?? 'AUD',
+      currency: row.currency ?? projectCurrency,
       allocationStatus: row.status,
       readiness,
     };
@@ -86,6 +89,9 @@ export async function resolveOperationalCoordinationSnapshot(
     : snapshot.participants;
 
   const deal = projectId ? snapshot.deals.find((d) => d.id === projectId) : undefined;
+  const projectCurrency = resolveOperationalWorkspaceCurrency({
+    projectCurrency: deal?.projectValueCurrency,
+  });
 
   let fundingAllocated = false;
   let confirmedFunding = 0;
@@ -126,7 +132,7 @@ export async function resolveOperationalCoordinationSnapshot(
     obligationsFunded += funded;
   }
 
-  const obligations = obligationsFromRows(obligationRows, participantsById);
+  const obligations = obligationsFromRows(obligationRows, participantsById, projectCurrency);
 
   if (deal) {
     const strait = isStraitProjectDeal(deal);
@@ -153,7 +159,7 @@ export async function resolveOperationalCoordinationSnapshot(
       obligationsTotal,
       obligationsFunded,
     },
-    projectCurrency: deal?.projectValueCurrency ?? 'AUD',
+    projectCurrency,
   };
 
   const graph = getOperationalCoordinationSnapshot(coordinationInput);

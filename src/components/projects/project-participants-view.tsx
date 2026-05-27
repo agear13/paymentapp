@@ -44,6 +44,7 @@ import type { ParticipantCompensationProfile } from '@/lib/participants/particip
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
 import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import {
   applyOperationalSyncRefresh,
@@ -91,6 +92,7 @@ export function ProjectParticipantsView() {
     participants: projectParticipants,
     enabled: Boolean(deal),
   });
+  const { currency: workspaceCurrency } = useOrganizationCurrency();
   const syncHandlers = React.useMemo(
     () => ({
       invalidate,
@@ -116,7 +118,10 @@ export function ProjectParticipantsView() {
   const [catalogItems, setCatalogItems] = React.useState<Array<{ id: string; name: string }>>([]);
   const tableScrollRef = React.useRef<HTMLDivElement>(null);
   const savedScrollTop = React.useRef(0);
-  const catalogContext = React.useMemo(() => ({ catalogItems }), [catalogItems]);
+  const catalogContext = React.useMemo(
+    () => ({ catalogItems, workspaceCurrency }),
+    [catalogItems, workspaceCurrency]
+  );
 
   useProjectWorkspaceSmartPolling({ enabled: Boolean(deal?.id), scope: 'participants' });
 
@@ -644,6 +649,7 @@ export function ProjectParticipantsView() {
           participant={compensationParticipant}
           projectId={projectId}
           organizationId={organizationId}
+          workspaceCurrency={workspaceCurrency}
           open={Boolean(compensationParticipant)}
           onOpenChange={(open) => {
             if (!open) setCompensationParticipant(null);

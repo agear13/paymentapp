@@ -6,6 +6,7 @@ export { ReleaseSimulationPreview } from '@/components/operations/release-simula
 export { OperationalTrustIndicators } from '@/components/operations/operational-trust-indicators';
 export { OperationalTrustStrip } from '@/components/operations/operational-trust-strip';
 export { OperationalTimeline } from '@/components/operations/operational-timeline';
+export { OperationalMilestoneStrip } from '@/components/operations/operational-milestone-strip';
 export { OperationalGuidanceRegion } from '@/components/operations/operational-guidance-region';
 export { OperationalTransitionBanner } from '@/components/operations/operational-transition-banner';
 export { ProgressiveOperationalPanel } from '@/components/operations/progressive-operational-panel';

@@ -53,7 +53,7 @@ import { cn } from '@/lib/utils';
 import type { OperationalCapabilities } from '@/lib/operations/capabilities/derive-operational-capabilities';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
-import { useReleaseInteractionCapability } from '@/hooks/use-release-interaction-capability';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
 
 interface Batch {
@@ -75,8 +75,15 @@ export function OperatorSettlementsWorkspace({
   releaseCapabilities,
 }: OperatorSettlementsWorkspaceProps) {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
-  const { operationalOnboarding, operationalInitialization, loading: activationLoading } = useWorkspaceActivation();
-  const releaseInteraction = useReleaseInteractionCapability(releaseCapabilities);
+  const {
+    operationalOnboarding,
+    operationalInitialization,
+    loading: activationLoading,
+    settlementInitialization,
+    releaseInteraction,
+    guidance,
+    graphSnapshotConverged,
+  } = useOperationalCoordinationState({ releaseCapabilities });
   const { currency: orgCurrency } = useOrganizationCurrency();
   const syncHandlers = useGlobalOperationalSyncHandlers();
   const [batches, setBatches] = React.useState<Batch[]>([]);
@@ -242,7 +249,7 @@ export function OperatorSettlementsWorkspace({
     );
   }
 
-  if (activationLoading || !operationalOnboarding?.graphReady) {
+  if (settlementInitialization.showInitializationShell) {
     return (
       <div className="space-y-6">
         {pageHeader}
@@ -250,6 +257,8 @@ export function OperatorSettlementsWorkspace({
           onboarding={operationalOnboarding}
           initialization={operationalInitialization}
           loading={activationLoading}
+          graphSnapshotConverged={graphSnapshotConverged}
+          nextActions={guidance.actions}
         >
           {null}
         </OperationalSettlementInitialization>

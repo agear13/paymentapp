@@ -35,6 +35,8 @@ import {
   applyGlobalOperationalSync,
   useGlobalOperationalSyncHandlers,
 } from '@/hooks/use-global-operational-sync';
+import { useReleaseInteractionCapability } from '@/hooks/use-release-interaction-capability';
+import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
 
 interface Payout {
   id: string;
@@ -66,6 +68,7 @@ export default function PayoutBatchDetailPage() {
     ? PAYOUTS_SETTLEMENTS_HREF
     : '/dashboard/partners/payouts';
   const { organizationId } = useOrganization();
+  const releaseInteraction = useReleaseInteractionCapability();
   const [batch, setBatch] = React.useState<Batch | null>(null);
   const [payouts, setPayouts] = React.useState<Payout[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -88,7 +91,7 @@ export default function PayoutBatchDetailPage() {
   const syncHandlers = useGlobalOperationalSyncHandlers();
 
   const fetchData = React.useCallback(async () => {
-    if (!organizationId || !id) return;
+    if (!organizationId || !id || !releaseInteraction.canQueryReleaseHistory) return;
     setLoading(true);
     try {
       const [batchRes, payoutsRes] = await Promise.all([
@@ -97,6 +100,7 @@ export default function PayoutBatchDetailPage() {
       ]);
       const batchData = await batchRes.json();
       const payoutsData = await payoutsRes.json();
+      if (batchRes.status === 403 || payoutsRes.status === 403) return;
       if (!batchRes.ok) throw new Error(batchData.error || 'Failed to fetch batch');
       if (!payoutsRes.ok) throw new Error(payoutsData.error || 'Failed to fetch payouts');
 
@@ -107,11 +111,17 @@ export default function PayoutBatchDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [organizationId, id]);
+  }, [organizationId, id, releaseInteraction.canQueryReleaseHistory]);
 
   React.useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (!releaseInteraction.canQueryReleaseHistory) {
+      setBatch(null);
+      setPayouts([]);
+      setLoading(false);
+      return;
+    }
+    void fetchData();
+  }, [fetchData, releaseInteraction.canQueryReleaseHistory]);
 
   const copyPayoutDetails = (p: Payout) => {
     const text = [
@@ -263,6 +273,22 @@ export default function PayoutBatchDetailPage() {
       setHederaSigning(false);
     }
   };
+
+  if (!releaseInteraction.canQueryReleaseHistory) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" asChild>
+            <Link href={settlementsListHref}>
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold">Payout release detail</h1>
+        </div>
+        <ReleaseInteractionNotice state={releaseInteraction} />
+      </div>
+    );
+  }
 
   if (loading || !batch) {
     return (
