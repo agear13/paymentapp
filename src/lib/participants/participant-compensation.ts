@@ -18,11 +18,32 @@ export function isCompensationExempt(participant: DemoParticipant): boolean {
   );
 }
 
-export function isCompensationConfigured(participant: DemoParticipant): boolean {
+/** Recognize compensation persisted on participant rows even when configured flag was not backfilled. */
+export function inferCompensationConfiguredFromPersistence(
+  participant: DemoParticipant
+): boolean {
   if (isCompensationExempt(participant)) return true;
   const profile = participant.compensationProfile;
-  if (profile?.configured === true) return true;
+  if (!profile) return false;
+  if (profile.configured === true) return true;
+  if (profile.configuredAt) return true;
+  const hasProfileAmount =
+    (profile.fixedAmount != null && profile.fixedAmount > 0) ||
+    (profile.percentage != null && profile.percentage > 0);
+  if (profile.compensationType && hasProfileAmount) return true;
+  if (
+    participant.operationalStatus !== 'draft' &&
+    profile.compensationType &&
+    Number.isFinite(participant.commissionValue) &&
+    participant.commissionValue > 0
+  ) {
+    return true;
+  }
   return false;
+}
+
+export function isCompensationConfigured(participant: DemoParticipant): boolean {
+  return inferCompensationConfiguredFromPersistence(participant);
 }
 
 export function deriveAllocationStatus(participant: DemoParticipant): AllocationStatus {

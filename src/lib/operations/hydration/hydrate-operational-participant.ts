@@ -11,6 +11,10 @@ import {
   warnLegacyParticipantShape,
   warnHydrationFailure,
 } from '@/lib/operations/dev/operational-diagnostics';
+import {
+  inferCompensationConfiguredFromPersistence,
+  isCompensationExempt,
+} from '@/lib/participants/participant-compensation';
 
 const DEV = process.env.NODE_ENV === 'development';
 
@@ -52,12 +56,20 @@ function hydrateCompensationProfile(
     warnMissingField('commissionServiceIds', participant.id);
   }
 
-  return {
+  const hydrated = {
     ...profile,
     revenueSources: profile.revenueSources ?? [],
     customerAttributionEnabled: profile.customerAttributionEnabled ?? false,
     commissionSourceMode: (profile.commissionSourceMode ?? 'all_active') as CommissionSourceMode,
     commissionServiceIds: profile.commissionServiceIds ?? [],
+  };
+  const draftParticipant = { ...participant, compensationProfile: hydrated };
+  const configured =
+    isCompensationExempt(draftParticipant) ||
+    inferCompensationConfiguredFromPersistence(draftParticipant);
+  return {
+    ...hydrated,
+    configured: configured ? true : hydrated.configured ?? false,
   };
 }
 

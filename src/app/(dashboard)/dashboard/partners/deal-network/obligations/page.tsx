@@ -85,6 +85,11 @@ import {
 } from '@/components/ui/sheet';
 import { PayoutGlossaryTooltip } from '@/components/payouts/payout-glossary-tooltip';
 import { cn } from '@/lib/utils';
+import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
+import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import { useOperationalTimelineProjection } from '@/hooks/use-operational-timeline-projection';
+import { safeObligationsProjection } from '@/lib/operations/coordination/safe-obligations-projection';
 import {
   Tooltip,
   TooltipContent,
@@ -413,13 +418,24 @@ function DealNetworkObligationsPageContent() {
   const { currency: orgCurrency } = useOrganizationCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const {
+    readiness,
+    settlementInitialization,
+    operationalOnboarding,
+    operationalInitialization,
+    loading: activationLoading,
+    guidance,
+    graphSnapshotConverged,
+    releaseInteraction,
+  } = useOperationalCoordinationState();
+  const timelineProjection = useOperationalTimelineProjection();
   const isPayoutsRoute = pathname?.startsWith('/dashboard/payouts') ?? false;
   const backHref = isPayoutsRoute ? PAYOUTS_HUB_HREF : '/dashboard/partners/deal-network';
   const backLabel = isPayoutsRoute ? 'Back to Payouts' : 'Back to Deal Network';
 
   const [allRows, setAllRows] = React.useState<ObligationRow[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
   const [dealFilter, setDealFilter] = React.useState<string>('__all__');
   const [statusFilter, setStatusFilter] = React.useState<string>('__all__');
   const [participantFilter, setParticipantFilter] = React.useState<string>('__all__');
@@ -456,32 +472,39 @@ function DealNetworkObligationsPageContent() {
   }, []);
 
   const load = React.useCallback(async () => {
+    if (settlementInitialization.showInitializationShell) {
+      setAllRows([]);
+      setLoadError(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const res = await fetch('/api/deal-network-pilot/obligations', {
         credentials: 'include',
         cache: 'no-store',
       });
       if (res.status === 401) {
-        setError('You need to be signed in to view pilot obligations.');
+        setLoadError('You need to be signed in to view payout obligations.');
         setAllRows([]);
         return;
       }
       if (!res.ok) {
-        setError('Could not load obligations.');
+        setLoadError(null);
         setAllRows([]);
         return;
       }
       const json = (await res.json()) as { data: ObligationRow[] };
       setAllRows(Array.isArray(json.data) ? json.data : []);
     } catch {
-      setError('Could not load obligations.');
+      setLoadError(null);
       setAllRows([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [settlementInitialization.showInitializationShell]);
 
   React.useEffect(() => {
     void load();
@@ -547,6 +570,48 @@ function DealNetworkObligationsPageContent() {
     [allRows]
   );
 
+  const obligationsProjection = React.useMemo(
+    () =>
+      safeObligationsProjection({
+        readiness,
+        settlementShowShell: settlementInitialization.showInitializationShell,
+        timelineProjection,
+        nextActions: guidance.actions,
+        loadError,
+        obligationsAvailable: allRows.length > 0,
+      }),
+    [
+      allRows.length,
+      guidance.actions,
+      loadError,
+      readiness,
+      settlementInitialization.showInitializationShell,
+      timelineProjection,
+    ]
+  );
+
+  if (settlementInitialization.showInitializationShell) {
+    return (
+      <div className="mx-auto max-w-7xl space-y-8 p-4 md:p-8">
+        <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 px-2">
+          <Link href={backHref}>
+            <ArrowLeft className="mr-1 size-4" />
+            {backLabel}
+          </Link>
+        </Button>
+        <OperationalSettlementInitialization
+          onboarding={operationalOnboarding}
+          initialization={operationalInitialization}
+          loading={activationLoading}
+          graphSnapshotConverged={graphSnapshotConverged}
+          nextActions={guidance.actions}
+        >
+          {null}
+        </OperationalSettlementInitialization>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-4 md:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -584,10 +649,29 @@ function DealNetworkObligationsPageContent() {
         </TooltipProvider>
       </div>
 
-      {error ? (
+      {!releaseInteraction.releaseInteractionEnabled ? (
+        <ReleaseInteractionNotice state={releaseInteraction} />
+      ) : null}
+
+      {obligationsProjection.degraded && obligationsProjection.guidance ? (
+        <Alert className="border-primary/20 bg-primary/[0.03]">
+          <AlertTitle>{obligationsProjection.headline}</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>{obligationsProjection.guidance}</p>
+            {obligationsProjection.nextActions[0] ? (
+              <p className="text-sm font-medium text-foreground">
+                Next: {obligationsProjection.nextActions[0].action} —{' '}
+                {obligationsProjection.nextActions[0].reason}
+              </p>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {loadError ? (
         <Alert variant="destructive">
-          <AlertTitle>Unable to load</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertTitle>Sign-in required</AlertTitle>
+          <AlertDescription>{loadError}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -627,9 +711,11 @@ function DealNetworkObligationsPageContent() {
                     {kpi.availableForPayoutCount === 1 ? '' : 's'} ready to release
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2 sm:justify-end">
-                    <Button size="sm" variant="default" className="h-8 shadow-sm" asChild>
-                      <Link href={PAYOUTS_SETTLEMENTS_HREF}>Create release batch</Link>
-                    </Button>
+                    {releaseInteraction.canCreateReleaseBatch ? (
+                      <Button size="sm" variant="default" className="h-8 shadow-sm" asChild>
+                        <Link href={PAYOUTS_SETTLEMENTS_HREF}>Create release batch</Link>
+                      </Button>
+                    ) : null}
                     <Button size="sm" variant="outline" className="h-8" asChild>
                       <Link href={`${PAYOUTS_OBLIGATIONS_HREF}?status=AVAILABLE_FOR_PAYOUT`}>
                         Review payouts
@@ -803,8 +889,15 @@ function DealNetworkObligationsPageContent() {
                       (row.obligation_type === 'PLATFORM_FEE' ? 'Platform' : '—');
                     const dealLabel = row.deal?.name ?? row.deal_id;
                     const expanded = expandedRowId === row.id;
-                    const nextAction = getObligationNextAction(row);
-                    const blocking = getObligationBlockingIssue(row);
+                    let nextAction = 'Review';
+                    let blocking: string | null = null;
+                    try {
+                      nextAction = getObligationNextAction(row);
+                      blocking = getObligationBlockingIssue(row);
+                    } catch {
+                      nextAction = 'Review obligation line';
+                      blocking = null;
+                    }
 
                     const openDetail = () => {
                       if (isMobile) {

@@ -51,6 +51,7 @@ describe('payout explainability integrity', () => {
         obligations: [],
         summary: {
           participantCount: 0,
+          earningsConfiguredCount: 0,
           payoutReadyCount: 0,
           releaseReadyCount: 0,
           blockerCount: 0,

@@ -16,6 +16,8 @@ export type ReleaseInteractionState = {
   canPreviewReleaseEligibility: boolean;
   canCreateReleaseBatch: boolean;
   canSubmitRelease: boolean;
+  /** Beta-gated referral commission ledger (distinct from pilot obligation reads). */
+  canQueryReferralCommissionLedger: boolean;
   disabledReason: string | null;
   disabledCategory: ReleaseInteractionDisabledCategory;
   interactionGuidance: string | null;
@@ -46,6 +48,7 @@ function disabledReleaseInteractionState(
     canPreviewReleaseEligibility: false,
     canCreateReleaseBatch: false,
     canSubmitRelease: false,
+    canQueryReferralCommissionLedger: false,
     disabledReason: guidance,
     disabledCategory: category,
     interactionGuidance: guidance,
@@ -105,6 +108,7 @@ export function deriveReleaseInteractionState(
       canPreviewReleaseEligibility: true,
       canCreateReleaseBatch: operationalCapabilities.canCreateReleaseBatch,
       canSubmitRelease: operationalCapabilities.canSubmitRelease,
+      canQueryReferralCommissionLedger: operationalCapabilities.canUseBetaSettlementFeatures,
       disabledReason: null,
       disabledCategory: null,
       interactionGuidance: null,

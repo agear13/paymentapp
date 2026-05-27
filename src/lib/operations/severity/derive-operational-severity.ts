@@ -122,6 +122,7 @@ export function deriveOperationalSeverity(input: SeverityDerivationInput): Atten
             obligations: [],
             summary: {
               participantCount: workspace.participantCount,
+              earningsConfiguredCount: workspace.participantsConfiguredCount,
               payoutReadyCount: 0,
               releaseReadyCount: workspace.releaseEligibleCount,
               blockerCount: guidance.explanation.blockers.length,

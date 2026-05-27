@@ -220,6 +220,7 @@ export function buildOperationalGuidance(
           obligations: [],
           summary: {
             participantCount: input.participants?.length ?? 0,
+            earningsConfiguredCount: input.workspace.participantsConfiguredCount,
             payoutReadyCount: 0,
             releaseReadyCount: input.workspace.releaseEligibleCount,
             blockerCount: explanation.blockers.length,

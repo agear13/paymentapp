@@ -38,6 +38,7 @@ export type OperationalCoordinationSnapshot = {
   obligations: ReturnType<typeof deriveObligationState>[];
   summary: {
     participantCount: number;
+    earningsConfiguredCount: number;
     payoutReadyCount: number;
     releaseReadyCount: number;
     blockerCount: number;
@@ -170,6 +171,9 @@ export function getOperationalCoordinationSnapshot(
     obligations,
     summary: {
       participantCount: participants.length,
+      earningsConfiguredCount: participantSnapshots.filter(
+        (s) => s.payoutReadiness.flags.hasCompensation
+      ).length,
       payoutReadyCount: participantSnapshots.filter((s) => s.payoutReadiness.payoutReady).length,
       releaseReadyCount,
       blockerCount: allBlockers.length,
@@ -188,6 +192,7 @@ export function getOperationalCoordinationSnapshot(
 export function emptyOperationalGraphSummary(): OperationalCoordinationSnapshot['summary'] {
   return {
     participantCount: 0,
+    earningsConfiguredCount: 0,
     payoutReadyCount: 0,
     releaseReadyCount: 0,
     blockerCount: 0,

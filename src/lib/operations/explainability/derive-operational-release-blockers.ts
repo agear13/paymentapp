@@ -17,6 +17,7 @@ import {
   assertPayoutExplainabilityInvariants,
   type PayoutExplainabilityInvariantInput,
 } from '@/lib/operations/dev/operational-invariants';
+import { deriveWorkspaceParticipantPayoutSummary } from '@/lib/operations/readiness/participant-readiness';
 
 export const OPERATIONAL_RELEASE_BLOCKER_CATEGORIES = [
   'funding_missing',
@@ -55,6 +56,34 @@ export type OperationalReleaseBlockerInput = {
   initializationRecoveryMessage?: string | null;
 };
 
+function semanticBlockerFingerprint(reason: string): string {
+  const t = reason.toLowerCase();
+  if (/release not ready|not ready for release|safe to release/i.test(t)) return 'release-not-ready';
+  if (/earnings|compensation/i.test(t)) return 'compensation';
+  if (/payout details|external payout|confirm.*payout/i.test(t)) return 'payout-details';
+  if (/agreement|approval|participation/i.test(t)) return 'agreement';
+  if (/funding|reserved|settlement|allocation/i.test(t)) return 'funding';
+  if (/obligation|orchestration refresh/i.test(t)) return 'obligation-sync';
+  if (/provider/i.test(t)) return 'provider';
+  return t.slice(0, 48);
+}
+
+export function deduplicateReleaseBlockers(
+  blockers: OperationalReleaseBlockerDetail[]
+): OperationalReleaseBlockerDetail[] {
+  const seen = new Set<string>();
+  const unique: OperationalReleaseBlockerDetail[] = [];
+  for (const d of blockers) {
+    const key = d.participantId
+      ? `${d.category}:${d.participantId}`
+      : `${d.category}:${semanticBlockerFingerprint(d.reason)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(d);
+  }
+  return unique;
+}
+
 function detailFromOperationalBlocker(
   blocker: OperationalBlockerDetail,
   projectId?: string | null
@@ -63,7 +92,7 @@ function detailFromOperationalBlocker(
   let category: OperationalReleaseBlockerCategory = 'participant_approval_missing';
   let ctaIntent: OperationalRouteIntent = 'configure_earnings';
   let ctaLabel = blocker.ctaLabel ?? 'Review participant';
-  let operatorActionRequired = true;
+  const operatorActionRequired = true;
 
   if (/earnings|compensation/i.test(explanation)) {
     category = 'compensation_configuration_missing';
@@ -219,12 +248,16 @@ export function deriveOperationalReleaseBlockers(
     });
   }
 
-  if (workspace && workspace.participantCount > workspace.participantsConfiguredCount) {
-    const missing = workspace.participantCount - workspace.participantsConfiguredCount;
+  const graphPayoutSummary = deriveWorkspaceParticipantPayoutSummary(
+    snapshot.participants.map((row) => row.participant)
+  );
+  const participantsNeedSetup =
+    graphPayoutSummary.participantCount - graphPayoutSummary.earningsConfiguredCount;
+  if (participantsNeedSetup > 0) {
     details.push({
       id: 'compensation-missing',
       category: 'compensation_configuration_missing',
-      reason: `${missing} participant${missing === 1 ? '' : 's'} still need earnings configuration.`,
+      reason: `${participantsNeedSetup} participant${participantsNeedSetup === 1 ? '' : 's'} still need earnings configuration.`,
       remediation: 'Save compensation structure for each participant on the project.',
       unlockCondition: 'All active participants have configured earnings profiles.',
       ctaLabel: 'Configure earnings',
@@ -286,14 +319,7 @@ export function deriveOperationalReleaseBlockers(
     }
   }
 
-  const seen = new Set<string>();
-  const unique: OperationalReleaseBlockerDetail[] = [];
-  for (const d of details) {
-    const key = `${d.category}:${d.reason}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(d);
-  }
+  const unique = deduplicateReleaseBlockers(details);
 
   if (typeof window === 'undefined') {
     const invariantInput: PayoutExplainabilityInvariantInput = {

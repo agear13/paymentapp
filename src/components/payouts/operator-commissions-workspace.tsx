@@ -37,6 +37,10 @@ import {
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { PayoutEmptyState } from '@/components/payouts/payout-empty-state';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
+import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
+import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import { shouldSuppressOperationalErrorToast } from '@/lib/operations/coordination/operational-fetch-guards';
 import type { PayoutEmptyIconVariant } from '@/components/payouts/payout-empty-state';
 import { cn } from '@/lib/utils';
 
@@ -102,9 +106,11 @@ function sectionSpacing(emphasis: SectionEmphasis): string {
 function OperationalSectionBlock({
   section,
   orgCurrency,
+  canCreateReleaseBatch,
 }: {
   section: OperationalSection;
   orgCurrency: string;
+  canCreateReleaseBatch: boolean;
 }) {
   const titleClass = cn(
     section.emphasis === 'primary' && 'text-xl font-semibold tracking-tight',
@@ -130,7 +136,7 @@ function OperationalSectionBlock({
         >
           {section.description}
         </p>
-        {section.emphasis === 'primary' && section.rows.length > 0 ? (
+        {section.emphasis === 'primary' && section.rows.length > 0 && canCreateReleaseBatch ? (
           <Button size="sm" className="mt-3 h-8" asChild>
             <Link href={PAYOUTS_SETTLEMENTS_HREF}>Create release batch</Link>
           </Button>
@@ -189,38 +195,84 @@ function OperationalSectionBlock({
 export function OperatorCommissionsWorkspace() {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const { currency: orgCurrency } = useOrganizationCurrency();
+  const {
+    releaseInteraction,
+    settlementInitialization,
+    operationalOnboarding,
+    operationalInitialization,
+    loading: activationLoading,
+    guidance,
+    graphSnapshotConverged,
+  } = useOperationalCoordinationState();
   const [pilotRows, setPilotRows] = React.useState<PilotObligation[]>([]);
   const [orgPosted, setOrgPosted] = React.useState<OrgCommission[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   const fetchAll = React.useCallback(async () => {
+    if (settlementInitialization.showInitializationShell) {
+      setPilotRows([]);
+      setOrgPosted([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      const [pilotRes, orgRes] = await Promise.all([
-        fetch('/api/deal-network-pilot/obligations'),
-        organizationId
-          ? fetch(
-              `/api/commissions/obligations?organizationId=${organizationId}&status=POSTED`
-            )
-          : Promise.resolve(null),
-      ]);
+      const pilotRes = await fetch('/api/deal-network-pilot/obligations', {
+        credentials: 'include',
+        cache: 'no-store',
+      });
       const pilotJson = await pilotRes.json();
-      if (!pilotRes.ok) throw new Error(pilotJson.error || 'Failed to load earnings');
-      setPilotRows(pilotJson.data ?? []);
+      if (!pilotRes.ok) {
+        if (!shouldSuppressOperationalErrorToast({ status: pilotRes.status, message: pilotJson.error, releaseInteraction })) {
+          throw new Error(pilotJson.error || 'Failed to load earnings');
+        }
+        setPilotRows([]);
+      } else {
+        setPilotRows(pilotJson.data ?? []);
+      }
 
-      if (orgRes) {
+      if (organizationId && releaseInteraction.canQueryReferralCommissionLedger) {
+        const orgRes = await fetch(
+          `/api/commissions/obligations?organizationId=${organizationId}&status=POSTED`,
+          { credentials: 'include', cache: 'no-store' }
+        );
         const orgJson = await orgRes.json();
-        if (!orgRes.ok) throw new Error(orgJson.error || 'Failed to load referral earnings');
-        setOrgPosted(orgJson.data ?? []);
+        if (!orgRes.ok) {
+          if (
+            !shouldSuppressOperationalErrorToast({
+              status: orgRes.status,
+              message: orgJson.error,
+              releaseInteraction,
+            })
+          ) {
+            throw new Error(orgJson.error || 'Failed to load referral earnings');
+          }
+          setOrgPosted([]);
+        } else {
+          setOrgPosted(orgJson.data ?? []);
+        }
       } else {
         setOrgPosted([]);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load participant earnings');
+      const message = err instanceof Error ? err.message : 'Failed to load participant earnings';
+      if (
+        !shouldSuppressOperationalErrorToast({
+          message,
+          releaseInteraction,
+        })
+      ) {
+        toast.error(message);
+      }
     } finally {
       setLoading(false);
     }
-  }, [organizationId]);
+  }, [
+    organizationId,
+    releaseInteraction,
+    settlementInitialization.showInitializationShell,
+  ]);
 
   React.useEffect(() => {
     void fetchAll();
@@ -327,7 +379,7 @@ export function OperatorCommissionsWorkspace() {
     };
   });
 
-  if (isOrgLoading) {
+  if (isOrgLoading || activationLoading) {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold tracking-tight">Participant earnings</h1>
@@ -336,18 +388,39 @@ export function OperatorCommissionsWorkspace() {
     );
   }
 
+  const pageHeader = (
+    <>
+      <h1 className="text-3xl font-bold tracking-tight">Participant earnings</h1>
+      <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+        Track what participants have earned and what is ready for payout release.
+      </p>
+      <p className="text-xs text-muted-foreground/60 mt-2">
+        {PAYOUT_TRUST_COPY.traceableAfterRelease}
+      </p>
+    </>
+  );
+
+  if (settlementInitialization.showInitializationShell) {
+    return (
+      <div className="space-y-6">
+        {pageHeader}
+        <OperationalSettlementInitialization
+          onboarding={operationalOnboarding}
+          initialization={operationalInitialization}
+          loading={activationLoading}
+          graphSnapshotConverged={graphSnapshotConverged}
+          nextActions={guidance.actions}
+        >
+          {null}
+        </OperationalSettlementInitialization>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-10">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Participant earnings</h1>
-          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-            Track what participants have earned and what is ready for payout release.
-          </p>
-          <p className="text-xs text-muted-foreground/60 mt-2">
-            {PAYOUT_TRUST_COPY.traceableAfterRelease}
-          </p>
-        </div>
+        <div>{pageHeader}</div>
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -367,6 +440,10 @@ export function OperatorCommissionsWorkspace() {
         </TooltipProvider>
       </div>
 
+      {!releaseInteraction.releaseInteractionEnabled ? (
+        <ReleaseInteractionNotice state={releaseInteraction} />
+      ) : null}
+
       {loading ? (
         <p className="text-muted-foreground text-sm">Loading…</p>
       ) : (
@@ -376,6 +453,7 @@ export function OperatorCommissionsWorkspace() {
               key={section.id}
               section={section}
               orgCurrency={orgCurrency}
+              canCreateReleaseBatch={releaseInteraction.canCreateReleaseBatch}
             />
           ))}
         </div>
@@ -387,10 +465,17 @@ export function OperatorCommissionsWorkspace() {
             Referral earnings history
           </h2>
           <p className="text-xs text-muted-foreground/60 mt-1">
-            Archive — recorded referral earnings from customer payments.
+            {releaseInteraction.canQueryReferralCommissionLedger
+              ? 'Archive — recorded referral earnings from customer payments.'
+              : 'Referral earnings history unlocks when beta payout infrastructure permits ledger access.'}
           </p>
         </div>
-        {loading ? (
+        {!releaseInteraction.canQueryReferralCommissionLedger ? (
+          <p className="text-sm text-muted-foreground">
+            {releaseInteraction.interactionGuidance ??
+              'Release actions are disabled while coordination completes or beta lockdown applies.'}
+          </p>
+        ) : loading ? (
           <p className="text-muted-foreground text-sm">Loading…</p>
         ) : orgPosted.length === 0 ? (
           <PayoutEmptyState

@@ -106,6 +106,35 @@ export function deriveParticipantPayoutReadiness(
   }
 }
 
+export type WorkspaceParticipantPayoutSummary = {
+  participantCount: number;
+  earningsConfiguredCount: number;
+  payoutReadyCount: number;
+  participantsConfigured: boolean;
+};
+
+/** Canonical workspace aggregation from persisted participant rows. */
+export function deriveWorkspaceParticipantPayoutSummary(
+  participants: DemoParticipant[]
+): WorkspaceParticipantPayoutSummary {
+  const active = participants.filter((p) => normalizeParticipantEntity(p).name?.trim());
+  let earningsConfiguredCount = 0;
+  let payoutReadyCount = 0;
+
+  for (const participant of active) {
+    const readiness = deriveParticipantPayoutReadiness(participant);
+    if (readiness.flags.hasCompensation) earningsConfiguredCount += 1;
+    if (readiness.payoutReady) payoutReadyCount += 1;
+  }
+
+  return {
+    participantCount: active.length,
+    earningsConfiguredCount,
+    payoutReadyCount,
+    participantsConfigured: active.length > 0 && earningsConfiguredCount >= active.length,
+  };
+}
+
 export function countPayoutReadyParticipants(
   participants: DemoParticipant[]
 ): number {

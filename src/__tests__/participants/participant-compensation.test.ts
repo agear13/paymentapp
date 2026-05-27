@@ -47,6 +47,21 @@ describe('participant compensation readiness', () => {
     ).toBe(true);
   });
 
+  it('infers configured from persisted type and amount without configured flag', () => {
+    expect(
+      isCompensationConfigured(
+        baseParticipant({
+          commissionValue: 5000,
+          compensationProfile: {
+            compensationType: 'FIXED_FEE',
+            fixedAmount: 5000,
+            configured: false,
+          },
+        })
+      )
+    ).toBe(true);
+  });
+
   it('reports compensation missing on readiness', () => {
     const r = deriveParticipantReadiness(baseParticipant({ name: 'Elite Beverages' }));
     expect(r.primaryIssue).toMatch(/Compensation|missing/i);

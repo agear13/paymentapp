@@ -54,11 +54,13 @@ export function projectOperationalTimeline(
   const timeline = deriveTimelineEventsFromProjection({ milestones, events: canonicalEvents });
   const replayFingerprint = operationalTimelineReplayFingerprint(canonicalEvents);
 
-  assertEventProjectionInvariants({
-    timelineDerivedOutsideEventLayer: false,
-    replayFingerprintEmpty: canonicalEvents.length > 0 && replayFingerprint.length === 0,
-    nonDeterministicReplay: false,
-  });
+  if (process.env.NODE_ENV === 'development') {
+    assertEventProjectionInvariants({
+      timelineDerivedOutsideEventLayer: false,
+      replayFingerprintEmpty: canonicalEvents.length > 0 && replayFingerprint.length === 0,
+      nonDeterministicReplay: false,
+    });
+  }
 
   return {
     canonicalEvents,

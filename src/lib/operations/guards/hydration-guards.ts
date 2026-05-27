@@ -5,6 +5,10 @@ import type { CompensationState } from '@/lib/operations/states/compensation-sta
 import type { ParticipantState } from '@/lib/operations/states/participant-state';
 import type { ProjectState } from '@/lib/operations/states/project-state';
 import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
+import {
+  inferCompensationConfiguredFromPersistence,
+  isCompensationExempt,
+} from '@/lib/participants/participant-compensation';
 /**
  * Safe hydration — never trust DB completeness.
  * All UI and orchestration must read entities through these helpers.
@@ -49,15 +53,8 @@ export function safeCompensationState(
 ): CompensationState {
   const p = participant;
   if (!p) return 'MISSING';
-  const type = p.compensationProfile?.compensationType;
-  if (
-    p.compensationProfile?.exemptFromPayout ||
-    type === 'UNPAID_INTERNAL' ||
-    (type as string) === 'INTERNAL'
-  ) {
-    return 'CONFIGURED';
-  }
-  if (p.compensationProfile?.configured === true) return 'CONFIGURED';
+  if (isCompensationExempt(p)) return 'CONFIGURED';
+  if (inferCompensationConfiguredFromPersistence(p)) return 'CONFIGURED';
   if (p.compensationProfile?.compensationType) return 'DRAFT';
   return 'MISSING';
 }

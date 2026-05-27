@@ -18,6 +18,7 @@ import { deduplicateOperationalActions } from '@/lib/operations/explainability/d
 import { deriveNextOperationalActions } from '@/lib/operations/explainability/derive-next-operational-actions';
 import { deriveOperationalNextActions } from '@/lib/operations/explainability/derive-operational-next-actions';
 import { deriveOperationalBlockingActions } from '@/lib/operations/explainability/derive-operational-blocking-actions';
+import { deduplicateReleaseBlockers } from '@/lib/operations/explainability/derive-operational-release-blockers';
 import { explainWorkspaceState } from '@/lib/operations/explainability/state-explanations';
 import { safeEventProjection } from '@/lib/operations/timeline/safe-event-projection';
 import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
@@ -25,8 +26,12 @@ import { emptyOperationalGraphFunding, emptyOperationalGraphSummary } from '@/li
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import { PLATFORM_FALLBACK_CURRENCY } from '@/lib/currency/resolve-operational-workspace-currency';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
-import { assertOnboardingGraphInvariants } from '@/lib/operations/dev/operational-invariants';
+import {
+  assertOnboardingGraphInvariants,
+  assertParticipantKpiConvergenceInvariants,
+} from '@/lib/operations/dev/operational-invariants';
 import type { OperationalOnboardingState } from '@/lib/operations/onboarding/operational-onboarding-phases';
+import { deriveWorkspaceParticipantPayoutSummary } from '@/lib/operations/readiness/participant-readiness';
 
 function projectableSummary(snapshot: OperationalCoordinationSnapshot) {
   if (snapshot.summary == null) {
@@ -65,9 +70,16 @@ function mapGraphPhase(snapshot: OperationalCoordinationSnapshot): {
   return { phase: 'setup_in_progress', label: 'Workspace setup in progress' };
 }
 
+function participantPayoutSummaryFromGraph(snapshot: OperationalCoordinationSnapshot) {
+  return deriveWorkspaceParticipantPayoutSummary(
+    snapshot.participants.map((row) => row.participant)
+  );
+}
+
 function buildChecklist(
   input: WorkspaceActivationInput,
-  snapshot: OperationalCoordinationSnapshot
+  snapshot: OperationalCoordinationSnapshot,
+  payoutSummary: ReturnType<typeof deriveWorkspaceParticipantPayoutSummary>
 ): ActivationChecklistItem[] {
   const provider =
     input.stripeConfigured || input.wiseConfigured || input.hederaConfigured;
@@ -83,7 +95,7 @@ function buildChecklist(
     {
       id: 'compensation',
       label: 'Participant compensation configured',
-      complete: input.participantsConfigured,
+      complete: payoutSummary.participantsConfigured,
     },
     { id: 'provider', label: 'Payment provider connected', complete: provider },
     { id: 'revenue', label: 'Revenue collection ready', complete: revenue },
@@ -111,6 +123,12 @@ export function activationFromOperationalGraph(
   input: WorkspaceActivationInput
 ): WorkspaceActivationSnapshot {
   const summary = projectableSummary(snapshot);
+  const payoutSummary = participantPayoutSummaryFromGraph(snapshot);
+  const participantCount = Math.max(
+    input.participantCount,
+    summary.participantCount,
+    payoutSummary.participantCount
+  );
   const { phase, label } = mapGraphPhase(snapshot);
   const provider =
     input.stripeConfigured || input.wiseConfigured || input.hederaConfigured;
@@ -141,9 +159,9 @@ export function activationFromOperationalGraph(
   return {
     workspaceCreated: input.hasOrganization,
     projectCreated: input.projectCreated,
-    participantCount: input.participantCount,
-    participantsConfigured: input.participantsConfigured,
-    participantsConfiguredCount: input.participantsConfiguredCount,
+    participantCount,
+    participantsConfigured: payoutSummary.participantsConfigured,
+    participantsConfiguredCount: payoutSummary.earningsConfiguredCount,
     obligationsCreated: snapshot.obligations.length > 0,
     obligationCount: snapshot.obligations.length,
     revenueConfigured: revenue,
@@ -157,7 +175,7 @@ export function activationFromOperationalGraph(
     onboardingProgressPercent: progress,
     phase,
     phaseLabel: label,
-    checklist: buildChecklist(input, snapshot),
+    checklist: buildChecklist(input, snapshot, payoutSummary),
     activationBlockers: blockers,
     setupWarnings: [],
     primaryProjectId: input.primaryProjectId,
@@ -171,8 +189,21 @@ export function workspaceContextFromGraph(
   input: WorkspaceActivationInput
 ): WorkspaceOperationalContext {
   const summary = projectableSummary(snapshot);
-  const provider =
-    input.stripeConfigured || input.wiseConfigured || input.hederaConfigured;
+  const payoutSummary = participantPayoutSummaryFromGraph(snapshot);
+  const participantCount = Math.max(
+    input.participantCount,
+    summary.participantCount,
+    payoutSummary.participantCount
+  );
+
+  assertParticipantKpiConvergenceInvariants({
+    participantRowsWithCompensation: payoutSummary.earningsConfiguredCount,
+    workspaceEarningsConfiguredCount: payoutSummary.earningsConfiguredCount,
+    graphEarningsConfiguredCount: summary.earningsConfiguredCount,
+    payoutReadyCount: payoutSummary.payoutReadyCount,
+    graphPayoutReadyCount: summary.payoutReadyCount,
+  });
+
   return {
     hasOrganization: input.hasOrganization,
     onboardingCompleted: input.onboardingCompleted,
@@ -182,8 +213,8 @@ export function workspaceContextFromGraph(
     hederaConfigured: input.hederaConfigured,
     projectCount: input.projectCreated ? 1 : 0,
     primaryProjectId: input.primaryProjectId,
-    participantCount: input.participantCount,
-    participantsConfiguredCount: input.participantsConfiguredCount,
+    participantCount,
+    participantsConfiguredCount: payoutSummary.earningsConfiguredCount,
     obligationCount: snapshot.obligations.length,
     paymentLinkCount: input.paymentLinkCount,
     collectionPreferenceDecideLater: input.collectionPreferenceDecideLater,
@@ -328,6 +359,8 @@ export function guidanceFromOperationalGraph(input: {
     },
   };
 
+  const releaseBlockers = deduplicateReleaseBlockers(blocking.detailedBlockers);
+
   return {
     explanation,
     stateExplanation: explainWorkspaceState(
@@ -338,7 +371,7 @@ export function guidanceFromOperationalGraph(input: {
       deriveOperationalNextActions({
         explanation,
         workspace: input.workspace,
-        releaseBlockers: blocking.detailedBlockers,
+        releaseBlockers,
         graphReady: input.graphReady ?? true,
         graphSnapshotConverged: input.graphSnapshotConverged ?? input.graphReady ?? true,
         operationalOnboarding: input.operationalOnboarding,
@@ -346,7 +379,7 @@ export function guidanceFromOperationalGraph(input: {
     ),
     trustSignals: deriveTrustSignals({ workspace: input.workspace }),
     releaseConfidence,
-    releaseBlockers: blocking.detailedBlockers,
+    releaseBlockers,
     timeline,
     transition: null,
     degraded: false,

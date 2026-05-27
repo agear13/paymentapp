@@ -18,3 +18,9 @@ export {
   type SafeProjectionInput,
   type SafeProjectionResult,
 } from '@/lib/operations/coordination/safe-operational-projection';
+export { safeObligationsProjection } from '@/lib/operations/coordination/safe-obligations-projection';
+export { safeReleaseCapabilityProjection } from '@/lib/operations/coordination/safe-release-capability-projection';
+export {
+  isExpectedOperationalForbidden,
+  shouldSuppressOperationalErrorToast,
+} from '@/lib/operations/coordination/operational-fetch-guards';

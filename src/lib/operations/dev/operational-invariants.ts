@@ -759,6 +759,7 @@ export function assertOnboardingGuidanceInvariants(
   input: OnboardingGuidanceInvariantInput
 ): void {
   if (process.env.NODE_ENV !== 'development') return;
+  if (input.graphSnapshotConverged === false) return;
 
   if (
     input.hasStripeConnected &&
@@ -1092,6 +1093,127 @@ export function assertEventLayerInvariants(input: EventLayerInvariantInput): voi
     throw new OperationalInvariantViolation(
       'CONFIDENCE_SCORED_OUTSIDE_EVENT_LAYER',
       'Operational confidence scored outside event projection layer'
+    );
+  }
+}
+
+export type ObligationProjectionInvariantInput = {
+  projectionThrewDuringConvergence?: boolean;
+  fatalDuringExpectedDegradedState?: boolean;
+};
+
+export function assertObligationProjectionInvariants(
+  input: ObligationProjectionInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.projectionThrewDuringConvergence) {
+    throw new OperationalInvariantViolation(
+      'OBLIGATION_PROJECTION_THROW_DURING_CONVERGENCE',
+      'Obligation projection threw during convergence window'
+    );
+  }
+
+  if (input.fatalDuringExpectedDegradedState) {
+    throw new OperationalInvariantViolation(
+      'OPERATIONAL_PAGE_FATAL_DURING_EXPECTED_DEGRADED_STATE',
+      'Operational page fatally failed during expected degraded state'
+    );
+  }
+}
+
+export type PayoutSurfaceInvariantInput = {
+  releaseQueryDuringBetaLockdown?: boolean;
+  forbiddenToastDuringExpectedDisabled?: boolean;
+  releaseEffectBeforeConvergence?: boolean;
+  participantEarningsBypassedReleaseGate?: boolean;
+  eventProjectionFatalOnPage?: boolean;
+  capabilityProjectionThrewDuringInit?: boolean;
+};
+
+export function assertPayoutSurfaceInvariants(input: PayoutSurfaceInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.releaseQueryDuringBetaLockdown) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_QUERY_EXECUTED_DURING_BETA_LOCKDOWN',
+      'Release-scoped query executed during beta lockdown'
+    );
+  }
+
+  if (input.forbiddenToastDuringExpectedDisabled) {
+    throw new OperationalInvariantViolation(
+      'FORBIDDEN_TOAST_TRIGGERED_DURING_EXPECTED_DISABLED_STATE',
+      'Forbidden toast surfaced during expected disabled capability state'
+    );
+  }
+
+  if (input.releaseEffectBeforeConvergence) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_EFFECT_EXECUTED_BEFORE_CAPABILITY_CONVERGENCE',
+      'Release effect executed before capability convergence'
+    );
+  }
+
+  if (input.participantEarningsBypassedReleaseGate) {
+    throw new OperationalInvariantViolation(
+      'PARTICIPANT_EARNINGS_BYPASSED_RELEASE_GATE',
+      'Participant earnings page bypassed release capability gate'
+    );
+  }
+
+  if (input.eventProjectionFatalOnPage) {
+    throw new OperationalInvariantViolation(
+      'EVENT_PROJECTION_FATAL_ON_OPERATIONAL_PAGE',
+      'Event projection caused fatal operational page failure'
+    );
+  }
+
+  if (input.capabilityProjectionThrewDuringInit) {
+    throw new OperationalInvariantViolation(
+      'CAPABILITY_PROJECTION_THROW_DURING_INITIALIZATION',
+      'Capability projection threw during initialization'
+    );
+  }
+}
+
+export type ParticipantKpiConvergenceInvariantInput = {
+  participantRowsWithCompensation?: number;
+  workspaceEarningsConfiguredCount?: number;
+  graphEarningsConfiguredCount?: number;
+  payoutReadyCount?: number;
+  graphPayoutReadyCount?: number;
+};
+
+export function assertParticipantKpiConvergenceInvariants(
+  input: ParticipantKpiConvergenceInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  const rows = input.participantRowsWithCompensation ?? 0;
+  const workspaceCount = input.workspaceEarningsConfiguredCount ?? 0;
+  const graphCount = input.graphEarningsConfiguredCount ?? workspaceCount;
+
+  if (rows > 0 && workspaceCount === 0) {
+    throw new OperationalInvariantViolation(
+      'KPI_COUNTS_CONTRADICT_PARTICIPANT_ROWS',
+      `${rows} participant row(s) show configured compensation but workspace KPI reports 0 earnings configured`
+    );
+  }
+
+  if (graphCount > 0 && workspaceCount !== graphCount) {
+    throw new OperationalInvariantViolation(
+      'PARTICIPANT_COMPENSATION_PERSISTED_BUT_NOT_READY',
+      `Graph reports ${graphCount} earnings configured but workspace context reports ${workspaceCount}`
+    );
+  }
+
+  const payoutReady = input.payoutReadyCount ?? 0;
+  const graphPayoutReady = input.graphPayoutReadyCount ?? payoutReady;
+  if (graphPayoutReady > 0 && payoutReady !== graphPayoutReady) {
+    throw new OperationalInvariantViolation(
+      'PAYOUT_READY_COUNT_CONTRADICTS_GRAPH',
+      `Graph reports ${graphPayoutReady} payout-ready participants but workspace context reports ${payoutReady}`
     );
   }
 }
