@@ -1,5 +1,6 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { formatCurrency } from '@/lib/formatters/format-currency';
+import { DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
 import type { ParticipantReferralCommerce } from '@/lib/referrals/referral-commerce-config';
 
 export type ScopedServiceCommissionRow = {
@@ -12,9 +13,14 @@ export type ScopedServiceCommissionRow = {
   earningsLabel: string;
 };
 
+export function formatCompensationPercent(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return `${value}%`;
+}
+
 export function formatFixedPayoutLine(
   amount: number,
-  currency = 'AUD',
+  currency: string = DEFAULT_WORKSPACE_CURRENCY,
   options?: { estimated?: boolean }
 ): string {
   const formatted = formatCurrency(amount, currency);

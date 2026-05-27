@@ -333,7 +333,7 @@ export function ProjectParticipantAgreementPanel({
           {!catalogCommission && commissionStructureLabel && participant.participationModel !== 'fixed_payout' ? (
             <p className="text-xs text-muted-foreground">Structure: {commissionStructureLabel}</p>
           ) : null}
-          {!catalogCommission && rolePayout && rolePayout.total > 0 ? (
+          {!catalogCommission && !participant.compensationProfile?.configured && rolePayout && rolePayout.total > 0 ? (
             <p className="text-sm text-muted-foreground">{rolePayout.previewLine}</p>
           ) : null}
         </div>

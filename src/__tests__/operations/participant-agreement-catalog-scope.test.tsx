@@ -4,6 +4,7 @@ import * as React from 'react';
 import { render } from '@testing-library/react';
 import { ParticipantAttributionAgreementSummary } from '@/components/projects/participant-attribution-agreement-summary';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
 
 const participant: DemoParticipant = {
   id: 'p-1',
@@ -93,26 +94,34 @@ describe('participant agreement catalog scope', () => {
     expect(container.textContent).toContain('All active catalog items available to customers');
   });
 
-  it('shows link routing clarification for single eligible service', () => {
+  it('shows hybrid attribution in agreement summary without referralCommerce object', () => {
+    const hybrid = applyCompensationProfileToParticipant(
+      {
+        ...participant,
+        referralCommerce: undefined,
+      } as DemoParticipant,
+      {
+        compensationType: 'HYBRID',
+        configured: true,
+        percentage: 8,
+        fixedAmount: 500,
+        customerAttributionEnabled: true,
+        commissionSourceMode: 'selected',
+        commissionServiceIds: ['svc-1'],
+        revenueSources: [],
+      }
+    );
     const { container } = render(
       <ParticipantAttributionAgreementSummary
-        participant={participant}
-        commerce={participant.referralCommerce}
+        participant={hybrid}
         approved
         catalogItems={[{ id: 'svc-1', name: 'Early Bird Tickets' }]}
-        serviceRows={[
-          {
-            id: 'svc-1',
-            name: 'Early Bird Tickets',
-            customerPrice: 100,
-            currency: 'AUD',
-            revenueSharePct: 10,
-            estimatedEarnings: 10,
-            earningsLabel: 'A$10.00',
-          },
-        ]}
       />
     );
-    expect(container.textContent).toContain('Early Bird Tickets');
+    const text = container.textContent ?? '';
+    expect(text).toContain('Customer attribution');
+    expect(text).toContain('8% commission');
+    expect(text).not.toContain('$8');
+    expect(text).not.toContain('does not earn from customer purchases');
   });
 });

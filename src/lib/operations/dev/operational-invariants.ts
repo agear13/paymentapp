@@ -447,7 +447,57 @@ export type ConvergenceInvariantInput = {
   multipleActiveInitializationChains?: boolean;
   graphProjectionBeforeConvergenceValidation?: boolean;
   catalogDefaultCurrencyMismatch?: boolean;
+  catalogSurfaceCurrencyContradictsWorkspace?: boolean;
 };
+
+export type AttributionConvergenceInvariantInput = {
+  hybridAttributionNotRenderedInAgreement?: boolean;
+  attributionEnabledWithoutReferralInfrastructure?: boolean;
+  percentageRenderedAsCurrency?: boolean;
+  attributionServiceScopeMissing?: boolean;
+  catalogSurfaceCurrencyContradictsWorkspace?: boolean;
+};
+
+export function assertAttributionConvergenceInvariants(
+  input: AttributionConvergenceInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.hybridAttributionNotRenderedInAgreement) {
+    throw new OperationalInvariantViolation(
+      'HYBRID_ATTRIBUTION_NOT_RENDERED_IN_AGREEMENT',
+      'Hybrid attribution enabled but agreement copy does not reflect catalog earnings'
+    );
+  }
+
+  if (input.attributionEnabledWithoutReferralInfrastructure) {
+    throw new OperationalInvariantViolation(
+      'ATTRIBUTION_ENABLED_WITHOUT_REFERRAL_INFRASTRUCTURE',
+      'Attribution enabled and approved but referral infrastructure is missing'
+    );
+  }
+
+  if (input.percentageRenderedAsCurrency) {
+    throw new OperationalInvariantViolation(
+      'PERCENTAGE_RENDERED_AS_CURRENCY',
+      'Compensation percentage rendered as currency amount'
+    );
+  }
+
+  if (input.attributionServiceScopeMissing) {
+    throw new OperationalInvariantViolation(
+      'ATTRIBUTION_SERVICE_SCOPE_MISSING',
+      'Attribution enabled without resolved eligible service scope'
+    );
+  }
+
+  if (input.catalogSurfaceCurrencyContradictsWorkspace) {
+    throw new OperationalInvariantViolation(
+      'CATALOG_SURFACE_CURRENCY_CONTRADICTS_WORKSPACE',
+      'Service catalog surface currency does not match canonical workspace currency'
+    );
+  }
+}
 
 export function assertConvergenceInvariants(input: ConvergenceInvariantInput): void {
   if (process.env.NODE_ENV !== 'development') return;
@@ -498,6 +548,13 @@ export function assertConvergenceInvariants(input: ConvergenceInvariantInput): v
     throw new OperationalInvariantViolation(
       'CATALOG_DEFAULT_CURRENCY_MISMATCH',
       'Service catalog default currency does not match workspace/org default currency'
+    );
+  }
+
+  if (input.catalogSurfaceCurrencyContradictsWorkspace) {
+    throw new OperationalInvariantViolation(
+      'CATALOG_SURFACE_CURRENCY_CONTRADICTS_WORKSPACE',
+      'Service catalog surface currency does not match canonical workspace currency'
     );
   }
 }

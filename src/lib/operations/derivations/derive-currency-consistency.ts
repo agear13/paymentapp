@@ -1,6 +1,7 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
+import { PLATFORM_FALLBACK_CURRENCY } from '@/lib/currency/resolve-catalog-default-currency';
 import { isCatalogScopedCommission } from '@/lib/operations/derivations/commission-scope';
 
 export type CurrencyConsistencyWarning = {
@@ -25,7 +26,7 @@ export function deriveCurrencyConsistencyWarnings(
   const projectCurrency = (
     input.projectCurrency ??
     input.payoutCurrency ??
-    'AUD'
+    PLATFORM_FALLBACK_CURRENCY
   ).toUpperCase();
   const currencies = new Set<string>([projectCurrency]);
 
@@ -97,7 +98,9 @@ export function normalizeCompensationAttributionSemantics(
   }
 
   if (
-    (next.compensationType === 'COMMISSION' || isCatalogScopedCommission({ ...participant, compensationProfile: next })) &&
+    (next.compensationType === 'COMMISSION' ||
+      next.compensationType === 'HYBRID' ||
+      isCatalogScopedCommission({ ...participant, compensationProfile: next })) &&
     hasCatalogSelection &&
     !next.customerAttributionEnabled
   ) {
@@ -111,10 +114,11 @@ export function normalizeCompensationAttributionSemantics(
   if (
     next.customerAttributionEnabled &&
     next.compensationType !== 'COMMISSION' &&
+    next.compensationType !== 'HYBRID' &&
     !isCatalogScopedCommission({ ...participant, compensationProfile: next })
   ) {
     warnings.push(
-      'Customer attribution applies only to catalog commission earnings — configure COMMISSION type for service-level payouts.'
+      'Customer attribution applies only to catalog commission earnings — configure COMMISSION or HYBRID type for service-level payouts.'
     );
   }
 

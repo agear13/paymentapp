@@ -20,6 +20,7 @@ import {
   shouldIssueReferralLink,
   type ParticipantReferralCommerce,
 } from '@/lib/referrals/referral-commerce-config';
+import { deriveReferralCommerceFromCompensationProfile } from '@/lib/referrals/derive-referral-commerce-from-profile';
 import { isProjectWorkspaceParticipant } from '@/lib/projects/participant-entitlement';
 import { canParticipantApproveAgreement } from '@/lib/operations/contracts/canonical-agreement-lifecycle';
 import { referralTrace } from '@/lib/referrals/referral-trace';
@@ -88,6 +89,10 @@ function resolveReferralCommerceForIssuance(
 ): ParticipantReferralCommerce | null {
   if (participant.referralCommerce) {
     return normalizeReferralCommerce(participant.referralCommerce);
+  }
+  const fromProfile = deriveReferralCommerceFromCompensationProfile(participant);
+  if (fromProfile) {
+    return fromProfile;
   }
   if (!isProjectWorkspaceParticipant(participant)) {
     return null;

@@ -5,6 +5,10 @@ import {
   hydrateEligibleCatalogServices,
   type HydratedCatalogService,
 } from '@/lib/operations/hydration/hydrate-eligible-catalog-services';
+import {
+  isAllActiveCatalogSource,
+  isCatalogScopedCommission,
+} from '@/lib/operations/derivations/commission-scope';
 import { prisma } from '@/lib/server/prisma';
 import { resolveOrganizationIdForPilotDeal } from '@/lib/referrals/ensure-referral-issuance';
 
@@ -17,12 +21,33 @@ export async function hydrateAgreementEligibleServices(input: {
   dealId: string;
   fallbackCurrency?: string;
 }): Promise<HydratedEligibleService[]> {
+  const organizationId = await resolveOrganizationIdForPilotDeal(input.dealUserId, input.dealId);
+
+  if (isCatalogScopedCommission(input.participant) && isAllActiveCatalogSource(input.participant)) {
+    if (!organizationId) return [];
+    const catalogRows = await prisma.organization_services.findMany({
+      where: { organization_id: organizationId, active: true },
+      select: { id: true, name: true, description: true, currency: true, price: true },
+      orderBy: { name: 'asc' },
+    });
+    return hydrateEligibleCatalogServices(
+      catalogRows.map((row) => row.id),
+      catalogRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        currency: row.currency,
+        price: Number(row.price),
+      })),
+      input.fallbackCurrency
+    );
+  }
+
   const profileIds = input.participant.compensationProfile?.commissionServiceIds ?? [];
   const commerceIds = input.participant.referralCommerce?.enabledServiceIds ?? [];
   const serviceIds = profileIds.length > 0 ? profileIds : commerceIds;
   if (serviceIds.length === 0) return [];
 
-  const organizationId = await resolveOrganizationIdForPilotDeal(input.dealUserId, input.dealId);
   if (!organizationId) {
     return hydrateEligibleCatalogServices(serviceIds, [], input.fallbackCurrency);
   }

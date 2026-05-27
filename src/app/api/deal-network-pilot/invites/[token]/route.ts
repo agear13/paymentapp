@@ -18,6 +18,11 @@ import { prisma } from '@/lib/server/prisma';
 import { filterServicesForReferralConfig } from '@/lib/referrals/referral-commerce-config';
 import { buildScopedServiceCommissionRows } from '@/lib/projects/participant-compensation-copy';
 import { hydrateAgreementEligibleServices } from '@/lib/operations/hydration/hydrate-agreement-eligible-services.server';
+import {
+  isAllActiveCatalogSource,
+  isCatalogScopedCommission,
+} from '@/lib/operations/derivations/commission-scope';
+import { formatCurrency } from '@/lib/formatters/format-currency';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,6 +115,34 @@ export async function GET(
           allServicesFallback: true,
         });
       }
+    } else if (isCatalogScopedCommission(participant) && organizationId) {
+      const allServices = await prisma.organization_services.findMany({
+        where: { organization_id: organizationId, active: true },
+        select: { id: true, name: true, price: true, currency: true },
+        orderBy: { name: 'asc' },
+      });
+      const scoped = isAllActiveCatalogSource(participant)
+        ? allServices
+        : allServices.filter((s) =>
+            (participant.compensationProfile?.commissionServiceIds ?? []).includes(s.id)
+          );
+      const pct =
+        participant.compensationProfile?.percentage ??
+        participant.referralCommerce?.commerceCommissionPct ??
+        0;
+      scopedServiceRows = scoped.map((s) => {
+        const price = Number(s.price);
+        const estimated = (price * pct) / 100;
+        return {
+          id: s.id,
+          name: s.name,
+          customerPrice: price,
+          currency: s.currency,
+          revenueSharePct: pct,
+          estimatedEarnings: estimated,
+          earningsLabel: formatCurrency(estimated, s.currency),
+        };
+      });
     }
 
     if (scopedServiceRows.length === 0 && eligibleServices.length > 0) {

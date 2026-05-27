@@ -110,6 +110,22 @@ export function applyCompensationProfileToParticipant(
       next.commissionValue = profile.fixedAmount ?? 0;
       break;
     case 'HYBRID':
+      if (profile.customerAttributionEnabled === true && profile.percentage != null) {
+        next.commissionKind = 'pct_deal_value';
+        next.commissionValue = profile.percentage;
+      } else if (profile.fixedAmount != null) {
+        next.commissionKind = 'fixed_amount';
+        next.commissionValue = profile.fixedAmount;
+      } else {
+        next.commissionValue = profile.percentage ?? profile.fixedAmount ?? next.commissionValue;
+      }
+      next.compensationProfile = {
+        ...next.compensationProfile!,
+        customerAttributionEnabled: profile.customerAttributionEnabled ?? false,
+        commissionSourceMode: profile.commissionSourceMode ?? 'all_active',
+        commissionServiceIds: profile.commissionServiceIds ?? [],
+      };
+      break;
     case 'CUSTOM':
       next.commissionValue = profile.percentage ?? profile.fixedAmount ?? next.commissionValue;
       break;

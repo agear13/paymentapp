@@ -56,7 +56,6 @@ export default function OrganizationServicesPage() {
   const [description, setDescription] = React.useState('');
   const [price, setPrice] = React.useState('');
   const [currency, setCurrency] = React.useState('');
-  const createCurrencyInitialized = React.useRef(false);
 
   const [editOpen, setEditOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Row | null>(null);
@@ -117,9 +116,8 @@ export default function OrganizationServicesPage() {
   }, [load]);
 
   React.useEffect(() => {
-    if (currencyLoading || createCurrencyInitialized.current) return;
+    if (currencyLoading) return;
     setCurrency(orgDefaultCurrency);
-    createCurrencyInitialized.current = true;
   }, [orgDefaultCurrency, currencyLoading]);
 
   const openEdit = (r: Row) => {

@@ -144,6 +144,21 @@ async function runBootstrap(
       select: { id: true },
     });
 
+    if (settings) {
+      await prisma.merchant_settings.update({
+        where: { id: settings.id },
+        data: { default_currency: body.defaultCurrency },
+      });
+    } else {
+      await prisma.merchant_settings.create({
+        data: {
+          organization_id: existingOrg.id,
+          display_name: 'Workspace',
+          default_currency: body.defaultCurrency,
+        },
+      });
+    }
+
     try {
       await saveOperatorOnboardingState(existingOrg.id, userId, {
         step: 'participants',

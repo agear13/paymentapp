@@ -156,7 +156,9 @@ export function ParticipantCompensationDialog({
   const showRevenueSources =
     draft.compensationType === 'REVENUE_SHARE' || draft.compensationType === 'HYBRID';
   const isExempt = draft.compensationType === 'UNPAID_INTERNAL';
-  const showCommissionSource = draft.compensationType === 'COMMISSION';
+  const showCommissionSource =
+    draft.compensationType === 'COMMISSION' ||
+    (draft.compensationType === 'HYBRID' && draft.customerAttributionEnabled === true);
   const commissionMode = draft.commissionSourceMode ?? 'all_active';
   const filteredServices = catalogServices.filter((s) =>
     s.name.toLowerCase().includes(serviceQuery.toLowerCase())

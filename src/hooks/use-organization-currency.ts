@@ -2,10 +2,8 @@
 
 import * as React from 'react';
 import { useOrganization } from '@/hooks/use-organization';
-import {
-  PLATFORM_FALLBACK_CURRENCY,
-  resolveCatalogDefaultCurrency,
-} from '@/lib/currency/resolve-catalog-default-currency';
+import { resolveCatalogDefaultCurrency } from '@/lib/currency/resolve-catalog-default-currency';
+import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 
 /**
  * Resolves the organization's default currency from merchant settings.
@@ -15,14 +13,15 @@ export function useOrganizationCurrency(): {
   isLoading: boolean;
 } {
   const { organizationId, isLoading: orgLoading } = useOrganization();
-  const [currency, setCurrency] = React.useState(PLATFORM_FALLBACK_CURRENCY);
+  const { activation, loading: activationLoading } = useWorkspaceActivation();
+  const [merchantCurrency, setMerchantCurrency] = React.useState<string | null>(null);
   const [settingsLoading, setSettingsLoading] = React.useState(true);
 
   React.useEffect(() => {
     if (orgLoading) return;
 
     if (!organizationId) {
-      setCurrency(PLATFORM_FALLBACK_CURRENCY);
+      setMerchantCurrency(null);
       setSettingsLoading(false);
       return;
     }
@@ -37,14 +36,11 @@ export function useOrganizationCurrency(): {
         );
         if (!res.ok) throw new Error('settings unavailable');
         const settings = (await res.json()) as Array<{ default_currency?: string }>;
-        const resolved = resolveCatalogDefaultCurrency({
-          merchantDefaultCurrency: settings[0]?.default_currency,
-        });
         if (!cancelled) {
-          setCurrency(resolved);
+          setMerchantCurrency(settings[0]?.default_currency ?? null);
         }
       } catch {
-        if (!cancelled) setCurrency(PLATFORM_FALLBACK_CURRENCY);
+        if (!cancelled) setMerchantCurrency(null);
       } finally {
         if (!cancelled) setSettingsLoading(false);
       }
@@ -55,8 +51,17 @@ export function useOrganizationCurrency(): {
     };
   }, [organizationId, orgLoading]);
 
+  const currency = React.useMemo(
+    () =>
+      resolveCatalogDefaultCurrency({
+        workspaceDefaultCurrency: activation?.defaultCurrency,
+        merchantDefaultCurrency: merchantCurrency,
+      }),
+    [activation?.defaultCurrency, merchantCurrency]
+  );
+
   return {
     currency,
-    isLoading: orgLoading || settingsLoading,
+    isLoading: orgLoading || activationLoading || settingsLoading,
   };
 }

@@ -1,6 +1,8 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { formatFixedPayoutLine } from '@/lib/projects/participant-compensation-copy';
+import { isAttributionCatalogCompensationType } from '@/lib/operations/truth/attribution-eligibility';
+import { DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
 import {
   catalogRefsFromHydrated,
   hydrateEligibleCatalogServices,
@@ -20,6 +22,7 @@ export type CatalogItemRef = { id: string; name: string };
 
 export type CommissionScopeContext = {
   catalogItems?: CatalogItemRef[];
+  workspaceCurrency?: string | null;
 };
 
 export type CommissionScope = {
@@ -53,20 +56,19 @@ function resolvePercentage(
   return null;
 }
 
-/** Catalog-scoped commission: COMMISSION + attribution, or referral_commerce mode. */
+/** Catalog-scoped commission: COMMISSION/HYBRID + attribution, or referral_commerce mode. */
 export function isCatalogScopedCommission(participant: DemoParticipant): boolean {
   const profile = profileOf(participant);
+  if (
+    profile?.customerAttributionEnabled === true &&
+    isAttributionCatalogCompensationType(profile.compensationType)
+  ) {
+    return true;
+  }
   if (profile?.compensationType === 'COMMISSION' && profile.customerAttributionEnabled === true) {
     return true;
   }
   if (participant.referralCommerce?.commissionMode === 'referral_commerce') {
-    return true;
-  }
-  if (
-    profile?.customerAttributionEnabled === true &&
-    profile.commissionSourceMode &&
-    (profile.commissionServiceIds?.length ?? 0) > 0
-  ) {
     return true;
   }
   return false;
@@ -74,6 +76,7 @@ export function isCatalogScopedCommission(participant: DemoParticipant): boolean
 
 export function isProjectWideRevenueShare(participant: DemoParticipant): boolean {
   const profile = profileOf(participant);
+  if (profile?.compensationType === 'HYBRID') return false;
   if (isCatalogScopedCommission(participant)) return false;
   if (profile?.compensationType === 'REVENUE_SHARE') return true;
   if (participant.participationModel === 'revenue_share') return true;
@@ -246,13 +249,23 @@ export function deriveCommissionScope(
     const scopeDescription = allActive
       ? 'Earns commission on all qualifying customer purchases.'
       : 'Earns commission only on qualifying customer purchases.';
+    const hybridFixed =
+      profile?.compensationType === 'HYBRID' &&
+      profile.fixedAmount != null &&
+      Number.isFinite(profile.fixedAmount)
+        ? formatFixedPayoutLine(
+            profile.fixedAmount,
+            context.workspaceCurrency ?? DEFAULT_WORKSPACE_CURRENCY
+          )
+        : null;
+    const earningsPrimary = hybridFixed ? `${scopeLabel} + ${hybridFixed}` : scopeLabel;
     return {
       settlementBasis: basis,
       scopeLabel,
       scopeDescription,
-      earningsPrimary: scopeLabel,
+      earningsPrimary,
       earningsSecondary: eligibleLine.line,
-      earningsTitle: `${scopeLabel} — ${eligibleLine.title}`,
+      earningsTitle: `${earningsPrimary} — ${eligibleLine.title}`,
       eligibleCatalogItems: eligible,
       isCatalogCommission: true,
       isAllActiveCatalog: allActive,
@@ -278,13 +291,38 @@ export function deriveCommissionScope(
 
   if (basis === 'fixed_fee') {
     const amount = profile?.fixedAmount ?? participant.commissionValue ?? 0;
-    const primary = formatFixedPayoutLine(amount);
+    const primary = formatFixedPayoutLine(
+      amount,
+      context.workspaceCurrency ?? DEFAULT_WORKSPACE_CURRENCY
+    );
     return {
       settlementBasis: basis,
       scopeLabel: primary,
       scopeDescription: 'Fixed fee payout on this project.',
       earningsPrimary: primary,
       earningsSecondary: 'Fixed project payout',
+      earningsTitle: primary,
+      eligibleCatalogItems: [],
+      isCatalogCommission: false,
+      isAllActiveCatalog: false,
+      percentage: pct,
+    };
+  }
+
+  if (basis === 'hybrid') {
+    const currency = context.workspaceCurrency ?? DEFAULT_WORKSPACE_CURRENCY;
+    const parts: string[] = [];
+    if (pct != null) parts.push(`${pct}% revenue share`);
+    if (profile?.fixedAmount != null && Number.isFinite(profile.fixedAmount)) {
+      parts.push(formatFixedPayoutLine(profile.fixedAmount, currency));
+    }
+    const primary = parts.join(' + ') || 'Hybrid compensation';
+    return {
+      settlementBasis: basis,
+      scopeLabel: primary,
+      scopeDescription: 'Hybrid compensation — fixed and percentage project earnings.',
+      earningsPrimary: primary,
+      earningsSecondary: 'Hybrid project payout',
       earningsTitle: primary,
       eligibleCatalogItems: [],
       isCatalogCommission: false,
