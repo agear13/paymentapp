@@ -1,5 +1,5 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { isAttributionCatalogCompensationType } from '@/lib/operations/truth/attribution-eligibility';
+import { isAttributionCatalogCompensationType } from '@/lib/operations/shared/attribution-compensation-semantics';
 import {
   defaultReferralCommerce,
   normalizeReferralCommerce,

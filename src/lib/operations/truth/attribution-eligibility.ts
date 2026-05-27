@@ -1,14 +1,25 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
   deriveCommissionEligibleCatalogItems,
-  isAllActiveCatalogSource,
-  isCatalogScopedCommission,
   type CatalogItemRef,
   type CommissionScopeContext,
 } from '@/lib/operations/derivations/commission-scope';
 import { normalizeParticipantEntity } from '@/lib/operations/guards/hydration-guards';
+import {
+  isAllActiveCatalogSource,
+  isAttributionAllActiveWithoutCatalog,
+  isAttributionCatalogCompensationType,
+  isCatalogScopedCommission,
+} from '@/lib/operations/shared/attribution-compensation-semantics';
 
 export type { CatalogItemRef, CommissionScopeContext };
+
+export {
+  isAttributionCatalogCompensationType,
+  isAttributionAllActiveWithoutCatalog,
+  isCatalogScopedCommission,
+  isAllActiveCatalogSource,
+};
 
 export function isAttributionEnabled(participant: DemoParticipant): boolean {
   const p = normalizeParticipantEntity(participant);
@@ -49,23 +60,4 @@ export function shouldIssueAttributionForParticipant(
   context: CommissionScopeContext = {}
 ): boolean {
   return canGenerateAttributionLink(participant, context);
-}
-
-/** Compensation types that can use catalog-scoped customer purchase attribution. */
-export function isAttributionCatalogCompensationType(compensationType?: string): boolean {
-  return compensationType === 'COMMISSION' || compensationType === 'HYBRID';
-}
-
-/** True when attribution + all-active catalog scope cannot be saved (empty active catalog). */
-export function isAttributionAllActiveWithoutCatalog(input: {
-  compensationType?: string;
-  customerAttributionEnabled?: boolean;
-  commissionSourceMode?: 'all_active' | 'selected';
-  activeCatalogCount: number;
-}): boolean {
-  if (!isAttributionCatalogCompensationType(input.compensationType)) return false;
-  if (input.customerAttributionEnabled !== true) return false;
-  const mode = input.commissionSourceMode ?? 'all_active';
-  if (mode !== 'all_active') return false;
-  return input.activeCatalogCount === 0;
 }

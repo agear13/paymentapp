@@ -1,7 +1,10 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { formatFixedPayoutLine } from '@/lib/projects/participant-compensation-copy';
-import { isAttributionCatalogCompensationType } from '@/lib/operations/truth/attribution-eligibility';
+import {
+  isCatalogScopedCommission,
+  isAllActiveCatalogSource,
+} from '@/lib/operations/shared/attribution-compensation-semantics';
 import { DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
 import {
   catalogRefsFromHydrated,
@@ -24,6 +27,11 @@ export type CommissionScopeContext = {
   catalogItems?: CatalogItemRef[];
   workspaceCurrency?: string | null;
 };
+
+export {
+  isCatalogScopedCommission,
+  isAllActiveCatalogSource,
+} from '@/lib/operations/shared/attribution-compensation-semantics';
 
 export type CommissionScope = {
   settlementBasis: CommissionSettlementBasis;
@@ -56,24 +64,6 @@ function resolvePercentage(
   return null;
 }
 
-/** Catalog-scoped commission: COMMISSION/HYBRID + attribution, or referral_commerce mode. */
-export function isCatalogScopedCommission(participant: DemoParticipant): boolean {
-  const profile = profileOf(participant);
-  if (
-    profile?.customerAttributionEnabled === true &&
-    isAttributionCatalogCompensationType(profile.compensationType)
-  ) {
-    return true;
-  }
-  if (profile?.compensationType === 'COMMISSION' && profile.customerAttributionEnabled === true) {
-    return true;
-  }
-  if (participant.referralCommerce?.commissionMode === 'referral_commerce') {
-    return true;
-  }
-  return false;
-}
-
 export function isProjectWideRevenueShare(participant: DemoParticipant): boolean {
   const profile = profileOf(participant);
   if (profile?.compensationType === 'HYBRID') return false;
@@ -83,17 +73,6 @@ export function isProjectWideRevenueShare(participant: DemoParticipant): boolean
   if (participant.referralCommerce?.commissionMode === 'project_revenue_share') return true;
   if (participant.commissionKind === 'pct_deal_value') return true;
   return false;
-}
-
-export function isAllActiveCatalogSource(participant: DemoParticipant): boolean {
-  const profile = profileOf(participant);
-  if (profile?.commissionSourceMode === 'selected') return false;
-  if (profile?.commissionSourceMode === 'all_active') return true;
-  const commerce = participant.referralCommerce;
-  if (commerce?.commissionMode === 'referral_commerce') {
-    return !commerce.enabledServiceIds?.length;
-  }
-  return !profile?.commissionServiceIds?.length;
 }
 
 function selectedCatalogIds(participant: DemoParticipant): string[] {

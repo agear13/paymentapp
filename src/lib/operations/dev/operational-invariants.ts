@@ -499,6 +499,23 @@ export function assertAttributionConvergenceInvariants(
   }
 }
 
+export type FoundationalSemanticsInvariantInput = {
+  foundationalSemanticsLayerImportViolation?: boolean;
+};
+
+export function assertFoundationalSemanticsLayerInvariants(
+  input: FoundationalSemanticsInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.foundationalSemanticsLayerImportViolation) {
+    throw new OperationalInvariantViolation(
+      'FOUNDATIONAL_SEMANTICS_LAYER_IMPORT_VIOLATION',
+      'Foundational semantics module imports truth, derivation, orchestration, or selector layers'
+    );
+  }
+}
+
 export function assertConvergenceInvariants(input: ConvergenceInvariantInput): void {
   if (process.env.NODE_ENV !== 'development') return;
 
