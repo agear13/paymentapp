@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useOrganization } from '@/hooks/use-organization';
+import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +46,7 @@ type StatusTab = 'all' | 'active' | 'archived';
 
 export default function OrganizationServicesPage() {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
+  const { currency: orgDefaultCurrency, isLoading: currencyLoading } = useOrganizationCurrency();
   const [rows, setRows] = React.useState<Row[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -53,14 +55,15 @@ export default function OrganizationServicesPage() {
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [price, setPrice] = React.useState('');
-  const [currency, setCurrency] = React.useState('AUD');
+  const [currency, setCurrency] = React.useState('');
+  const createCurrencyInitialized = React.useRef(false);
 
   const [editOpen, setEditOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Row | null>(null);
   const [editName, setEditName] = React.useState('');
   const [editDescription, setEditDescription] = React.useState('');
   const [editPrice, setEditPrice] = React.useState('');
-  const [editCurrency, setEditCurrency] = React.useState('AUD');
+  const [editCurrency, setEditCurrency] = React.useState('');
   const [editActive, setEditActive] = React.useState(true);
   const [editFieldErrors, setEditFieldErrors] = React.useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = React.useState(false);
@@ -113,6 +116,12 @@ export default function OrganizationServicesPage() {
     load();
   }, [load]);
 
+  React.useEffect(() => {
+    if (currencyLoading || createCurrencyInitialized.current) return;
+    setCurrency(orgDefaultCurrency);
+    createCurrencyInitialized.current = true;
+  }, [orgDefaultCurrency, currencyLoading]);
+
   const openEdit = (r: Row) => {
     setEditing(r);
     setEditName(r.name);
@@ -132,6 +141,7 @@ export default function OrganizationServicesPage() {
       toast.error('Enter a valid price');
       return;
     }
+    const effectiveCurrency = (currency || orgDefaultCurrency).toUpperCase().slice(0, 3);
     setSaving(true);
     try {
       const res = await fetch('/api/organization-services', {
@@ -142,7 +152,7 @@ export default function OrganizationServicesPage() {
           name,
           description,
           price: p,
-          currency: currency.toUpperCase().slice(0, 3),
+          currency: effectiveCurrency,
         }),
       });
       const json = await res.json();

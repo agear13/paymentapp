@@ -1,3 +1,5 @@
+import { DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
+
 export type HydratedCatalogService = {
   id: string;
   name: string;
@@ -18,7 +20,7 @@ export type RawCatalogServiceInput = {
 export function hydrateEligibleCatalogServices(
   serviceIds: string[],
   catalog: RawCatalogServiceInput[] = [],
-  fallbackCurrency = 'AUD'
+  fallbackCurrency: string = DEFAULT_WORKSPACE_CURRENCY
 ): HydratedCatalogService[] {
   if (serviceIds.length === 0) return [];
 
@@ -39,7 +41,7 @@ export function hydrateEligibleCatalogServices(
 
 export function hydrateAllCatalogServices(
   catalog: RawCatalogServiceInput[],
-  fallbackCurrency = 'AUD'
+  fallbackCurrency: string = DEFAULT_WORKSPACE_CURRENCY
 ): HydratedCatalogService[] {
   return catalog.map((s) => ({
     id: s.id,

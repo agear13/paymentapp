@@ -20,9 +20,12 @@ const SECTION_ORDER: OperationalSeverity[] = [
 ];
 
 function ctaIntent(item: AttentionItem): Parameters<typeof SafeOperationalLink>[0]['intent'] {
-  const label = `${item.ctaLabel ?? ''} ${item.title}`;
-  if (/earnings|compensation/i.test(label)) return 'configure_earnings';
-  if (/obligation/i.test(label)) return 'review_obligations';
+  const label = `${item.ctaLabel ?? ''} ${item.title} ${item.explanation}`;
+  if (/refresh|orchestration|convergence|initialization|resume/i.test(label)) {
+    return 'review_obligations';
+  }
+  if (/earnings|compensation|payout details|confirm/i.test(label)) return 'configure_earnings';
+  if (/obligation|funding/i.test(label)) return 'review_obligations';
   if (/release|settlement/i.test(label)) return 'review_release';
   if (/provider|connect/i.test(label)) return 'connect_provider';
   return 'resolve_issue';

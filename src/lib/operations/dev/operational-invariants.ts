@@ -24,6 +24,7 @@ export type OperationalInvariantInput = {
 export type OperationalInvariantInputWithAttribution = OperationalInvariantInput & {
   attributionEnabled?: boolean;
   referralLinkPresent?: boolean;
+  attributionEnabledWithoutActiveServices?: boolean;
 };
 
 /** Hard assertions for impossible operational states — throws in development. */
@@ -66,6 +67,13 @@ export function assertOperationalInvariants(input: OperationalInvariantInputWith
     throw new OperationalInvariantViolation(
       'REFERRAL_LINK_WITHOUT_ATTRIBUTION',
       `Referral link exists while attribution disabled (${input.participantId ?? 'unknown'})`
+    );
+  }
+
+  if (input.attributionEnabledWithoutActiveServices) {
+    throw new OperationalInvariantViolation(
+      'ATTRIBUTION_ENABLED_WITHOUT_ACTIVE_SERVICES',
+      `Customer attribution with all-active catalog scope enabled without active catalog services (${input.participantId ?? 'unknown'})`
     );
   }
 
@@ -166,6 +174,138 @@ export type CapabilityInvariantInput = {
 };
 
 const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type ParticipantSetupGuidanceInvariantInput = {
+  showCompensationSetupGuidance?: boolean;
+  needsEarningsConfiguration?: boolean;
+  payoutReadyCount?: number;
+  total?: number;
+};
+
+export function assertParticipantSetupGuidanceInvariants(
+  input: ParticipantSetupGuidanceInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  const total = input.total ?? 0;
+  const payoutReady = input.payoutReadyCount ?? 0;
+
+  if (
+    input.showCompensationSetupGuidance &&
+    total > 0 &&
+    payoutReady === total &&
+    input.needsEarningsConfiguration === false
+  ) {
+    throw new OperationalInvariantViolation(
+      'GUIDANCE_SHOWS_CONFIGURATION_BLOCKER_FOR_PAYOUT_READY_PARTICIPANT',
+      'Compensation setup guidance is shown while all participants are payout-ready'
+    );
+  }
+}
+
+export type SettlementReleaseInvariantInput = {
+  settlementReady?: boolean;
+  releaseBlocked?: boolean;
+  releaseReadyCount?: number;
+  guidanceHeadline?: string;
+  fundingBlocker?: string | null;
+  approvedParticipantPendingApproval?: boolean;
+};
+
+export function assertSettlementReleaseInvariants(input: SettlementReleaseInvariantInput): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (
+    input.settlementReady &&
+    input.releaseBlocked &&
+    !input.fundingBlocker
+  ) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_BLOCKED_WHEN_SETTLEMENT_READY',
+      'Settlement is release-ready but top-level guidance still reports release blocked'
+    );
+  }
+
+  if (
+    input.settlementReady &&
+    input.guidanceHeadline?.toLowerCase().includes('release blocked')
+  ) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_STATE_CONTRADICTS_CANONICAL_GRAPH',
+      'Guidance headline contradicts canonical settlement release readiness'
+    );
+  }
+
+  if (
+    !input.fundingBlocker &&
+    (input.releaseReadyCount ?? 0) > 0 &&
+    input.releaseBlocked &&
+    input.guidanceHeadline?.toLowerCase().includes('release blocked')
+  ) {
+    throw new OperationalInvariantViolation(
+      'FUNDING_READY_BUT_RELEASE_BLOCKED_WITHOUT_REASON',
+      'Funding is ready and participants are release-eligible but release remains blocked without reason'
+    );
+  }
+
+  if (input.approvedParticipantPendingApproval) {
+    throw new OperationalInvariantViolation(
+      'APPROVED_PARTICIPANT_SHOWING_PENDING_APPROVAL',
+      'Approved payout-ready participant still shows pending approval allocation status'
+    );
+  }
+}
+
+export type PayoutExplainabilityInvariantInput = {
+  detailedBlockers?: Array<{ reason?: string; remediation?: string; category?: string }>;
+  graphReady?: boolean;
+  settlementReady?: boolean;
+  staleObligationCount?: number;
+  payoutReadyCount?: number;
+  earningsMarkedNeedsFundingWhenFunded?: boolean;
+  genericBlockerWithoutExplanation?: boolean;
+  operatorActionRequiredWhenOnlyRefreshNeeded?: boolean;
+};
+
+export function assertPayoutExplainabilityInvariants(
+  input: PayoutExplainabilityInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  for (const blocker of input.detailedBlockers ?? []) {
+    if (!blocker.reason?.trim() || !blocker.remediation?.trim()) {
+      throw new OperationalInvariantViolation(
+        'GENERIC_RELEASE_BLOCKER_WITHOUT_EXPLANATION',
+        'Release blocker is missing canonical reason or remediation'
+      );
+    }
+  }
+
+  if (input.earningsMarkedNeedsFundingWhenFunded) {
+    throw new OperationalInvariantViolation(
+      'EARNINGS_MARKED_NEEDS_FUNDING_WHEN_FUNDED',
+      'Participant earnings marked needs funding while payout-ready and approved'
+    );
+  }
+
+  if (
+    input.settlementReady &&
+    (input.staleObligationCount ?? 0) > 0 &&
+    input.detailedBlockers?.some((b) => b.category === 'participant_approval_missing')
+  ) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_BLOCKER_REASON_CONTRADICTS_GRAPH',
+      'Settlement-ready graph reports participant approval blockers while obligations are stale'
+    );
+  }
+
+  if (input.operatorActionRequiredWhenOnlyRefreshNeeded) {
+    throw new OperationalInvariantViolation(
+      'OPERATOR_ACTION_REQUIRED_WHEN_ONLY_REFRESH_NEEDED',
+      'Guidance implies operator action while only orchestration refresh is required'
+    );
+  }
+}
 
 /** Development-only graph consistency checks for guidance, funding, hydration, and capabilities. */
 export function assertGraphGuidanceInvariants(input: GraphGuidanceInvariantInput): void {
@@ -306,6 +446,7 @@ export type ConvergenceInvariantInput = {
   partialBootstrapWithReadyPhase?: boolean;
   multipleActiveInitializationChains?: boolean;
   graphProjectionBeforeConvergenceValidation?: boolean;
+  catalogDefaultCurrencyMismatch?: boolean;
 };
 
 export function assertConvergenceInvariants(input: ConvergenceInvariantInput): void {
@@ -350,6 +491,13 @@ export function assertConvergenceInvariants(input: ConvergenceInvariantInput): v
     throw new OperationalInvariantViolation(
       'GRAPH_PROJECTION_BEFORE_CONVERGENCE_VALIDATION',
       'Graph projection attempted before convergence validation'
+    );
+  }
+
+  if (input.catalogDefaultCurrencyMismatch) {
+    throw new OperationalInvariantViolation(
+      'CATALOG_DEFAULT_CURRENCY_MISMATCH',
+      'Service catalog default currency does not match workspace/org default currency'
     );
   }
 }

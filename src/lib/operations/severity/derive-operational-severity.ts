@@ -1,4 +1,6 @@
 import type { OperationalGuidanceBundle } from '@/lib/operations/explainability';
+import type { OperationalReleaseBlockerDetail } from '@/lib/operations/explainability/derive-operational-release-blockers';
+import { deriveOperationalReleaseBlockers } from '@/lib/operations/explainability/derive-operational-release-blockers';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { AttentionItem, OperationalSeverity } from '@/lib/operations/severity/types';
 import {
@@ -14,6 +16,17 @@ export type SeverityDerivationInput = {
   workspace: WorkspaceOperationalContext;
   projectName?: string;
 };
+
+function severityForBlocker(
+  blocker: OperationalReleaseBlockerDetail,
+  conf: string
+): OperationalSeverity {
+  if (blocker.category === 'operational_graph_initializing') return 'ACTION_REQUIRED';
+  if (blocker.category === 'obligation_sync_pending' && !blocker.operatorActionRequired) {
+    return 'ACTION_REQUIRED';
+  }
+  return conf === 'BLOCKED' ? 'CRITICAL' : 'ACTION_REQUIRED';
+}
 
 function severityRank(s: OperationalSeverity): number {
   return { CRITICAL: 0, ACTION_REQUIRED: 1, WARNING: 2, INFORMATIONAL: 3 }[s];
@@ -100,7 +113,48 @@ export function deriveOperationalSeverity(input: SeverityDerivationInput): Atten
     });
   }
 
-  if ((conf === 'BLOCKED' || guidance.explanation.blockers.length > 0) && !participantsIncomplete) {
+  const releaseBlockers =
+    guidance.releaseBlockers.length > 0
+      ? guidance.releaseBlockers
+      : deriveOperationalReleaseBlockers({
+          snapshot: {
+            participants: [],
+            obligations: [],
+            summary: {
+              participantCount: workspace.participantCount,
+              payoutReadyCount: 0,
+              releaseReadyCount: workspace.releaseEligibleCount,
+              blockerCount: guidance.explanation.blockers.length,
+              allBlockers: [],
+            },
+            funding: { allocated: false, stage: null },
+          },
+          workspace,
+          graphReady: !guidance.degraded,
+          initializationRecoveryMessage: guidance.degraded
+            ? guidance.explanation.blockers[0]
+            : null,
+        });
+
+  if (releaseBlockers.length > 0 && !participantsIncomplete) {
+    for (const blocker of releaseBlockers) {
+      items.push({
+        id: blocker.id,
+        severity: severityForBlocker(blocker, conf),
+        title: blocker.reason,
+        explanation: blocker.remediation,
+        projectName: input.projectName,
+        ctaLabel: blocker.ctaLabel,
+        ctaHref: blocker.ctaHref,
+        confidenceImpact: blocker.operatorActionRequired
+          ? 'Prevents safe payout release'
+          : 'State not yet converged — refresh required',
+        whyBlocked: blocker.reason,
+        whatUnlocks: blocker.unlockCondition,
+        recommendedStep: blocker.remediation,
+      });
+    }
+  } else if ((conf === 'BLOCKED' || guidance.explanation.blockers.length > 0) && !participantsIncomplete) {
     for (const blocker of guidance.explanation.blockers) {
       const human = humanizeOperatorText(blocker);
       if (/compensation|earnings|participant payout/i.test(blocker)) continue;

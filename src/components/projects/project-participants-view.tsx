@@ -434,7 +434,7 @@ export function ProjectParticipantsView() {
       }
     >
       <div className="space-y-6">
-        {(routeProject.phase === 'configuring' || routeParticipants.needsEarningsConfiguration) &&
+        {(routeParticipants.showCompensationSetupGuidance) &&
         routeParticipants.total > 0 ? (
           <ProgressiveOperationalPanel
             title="Configure how each participant gets paid"

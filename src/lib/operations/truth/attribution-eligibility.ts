@@ -50,3 +50,22 @@ export function shouldIssueAttributionForParticipant(
 ): boolean {
   return canGenerateAttributionLink(participant, context);
 }
+
+/** Compensation types that can use catalog-scoped customer purchase attribution. */
+export function isAttributionCatalogCompensationType(compensationType?: string): boolean {
+  return compensationType === 'COMMISSION' || compensationType === 'HYBRID';
+}
+
+/** True when attribution + all-active catalog scope cannot be saved (empty active catalog). */
+export function isAttributionAllActiveWithoutCatalog(input: {
+  compensationType?: string;
+  customerAttributionEnabled?: boolean;
+  commissionSourceMode?: 'all_active' | 'selected';
+  activeCatalogCount: number;
+}): boolean {
+  if (!isAttributionCatalogCompensationType(input.compensationType)) return false;
+  if (input.customerAttributionEnabled !== true) return false;
+  const mode = input.commissionSourceMode ?? 'all_active';
+  if (mode !== 'all_active') return false;
+  return input.activeCatalogCount === 0;
+}

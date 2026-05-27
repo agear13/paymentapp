@@ -6,6 +6,7 @@ import {
 } from '@/lib/operations/contracts/compensation-classification';
 import { deriveCurrencyConsistencyWarnings } from '@/lib/operations/derivations/derive-currency-consistency';
 import { deriveCompensationReadiness } from '@/lib/operations/readiness/compensation-readiness';
+import { deriveObligationApprovalState } from '@/lib/operations/derivations/derive-approval-state';
 import { deriveParticipantPayoutReadiness } from '@/lib/operations/readiness/participant-readiness';
 import { deriveParticipantReleaseEligibility } from '@/lib/operations/readiness/derive-participant-release-eligibility';
 import {
@@ -89,16 +90,25 @@ export function deriveOperationalReadinessHierarchy(
     ),
   };
 
+  const obligationApprovalReady = input.obligationStatus
+    ? deriveObligationApprovalState({
+        obligationStatus: input.obligationStatus,
+        participant,
+      }) === 'ready'
+    : false;
+
   const obligationLayer: LayerReadiness = {
     layer: 'obligation',
     ready:
       compensationGeneratesObligations(classification) &&
       comp.missingRequirements.length === 0 &&
       participantLayer.ready &&
-      (input.obligationCount ?? 0) > 0,
+      ((input.obligationCount ?? 0) > 0 || obligationApprovalReady),
     blockers: [
       ...comp.missingRequirements,
-      ...(input.obligationCount === 0 ? ['Operational obligations not yet generated'] : []),
+      ...(input.obligationCount === 0 && !obligationApprovalReady
+        ? ['Operational obligations not yet generated']
+        : []),
       ...(!participantLayer.ready ? ['Participant not payout-ready'] : []),
     ],
     operationalBlockers: [],

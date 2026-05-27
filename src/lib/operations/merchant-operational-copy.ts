@@ -36,3 +36,10 @@ export const SERVICE_CATALOG_ATTRIBUTION_WARNING = {
     'Participants can only earn commission on catalog items available to customers.',
   cta: 'Add services',
 } as const;
+
+export const ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES = {
+  message:
+    'No active services exist in the catalog yet. Add services/products before enabling customer purchase attribution.',
+  cta: 'Add services/products',
+  href: '/dashboard/settings/services',
+} as const;

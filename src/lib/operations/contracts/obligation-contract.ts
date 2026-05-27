@@ -6,6 +6,8 @@ export type HydratedObligation = {
   id: string;
   lifecycle: ObligationLifecycleState;
   readiness: ObligationOperationalReadiness;
+  /** Persisted allocation status enum when hydrated from pilot rows. */
+  allocationStatus?: string;
   amount: number;
   amountFunded: number;
   currency: string;

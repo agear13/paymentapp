@@ -21,6 +21,8 @@ import {
   formatOperationalReadiness,
   operationalReadinessBadgeVariant,
 } from '@/lib/projects/funding-sources/obligation-readiness';
+import { resolveObligationAllocationLabel } from '@/lib/operations/derivations/derive-obligation-allocation-status';
+import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
 type ObligationRow = {
@@ -31,7 +33,12 @@ type ObligationRow = {
   amount_owed: unknown;
   currency: string;
   status: string;
-  participant: { name: string; role: string } | null;
+  participant: {
+    name: string;
+    role: string;
+    approvalStatus?: string;
+    onboardingStatus?: string;
+  } | null;
 };
 
 function formatMoney(amount: unknown, currency: string): string {
@@ -155,7 +162,23 @@ export function ProjectObligationsView() {
                     <TableCell className="text-muted-foreground">{r.obligation_type}</TableCell>
                     <TableCell>{formatMoney(r.amount_owed, r.currency)}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{r.status.replace(/_/g, ' ')}</Badge>
+                      <Badge variant="outline">
+                        {resolveObligationAllocationLabel({
+                          allocationStatus: r.status,
+                          participant: r.participant
+                            ? ({
+                                id: r.participant_id ?? 'unknown',
+                                name: r.participant.name,
+                                role: r.participant.role,
+                                approvalStatus:
+                                  r.participant.approvalStatus === 'Approved'
+                                    ? 'Approved'
+                                    : 'Pending approval',
+                                onboardingStatus: r.participant.onboardingStatus,
+                              } as DemoParticipant)
+                            : null,
+                        })}
+                      </Badge>
                     </TableCell>
                   </TableRow>
                 ))}

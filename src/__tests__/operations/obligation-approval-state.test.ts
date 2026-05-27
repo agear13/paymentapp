@@ -64,6 +64,27 @@ describe('obligation approval state', () => {
     expect(state).toBe('pending_operator');
   });
 
+  it('ready when participant approved, payout verified, and obligation row stale', () => {
+    const participant = buildProjectParticipant({
+      name: 'Coastal Media',
+      role: 'Partner',
+      project: baseDeal(),
+      participationModel: 'fixed_payout',
+      commissionKind: 'fixed_amount',
+      commissionValue: 500,
+      enableCustomerAttribution: false,
+    });
+    participant.approvalStatus = 'Approved';
+    participant.payoutVerificationConfirmed = true;
+    participant.compensationProfile = { ...participant.compensationProfile!, configured: true };
+
+    const state = deriveObligationApprovalState({
+      obligationStatus: 'PENDING_APPROVAL',
+      participant,
+    });
+    expect(state).toBe('ready');
+  });
+
   it('obligation labels replace generic awaiting approval', () => {
     const participant = buildProjectParticipant({
       name: 'Coastal Media',

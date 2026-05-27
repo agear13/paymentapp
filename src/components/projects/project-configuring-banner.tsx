@@ -17,7 +17,7 @@ export function ProjectConfiguringBanner({
   onPrimaryAction?: () => void;
   primaryLabel?: string;
 }) {
-  if (project.phase === 'ready' && !participants.needsEarningsConfiguration) {
+  if (!participants.showCompensationSetupGuidance) {
     return null;
   }
 

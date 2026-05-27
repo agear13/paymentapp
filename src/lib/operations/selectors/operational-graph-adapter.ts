@@ -261,6 +261,7 @@ export function guidanceFromOperationalGraph(input: {
     input.scopeTitle ?? (scope === 'project' ? 'Project' : 'Workspace'),
     input.workspace
   );
+  const blocking = deriveOperationalBlockingActions(input.snapshot, input.workspace);
 
   const fundingState = deriveCanonicalFundingLifecycle(input.snapshot.funding.stage);
 
@@ -306,6 +307,7 @@ export function guidanceFromOperationalGraph(input: {
     ),
     trustSignals: deriveTrustSignals({ workspace: input.workspace }),
     releaseConfidence,
+    releaseBlockers: blocking.detailedBlockers,
     timeline,
     transition: null,
     degraded: false,

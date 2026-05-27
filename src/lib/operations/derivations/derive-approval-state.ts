@@ -49,11 +49,10 @@ export function deriveObligationApprovalState(input: {
   if (status === 'PENDING_APPROVAL') {
     if (!participant) return 'pending_participant';
     const agreement = deriveAgreementApprovalState(participant);
-    if (
-      agreement === 'participant_approved' ||
-      agreement === 'fully_approved' ||
-      agreement === 'operator_confirmed'
-    ) {
+    if (agreement === 'fully_approved' && isParticipantPayoutReady(participant)) {
+      return 'ready';
+    }
+    if (agreement === 'participant_approved' || agreement === 'operator_confirmed') {
       return 'pending_operator';
     }
     return 'pending_participant';

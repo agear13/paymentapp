@@ -6,7 +6,12 @@ import {
   safeOperationalRouteState,
   safeParticipantRouteContext,
   safeProjectRouteContext,
+  shouldShowParticipantCompensationSetupGuidance,
 } from '@/lib/operations/routing/draft-safe-routing';
+import {
+  assertParticipantSetupGuidanceInvariants,
+  OperationalInvariantViolation,
+} from '@/lib/operations/dev/operational-invariants';
 
 function baseDeal(overrides: Partial<RecentDeal> = {}): RecentDeal {
   return {
@@ -89,5 +94,58 @@ describe('draft-safe routing', () => {
     expect(state.project.phase).toBe('configuring');
     expect(state.participants.total).toBe(1);
     expect(state.compensation.canConfigure).toBe(true);
+  });
+
+  it('does not show compensation setup guidance when all participants are payout-ready', () => {
+    const payoutReadyParticipant = baseParticipant({
+      compensationProfile: {
+        compensationType: 'FIXED_FEE',
+        fixedAmount: 5000,
+        configured: true,
+        revenueSources: [],
+      },
+      approvalStatus: 'Approved',
+      payoutVerificationConfirmed: true,
+    });
+    const ctx = safeParticipantRouteContext([payoutReadyParticipant]);
+    expect(ctx.needsEarningsConfiguration).toBe(false);
+    expect(ctx.payoutReadyCount).toBe(1);
+    expect(ctx.showCompensationSetupGuidance).toBe(false);
+    expect(shouldShowParticipantCompensationSetupGuidance(ctx)).toBe(false);
+  });
+
+  it('hides compensation guidance on configuring project when earnings are complete', () => {
+    const state = safeOperationalRouteState({
+      projectId: 'onb-deal-abc',
+      deal: baseDeal({ setupStatus: 'configuring' }),
+      participants: [
+        baseParticipant({
+          compensationProfile: {
+            compensationType: 'FIXED_FEE',
+            fixedAmount: 5000,
+            configured: true,
+            revenueSources: [],
+          },
+          approvalStatus: 'Approved',
+          payoutVerificationConfirmed: true,
+        }),
+      ],
+    });
+    expect(state.project.phase).toBe('configuring');
+    expect(state.participants.showCompensationSetupGuidance).toBe(false);
+  });
+
+  it('throws GUIDANCE_SHOWS_CONFIGURATION_BLOCKER_FOR_PAYOUT_READY_PARTICIPANT in development', () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    expect(() =>
+      assertParticipantSetupGuidanceInvariants({
+        showCompensationSetupGuidance: true,
+        needsEarningsConfiguration: false,
+        payoutReadyCount: 2,
+        total: 2,
+      })
+    ).toThrow(OperationalInvariantViolation);
+    process.env.NODE_ENV = prev;
   });
 });

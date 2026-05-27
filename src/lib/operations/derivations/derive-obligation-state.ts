@@ -9,6 +9,8 @@ export type RawObligationInput = {
   amountFunded?: number;
   currency?: string;
   participantId?: string | null;
+  /** Persisted allocation status enum (e.g. PENDING_APPROVAL, APPROVED). */
+  allocationStatus?: string;
   readiness?: ObligationOperationalReadiness;
 };
 
@@ -23,6 +25,7 @@ export function deriveObligationState(input: RawObligationInput): HydratedObliga
     id: input.id ?? `obligation-${Date.now()}`,
     lifecycle,
     readiness,
+    allocationStatus: input.allocationStatus,
     amount,
     amountFunded,
     currency: input.currency ?? 'AUD',

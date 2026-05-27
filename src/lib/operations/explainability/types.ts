@@ -99,12 +99,15 @@ export type OperationalExplainability = {
   scopeTitle: string;
 };
 
+import type { OperationalReleaseBlockerDetail } from '@/lib/operations/explainability/derive-operational-release-blockers';
+
 export type OperationalGuidanceBundle = {
   explanation: OperationalExplainability;
   stateExplanation: StateExplanation | null;
   actions: OperationalAction[];
   trustSignals: TrustSignal[];
   releaseConfidence: ReleaseConfidenceSnapshot;
+  releaseBlockers: OperationalReleaseBlockerDetail[];
   timeline: TimelineEvent[];
   transition: TransitionExplanation | null;
   degraded: boolean;

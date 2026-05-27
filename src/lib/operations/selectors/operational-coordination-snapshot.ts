@@ -57,6 +57,7 @@ export type OperationalCoordinationInput = {
   projectId?: string;
   fundingAllocated?: boolean;
   funding?: FundingCoordinationInput;
+  obligationStatusByParticipant?: Record<string, string>;
   catalogItemsByParticipant?: Record<string, CatalogItemRef[]>;
   projectCurrency?: string;
   serviceCurrencies?: string[];
@@ -83,11 +84,15 @@ export function getOperationalCoordinationSnapshot(
     const participantObligations = obligations.filter(
       (o) => o.participantId === participant.id
     );
+    const allocationStatus =
+      input.obligationStatusByParticipant?.[participant.id] ??
+      participantObligations[0]?.allocationStatus;
     const agreementApproval = deriveAgreementApprovalState(participant);
     const payoutReadiness = deriveParticipantPayoutReadiness(participant);
     const releaseReadiness = derivePayoutReleaseReadiness(participant, {
       projectId: input.projectId,
       fundingAllocated: effectiveFundingAllocated,
+      obligationStatus: allocationStatus,
       catalogItems,
       projectCurrency: input.projectCurrency,
       serviceCurrencies: input.serviceCurrencies,
@@ -97,7 +102,7 @@ export function getOperationalCoordinationSnapshot(
       projectId: input.projectId,
       funding: input.funding,
       obligationCount: participantObligations.length,
-      obligationStatus: participantObligations[0]?.readiness,
+      obligationStatus: allocationStatus,
       catalogItems,
       projectCurrency: input.projectCurrency,
       serviceCurrencies: input.serviceCurrencies,
@@ -153,6 +158,7 @@ export function getOperationalCoordinationSnapshot(
     projectId: input.projectId,
     fundingAllocated: effectiveFundingAllocated,
     catalogItemsByParticipant: input.catalogItemsByParticipant,
+    obligationStatusByParticipant: input.obligationStatusByParticipant,
     projectCurrency: input.projectCurrency,
     serviceCurrencies: input.serviceCurrencies,
   });

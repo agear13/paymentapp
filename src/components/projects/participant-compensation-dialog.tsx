@@ -37,6 +37,8 @@ import {
 } from '@/lib/participants/initialize-compensation-draft';
 import { hydrateParticipant, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
 import { deriveCompensationPreviewText } from '@/lib/operations/derivations/commission-scope';
+import { isAttributionAllActiveWithoutCatalog } from '@/lib/operations/truth/attribution-eligibility';
+import { ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES } from '@/lib/operations/merchant-operational-copy';
 import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-guidance';
 
 type CatalogService = { id: string; name: string; price?: number; currency?: string };
@@ -106,7 +108,10 @@ export function ParticipantCompensationDialog({
   }, [open, entity, projectId]);
 
   React.useEffect(() => {
-    if (!open || !organizationId || draft.compensationType !== 'COMMISSION') return;
+    const needsCatalog =
+      draft.compensationType === 'COMMISSION' ||
+      (draft.compensationType === 'HYBRID' && draft.customerAttributionEnabled === true);
+    if (!open || !organizationId || !needsCatalog) return;
     let cancelled = false;
     setCatalogLoading(true);
     setCatalogUnavailable(false);
@@ -137,7 +142,7 @@ export function ParticipantCompensationDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, organizationId, draft.compensationType, entity?.id, projectId]);
+  }, [open, organizationId, draft.compensationType, draft.customerAttributionEnabled, entity?.id, projectId]);
 
   const showPercentage =
     draft.compensationType === 'REVENUE_SHARE' ||
@@ -157,7 +162,18 @@ export function ParticipantCompensationDialog({
     s.name.toLowerCase().includes(serviceQuery.toLowerCase())
   );
 
+  const attributionAllActiveBlocked = isAttributionAllActiveWithoutCatalog({
+    compensationType: draft.compensationType,
+    customerAttributionEnabled: draft.customerAttributionEnabled,
+    commissionSourceMode: commissionMode,
+    activeCatalogCount: catalogServices.length,
+  });
+
   async function handleSave() {
+    if (attributionAllActiveBlocked) {
+      toast.error(ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES.message);
+      return;
+    }
     setSaving(true);
     try {
       const profile: ParticipantCompensationProfile = {
@@ -300,6 +316,19 @@ export function ParticipantCompensationDialog({
                       />
                       All active services
                     </label>
+                    {commissionMode === 'all_active' &&
+                    draft.customerAttributionEnabled &&
+                    !catalogLoading &&
+                    catalogServices.length === 0 ? (
+                      <div className="rounded-md border border-amber-500/25 bg-amber-500/5 p-3 text-xs space-y-2 ml-6">
+                        <p>{ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES.message}</p>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES.href}>
+                            {ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES.cta}
+                          </Link>
+                        </Button>
+                      </div>
+                    ) : null}
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"
@@ -371,9 +400,21 @@ export function ParticipantCompensationDialog({
                     />
                     Enable customer purchase attribution
                   </label>
+                  {attributionAllActiveBlocked && !showCommissionSource ? (
+                    <div className="rounded-md border border-amber-500/25 bg-amber-500/5 p-3 text-xs space-y-2">
+                      <p>{ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES.message}</p>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES.href}>
+                          {ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES.cta}
+                        </Link>
+                      </Button>
+                    </div>
+                  ) : null}
                   <ServiceCatalogGuidance
                     organizationId={organizationId}
-                    attributionEnabled={draft.customerAttributionEnabled === true}
+                    attributionEnabled={
+                      draft.customerAttributionEnabled === true && commissionMode !== 'all_active'
+                    }
                   />
                 </div>
               ) : null}
@@ -420,7 +461,11 @@ export function ParticipantCompensationDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="button" onClick={() => void handleSave()} disabled={saving}>
+              <Button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={saving || attributionAllActiveBlocked}
+              >
                 {saving ? 'Saving…' : 'Save compensation'}
               </Button>
             </DialogFooter>

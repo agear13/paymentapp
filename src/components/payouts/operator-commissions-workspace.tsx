@@ -28,6 +28,13 @@ import {
   PAYOUTS_OBLIGATIONS_HREF,
   PAYOUTS_SETTLEMENTS_HREF,
 } from '@/lib/navigation/operator-nav';
+import {
+  groupParticipantEarningsByBucket,
+  PARTICIPANT_EARNINGS_BUCKET_META,
+  type ParticipantEarningsBucket,
+  type ParticipantEarningsRowInput,
+} from '@/lib/operations/selectors/derive-participant-earnings-buckets';
+import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { PayoutEmptyState } from '@/components/payouts/payout-empty-state';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import type { PayoutEmptyIconVariant } from '@/components/payouts/payout-empty-state';
@@ -48,6 +55,8 @@ type PilotObligation = {
     role: string;
     onboardingStatus?: string;
     approvalStatus?: string;
+    payoutVerificationConfirmed?: boolean;
+    compensationProfile?: DemoParticipant['compensationProfile'];
   } | null;
 };
 
@@ -223,60 +232,100 @@ export function OperatorCommissionsWorkspace() {
     </Button>
   );
 
-  const sections: OperationalSection[] = [
-    {
-      id: 'ready-for-release',
-      title: 'Ready for release',
-      description: 'Eligible to include in the next release batch.',
-      rows: pilotRows.filter((r) => r.status === 'AVAILABLE_FOR_PAYOUT'),
-      emptyTitle: 'No payouts ready for release',
-      emptyDescription:
-        'Eligible participant payouts will appear here once funding and approvals are complete.',
-      emptyAction: reviewObligationsBtn,
-      emptyIcon: 'release',
-      emphasis: 'primary',
-    },
-    {
-      id: 'needs-funding',
-      title: 'Needs funding',
-      description: 'Earnings waiting on project funding or payout approval.',
-      rows: pilotRows.filter((r) =>
-        ['DRAFT', 'UNFUNDED', 'PARTIALLY_FUNDED', 'PENDING_APPROVAL'].includes(r.status)
-      ),
-      emptyTitle: 'No funding tasks right now',
-      emptyDescription:
-        'Funding tasks will appear once customer payments or obligations are created.',
-      emptyIcon: 'funding',
-      emphasis: 'caution',
-    },
-    {
-      id: 'awaiting-onboarding',
-      title: 'Awaiting participant setup',
-      description: 'Approved participants completing payout setup.',
-      rows: pilotRows.filter(
-        (r) =>
-          r.status === 'APPROVED' &&
-          r.participant?.onboardingStatus &&
-          r.participant.onboardingStatus !== 'Complete'
-      ),
-      emptyTitle: 'No participants awaiting setup',
-      emptyDescription:
-        'Participants who need to finish payout setup will appear here after approval.',
-      emptyIcon: 'participant',
-      emphasis: 'default',
-    },
-    {
-      id: 'recently-released',
-      title: 'Recently released',
-      description: 'Participant payouts from completed release batches.',
-      rows: pilotRows.filter((r) => r.status === 'PAID').slice(0, 25),
-      emptyTitle: 'No recent releases',
-      emptyDescription:
-        'Released participant payouts will appear here once release batches are completed.',
-      emptyIcon: 'history',
-      emphasis: 'muted',
-    },
+  const refreshObligations = React.useCallback(async () => {
+    try {
+      const res = await fetch('/api/deal-network-pilot/obligations/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || 'Failed to refresh obligations');
+      }
+      toast.success('Obligation projections refreshed');
+      await fetchAll();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Refresh failed');
+    }
+  }, [fetchAll]);
+
+  const earningsRows = React.useMemo((): ParticipantEarningsRowInput[] => {
+    return pilotRows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      amountOwed:
+        typeof row.amount_owed === 'string' ? parseFloat(row.amount_owed) : row.amount_owed,
+      participant: row.participant
+        ? ({
+            id: row.participant.id,
+            name: row.participant.name,
+            role: row.participant.role,
+            approvalStatus:
+              row.participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
+            payoutVerificationConfirmed: row.participant.payoutVerificationConfirmed === true,
+            compensationProfile: row.participant.compensationProfile,
+            onboardingStatus: row.participant.onboardingStatus,
+          } as DemoParticipant)
+        : null,
+    }));
+  }, [pilotRows]);
+
+  const bucketed = React.useMemo(
+    () => groupParticipantEarningsByBucket(earningsRows),
+    [earningsRows]
+  );
+
+  const bucketSections: Array<{
+    bucket: ParticipantEarningsBucket;
+    emphasis: SectionEmphasis;
+    emptyIcon: PayoutEmptyIconVariant;
+  }> = [
+    { bucket: 'ready_for_release', emphasis: 'primary', emptyIcon: 'release' },
+    { bucket: 'awaiting_orchestration_refresh', emphasis: 'caution', emptyIcon: 'funding' },
+    { bucket: 'needs_funding', emphasis: 'caution', emptyIcon: 'funding' },
+    { bucket: 'awaiting_participant_approval', emphasis: 'default', emptyIcon: 'participant' },
+    { bucket: 'awaiting_payout_details', emphasis: 'default', emptyIcon: 'participant' },
+    { bucket: 'awaiting_participant_setup', emphasis: 'default', emptyIcon: 'participant' },
+    { bucket: 'recently_released', emphasis: 'muted', emptyIcon: 'history' },
   ];
+
+  const sections: OperationalSection[] = bucketSections.map(({ bucket, emphasis, emptyIcon }) => {
+    const meta = PARTICIPANT_EARNINGS_BUCKET_META[bucket];
+    const rowIds = new Set(bucketed[bucket].map((r) => r.id));
+    const rows = pilotRows.filter((r) => rowIds.has(r.id));
+    const refreshAction =
+      bucket === 'awaiting_orchestration_refresh' ? (
+        <Button variant="outline" size="sm" onClick={() => void refreshObligations()}>
+          Refresh obligations
+        </Button>
+      ) : undefined;
+    return {
+      id: bucket,
+      title: meta.title,
+      description: meta.description,
+      rows,
+      emptyTitle:
+        bucket === 'ready_for_release'
+          ? 'No payouts ready for release'
+          : bucket === 'awaiting_orchestration_refresh'
+            ? 'No coordination refresh pending'
+            : `No ${meta.title.toLowerCase()} right now`,
+      emptyDescription:
+        bucket === 'ready_for_release'
+          ? 'Eligible participant payouts will appear here once funding and approvals converge.'
+          : meta.description,
+      emptyAction:
+        bucket === 'ready_for_release'
+          ? reviewObligationsBtn
+          : bucket === 'awaiting_orchestration_refresh'
+            ? refreshAction
+            : undefined,
+      emptyIcon,
+      emphasis,
+    };
+  });
 
   if (isOrgLoading) {
     return (

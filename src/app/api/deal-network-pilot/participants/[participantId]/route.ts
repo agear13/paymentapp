@@ -18,6 +18,11 @@ import {
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import { normalizeCompensationAttributionSemantics } from '@/lib/operations/derivations/derive-currency-consistency';
 import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
+import { prisma } from '@/lib/server/prisma';
+import { isAttributionAllActiveWithoutCatalog } from '@/lib/operations/truth/attribution-eligibility';
+import { ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES } from '@/lib/operations/merchant-operational-copy';
+import { assertOperationalInvariants } from '@/lib/operations/dev/operational-invariants';
 
 const compensationProfileSchema = z.object({
   compensationType: z.enum(PARTICIPANT_COMPENSATION_TYPES),
@@ -96,12 +101,38 @@ export async function PATCH(
     if (body.agreementNotes != null) payloadPatch.agreementNotes = body.agreementNotes;
 
     if (body.compensationProfile) {
-      const profile = {
+      const org = await getOrganizationForAuthenticatedUser(user.id);
+      const activeCatalogCount = org
+        ? await prisma.organization_services.count({
+            where: { organization_id: org.id, active: true },
+          })
+        : 0;
+
+      const profileInput = {
         ...body.compensationProfile,
         configured: body.compensationProfile.configured ?? true,
         configuredAt: body.compensationProfile.configuredAt ?? new Date().toISOString(),
       };
-      const normalized = normalizeCompensationAttributionSemantics(working, profile);
+
+      if (
+        isAttributionAllActiveWithoutCatalog({
+          compensationType: profileInput.compensationType,
+          customerAttributionEnabled: profileInput.customerAttributionEnabled,
+          commissionSourceMode: profileInput.commissionSourceMode,
+          activeCatalogCount,
+        })
+      ) {
+        assertOperationalInvariants({
+          participantId,
+          attributionEnabledWithoutActiveServices: true,
+        });
+        return NextResponse.json(
+          { error: ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES.message },
+          { status: 422 }
+        );
+      }
+
+      const normalized = normalizeCompensationAttributionSemantics(working, profileInput);
       const merged = applyCompensationProfileToParticipant(working, normalized.profile);
       payloadPatch.compensationProfile = merged.compensationProfile;
       payloadPatch.participationModel = merged.participationModel;

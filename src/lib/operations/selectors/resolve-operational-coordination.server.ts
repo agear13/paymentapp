@@ -10,44 +10,15 @@ import {
 } from '@/lib/deal-network-demo/pilot-project-funding.server';
 import { sumConfirmedFundingForProject } from '@/lib/projects/funding-sources/confirmed-funding.server';
 import type { RawObligationInput } from '@/lib/operations/derivations/derive-obligation-state';
-import type { ObligationOperationalReadiness } from '@/lib/projects/funding-sources/types';
+import {
+  resolveObligationAmountFunded,
+  resolveObligationOperationalReadiness,
+} from '@/lib/operations/derivations/derive-obligation-allocation-status';
 import {
   getOperationalCoordinationSnapshot,
   type OperationalCoordinationInput,
   type OperationalCoordinationSnapshot,
 } from '@/lib/operations/selectors/operational-coordination-snapshot';
-
-function pilotStatusToReadiness(status: DealNetworkPilotObligationStatus): ObligationOperationalReadiness {
-  switch (status) {
-    case DealNetworkPilotObligationStatus.AVAILABLE_FOR_PAYOUT:
-      return 'ready';
-    case DealNetworkPilotObligationStatus.PARTIALLY_FUNDED:
-      return 'partially_funded';
-    case DealNetworkPilotObligationStatus.UNFUNDED:
-      return 'awaiting_funding';
-    case DealNetworkPilotObligationStatus.PAID:
-      return 'ready';
-    default:
-      return 'awaiting_funding';
-  }
-}
-
-function amountFundedFromStatus(
-  amountOwed: unknown,
-  status: DealNetworkPilotObligationStatus
-): number {
-  const owed = Number(amountOwed) || 0;
-  switch (status) {
-    case DealNetworkPilotObligationStatus.AVAILABLE_FOR_PAYOUT:
-    case DealNetworkPilotObligationStatus.PAID:
-      return owed;
-    case DealNetworkPilotObligationStatus.PARTIALLY_FUNDED:
-      return owed;
-    default:
-      return 0;
-  }
-}
-
 function obligationsFromRows(
   rows: Array<{
     id: string;
@@ -55,16 +26,37 @@ function obligationsFromRows(
     amount_owed: unknown;
     currency: string | null;
     status: DealNetworkPilotObligationStatus;
-  }>
+    payment_event_id?: string | null;
+  }>,
+  participantsById: Map<string, DemoParticipant>
 ): RawObligationInput[] {
-  return rows.map((row) => ({
-    id: row.id,
-    participantId: row.participant_id,
-    amount: Number(row.amount_owed) || 0,
-    amountFunded: amountFundedFromStatus(row.amount_owed, row.status),
-    currency: row.currency ?? 'AUD',
-    readiness: pilotStatusToReadiness(row.status),
-  }));
+  return rows.map((row) => {
+    const amount = Number(row.amount_owed) || 0;
+    const participant = row.participant_id
+      ? participantsById.get(row.participant_id)
+      : undefined;
+    const amountFunded = resolveObligationAmountFunded({
+      allocationStatus: row.status,
+      amountOwed: amount,
+      participant,
+      paymentLinked: Boolean(row.payment_event_id),
+    });
+    const readiness = resolveObligationOperationalReadiness({
+      allocationStatus: row.status,
+      participant,
+      amountOwed: amount,
+      amountFunded,
+    });
+    return {
+      id: row.id,
+      participantId: row.participant_id,
+      amount,
+      amountFunded,
+      currency: row.currency ?? 'AUD',
+      allocationStatus: row.status,
+      readiness,
+    };
+  });
 }
 
 export type ResolveOperationalCoordinationInput = {
@@ -113,15 +105,28 @@ export async function resolveOperationalCoordinationSnapshot(
       amount_owed: true,
       currency: true,
       status: true,
+      payment_event_id: true,
     },
   });
 
+  const participantsById = new Map(dealParticipants.map((p) => [p.id, p]));
+
   for (const row of obligationRows) {
     const owed = Number(row.amount_owed) || 0;
-    const funded = amountFundedFromStatus(row.amount_owed, row.status);
+    const participant = row.participant_id
+      ? participantsById.get(row.participant_id)
+      : undefined;
+    const funded = resolveObligationAmountFunded({
+      allocationStatus: row.status,
+      amountOwed: owed,
+      participant,
+      paymentLinked: Boolean(row.payment_event_id),
+    });
     obligationsTotal += owed;
     obligationsFunded += funded;
   }
+
+  const obligations = obligationsFromRows(obligationRows, participantsById);
 
   if (deal) {
     const strait = isStraitProjectDeal(deal);
@@ -130,13 +135,18 @@ export async function resolveOperationalCoordinationSnapshot(
     fundingAllocated = confirmedFunding > 0;
   }
 
-  const obligations = obligationsFromRows(obligationRows);
+  const obligationStatusByParticipant = Object.fromEntries(
+    obligations
+      .filter((o) => o.participantId && o.allocationStatus)
+      .map((o) => [o.participantId as string, o.allocationStatus as string])
+  );
 
   const coordinationInput: OperationalCoordinationInput = {
     participants: dealParticipants,
     obligations,
     projectId: projectId ?? undefined,
     fundingAllocated,
+    obligationStatusByParticipant,
     funding: {
       fundingSourceConnected: fundingAllocated || obligationsTotal > 0,
       confirmedFunding,

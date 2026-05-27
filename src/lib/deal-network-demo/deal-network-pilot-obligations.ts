@@ -28,23 +28,21 @@ import {
 } from '@/lib/deal-network-demo/pilot-project-funding.server';
 import { sumConfirmedFundingForProject } from '@/lib/projects/funding-sources/confirmed-funding.server';
 import { effectiveOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
+import { resolvePersistedObligationStatus } from '@/lib/operations/derivations/derive-obligation-allocation-status';
 
 function payoutLineToObligationStatus(
-  payout: ParticipantPayoutSettlementStatus,
-  dealStatus: RecentDeal['status']
+  participant: DemoParticipant,
+  deal: RecentDeal,
+  moneyConfirmed: boolean,
+  fullyFunded: boolean
 ): DealNetworkPilotObligationStatus {
-  if (dealStatus === 'Reversed') return DealNetworkPilotObligationStatus.REVERSED;
-  switch (payout) {
-    case 'Paid':
-      return DealNetworkPilotObligationStatus.PAID;
-    case 'Approved':
-      return DealNetworkPilotObligationStatus.APPROVED;
-    case 'Eligible':
-      return DealNetworkPilotObligationStatus.AVAILABLE_FOR_PAYOUT;
-    case 'Pending':
-    default:
-      return DealNetworkPilotObligationStatus.PENDING_APPROVAL;
-  }
+  if (deal.status === 'Reversed') return DealNetworkPilotObligationStatus.REVERSED;
+  return resolvePersistedObligationStatus({
+    participant,
+    deal,
+    moneyConfirmed,
+    fullyFunded,
+  });
 }
 
 /** Platform line follows deal settlement state (same badge as pipeline in pilot UI). */
@@ -193,7 +191,7 @@ export async function refreshDealNetworkPilotObligationsForDeal(
       amount_owed: new Prisma.Decimal(resolved.total.toFixed(2)),
       currency,
       status: moneyConfirmed
-        ? payoutLineToObligationStatus(payout, deal.status)
+        ? payoutLineToObligationStatus(p, deal, moneyConfirmed, fullyFunded)
         : unfundedRowStatus,
       calculation_explanation: resolved.previewLine,
       calculation_snapshot_json: snapshot as unknown as Prisma.InputJsonValue,

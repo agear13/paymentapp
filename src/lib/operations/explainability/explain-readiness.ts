@@ -7,6 +7,7 @@ import type {
 import type { TrustLevel } from '@/lib/operations/explainability/types';
 import { deriveNextOperationalActions } from '@/lib/operations/explainability/derive-next-operational-actions';
 import { deduplicateOperationalActions } from '@/lib/operations/explainability/deduplicate-operational-actions';
+import { deriveOperationalReleaseBlockers } from '@/lib/operations/explainability/derive-operational-release-blockers';
 import { deriveReleaseConfidence } from '@/lib/operations/explainability/release-confidence';
 import { buildOperationalTimeline } from '@/lib/operations/explainability/operational-timeline';
 import { deriveTrustSignals } from '@/lib/operations/explainability/trust-signals';
@@ -213,6 +214,22 @@ export function buildOperationalGuidance(
       actions,
       trustSignals,
       releaseConfidence,
+      releaseBlockers: deriveOperationalReleaseBlockers({
+        snapshot: {
+          participants: [],
+          obligations: [],
+          summary: {
+            participantCount: input.participants?.length ?? 0,
+            payoutReadyCount: 0,
+            releaseReadyCount: input.workspace.releaseEligibleCount,
+            blockerCount: explanation.blockers.length,
+            allBlockers: [],
+          },
+          funding: { allocated: false, stage: null },
+        },
+        workspace: input.workspace,
+        graphReady: true,
+      }),
       timeline,
       transition,
       degraded: deriveWorkspaceOperationalHealth(input.workspace).readinessLevel === 'degraded',
@@ -252,6 +269,7 @@ export function buildOperationalGuidance(
         workspace: input.workspace,
         participants: input.participants,
       }),
+      releaseBlockers: [],
       timeline: buildOperationalTimeline({ workspace: input.workspace }),
       transition: null,
       degraded: true,

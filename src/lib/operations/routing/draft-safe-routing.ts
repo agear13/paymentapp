@@ -9,6 +9,7 @@ import {
   normalizeParticipantEntity,
   safeProjectState,
 } from '@/lib/operations/guards/hydration-guards';
+import { assertParticipantSetupGuidanceInvariants } from '@/lib/operations/dev/operational-invariants';
 import { deriveParticipantPayoutReadiness } from '@/lib/operations/readiness/participant-readiness';
 import { deriveProjectOperationalReadiness } from '@/lib/operations/readiness/project-readiness';
 import type { ProjectState } from '@/lib/operations/states/project-state';
@@ -36,8 +37,20 @@ export type SafeParticipantRouteContext = {
   configuredCount: number;
   payoutReadyCount: number;
   needsEarningsConfiguration: boolean;
+  /** True when compensation setup guidance should surface (canonical graph gate). */
+  showCompensationSetupGuidance: boolean;
   guidance: string;
 };
+
+/** Whether participant compensation setup guidance should appear — not project phase alone. */
+export function shouldShowParticipantCompensationSetupGuidance(
+  ctx: Pick<
+    SafeParticipantRouteContext,
+    'needsEarningsConfiguration' | 'total' | 'payoutReadyCount'
+  >
+): boolean {
+  return ctx.total > 0 && ctx.needsEarningsConfiguration;
+}
 
 export type SafeCompensationRouteContext = {
   canConfigure: boolean;
@@ -136,6 +149,18 @@ export function safeParticipantRouteContext(
   }
 
   const needsEarningsConfiguration = total > 0 && configuredCount < total;
+  const showCompensationSetupGuidance = shouldShowParticipantCompensationSetupGuidance({
+    needsEarningsConfiguration,
+    total,
+    payoutReadyCount,
+  });
+
+  assertParticipantSetupGuidanceInvariants({
+    showCompensationSetupGuidance,
+    needsEarningsConfiguration,
+    total,
+    payoutReadyCount,
+  });
 
   return {
     participants: list,
@@ -143,6 +168,7 @@ export function safeParticipantRouteContext(
     configuredCount,
     payoutReadyCount,
     needsEarningsConfiguration,
+    showCompensationSetupGuidance,
     guidance:
       total === 0
         ? 'Add participants, then configure how each earns before obligations or payout release.'

@@ -71,6 +71,8 @@ export async function GET(request: Request) {
               role: participant.role,
               email: participant.email,
               approvalStatus: payload?.approvalStatus ?? 'Pending approval',
+              payoutVerificationConfirmed: payload?.payoutVerificationConfirmed === true,
+              compensationProfile: payload?.compensationProfile,
               onboardingStatus: effectiveOnboardingStatus({
                 id: participant.id,
                 onboardingStatus: payload?.onboardingStatus,

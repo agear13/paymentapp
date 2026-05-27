@@ -21,6 +21,7 @@ import { createFallbackActivation } from '@/lib/onboarding/workspace-activation-
 import { defaultWorkspaceContext } from '@/lib/operations/types/operational-context';
 import type { OperationalOnboardingState } from '@/lib/operations/onboarding/operational-onboarding-phases';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
+import { deriveOperationalReleaseBlockers } from '@/lib/operations/explainability/derive-operational-release-blockers';
 import { subscribeProjectOperationalEvents } from '@/lib/operations/orchestration/operational-sync-client';
 import { dispatchOperationalEvent } from '@/lib/operations/orchestration/operational-event-bus';
 
@@ -60,21 +61,51 @@ function isGraphReadyForProjection(onboarding: OperationalOnboardingState | null
 }
 
 function degradedGuidance(recoveryMessage?: string | null): OperationalGuidanceBundle {
+  const releaseBlockers = deriveOperationalReleaseBlockers({
+    snapshot: {
+      participants: [],
+      obligations: [],
+      summary: {
+        participantCount: 0,
+        payoutReadyCount: 0,
+        releaseReadyCount: 0,
+        blockerCount: 1,
+        allBlockers: [],
+      },
+      funding: { allocated: false, stage: null },
+    },
+    graphReady: false,
+    initializationRecoveryMessage: recoveryMessage,
+  });
+  const primary = releaseBlockers[0];
+  const headline = primary?.reason ?? 'Operational coordination initializing';
+  const remediation =
+    primary?.remediation ??
+    'Your payment rails were connected successfully. Operational coordination is being prepared.';
+
   return {
     explanation: {
       readinessLevel: 'blocked',
       readinessScore: 0,
-      blockers: recoveryMessage ? [recoveryMessage] : ['Settlement infrastructure is initializing'],
+      blockers: [headline],
       warnings: [],
       missingRequirements: [],
       confidence: 'BLOCKED',
-      nextRecommendedActions: [],
+      nextRecommendedActions: primary
+        ? [
+            {
+              id: primary.id,
+              title: primary.remediation,
+              description: primary.unlockCondition,
+              href: primary.ctaHref,
+              ctaLabel: primary.ctaLabel,
+              priority: 1,
+            },
+          ]
+        : [],
       explainability: {
         headline: 'Operational coordination initializing',
-        bullets: [
-          recoveryMessage ??
-            'Your payment rails were connected successfully. Operational coordination is being prepared.',
-        ],
+        bullets: [headline, remediation],
       },
       trustState: 'attention',
       phaseLabel: 'Settlement infrastructure initializing',
@@ -83,6 +114,7 @@ function degradedGuidance(recoveryMessage?: string | null): OperationalGuidanceB
     stateExplanation: null,
     actions: [],
     trustSignals: [],
+    releaseBlockers,
     releaseConfidence: {
       level: 'BLOCKED',
       score: 0,
@@ -91,12 +123,17 @@ function degradedGuidance(recoveryMessage?: string | null): OperationalGuidanceB
       reservedObligations: 0,
       readyToRelease: 0,
       heldBack: 0,
-      heldBackReasons: [],
+      heldBackReasons: [headline],
       blockedParticipantCount: 0,
       riskWarnings: [],
       releasableObligationCount: 0,
       totalObligationCount: 0,
-      explainability: { headline: 'Initializing', bullets: [] },
+      explainability: {
+        headline: primary?.category === 'operational_graph_initializing'
+          ? 'Settlement graph initialization in progress'
+          : 'Initializing',
+        bullets: [remediation],
+      },
     },
     timeline: [],
     transition: null,

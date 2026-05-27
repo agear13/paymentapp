@@ -57,6 +57,7 @@ import {
   FileWarning,
 } from 'lucide-react';
 import type { DealNetworkPilotObligationStatus } from '@prisma/client';
+import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { PilotParticipantOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 import {
   isApprovedButNotOnboarded,
@@ -200,8 +201,25 @@ function statusRowAccent(s: DealNetworkPilotObligationStatus): string {
   }
 }
 
-function StatusBadge({ status }: { status: DealNetworkPilotObligationStatus }) {
+function StatusBadge({
+  status,
+  participant,
+}: {
+  status: DealNetworkPilotObligationStatus;
+  participant?: ObligationRow['participant'];
+}) {
+  const demoParticipant = participant
+    ? ({
+        id: participant.id,
+        name: participant.name,
+        role: participant.role,
+        approvalStatus:
+          participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
+        onboardingStatus: participant.onboardingStatus,
+      } as DemoParticipant)
+    : null;
   const variant = statusBadgeVariant(status);
+  const label = operatorStatusLabel(status, demoParticipant);
   const icon =
     status === 'UNFUNDED' || status === 'PARTIALLY_FUNDED' ? (
       <AlertTriangle className="size-3 shrink-0" aria-hidden />
@@ -223,7 +241,7 @@ function StatusBadge({ status }: { status: DealNetworkPilotObligationStatus }) {
       className="max-w-[140px] gap-1 font-normal text-[11px] px-1.5 py-0 transition-colors"
     >
       {icon}
-      <span className="truncate">{operatorStatusLabel(status)}</span>
+      <span className="truncate">{label}</span>
     </Badge>
   );
 }
@@ -854,7 +872,7 @@ function DealNetworkObligationsPageContent() {
                             {blocking ?? '—'}
                           </TableCell>
                           <TableCell className="opacity-80">
-                            <StatusBadge status={row.status} />
+                            <StatusBadge status={row.status} participant={row.participant} />
                           </TableCell>
                         </TableRow>
                         {expanded && !isMobile ? (
