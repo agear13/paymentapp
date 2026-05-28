@@ -17,6 +17,11 @@ type OperationalSettlementInitializationProps = {
   loading?: boolean;
   graphSnapshotConverged?: boolean;
   nextActions?: OperationalAction[];
+  /** Persisted operational evidence — prevents shell from replacing populated pages. */
+  participantCount?: number;
+  earningsConfiguredCount?: number;
+  obligationCount?: number;
+  obligationsLoadedCount?: number;
   children: React.ReactNode;
 };
 
@@ -27,6 +32,10 @@ export function OperationalSettlementInitialization({
   loading = false,
   graphSnapshotConverged = false,
   nextActions = [],
+  participantCount,
+  earningsConfiguredCount,
+  obligationCount,
+  obligationsLoadedCount,
   children,
 }: OperationalSettlementInitializationProps) {
   const [refreshing, setRefreshing] = React.useState(false);
@@ -38,6 +47,10 @@ export function OperationalSettlementInitialization({
     operationalInitialization: initialization,
     graphSnapshotConverged,
     nextActions,
+    participantCount,
+    earningsConfiguredCount,
+    obligationCount,
+    obligationsLoadedCount,
   });
   const timelineProjection = useOperationalTimelineProjection({ enabled: !loading });
 

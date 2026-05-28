@@ -15,6 +15,8 @@ import type { CanonicalOperationalState } from '@/lib/operations/reducer/types';
 import type { OperationalEvent } from '@/lib/operations/contracts/operational-events';
 import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
 import { collectOperationalEventStream } from '@/lib/operations/timeline/canonical-operational-event';
+import { deriveAuditTimelineFromGraph } from '@/lib/operations/audit/derive-audit-timeline-from-state';
+import { mergeAuditTimeline } from '@/lib/operations/audit/operational-audit';
 
 export type BuildCanonicalStateInput = ReduceOperationalStateInput & {
   auditTimeline?: OperationalAuditEntry[];
@@ -57,13 +59,20 @@ export function buildCanonicalStateFromSnapshot(
 ): CanonicalOperationalState {
   const seed = seedFromSnapshot(snapshot, input.activation, input);
   const workspace = workspaceContextFromActivationSeed(seed, input.activation);
+  const persistedAudit = deriveAuditTimelineFromGraph(snapshot, input.activation.primaryProjectId ?? undefined);
+  const auditTimeline = mergeAuditTimeline(persistedAudit, input.auditTimeline ?? []);
 
   return reduceOperationalState({
     events: collectOperationalEventStream({
       events: input.events,
-      auditTimeline: input.auditTimeline,
+      auditTimeline,
     }),
-    seed: { ...seed, workspace },
+    seed: {
+      ...seed,
+      workspace,
+      graphReady: input.graphReady ?? true,
+      graphSnapshotConverged: input.graphSnapshotConverged ?? input.graphReady ?? true,
+    },
   });
 }
 

@@ -427,6 +427,7 @@ function DealNetworkObligationsPageContent() {
     guidance,
     graphSnapshotConverged,
     releaseInteraction,
+    kpis,
   } = useOperationalCoordinationState();
   const timelineProjection = useOperationalTimelineProjection();
   const isPayoutsRoute = pathname?.startsWith('/dashboard/payouts') ?? false;
@@ -471,8 +472,20 @@ function DealNetworkObligationsPageContent() {
     if (value) setStatusFilter('__all__');
   }, []);
 
+  const hasOperationalEvidence = React.useMemo(
+    () =>
+      (kpis?.participantCount ?? 0) > 0 ||
+      (kpis?.earningsConfiguredCount ?? 0) > 0 ||
+      (kpis?.obligationCount ?? 0) > 0 ||
+      allRows.length > 0,
+    [allRows.length, kpis]
+  );
+
+  const showInitializationShell =
+    settlementInitialization.showInitializationShell && !hasOperationalEvidence;
+
   const load = React.useCallback(async () => {
-    if (settlementInitialization.showInitializationShell) {
+    if (showInitializationShell) {
       setAllRows([]);
       setLoadError(null);
       setLoading(false);
@@ -504,7 +517,7 @@ function DealNetworkObligationsPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [settlementInitialization.showInitializationShell]);
+  }, [showInitializationShell]);
 
   React.useEffect(() => {
     void load();
@@ -574,23 +587,24 @@ function DealNetworkObligationsPageContent() {
     () =>
       safeObligationsProjection({
         readiness,
-        settlementShowShell: settlementInitialization.showInitializationShell,
+        settlementShowShell: showInitializationShell,
         timelineProjection,
         nextActions: guidance.actions,
         loadError,
-        obligationsAvailable: allRows.length > 0,
+        obligationsAvailable: allRows.length > 0 || (kpis?.obligationCount ?? 0) > 0,
       }),
     [
       allRows.length,
       guidance.actions,
+      kpis?.obligationCount,
       loadError,
       readiness,
-      settlementInitialization.showInitializationShell,
+      showInitializationShell,
       timelineProjection,
     ]
   );
 
-  if (settlementInitialization.showInitializationShell) {
+  if (showInitializationShell) {
     return (
       <div className="mx-auto max-w-7xl space-y-8 p-4 md:p-8">
         <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 px-2">

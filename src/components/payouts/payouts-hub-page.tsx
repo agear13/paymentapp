@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { ArrowRight, CircleDollarSign, FileCheck, History } from 'lucide-react';
-import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import type { useOperationalCoordinationState as UseOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { deduplicateAttentionItems } from '@/lib/operations/explainability/deduplicate-operational-actions';
 import { deriveOperationalSeverity } from '@/lib/operations/severity';
 import { ReleaseConfidenceSummary } from '@/components/operations/release-confidence-summary';
@@ -132,7 +133,8 @@ export function PayoutsHubPage() {
     operationalOnboarding,
     operationalInitialization,
     graphSnapshotConverged,
-  } = useOperationalGuidance();
+    kpis,
+  } = useOperationalCoordinationState();
 
   return (
     <ProjectSectionErrorBoundary sectionTitle="Payouts" boundaryScope="payouts">
@@ -150,6 +152,11 @@ export function PayoutsHubPage() {
           loading={loading}
           graphSnapshotConverged={graphSnapshotConverged}
           nextActions={guidance.actions.slice(0, 3)}
+          participantCount={kpis?.participantCount ?? activation?.participantCount}
+          earningsConfiguredCount={
+            kpis?.earningsConfiguredCount ?? activation?.participantsConfiguredCount
+          }
+          obligationCount={kpis?.obligationCount ?? activation?.obligationCount}
         >
           <div className="space-y-6">
             <PayoutsHubContent

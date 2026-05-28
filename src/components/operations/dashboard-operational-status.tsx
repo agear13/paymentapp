@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { OperationalStatusBar } from '@/components/operations/operational-status-bar';
 
 /**
@@ -18,7 +18,7 @@ export function DashboardOperationalStatus() {
     return null;
   }
 
-  const { guidance, loading, degraded } = useOperationalGuidance();
+  const { guidance, loading, degraded } = useOperationalCoordinationState();
 
   return (
     <OperationalStatusBar

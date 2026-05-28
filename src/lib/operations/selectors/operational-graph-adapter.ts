@@ -288,9 +288,8 @@ export function guidanceFromOperationalGraph(input: {
           }))
         : timelineProjection.timeline;
 
-  const eventBlockerBullets = timelineProjection.blockers.map((b) => b.reason);
-  if (eventBlockerBullets.length > 0) {
-    explanation.blockers = [...new Set([...eventBlockerBullets, ...explanation.blockers])];
+  if (canonical.blockers.length > 0) {
+    explanation.blockers = canonical.blockers.map((b) => b.reason);
   }
 
   const releaseConfidence: ReleaseConfidenceSnapshot = {

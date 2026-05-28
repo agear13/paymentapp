@@ -11,6 +11,11 @@ export type SettlementInitializationInput = {
   operationalInitialization?: OperationalInitializationSnapshot | null;
   graphSnapshotConverged?: boolean;
   nextActions?: OperationalAction[];
+  /** When persisted operational data exists, do not replace pages with init shell. */
+  participantCount?: number;
+  earningsConfiguredCount?: number;
+  obligationCount?: number;
+  obligationsLoadedCount?: number;
 };
 
 /**
@@ -28,7 +33,14 @@ export function deriveSettlementInitializationState(
   );
   const graphConverged = input.graphSnapshotConverged === true;
 
-  const showInitializationShell = activationLoading || !graphReady;
+  const hasOperationalEvidence =
+    (input.participantCount ?? 0) > 0 ||
+    (input.earningsConfiguredCount ?? 0) > 0 ||
+    (input.obligationCount ?? 0) > 0 ||
+    (input.obligationsLoadedCount ?? 0) > 0;
+
+  const showInitializationShell =
+    activationLoading || (!graphReady && !hasOperationalEvidence);
 
   const progress = effectiveOnboarding
     ? onboardingInitializationProgress(effectiveOnboarding)

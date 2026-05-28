@@ -247,4 +247,55 @@ describe('operational convergence architecture', () => {
 
     assertCanonicalConvergenceInvariants({ state });
   });
+
+  it('counts all 3 participants when compensation persisted without configured flag', () => {
+    const participants = [
+      readyParticipant('p-1'),
+      readyParticipant('p-2', {
+        compensationProfile: {
+          compensationType: 'FIXED_FEE',
+          fixedAmount: 1500,
+          revenueSources: [],
+          customerAttributionEnabled: false,
+          commissionSourceMode: 'all_active',
+          commissionServiceIds: [],
+        },
+      }),
+      readyParticipant('p-3', {
+        compensationProfile: {
+          compensationType: 'REVENUE_SHARE',
+          percentage: 12,
+          revenueSources: [],
+          customerAttributionEnabled: false,
+          commissionSourceMode: 'all_active',
+          commissionServiceIds: [],
+        },
+        commissionKind: 'pct_deal_value',
+        commissionValue: 12,
+        operationalStatus: 'active',
+      }),
+    ];
+
+    const snapshot = getOperationalCoordinationSnapshot({
+      participants,
+      fundingAllocated: true,
+    });
+
+    expect(snapshot.summary.earningsConfiguredCount).toBe(3);
+    expect(snapshot.summary.payoutReadyCount).toBe(3);
+
+    const state = reduceOperationalState({
+      seed: {
+        participants,
+        fundingAllocated: true,
+        graphReady: true,
+        graphSnapshotConverged: true,
+      },
+    });
+
+    expect(state.kpis.earningsConfiguredCount).toBe(3);
+    expect(state.kpis.participantsConfigured).toBe(true);
+    expect(state.kpis.payoutReadyCount).toBe(3);
+    expect(state.obligations.length).toBeGreaterThan(0);
+  });
 });

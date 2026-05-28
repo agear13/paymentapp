@@ -1,6 +1,6 @@
 'use client';
 
-import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { deriveOperationalSeverity } from '@/lib/operations/severity';
 import { deduplicateAttentionItems } from '@/lib/operations/explainability/deduplicate-operational-actions';
 import { OperationalCommandCenterHero } from '@/components/operations/operational-command-center-hero';
@@ -17,7 +17,8 @@ import {
 import { ChevronDown } from 'lucide-react';
 
 export function OperationalHomeCommandCenter() {
-  const { guidance, loading, workspaceContext, activation, auditTimeline } = useOperationalGuidance();
+  const { guidance, loading, workspaceContext, activation, auditTimeline } =
+    useOperationalCoordinationState();
   const primaryAction = guidance.actions[0] ?? null;
 
   const attentionItems = deduplicateAttentionItems(

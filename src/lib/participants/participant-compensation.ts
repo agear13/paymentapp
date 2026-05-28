@@ -1,4 +1,5 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
 import {
   isOnboardingComplete,
   effectiveOnboardingStatus,
@@ -167,7 +168,9 @@ export type WorkspaceCompensationReadiness = {
 export function evaluateWorkspaceCompensationReadiness(
   participants: DemoParticipant[]
 ): WorkspaceCompensationReadiness {
-  const active = participants.filter((p) => p.name?.trim());
+  const active = participants
+    .map((p) => hydrateOperationalParticipant(p))
+    .filter((p) => p.name?.trim());
   const unconfigured = active.filter((p) => !isCompensationConfigured(p));
   const configuredCount = active.length - unconfigured.length;
   return {

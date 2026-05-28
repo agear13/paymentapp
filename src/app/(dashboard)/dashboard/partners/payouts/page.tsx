@@ -51,6 +51,7 @@ export default function PartnerPayoutsPage() {
     loading: activationLoading,
     guidance,
     graphSnapshotConverged,
+    kpis,
   } = useOperationalCoordinationState();
   const [batches, setBatches] = React.useState<Batch[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -149,7 +150,13 @@ export default function PartnerPayoutsPage() {
     );
   }
 
-  if (settlementInitialization.showInitializationShell) {
+  const showInitializationShell =
+    settlementInitialization.showInitializationShell &&
+    (kpis?.participantCount ?? 0) === 0 &&
+    (kpis?.earningsConfiguredCount ?? 0) === 0 &&
+    (kpis?.obligationCount ?? 0) === 0;
+
+  if (showInitializationShell) {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold tracking-tight">Payouts</h1>

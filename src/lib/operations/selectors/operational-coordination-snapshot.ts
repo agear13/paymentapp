@@ -19,6 +19,7 @@ import {
   classifyParticipantCompensation,
   compensationGeneratesObligations,
 } from '@/lib/operations/contracts/compensation-classification';
+import { inferCompensationConfiguredFromPersistence } from '@/lib/participants/participant-compensation';
 import { warnOperationalInconsistency } from '@/lib/operations/dev/operational-diagnostics';
 import { deriveOperationalReadinessHierarchy } from '@/lib/operations/readiness/readiness-hierarchy';
 import {
@@ -124,7 +125,7 @@ export function getOperationalCoordinationSnapshot(
     const compensationClass = classifyParticipantCompensation(participant);
     const compensationConfigured =
       compensationGeneratesObligations(compensationClass) &&
-      participant.compensationProfile?.configured === true;
+      inferCompensationConfiguredFromPersistence(participant);
 
     assertOperationalInvariants({
       participantId: participant.id,

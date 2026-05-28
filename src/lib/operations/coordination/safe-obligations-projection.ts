@@ -30,9 +30,11 @@ export function safeObligationsProjection(
   input: SafeObligationsProjectionInput
 ): SafeObligationsProjection {
   const { readiness, timelineProjection } = input;
-  const showInitializationShell = input.settlementShowShell;
+  const showInitializationShell =
+    input.settlementShowShell && !input.obligationsAvailable;
   const canLoadObligations =
-    readiness.settlementInfrastructureReady && !showInitializationShell;
+    input.obligationsAvailable ||
+    (readiness.settlementInfrastructureReady && !input.settlementShowShell);
 
   let headline = readiness.headline;
   let guidance = readiness.guidance;

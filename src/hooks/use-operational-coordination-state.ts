@@ -53,6 +53,12 @@ export function useOperationalCoordinationState(options?: OperationalCoordinatio
         operationalInitialization: canonical.operationalInitialization,
         graphSnapshotConverged: canonical.graphSnapshotConverged,
         nextActions: canonical.guidance.actions,
+        participantCount: canonical.kpis?.participantCount ?? canonical.activation?.participantCount,
+        earningsConfiguredCount:
+          canonical.kpis?.earningsConfiguredCount ??
+          canonical.activation?.participantsConfiguredCount,
+        obligationCount:
+          canonical.kpis?.obligationCount ?? canonical.activation?.obligationCount,
       }),
     [
       canonical.loading,
@@ -60,6 +66,8 @@ export function useOperationalCoordinationState(options?: OperationalCoordinatio
       canonical.operationalInitialization,
       canonical.graphSnapshotConverged,
       canonical.guidance.actions,
+      canonical.kpis,
+      canonical.activation,
     ]
   );
 

@@ -83,6 +83,7 @@ export function OperatorSettlementsWorkspace({
     releaseInteraction,
     guidance,
     graphSnapshotConverged,
+    kpis,
   } = useOperationalCoordinationState({ releaseCapabilities });
   const { currency: orgCurrency } = useOrganizationCurrency();
   const syncHandlers = useGlobalOperationalSyncHandlers();
@@ -249,7 +250,13 @@ export function OperatorSettlementsWorkspace({
     );
   }
 
-  if (settlementInitialization.showInitializationShell) {
+  const showInitializationShell =
+    settlementInitialization.showInitializationShell &&
+    (kpis?.participantCount ?? 0) === 0 &&
+    (kpis?.earningsConfiguredCount ?? 0) === 0 &&
+    (kpis?.obligationCount ?? 0) === 0;
+
+  if (showInitializationShell) {
     return (
       <div className="space-y-6">
         {pageHeader}
@@ -259,6 +266,9 @@ export function OperatorSettlementsWorkspace({
           loading={activationLoading}
           graphSnapshotConverged={graphSnapshotConverged}
           nextActions={guidance.actions}
+          participantCount={kpis?.participantCount}
+          earningsConfiguredCount={kpis?.earningsConfiguredCount}
+          obligationCount={kpis?.obligationCount}
         >
           {null}
         </OperationalSettlementInitialization>

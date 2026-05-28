@@ -70,6 +70,17 @@ describe('settlement initialization selector', () => {
     expect(init.showInitializationShell).toBe(false);
     expect(init.allowChildProjections).toBe(false);
   });
+
+  it('does not show initialization shell when persisted operational evidence exists', () => {
+    const init = deriveSettlementInitializationState({
+      operationalOnboarding: { graphReady: false, blockers: [] } as never,
+      graphSnapshotConverged: false,
+      participantCount: 3,
+      earningsConfiguredCount: 3,
+      obligationCount: 4,
+    });
+    expect(init.showInitializationShell).toBe(false);
+  });
 });
 
 describe('safe operational projection', () => {

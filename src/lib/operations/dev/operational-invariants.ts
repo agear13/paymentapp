@@ -1321,3 +1321,76 @@ export function assertMultipleOperationalTruthSources(
     );
   }
 }
+
+export type SurfaceConvergenceInvariantInput = {
+  surface?: string;
+  usesNonCanonicalSelector?: boolean;
+  replayEventType?: string;
+  replayEventPresent?: boolean;
+  compensationPersistedCount?: number;
+  earningsConfiguredCount?: number;
+  approvedWithoutObligation?: boolean;
+  obligationsExist?: boolean;
+  pageRenderBlocked?: boolean;
+  duplicateBlockerCount?: number;
+  fundingPresent?: boolean;
+  releasePhaseInitializing?: boolean;
+};
+
+/** Dev-only convergence guards for mixed truth sources and incomplete replay. */
+export function assertSurfaceConvergenceInvariants(
+  input: SurfaceConvergenceInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  if (input.usesNonCanonicalSelector) {
+    throw new OperationalInvariantViolation(
+      'UI_SURFACE_USING_NONCANONICAL_OPERATIONAL_SELECTOR',
+      `Surface ${input.surface ?? 'unknown'} derived operational truth outside useCanonicalOperationalState()`
+    );
+  }
+
+  if (input.replayEventType && input.replayEventPresent === false) {
+    throw new OperationalInvariantViolation(
+      'REPLAY_EVENT_MISSING_FROM_CANONICAL_STATE',
+      `Persisted event ${input.replayEventType} did not replay into canonical operational state`
+    );
+  }
+
+  if (
+    (input.compensationPersistedCount ?? 0) > (input.earningsConfiguredCount ?? 0)
+  ) {
+    throw new OperationalInvariantViolation(
+      'PARTICIPANT_COMPENSATION_PRESENT_BUT_NOT_COUNTED',
+      `${input.compensationPersistedCount} participant row(s) show compensation but canonical KPI reports ${input.earningsConfiguredCount ?? 0} configured`
+    );
+  }
+
+  if (input.approvedWithoutObligation) {
+    throw new OperationalInvariantViolation(
+      'APPROVED_AGREEMENT_WITHOUT_OBLIGATION',
+      'Approved agreement exists in persistence but no obligation materialized in canonical state'
+    );
+  }
+
+  if (input.obligationsExist && input.pageRenderBlocked) {
+    throw new OperationalInvariantViolation(
+      'OBLIGATIONS_EXIST_BUT_PAGE_RENDER_BLOCKED',
+      'Operational obligations exist but page rendered initialization shell instead of data'
+    );
+  }
+
+  if ((input.duplicateBlockerCount ?? 0) > 1) {
+    throw new OperationalInvariantViolation(
+      'DUPLICATE_OPERATIONAL_BLOCKERS_RENDERED',
+      `${input.duplicateBlockerCount} duplicate operational blockers rendered from parallel derivation paths`
+    );
+  }
+
+  if (input.fundingPresent && input.releasePhaseInitializing) {
+    throw new OperationalInvariantViolation(
+      'FUNDING_PRESENT_BUT_RELEASE_STATE_INITIALIZING',
+      'Funding is allocated but canonical release phase remains INITIALIZING'
+    );
+  }
+}

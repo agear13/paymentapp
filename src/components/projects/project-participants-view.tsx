@@ -39,11 +39,15 @@ import {
   PARTICIPANT_TABLE_MIN_WIDTH,
   participantTableHeadClass,
 } from '@/components/projects/participant-table-layout';
-import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
+import {
+  applyCompensationProfileToParticipant,
+  inferCompensationConfiguredFromPersistence,
+} from '@/lib/participants/participant-compensation';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
-import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import { assertParticipantKpiConvergenceInvariants } from '@/lib/operations/dev/operational-invariants';
 import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import {
@@ -86,7 +90,7 @@ export function ProjectParticipantsView() {
     invalidate,
     clearSectionError,
   } = useProjectWorkspace();
-  const { graph } = useOperationalGuidance({
+  const { graph, kpis: canonicalKpis } = useOperationalCoordinationState({
     scope: 'project',
     project: deal ?? undefined,
     participants: projectParticipants,
@@ -367,10 +371,35 @@ export function ProjectParticipantsView() {
     );
   }, [hydratedParticipants, pinnedOrder]);
 
-  const stats = React.useMemo(
-    () => participantSummaryMetrics(hydratedParticipants.map(participantEntity)),
-    [hydratedParticipants]
-  );
+  const stats = React.useMemo(() => {
+    const rowMetrics = participantSummaryMetrics(hydratedParticipants.map(participantEntity));
+    if (!canonicalKpis) return rowMetrics;
+    return {
+      ...rowMetrics,
+      readyForPayout: canonicalKpis.payoutReadyCount,
+      pendingAgreements: Math.max(
+        0,
+        canonicalKpis.participantCount - canonicalKpis.approvedAgreementCount
+      ),
+      activeAttribution: canonicalKpis.attributionActiveCount,
+    };
+  }, [hydratedParticipants, canonicalKpis]);
+
+  React.useEffect(() => {
+    if (!canonicalKpis) return;
+    const rowsWithCompensation = hydratedParticipants.filter((p) =>
+      participantEntity(p).compensationProfile
+        ? inferCompensationConfiguredFromPersistence(participantEntity(p))
+        : false
+    ).length;
+    assertParticipantKpiConvergenceInvariants({
+      participantRowsWithCompensation: rowsWithCompensation,
+      workspaceEarningsConfiguredCount: canonicalKpis.earningsConfiguredCount,
+      graphEarningsConfiguredCount: graph.summary?.earningsConfiguredCount,
+      payoutReadyCount: canonicalKpis.payoutReadyCount,
+      graphPayoutReadyCount: graph.summary?.payoutReadyCount,
+    });
+  }, [canonicalKpis, graph.summary, hydratedParticipants]);
 
   const attributionEnabled = React.useMemo(
     () => hydratedParticipants.some((p) => p.compensation.attributionEnabled),

@@ -203,13 +203,20 @@ export function OperatorCommissionsWorkspace() {
     loading: activationLoading,
     guidance,
     graphSnapshotConverged,
+    kpis,
   } = useOperationalCoordinationState();
   const [pilotRows, setPilotRows] = React.useState<PilotObligation[]>([]);
   const [orgPosted, setOrgPosted] = React.useState<OrgCommission[]>([]);
   const [loading, setLoading] = React.useState(true);
 
+  const showInitializationShell =
+    settlementInitialization.showInitializationShell &&
+    (kpis?.participantCount ?? 0) === 0 &&
+    (kpis?.earningsConfiguredCount ?? 0) === 0 &&
+    (kpis?.obligationCount ?? 0) === 0;
+
   const fetchAll = React.useCallback(async () => {
-    if (settlementInitialization.showInitializationShell) {
+    if (showInitializationShell) {
       setPilotRows([]);
       setOrgPosted([]);
       setLoading(false);
@@ -271,7 +278,7 @@ export function OperatorCommissionsWorkspace() {
   }, [
     organizationId,
     releaseInteraction,
-    settlementInitialization.showInitializationShell,
+    showInitializationShell,
   ]);
 
   React.useEffect(() => {
@@ -400,7 +407,7 @@ export function OperatorCommissionsWorkspace() {
     </>
   );
 
-  if (settlementInitialization.showInitializationShell) {
+  if (showInitializationShell) {
     return (
       <div className="space-y-6">
         {pageHeader}

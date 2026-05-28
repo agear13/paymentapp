@@ -31,12 +31,12 @@ export type CanonicalOperationalStateOptions = OperationalGuidanceOptions & {
  */
 export function useCanonicalOperationalState(options?: CanonicalOperationalStateOptions) {
   const guidance = useOperationalGuidance(options);
-  const requireConvergence = options?.requireConvergence ?? true;
+  const requireConvergence = options?.requireConvergence ?? false;
 
   const canonicalState = React.useMemo((): CanonicalOperationalState | null => {
-    if (requireConvergence && !guidance.graphSnapshotConverged) return null;
     const graph = guidance.graph as OperationalCoordinationSnapshot;
-    if (!graph?.participants) return null;
+    if (!graph?.participants?.length) return null;
+    if (requireConvergence && !guidance.graphSnapshotConverged) return null;
 
     const activationInput: WorkspaceActivationInput = {
       hasOrganization: guidance.activation?.workspaceCreated ?? false,

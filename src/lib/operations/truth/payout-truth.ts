@@ -4,12 +4,13 @@ import {
 } from '@/lib/operations/lifecycle/payout-lifecycle';
 import { isParticipantOperationallyApproved } from '@/lib/operations/truth/participant-truth';
 import { payoutOnboardingPlaceholderCopy } from '@/lib/operations/lifecycle/payout-lifecycle';
+import { inferCompensationConfiguredFromPersistence } from '@/lib/participants/participant-compensation';
 
 export function isParticipantPayoutReady(participant: DemoParticipant): boolean {
   if (participant.payoutBlocked) return false;
   if (!isParticipantOperationallyApproved(participant)) return false;
   if (participant.compensationProfile?.exemptFromPayout) return true;
-  if (!participant.compensationProfile?.configured) return false;
+  if (!inferCompensationConfiguredFromPersistence(participant)) return false;
   return participant.payoutVerificationConfirmed === true;
 }
 

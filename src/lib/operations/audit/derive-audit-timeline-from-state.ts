@@ -2,6 +2,8 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
 import { mergeAuditTimeline } from '@/lib/operations/audit/operational-audit';
 import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
+import { inferCompensationConfiguredFromPersistence } from '@/lib/participants/participant-compensation';
+import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
 
 /** Derive persisted audit entries from participant/deal operational state. */
 export function deriveAuditTimelineFromParticipants(
@@ -10,7 +12,8 @@ export function deriveAuditTimelineFromParticipants(
 ): OperationalAuditEntry[] {
   const entries: OperationalAuditEntry[] = [];
 
-  for (const p of participants) {
+  for (const raw of participants) {
+    const p = hydrateOperationalParticipant(raw);
     const base = { projectId, participantId: p.id };
 
     if (p.agreementSharedAt || p.inviteSentAt) {
@@ -35,15 +38,19 @@ export function deriveAuditTimelineFromParticipants(
       });
     }
 
-    if (p.approvalStatus === 'Approved' && p.approvedAt) {
+    if (p.approvalStatus === 'Approved') {
+      const approvedAt =
+        p.approvedAt ??
+        p.compensationProfile?.configuredAt ??
+        new Date().toISOString();
       entries.push({
-        id: `agreement_approved-${p.id}-${p.approvedAt}`,
+        id: `agreement_approved-${p.id}-${approvedAt}`,
         type: 'agreement_approved',
         title: 'Participation agreement approved',
         description: p.approvalNote?.trim()
           ? `${p.name} approved with note: "${p.approvalNote.trim()}"`
           : `${p.name} approved participation agreement.`,
-        timestamp: p.approvedAt,
+        timestamp: approvedAt,
         ...base,
       });
     }
@@ -60,24 +67,29 @@ export function deriveAuditTimelineFromParticipants(
       });
     }
 
-    if (p.compensationProfile?.configured && p.compensationProfile.configuredAt) {
+    if (inferCompensationConfiguredFromPersistence(p)) {
+      const configuredAt =
+        p.compensationProfile?.configuredAt ??
+        p.approvedAt ??
+        new Date().toISOString();
       entries.push({
-        id: `compensation_updated-${p.id}-${p.compensationProfile.configuredAt}`,
+        id: `compensation_updated-${p.id}-${configuredAt}`,
         type: 'compensation_updated',
         title: 'Participant compensation updated',
         description: `Earnings configured for ${p.name}.`,
-        timestamp: p.compensationProfile.configuredAt,
+        timestamp: configuredAt,
         ...base,
       });
     }
 
-    if (p.payoutVerificationConfirmed && p.payoutVerificationConfirmedAt) {
+    if (p.payoutVerificationConfirmed) {
+      const confirmedAt = p.payoutVerificationConfirmedAt ?? new Date().toISOString();
       entries.push({
-        id: `payout_state-${p.id}-${p.payoutVerificationConfirmedAt}`,
+        id: `payout_state-${p.id}-${confirmedAt}`,
         type: 'payout_state_updated',
         title: 'Payout details confirmed',
         description: `Operator confirmed payout details for ${p.name}.`,
-        timestamp: p.payoutVerificationConfirmedAt,
+        timestamp: confirmedAt,
         ...base,
       });
     }
