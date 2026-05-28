@@ -212,12 +212,15 @@ export type CoordinationSnapshotProjectionPayload = {
   participants?: OperationalCoordinationSnapshot['participants'];
 };
 
-/** Returns null when graph projections must not be consumed (pre-convergence). */
+/** Returns null only when no persisted operational entities are present in the payload. */
 export function parseCoordinationSnapshotProjection(
   payload: CoordinationSnapshotProjectionPayload
 ): Pick<OperationalCoordinationSnapshot, 'summary' | 'funding' | 'participants' | 'obligations'> | null {
-  if (payload.graphReady === false) return null;
   if (payload.summary == null || payload.funding == null) return null;
+  const hasEntities =
+    (payload.summary.participantCount ?? 0) > 0 ||
+    (payload.participants?.length ?? 0) > 0;
+  if (payload.graphReady === false && !hasEntities) return null;
   return {
     summary: payload.summary,
     funding: payload.funding,

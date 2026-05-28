@@ -52,7 +52,7 @@ export default function PartnerPayoutsPage() {
     guidance,
     graphSnapshotConverged,
     kpis,
-  } = useOperationalCoordinationState();
+  } = useOperationalCoordinationState({ traceSurface: 'partners-payouts-page' });
   const [batches, setBatches] = React.useState<Batch[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [createLoading, setCreateLoading] = React.useState(false);

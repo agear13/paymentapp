@@ -72,18 +72,28 @@ export function deriveCanonicalOperationalBlockers(
   const snapshot = snapshotFromCanonicalState(state);
   const workspace = state.coordination.workspace ?? undefined;
 
+  const entityAuthoritative = state.participants.length > 0;
+  const graphReadyForBlockers =
+    entityAuthoritative || state.readiness.graphReady;
+
   const base = deriveOperationalReleaseBlockers({
     snapshot,
     workspace,
-    graphReady: state.readiness.graphReady,
+    graphReady: graphReadyForBlockers,
     initializationRecoveryMessage: state.readiness.graphConverged
       ? null
       : 'Operational graph is converging — projections may be temporarily incomplete.',
   });
 
   const merged = deduplicateReleaseBlockers([
-    ...base,
-    ...materializationBlockers(state),
+    ...base.filter(
+      (b) =>
+        b.category !== 'operational_graph_initializing' ||
+        !entityAuthoritative
+    ),
+    ...materializationBlockers(state).filter(
+      (b) => !entityAuthoritative || state.kpis.obligationCount === 0
+    ),
   ]);
 
   const seen = new Set<string>();

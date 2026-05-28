@@ -262,7 +262,8 @@ function paidAndOutstanding(row: ObligationRow): { paid: number; outstanding: nu
   return { paid: 0, outstanding: owed };
 }
 
-function computeKpis(rows: ObligationRow[]) {
+/** Monetary totals from obligation table rows — not operational readiness KPIs. */
+function computeObligationMonetaryTotals(rows: ObligationRow[]) {
   let totalOwed = 0;
   let totalPaid = 0;
   let totalOutstanding = 0;
@@ -428,7 +429,7 @@ function DealNetworkObligationsPageContent() {
     graphSnapshotConverged,
     releaseInteraction,
     kpis,
-  } = useOperationalCoordinationState();
+  } = useOperationalCoordinationState({ traceSurface: 'obligations-page' });
   const timelineProjection = useOperationalTimelineProjection();
   const isPayoutsRoute = pathname?.startsWith('/dashboard/payouts') ?? false;
   const backHref = isPayoutsRoute ? PAYOUTS_HUB_HREF : '/dashboard/partners/deal-network';
@@ -485,12 +486,6 @@ function DealNetworkObligationsPageContent() {
     settlementInitialization.showInitializationShell && !hasOperationalEvidence;
 
   const load = React.useCallback(async () => {
-    if (showInitializationShell) {
-      setAllRows([]);
-      setLoadError(null);
-      setLoading(false);
-      return;
-    }
 
     setLoading(true);
     setLoadError(null);
@@ -517,7 +512,7 @@ function DealNetworkObligationsPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [showInitializationShell]);
+  }, []);
 
   React.useEffect(() => {
     void load();
@@ -534,7 +529,19 @@ function DealNetworkObligationsPageContent() {
     });
   }, [allRows, needsActionOnly, dealFilter, statusFilter, participantFilter, searchQuery]);
 
-  const kpi = React.useMemo(() => computeKpis(rows), [rows]);
+  const kpi = React.useMemo(() => computeObligationMonetaryTotals(rows), [rows]);
+
+  React.useEffect(() => {
+    if (process.env.NODE_ENV !== 'development' || !kpis) return;
+    if (dealFilter !== '__all__' || statusFilter !== '__all__' || participantFilter !== '__all__') {
+      return;
+    }
+    if (allRows.length > 0 && kpis.obligationCount !== allRows.length) {
+      console.warn(
+        `[convergence-warning] obligations table row count (${allRows.length}) !== canonical obligationCount (${kpis.obligationCount})`
+      );
+    }
+  }, [allRows.length, dealFilter, kpis, participantFilter, statusFilter]);
 
   const formatKpiAmount = (n: number) => {
     if (kpi.mixedCurrency) return '—';

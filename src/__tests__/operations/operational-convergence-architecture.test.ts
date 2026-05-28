@@ -13,8 +13,11 @@ import type { OperationalEvent } from '@/lib/operations/contracts/operational-ev
 import {
   assertCanonicalConvergenceInvariants,
   assertMultipleOperationalTruthSources,
+  assertPersistedEntityDominanceInvariants,
   OperationalInvariantViolation,
 } from '@/lib/operations/dev/operational-invariants';
+import { buildPersistedCoordinationSnapshot } from '@/lib/operations/selectors/build-persisted-coordination-snapshot';
+import { buildCanonicalStateFromSnapshot } from '@/lib/operations/reducer/adapters/legacy-selectors';
 
 function readyParticipant(id: string, overrides: Partial<DemoParticipant> = {}): DemoParticipant {
   return {
@@ -297,5 +300,47 @@ describe('operational convergence architecture', () => {
     expect(state.kpis.participantsConfigured).toBe(true);
     expect(state.kpis.payoutReadyCount).toBe(3);
     expect(state.obligations.length).toBeGreaterThan(0);
+  });
+
+  it('derives payout-ready from persisted confirmations without compensation events', () => {
+    const participants = [
+      readyParticipant('p-a', { payoutVerificationConfirmed: true }),
+      readyParticipant('p-b', { payoutVerificationConfirmed: true }),
+    ];
+    const snapshot = buildPersistedCoordinationSnapshot({ participants, fundingAllocated: true });
+    const state = buildCanonicalStateFromSnapshot(snapshot, {
+      activation: {
+        hasOrganization: true,
+        onboardingCompleted: true,
+        projectCreated: true,
+        participantCount: 2,
+        participantsConfigured: true,
+        participantsConfiguredCount: 2,
+        obligationCount: 0,
+        paymentLinkCount: 0,
+        collectionPreferenceDecideLater: false,
+        defaultCurrency: 'USD',
+        stripeConfigured: true,
+        wiseConfigured: false,
+        hederaConfigured: false,
+        releaseEligibleCount: 0,
+        releaseBatchCount: 0,
+        primaryProjectId: 'proj-1',
+      },
+      events: [],
+    });
+
+    expect(state.kpis.payoutReadyCount).toBe(2);
+    expect(state.release.phase).not.toBe('INITIALIZING');
+
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    assertPersistedEntityDominanceInvariants({
+      payoutConfirmationCount: 2,
+      payoutReadyCount: state.kpis.payoutReadyCount,
+      persistedCompensationRowCount: 2,
+      earningsConfiguredCount: state.kpis.earningsConfiguredCount,
+    });
+    process.env.NODE_ENV = prev;
   });
 });

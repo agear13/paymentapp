@@ -17,6 +17,11 @@ import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-a
 import { collectOperationalEventStream } from '@/lib/operations/timeline/canonical-operational-event';
 import { deriveAuditTimelineFromGraph } from '@/lib/operations/audit/derive-audit-timeline-from-state';
 import { mergeAuditTimeline } from '@/lib/operations/audit/operational-audit';
+import {
+  fundingInputFromTreasury,
+  hasPersistedOperationalEntities,
+} from '@/lib/operations/selectors/build-persisted-coordination-snapshot';
+import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
 export type BuildCanonicalStateInput = ReduceOperationalStateInput & {
   auditTimeline?: OperationalAuditEntry[];
@@ -25,10 +30,27 @@ export type BuildCanonicalStateInput = ReduceOperationalStateInput & {
 function seedFromSnapshot(
   snapshot: OperationalCoordinationSnapshot,
   activation: WorkspaceActivationInput,
-  options?: { graphReady?: boolean; graphSnapshotConverged?: boolean }
+  options?: {
+    graphReady?: boolean;
+    graphSnapshotConverged?: boolean;
+    treasury?: ProjectTreasurySummary | null;
+  }
 ): ReduceOperationalStateInput['seed'] {
+  const participants = snapshot.participants.map((row) => row.participant);
+  const entityAuthoritative = hasPersistedOperationalEntities(participants);
+  const funding =
+    fundingInputFromTreasury(options?.treasury) ??
+    (snapshot.funding.stage
+      ? {
+          fundingSourceConnected: Boolean(snapshot.funding.stage.fundingSourceConnected),
+          confirmedFunding: snapshot.funding.allocated ? 1 : 0,
+          obligationsTotal: snapshot.obligations.reduce((s, o) => s + (o.amount ?? 0), 0),
+          obligationsFunded: snapshot.obligations.reduce((s, o) => s + (o.amountFunded ?? 0), 0),
+        }
+      : undefined);
+
   return {
-    participants: snapshot.participants.map((row) => row.participant),
+    participants,
     obligations: snapshot.obligations.map((o) => ({
       id: o.id,
       amount: o.amount,
@@ -38,10 +60,13 @@ function seedFromSnapshot(
       allocationStatus: o.allocationStatus,
       readiness: o.readiness,
     })),
-    fundingAllocated: snapshot.funding.allocated,
+    funding,
+    fundingAllocated:
+      snapshot.funding.allocated ||
+      Boolean(funding?.fundingSourceConnected && (funding.confirmedFunding ?? 0) > 0),
     projectId: activation.primaryProjectId ?? undefined,
-    graphReady: options?.graphReady,
-    graphSnapshotConverged: options?.graphSnapshotConverged,
+    graphReady: entityAuthoritative ? true : options?.graphReady,
+    graphSnapshotConverged: entityAuthoritative ? true : options?.graphSnapshotConverged,
     releaseBatchCount: activation.releaseBatchCount,
   };
 }
@@ -55,12 +80,14 @@ export function buildCanonicalStateFromSnapshot(
     auditTimeline?: OperationalAuditEntry[];
     graphReady?: boolean;
     graphSnapshotConverged?: boolean;
+    treasury?: ProjectTreasurySummary | null;
   }
 ): CanonicalOperationalState {
   const seed = seedFromSnapshot(snapshot, input.activation, input);
   const workspace = workspaceContextFromActivationSeed(seed, input.activation);
   const persistedAudit = deriveAuditTimelineFromGraph(snapshot, input.activation.primaryProjectId ?? undefined);
   const auditTimeline = mergeAuditTimeline(persistedAudit, input.auditTimeline ?? []);
+  const entityAuthoritative = hasPersistedOperationalEntities(seed.participants);
 
   return reduceOperationalState({
     events: collectOperationalEventStream({
@@ -70,8 +97,10 @@ export function buildCanonicalStateFromSnapshot(
     seed: {
       ...seed,
       workspace,
-      graphReady: input.graphReady ?? true,
-      graphSnapshotConverged: input.graphSnapshotConverged ?? input.graphReady ?? true,
+      graphReady: entityAuthoritative ? true : (input.graphReady ?? true),
+      graphSnapshotConverged: entityAuthoritative
+        ? true
+        : (input.graphSnapshotConverged ?? input.graphReady ?? true),
     },
   });
 }

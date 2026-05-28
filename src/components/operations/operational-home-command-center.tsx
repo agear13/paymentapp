@@ -17,8 +17,8 @@ import {
 import { ChevronDown } from 'lucide-react';
 
 export function OperationalHomeCommandCenter() {
-  const { guidance, loading, workspaceContext, activation, auditTimeline } =
-    useOperationalCoordinationState();
+  const { guidance, loading, workspaceContext, activation, auditTimeline, kpis } =
+    useOperationalCoordinationState({ traceSurface: 'operational-home-command-center' });
   const primaryAction = guidance.actions[0] ?? null;
 
   const attentionItems = deduplicateAttentionItems(
@@ -26,6 +26,7 @@ export function OperationalHomeCommandCenter() {
       guidance,
       workspace: workspaceContext,
       projectName: undefined,
+      kpis,
     }),
     {
       primaryActionLabel: primaryAction?.action ?? null,

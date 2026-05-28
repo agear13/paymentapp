@@ -9,6 +9,10 @@ import {
   deriveOperationalOnboardingProgress,
 } from '@/lib/operations/coordination';
 import {
+  logCoordinationTruth,
+  registerCrossSurfaceOperationalKpis,
+} from '@/lib/operations/dev/coordination-truth-trace';
+import {
   useCanonicalOperationalState,
   type CanonicalOperationalStateOptions,
 } from '@/hooks/use-canonical-operational-state';
@@ -88,6 +92,62 @@ export function useOperationalCoordinationState(options?: OperationalCoordinatio
       canonical.guidance.explanation,
     ]
   );
+
+  const traceSurface = options?.traceSurface ?? 'useOperationalCoordinationState';
+  const projectId =
+    options?.project?.id ?? canonical.activation?.primaryProjectId ?? null;
+
+  React.useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+
+    const apiSummary = canonical.graph?.summary
+      ? {
+          participantCount: canonical.graph.summary.participantCount,
+          earningsConfiguredCount: canonical.graph.summary.earningsConfiguredCount,
+          payoutReadyCount: canonical.graph.summary.payoutReadyCount,
+          releaseReadyCount: canonical.graph.summary.releaseReadyCount,
+          obligationCount: canonical.graph.obligations?.length ?? 0,
+        }
+      : null;
+
+    logCoordinationTruth({
+      surface: traceSurface,
+      hook: 'useOperationalCoordinationState',
+      projectId,
+      apiSummary,
+      canonicalKpis: canonical.kpis,
+      renderedKpis: canonical.kpis,
+      degraded: canonical.degraded,
+      graphReady: canonical.graph?.summary
+        ? (canonical.graph.summary.participantCount ?? 0) > 0
+        : undefined,
+      graphConverged: canonical.graphSnapshotConverged,
+      initializationBlocked: settlementInitialization.showInitializationShell,
+    });
+
+    if (canonical.kpis) {
+      registerCrossSurfaceOperationalKpis({
+        surface: traceSurface,
+        projectId,
+        participantCount: canonical.kpis.participantCount,
+        earningsConfiguredCount: canonical.kpis.earningsConfiguredCount,
+        payoutReadyCount: canonical.kpis.payoutReadyCount,
+        obligationCount: canonical.kpis.obligationCount,
+        releaseEligibleCount: canonical.kpis.releaseEligibleCount,
+        fundingAllocated: canonical.canonicalState?.funding.allocated ?? false,
+      });
+    }
+  }, [
+    canonical.activation?.primaryProjectId,
+    canonical.canonicalState?.funding.allocated,
+    canonical.degraded,
+    canonical.graph,
+    canonical.graphSnapshotConverged,
+    canonical.kpis,
+    projectId,
+    settlementInitialization.showInitializationShell,
+    traceSurface,
+  ]);
 
   return {
     ...canonical,

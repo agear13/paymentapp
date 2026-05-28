@@ -11,8 +11,6 @@ import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selecto
 import { activationFromOperationalGraph } from '@/lib/operations/selectors/operational-graph-adapter';
 import { deriveNextRecommendedAction } from '@/lib/onboarding/next-recommended-action';
 import { resolveOperationalInitializationSnapshot } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
-import { assertOnboardingGraphInvariants } from '@/lib/operations/dev/operational-invariants';
-
 /** GET /api/workspace/activation — derived activation snapshot from canonical operational graph */
 export async function GET() {
   try {
@@ -84,51 +82,6 @@ export async function GET() {
       snapshot.deals[0]?.id ??
       null;
 
-    if (!onboardingState.graphReady) {
-      assertOnboardingGraphInvariants({
-        graphProjectionBeforeBootstrap: !onboardingState.projectReady && Boolean(primaryProjectId),
-        settlementRailRenderedBeforeReady: false,
-        stripeConnectedWithoutPaymentRail:
-          onboardingState.stripeConnected && !onboardingState.paymentRailsReady,
-      });
-
-      const { activation, nextAction } = safeDeriveActivationResponse({
-        hasOrganization: true,
-        onboardingCompleted: persistedOnboarding?.completed === true,
-        projectCreated,
-        participantCount: compensation.participantCount,
-        participantsConfigured: compensation.participantsConfigured,
-        participantsConfiguredCount: compensation.configuredCount,
-        obligationCount: 0,
-        paymentLinkCount,
-        collectionPreferenceDecideLater:
-          persistedOnboarding?.collection_preference === 'decide_later' ||
-          persistedOnboarding?.collection_preference == null,
-        defaultCurrency: merchant?.default_currency ?? null,
-        ...rails,
-        releaseEligibleCount: 0,
-        releaseBatchCount,
-        primaryProjectId,
-      });
-
-      return apiResponse({
-        activation: {
-          ...activation,
-          phaseLabel: onboardingState.recoveryMessage ?? activation.phaseLabel,
-          activationBlockers: onboardingState.blockers,
-          needsGuidance: true,
-          degraded: true,
-          providerConnected: rails.stripeConfigured || rails.wiseConfigured || rails.hederaConfigured,
-          payoutMethodConfigured:
-            rails.stripeConfigured || rails.wiseConfigured || rails.hederaConfigured,
-        },
-        nextAction,
-        operationalOnboarding: onboardingState,
-        operationalInitialization: initSnapshot,
-        correlationId: initSnapshot.correlationId,
-      });
-    }
-
     const graph = await resolveOperationalCoordinationSnapshot({
       userId: user.id,
       projectId: primaryProjectId,
@@ -156,9 +109,14 @@ export async function GET() {
 
     const activation = activationFromOperationalGraph(graph, activationInput);
     const nextAction = deriveNextRecommendedAction(activation);
+    const persistedTruth = compensation.participantCount > 0;
 
     return apiResponse({
-      activation,
+      activation: {
+        ...activation,
+        degraded: persistedTruth ? false : activation.degraded,
+        needsGuidance: persistedTruth ? activation.needsGuidance : true,
+      },
       nextAction,
       operationalOnboarding: onboardingState,
       operationalInitialization: initSnapshot,

@@ -11,17 +11,21 @@ import {
   projectParticipantsPath,
 } from '@/lib/projects/project-routes';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
-import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 
 export function ProjectPayoutsView() {
   const { projectId, summary, deal, projectParticipants } = useProjectWorkspace();
-  useOperationalGuidance({
+  const { kpis } = useOperationalCoordinationState({
     scope: 'project',
     project: deal ?? undefined,
     participants: projectParticipants,
     enabled: Boolean(deal),
+    traceSurface: 'project-payouts-view',
   });
   if (!summary) return null;
+
+  const participantCount = kpis?.participantCount ?? summary.participantCount;
+  const payoutReadyCount = kpis?.payoutReadyCount ?? summary.participantsReady;
 
   return (
     <div className="space-y-6">
@@ -55,7 +59,7 @@ export function ProjectPayoutsView() {
               Participant readiness
             </CardTitle>
             <CardDescription>
-              {summary.participantsReady}/{summary.participantCount} participants payout-ready.
+              {payoutReadyCount}/{participantCount} participants payout-ready.
             </CardDescription>
           </CardHeader>
           <CardContent>

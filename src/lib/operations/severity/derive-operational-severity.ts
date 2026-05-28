@@ -1,6 +1,7 @@
 import type { OperationalGuidanceBundle } from '@/lib/operations/explainability';
 import type { OperationalReleaseBlockerDetail } from '@/lib/operations/explainability/derive-operational-release-blockers';
 import { deriveOperationalReleaseBlockers } from '@/lib/operations/explainability/derive-operational-release-blockers';
+import type { OperationalKPIs } from '@/lib/operations/reducer/types';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { AttentionItem, OperationalSeverity } from '@/lib/operations/severity/types';
 import {
@@ -15,6 +16,8 @@ export type SeverityDerivationInput = {
   guidance: OperationalGuidanceBundle;
   workspace: WorkspaceOperationalContext;
   projectName?: string;
+  /** Canonical reducer KPIs — when set, overrides workspace activation counters. */
+  kpis?: OperationalKPIs | null;
 };
 
 function severityForBlocker(
@@ -43,12 +46,18 @@ export function deriveOperationalSeverity(input: SeverityDerivationInput): Atten
   const obligationsHref = safeOperationalNavigation('review_obligations', projectId);
   const conf = guidance.releaseConfidence.level;
 
+  const participantCount = input.kpis?.participantCount ?? workspace.participantCount;
+  const earningsConfiguredCount =
+    input.kpis?.earningsConfiguredCount ?? workspace.participantsConfiguredCount;
+  const obligationCount = input.kpis?.obligationCount ?? workspace.obligationCount;
+  const releaseEligibleCount =
+    input.kpis?.releaseEligibleCount ?? workspace.releaseEligibleCount;
+
   const participantsIncomplete =
-    workspace.participantCount > 0 &&
-    workspace.participantsConfiguredCount < workspace.participantCount;
+    participantCount > 0 && earningsConfiguredCount < participantCount;
 
   if (participantsIncomplete) {
-    const missing = workspace.participantCount - workspace.participantsConfiguredCount;
+    const missing = participantCount - earningsConfiguredCount;
     items.push({
       id: 'participants-incomplete',
       severity: 'ACTION_REQUIRED',
@@ -78,7 +87,7 @@ export function deriveOperationalSeverity(input: SeverityDerivationInput): Atten
     });
   }
 
-  if (!provider && workspace.participantCount > 0) {
+  if (!provider && participantCount > 0) {
     items.push({
       id: 'provider-missing',
       severity: 'ACTION_REQUIRED',
@@ -90,11 +99,11 @@ export function deriveOperationalSeverity(input: SeverityDerivationInput): Atten
     });
   }
 
-  if (workspace.releaseEligibleCount > 0 && conf !== 'BLOCKED') {
+  if (releaseEligibleCount > 0 && conf !== 'BLOCKED') {
     items.push({
       id: 'release-ready',
       severity: 'INFORMATIONAL',
-      title: `${workspace.releaseEligibleCount} payout${workspace.releaseEligibleCount === 1 ? '' : 's'} ${OPERATOR_LABELS.safeToRelease.toLowerCase()}`,
+      title: `${releaseEligibleCount} payout${releaseEligibleCount === 1 ? '' : 's'} ${OPERATOR_LABELS.safeToRelease.toLowerCase()}`,
       explanation: CONFIDENCE_HEADLINES[conf],
       ctaHref: PAYOUTS_SETTLEMENTS_HREF,
       ctaLabel: 'Review payout release',
@@ -102,7 +111,7 @@ export function deriveOperationalSeverity(input: SeverityDerivationInput): Atten
     });
   }
 
-  if (workspace.obligationCount === 0 && workspace.participantCount > 0 && !participantsIncomplete) {
+  if (obligationCount === 0 && participantCount > 0 && !participantsIncomplete) {
     items.push({
       id: 'no-obligations',
       severity: 'INFORMATIONAL',
@@ -121,10 +130,10 @@ export function deriveOperationalSeverity(input: SeverityDerivationInput): Atten
             participants: [],
             obligations: [],
             summary: {
-              participantCount: workspace.participantCount,
-              earningsConfiguredCount: workspace.participantsConfiguredCount,
-              payoutReadyCount: 0,
-              releaseReadyCount: workspace.releaseEligibleCount,
+              participantCount,
+              earningsConfiguredCount,
+              payoutReadyCount: input.kpis?.payoutReadyCount ?? 0,
+              releaseReadyCount: releaseEligibleCount,
               blockerCount: guidance.explanation.blockers.length,
               allBlockers: [],
             },

@@ -1,14 +1,16 @@
 'use client';
 
 import * as React from 'react';
-import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 /** Development-only operational graph diagnostics — equivalent to Redux DevTools for ops. */
 export function OperationalGraphDiagnostics() {
   if (process.env.NODE_ENV !== 'development') return null;
 
-  const { graph, auditTimeline, loading } = useOperationalGuidance();
+  const { graph, auditTimeline, loading, kpis } = useOperationalCoordinationState({
+    traceSurface: 'operational-graph-diagnostics',
+  });
   const [open, setOpen] = React.useState(false);
 
   if (!open) {
@@ -37,6 +39,12 @@ export function OperationalGraphDiagnostics() {
           <p className="font-semibold text-foreground mb-1">Summary</p>
           <pre className="whitespace-pre-wrap break-all text-[10px] bg-muted/40 p-2 rounded">
             {JSON.stringify(graph.summary, null, 2)}
+          </pre>
+        </section>
+        <section>
+          <p className="font-semibold text-foreground mb-1">Canonical KPIs</p>
+          <pre className="whitespace-pre-wrap break-all text-[10px] bg-muted/40 p-2 rounded">
+            {JSON.stringify(kpis, null, 2)}
           </pre>
         </section>
         <section>

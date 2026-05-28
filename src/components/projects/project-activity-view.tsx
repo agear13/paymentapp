@@ -1,7 +1,7 @@
 'use client';
 
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
-import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import { OperationalTimeline } from '@/components/operations/operational-timeline';
 import { useOperationalTimelineProjection } from '@/hooks/use-operational-timeline-projection';
@@ -9,11 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export function ProjectActivityView() {
   const { deal, summary, projectParticipants, projectId } = useProjectWorkspace();
-  useOperationalGuidance({
+  useOperationalCoordinationState({
     scope: 'project',
     project: deal ?? undefined,
     participants: projectParticipants,
     enabled: Boolean(deal),
+    traceSurface: 'project-activity-view',
   });
   const timelineProjection = useOperationalTimelineProjection({
     projectId,

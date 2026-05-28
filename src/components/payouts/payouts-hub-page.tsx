@@ -40,15 +40,17 @@ function PayoutsHubContent({
   guidance,
   workspaceContext,
   activation,
+  kpis,
 }: {
-  guidance: ReturnType<typeof useOperationalGuidance>['guidance'];
-  workspaceContext: ReturnType<typeof useOperationalGuidance>['workspaceContext'];
-  activation: ReturnType<typeof useOperationalGuidance>['activation'];
+  guidance: ReturnType<UseOperationalCoordinationState>['guidance'];
+  workspaceContext: ReturnType<UseOperationalCoordinationState>['workspaceContext'];
+  activation: ReturnType<UseOperationalCoordinationState>['activation'];
+  kpis: ReturnType<UseOperationalCoordinationState>['kpis'];
 }) {
   const primary = guidance.actions[0];
 
   const attentionItems = deduplicateAttentionItems(
-    deriveOperationalSeverity({ guidance, workspace: workspaceContext }),
+    deriveOperationalSeverity({ guidance, workspace: workspaceContext, kpis }),
     {
       primaryActionLabel: primary?.action,
       primaryActionHref: primary?.destination,
@@ -134,7 +136,7 @@ export function PayoutsHubPage() {
     operationalInitialization,
     graphSnapshotConverged,
     kpis,
-  } = useOperationalCoordinationState();
+  } = useOperationalCoordinationState({ traceSurface: 'payouts-hub-page' });
 
   return (
     <ProjectSectionErrorBoundary sectionTitle="Payouts" boundaryScope="payouts">
@@ -163,6 +165,7 @@ export function PayoutsHubPage() {
               guidance={guidance}
               workspaceContext={workspaceContext}
               activation={activation}
+              kpis={kpis}
             />
           </div>
         </OperationalSettlementInitialization>

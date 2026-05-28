@@ -1322,6 +1322,67 @@ export function assertMultipleOperationalTruthSources(
   }
 }
 
+export type PersistedEntityDominanceInvariantInput = {
+  persistedCompensationRowCount?: number;
+  earningsConfiguredCount?: number;
+  persistedApprovedCount?: number;
+  approvedAgreementCount?: number;
+  fundingReconciled?: boolean;
+  fundingConnectedInState?: boolean;
+  obligationCount?: number;
+  obligationsTableSuppressed?: boolean;
+  payoutConfirmationCount?: number;
+  payoutReadyCount?: number;
+};
+
+/** Dev-only — persisted DB/participant rows must dominate event-derived KPIs. */
+export function assertPersistedEntityDominanceInvariants(
+  input: PersistedEntityDominanceInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  const compRows = input.persistedCompensationRowCount ?? 0;
+  const earnings = input.earningsConfiguredCount ?? 0;
+  if (compRows > 0 && earnings === 0) {
+    throw new OperationalInvariantViolation(
+      'PARTICIPANT_COMPENSATION_PRESENT_BUT_NOT_COUNTED',
+      `${compRows} persisted compensation row(s) but canonical KPI reports 0 earnings configured`
+    );
+  }
+
+  const approvedRows = input.persistedApprovedCount ?? 0;
+  const approvedKpi = input.approvedAgreementCount ?? 0;
+  if (approvedRows > 0 && approvedKpi === 0) {
+    throw new OperationalInvariantViolation(
+      'APPROVED_AGREEMENTS_PRESENT_BUT_KPI_ZERO',
+      `${approvedRows} approved agreement(s) in persistence but canonical KPI reports 0 approved`
+    );
+  }
+
+  if (input.fundingReconciled === true && input.fundingConnectedInState !== true) {
+    throw new OperationalInvariantViolation(
+      'RECONCILED_FUNDING_PRESENT_BUT_KPI_DISCONNECTED',
+      'Reconciled funding exists in persistence but canonical funding state is disconnected'
+    );
+  }
+
+  if ((input.obligationCount ?? 0) > 0 && input.obligationsTableSuppressed === true) {
+    throw new OperationalInvariantViolation(
+      'OBLIGATIONS_EXIST_BUT_PAGE_RENDER_BLOCKED',
+      'Persisted obligations exist but obligations table was suppressed by initialization gate'
+    );
+  }
+
+  const confirmations = input.payoutConfirmationCount ?? 0;
+  const payoutReady = input.payoutReadyCount ?? 0;
+  if (confirmations > 0 && payoutReady === 0) {
+    throw new OperationalInvariantViolation(
+      'PAYOUT_CONFIRMATIONS_PRESENT_BUT_READY_COUNT_ZERO',
+      `${confirmations} payout confirmation(s) persisted but canonical payout-ready count is 0`
+    );
+  }
+}
+
 export type SurfaceConvergenceInvariantInput = {
   surface?: string;
   usesNonCanonicalSelector?: boolean;

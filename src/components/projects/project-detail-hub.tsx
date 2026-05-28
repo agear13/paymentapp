@@ -54,6 +54,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
     treasury,
     scopeTitle: summary?.name,
     enabled: Boolean(deal),
+    traceSurface: 'project-detail-hub',
   });
 
   React.useEffect(() => {

@@ -45,19 +45,23 @@ function normalizeIncomingEvents(events: OperationalEvent[]): OperationalEvent[]
   });
 }
 
+/** Release phase from persisted entities only — not from event stream or graph convergence flags. */
 function deriveReleasePhase(input: {
-  graphReady: boolean;
-  graphConverged: boolean;
   releaseEligibleCount: number;
   releaseBatchCount: number;
   payoutReadyCount: number;
   participantCount: number;
+  obligationCount: number;
 }): CanonicalReleasePhase {
-  if (!input.graphReady) return 'INITIALIZING';
-  if (!input.graphConverged) return 'CONVERGING';
   if (input.releaseBatchCount > 0) return 'RELEASED';
   if (input.releaseEligibleCount > 0) return 'RELEASABLE';
-  if (input.payoutReadyCount > 0 || input.participantCount > 0) return 'READY';
+  if (
+    input.payoutReadyCount > 0 ||
+    input.obligationCount > 0 ||
+    input.participantCount > 0
+  ) {
+    return 'READY';
+  }
   return 'INITIALIZING';
 }
 
@@ -124,8 +128,13 @@ function buildParticipantRecords(
 export function reduceOperationalState(
   input: ReduceOperationalStateInput
 ): CanonicalOperationalState {
-  const graphReady = input.seed.graphReady ?? true;
-  const graphConverged = input.seed.graphSnapshotConverged ?? graphReady;
+  const hasPersistedParticipants = (input.seed.participants?.length ?? 0) > 0;
+  const graphReady = hasPersistedParticipants
+    ? true
+    : (input.seed.graphReady ?? true);
+  const graphConverged = hasPersistedParticipants
+    ? true
+    : (input.seed.graphSnapshotConverged ?? graphReady);
   const workspace = input.seed.workspace ?? defaultWorkspaceContext();
 
   const normalizedEvents = normalizeIncomingEvents(
@@ -173,12 +182,11 @@ export function reduceOperationalState(
   let kpis = deriveOperationalKPIsFromParticipants(participants, obligations, releaseEligibleCount);
 
   const releasePhase = deriveReleasePhase({
-    graphReady,
-    graphConverged,
     releaseEligibleCount,
     releaseBatchCount: input.seed.releaseBatchCount ?? workspace.releaseBatchCount ?? 0,
     payoutReadyCount: kpis.payoutReadyCount,
     participantCount: kpis.participantCount,
+    obligationCount: kpis.obligationCount,
   });
 
   const attribution = deriveAllAttributionScopesFromState(
@@ -238,7 +246,7 @@ export function reduceOperationalState(
       graphReady,
       graphConverged,
       settlementReady: releaseEligibleCount > 0 && !funding.blockerLabel,
-      coordinationBlocked: eventBlockers.length > 0,
+      coordinationBlocked: false,
     },
     blockers: [],
     kpis,

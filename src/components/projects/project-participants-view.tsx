@@ -16,7 +16,6 @@ import {
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { InviteProjectParticipantModal } from '@/components/projects/invite-project-participant-modal';
 import { useOrganization } from '@/hooks/use-organization';
-import { participantSummaryMetrics } from '@/lib/projects/participant-lifecycle';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { useProjectWorkspaceSmartPolling } from '@/hooks/use-project-workspace-refresh';
 import { ProjectSectionErrorBoundary } from '@/components/projects/project-section-error-boundary';
@@ -54,7 +53,6 @@ import {
   applyOperationalSyncRefresh,
   parseOperationalSync,
 } from '@/lib/operations/orchestration/operational-sync-client';
-import { safeOperationalRouteState } from '@/lib/operations/routing/draft-safe-routing';
 import { ProgressiveOperationalPanel } from '@/components/operations/progressive-operational-panel';
 import { SafeParticipantBoundary } from '@/components/operations/safe-participant-boundary';
 import { hydrateParticipants, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
@@ -90,11 +88,12 @@ export function ProjectParticipantsView() {
     invalidate,
     clearSectionError,
   } = useProjectWorkspace();
-  const { graph, kpis: canonicalKpis } = useOperationalCoordinationState({
+  const { graph, kpis: canonicalKpis, guidance } = useOperationalCoordinationState({
     scope: 'project',
     project: deal ?? undefined,
     participants: projectParticipants,
     enabled: Boolean(deal),
+    traceSurface: 'project-participants-view',
   });
   const { currency: workspaceCurrency } = useOrganizationCurrency();
   const syncHandlers = React.useMemo(
@@ -372,18 +371,27 @@ export function ProjectParticipantsView() {
   }, [hydratedParticipants, pinnedOrder]);
 
   const stats = React.useMemo(() => {
-    const rowMetrics = participantSummaryMetrics(hydratedParticipants.map(participantEntity));
-    if (!canonicalKpis) return rowMetrics;
+    if (!canonicalKpis) {
+      return {
+        pendingAgreements: 0,
+        missingOnboarding: 0,
+        readyForPayout: 0,
+        activeAttribution: 0,
+      };
+    }
+    const missingOnboarding = graph.participants.filter(
+      (p) => !p.payoutReadiness.payoutConfirmed
+    ).length;
     return {
-      ...rowMetrics,
       readyForPayout: canonicalKpis.payoutReadyCount,
       pendingAgreements: Math.max(
         0,
         canonicalKpis.participantCount - canonicalKpis.approvedAgreementCount
       ),
       activeAttribution: canonicalKpis.attributionActiveCount,
+      missingOnboarding,
     };
-  }, [hydratedParticipants, canonicalKpis]);
+  }, [canonicalKpis, graph.participants]);
 
   React.useEffect(() => {
     if (!canonicalKpis) return;
@@ -417,17 +425,9 @@ export function ProjectParticipantsView() {
     [hydratedParticipants]
   );
 
-  const routeState = React.useMemo(
-    () =>
-      safeOperationalRouteState({
-        projectId: deal?.id ?? projectId ?? 'unknown',
-        deal,
-        participants: participantEntities,
-        loading: loading && !deal,
-        notFound: !deal && !loading,
-      }),
-    [deal, projectId, participantEntities, loading]
-  );
+  const needsEarningsConfiguration =
+    (canonicalKpis?.participantCount ?? 0) > 0 &&
+    (canonicalKpis?.earningsConfiguredCount ?? 0) < (canonicalKpis?.participantCount ?? 0);
 
   if (loading && !deal) {
     return <ProjectOperationalLoadingState variant="loading" />;
@@ -437,7 +437,10 @@ export function ProjectParticipantsView() {
     return (
       <ProjectOperationalLoadingState
         variant="configuring"
-        message={routeState.project.guidance}
+        message={
+          guidance.explanation.explainability.headline ??
+          'This project is still being configured.'
+        }
         onRetry={handleRefresh}
       />
     );
@@ -445,7 +448,6 @@ export function ProjectParticipantsView() {
 
   const hasParticipants = participantEntities.length > 0;
   const sectionError = sectionErrors.participants;
-  const { project: routeProject, participants: routeParticipants } = routeState;
 
   const focusFirstEarnings = () => {
     const needsConfig = hydratedParticipants.find((p) => !p.compensation.configured);
@@ -468,23 +470,25 @@ export function ProjectParticipantsView() {
       }
     >
       <div className="space-y-6">
-        {(routeParticipants.showCompensationSetupGuidance) &&
-        routeParticipants.total > 0 ? (
+        {needsEarningsConfiguration && hasParticipants ? (
           <ProgressiveOperationalPanel
             title="Configure how each participant gets paid"
-            summary={routeParticipants.guidance}
+            summary={guidance.explanation.explainability.headline}
             missingItems={
-              routeParticipants.needsEarningsConfiguration
-                ? [`${routeParticipants.total - routeParticipants.configuredCount} earnings not configured`]
+              canonicalKpis
+                ? [
+                    `${canonicalKpis.participantCount - canonicalKpis.earningsConfiguredCount} earnings not configured`,
+                  ]
                 : undefined
             }
             detailLabel="Why does this matter?"
           >
             <p className="text-sm text-foreground/80">
-              {routeProject.guidance} This unlocks obligations and payout release when funding is
-              ready.
+              {guidance.explanation.explainability.bullets[0] ??
+                'Configure earnings for each participant.'}{' '}
+              This unlocks obligations and payout release when funding is ready.
             </p>
-            {routeParticipants.needsEarningsConfiguration ? (
+            {needsEarningsConfiguration ? (
               <button
                 type="button"
                 className="text-sm font-medium text-primary underline-offset-2 hover:underline mt-2"

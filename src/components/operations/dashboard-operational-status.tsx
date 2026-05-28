@@ -18,7 +18,9 @@ export function DashboardOperationalStatus() {
     return null;
   }
 
-  const { guidance, loading, degraded } = useOperationalCoordinationState();
+  const { guidance, loading, degraded } = useOperationalCoordinationState({
+    traceSurface: 'dashboard-operational-status',
+  });
 
   return (
     <OperationalStatusBar

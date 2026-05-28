@@ -199,9 +199,8 @@ export function deriveOperationalReleaseBlockers(
       ctaHref: '/api/operations/initialization/resume',
       ctaIntent: 'continue_setup',
       operatorActionRequired: false,
-      severity: 'blocking',
+      severity: 'warning',
     });
-    return details;
   }
 
   const funding = fundingBlockerDetail(snapshot, projectId);
@@ -251,9 +250,11 @@ export function deriveOperationalReleaseBlockers(
   const graphPayoutSummary = deriveWorkspaceParticipantPayoutSummary(
     snapshot.participants.map((row) => row.participant)
   );
-  const participantsNeedSetup =
-    graphPayoutSummary.participantCount - graphPayoutSummary.earningsConfiguredCount;
-  if (participantsNeedSetup > 0) {
+  const participantsNeedSetup = Math.max(
+    0,
+    graphPayoutSummary.participantCount - graphPayoutSummary.earningsConfiguredCount
+  );
+  if (participantsNeedSetup > 0 && graphPayoutSummary.participantCount > 0) {
     details.push({
       id: 'compensation-missing',
       category: 'compensation_configuration_missing',

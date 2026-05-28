@@ -7,7 +7,6 @@ import { OperationalGuidanceRegion } from '@/components/operations/operational-g
 import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-guidance';
 import { useOrganization } from '@/hooks/use-organization';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
-import { safeOperationalRouteState } from '@/lib/operations/routing/draft-safe-routing';
 
 function sectionTitle(pathname: string, projectName: string): string {
   if (pathname.includes('/participants')) return `${projectName} — Participant earnings`;
@@ -49,19 +48,13 @@ export function ProjectOperationalGuidance() {
   // Participants page owns configuring UX — avoid duplicate guidance strip
   if (pathname.includes('/participants')) return null;
 
-  const routeState = safeOperationalRouteState({
-    projectId,
-    deal,
-    participants: projectParticipants,
-  });
-
   const projectName = summary?.name ?? deal.dealName ?? 'Project';
   const showRelease =
     pathname.includes('/payouts') ||
     Boolean(pathname.match(new RegExp(`/projects/${projectId}$`))) ||
     pathname.includes('/funding');
 
-  const attributionEnabled = routeState.participants.participants.some(
+  const attributionEnabled = projectParticipants.some(
     (p) => p.compensationProfile?.customerAttributionEnabled === true
   );
 
@@ -76,8 +69,9 @@ export function ProjectOperationalGuidance() {
       scope="project"
       scopeTitle={sectionTitle(pathname, projectName)}
       project={deal}
-      participants={routeState.participants.participants}
+      participants={projectParticipants}
       treasury={treasury}
+      traceSurface="project-operational-guidance"
       previousProjectState={prevStateRef.current}
       showReleaseConfidence={showRelease}
       showSimulation={false}

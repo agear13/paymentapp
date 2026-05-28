@@ -18,9 +18,15 @@ export function deriveOperationalKPIsFromParticipants(
 
   for (const row of participants) {
     if (row.compensationConfigured) earningsConfiguredCount += 1;
-    if (row.payoutReadiness.payoutReady) payoutReadyCount += 1;
     if (row.agreementApproved) approvedAgreementCount += 1;
     if (row.attributionActive) attributionActiveCount += 1;
+    if (
+      row.compensationConfigured &&
+      row.agreementApproved &&
+      row.payoutConfirmed
+    ) {
+      payoutReadyCount += 1;
+    }
   }
 
   const fundedObligationCount = obligations.filter(

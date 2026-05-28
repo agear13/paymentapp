@@ -2,10 +2,6 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { deriveAuditTimelineFromGraph } from '@/lib/operations/audit/derive-audit-timeline-from-state';
-import {
-  emptyOperationalGraphFunding,
-  emptyOperationalGraphSummary,
-} from '@/lib/operations/selectors/operational-coordination-snapshot';
 import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selectors/resolve-operational-coordination.server';
 import { resolveOperationalInitializationSnapshot } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
 import { listOperationalTransitions } from '@/lib/operations/onboarding/persist-operational-transition.server';
@@ -25,25 +21,6 @@ export async function GET(request: Request) {
         })
       : null;
 
-    if (onboarding && !onboarding.graphReady) {
-      const transitions = org
-        ? await listOperationalTransitions({ organizationId: org.id, correlationId: onboarding.correlationId })
-        : [];
-      return NextResponse.json({
-        data: {
-          graphReady: false,
-          operationalOnboarding: onboarding.onboarding,
-          operationalInitialization: onboarding,
-          correlationId: onboarding.correlationId,
-          summary: emptyOperationalGraphSummary(),
-          funding: emptyOperationalGraphFunding(),
-          obligationCount: 0,
-          auditTimeline: mergeInitializationAuditTimeline([], transitions),
-          participants: [],
-        },
-      });
-    }
-
     const { searchParams } = new URL(request.url);
     const projectId =
       searchParams.get('projectId')?.trim() ||
@@ -54,6 +31,10 @@ export async function GET(request: Request) {
       userId: user.id,
       projectId,
     });
+
+    const persistedEntityAuthoritative = graph.summary.participantCount > 0;
+    const graphReady =
+      persistedEntityAuthoritative || (onboarding?.graphReady ?? true);
 
     const transitions = org
       ? await listOperationalTransitions({
@@ -68,20 +49,22 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       data: {
-        graphReady: true,
+        graphReady,
+        operationalOnboarding: onboarding?.onboarding,
+        operationalInitialization: onboarding ?? undefined,
+        correlationId: onboarding?.correlationId,
         summary: graph.summary,
         funding: graph.funding,
         obligationCount: graph.obligations.length,
         auditTimeline,
         projectCurrency: graph.projectCurrency,
-        participants: graph.participants.map((p) => ({
+        participants: graph.participants,
+        participantDiagnostics: graph.participants.map((p) => ({
           participantId: p.participant.id,
           name: p.participant.name,
           agreementApproval: p.agreementApproval,
           payoutReady: p.payoutReadiness.payoutReady,
           releaseReady: p.readinessHierarchy?.release?.ready ?? false,
-          readinessHierarchy: p.readinessHierarchy,
-          blockers: p.blockers,
         })),
       },
     });

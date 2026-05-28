@@ -84,7 +84,10 @@ export function OperatorSettlementsWorkspace({
     guidance,
     graphSnapshotConverged,
     kpis,
-  } = useOperationalCoordinationState({ releaseCapabilities });
+  } = useOperationalCoordinationState({
+    releaseCapabilities,
+    traceSurface: 'operator-settlements-workspace',
+  });
   const { currency: orgCurrency } = useOrganizationCurrency();
   const syncHandlers = useGlobalOperationalSyncHandlers();
   const [batches, setBatches] = React.useState<Batch[]>([]);

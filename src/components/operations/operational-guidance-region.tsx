@@ -1,8 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import type { OperationalGuidanceOptions } from '@/hooks/use-operational-guidance';
-import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import type { OperationalCoordinationStateOptions } from '@/hooks/use-operational-coordination-state';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { ReleaseConfidenceSummary } from '@/components/operations/release-confidence-summary';
 import { opCollapsibleTrigger } from '@/lib/design/operational-surfaces';
 import { cn } from '@/lib/utils';
@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
 
-export type OperationalGuidanceRegionProps = OperationalGuidanceOptions & {
+export type OperationalGuidanceRegionProps = OperationalCoordinationStateOptions & {
   title?: string;
   showExplanation?: boolean;
   showTrust?: boolean;
@@ -29,7 +29,10 @@ export function OperationalGuidanceRegion({
   className,
   ...options
 }: OperationalGuidanceRegionProps) {
-  const { guidance } = useOperationalGuidance(options);
+  const { guidance } = useOperationalCoordinationState({
+    ...options,
+    traceSurface: options.traceSurface ?? 'operational-guidance-region',
+  });
 
   if (!showReleaseConfidence && !showSimulation) return null;
 

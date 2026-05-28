@@ -37,7 +37,10 @@ export type SafeProjectionResult = {
  */
 export function safeOperationalProjection(input: SafeProjectionInput): SafeProjectionResult {
   const projection = parseCoordinationSnapshotProjection(input.payload);
-  const converged = projection != null && input.payload.graphReady === true;
+  const converged =
+    projection != null &&
+    (input.payload.graphReady === true ||
+      (projection.summary?.participantCount ?? 0) > 0);
 
   if (!converged) {
     return {

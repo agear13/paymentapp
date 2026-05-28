@@ -8,7 +8,7 @@ import {
   type ReleaseInteractionState,
 } from '@/lib/operations/capabilities/derive-release-interaction-state';
 import { isGraphReadyForProjection } from '@/lib/operations/coordination/derive-operational-readiness-state';
-import { useOperationalGuidance } from '@/hooks/use-operational-guidance';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 
 /**
@@ -19,7 +19,7 @@ export function useReleaseInteractionCapability(
 ): ReleaseInteractionState {
   const { loading: activationLoading, operationalOnboarding, operationalInitialization } =
     useWorkspaceActivation();
-  const { graphSnapshotConverged } = useOperationalGuidance();
+  const { graphSnapshotConverged } = useOperationalCoordinationState();
 
   const operationalCapabilities = releaseCapabilities ?? CONSERVATIVE_RELEASE_CAPABILITIES;
   const graphReady = isGraphReadyForProjection(operationalOnboarding, operationalInitialization);

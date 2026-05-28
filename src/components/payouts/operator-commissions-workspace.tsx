@@ -204,7 +204,7 @@ export function OperatorCommissionsWorkspace() {
     guidance,
     graphSnapshotConverged,
     kpis,
-  } = useOperationalCoordinationState();
+  } = useOperationalCoordinationState({ traceSurface: 'operator-commissions-workspace' });
   const [pilotRows, setPilotRows] = React.useState<PilotObligation[]>([]);
   const [orgPosted, setOrgPosted] = React.useState<OrgCommission[]>([]);
   const [loading, setLoading] = React.useState(true);
