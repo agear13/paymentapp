@@ -31,7 +31,12 @@ import {
   assertParticipantKpiConvergenceInvariants,
 } from '@/lib/operations/dev/operational-invariants';
 import type { OperationalOnboardingState } from '@/lib/operations/onboarding/operational-onboarding-phases';
-import { deriveWorkspaceParticipantPayoutSummary } from '@/lib/operations/readiness/participant-readiness';
+import type { OperationalKPIs } from '@/lib/operations/reducer/types';
+import {
+  buildCanonicalStateFromSnapshot,
+  workspaceContextFromCanonicalState,
+  activationFromCanonicalState,
+} from '@/lib/operations/reducer/adapters/legacy-selectors';
 
 function projectableSummary(snapshot: OperationalCoordinationSnapshot) {
   if (snapshot.summary == null) {
@@ -70,16 +75,10 @@ function mapGraphPhase(snapshot: OperationalCoordinationSnapshot): {
   return { phase: 'setup_in_progress', label: 'Workspace setup in progress' };
 }
 
-function participantPayoutSummaryFromGraph(snapshot: OperationalCoordinationSnapshot) {
-  return deriveWorkspaceParticipantPayoutSummary(
-    snapshot.participants.map((row) => row.participant)
-  );
-}
-
 function buildChecklist(
   input: WorkspaceActivationInput,
   snapshot: OperationalCoordinationSnapshot,
-  payoutSummary: ReturnType<typeof deriveWorkspaceParticipantPayoutSummary>
+  payoutSummary: OperationalKPIs
 ): ActivationChecklistItem[] {
   const provider =
     input.stripeConfigured || input.wiseConfigured || input.hederaConfigured;
@@ -122,65 +121,17 @@ export function activationFromOperationalGraph(
   snapshot: OperationalCoordinationSnapshot,
   input: WorkspaceActivationInput
 ): WorkspaceActivationSnapshot {
-  const summary = projectableSummary(snapshot);
-  const payoutSummary = participantPayoutSummaryFromGraph(snapshot);
-  const participantCount = Math.max(
-    input.participantCount,
-    summary.participantCount,
-    payoutSummary.participantCount
-  );
+  const canonical = buildCanonicalStateFromSnapshot(snapshot, { activation: input });
+  const activation = activationFromCanonicalState(canonical, input);
   const { phase, label } = mapGraphPhase(snapshot);
-  const provider =
-    input.stripeConfigured || input.wiseConfigured || input.hederaConfigured;
-  const revenue =
-    provider ||
-    input.paymentLinkCount > 0 ||
-    !input.collectionPreferenceDecideLater;
-
-  const blockers = summary.allBlockers.map((b) => b.explanation);
-  const fundingState = deriveCanonicalFundingLifecycle(projectableFunding(snapshot).stage);
-  const fundingBlocker = fundingLifecycleBlocker(fundingState);
-  if (fundingBlocker && !blockers.includes(fundingBlocker)) {
-    blockers.push(fundingBlocker);
-  }
-
-  const progress =
-    summary.participantCount === 0
-      ? 10
-      : Math.min(
-          100,
-          Math.round(
-            ((summary.payoutReadyCount / Math.max(1, summary.participantCount)) *
-              50 +
-              (summary.releaseReadyCount > 0 ? 50 : snapshot.obligations.length > 0 ? 25 : 0))
-          )
-        );
-
   return {
-    workspaceCreated: input.hasOrganization,
-    projectCreated: input.projectCreated,
-    participantCount,
-    participantsConfigured: payoutSummary.participantsConfigured,
-    participantsConfiguredCount: payoutSummary.earningsConfiguredCount,
-    obligationsCreated: snapshot.obligations.length > 0,
-    obligationCount: snapshot.obligations.length,
-    revenueConfigured: revenue,
-    providerConnected: provider,
-    payoutMethodConfigured: provider,
-    releaseEligible: summary.releaseReadyCount > 0,
-    releaseEligibleCount: summary.releaseReadyCount,
-    firstReleaseCompleted: input.releaseBatchCount > 0,
-    onboardingCompleted: input.onboardingCompleted,
-    defaultCurrency: input.defaultCurrency,
-    onboardingProgressPercent: progress,
+    ...activation,
     phase,
     phaseLabel: label,
-    checklist: buildChecklist(input, snapshot, payoutSummary),
-    activationBlockers: blockers,
-    setupWarnings: [],
-    primaryProjectId: input.primaryProjectId,
-    needsGuidance: blockers.length > 0 || summary.releaseReadyCount === 0,
-    degraded: false,
+    checklist: buildChecklist(input, snapshot, canonical.kpis),
+    obligationCount: Math.max(snapshot.obligations.length, canonical.kpis.obligationCount),
+    obligationsCreated:
+      snapshot.obligations.length > 0 || canonical.kpis.obligationCount > 0,
   };
 }
 
@@ -188,39 +139,19 @@ export function workspaceContextFromGraph(
   snapshot: OperationalCoordinationSnapshot,
   input: WorkspaceActivationInput
 ): WorkspaceOperationalContext {
+  const canonical = buildCanonicalStateFromSnapshot(snapshot, { activation: input });
   const summary = projectableSummary(snapshot);
-  const payoutSummary = participantPayoutSummaryFromGraph(snapshot);
-  const participantCount = Math.max(
-    input.participantCount,
-    summary.participantCount,
-    payoutSummary.participantCount
-  );
+  const kpis = canonical.kpis;
 
   assertParticipantKpiConvergenceInvariants({
-    participantRowsWithCompensation: payoutSummary.earningsConfiguredCount,
-    workspaceEarningsConfiguredCount: payoutSummary.earningsConfiguredCount,
+    participantRowsWithCompensation: kpis.earningsConfiguredCount,
+    workspaceEarningsConfiguredCount: kpis.earningsConfiguredCount,
     graphEarningsConfiguredCount: summary.earningsConfiguredCount,
-    payoutReadyCount: payoutSummary.payoutReadyCount,
+    payoutReadyCount: kpis.payoutReadyCount,
     graphPayoutReadyCount: summary.payoutReadyCount,
   });
 
-  return {
-    hasOrganization: input.hasOrganization,
-    onboardingCompleted: input.onboardingCompleted,
-    defaultCurrency: input.defaultCurrency,
-    stripeConfigured: input.stripeConfigured,
-    wiseConfigured: input.wiseConfigured,
-    hederaConfigured: input.hederaConfigured,
-    projectCount: input.projectCreated ? 1 : 0,
-    primaryProjectId: input.primaryProjectId,
-    participantCount,
-    participantsConfiguredCount: payoutSummary.earningsConfiguredCount,
-    obligationCount: snapshot.obligations.length,
-    paymentLinkCount: input.paymentLinkCount,
-    collectionPreferenceDecideLater: input.collectionPreferenceDecideLater,
-    releaseEligibleCount: summary.releaseReadyCount,
-    releaseBatchCount: input.releaseBatchCount,
-  };
+  return workspaceContextFromCanonicalState(canonical, input);
 }
 
 function explainabilityFromGraph(
@@ -306,6 +237,35 @@ export function guidanceFromOperationalGraph(input: {
     initializationRecoveryMessage: input.initializationRecoveryMessage,
   });
 
+  const canonical = buildCanonicalStateFromSnapshot(input.snapshot, {
+    activation: {
+      hasOrganization: input.workspace.hasOrganization,
+      onboardingCompleted: input.workspace.onboardingCompleted,
+      projectCreated: input.workspace.projectCount > 0,
+      participantCount: input.workspace.participantCount,
+      participantsConfigured:
+        input.workspace.participantsConfiguredCount >= input.workspace.participantCount,
+      participantsConfiguredCount: input.workspace.participantsConfiguredCount,
+      obligationCount: input.workspace.obligationCount,
+      paymentLinkCount: input.workspace.paymentLinkCount,
+      collectionPreferenceDecideLater: input.workspace.collectionPreferenceDecideLater,
+      defaultCurrency: input.workspace.defaultCurrency,
+      stripeConfigured: input.workspace.stripeConfigured,
+      wiseConfigured: input.workspace.wiseConfigured,
+      hederaConfigured: input.workspace.hederaConfigured,
+      releaseEligibleCount: input.workspace.releaseEligibleCount,
+      releaseBatchCount: input.workspace.releaseBatchCount,
+      primaryProjectId: input.workspace.primaryProjectId ?? null,
+    },
+    auditTimeline: input.auditTimeline,
+    graphReady: input.graphReady,
+    graphSnapshotConverged: input.graphSnapshotConverged,
+  });
+
+  const releaseBlockers = deduplicateReleaseBlockers(
+    canonical.blockers.length > 0 ? canonical.blockers : blocking.detailedBlockers
+  );
+
   const fundingState = deriveCanonicalFundingLifecycle(funding.stage);
 
   const timelineProjection = safeEventProjection({
@@ -314,16 +274,19 @@ export function guidanceFromOperationalGraph(input: {
     graphSnapshotConverged: input.graphSnapshotConverged ?? input.graphReady ?? true,
   });
 
-  const timeline: TimelineEvent[] = timelineProjection.degraded
-    ? (input.auditTimeline ?? []).map((e) => ({
-        id: e.id,
-        type: 'state_transition' as const,
-        title: e.title,
-        description: e.description,
-        timestamp: e.timestamp,
-        completed: true,
-      }))
-    : timelineProjection.timeline;
+  const timeline: TimelineEvent[] =
+    canonical.timeline.length > 0
+      ? canonical.timeline
+      : timelineProjection.degraded
+        ? (input.auditTimeline ?? []).map((e) => ({
+            id: e.id,
+            type: 'state_transition' as const,
+            title: e.title,
+            description: e.description,
+            timestamp: e.timestamp,
+            completed: true,
+          }))
+        : timelineProjection.timeline;
 
   const eventBlockerBullets = timelineProjection.blockers.map((b) => b.reason);
   if (eventBlockerBullets.length > 0) {
@@ -331,35 +294,30 @@ export function guidanceFromOperationalGraph(input: {
   }
 
   const releaseConfidence: ReleaseConfidenceSnapshot = {
-    level: timelineProjection.confidence.level,
-    score: timelineProjection.confidence.score,
+    level: canonical.confidence.level,
+    score: canonical.confidence.score,
     currency: input.workspace.defaultCurrency ?? PLATFORM_FALLBACK_CURRENCY,
     collectedRevenue: 0,
-    reservedObligations: input.snapshot.obligations.length,
-    readyToRelease: summary.releaseReadyCount,
-    heldBack: Math.max(
-      0,
-      summary.participantCount - summary.releaseReadyCount
-    ),
+    reservedObligations: canonical.kpis.obligationCount,
+    readyToRelease: canonical.kpis.releaseEligibleCount,
+    heldBack: Math.max(0, canonical.kpis.participantCount - canonical.kpis.releaseEligibleCount),
     heldBackReasons: explanation.blockers,
-    blockedParticipantCount: input.snapshot.participants.filter(
-      (p) => !p.readinessHierarchy?.release?.ready
+    blockedParticipantCount: canonical.participants.filter(
+      (p) => !p.releaseReadiness.releaseReady
     ).length,
     riskWarnings: [],
-    releasableObligationCount: input.snapshot.obligations.filter(
-      (o) => o.operational?.releaseReady
+    releasableObligationCount: canonical.obligations.filter(
+      (o) => o.obligation.operational.releaseReady
     ).length,
-    totalObligationCount: input.snapshot.obligations.length,
+    totalObligationCount: canonical.kpis.obligationCount,
     explainability: {
-      headline: timelineProjection.confidence.explainability.headline,
+      headline: canonical.confidence.explainability.headline,
       bullets: [
-        ...timelineProjection.confidence.explainability.bullets,
+        ...canonical.confidence.explainability.bullets,
         ...explanation.explainability.bullets,
       ],
     },
   };
-
-  const releaseBlockers = deduplicateReleaseBlockers(blocking.detailedBlockers);
 
   return {
     explanation,

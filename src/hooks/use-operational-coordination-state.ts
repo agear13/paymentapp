@@ -8,36 +8,39 @@ import {
   deriveSettlementInitializationState,
   deriveOperationalOnboardingProgress,
 } from '@/lib/operations/coordination';
-import { useOperationalGuidance, type OperationalGuidanceOptions } from '@/hooks/use-operational-guidance';
+import {
+  useCanonicalOperationalState,
+  type CanonicalOperationalStateOptions,
+} from '@/hooks/use-canonical-operational-state';
 
-export type OperationalCoordinationStateOptions = OperationalGuidanceOptions & {
+export type OperationalCoordinationStateOptions = CanonicalOperationalStateOptions & {
   releaseCapabilities?: OperationalCapabilities;
 };
 
 /**
- * Unified operational coordination hook — canonical readiness, settlement init, and onboarding progress.
+ * Unified operational coordination hook — delegates to canonical reducer state.
  */
 export function useOperationalCoordinationState(options?: OperationalCoordinationStateOptions) {
-  const guidanceState = useOperationalGuidance(options);
+  const canonical = useCanonicalOperationalState(options);
   const operationalCapabilities =
     options?.releaseCapabilities ?? CONSERVATIVE_RELEASE_CAPABILITIES;
 
   const readiness = React.useMemo(
     () =>
       deriveOperationalReadinessState({
-        operationalOnboarding: guidanceState.operationalOnboarding,
-        operationalInitialization: guidanceState.operationalInitialization,
-        graphSnapshotConverged: guidanceState.graphSnapshotConverged,
-        activationLoading: guidanceState.loading,
+        operationalOnboarding: canonical.operationalOnboarding,
+        operationalInitialization: canonical.operationalInitialization,
+        graphSnapshotConverged: canonical.graphSnapshotConverged,
+        activationLoading: canonical.loading,
         operationalCapabilities,
-        workspace: guidanceState.workspaceContext,
+        workspace: canonical.workspaceContext,
       }),
     [
-      guidanceState.operationalOnboarding,
-      guidanceState.operationalInitialization,
-      guidanceState.graphSnapshotConverged,
-      guidanceState.loading,
-      guidanceState.workspaceContext,
+      canonical.operationalOnboarding,
+      canonical.operationalInitialization,
+      canonical.graphSnapshotConverged,
+      canonical.loading,
+      canonical.workspaceContext,
       operationalCapabilities,
     ]
   );
@@ -45,41 +48,41 @@ export function useOperationalCoordinationState(options?: OperationalCoordinatio
   const settlementInitialization = React.useMemo(
     () =>
       deriveSettlementInitializationState({
-        activationLoading: guidanceState.loading,
-        operationalOnboarding: guidanceState.operationalOnboarding,
-        operationalInitialization: guidanceState.operationalInitialization,
-        graphSnapshotConverged: guidanceState.graphSnapshotConverged,
-        nextActions: guidanceState.guidance.actions,
+        activationLoading: canonical.loading,
+        operationalOnboarding: canonical.operationalOnboarding,
+        operationalInitialization: canonical.operationalInitialization,
+        graphSnapshotConverged: canonical.graphSnapshotConverged,
+        nextActions: canonical.guidance.actions,
       }),
     [
-      guidanceState.loading,
-      guidanceState.operationalOnboarding,
-      guidanceState.operationalInitialization,
-      guidanceState.graphSnapshotConverged,
-      guidanceState.guidance.actions,
+      canonical.loading,
+      canonical.operationalOnboarding,
+      canonical.operationalInitialization,
+      canonical.graphSnapshotConverged,
+      canonical.guidance.actions,
     ]
   );
 
   const onboardingProgress = React.useMemo(
     () =>
       deriveOperationalOnboardingProgress({
-        operationalOnboarding: guidanceState.operationalOnboarding,
-        workspace: guidanceState.workspaceContext,
-        graphSnapshotConverged: guidanceState.graphSnapshotConverged,
-        releaseBlockers: guidanceState.guidance.releaseBlockers,
-        explanation: guidanceState.guidance.explanation,
+        operationalOnboarding: canonical.operationalOnboarding,
+        workspace: canonical.workspaceContext,
+        graphSnapshotConverged: canonical.graphSnapshotConverged,
+        releaseBlockers: canonical.releaseBlockers,
+        explanation: canonical.guidance.explanation,
       }),
     [
-      guidanceState.operationalOnboarding,
-      guidanceState.workspaceContext,
-      guidanceState.graphSnapshotConverged,
-      guidanceState.guidance.releaseBlockers,
-      guidanceState.guidance.explanation,
+      canonical.operationalOnboarding,
+      canonical.workspaceContext,
+      canonical.graphSnapshotConverged,
+      canonical.releaseBlockers,
+      canonical.guidance.explanation,
     ]
   );
 
   return {
-    ...guidanceState,
+    ...canonical,
     readiness,
     settlementInitialization,
     onboardingProgress,

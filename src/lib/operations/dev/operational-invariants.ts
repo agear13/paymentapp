@@ -1217,3 +1217,107 @@ export function assertParticipantKpiConvergenceInvariants(
     );
   }
 }
+
+export type CanonicalConvergenceInvariantInput = {
+  state: import('@/lib/operations/reducer/types').CanonicalOperationalState;
+  pageDerivedKpisIndependently?: boolean;
+  pageDerivedBlockersIndependently?: boolean;
+  pageDerivedReadinessOutsideCanonical?: boolean;
+  staleActivationDataRendered?: boolean;
+};
+
+export function assertCanonicalConvergenceInvariants(
+  input: CanonicalConvergenceInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  const { state } = input;
+  const kpis = state.kpis;
+
+  if (input.pageDerivedKpisIndependently) {
+    throw new OperationalInvariantViolation(
+      'KPI_COUNTS_DERIVED_OUTSIDE_CANONICAL_STATE',
+      'A page derived KPI counts outside deriveOperationalKPIs()'
+    );
+  }
+
+  if (input.pageDerivedBlockersIndependently) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_BLOCKER_DERIVED_OUTSIDE_BLOCKER_ENGINE',
+      'A page derived release blockers outside deriveCanonicalOperationalBlockers()'
+    );
+  }
+
+  if (input.pageDerivedReadinessOutsideCanonical) {
+    throw new OperationalInvariantViolation(
+      'PAGE_DERIVING_READINESS_OUTSIDE_CANONICAL_STATE',
+      'A page derived readiness outside reduceOperationalState()'
+    );
+  }
+
+  if (input.staleActivationDataRendered) {
+    throw new OperationalInvariantViolation(
+      'PAGE_RENDERING_STALE_ACTIVATION_DATA',
+      'UI rendered stale activation counters instead of canonical reducer KPIs'
+    );
+  }
+
+  const payoutReadyIds = new Set(
+    state.participants.filter((p) => p.payoutReadiness.payoutReady).map((p) => p.participantId)
+  );
+  for (const id of payoutReadyIds) {
+    if (!state.obligations.some((o) => o.participantId === id) && state.funding.allocated) {
+      throw new OperationalInvariantViolation(
+        'OBLIGATIONS_NOT_MATERIALIZED_AFTER_APPROVAL',
+        `Participant ${id} is payout-ready with funding but no obligation materialized in canonical state`
+      );
+    }
+  }
+
+  if (
+    kpis.payoutReadyCount > 0 &&
+    kpis.obligationCount === 0 &&
+    state.funding.allocated
+  ) {
+    throw new OperationalInvariantViolation(
+      'OBLIGATIONS_NOT_MATERIALIZED_AFTER_APPROVAL',
+      'Payout-ready participants exist with funding but canonical obligations are empty'
+    );
+  }
+
+  if (state.participants.some((p) => p.attributionActive) && state.attribution.length === 0) {
+    throw new OperationalInvariantViolation(
+      'ATTRIBUTION_SCOPE_NOT_REPLAY_DERIVED',
+      'Attribution active on participants but attribution scope missing from canonical state'
+    );
+  }
+
+  const phases = ['INITIALIZING', 'CONVERGING', 'READY', 'RELEASABLE', 'RELEASED'];
+  if (!phases.includes(state.release.phase)) {
+    throw new OperationalInvariantViolation(
+      'RELEASE_STATE_MACHINE_SKIPPED_PHASE',
+      `Invalid release phase ${state.release.phase}`
+    );
+  }
+}
+
+export type MultipleTruthSourcesInvariantInput = {
+  canonicalKpis?: number;
+  parallelKpiDerivation?: number;
+};
+
+export function assertMultipleOperationalTruthSources(
+  input: MultipleTruthSourcesInvariantInput
+): void {
+  if (process.env.NODE_ENV !== 'development') return;
+  if (
+    input.canonicalKpis != null &&
+    input.parallelKpiDerivation != null &&
+    input.canonicalKpis !== input.parallelKpiDerivation
+  ) {
+    throw new OperationalInvariantViolation(
+      'MULTIPLE_OPERATIONAL_TRUTH_SOURCES_DETECTED',
+      `Canonical KPIs (${input.canonicalKpis}) contradict parallel derivation (${input.parallelKpiDerivation})`
+    );
+  }
+}
