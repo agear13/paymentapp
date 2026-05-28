@@ -19,7 +19,10 @@ const FORBIDDEN_IMPORT_PATTERNS: Array<{
   {
     layer: 'telemetry',
     filePattern: /(?:lib\/operations\/)?telemetry\/operational-telemetry\.ts$/,
-    forbidden: [/from ['"]@\/lib\/operations\/orchestration\//],
+    forbidden: [
+      /from ['"]@\/lib\/operations\/orchestration\//,
+      /from ['"]@\/lib\/operations\/dev\//,
+    ],
   },
   {
     layer: 'resilience',
@@ -57,8 +60,12 @@ export function assertOperationalLayerBoundaries(sources: Record<string, string>
       if (!rule.filePattern.test(normalized)) continue;
       for (const pattern of rule.forbidden) {
         if (pattern.test(content)) {
+          const diagnosticsImport =
+            rule.layer === 'telemetry' && /from ['"]@\/lib\/operations\/dev\//.test(content);
           throw new Error(
-            `[operational-layer-boundary] ${rule.layer} layer violation in ${normalized}: forbidden import pattern ${pattern}`
+            diagnosticsImport
+              ? `[operational-layer-boundary] TELEMETRY_LAYER_IMPORTS_DIAGNOSTICS_LAYER in ${normalized}: forbidden import pattern ${pattern}`
+              : `[operational-layer-boundary] ${rule.layer} layer violation in ${normalized}: forbidden import pattern ${pattern}`
           );
         }
       }

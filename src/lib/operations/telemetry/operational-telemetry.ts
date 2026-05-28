@@ -92,15 +92,33 @@ export type OperationalTelemetryEvent =
       detail?: Record<string, unknown>;
     };
 
-import { ingestOperationalTelemetryEvent } from '@/lib/operations/dev/operational-diagnostics-counters';
+export type OperationalTelemetryListener = (event: OperationalTelemetryEvent) => void;
 
 const telemetryBuffer: OperationalTelemetryEvent[] = [];
 const MAX_BUFFER = 50;
+const telemetrySubscribers = new Set<OperationalTelemetryListener>();
+
+/** Register a passive observer — diagnostics and dev tooling subscribe here. */
+export function subscribeOperationalTelemetry(listener: OperationalTelemetryListener): () => void {
+  telemetrySubscribers.add(listener);
+  return () => telemetrySubscribers.delete(listener);
+}
+
+function notifyOperationalTelemetrySubscribers(event: OperationalTelemetryEvent): void {
+  for (const listener of telemetrySubscribers) {
+    try {
+      listener(event);
+    } catch {
+      /* observers must not break emit */
+    }
+  }
+}
 
 export function emitOperationalTelemetry(event: OperationalTelemetryEvent): void {
-  ingestOperationalTelemetryEvent(event);
   telemetryBuffer.push(event);
   if (telemetryBuffer.length > MAX_BUFFER) telemetryBuffer.shift();
+
+  notifyOperationalTelemetrySubscribers(event);
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('operational-telemetry', { detail: event }));

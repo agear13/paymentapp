@@ -1,4 +1,5 @@
 import type { OperationalTelemetryEvent } from '@/lib/operations/telemetry/operational-telemetry';
+import { subscribeOperationalTelemetry } from '@/lib/operations/telemetry/operational-telemetry';
 
 let timeoutRecoveryCount = 0;
 let staleRenderCount = 0;
@@ -56,4 +57,12 @@ export function resetOperationalDiagnosticsCountersForTests(): void {
   replayAnomalyCount = 0;
   obligationsRecomputeCount = 0;
   manualRecoveryCount = 0;
+}
+
+let diagnosticsTelemetryObserverRegistered = false;
+
+/** Passive observer — telemetry emits, diagnostics ingests locally. */
+if (!diagnosticsTelemetryObserverRegistered) {
+  subscribeOperationalTelemetry((event) => ingestOperationalTelemetryEvent(event));
+  diagnosticsTelemetryObserverRegistered = true;
 }

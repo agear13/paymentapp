@@ -53,4 +53,13 @@ describe('operational layer dependency boundaries', () => {
       "\nimport x from '@/lib/operations/orchestration/operational-sync-client';\n";
     expect(() => assertOperationalLayerBoundaries(sources)).toThrow(/telemetry layer violation/);
   });
+
+  it('rejects telemetry importing diagnostics layer (TELEMETRY_LAYER_IMPORTS_DIAGNOSTICS_LAYER)', () => {
+    const sources = readSources();
+    sources['telemetry/operational-telemetry.ts'] +=
+      "\nimport x from '@/lib/operations/dev/operational-diagnostics-counters';\n";
+    expect(() => assertOperationalLayerBoundaries(sources)).toThrow(
+      /TELEMETRY_LAYER_IMPORTS_DIAGNOSTICS_LAYER/
+    );
+  });
 });
