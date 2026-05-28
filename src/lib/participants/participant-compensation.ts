@@ -33,16 +33,23 @@ export function inferCompensationConfiguredFromPersistence(
     (profile.percentage != null && profile.percentage > 0);
   if (profile.compensationType && hasProfileAmount) return true;
   if (
-    participant.operationalStatus !== 'draft' &&
     profile.compensationType &&
     Number.isFinite(participant.commissionValue) &&
     participant.commissionValue > 0
   ) {
     return true;
   }
+  if (
+    profile.compensationType &&
+    (profile.commissionServiceIds?.length ?? 0) > 0 &&
+    (profile.customerAttributionEnabled === true || profile.commissionSourceMode === 'selected')
+  ) {
+    return true;
+  }
   return false;
 }
 
+/** @deprecated Use isParticipantEarningsConfigured from participant-earnings-selectors */
 export function isCompensationConfigured(participant: DemoParticipant): boolean {
   return inferCompensationConfiguredFromPersistence(participant);
 }

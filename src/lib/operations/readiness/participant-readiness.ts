@@ -15,6 +15,11 @@ import {
   deriveApprovalBlockingReason,
   deriveAgreementApprovalState,
 } from '@/lib/operations/derivations/derive-approval-state';
+import {
+  countParticipantsEarningsConfigured,
+  countParticipantsPayoutReadyForKpi,
+  isParticipantEarningsConfigured,
+} from '@/lib/operations/selectors/participant-earnings-selectors';
 
 export type ParticipantPayoutReadiness = OperationalReadinessResult & {
   participantId: string;
@@ -118,27 +123,21 @@ export function deriveWorkspaceParticipantPayoutSummary(
   participants: DemoParticipant[]
 ): WorkspaceParticipantPayoutSummary {
   const active = participants.filter((p) => normalizeParticipantEntity(p).name?.trim());
-  let earningsConfiguredCount = 0;
-  let payoutReadyCount = 0;
-
-  for (const participant of active) {
-    const readiness = deriveParticipantPayoutReadiness(participant);
-    if (readiness.flags.hasCompensation) earningsConfiguredCount += 1;
-    if (readiness.payoutReady) payoutReadyCount += 1;
-  }
 
   return {
     participantCount: active.length,
-    earningsConfiguredCount,
-    payoutReadyCount,
-    participantsConfigured: active.length > 0 && earningsConfiguredCount >= active.length,
+    earningsConfiguredCount: countParticipantsEarningsConfigured(active),
+    payoutReadyCount: countParticipantsPayoutReadyForKpi(active),
+    participantsConfigured:
+      active.length > 0 &&
+      countParticipantsEarningsConfigured(active) >= active.length,
   };
 }
 
 export function countPayoutReadyParticipants(
   participants: DemoParticipant[]
 ): number {
-  return participants.filter((p) => deriveParticipantPayoutReadiness(p).payoutReady).length;
+  return countParticipantsPayoutReadyForKpi(participants);
 }
 
 export type ProjectReadinessGapSummary = {
@@ -159,16 +158,11 @@ export function summarizeProjectReadinessGaps(
   let missingCompliance = 0;
   let payoutReadyCount = 0;
 
-  for (const s of snapshots) {
+  for (let i = 0; i < participants.length; i++) {
+    const p = participants[i]!;
+    const s = snapshots[i]!;
     if (s.payoutReady) payoutReadyCount += 1;
-    if (
-      s.issues.some(
-        (r) =>
-          r.includes('Compensation') ||
-          r.includes('Revenue share') ||
-          r.includes('reimbursement')
-      )
-    ) {
+    if (!isParticipantEarningsConfigured(p)) {
       missingCompensation += 1;
     }
     if (

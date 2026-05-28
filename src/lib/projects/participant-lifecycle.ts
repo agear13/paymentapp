@@ -22,7 +22,7 @@ import { deriveAgreementLifecycleState } from '@/lib/operations/lifecycle/agreem
 import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
 import type { ParticipantAttributionStatus } from '@/lib/projects/participant-entitlement';
 import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
-import { inferCompensationConfiguredFromPersistence } from '@/lib/participants/participant-compensation';
+import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 
 /** @deprecated Use ParticipantLifecycleState — kept for table column compatibility */
 export type ParticipantInviteState =
@@ -182,7 +182,7 @@ export function participantSummaryMetrics(
     if (!agreementApproved) pendingAgreements += 1;
 
     const needsPayoutConfirmation =
-      !p.compensationProfile?.exemptFromPayout && inferCompensationConfiguredFromPersistence(p);
+      !p.compensationProfile?.exemptFromPayout && isParticipantEarningsConfigured(p);
     if (agreementApproved && needsPayoutConfirmation && p.payoutVerificationConfirmed !== true) {
       missingOnboarding += 1;
     }

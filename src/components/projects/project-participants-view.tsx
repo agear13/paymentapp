@@ -40,8 +40,9 @@ import {
 } from '@/components/projects/participant-table-layout';
 import {
   applyCompensationProfileToParticipant,
-  inferCompensationConfiguredFromPersistence,
 } from '@/lib/participants/participant-compensation';
+import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
+import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
@@ -448,7 +449,7 @@ export function ProjectParticipantsView() {
         traceCompensationConfiguredState(persisted, traceCtx, 'api-response');
         logCompensationPersistenceTrace('save-success', traceCtx, {
           persistedConfigured: persisted.compensationProfile?.configured ?? null,
-          inferConfigured: inferCompensationConfiguredFromPersistence(persisted),
+          inferConfigured: isParticipantEarningsConfigured(persisted),
         });
         const sync = parseOperationalSync(json);
         const nextParticipants = allParticipants.map((p) =>
@@ -542,7 +543,7 @@ export function ProjectParticipantsView() {
         projectId,
         surface: 'project-participants-view',
       }, {
-        inferConfigured: inferCompensationConfiguredFromPersistence(saved),
+        inferConfigured: isParticipantEarningsConfigured(saved),
         canonicalEarningsConfigured: canonicalKpis.earningsConfiguredCount,
         canonicalPayoutReady: canonicalKpis.payoutReadyCount,
         phase: 'coordination-hook-refresh',
@@ -553,10 +554,15 @@ export function ProjectParticipantsView() {
   React.useEffect(() => {
     if (!canonicalKpis) return;
     const rowsWithCompensation = hydratedParticipants.filter((p) =>
-      participantEntity(p).compensationProfile
-        ? inferCompensationConfiguredFromPersistence(participantEntity(p))
-        : false
+      isParticipantEarningsConfigured(participantEntity(p))
     ).length;
+    if (hydratedParticipants[0]) {
+      logEarningsSelectorAudit({
+        surface: 'project-participants-view',
+        participant: participantEntity(hydratedParticipants[0]),
+        canonicalKpis,
+      });
+    }
     assertParticipantKpiConvergenceInvariants({
       participantRowsWithCompensation: rowsWithCompensation,
       workspaceEarningsConfiguredCount: canonicalKpis.earningsConfiguredCount,
@@ -607,7 +613,9 @@ export function ProjectParticipantsView() {
   const sectionError = sectionErrors.participants;
 
   const focusFirstEarnings = () => {
-    const needsConfig = hydratedParticipants.find((p) => !p.compensation.configured);
+    const needsConfig = hydratedParticipants.find(
+      (p) => !isParticipantEarningsConfigured(participantEntity(p))
+    );
     if (needsConfig) openCompensationConfig(participantEntity(needsConfig));
     else if (participantEntities[0]) openCompensationConfig(participantEntities[0]);
   };

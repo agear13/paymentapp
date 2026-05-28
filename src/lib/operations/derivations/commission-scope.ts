@@ -6,7 +6,7 @@ import {
   isCatalogScopedCommission,
   isAllActiveCatalogSource,
 } from '@/lib/operations/shared/attribution-compensation-semantics';
-import { isCompensationConfigured } from '@/lib/participants/participant-compensation';
+import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 import { DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
 import {
   catalogRefsFromHydrated,
@@ -107,7 +107,7 @@ export function deriveCommissionSettlementBasis(
   if (profile?.exemptFromPayout || profile?.compensationType === 'UNPAID_INTERNAL') {
     return 'unpaid';
   }
-  if (!isCompensationConfigured(participant)) {
+  if (!isParticipantEarningsConfigured(participant)) {
     return 'not_configured';
   }
   if (isCatalogScopedCommission(participant)) {

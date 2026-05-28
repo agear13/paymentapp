@@ -11,7 +11,10 @@ import {
 } from '@/lib/operations/guards/hydration-guards';
 import { assertParticipantSetupGuidanceInvariants } from '@/lib/operations/dev/operational-invariants';
 import { warnLegacyOperationalPath } from '@/lib/operations/dev/warn-legacy-operational-path';
-import { deriveParticipantPayoutReadiness } from '@/lib/operations/readiness/participant-readiness';
+import {
+  countParticipantsEarningsConfigured,
+  countParticipantsPayoutReadyForKpi,
+} from '@/lib/operations/selectors/participant-earnings-selectors';
 import { deriveProjectOperationalReadiness } from '@/lib/operations/readiness/project-readiness';
 import type { ProjectState } from '@/lib/operations/states/project-state';
 
@@ -140,14 +143,8 @@ export function safeParticipantRouteContext(
 ): SafeParticipantRouteContext {
   const list = (participants ?? []).map(normalizeParticipantEntity);
   const total = list.length;
-  let configuredCount = 0;
-  let payoutReadyCount = 0;
-
-  for (const p of list) {
-    const r = deriveParticipantPayoutReadiness(p);
-    if (r.flags.hasCompensation) configuredCount += 1;
-    if (r.payoutReady) payoutReadyCount += 1;
-  }
+  const configuredCount = countParticipantsEarningsConfigured(list);
+  const payoutReadyCount = countParticipantsPayoutReadyForKpi(list);
 
   const needsEarningsConfiguration = total > 0 && configuredCount < total;
   const showCompensationSetupGuidance = shouldShowParticipantCompensationSetupGuidance({

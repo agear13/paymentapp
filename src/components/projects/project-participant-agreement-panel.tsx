@@ -45,6 +45,8 @@ import {
 import { createPostConvergenceVerifier } from '@/lib/operations/dev/post-convergence-verifier';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
+import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
+import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
 
 function roleAmountsFromDeal(deal: RecentDeal) {
   return {
@@ -291,6 +293,14 @@ export function ProjectParticipantAgreementPanel({
   );
   const catalogCommission = isCatalogScopedCommission(participant);
 
+  React.useEffect(() => {
+    logEarningsSelectorAudit({
+      surface: 'project-participant-agreement-panel',
+      participant,
+      context: { catalogItems, workspaceCurrency },
+    });
+  }, [participant, catalogItems, workspaceCurrency]);
+
   return (
     <>
     <Card className="w-full max-w-2xl">
@@ -357,7 +367,7 @@ export function ProjectParticipantAgreementPanel({
           {!catalogCommission && commissionStructureLabel && participant.participationModel !== 'fixed_payout' ? (
             <p className="text-xs text-muted-foreground">Structure: {commissionStructureLabel}</p>
           ) : null}
-          {!catalogCommission && !participant.compensationProfile?.configured && rolePayout && rolePayout.total > 0 ? (
+          {!catalogCommission && !isParticipantEarningsConfigured(participant) && rolePayout && rolePayout.total > 0 ? (
             <p className="text-sm text-muted-foreground">{rolePayout.previewLine}</p>
           ) : null}
         </div>

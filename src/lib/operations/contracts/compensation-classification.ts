@@ -1,6 +1,7 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { isCatalogScopedCommission } from '@/lib/operations/derivations/commission-scope';
+import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 
 /** Explicit compensation classifications — prevents semantic ambiguity across surfaces. */
 export const COMPENSATION_CLASSIFICATIONS = [
@@ -25,7 +26,7 @@ export function classifyParticipantCompensation(
   participant: DemoParticipant
 ): CompensationClassification {
   const profile = participant.compensationProfile;
-  if (!profile?.configured) return 'UNCONFIGURED';
+  if (!profile || !isParticipantEarningsConfigured(participant)) return 'UNCONFIGURED';
 
   if (
     profile.compensationType === 'REVENUE_SHARE' ||

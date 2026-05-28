@@ -2,6 +2,7 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { CompletenessLine } from '@/lib/operations/types/operational-completeness';
 import { deriveParticipantCapabilityFlags, normalizeParticipantEntity } from '@/lib/operations/guards/hydration-guards';
+import { countParticipantsEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 
 export type { CompletenessLine };
 
@@ -15,9 +16,7 @@ export function deriveProjectCompletenessLines(
   }
 ): CompletenessLine[] {
   const normalized = participants.map(normalizeParticipantEntity);
-  const configured = normalized.filter((p) =>
-    deriveParticipantCapabilityFlags(p).hasCompensation
-  ).length;
+  const configured = countParticipantsEarningsConfigured(normalized);
   const payoutDest = normalized.filter((p) =>
     deriveParticipantCapabilityFlags(p).hasPayoutDestination
   ).length;

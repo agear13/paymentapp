@@ -1,9 +1,9 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import { isCompensationExempt } from '@/lib/participants/participant-compensation';
 import {
-  inferCompensationConfiguredFromPersistence,
-  isCompensationExempt,
-} from '@/lib/participants/participant-compensation';
-import { isParticipantPayoutReady } from '@/lib/operations/truth/payout-truth';
+  isParticipantEarningsConfigured,
+  isParticipantPayoutReadyForKpi,
+} from '@/lib/operations/selectors/participant-earnings-selectors';
 
 /** Row-level counts from persisted participants only — must match canonical reducer KPIs. */
 export function countPersistedParticipantMetrics(participants: DemoParticipant[]) {
@@ -13,11 +13,11 @@ export function countPersistedParticipantMetrics(participants: DemoParticipant[]
   let approvedAgreementCount = 0;
 
   for (const p of active) {
-    if (inferCompensationConfiguredFromPersistence(p) || isCompensationExempt(p)) {
+    if (isParticipantEarningsConfigured(p) || isCompensationExempt(p)) {
       earningsConfiguredCount += 1;
     }
     if (p.approvalStatus === 'Approved') approvedAgreementCount += 1;
-    if (isParticipantPayoutReady(p)) payoutReadyCount += 1;
+    if (isParticipantPayoutReadyForKpi(p)) payoutReadyCount += 1;
   }
 
   return {

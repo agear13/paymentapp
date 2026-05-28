@@ -1,6 +1,6 @@
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { isCompensationConfigured } from '@/lib/participants/participant-compensation';
+import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
 
 export function projectEntityForMutation(project: RecentDeal): RecentDeal {
@@ -19,5 +19,7 @@ export function detectProjectPhase(
 }
 
 export function countConfiguredParticipants(participants: DemoParticipant[]): number {
-  return participants.filter((p) => isCompensationConfigured(hydrateOperationalParticipant(p))).length;
+  return participants.filter((p) =>
+    isParticipantEarningsConfigured(hydrateOperationalParticipant(p))
+  ).length;
 }

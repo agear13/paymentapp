@@ -25,7 +25,7 @@ export function ProjectPayoutsView() {
   if (!summary) return null;
 
   const participantCount = kpis?.participantCount ?? summary.participantCount;
-  const payoutReadyCount = kpis?.payoutReadyCount ?? summary.participantsReady;
+  const payoutReadyCount = kpis?.payoutReadyCount ?? 0;
 
   return (
     <div className="space-y-6">

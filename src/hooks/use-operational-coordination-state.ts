@@ -13,6 +13,7 @@ import {
   registerCrossSurfaceOperationalKpis,
 } from '@/lib/operations/dev/coordination-truth-trace';
 import { traceOperationalRender } from '@/lib/operations/dev/operational-render-trace';
+import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
 import {
   useCanonicalOperationalState,
   type CanonicalOperationalStateOptions,
@@ -187,6 +188,18 @@ export function useOperationalCoordinationState(options?: OperationalCoordinatio
     settlementInitialization.showInitializationShell,
     traceSurface,
   ]);
+
+  React.useEffect(() => {
+    if (!canonical.kpis || process.env.NODE_ENV !== 'development') return;
+    const sample = options?.participants?.[0] ?? canonical.graph?.participants?.[0]?.participant;
+    if (sample) {
+      logEarningsSelectorAudit({
+        surface: traceSurface,
+        participant: sample,
+        canonicalKpis: canonical.kpis,
+      });
+    }
+  }, [canonical.graph?.participants, canonical.kpis, options?.participants, traceSurface]);
 
   React.useEffect(() => {
     if (!canonical.canonicalState || process.env.NODE_ENV !== 'development') return;

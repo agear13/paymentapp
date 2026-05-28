@@ -2,13 +2,15 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import { deriveAgreementApprovalState } from '@/lib/operations/derivations/derive-approval-state';
 import { deriveFundingCoordinationStage } from '@/lib/operations/truth/funding-coordination-semantics';
 import { hydrateOperationalParticipants } from '@/lib/operations/hydration/hydrate-operational-participant';
-import { inferCompensationConfiguredFromPersistence } from '@/lib/participants/participant-compensation';
+import {
+  isParticipantAttributionActive,
+  isParticipantEarningsConfigured,
+} from '@/lib/operations/selectors/participant-earnings-selectors';
 import { deriveParticipantPayoutReadiness } from '@/lib/operations/readiness/participant-readiness';
 import {
   derivePayoutReleaseReadiness,
   type PayoutReleaseContext,
 } from '@/lib/operations/readiness/derive-payout-release-readiness';
-import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
 import { collectOperationalEventStream } from '@/lib/operations/timeline/canonical-operational-event';
 import { operationalTimelineReplayFingerprint } from '@/lib/operations/timeline/canonical-operational-event';
 import { replayOperationalEvents } from '@/lib/operations/timeline/replay-operational-events';
@@ -109,12 +111,12 @@ function buildParticipantRecords(
       entity,
       payoutReadiness,
       releaseReadiness,
-      compensationConfigured: inferCompensationConfiguredFromPersistence(entity),
+      compensationConfigured: isParticipantEarningsConfigured(entity),
       agreementApproved,
       payoutConfirmed:
         entity.compensationProfile?.exemptFromPayout === true ||
         entity.payoutVerificationConfirmed === true,
-      attributionActive: canGenerateAttributionLink(entity, {
+      attributionActive: isParticipantAttributionActive(entity, {
         catalogItems: seed.catalogItemsByParticipant?.[entity.id] ?? seed.catalogItems,
       }),
     };

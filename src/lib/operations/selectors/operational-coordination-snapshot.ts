@@ -19,7 +19,10 @@ import {
   classifyParticipantCompensation,
   compensationGeneratesObligations,
 } from '@/lib/operations/contracts/compensation-classification';
-import { inferCompensationConfiguredFromPersistence } from '@/lib/participants/participant-compensation';
+import {
+  isParticipantEarningsConfigured,
+  isParticipantPayoutReadyForKpi,
+} from '@/lib/operations/selectors/participant-earnings-selectors';
 import { warnOperationalInconsistency } from '@/lib/operations/dev/operational-diagnostics';
 import { deriveOperationalReadinessHierarchy } from '@/lib/operations/readiness/readiness-hierarchy';
 import {
@@ -125,7 +128,7 @@ export function getOperationalCoordinationSnapshot(
     const compensationClass = classifyParticipantCompensation(participant);
     const compensationConfigured =
       compensationGeneratesObligations(compensationClass) &&
-      inferCompensationConfiguredFromPersistence(participant);
+      isParticipantEarningsConfigured(participant);
 
     assertOperationalInvariants({
       participantId: participant.id,
@@ -172,10 +175,12 @@ export function getOperationalCoordinationSnapshot(
     obligations,
     summary: {
       participantCount: participants.length,
-      earningsConfiguredCount: participantSnapshots.filter(
-        (s) => s.payoutReadiness.flags.hasCompensation
+      earningsConfiguredCount: participantSnapshots.filter((s) =>
+        isParticipantEarningsConfigured(s.participant)
       ).length,
-      payoutReadyCount: participantSnapshots.filter((s) => s.payoutReadiness.payoutReady).length,
+      payoutReadyCount: participantSnapshots.filter((s) =>
+        isParticipantPayoutReadyForKpi(s.participant)
+      ).length,
       releaseReadyCount,
       blockerCount: allBlockers.length,
       allBlockers,

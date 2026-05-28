@@ -18,6 +18,7 @@ import {
 import { explainProjectTransition } from '@/lib/operations/explainability/transition-explanations';
 import { orchestrateOperations } from '@/lib/operations/orchestration/operational-orchestrator';
 import { deriveProjectOperationalReadiness } from '@/lib/operations/readiness/project-readiness';
+import { countParticipantsEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 import { deriveWorkspaceOperationalHealth } from '@/lib/operations/readiness/workspace-readiness';
 import {
   deriveParticipantPayoutReadiness,
@@ -117,9 +118,7 @@ export function explainOperationalReadiness(
       releaseEligibleCount: input.treasury?.obligationsReady ?? input.workspace.releaseEligibleCount,
       participantCount: participants.length,
       participantsPayoutReadyCount: gaps?.payoutReadyCount ?? 0,
-      participantsConfiguredCount: participants.filter(
-        (p) => deriveParticipantPayoutReadiness(p).flags.hasCompensation
-      ).length,
+      participantsConfiguredCount: countParticipantsEarningsConfigured(participants),
       providerConnected:
         input.workspace.stripeConfigured ||
         input.workspace.wiseConfigured ||
