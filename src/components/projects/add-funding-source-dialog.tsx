@@ -27,10 +27,10 @@ import {
 import type { ProjectFundingSourceDto } from '@/lib/projects/funding-sources/types';
 import {
   applyOperationalSyncRefresh,
-  createPostConvergenceVerifier,
   parseOperationalSync,
   type OperationalSyncResponse,
 } from '@/lib/operations/orchestration/operational-sync-client';
+import { createPostConvergenceVerifier } from '@/lib/operations/dev/post-convergence-verifier';
 import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-convergence';
 import { logOperationalSyncConvergence } from '@/lib/operations/orchestration/operational-sync-convergence';
 

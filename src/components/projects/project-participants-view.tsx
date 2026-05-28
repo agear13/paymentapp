@@ -51,11 +51,11 @@ import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import {
   applyOperationalSyncRefresh,
-  createPostConvergenceVerifier,
   parseOperationalSync,
   toOperationalSyncHandlers,
   type OperationalSyncResponse,
 } from '@/lib/operations/orchestration/operational-sync-client';
+import { createPostConvergenceVerifier } from '@/lib/operations/dev/post-convergence-verifier';
 import {
   logOperationalSyncConvergence,
   type OperationalSyncMutationKind,
@@ -76,6 +76,7 @@ import { EMPTY_STATE_COPY } from '@/lib/operations/design-language';
 import { opSurface } from '@/lib/design/operational-surfaces';
 import { OperatorEmptyState } from '@/components/operations/operator-empty-state';
 import { cn } from '@/lib/utils';
+import { OperationalDiagnosticsPanel } from '@/components/operations/operational-diagnostics-panel';
 
 const ONBOARDING_CHECKLIST = [
   'Add participants',
@@ -885,6 +886,14 @@ export function ProjectParticipantsView() {
           project={deal}
           organizationId={organizationId}
           onSubmit={handleInvite}
+        />
+
+        <OperationalDiagnosticsPanel
+          projectId={projectId}
+          participants={projectParticipants}
+          invalidate={invalidate}
+          refreshSilent={(scope) => refresh({ scope: scope ?? 'all', silent: true, force: true })}
+          reloadCoordinationSnapshot={reloadCoordinationSnapshot}
         />
     </>
   );

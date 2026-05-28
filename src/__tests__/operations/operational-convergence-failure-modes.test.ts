@@ -13,7 +13,7 @@ import {
   dispatchOperationalEvent,
   resetOperationalEventBusForTests,
   subscribeOperationalEvents,
-} from '@/lib/operations/orchestration/operational-event-bus';
+} from '@/lib/operations/sync/operational-sync-events';
 import { withConvergenceTimeout } from '@/lib/operations/orchestration/operational-convergence-resilience';
 import {
   getRecentOperationalTelemetry,

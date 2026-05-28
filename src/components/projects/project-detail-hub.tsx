@@ -16,6 +16,7 @@ import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-oper
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import { OperationalGraphDiagnostics } from '@/components/operations/operational-graph-diagnostics';
+import { OperationalDiagnosticsPanel } from '@/components/operations/operational-diagnostics-panel';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { ProjectFundingSourcesPanel } from '@/components/projects/project-funding-sources-panel';
@@ -47,15 +48,16 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
     invalidate,
   } = useProjectWorkspace();
   const [treasury, setTreasury] = React.useState<ProjectTreasurySummary | null>(null);
-  const { guidance, graph, workspaceContext, kpis } = useOperationalCoordinationState({
-    scope: 'project',
-    project: deal ?? undefined,
-    participants: projectParticipants,
-    treasury,
-    scopeTitle: summary?.name,
-    enabled: Boolean(deal),
-    traceSurface: 'project-detail-hub',
-  });
+  const { guidance, graph, workspaceContext, kpis, reloadCoordinationSnapshot } =
+    useOperationalCoordinationState({
+      scope: 'project',
+      project: deal ?? undefined,
+      participants: projectParticipants,
+      treasury,
+      scopeTitle: summary?.name,
+      enabled: Boolean(deal),
+      traceSurface: 'project-detail-hub',
+    });
 
   React.useEffect(() => {
     let cancelled = false;
@@ -250,6 +252,14 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
       <OperationalActivitySection projectId={projectId} defaultOpen={false} />
 
       <OperationalGraphDiagnostics />
+
+      <OperationalDiagnosticsPanel
+        projectId={projectId}
+        participants={projectParticipants}
+        invalidate={invalidate}
+        refreshSilent={refreshSilent}
+        reloadCoordinationSnapshot={reloadCoordinationSnapshot}
+      />
     </div>
   );
 }

@@ -1,9 +1,9 @@
 'use client';
 
-import { fetchCoordinationSnapshotAfterConvergence } from '@/lib/operations/orchestration/fetch-post-convergence-verification';
-import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-convergence';
-import type { OperationalSyncTraceContext } from '@/lib/operations/orchestration/operational-sync-convergence';
-import { emitOperationalTelemetry } from '@/lib/operations/telemetry/operational-telemetry';
+import type {
+  OperationalSyncHandlers,
+  OperationalSyncTraceContext,
+} from '@/lib/operations/sync/operational-sync-types';
 
 export class OperationalConvergenceTimeoutError extends Error {
   readonly thresholdMs: number;
@@ -50,57 +50,83 @@ export async function withConvergenceTimeout<T>(
   }
 }
 
-/** Force authoritative reload after timeout — prevents silent half-converged state. */
+export type ConvergenceRecoveryTelemetryEvent =
+  | {
+      type: 'convergence_recovery';
+      mutation: string;
+      projectId: string | null;
+      path: 'force_snapshot_reload' | 'full_retry';
+      retryCount: number;
+    }
+  | {
+      type: 'snapshot_reload_retry';
+      mutation: string;
+      projectId: string | null;
+      attempt: number;
+      ok: boolean;
+    };
+
+export type ConvergenceRecoveryInput = {
+  handlers: OperationalSyncHandlers;
+  trace: OperationalSyncTraceContext;
+  attempt?: number;
+  fetchAuthoritativeSnapshot?: (projectId: string | null) => Promise<boolean>;
+  emitTelemetry?: (event: ConvergenceRecoveryTelemetryEvent) => void;
+};
+
+/** Force authoritative reload after timeout — callbacks injected by orchestration layer. */
 export async function recoverFromConvergenceTimeout(
-  handlers: OperationalSyncHandlers,
-  trace: OperationalSyncTraceContext,
-  attempt = 1
+  input: ConvergenceRecoveryInput
 ): Promise<void> {
-  const projectId = trace.projectId ?? null;
-  emitOperationalTelemetry({
+  const attempt = input.attempt ?? 1;
+  const projectId = input.trace.projectId ?? null;
+  const emit = input.emitTelemetry;
+
+  emit?.({
     type: 'convergence_recovery',
-    mutation: trace.mutation,
+    mutation: input.trace.mutation,
     projectId,
     path: attempt === 1 ? 'force_snapshot_reload' : 'full_retry',
     retryCount: attempt,
   });
 
   for (const scope of ['all'] as const) {
-    handlers.invalidate(scope);
+    input.handlers.invalidate(scope);
   }
 
   let snapshotOk = false;
-  try {
-    const fetched = await fetchCoordinationSnapshotAfterConvergence(projectId);
-    snapshotOk = Boolean(fetched?.snapshot?.summary?.participantCount);
-    emitOperationalTelemetry({
-      type: 'snapshot_reload_retry',
-      mutation: trace.mutation,
-      projectId,
-      attempt,
-      ok: snapshotOk,
-    });
-  } catch {
-    emitOperationalTelemetry({
-      type: 'snapshot_reload_retry',
-      mutation: trace.mutation,
-      projectId,
-      attempt,
-      ok: false,
-    });
+  if (input.fetchAuthoritativeSnapshot) {
+    try {
+      snapshotOk = await input.fetchAuthoritativeSnapshot(projectId);
+      emit?.({
+        type: 'snapshot_reload_retry',
+        mutation: input.trace.mutation,
+        projectId,
+        attempt,
+        ok: snapshotOk,
+      });
+    } catch {
+      emit?.({
+        type: 'snapshot_reload_retry',
+        mutation: input.trace.mutation,
+        projectId,
+        attempt,
+        ok: false,
+      });
+    }
   }
 
   await Promise.allSettled([
-    handlers.refreshWorkspace('all'),
-    handlers.reloadCoordinationSnapshot?.() ?? Promise.resolve(),
+    input.handlers.refreshWorkspace('all'),
+    input.handlers.reloadCoordinationSnapshot?.() ?? Promise.resolve(),
   ]);
-  handlers.notifyActivation?.();
+  input.handlers.notifyActivation?.();
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('operational-coordination-reload'));
   }
 
-  if (!snapshotOk && attempt < 2) {
-    await recoverFromConvergenceTimeout(handlers, trace, attempt + 1);
+  if (!snapshotOk && attempt < 2 && input.fetchAuthoritativeSnapshot) {
+    await recoverFromConvergenceTimeout({ ...input, attempt: attempt + 1 });
   }
 }

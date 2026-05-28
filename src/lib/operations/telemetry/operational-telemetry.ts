@@ -57,16 +57,48 @@ export type OperationalTelemetryEvent =
     }
   | {
       type: 'operational_event_ordering_anomaly';
-      anomaly: 'duplicate_suppressed' | 'out_of_order_refresh' | 'convergence_overlap';
+      anomaly:
+        | 'duplicate_suppressed'
+        | 'out_of_order_refresh'
+        | 'convergence_overlap'
+        | 'replay_anomaly';
       mutation?: string;
       projectId?: string | null;
       detail?: Record<string, unknown>;
+    }
+  | {
+      type: 'obligations_recompute';
+      projectId?: string | null;
+      trigger: 'manual_recovery' | 'api_refresh' | 'mutation';
+      participantCount?: number;
+      obligationCount?: number;
+    }
+  | {
+      type: 'manual_recovery_action';
+      action:
+        | 'force_snapshot_reload'
+        | 'force_convergence_replay'
+        | 'recompute_obligations'
+        | 'clear_stale_cache'
+        | 'rerun_coordination_refresh'
+        | 'rebuild_kpis_from_persisted';
+      projectId?: string | null;
+      confirmed: boolean;
+    }
+  | {
+      type: 'replay_anomaly';
+      projectId?: string | null;
+      fingerprint?: string | null;
+      detail?: Record<string, unknown>;
     };
+
+import { ingestOperationalTelemetryEvent } from '@/lib/operations/dev/operational-diagnostics-counters';
 
 const telemetryBuffer: OperationalTelemetryEvent[] = [];
 const MAX_BUFFER = 50;
 
 export function emitOperationalTelemetry(event: OperationalTelemetryEvent): void {
+  ingestOperationalTelemetryEvent(event);
   telemetryBuffer.push(event);
   if (telemetryBuffer.length > MAX_BUFFER) telemetryBuffer.shift();
 
@@ -79,7 +111,8 @@ export function emitOperationalTelemetry(event: OperationalTelemetryEvent): void
     event.type === 'stale_render_detected' ||
     event.type === 'cross_surface_mismatch' ||
     event.type === 'post_convergence_assertion_failure' ||
-    event.type === 'operational_event_ordering_anomaly';
+    event.type === 'operational_event_ordering_anomaly' ||
+    event.type === 'replay_anomaly';
 
   if (process.env.NODE_ENV !== 'production' || isErrorLike) {
     const payload = { tag: 'operational-telemetry', ...event };

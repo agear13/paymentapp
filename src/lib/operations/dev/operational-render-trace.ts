@@ -6,6 +6,15 @@ let lastConvergenceAt: string | null = null;
 let lastConvergenceMutation: string | null = null;
 let lastConvergenceKpis: Partial<OperationalKPIs> | null = null;
 
+const renderTraceRing: Array<{
+  at: string;
+  hook: string;
+  phase: string;
+  surface: string | null;
+  stale: boolean;
+}> = [];
+const MAX_RENDER_TRACES = 30;
+
 export function markOperationalConvergenceComplete(meta: {
   mutation: string;
   kpis?: Partial<OperationalKPIs> | null;
@@ -82,5 +91,32 @@ export function traceOperationalRender(input: OperationalRenderTraceInput): void
   console.log('degraded', input.degraded ?? null);
   console.log('kpis', kpis ?? null);
   if (input.memoDeps) console.log('memoDeps', input.memoDeps);
+  renderTraceRing.push({
+    at: new Date().toISOString(),
+    hook: input.hook,
+    phase: input.phase,
+    surface: input.surface ?? null,
+    stale: staleAfterConvergence,
+  });
+  if (renderTraceRing.length > MAX_RENDER_TRACES) renderTraceRing.shift();
+
   console.groupEnd();
+}
+
+export function getOperationalRenderDiagnostics() {
+  return {
+    convergenceGeneration,
+    lastConvergenceAt,
+    lastConvergenceMutation,
+    lastConvergenceKpis,
+    recentRenders: [...renderTraceRing],
+  };
+}
+
+export function resetOperationalRenderTraceForTests(): void {
+  convergenceGeneration = 0;
+  lastConvergenceAt = null;
+  lastConvergenceMutation = null;
+  lastConvergenceKpis = null;
+  renderTraceRing.length = 0;
 }

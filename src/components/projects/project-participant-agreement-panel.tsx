@@ -40,9 +40,9 @@ import { OperationalActivitySection } from '@/components/operations/operational-
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
 import {
   applyOperationalSyncRefresh,
-  createPostConvergenceVerifier,
   parseOperationalSync,
 } from '@/lib/operations/orchestration/operational-sync-client';
+import { createPostConvergenceVerifier } from '@/lib/operations/dev/post-convergence-verifier';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 

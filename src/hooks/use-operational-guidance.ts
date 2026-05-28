@@ -37,6 +37,7 @@ import {
 } from '@/lib/operations/coordination/safe-operational-projection';
 import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-operational-workspace-currency';
 import { traceOperationalRender } from '@/lib/operations/dev/operational-render-trace';
+import { warnLegacyOperationalPath } from '@/lib/operations/dev/warn-legacy-operational-path';
 
 export type OperationalGuidanceOptions = {
   enabled?: boolean;
@@ -62,6 +63,7 @@ function degradedGuidance(
   workspace = defaultWorkspaceContext(),
   operationalOnboarding?: OperationalOnboardingState | null
 ): OperationalGuidanceBundle {
+  warnLegacyOperationalPath('degradedGuidance', recoveryMessage ?? 'initialization');
   const releaseBlockers = deriveOperationalReleaseBlockers({
     snapshot: {
       participants: [],

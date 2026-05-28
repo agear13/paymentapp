@@ -2,82 +2,24 @@
 
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { buildCanonicalStateFromSnapshot } from '@/lib/operations/reducer/adapters/legacy-selectors';
-import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
-import { parseCoordinationSnapshotProjection } from '@/lib/operations/selectors/operational-coordination-snapshot';
 import {
-  assertPostConvergenceIntegrity,
-  type PostConvergenceIntegrityInput,
-} from '@/lib/operations/dev/assert-post-convergence-integrity';
+  fetchActivationMetricsAfterConvergence,
+  fetchCoordinationSnapshotAfterConvergence,
+} from '@/lib/operations/sync/fetch-coordination-snapshot-data';
+import type {
+  OperationalSyncMutationKind,
+  OperationalSyncPayload,
+} from '@/lib/operations/sync/operational-sync-types';
+import { runPostConvergenceIntegrityCheck } from '@/lib/operations/dev/post-convergence-integrity-runner';
+import type { PostConvergenceIntegrityInput } from '@/lib/operations/dev/post-convergence-integrity-types';
 import { markOperationalConvergenceComplete } from '@/lib/operations/dev/operational-render-trace';
-import type { OperationalSyncMutationKind } from '@/lib/operations/orchestration/operational-sync-convergence';
-import type { OperationalSyncResponse } from '@/lib/operations/orchestration/operational-sync-client';
 
-export type CoordinationSnapshotVerificationPayload = {
-  snapshot: OperationalCoordinationSnapshot;
-  obligationCount: number;
-};
-
-export async function fetchCoordinationSnapshotAfterConvergence(
-  projectId: string | null | undefined
-): Promise<CoordinationSnapshotVerificationPayload | null> {
-  const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
-  const res = await fetch(`/api/operations/coordination-snapshot${qs}`, {
-    cache: 'no-store',
-    credentials: 'include',
-  });
-  if (!res.ok) return null;
-  const json = (await res.json()) as {
-    data?: {
-      graphReady?: boolean;
-      summary: OperationalCoordinationSnapshot['summary'] | null;
-      funding: OperationalCoordinationSnapshot['funding'] | null;
-      participants: OperationalCoordinationSnapshot['participants'];
-      obligationCount?: number;
-    };
-  };
-  if (!json.data) return null;
-  const projection = parseCoordinationSnapshotProjection({
-    graphReady: json.data.graphReady,
-    summary: json.data.summary,
-    funding: json.data.funding,
-    participants: json.data.participants,
-  });
-  if (!projection) return null;
-  const obligationCount = json.data.obligationCount ?? projection.obligations?.length ?? 0;
-  return { snapshot: projection, obligationCount };
-}
-
-export async function fetchActivationMetricsAfterConvergence(): Promise<
-  PostConvergenceIntegrityInput['activation'] | null
-> {
-  const res = await fetch('/api/workspace/activation', { cache: 'no-store', credentials: 'include' });
-  if (!res.ok) return null;
-  const json = (await res.json()) as {
-    activation?: {
-      participantCount: number;
-      participantsConfiguredCount: number;
-      obligationCount: number;
-      releaseEligibleCount: number;
-    };
-    data?: { activation?: PostConvergenceIntegrityInput['activation'] };
-  };
-  const act = json.activation ?? json.data?.activation;
-  if (!act) return null;
-  return {
-    participantCount: act.participantCount,
-    participantsConfiguredCount: act.participantsConfiguredCount,
-    obligationCount: act.obligationCount,
-    releaseEligibleCount: act.releaseEligibleCount,
-  };
-}
-
-/** Build verifier run immediately after awaited applyOperationalSyncConvergence. */
 export function createPostConvergenceVerifier(input: {
   mutation: OperationalSyncMutationKind;
   projectId?: string | null;
   surface?: string;
   participants: DemoParticipant[];
-  sync?: OperationalSyncResponse['operationalSync'];
+  sync?: OperationalSyncPayload;
   obligationsTableRowCount?: number;
   treasuryHasFundingSources?: boolean;
   activationInput?: {
@@ -159,7 +101,7 @@ export function createPostConvergenceVerifier(input: {
       treasuryHasFundingSources: input.treasuryHasFundingSources,
     };
 
-    assertPostConvergenceIntegrity(verifyInput);
+    runPostConvergenceIntegrityCheck(verifyInput);
 
     markOperationalConvergenceComplete({
       mutation: input.mutation,

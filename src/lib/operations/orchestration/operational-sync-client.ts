@@ -1,35 +1,29 @@
 'use client';
 
-import type { OperationalEvent } from '@/lib/operations/contracts/operational-events';
 import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
 import type { OperationalSyncScope } from '@/lib/operations/orchestration/synchronize-operational-state';
-import {
-  applyOperationalSyncConvergence,
-  type OperationalSyncConvergenceOptions,
-  type OperationalSyncHandlers,
-  type OperationalSyncTraceContext,
-} from '@/lib/operations/orchestration/operational-sync-convergence';
-import { subscribeOperationalWindowEvents } from '@/lib/operations/orchestration/operational-event-bus';
+import { applyOperationalSyncConvergence } from '@/lib/operations/orchestration/operational-sync-convergence';
+import type {
+  OperationalSyncConvergenceOptions,
+  OperationalSyncHandlers,
+  OperationalSyncPayload,
+  OperationalSyncResponse,
+  OperationalSyncTraceContext,
+} from '@/lib/operations/sync/operational-sync-types';
+import { subscribeOperationalWindowEvents } from '@/lib/operations/sync/operational-sync-events';
+import { parseOperationalSync } from '@/lib/operations/sync/operational-sync-helpers';
 import type { WorkspaceRefreshScope } from '@/lib/projects/workspace-refresh-controller';
-import { createPostConvergenceVerifier } from '@/lib/operations/orchestration/fetch-post-convergence-verification';
 
-export { createPostConvergenceVerifier };
+export type {
+  OperationalSyncConvergenceOptions,
+  OperationalSyncHandlers,
+  OperationalSyncMutationKind,
+  OperationalSyncPayload,
+  OperationalSyncResponse,
+  OperationalSyncTraceContext,
+} from '@/lib/operations/sync/operational-sync-types';
+export { parseOperationalSync };
 
-export type OperationalSyncResponse = {
-  operationalSync?: {
-    invalidatedScopes?: OperationalSyncScope[];
-    releaseEligibleCount?: number;
-    payoutReadyCount?: number;
-    obligationCount?: number;
-    releaseEligibleObligationCount?: number;
-    operationalEvent?: OperationalEvent;
-    completionEvent?: OperationalEvent;
-    auditEntry?: OperationalAuditEntry | null;
-    syncCompletedAt?: string;
-  };
-};
-
-/** Map legacy refreshSilent handlers into convergence handlers. */
 export function toOperationalSyncHandlers(handlers: {
   invalidate: (scope?: WorkspaceRefreshScope | 'all') => void;
   refreshSilent: (scope?: WorkspaceRefreshScope | 'all') => Promise<void>;
@@ -46,10 +40,9 @@ export function toOperationalSyncHandlers(handlers: {
   };
 }
 
-/** Apply canonical invalidation + awaited refresh after any operational mutation response. */
 export async function applyOperationalSyncRefresh(
   handlers: OperationalSyncHandlers,
-  sync?: OperationalSyncResponse['operationalSync'],
+  sync?: OperationalSyncPayload,
   trace?: OperationalSyncTraceContext,
   verifyOrOptions?: (() => void | Promise<void>) | OperationalSyncConvergenceOptions
 ): Promise<void> {
@@ -61,22 +54,13 @@ export async function applyOperationalSyncRefresh(
   );
 }
 
-/** Fire-and-forget variant for legacy call sites. Prefer awaited applyOperationalSyncRefresh. */
 export function applyOperationalSyncRefreshFireAndForget(
   handlers: OperationalSyncHandlers,
-  sync?: OperationalSyncResponse['operationalSync']
+  sync?: OperationalSyncPayload
 ): void {
   void applyOperationalSyncRefresh(handlers, sync);
 }
 
-export function parseOperationalSync(json: unknown): OperationalSyncResponse['operationalSync'] {
-  if (!json || typeof json !== 'object') return undefined;
-  const raw = (json as OperationalSyncResponse).operationalSync;
-  if (!raw || typeof raw !== 'object') return undefined;
-  return raw;
-}
-
-/** Subscribe project workspace to operational events — event-driven, not page-driven. */
 export function subscribeProjectOperationalEvents(
   projectId: string,
   handlers: {

@@ -6,6 +6,7 @@ import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors
 import { deriveParticipantOperationalBlockers } from '@/lib/operations/blockers/payout-blockers';
 import { hydrateParticipants, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
 import { summarizeProjectReadinessGaps } from '@/lib/operations/readiness/participant-readiness';
+import { warnLegacyOperationalPath } from '@/lib/operations/dev/warn-legacy-operational-path';
 import { formatParticipantPayoutReadiness } from '@/lib/projects/format-participant-payout-readiness';
 import { Button } from '@/components/ui/button';
 
@@ -75,6 +76,7 @@ export function ProjectReadinessBreakdown({
   }
 
   const safeList = hydrateParticipants(participants).map(participantEntity);
+  warnLegacyOperationalPath('summarizeProjectReadinessGaps', 'project-readiness-breakdown-fallback');
   const gaps = summarizeProjectReadinessGaps(safeList);
 
   if (gaps.total === 0) {

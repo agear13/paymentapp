@@ -10,6 +10,7 @@ import {
   safeProjectState,
 } from '@/lib/operations/guards/hydration-guards';
 import { assertParticipantSetupGuidanceInvariants } from '@/lib/operations/dev/operational-invariants';
+import { warnLegacyOperationalPath } from '@/lib/operations/dev/warn-legacy-operational-path';
 import { deriveParticipantPayoutReadiness } from '@/lib/operations/readiness/participant-readiness';
 import { deriveProjectOperationalReadiness } from '@/lib/operations/readiness/project-readiness';
 import type { ProjectState } from '@/lib/operations/states/project-state';
@@ -198,6 +199,7 @@ export function safeOperationalRouteState(input: {
   loading?: boolean;
   notFound?: boolean;
 }): SafeOperationalRouteState {
+  warnLegacyOperationalPath('safeOperationalRouteState', input.projectId);
   const project = safeProjectRouteContext(input);
   const participants = safeParticipantRouteContext(input.participants);
 

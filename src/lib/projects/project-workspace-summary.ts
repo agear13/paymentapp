@@ -4,6 +4,7 @@ import { countPayoutReadyParticipants } from '@/lib/participants/participant-rea
 import { getProjectDisplayName } from '@/lib/projects/get-project-display-name';
 import { formatOperationalStage } from '@/lib/projects/format-operational-stage';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
+import { warnLegacyOperationalPath } from '@/lib/operations/dev/warn-legacy-operational-path';
 
 /** Graph-derived overrides — when provided, replaces all local counting logic. */
 export type GraphSummaryOverride = {
@@ -86,6 +87,9 @@ export function summarizeProject(
   treasury?: ProjectTreasurySummary,
   graph?: GraphSummaryOverride
 ): ProjectWorkspaceSummary {
+  if (!graph) {
+    warnLegacyOperationalPath('summarizeProject', deal.id);
+  }
   const dealParticipants = participantsForDeal(deal, participants);
   const participantCount = graph?.participantCount ?? dealParticipants.length;
   const participantsReady =
