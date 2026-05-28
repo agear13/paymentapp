@@ -24,6 +24,7 @@ import {
   type OperationalGuidanceOptions,
 } from '@/hooks/use-operational-guidance';
 import type { WorkspaceActivationInput } from '@/lib/onboarding/workspace-activation-state';
+import { traceOperationalRender } from '@/lib/operations/dev/operational-render-trace';
 
 export type CanonicalOperationalStateOptions = OperationalGuidanceOptions & {
   /** When false, returns null canonical state until graph converges. */
@@ -36,6 +37,16 @@ function resolveAuthoritativeSnapshot(
   guidanceGraph: OperationalCoordinationSnapshot,
   options?: CanonicalOperationalStateOptions
 ): OperationalCoordinationSnapshot | null {
+  const apiHasEntities =
+    (guidanceGraph?.participants?.length ?? 0) > 0 ||
+    (guidanceGraph?.summary?.participantCount ?? 0) > 0;
+
+  // After persistence, coordination-snapshot (server) is authoritative — never override with
+  // client workspace snapshots that may lag one refresh cycle behind DB commit.
+  if (apiHasEntities) {
+    return guidanceGraph;
+  }
+
   const persistedParticipants = options?.participants ?? [];
   if (hasPersistedOperationalEntities(persistedParticipants)) {
     return buildPersistedCoordinationSnapshot({
@@ -43,13 +54,6 @@ function resolveAuthoritativeSnapshot(
       projectId: options?.project?.id ?? null,
       treasury: options?.treasury,
     });
-  }
-
-  if (
-    (guidanceGraph?.participants?.length ?? 0) > 0 ||
-    (guidanceGraph?.summary?.participantCount ?? 0) > 0
-  ) {
-    return guidanceGraph;
   }
 
   return null;
@@ -165,6 +169,45 @@ export function useCanonicalOperationalState(options?: CanonicalOperationalState
     () => (canonicalState ? deriveOperationalKPIs(canonicalState) : null),
     [canonicalState]
   );
+
+  const canonicalMemoDeps = React.useMemo(
+    () =>
+      [
+        guidance.graphSnapshotConverged,
+        guidance.graph?.summary?.participantCount,
+        guidance.graph?.summary?.earningsConfiguredCount,
+        canonicalState?.replayFingerprint,
+        options?.participants?.length,
+      ].join('|'),
+    [
+      canonicalState?.replayFingerprint,
+      guidance.graph,
+      guidance.graphSnapshotConverged,
+      options?.participants?.length,
+    ]
+  );
+
+  React.useEffect(() => {
+    traceOperationalRender({
+      hook: 'useCanonicalOperationalState',
+      phase: 'effect',
+      surface: options?.traceSurface,
+      projectId: options?.project?.id ?? guidance.activation?.primaryProjectId ?? null,
+      graphSnapshotConverged: guidance.graphSnapshotConverged,
+      degraded: guidance.degraded,
+      participantCount: kpis?.participantCount,
+      kpis,
+      memoDeps: canonicalMemoDeps,
+    });
+  }, [
+    canonicalMemoDeps,
+    guidance.activation?.primaryProjectId,
+    guidance.degraded,
+    guidance.graphSnapshotConverged,
+    kpis,
+    options?.project?.id,
+    options?.traceSurface,
+  ]);
 
   const blockers = React.useMemo(
     () => (canonicalState ? deriveCanonicalOperationalBlockers(canonicalState) : []),

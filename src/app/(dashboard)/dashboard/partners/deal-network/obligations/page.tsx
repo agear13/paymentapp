@@ -88,6 +88,7 @@ import { cn } from '@/lib/utils';
 import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
 import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import { subscribeOperationalWindowEvents } from '@/lib/operations/orchestration/operational-event-bus';
 import { useOperationalTimelineProjection } from '@/hooks/use-operational-timeline-projection';
 import { safeObligationsProjection } from '@/lib/operations/coordination/safe-obligations-projection';
 import {
@@ -516,6 +517,12 @@ function DealNetworkObligationsPageContent() {
 
   React.useEffect(() => {
     void load();
+  }, [load]);
+
+  React.useEffect(() => {
+    return subscribeOperationalWindowEvents(() => {
+      void load();
+    });
   }, [load]);
 
   const rows = React.useMemo(() => {

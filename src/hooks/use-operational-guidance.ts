@@ -36,6 +36,7 @@ import {
   safeOperationalProjection,
 } from '@/lib/operations/coordination/safe-operational-projection';
 import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-operational-workspace-currency';
+import { traceOperationalRender } from '@/lib/operations/dev/operational-render-trace';
 
 export type OperationalGuidanceOptions = {
   enabled?: boolean;
@@ -219,6 +220,13 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
       }
       setGraph(projection);
       setGraphSnapshotConverged(true);
+      if (process.env.NODE_ENV === 'development') {
+        console.groupCollapsed('[operational-sync] coordination-snapshot-response');
+        console.log('at', new Date().toISOString());
+        console.log('projectId', projectId ?? null);
+        console.log('summary', projection.summary);
+        console.groupEnd();
+      }
     } finally {
       setGraphLoading(false);
     }
@@ -226,6 +234,15 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
 
   React.useEffect(() => {
     void loadGraph();
+  }, [loadGraph]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => {
+      void loadGraph();
+    };
+    window.addEventListener('operational-coordination-reload', handler);
+    return () => window.removeEventListener('operational-coordination-reload', handler);
   }, [loadGraph]);
 
   React.useEffect(() => {
@@ -400,6 +417,68 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     return () => window.removeEventListener('operational-sync', handler);
   }, [appendAudit]);
 
+  const guidanceMemoDeps = React.useMemo(
+    () =>
+      [
+        graphSnapshotConverged,
+        hasPersistedTruth,
+        effectiveGraph.summary?.participantCount,
+        effectiveGraph.summary?.earningsConfiguredCount,
+        effectiveGraph.summary?.payoutReadyCount,
+        effectiveGraph.obligations?.length,
+        loading,
+        graphLoading,
+      ].join('|'),
+    [
+      effectiveGraph,
+      graphLoading,
+      graphSnapshotConverged,
+      hasPersistedTruth,
+      loading,
+    ]
+  );
+
+  React.useEffect(() => {
+    traceOperationalRender({
+      hook: 'useOperationalGuidance',
+      phase: 'effect',
+      surface: options?.scopeTitle ?? options?.scope,
+      projectId,
+      graphSnapshotConverged: hasPersistedTruth ? true : graphSnapshotConverged,
+      degraded:
+        hasPersistedTruth
+          ? false
+          : degraded ||
+            guidance.degraded ||
+            (!graphReadyForProjection && !graphSnapshotConverged),
+      participantCount: effectiveGraph.summary?.participantCount,
+      kpis: effectiveGraph.summary
+        ? {
+            participantCount: effectiveGraph.summary.participantCount,
+            earningsConfiguredCount: effectiveGraph.summary.earningsConfiguredCount,
+            payoutReadyCount: effectiveGraph.summary.payoutReadyCount,
+            obligationCount: effectiveGraph.obligations?.length ?? 0,
+          }
+        : null,
+      memoDeps: guidanceMemoDeps,
+    });
+  }, [
+    degraded,
+    effectiveGraph,
+    graphReadyForProjection,
+    graphSnapshotConverged,
+    guidance.degraded,
+    guidanceMemoDeps,
+    hasPersistedTruth,
+    options?.scope,
+    options?.scopeTitle,
+    projectId,
+  ]);
+
+  const apiHasEntitiesFromGraph =
+    (effectiveGraph.summary?.participantCount ?? 0) > 0 ||
+    (effectiveGraph.participants?.length ?? 0) > 0;
+
   const primaryAction = guidance.actions[0] ?? null;
   const nextRecommended =
     (graphSnapshotConverged || hasPersistedTruth) && primaryAction
@@ -430,18 +509,18 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     auditTimeline,
     nextAction: nextRecommended,
     loading: loading || graphLoading,
-    degraded:
-      hasPersistedTruth
-        ? false
-        : degraded ||
-          guidance.degraded ||
-          (!graphReadyForProjection && !graphSnapshotConverged),
+    degraded: hasPersistedTruth
+      ? false
+      : degraded ||
+        guidance.degraded ||
+        (!graphReadyForProjection && !graphSnapshotConverged && !apiHasEntitiesFromGraph),
     graphSnapshotConverged: hasPersistedTruth ? true : graphSnapshotConverged,
     operationalOnboarding,
     operationalInitialization,
     refresh: async () => {
       await Promise.all([refresh(), loadGraph()]);
     },
+    reloadCoordinationSnapshot: loadGraph,
     appendAudit,
     workspaceContext: activation
       ? workspaceContextFromGraph(effectiveGraph as OperationalCoordinationSnapshot, {

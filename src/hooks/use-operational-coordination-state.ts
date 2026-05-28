@@ -12,6 +12,7 @@ import {
   logCoordinationTruth,
   registerCrossSurfaceOperationalKpis,
 } from '@/lib/operations/dev/coordination-truth-trace';
+import { traceOperationalRender } from '@/lib/operations/dev/operational-render-trace';
 import {
   useCanonicalOperationalState,
   type CanonicalOperationalStateOptions,
@@ -97,6 +98,44 @@ export function useOperationalCoordinationState(options?: OperationalCoordinatio
   const projectId =
     options?.project?.id ?? canonical.activation?.primaryProjectId ?? null;
 
+  const coordinationMemoDeps = React.useMemo(
+    () =>
+      [
+        canonical.graphSnapshotConverged,
+        canonical.kpis?.participantCount,
+        canonical.kpis?.earningsConfiguredCount,
+        canonical.kpis?.payoutReadyCount,
+        canonical.kpis?.obligationCount,
+        canonical.degraded,
+      ].join('|'),
+    [
+      canonical.degraded,
+      canonical.graphSnapshotConverged,
+      canonical.kpis,
+    ]
+  );
+
+  React.useEffect(() => {
+    traceOperationalRender({
+      hook: 'useOperationalCoordinationState',
+      phase: 'render',
+      surface: traceSurface,
+      projectId,
+      graphSnapshotConverged: canonical.graphSnapshotConverged,
+      degraded: canonical.degraded,
+      participantCount: canonical.kpis?.participantCount,
+      kpis: canonical.kpis,
+      memoDeps: coordinationMemoDeps,
+    });
+  }, [
+    canonical.degraded,
+    canonical.graphSnapshotConverged,
+    canonical.kpis,
+    coordinationMemoDeps,
+    projectId,
+    traceSurface,
+  ]);
+
   React.useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
 
@@ -149,11 +188,24 @@ export function useOperationalCoordinationState(options?: OperationalCoordinatio
     traceSurface,
   ]);
 
+  React.useEffect(() => {
+    if (!canonical.canonicalState || process.env.NODE_ENV !== 'development') return;
+    console.groupCollapsed('[operational-sync] selector-recompute');
+    console.log('at', new Date().toISOString());
+    console.log('surface', traceSurface);
+    console.log('projectId', projectId);
+    console.log('kpis', canonical.kpis);
+    console.log('replayFingerprint', canonical.replayFingerprint);
+    console.groupEnd();
+  }, [canonical.canonicalState, canonical.kpis, canonical.replayFingerprint, projectId, traceSurface]);
+
   return {
     ...canonical,
     readiness,
     settlementInitialization,
     onboardingProgress,
     releaseInteraction: readiness.releaseInteraction,
+    reloadCoordinationSnapshot: canonical.reloadCoordinationSnapshot,
+    refreshOperationalState: canonical.refresh,
   };
 }

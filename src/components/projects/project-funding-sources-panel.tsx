@@ -21,18 +21,21 @@ import {
   formatTreasuryAmount,
 } from '@/lib/projects/funding-sources/format-funding-source';
 import type { ProjectFundingSourceDto, ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
+import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-convergence';
 import { createInvoiceHref } from '@/lib/navigation/payment-routes';
 
 type ProjectFundingSourcesPanelProps = {
   projectId: string;
   defaultCurrency?: string;
   onTreasuryChange?: () => void;
+  operationalSyncHandlers?: OperationalSyncHandlers;
 };
 
 export function ProjectFundingSourcesPanel({
   projectId,
   defaultCurrency = 'USD',
   onTreasuryChange,
+  operationalSyncHandlers,
 }: ProjectFundingSourcesPanelProps) {
   const [sources, setSources] = React.useState<ProjectFundingSourceDto[]>([]);
   const [treasury, setTreasury] = React.useState<ProjectTreasurySummary | null>(null);
@@ -186,6 +189,7 @@ export function ProjectFundingSourcesPanel({
         onOpenChange={setDialogOpen}
         defaultCurrency={currency}
         onCreated={handleCreated}
+        operationalSyncHandlers={operationalSyncHandlers}
       />
     </div>
   );

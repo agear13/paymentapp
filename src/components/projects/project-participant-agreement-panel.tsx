@@ -40,6 +40,7 @@ import { OperationalActivitySection } from '@/components/operations/operational-
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
 import {
   applyOperationalSyncRefresh,
+  createPostConvergenceVerifier,
   parseOperationalSync,
 } from '@/lib/operations/orchestration/operational-sync-client';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
@@ -234,16 +235,46 @@ export function ProjectParticipantAgreementPanel({
         setIssuingCommerce(false);
       }
 
-      toast.success('Participation approved');
-      applyOperationalSyncRefresh(
+      const sync = parseOperationalSync(json);
+      const nextParticipants = dealParticipants.map((p) =>
+        p.id === json.participant.id ? json.participant : p
+      );
+      await applyOperationalSyncRefresh(
         {
-          invalidate: () => {},
-          refreshSilent: async () => {},
+          invalidate: () => notifyWorkspaceActivationRefresh(),
+          refreshWorkspace: async () => {
+            notifyWorkspaceActivationRefresh();
+          },
+          reloadCoordinationSnapshot: async () => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('operational-coordination-reload'));
+            }
+          },
           notifyActivation: notifyWorkspaceActivationRefresh,
           onAudit: appendOperationalAuditEntry,
         },
-        parseOperationalSync(json)
+        sync,
+        {
+          mutation: 'agreement_approval',
+          projectId: participant.dealId ?? null,
+          participantId: participant.id,
+          surface: 'project-participant-agreement-panel',
+        },
+        createPostConvergenceVerifier({
+          mutation: 'agreement_approval',
+          projectId: participant.dealId ?? null,
+          surface: 'project-participant-agreement-panel',
+          participants: nextParticipants,
+          sync: sync
+            ? {
+                payoutReadyCount: sync.payoutReadyCount,
+                obligationCount: sync.obligationCount,
+                releaseEligibleObligationCount: sync.releaseEligibleObligationCount,
+              }
+            : undefined,
+        })
       );
+      toast.success('Participation approved');
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Approval failed');
     }

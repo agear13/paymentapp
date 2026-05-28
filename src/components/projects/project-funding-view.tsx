@@ -1,10 +1,38 @@
 'use client';
 
+import * as React from 'react';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { ProjectFundingSourcesPanel } from '@/components/projects/project-funding-sources-panel';
+import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
+import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
+import { toOperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-client';
 
 export function ProjectFundingView() {
-  const { summary, projectId, refresh } = useProjectWorkspace();
+  const { summary, projectId, deal, projectParticipants, refresh, invalidate } =
+    useProjectWorkspace();
+  const { reloadCoordinationSnapshot } = useOperationalCoordinationState({
+    scope: 'project',
+    project: deal ?? undefined,
+    participants: projectParticipants,
+    treasury: summary?.treasury ?? undefined,
+    enabled: Boolean(deal),
+    traceSurface: 'project-funding-view',
+  });
+
+  const operationalSyncHandlers = React.useMemo(
+    () =>
+      toOperationalSyncHandlers({
+        invalidate,
+        refreshSilent: (scope) =>
+          refresh({ scope: scope ?? 'all', silent: true, force: true }),
+        reloadCoordinationSnapshot,
+        notifyActivation: notifyWorkspaceActivationRefresh,
+        onAudit: appendOperationalAuditEntry,
+      }),
+    [invalidate, refresh, reloadCoordinationSnapshot]
+  );
+
   if (!summary) return null;
 
   const defaultCurrency = summary.currencyLabel.includes('AUD') ? 'AUD' : 'USD';
@@ -22,7 +50,10 @@ export function ProjectFundingView() {
       <ProjectFundingSourcesPanel
         projectId={projectId}
         defaultCurrency={defaultCurrency}
-        onTreasuryChange={() => void refresh({ scope: 'all', silent: true, force: true })}
+        operationalSyncHandlers={operationalSyncHandlers}
+        onTreasuryChange={() =>
+          void refresh({ scope: 'all', silent: true, force: true })
+        }
       />
     </div>
   );

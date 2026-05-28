@@ -197,6 +197,41 @@ describe('configure earnings flow', () => {
       expect(screen.getByRole('button', { name: /Save compensation/i })).toBeTruthy();
     });
 
+    it('does not block save when catalog fetch fails but attribution all-active is selected', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('network'));
+      const onSave = jest.fn().mockResolvedValue(undefined);
+      render(
+        <ParticipantCompensationDialog
+          participant={{
+            ...draftParticipant(),
+            compensationProfile: {
+              compensationType: 'COMMISSION',
+              configured: false,
+              percentage: 10,
+              customerAttributionEnabled: true,
+              commissionSourceMode: 'all_active',
+              commissionServiceIds: [],
+            },
+          }}
+          projectId="deal-1"
+          organizationId="org-1"
+          open
+          onOpenChange={() => {}}
+          onSave={onSave}
+        />
+      );
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Service catalog unavailable right now/i)
+        ).toBeTruthy();
+      });
+      const saveBtn = screen.getByRole('button', { name: /Save compensation/i });
+      expect((saveBtn as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(saveBtn);
+      await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+      expect(onSave.mock.calls[0][0].configured).toBe(true);
+    });
+
     it('saves compensation after hydration', async () => {
       const onSave = jest.fn().mockResolvedValue(undefined);
       render(

@@ -44,6 +44,8 @@ export type ProjectContextValue = {
   invalidate: (scope?: WorkspaceRefreshScope | 'all') => void;
   clearSectionError: (section: ProjectSectionKey) => void;
   saveSnapshot: (deals: RecentDeal[], participants: DemoParticipant[]) => Promise<boolean>;
+  /** Apply server-persisted participant rows to workspace state before convergence refresh. */
+  patchParticipants: (updater: (list: DemoParticipant[]) => DemoParticipant[]) => void;
 };
 
 export function useProjectContext(projectId: string): ProjectContextValue {
@@ -129,7 +131,8 @@ export function useProjectContext(projectId: string): ProjectContextValue {
         invalidateWorkspaceCache(projectId, scope ?? 'all');
         controller.invalidate(scope);
       },
-      refreshSilent: (scope) => controller.refreshSilent(scope ?? 'all'),
+      refreshSilent: (scope) =>
+        controller.refresh({ scope: scope ?? 'all', silent: true, force: true }),
       notifyActivation: notifyWorkspaceActivationRefresh,
       onAudit: appendOperationalAuditEntry,
     });
@@ -187,6 +190,17 @@ export function useProjectContext(projectId: string): ProjectContextValue {
     [invalidate]
   );
 
+  const patchParticipants = React.useCallback(
+    (updater: (list: DemoParticipant[]) => DemoParticipant[]) => {
+      setAllParticipants((prev) => {
+        const next = updater(prev);
+        invalidateWorkspaceCache(projectId, 'participants');
+        return next;
+      });
+    },
+    [projectId]
+  );
+
   return React.useMemo(
     () => ({
       projectId,
@@ -205,6 +219,7 @@ export function useProjectContext(projectId: string): ProjectContextValue {
       invalidate,
       clearSectionError,
       saveSnapshot,
+      patchParticipants,
     }),
     [
       projectId,
@@ -223,6 +238,7 @@ export function useProjectContext(projectId: string): ProjectContextValue {
       invalidate,
       clearSectionError,
       saveSnapshot,
+      patchParticipants,
     ]
   );
 }

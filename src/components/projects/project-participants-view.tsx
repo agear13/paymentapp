@@ -51,8 +51,15 @@ import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
 import {
   applyOperationalSyncRefresh,
+  createPostConvergenceVerifier,
   parseOperationalSync,
+  toOperationalSyncHandlers,
+  type OperationalSyncResponse,
 } from '@/lib/operations/orchestration/operational-sync-client';
+import {
+  logOperationalSyncConvergence,
+  type OperationalSyncMutationKind,
+} from '@/lib/operations/orchestration/operational-sync-convergence';
 import { ProgressiveOperationalPanel } from '@/components/operations/progressive-operational-panel';
 import { SafeParticipantBoundary } from '@/components/operations/safe-participant-boundary';
 import { hydrateParticipants, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
@@ -60,6 +67,11 @@ import {
   logCompensationConfigDiagnostic,
   prepareParticipantForCompensationEdit,
 } from '@/lib/participants/initialize-compensation-draft';
+import {
+  logCompensationPersistenceTrace,
+  traceCompensationConfiguredState,
+  traceCompensationSavePayload,
+} from '@/lib/participants/compensation-persistence-trace';
 import { EMPTY_STATE_COPY } from '@/lib/operations/design-language';
 import { opSurface } from '@/lib/design/operational-surfaces';
 import { OperatorEmptyState } from '@/components/operations/operator-empty-state';
@@ -81,6 +93,8 @@ export function ProjectParticipantsView() {
     allDeals,
     allParticipants,
     saveSnapshot,
+    patchParticipants,
+    refresh,
     isRefreshing,
     loading,
     sectionErrors,
@@ -88,7 +102,12 @@ export function ProjectParticipantsView() {
     invalidate,
     clearSectionError,
   } = useProjectWorkspace();
-  const { graph, kpis: canonicalKpis, guidance } = useOperationalCoordinationState({
+  const {
+    graph,
+    kpis: canonicalKpis,
+    guidance,
+    reloadCoordinationSnapshot,
+  } = useOperationalCoordinationState({
     scope: 'project',
     project: deal ?? undefined,
     participants: projectParticipants,
@@ -97,13 +116,58 @@ export function ProjectParticipantsView() {
   });
   const { currency: workspaceCurrency } = useOrganizationCurrency();
   const syncHandlers = React.useMemo(
-    () => ({
-      invalidate,
-      refreshSilent,
-      notifyActivation: notifyWorkspaceActivationRefresh,
-      onAudit: appendOperationalAuditEntry,
-    }),
-    [invalidate, refreshSilent]
+    () =>
+      toOperationalSyncHandlers({
+        invalidate,
+        refreshSilent: (scope) =>
+          refresh({ scope: scope ?? 'all', silent: true, force: true }),
+        reloadCoordinationSnapshot,
+        notifyActivation: notifyWorkspaceActivationRefresh,
+        onAudit: appendOperationalAuditEntry,
+      }),
+    [invalidate, refresh, reloadCoordinationSnapshot]
+  );
+
+  const buildConvergenceVerify = React.useCallback(
+    (
+      mutation: OperationalSyncMutationKind,
+      surface: string,
+      participants: DemoParticipant[],
+      sync?: OperationalSyncResponse['operationalSync']
+    ) => {
+      const base = createPostConvergenceVerifier({
+        mutation,
+        projectId,
+        surface,
+        participants,
+        sync: sync
+          ? {
+              payoutReadyCount: sync.payoutReadyCount,
+              obligationCount: sync.obligationCount,
+              releaseEligibleObligationCount: sync.releaseEligibleObligationCount,
+            }
+          : undefined,
+      });
+      if (mutation !== 'participant_earnings_save' || sync?.obligationCount == null) {
+        return base;
+      }
+      const obligationVerify = createPostConvergenceVerifier({
+        mutation: 'obligation_generation',
+        projectId,
+        surface,
+        participants,
+        sync: {
+          payoutReadyCount: sync.payoutReadyCount,
+          obligationCount: sync.obligationCount,
+          releaseEligibleObligationCount: sync.releaseEligibleObligationCount,
+        },
+      });
+      return async () => {
+        await base();
+        await obligationVerify();
+      };
+    },
+    [projectId]
   );
   const { organizationId } = useOrganization();
   const searchParams = useSearchParams();
@@ -217,6 +281,12 @@ export function ProjectParticipantsView() {
 
   const updatePayoutVerification = React.useCallback(
     async (participantId: string, confirmed: boolean) => {
+      logOperationalSyncConvergence('mutation-start', {
+        mutation: 'payout_verification',
+        projectId,
+        participantId,
+        surface: 'project-participants-view',
+      });
       try {
         const res = await fetch(`/api/deal-network-pilot/participants/${participantId}`, {
           method: 'PATCH',
@@ -227,8 +297,32 @@ export function ProjectParticipantsView() {
           const err = await res.json().catch(() => ({}));
           throw new Error((err as { error?: string }).error || 'Update failed');
         }
-        const json = await res.json();
-        applyOperationalSyncRefresh(syncHandlers, parseOperationalSync(json));
+        const json = (await res.json()) as { participant?: DemoParticipant };
+        if (json.participant) {
+          patchParticipants((list) =>
+            list.map((p) => (p.id === participantId ? json.participant! : p))
+          );
+        }
+        const sync = parseOperationalSync(json);
+        const nextParticipants = json.participant
+          ? allParticipants.map((p) => (p.id === participantId ? json.participant! : p))
+          : allParticipants;
+        await applyOperationalSyncRefresh(
+          syncHandlers,
+          sync,
+          {
+            mutation: 'payout_verification',
+            projectId,
+            participantId,
+            surface: 'project-participants-view',
+          },
+          buildConvergenceVerify(
+            'payout_verification',
+            'project-participants-view',
+            nextParticipants,
+            sync
+          )
+        );
         toast.success(
           confirmed ? 'Payout details confirmed externally' : 'Payout confirmation cleared'
         );
@@ -236,7 +330,7 @@ export function ProjectParticipantsView() {
         toast.error(e instanceof Error ? e.message : 'Update failed');
       }
     },
-    [invalidate, refreshSilent]
+    [allParticipants, buildConvergenceVerify, patchParticipants, projectId, syncHandlers]
   );
 
   const updateParticipantDetails = React.useCallback(
@@ -276,22 +370,24 @@ export function ProjectParticipantsView() {
           const err = await res.json().catch(() => ({}));
           throw new Error((err as { error?: string }).error || 'Update failed');
         }
+        const json = (await res.json()) as { participant?: DemoParticipant };
+        if (json.participant) {
+          patchParticipants((list) =>
+            list.map((p) => (p.id === participantId ? json.participant! : p))
+          );
+        }
+        await applyOperationalSyncRefresh(syncHandlers, parseOperationalSync(json), {
+          mutation: 'snapshot_persist',
+          projectId,
+          participantId,
+          surface: 'project-participants-view',
+        });
         toast.success('Participant updated');
-        const json = await res.json();
-        applyOperationalSyncRefresh(syncHandlers, parseOperationalSync(json));
       } catch (e: unknown) {
-        void saveSnapshot(allDeals, allParticipants);
         toast.error(e instanceof Error ? e.message : 'Update failed');
       }
     },
-    [
-      allDeals,
-      allParticipants,
-      invalidate,
-      projectParticipants,
-      refreshSilent,
-      saveSnapshot,
-    ]
+    [patchParticipants, projectId, syncHandlers]
   );
 
   const handleInvite = React.useCallback(
@@ -309,15 +405,24 @@ export function ProjectParticipantsView() {
       const prev = projectParticipants.find((p) => p.id === participantId);
       if (!prev) return;
 
+      const traceCtx = {
+        participantId,
+        projectId,
+        surface: 'project-participants-view',
+      };
+      traceCompensationConfiguredState(prev, traceCtx, 'before-save');
+      traceCompensationSavePayload(profile, traceCtx);
+
       if (tableScrollRef.current) {
         savedScrollTop.current = tableScrollRef.current.scrollTop;
       }
 
-      const optimistic = applyCompensationProfileToParticipant(prev, profile);
-      const nextParticipants = allParticipants.map((p) =>
-        p.id === participantId ? optimistic : p
-      );
-      void saveSnapshot(allDeals, nextParticipants);
+      logOperationalSyncConvergence('mutation-start', {
+        mutation: 'participant_earnings_save',
+        projectId,
+        participantId,
+        surface: 'project-participants-view',
+      });
 
       try {
         const res = await fetch(`/api/deal-network-pilot/participants/${participantId}`, {
@@ -329,8 +434,41 @@ export function ProjectParticipantsView() {
           const err = await res.json().catch(() => ({}));
           throw new Error((err as { error?: string }).error || 'Update failed');
         }
-        const json = await res.json();
-        applyOperationalSyncRefresh(syncHandlers, parseOperationalSync(json));
+        const json = (await res.json()) as {
+          participant?: DemoParticipant;
+        };
+        const persisted = json.participant;
+        if (!persisted) {
+          throw new Error('Server did not return persisted participant');
+        }
+        patchParticipants((list) =>
+          list.map((p) => (p.id === participantId ? persisted : p))
+        );
+        traceCompensationConfiguredState(persisted, traceCtx, 'api-response');
+        logCompensationPersistenceTrace('save-success', traceCtx, {
+          persistedConfigured: persisted.compensationProfile?.configured ?? null,
+          inferConfigured: inferCompensationConfiguredFromPersistence(persisted),
+        });
+        const sync = parseOperationalSync(json);
+        const nextParticipants = allParticipants.map((p) =>
+          p.id === participantId ? persisted : p
+        );
+        await applyOperationalSyncRefresh(
+          syncHandlers,
+          sync,
+          {
+            mutation: 'participant_earnings_save',
+            projectId,
+            participantId,
+            surface: 'project-participants-view',
+          },
+          buildConvergenceVerify(
+            'participant_earnings_save',
+            'project-participants-view',
+            nextParticipants,
+            sync
+          )
+        );
         toast.success('Compensation structure saved', {
           description: 'Agreement terms updated successfully.',
         });
@@ -342,18 +480,14 @@ export function ProjectParticipantsView() {
           }
         });
       } catch (e: unknown) {
-        void saveSnapshot(allDeals, allParticipants);
+        logCompensationPersistenceTrace('save-failure', traceCtx, {
+          error: e instanceof Error ? e.message : String(e),
+        });
         toast.error(e instanceof Error ? e.message : 'Update failed');
+        throw e;
       }
     },
-    [
-      allDeals,
-      allParticipants,
-      invalidate,
-      projectParticipants,
-      refreshSilent,
-      saveSnapshot,
-    ]
+    [allParticipants, buildConvergenceVerify, patchParticipants, projectId, projectParticipants, syncHandlers]
   );
 
   const hydratedParticipants = React.useMemo(
@@ -392,6 +526,28 @@ export function ProjectParticipantsView() {
       missingOnboarding,
     };
   }, [canonicalKpis, graph.participants]);
+
+  React.useEffect(() => {
+    if (!canonicalKpis || !recentlySavedParticipantId) return;
+    const saved = projectParticipants.find((p) => p.id === recentlySavedParticipantId);
+    if (saved) {
+      traceCompensationConfiguredState(saved, {
+        participantId: recentlySavedParticipantId,
+        projectId,
+        surface: 'project-participants-view',
+      }, 'post-coordination-refresh');
+      logCompensationPersistenceTrace('configured-transition', {
+        participantId: recentlySavedParticipantId,
+        projectId,
+        surface: 'project-participants-view',
+      }, {
+        inferConfigured: inferCompensationConfiguredFromPersistence(saved),
+        canonicalEarningsConfigured: canonicalKpis.earningsConfiguredCount,
+        canonicalPayoutReady: canonicalKpis.payoutReadyCount,
+        phase: 'coordination-hook-refresh',
+      });
+    }
+  }, [canonicalKpis, recentlySavedParticipantId, projectParticipants, projectId]);
 
   React.useEffect(() => {
     if (!canonicalKpis) return;

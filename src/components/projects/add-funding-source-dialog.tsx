@@ -25,6 +25,14 @@ import {
   FUNDING_SOURCE_TYPE_OPTIONS,
 } from '@/lib/projects/funding-sources/format-funding-source';
 import type { ProjectFundingSourceDto } from '@/lib/projects/funding-sources/types';
+import {
+  applyOperationalSyncRefresh,
+  createPostConvergenceVerifier,
+  parseOperationalSync,
+  type OperationalSyncResponse,
+} from '@/lib/operations/orchestration/operational-sync-client';
+import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-convergence';
+import { logOperationalSyncConvergence } from '@/lib/operations/orchestration/operational-sync-convergence';
 
 type AddFundingSourceDialogProps = {
   projectId: string;
@@ -32,6 +40,7 @@ type AddFundingSourceDialogProps = {
   onOpenChange: (open: boolean) => void;
   defaultCurrency?: string;
   onCreated?: (source: ProjectFundingSourceDto) => void;
+  operationalSyncHandlers?: OperationalSyncHandlers;
 };
 
 export function AddFundingSourceDialog({
@@ -40,6 +49,7 @@ export function AddFundingSourceDialog({
   onOpenChange,
   defaultCurrency = 'USD',
   onCreated,
+  operationalSyncHandlers,
 }: AddFundingSourceDialogProps) {
   const [name, setName] = React.useState('');
   const [sourceType, setSourceType] =
@@ -76,6 +86,11 @@ export function AddFundingSourceDialog({
     }
     setSubmitting(true);
     setError(null);
+    logOperationalSyncConvergence('mutation-start', {
+      mutation: 'funding_update',
+      projectId,
+      surface: 'add-funding-source-dialog',
+    });
     try {
       const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/funding-sources`, {
         method: 'POST',
@@ -97,7 +112,32 @@ export function AddFundingSourceDialog({
         const json = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(json.error ?? 'Failed to add funding source');
       }
-      const json = (await res.json()) as { data: ProjectFundingSourceDto };
+      const json = (await res.json()) as {
+        data: ProjectFundingSourceDto;
+        operationalSync?: OperationalSyncResponse['operationalSync'];
+      };
+      if (operationalSyncHandlers) {
+        const sync = parseOperationalSync(json);
+        await applyOperationalSyncRefresh(
+          operationalSyncHandlers,
+          sync,
+          { mutation: 'funding_update', projectId, surface: 'add-funding-source-dialog' },
+          createPostConvergenceVerifier({
+            mutation: 'funding_update',
+            projectId,
+            surface: 'add-funding-source-dialog',
+            participants: [],
+            sync: sync
+              ? {
+                  payoutReadyCount: sync.payoutReadyCount,
+                  obligationCount: sync.obligationCount,
+                  releaseEligibleObligationCount: sync.releaseEligibleObligationCount,
+                }
+              : undefined,
+            treasuryHasFundingSources: true,
+          })
+        );
+      }
       reset();
       onOpenChange(false);
       onCreated?.(json.data);

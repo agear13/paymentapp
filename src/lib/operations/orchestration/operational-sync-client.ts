@@ -3,12 +3,17 @@
 import type { OperationalEvent } from '@/lib/operations/contracts/operational-events';
 import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
 import type { OperationalSyncScope } from '@/lib/operations/orchestration/synchronize-operational-state';
-import { workspaceScopesFromOperationalSync } from '@/lib/operations/orchestration/synchronize-operational-state';
 import {
-  dispatchOperationalEvent,
-  subscribeOperationalWindowEvents,
-} from '@/lib/operations/orchestration/operational-event-bus';
+  applyOperationalSyncConvergence,
+  type OperationalSyncConvergenceOptions,
+  type OperationalSyncHandlers,
+  type OperationalSyncTraceContext,
+} from '@/lib/operations/orchestration/operational-sync-convergence';
+import { subscribeOperationalWindowEvents } from '@/lib/operations/orchestration/operational-event-bus';
 import type { WorkspaceRefreshScope } from '@/lib/projects/workspace-refresh-controller';
+import { createPostConvergenceVerifier } from '@/lib/operations/orchestration/fetch-post-convergence-verification';
+
+export { createPostConvergenceVerifier };
 
 export type OperationalSyncResponse = {
   operationalSync?: {
@@ -24,36 +29,44 @@ export type OperationalSyncResponse = {
   };
 };
 
-/** Apply canonical invalidation + event dispatch after any operational mutation response. */
-export function applyOperationalSyncRefresh(handlers: {
-  invalidate: (scope?: WorkspaceRefreshScope) => void;
-  refreshSilent: (scope?: WorkspaceRefreshScope) => Promise<void>;
+/** Map legacy refreshSilent handlers into convergence handlers. */
+export function toOperationalSyncHandlers(handlers: {
+  invalidate: (scope?: WorkspaceRefreshScope | 'all') => void;
+  refreshSilent: (scope?: WorkspaceRefreshScope | 'all') => Promise<void>;
+  reloadCoordinationSnapshot?: () => Promise<void>;
   notifyActivation?: () => void;
   onAudit?: (entry: OperationalAuditEntry) => void;
-}, sync?: OperationalSyncResponse['operationalSync']): void {
-  const scopes = sync?.invalidatedScopes ?? (['all'] as OperationalSyncScope[]);
-  const workspaceScopes = workspaceScopesFromOperationalSync(scopes);
-  for (const scope of workspaceScopes) {
-    handlers.invalidate(scope);
-  }
+}): OperationalSyncHandlers {
+  return {
+    invalidate: handlers.invalidate,
+    refreshWorkspace: (scope) => handlers.refreshSilent(scope ?? 'all'),
+    reloadCoordinationSnapshot: handlers.reloadCoordinationSnapshot,
+    notifyActivation: handlers.notifyActivation,
+    onAudit: handlers.onAudit,
+  };
+}
 
-  if (sync?.operationalEvent) {
-    dispatchOperationalEvent({ ...sync.operationalEvent, source: 'client' });
-  }
-  if (sync?.completionEvent) {
-    dispatchOperationalEvent({ ...sync.completionEvent, source: 'client' });
-  }
-  if (sync?.auditEntry) {
-    handlers.onAudit?.(sync.auditEntry);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('operational-sync', { detail: { auditEntry: sync.auditEntry } })
-      );
-    }
-  }
+/** Apply canonical invalidation + awaited refresh after any operational mutation response. */
+export async function applyOperationalSyncRefresh(
+  handlers: OperationalSyncHandlers,
+  sync?: OperationalSyncResponse['operationalSync'],
+  trace?: OperationalSyncTraceContext,
+  verifyOrOptions?: (() => void | Promise<void>) | OperationalSyncConvergenceOptions
+): Promise<void> {
+  await applyOperationalSyncConvergence(
+    handlers,
+    sync,
+    trace ?? { mutation: 'other', projectId: sync?.operationalEvent?.projectId ?? null },
+    verifyOrOptions
+  );
+}
 
-  void handlers.refreshSilent('all');
-  handlers.notifyActivation?.();
+/** Fire-and-forget variant for legacy call sites. Prefer awaited applyOperationalSyncRefresh. */
+export function applyOperationalSyncRefreshFireAndForget(
+  handlers: OperationalSyncHandlers,
+  sync?: OperationalSyncResponse['operationalSync']
+): void {
+  void applyOperationalSyncRefresh(handlers, sync);
 }
 
 export function parseOperationalSync(json: unknown): OperationalSyncResponse['operationalSync'] {
@@ -67,17 +80,20 @@ export function parseOperationalSync(json: unknown): OperationalSyncResponse['op
 export function subscribeProjectOperationalEvents(
   projectId: string,
   handlers: {
-    invalidate: (scope?: WorkspaceRefreshScope) => void;
-    refreshSilent: (scope?: WorkspaceRefreshScope) => Promise<void>;
+    invalidate: (scope?: WorkspaceRefreshScope | 'all') => void;
+    refreshSilent: (scope?: WorkspaceRefreshScope | 'all') => Promise<void>;
+    reloadCoordinationSnapshot?: () => Promise<void>;
     notifyActivation?: () => void;
     onAudit?: (entry: OperationalAuditEntry) => void;
   }
 ): () => void {
+  const convergenceHandlers = toOperationalSyncHandlers(handlers);
   return subscribeOperationalWindowEvents((event) => {
     if (event.projectId && event.projectId !== projectId) return;
-    applyOperationalSyncRefresh(handlers, {
-      invalidatedScopes: ['all'],
-      operationalEvent: event,
-    });
+    void applyOperationalSyncRefresh(
+      convergenceHandlers,
+      { invalidatedScopes: ['all'], operationalEvent: event },
+      { mutation: 'other', projectId: event.projectId ?? projectId }
+    );
   });
 }

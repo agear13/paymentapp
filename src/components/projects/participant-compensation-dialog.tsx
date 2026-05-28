@@ -35,6 +35,10 @@ import {
   initializeCompensationDraft,
   logCompensationConfigDiagnostic,
 } from '@/lib/participants/initialize-compensation-draft';
+import {
+  logCompensationPersistenceTrace,
+  traceCompensationSavePayload,
+} from '@/lib/participants/compensation-persistence-trace';
 import { hydrateParticipant, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
 import { deriveCompensationPreviewText } from '@/lib/operations/derivations/commission-scope';
 import { isAttributionAllActiveWithoutCatalog } from '@/lib/operations/truth/attribution-eligibility';
@@ -167,28 +171,59 @@ export function ParticipantCompensationDialog({
     s.name.toLowerCase().includes(serviceQuery.toLowerCase())
   );
 
-  const attributionAllActiveBlocked = isAttributionAllActiveWithoutCatalog({
-    compensationType: draft.compensationType,
-    customerAttributionEnabled: draft.customerAttributionEnabled,
-    commissionSourceMode: commissionMode,
-    activeCatalogCount: catalogServices.length,
-  });
+  const attributionAllActiveBlocked =
+    !catalogUnavailable &&
+    isAttributionAllActiveWithoutCatalog({
+      compensationType: draft.compensationType,
+      customerAttributionEnabled: draft.customerAttributionEnabled,
+      commissionSourceMode: commissionMode,
+      activeCatalogCount: catalogServices.length,
+    });
 
   async function handleSave() {
     if (attributionAllActiveBlocked) {
       toast.error(ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES.message);
       return;
     }
+    const participantId = entity?.id ?? 'unknown';
     setSaving(true);
+    const profile: ParticipantCompensationProfile = {
+      ...draft,
+      exemptFromPayout: isExempt,
+      configured: true,
+      configuredAt: new Date().toISOString(),
+    };
+    logCompensationPersistenceTrace('save-start', {
+      participantId,
+      projectId,
+      surface: 'participant-compensation-dialog',
+    }, {
+      catalogUnavailable,
+      catalogServiceCount: catalogServices.length,
+      attributionAllActiveBlocked,
+    });
+    traceCompensationSavePayload(profile, {
+      participantId,
+      projectId,
+      surface: 'participant-compensation-dialog',
+    });
     try {
-      const profile: ParticipantCompensationProfile = {
-        ...draft,
-        exemptFromPayout: isExempt,
-        configured: true,
-        configuredAt: new Date().toISOString(),
-      };
       await onSave(profile);
+      logCompensationPersistenceTrace('save-success', {
+        participantId,
+        projectId,
+        surface: 'participant-compensation-dialog',
+      });
       onOpenChange(false);
+    } catch (error) {
+      logCompensationPersistenceTrace('save-failure', {
+        participantId,
+        projectId,
+        surface: 'participant-compensation-dialog',
+      }, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     } finally {
       setSaving(false);
     }

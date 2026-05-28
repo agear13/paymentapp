@@ -209,7 +209,10 @@ export function OperatorSettlementsWorkspace({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'Failed to create batch');
-      applyGlobalOperationalSync(syncHandlers, data);
+      void applyGlobalOperationalSync(syncHandlers, data, {
+        mutation: 'other',
+        surface: 'operator-settlements-workspace',
+      });
       toast.success('Release batch created');
       setCreateOpen(false);
       void fetchBatches();
