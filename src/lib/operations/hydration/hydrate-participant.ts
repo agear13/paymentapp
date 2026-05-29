@@ -15,7 +15,7 @@ import {
   detectParticipantEntitySource,
   warnHydrationFailure,
   warnInvalidLifecycleCombination,
-} from '@/lib/operations/dev/operational-diagnostics';
+} from '@/lib/operations/hydration/hydration-dev-warnings';
 import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
 import { deriveAgreementLifecycleState } from '@/lib/operations/lifecycle/agreement-lifecycle';
 import { deriveAttributionLifecycleState } from '@/lib/operations/lifecycle/attribution-lifecycle';

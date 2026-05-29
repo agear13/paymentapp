@@ -2,16 +2,11 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import {
   derivePayoutOnboardingPhase,
 } from '@/lib/operations/lifecycle/payout-lifecycle';
-import { isParticipantOperationallyApproved } from '@/lib/operations/truth/participant-truth';
 import { payoutOnboardingPlaceholderCopy } from '@/lib/operations/lifecycle/payout-lifecycle';
-import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
+import { hasPersistedPayoutReadyForKpi } from '@/lib/operations/primitives/participant-earnings-primitives';
 
 export function isParticipantPayoutReady(participant: DemoParticipant): boolean {
-  if (participant.payoutBlocked) return false;
-  if (!isParticipantOperationallyApproved(participant)) return false;
-  if (participant.compensationProfile?.exemptFromPayout) return true;
-  if (!isParticipantEarningsConfigured(participant)) return false;
-  return participant.payoutVerificationConfirmed === true;
+  return hasPersistedPayoutReadyForKpi(participant);
 }
 
 export function payoutDestinationTruthMessage(participant: DemoParticipant): string {

@@ -6,7 +6,7 @@ import {
   PROJECT_CONTRACT_VERSION,
   type HydratedProject,
 } from '@/lib/operations/contracts/project-contract';
-import { warnHydrationFailure } from '@/lib/operations/dev/operational-diagnostics';
+import { warnHydrationFailure } from '@/lib/operations/hydration/hydration-dev-warnings';
 import { draftProjectDefaults } from '@/lib/operations/guards/hydration-guards';
 
 function emptyHydratedProject(): HydratedProject {

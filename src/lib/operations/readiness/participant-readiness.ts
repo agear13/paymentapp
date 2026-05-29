@@ -16,10 +16,10 @@ import {
   deriveAgreementApprovalState,
 } from '@/lib/operations/derivations/derive-approval-state';
 import {
-  countParticipantsEarningsConfigured,
-  countParticipantsPayoutReadyForKpi,
-  isParticipantEarningsConfigured,
-} from '@/lib/operations/selectors/participant-earnings-selectors';
+  countPersistedEarningsConfigured,
+  countPersistedPayoutReadyForKpi,
+  hasPersistedCompensationTerms,
+} from '@/lib/operations/primitives/participant-earnings-primitives';
 
 export type ParticipantPayoutReadiness = OperationalReadinessResult & {
   participantId: string;
@@ -126,18 +126,17 @@ export function deriveWorkspaceParticipantPayoutSummary(
 
   return {
     participantCount: active.length,
-    earningsConfiguredCount: countParticipantsEarningsConfigured(active),
-    payoutReadyCount: countParticipantsPayoutReadyForKpi(active),
+    earningsConfiguredCount: countPersistedEarningsConfigured(active),
+    payoutReadyCount: countPersistedPayoutReadyForKpi(active),
     participantsConfigured:
-      active.length > 0 &&
-      countParticipantsEarningsConfigured(active) >= active.length,
+      active.length > 0 && countPersistedEarningsConfigured(active) >= active.length,
   };
 }
 
 export function countPayoutReadyParticipants(
   participants: DemoParticipant[]
 ): number {
-  return countParticipantsPayoutReadyForKpi(participants);
+  return countPersistedPayoutReadyForKpi(participants);
 }
 
 export type ProjectReadinessGapSummary = {
@@ -162,7 +161,7 @@ export function summarizeProjectReadinessGaps(
     const p = participants[i]!;
     const s = snapshots[i]!;
     if (s.payoutReady) payoutReadyCount += 1;
-    if (!isParticipantEarningsConfigured(p)) {
+    if (!hasPersistedCompensationTerms(p)) {
       missingCompensation += 1;
     }
     if (

@@ -14,14 +14,6 @@ const scanDirs = [
 
 const KNOWN_CYCLES = new Set([
   normalizeCycle([
-    'lib/operations/dev/operational-diagnostics.ts',
-    'lib/operations/lifecycle/attribution-lifecycle.ts',
-    'lib/operations/truth/attribution-eligibility.ts',
-    'lib/operations/guards/hydration-guards.ts',
-    'lib/operations/hydration/hydrate-operational-participant.ts',
-    'lib/operations/dev/operational-diagnostics.ts',
-  ]),
-  normalizeCycle([
     'lib/operations/derivations/derive-approval-state.ts',
     'lib/operations/truth/payout-truth.ts',
     'lib/operations/truth/participant-truth.ts',

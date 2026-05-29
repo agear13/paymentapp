@@ -18,6 +18,9 @@ export function initializeCompensationDraft(
 ): ParticipantCompensationProfile {
   if (!participant) return { ...DEFAULT_COMPENSATION_DRAFT };
   try {
+    const rawProfile = participant.compensationProfile;
+    const explicitlyConfigured =
+      rawProfile?.configured === true || Boolean(rawProfile?.configuredAt);
     const hydrated = hydrateParticipant(participant);
     const entity = participantEntity(hydrated);
     const profile =
@@ -25,6 +28,7 @@ export function initializeCompensationDraft(
     return {
       ...DEFAULT_COMPENSATION_DRAFT,
       ...profile,
+      configured: explicitlyConfigured ? profile.configured ?? true : false,
       revenueSources: profile.revenueSources ?? [],
       commissionServiceIds: profile.commissionServiceIds ?? [],
       customerAttributionEnabled: profile.customerAttributionEnabled ?? false,

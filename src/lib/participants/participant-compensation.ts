@@ -10,43 +10,20 @@ import type {
   ParticipantCompensationType,
   ParticipantPayoutDestinationStatus,
 } from '@/lib/participants/participant-compensation-types';
+import {
+  hasPersistedCompensationTerms,
+  isParticipantCompensationExempt,
+} from '@/lib/operations/primitives/participant-earnings-primitives';
 
 export function isCompensationExempt(participant: DemoParticipant): boolean {
-  const profile = participant.compensationProfile;
-  return Boolean(
-    profile?.exemptFromPayout ||
-      profile?.compensationType === 'UNPAID_INTERNAL'
-  );
+  return isParticipantCompensationExempt(participant);
 }
 
 /** Recognize compensation persisted on participant rows even when configured flag was not backfilled. */
 export function inferCompensationConfiguredFromPersistence(
   participant: DemoParticipant
 ): boolean {
-  if (isCompensationExempt(participant)) return true;
-  const profile = participant.compensationProfile;
-  if (!profile) return false;
-  if (profile.configured === true) return true;
-  if (profile.configuredAt) return true;
-  const hasProfileAmount =
-    (profile.fixedAmount != null && profile.fixedAmount > 0) ||
-    (profile.percentage != null && profile.percentage > 0);
-  if (profile.compensationType && hasProfileAmount) return true;
-  if (
-    profile.compensationType &&
-    Number.isFinite(participant.commissionValue) &&
-    participant.commissionValue > 0
-  ) {
-    return true;
-  }
-  if (
-    profile.compensationType &&
-    (profile.commissionServiceIds?.length ?? 0) > 0 &&
-    (profile.customerAttributionEnabled === true || profile.commissionSourceMode === 'selected')
-  ) {
-    return true;
-  }
-  return false;
+  return hasPersistedCompensationTerms(participant);
 }
 
 /** @deprecated Use isParticipantEarningsConfigured from participant-earnings-selectors */

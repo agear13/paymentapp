@@ -62,4 +62,20 @@ describe('operational layer dependency boundaries', () => {
       /TELEMETRY_LAYER_IMPORTS_DIAGNOSTICS_LAYER/
     );
   });
+
+  it('rejects truth importing selectors (FOUNDATION_LAYER_IMPORTS_SELECTORS)', () => {
+    const sources = readSources();
+    sources['telemetry/operational-telemetry.ts'] = '';
+    const extra = {
+      'truth/payout-truth.ts': fs.readFileSync(
+        path.join(ROOT, 'truth/payout-truth.ts'),
+        'utf8'
+      ),
+    };
+    extra['truth/payout-truth.ts'] +=
+      "\nimport x from '@/lib/operations/selectors/participant-earnings-selectors';\n";
+    expect(() => assertOperationalLayerBoundaries({ ...sources, ...extra })).toThrow(
+      /FOUNDATION_LAYER_IMPORTS_SELECTORS/
+    );
+  });
 });

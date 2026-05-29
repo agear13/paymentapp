@@ -16,6 +16,7 @@ import {
   isCatalogScopedCommission,
 } from '@/lib/operations/derivations/commission-scope';
 import { normalizeParticipantEntity } from '@/lib/operations/guards/hydration-guards';
+import { hasActiveAttributionTracking } from '@/lib/operations/primitives/participant-earnings-primitives';
 
 export type AttributionExplanation =
   | 'inactive'
@@ -45,12 +46,7 @@ export function isAttributionActiveForTracking(
   participant: DemoParticipant,
   context: CommissionScopeContext = {}
 ): boolean {
-  if (!canGenerateAttributionLink(participant, context)) return false;
-  return (
-    participant.approvalStatus === 'Approved' &&
-    (participant.attributionStatus === 'active' ||
-      Boolean(participant.customerCommerceUrl?.trim()))
-  );
+  return hasActiveAttributionTracking(participant, context);
 }
 
 export function deriveAttributionExplanation(

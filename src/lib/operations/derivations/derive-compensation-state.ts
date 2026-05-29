@@ -7,7 +7,7 @@ import {
   type CommissionScopeContext,
   type CommissionSettlementBasis,
 } from '@/lib/operations/derivations/commission-scope';
-import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
+import { hasPersistedCompensationTerms } from '@/lib/operations/primitives/participant-earnings-primitives';
 import { safeCompensationState } from '@/lib/operations/guards/hydration-guards';
 import type { ParticipantCompensationType } from '@/lib/participants/participant-compensation-types';
 
@@ -37,7 +37,7 @@ export function deriveCompensationState(
 ): DerivedCompensationState {
   const profile = participant.compensationProfile;
   const storageState = safeCompensationState(participant);
-  const configured = isParticipantEarningsConfigured(participant);
+  const configured = hasPersistedCompensationTerms(participant);
   const exemptFromPayout = profile?.exemptFromPayout === true;
   const scope = deriveCommissionScope(participant, context);
 

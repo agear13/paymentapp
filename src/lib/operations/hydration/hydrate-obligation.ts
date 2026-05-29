@@ -1,6 +1,6 @@
 import { deriveObligationState, type RawObligationInput } from '@/lib/operations/derivations/derive-obligation-state';
 import type { HydratedObligation } from '@/lib/operations/contracts/obligation-contract';
-import { warnHydrationFailure } from '@/lib/operations/dev/operational-diagnostics';
+import { warnHydrationFailure } from '@/lib/operations/hydration/hydration-dev-warnings';
 
 function emptyHydratedObligation(): HydratedObligation {
   return deriveObligationState({});

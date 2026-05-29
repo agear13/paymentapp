@@ -4,7 +4,7 @@ import {
   detectParticipantEntitySource,
   warnLegacyParticipantShape,
   warnMissingParticipantFields,
-} from '@/lib/operations/dev/operational-diagnostics';
+} from '@/lib/operations/hydration/hydration-dev-warnings';
 
 /** Adapt raw/API/storage participant records into DemoParticipant shape. */
 export function adaptParticipantInput(

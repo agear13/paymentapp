@@ -1,9 +1,9 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { CommissionScopeContext } from '@/lib/operations/derivations/commission-scope';
 import {
-  isParticipantEarningsConfigured,
-  participantRendersCommercialTerms,
-} from '@/lib/operations/selectors/participant-earnings-selectors';
+  hasPersistedCompensationTerms,
+} from '@/lib/operations/primitives/participant-earnings-primitives';
+import { participantRendersCommercialTerms } from '@/lib/operations/selectors/participant-earnings-selectors';
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
 
 export class EarningsConfigurationSelectorDivergenceError extends Error {
@@ -24,7 +24,7 @@ export function assertEarningsConfigurationSelectorConvergence(
 ): void {
   if (process.env.NODE_ENV === 'production') return;
   const rendersTerms = participantRendersCommercialTerms(participant, context);
-  const configured = isParticipantEarningsConfigured(participant);
+  const configured = hasPersistedCompensationTerms(participant);
   if (rendersTerms && !configured) {
     throw new EarningsConfigurationSelectorDivergenceError(
       'EARNINGS_CONFIGURATION_SELECTOR_DIVERGENCE: commercial terms render while earnings selector is false',
@@ -45,7 +45,7 @@ export function logEarningsSelectorAudit(input: EarningsSelectorAuditInput): voi
   if (process.env.NODE_ENV === 'production') return;
   const entity = input.participant;
   const profile = entity.compensationProfile;
-  const configured = isParticipantEarningsConfigured(entity);
+  const configured = hasPersistedCompensationTerms(entity);
   const rendersTerms = participantRendersCommercialTerms(entity, input.context);
 
   console.groupCollapsed('[earnings-selector]');

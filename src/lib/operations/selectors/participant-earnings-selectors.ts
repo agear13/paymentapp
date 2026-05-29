@@ -6,23 +6,26 @@ import {
 } from '@/lib/operations/derivations/commission-scope';
 import { normalizeParticipantEntity } from '@/lib/operations/guards/hydration-guards';
 import {
-  isCompensationExempt,
-  inferCompensationConfiguredFromPersistence,
-} from '@/lib/participants/participant-compensation';
-import { isParticipantOperationallyApproved } from '@/lib/operations/truth/participant-truth';
-import { isAttributionActiveForTracking } from '@/lib/operations/truth/attribution-truth';
+  countPersistedEarningsConfigured,
+  countPersistedPayoutReadyForKpi,
+  hasActiveAttributionTracking,
+  hasPersistedAttributionLinkEligibility,
+  hasPersistedCompensationTerms,
+  hasPersistedPayoutReadyForKpi,
+  isParticipantCompensationExempt,
+} from '@/lib/operations/primitives/participant-earnings-primitives';
 
 /**
- * Canonical earnings-configured gate — all surfaces must use this selector only.
- * Derives from persisted participant entity fields after operational hydration.
+ * Canonical earnings-configured gate — top-layer selector composing persisted primitives.
+ * UI, lifecycle, and diagnostics should import this; truth/derivations/hydration use primitives only.
  */
 export function isParticipantEarningsConfigured(
   participant: DemoParticipant | null | undefined
 ): boolean {
   if (!participant) return false;
   const entity = normalizeParticipantEntity(participant);
-  if (isCompensationExempt(entity)) return true;
-  return inferCompensationConfiguredFromPersistence(entity);
+  if (isParticipantCompensationExempt(entity)) return true;
+  return hasPersistedCompensationTerms(entity);
 }
 
 /** True when commercial terms (scope/pricing copy) would render for this participant. */
@@ -34,18 +37,12 @@ export function participantRendersCommercialTerms(
   return scope.settlementBasis !== 'not_configured';
 }
 
-/**
- * Canonical payout-ready KPI — matches reducer KPI semantics (persisted entities only).
- */
+/** Canonical payout-ready KPI — matches reducer KPI semantics (persisted entities only). */
 export function isParticipantPayoutReadyForKpi(
   participant: DemoParticipant | null | undefined
 ): boolean {
   if (!participant) return false;
-  const entity = normalizeParticipantEntity(participant);
-  if (!isParticipantEarningsConfigured(entity)) return false;
-  if (!isParticipantOperationallyApproved(entity)) return false;
-  if (entity.compensationProfile?.exemptFromPayout) return true;
-  return entity.payoutVerificationConfirmed === true;
+  return hasPersistedPayoutReadyForKpi(normalizeParticipantEntity(participant));
 }
 
 /** Attribution active for operational KPIs — configured + approved + link/trackable. */
@@ -53,8 +50,13 @@ export function isParticipantAttributionActive(
   participant: DemoParticipant,
   context: CommissionScopeContext = {}
 ): boolean {
-  if (!isParticipantEarningsConfigured(participant)) return false;
-  return isAttributionActiveForTracking(participant, context);
+  const entity = normalizeParticipantEntity(participant);
+  if (!hasPersistedCompensationTerms(entity) && !isParticipantCompensationExempt(entity)) {
+    return false;
+  }
+  return hasActiveAttributionTracking(entity, {
+    catalogItems: context.catalogItems,
+  });
 }
 
 /** Participant may appear in release/obligations releasable counts. */
@@ -68,13 +70,13 @@ export function isParticipantObligationReleasable(
 export function countParticipantsEarningsConfigured(
   participants: DemoParticipant[]
 ): number {
-  return participants.filter((p) => isParticipantEarningsConfigured(p)).length;
+  return countPersistedEarningsConfigured(participants);
 }
 
 export function countParticipantsPayoutReadyForKpi(
   participants: DemoParticipant[]
 ): number {
-  return participants.filter((p) => isParticipantPayoutReadyForKpi(p)).length;
+  return countPersistedPayoutReadyForKpi(participants);
 }
 
 export function countParticipantsAttributionActive(
@@ -88,3 +90,6 @@ export function countParticipantsAttributionActive(
     return isParticipantAttributionActive(p, { ...context, catalogItems });
   }).length;
 }
+
+/** Re-export primitive for diagnostics comparing link eligibility without selector cycles. */
+export { hasPersistedAttributionLinkEligibility };

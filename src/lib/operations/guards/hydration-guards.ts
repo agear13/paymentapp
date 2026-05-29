@@ -6,9 +6,9 @@ import type { ParticipantState } from '@/lib/operations/states/participant-state
 import type { ProjectState } from '@/lib/operations/states/project-state';
 import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
 import {
-  isCompensationExempt,
-} from '@/lib/participants/participant-compensation';
-import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
+  hasPersistedCompensationTerms,
+  isParticipantCompensationExempt,
+} from '@/lib/operations/primitives/participant-earnings-primitives';
 /**
  * Safe hydration — never trust DB completeness.
  * All UI and orchestration must read entities through these helpers.
@@ -53,8 +53,8 @@ export function safeCompensationState(
 ): CompensationState {
   const p = participant;
   if (!p) return 'MISSING';
-  if (isCompensationExempt(p)) return 'CONFIGURED';
-  if (isParticipantEarningsConfigured(p)) return 'CONFIGURED';
+  if (isParticipantCompensationExempt(p)) return 'CONFIGURED';
+  if (hasPersistedCompensationTerms(p)) return 'CONFIGURED';
   if (p.compensationProfile?.compensationType) return 'DRAFT';
   return 'MISSING';
 }

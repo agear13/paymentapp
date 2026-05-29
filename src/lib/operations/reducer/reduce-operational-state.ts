@@ -3,9 +3,9 @@ import { deriveAgreementApprovalState } from '@/lib/operations/derivations/deriv
 import { deriveFundingCoordinationStage } from '@/lib/operations/truth/funding-coordination-semantics';
 import { hydrateOperationalParticipants } from '@/lib/operations/hydration/hydrate-operational-participant';
 import {
-  isParticipantAttributionActive,
-  isParticipantEarningsConfigured,
-} from '@/lib/operations/selectors/participant-earnings-selectors';
+  hasActiveAttributionTracking,
+  hasPersistedCompensationTerms,
+} from '@/lib/operations/primitives/participant-earnings-primitives';
 import { deriveParticipantPayoutReadiness } from '@/lib/operations/readiness/participant-readiness';
 import {
   derivePayoutReleaseReadiness,
@@ -111,12 +111,12 @@ function buildParticipantRecords(
       entity,
       payoutReadiness,
       releaseReadiness,
-      compensationConfigured: isParticipantEarningsConfigured(entity),
+      compensationConfigured: hasPersistedCompensationTerms(entity),
       agreementApproved,
       payoutConfirmed:
         entity.compensationProfile?.exemptFromPayout === true ||
         entity.payoutVerificationConfirmed === true,
-      attributionActive: isParticipantAttributionActive(entity, {
+      attributionActive: hasActiveAttributionTracking(entity, {
         catalogItems: seed.catalogItemsByParticipant?.[entity.id] ?? seed.catalogItems,
       }),
     };

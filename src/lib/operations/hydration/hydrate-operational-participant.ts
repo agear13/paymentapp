@@ -10,11 +10,11 @@ import {
   warnMissingParticipantFields,
   warnLegacyParticipantShape,
   warnHydrationFailure,
-} from '@/lib/operations/dev/operational-diagnostics';
+} from '@/lib/operations/hydration/hydration-dev-warnings';
 import {
-  inferCompensationConfiguredFromPersistence,
-  isCompensationExempt,
-} from '@/lib/participants/participant-compensation';
+  hasPersistedCompensationTerms,
+  isParticipantCompensationExempt,
+} from '@/lib/operations/primitives/participant-earnings-primitives';
 
 const DEV = process.env.NODE_ENV === 'development';
 
@@ -65,8 +65,8 @@ function hydrateCompensationProfile(
   };
   const draftParticipant = { ...participant, compensationProfile: hydrated };
   const configured =
-    isCompensationExempt(draftParticipant) ||
-    inferCompensationConfiguredFromPersistence(draftParticipant);
+    isParticipantCompensationExempt(draftParticipant) ||
+    hasPersistedCompensationTerms(draftParticipant);
   return {
     ...hydrated,
     configured: configured ? true : hydrated.configured ?? false,

@@ -1,7 +1,7 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import { countPayoutReadyParticipants } from '@/lib/operations/readiness/participant-readiness';
-import { countParticipantsEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
+import { countPersistedEarningsConfigured } from '@/lib/operations/primitives/participant-earnings-primitives';
 import { safeProjectState } from '@/lib/operations/guards/hydration-guards';
 import type { ProjectOperationalContext } from '@/lib/operations/types/operational-context';
 import type { OperationalCompleteness } from '@/lib/operations/types/operational-completeness';
@@ -26,7 +26,7 @@ export function deriveProjectOperationalReadiness(
   const state = safeProjectState(project);
   const payoutReady = countPayoutReadyParticipants(participants);
   const total = participants.length;
-  const configured = countParticipantsEarningsConfigured(participants);
+  const configured = countPersistedEarningsConfigured(participants);
 
   const completeness: OperationalCompleteness = {
     ...defaultOperationalCompleteness(),

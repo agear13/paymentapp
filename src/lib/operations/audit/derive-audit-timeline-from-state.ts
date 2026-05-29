@@ -2,7 +2,7 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
 import { mergeAuditTimeline } from '@/lib/operations/audit/operational-audit';
 import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
-import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
+import { hasPersistedCompensationTerms } from '@/lib/operations/primitives/participant-earnings-primitives';
 import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
 
 /** Derive persisted audit entries from participant/deal operational state. */
@@ -67,7 +67,7 @@ export function deriveAuditTimelineFromParticipants(
       });
     }
 
-    if (isParticipantEarningsConfigured(p)) {
+    if (hasPersistedCompensationTerms(p)) {
       const configuredAt =
         p.compensationProfile?.configuredAt ??
         p.approvedAt ??
