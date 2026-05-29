@@ -92,6 +92,12 @@ import { subscribeOperationalWindowEvents } from '@/lib/operations/orchestration
 import { useOperationalTimelineProjection } from '@/hooks/use-operational-timeline-projection';
 import { safeObligationsProjection } from '@/lib/operations/coordination/safe-obligations-projection';
 import {
+  beginOperationalPageLoadTrace,
+  flushOperationalPageLoadTrace,
+  parseOperationalApiJson,
+  readOperationalApiResponseDiagnostics,
+} from '@/lib/operations/dev/operational-api-fetch-diagnostics';
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -450,6 +456,16 @@ function DealNetworkObligationsPageContent() {
   const isMobile = useIsMobile();
 
   React.useEffect(() => {
+    beginOperationalPageLoadTrace('payout-obligations');
+  }, []);
+
+  React.useEffect(() => {
+    if (!activationLoading && !loading) {
+      flushOperationalPageLoadTrace();
+    }
+  }, [activationLoading, loading]);
+
+  React.useEffect(() => {
     const stored = readNeedsAttentionPreference();
     if (stored !== null && isPayoutsRoute) {
       setNeedsActionOnly(stored);
@@ -491,21 +507,27 @@ function DealNetworkObligationsPageContent() {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch('/api/deal-network-pilot/obligations', {
+      const route = '/api/deal-network-pilot/obligations';
+      const fetchStartedAt = performance.now();
+      const res = await fetch(route, {
         credentials: 'include',
         cache: 'no-store',
+      });
+      const diagnostics = await readOperationalApiResponseDiagnostics(route, res, {
+        pageLoadLabel: 'C-obligations',
+        startedAt: fetchStartedAt,
       });
       if (res.status === 401) {
         setLoadError('You need to be signed in to view payout obligations.');
         setAllRows([]);
         return;
       }
-      if (!res.ok) {
+      if (!diagnostics.shouldParseJson) {
         setLoadError(null);
         setAllRows([]);
         return;
       }
-      const json = (await res.json()) as { data: ObligationRow[] };
+      const json = parseOperationalApiJson<{ data: ObligationRow[] }>(route, diagnostics.bodyText);
       setAllRows(Array.isArray(json.data) ? json.data : []);
     } catch {
       setLoadError(null);

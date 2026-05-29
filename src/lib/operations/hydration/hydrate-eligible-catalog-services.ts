@@ -6,6 +6,7 @@ export type HydratedCatalogService = {
   category: string | null;
   sku: string | null;
   currency: string;
+  price: number | null;
 };
 
 export type RawCatalogServiceInput = {
@@ -35,6 +36,10 @@ export function hydrateEligibleCatalogServices(
       category: inferCategory(raw?.description),
       sku: id.slice(0, 8).toUpperCase(),
       currency: (raw?.currency ?? fallbackCurrency).toUpperCase(),
+      price:
+        raw?.price != null && Number.isFinite(Number(raw.price))
+          ? Number(raw.price)
+          : null,
     };
   });
 }
@@ -49,6 +54,8 @@ export function hydrateAllCatalogServices(
     category: inferCategory(s.description),
     sku: s.id.slice(0, 8).toUpperCase(),
     currency: (s.currency ?? fallbackCurrency).toUpperCase(),
+    price:
+      s.price != null && Number.isFinite(Number(s.price)) ? Number(s.price) : null,
   }));
 }
 

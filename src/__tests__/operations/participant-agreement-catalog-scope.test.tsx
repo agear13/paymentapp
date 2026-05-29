@@ -119,6 +119,7 @@ describe('participant agreement catalog scope', () => {
     );
     const text = container.textContent ?? '';
     expect(text).toContain('Early Bird Tickets');
+    expect(text).toContain('10% commission');
     expect(text).toContain('activate after you approve');
     expect(text).not.toContain('Active tracking is enabled');
   });

@@ -4,6 +4,7 @@ import {
   inferCompensationConfiguredFromPersistence,
   isCompensationConfigured,
 } from '@/lib/participants/participant-compensation';
+import { buildParticipantEarningsPersistenceDiagnostic } from '@/lib/operations/dev/participant-earnings-persistence-diagnostic';
 
 export type CompensationPersistenceTraceContext = {
   participantId: string;
@@ -42,15 +43,11 @@ export function traceCompensationConfiguredState(
   if (process.env.NODE_ENV === 'production' || !participant) return;
 
   const profile = participant.compensationProfile;
+  const diagnostic = buildParticipantEarningsPersistenceDiagnostic(participant);
   logCompensationPersistenceTrace('selector-recompute', context, {
     label,
+    ...diagnostic,
     profileConfigured: profile?.configured ?? null,
-    configuredAt: profile?.configuredAt ?? null,
-    compensationType: profile?.compensationType ?? null,
-    percentage: profile?.percentage ?? null,
-    fixedAmount: profile?.fixedAmount ?? null,
-    commissionValue: participant.commissionValue ?? null,
-    commissionKind: participant.commissionKind ?? null,
     inferConfigured: inferCompensationConfiguredFromPersistence(participant),
     isConfigured: isCompensationConfigured(participant),
   });

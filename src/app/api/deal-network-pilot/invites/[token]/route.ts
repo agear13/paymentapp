@@ -150,15 +150,19 @@ export async function GET(
         participant.referralCommerce?.commerceCommissionPct ??
         participant.compensationProfile?.percentage ??
         0;
-      scopedServiceRows = eligibleServices.map((s) => ({
-        id: s.id,
-        name: s.name,
-        customerPrice: 0,
-        currency: s.currency,
-        revenueSharePct: pct,
-        estimatedEarnings: 0,
-        earningsLabel: '—',
-      }));
+      scopedServiceRows = eligibleServices.map((s) => {
+        const price = s.price ?? 0;
+        const estimated = price > 0 ? (price * pct) / 100 : 0;
+        return {
+          id: s.id,
+          name: s.name,
+          customerPrice: price,
+          currency: s.currency,
+          revenueSharePct: pct,
+          estimatedEarnings: price > 0 ? estimated : null,
+          earningsLabel: price > 0 ? formatCurrency(estimated, s.currency) : '—',
+        };
+      });
     }
 
     return NextResponse.json({

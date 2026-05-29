@@ -19,6 +19,8 @@
     "typecheck:repo": "tsc --noEmit",
     "check:duplicate-imports": "node scripts/scan-duplicate-imports.mjs",
     "check:circular-deps": "node scripts/scan-circular-dependencies.mjs",
+    "verify:operational-root-causes": "tsx scripts/verify-operational-root-causes.ts",
+    "verify:operational-root-causes:test": "jest __tests__/operations/verify-operational-root-causes.test.tsx --verbose",
     "check:pre-push": "npm run check:duplicate-imports && npm run check:circular-deps && npm run typecheck && npm run test:operations",
     "test:operations": "jest __tests__/operations/ __tests__/participants/participant-compensation.test.ts",
     "prepare": "cd .. && husky .husky || true",

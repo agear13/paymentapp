@@ -23,6 +23,7 @@ import { prisma } from '@/lib/server/prisma';
 import { isAttributionAllActiveWithoutCatalog } from '@/lib/operations/truth/attribution-eligibility';
 import { ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES } from '@/lib/operations/merchant-operational-copy';
 import { assertOperationalInvariants } from '@/lib/operations/dev/operational-invariants';
+import { logParticipantEarningsPersistenceDiagnostic } from '@/lib/operations/dev/participant-earnings-persistence-diagnostic';
 
 const compensationProfileSchema = z.object({
   compensationType: z.enum(PARTICIPANT_COMPENSATION_TYPES),
@@ -144,6 +145,14 @@ export async function PATCH(
 
     if (!persisted) {
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
+    }
+
+    if (body.compensationProfile) {
+      logParticipantEarningsPersistenceDiagnostic('save-persisted', persisted, {}, {
+        mutation: 'participant_earnings_save',
+        payloadConfigured: body.compensationProfile.configured ?? true,
+        payloadConfiguredAt: body.compensationProfile.configuredAt ?? null,
+      });
     }
 
     const nextParticipants = snapshot.participants.map((p) =>

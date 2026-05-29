@@ -23,7 +23,7 @@ type Props = {
   serviceRows?: ScopedServiceCommissionRow[];
   allServicesNote?: boolean;
   approved?: boolean;
-  catalogItems?: Array<{ id: string; name: string }>;
+  catalogItems?: Array<{ id: string; name: string; price?: number; currency?: string }>;
   workspaceCurrency?: string | null;
 };
 
@@ -70,12 +70,15 @@ export function ParticipantAttributionAgreementSummary({
     serviceRows ??
     (commerce?.commissionMode === 'referral_commerce'
       ? buildScopedServiceCommissionRows({
-          services: resolvedCatalogItems.map((s) => ({
-            id: s.id,
-            name: s.name,
-            price: 0,
-            currency: workspaceCurrency ?? 'USD',
-          })),
+          services: resolvedCatalogItems.map((s) => {
+            const priced = catalogItems.find((item) => item.id === s.id);
+            return {
+              id: s.id,
+              name: s.name,
+              price: priced?.price ?? 0,
+              currency: priced?.currency ?? workspaceCurrency ?? 'USD',
+            };
+          }),
           commerce,
           allServicesFallback: false,
         })
@@ -106,18 +109,20 @@ export function ParticipantAttributionAgreementSummary({
         You earn commission only on qualifying customer purchases — not on total project or deal
         value. Customers do not see your commission terms.
       </p>
-      {!approved ? (
-        <p className="text-muted-foreground leading-relaxed">
-          Review the eligible services below before approving. Customer attribution and your
-          trackable payment link activate after you approve participation.
-        </p>
-      ) : (
-        <p className="text-muted-foreground leading-relaxed">
-          Active tracking is enabled on your customer payment link. You earn{' '}
-          <span className="font-medium text-foreground">{pctLabel} commission</span> on the qualifying
-          catalog purchases listed below.
-        </p>
-      )}
+      <p className="text-muted-foreground leading-relaxed">
+        You earn{' '}
+        <span className="font-medium text-foreground">{pctLabel} commission</span> on the qualifying
+        catalog purchases listed below.
+        {!approved ? (
+          <>
+            {' '}
+            Customer attribution and your trackable payment link activate after you approve
+            participation.
+          </>
+        ) : (
+          <> Active tracking is enabled on your customer payment link.</>
+        )}
+      </p>
 
       <div>
         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
@@ -133,7 +138,7 @@ export function ParticipantAttributionAgreementSummary({
         ) : (
           <p className="text-muted-foreground">{eligibleCopy.emptyMessage}</p>
         )}
-        {rows.length > 0 && !showAll ? (
+        {rows.length > 0 ? (
           <div className="mt-3">
             <ParticipantServiceCommissionTable rows={rows} showAllServicesNote={showAll} />
           </div>

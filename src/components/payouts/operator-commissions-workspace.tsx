@@ -41,6 +41,10 @@ import { OperationalSettlementInitialization } from '@/components/operations/ope
 import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { shouldSuppressOperationalErrorToast } from '@/lib/operations/coordination/operational-fetch-guards';
+import {
+  parseOperationalApiJson,
+  readOperationalApiResponseDiagnostics,
+} from '@/lib/operations/dev/operational-api-fetch-diagnostics';
 import type { PayoutEmptyIconVariant } from '@/components/payouts/payout-empty-state';
 import { cn } from '@/lib/utils';
 
@@ -229,13 +233,26 @@ export function OperatorCommissionsWorkspace() {
         credentials: 'include',
         cache: 'no-store',
       });
-      const pilotJson = await pilotRes.json();
-      if (!pilotRes.ok) {
-        if (!shouldSuppressOperationalErrorToast({ status: pilotRes.status, message: pilotJson.error, releaseInteraction })) {
-          throw new Error(pilotJson.error || 'Failed to load earnings');
+      const pilotDiagnostics = await readOperationalApiResponseDiagnostics(
+        '/api/deal-network-pilot/obligations',
+        pilotRes
+      );
+      if (!pilotDiagnostics.shouldParseJson) {
+        if (
+          !shouldSuppressOperationalErrorToast({
+            status: pilotRes.status,
+            message: pilotDiagnostics.bodyPreview,
+            releaseInteraction,
+          })
+        ) {
+          throw new Error('Failed to load earnings');
         }
         setPilotRows([]);
       } else {
+        const pilotJson = parseOperationalApiJson<{ data?: PilotObligation[]; error?: string }>(
+          '/api/deal-network-pilot/obligations',
+          pilotDiagnostics.bodyText
+        );
         setPilotRows(pilotJson.data ?? []);
       }
 
@@ -244,19 +261,26 @@ export function OperatorCommissionsWorkspace() {
           `/api/commissions/obligations?organizationId=${organizationId}&status=POSTED`,
           { credentials: 'include', cache: 'no-store' }
         );
-        const orgJson = await orgRes.json();
-        if (!orgRes.ok) {
+        const orgDiagnostics = await readOperationalApiResponseDiagnostics(
+          `/api/commissions/obligations?organizationId=${organizationId}&status=POSTED`,
+          orgRes
+        );
+        if (!orgDiagnostics.shouldParseJson) {
           if (
             !shouldSuppressOperationalErrorToast({
               status: orgRes.status,
-              message: orgJson.error,
+              message: orgDiagnostics.bodyPreview,
               releaseInteraction,
             })
           ) {
-            throw new Error(orgJson.error || 'Failed to load referral earnings');
+            throw new Error('Failed to load referral earnings');
           }
           setOrgPosted([]);
         } else {
+          const orgJson = parseOperationalApiJson<{ data?: typeof orgPosted; error?: string }>(
+            `/api/commissions/obligations?organizationId=${organizationId}&status=POSTED`,
+            orgDiagnostics.bodyText
+          );
           setOrgPosted(orgJson.data ?? []);
         }
       } else {

@@ -5,6 +5,7 @@ import {
 } from '@/lib/operations/primitives/participant-earnings-primitives';
 import { participantRendersCommercialTerms } from '@/lib/operations/selectors/participant-earnings-selectors';
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
+import { buildParticipantEarningsPersistenceDiagnostic } from '@/lib/operations/dev/participant-earnings-persistence-diagnostic';
 
 export class EarningsConfigurationSelectorDivergenceError extends Error {
   constructor(
@@ -44,7 +45,7 @@ export type EarningsSelectorAuditInput = {
 export function logEarningsSelectorAudit(input: EarningsSelectorAuditInput): void {
   if (process.env.NODE_ENV === 'production') return;
   const entity = input.participant;
-  const profile = entity.compensationProfile;
+  const diagnostic = buildParticipantEarningsPersistenceDiagnostic(entity, input.context);
   const configured = hasPersistedCompensationTerms(entity);
   const rendersTerms = participantRendersCommercialTerms(entity, input.context);
 
@@ -52,17 +53,12 @@ export function logEarningsSelectorAudit(input: EarningsSelectorAuditInput): voi
   console.log('at', new Date().toISOString());
   console.log('surface', input.surface);
   console.log('participantId', entity.id);
-  console.log('selectorResult', { configured, rendersCommercialTerms: rendersTerms });
-  console.log('persistedCompensation', {
-    compensationType: profile?.compensationType ?? null,
-    configured: profile?.configured ?? null,
-    configuredAt: profile?.configuredAt ?? null,
-    fixedAmount: profile?.fixedAmount ?? null,
-    percentage: profile?.percentage ?? null,
-    commissionValue: entity.commissionValue ?? null,
-    commissionKind: entity.commissionKind ?? null,
-    operationalStatus: entity.operationalStatus ?? null,
-  });
+  console.log('compensationProfileFound', diagnostic.compensationProfileFound);
+  console.log('configuredAt', diagnostic.configuredAt);
+  console.log('earningsStructure', diagnostic.earningsStructure);
+  console.log('selectorResult', diagnostic.selectorResult);
+  console.log('selectorResultLegacy', { configured, rendersCommercialTerms: rendersTerms });
+  console.log('persistedCompensation', diagnostic.persisted);
   if (input.canonicalKpis) {
     console.log('canonicalKpis', {
       participantCount: input.canonicalKpis.participantCount,

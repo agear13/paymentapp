@@ -9,6 +9,11 @@ import {
   createFallbackActivation,
   createFallbackNextAction,
 } from '@/lib/onboarding/workspace-activation-fallback';
+import {
+  hasActiveOperationalPageLoadTrace,
+  parseOperationalApiJson,
+  readOperationalApiResponseDiagnostics,
+} from '@/lib/operations/dev/operational-api-fetch-diagnostics';
 
 export const WORKSPACE_ACTIVATION_REFRESH_EVENT = 'workspace-activation-refresh';
 
@@ -45,8 +50,16 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
 
     void (async () => {
       try {
+        const fetchStartedAt = performance.now();
         const res = await fetch('/api/workspace/activation', { cache: 'no-store' });
-        if (!res.ok) {
+        const diagnostics = await readOperationalApiResponseDiagnostics(
+          '/api/workspace/activation',
+          res,
+          hasActiveOperationalPageLoadTrace()
+            ? { pageLoadLabel: 'A-activation', startedAt: fetchStartedAt }
+            : undefined
+        );
+        if (!diagnostics.shouldParseJson) {
           if (!cancelled) {
             setDegraded(true);
             setData({
@@ -56,14 +69,14 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
           }
           return;
         }
-        const json = (await res.json()) as {
+        const json = parseOperationalApiJson<{
           activation?: WorkspaceActivationSnapshot;
           nextAction?: NextRecommendedAction;
           operationalOnboarding?: OperationalOnboardingState;
           operationalInitialization?: OperationalInitializationSnapshot;
           correlationId?: string;
           data?: ActivationResponse;
-        };
+        }>('/api/workspace/activation', diagnostics.bodyText);
         const payload = json.data ?? {
           activation: json.activation,
           nextAction: json.nextAction,

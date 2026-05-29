@@ -17,6 +17,11 @@ import {
 import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
 import { parseCoordinationSnapshotProjection } from '@/lib/operations/selectors/operational-coordination-snapshot';
 import {
+  hasActiveOperationalPageLoadTrace,
+  parseOperationalApiJson,
+  readOperationalApiResponseDiagnostics,
+} from '@/lib/operations/dev/operational-api-fetch-diagnostics';
+import {
   buildPersistedCoordinationSnapshot,
   hasPersistedOperationalEntities,
 } from '@/lib/operations/selectors/build-persisted-coordination-snapshot';
@@ -184,15 +189,24 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     setGraphLoading(true);
     try {
       const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
-      const res = await fetch(`/api/operations/coordination-snapshot${qs}`, {
+      const route = `/api/operations/coordination-snapshot${qs}`;
+      const fetchStartedAt = performance.now();
+      const res = await fetch(route, {
         cache: 'no-store',
         credentials: 'include',
       });
-      if (!res.ok) {
+      const diagnostics = await readOperationalApiResponseDiagnostics(
+        route,
+        res,
+        hasActiveOperationalPageLoadTrace()
+          ? { pageLoadLabel: 'B-coordination-snapshot', startedAt: fetchStartedAt }
+          : undefined
+      );
+      if (!diagnostics.shouldParseJson) {
         setGraphSnapshotConverged(false);
         return;
       }
-      const json = (await res.json()) as {
+      const json = parseOperationalApiJson<{
         data?: {
           graphReady?: boolean;
           summary: GraphSummary['summary'] | null;
@@ -200,8 +214,9 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
           participants: GraphSummary['participants'];
           obligationCount: number;
           auditTimeline?: OperationalAuditEntry[];
+          participantDiagnostics?: unknown[];
         };
-      };
+      }>(route, diagnostics.bodyText);
       if (!json.data) {
         setGraphSnapshotConverged(false);
         return;
@@ -222,12 +237,25 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
       }
       setGraph(projection);
       setGraphSnapshotConverged(true);
-      if (process.env.NODE_ENV === 'development') {
-        console.groupCollapsed('[operational-sync] coordination-snapshot-response');
-        console.log('at', new Date().toISOString());
-        console.log('projectId', projectId ?? null);
-        console.log('summary', projection.summary);
-        console.groupEnd();
+      if (json.data?.participantDiagnostics?.length) {
+        console.info('[operational-sync] coordination-snapshot participantDiagnostics', {
+          projectId: projectId ?? null,
+          summary: projection.summary,
+          participantDiagnostics: json.data.participantDiagnostics,
+        });
+        const djAlex = (
+          json.data.participantDiagnostics as Array<{
+            participantId: string;
+            name: string | null;
+            compensationProfileFound: boolean;
+            configuredAt: string | null;
+            earningsStructure: unknown;
+            selectorResult: { hasPersistedCompensationTerms: boolean };
+          }>
+        ).find((p) => p.name?.toLowerCase().includes('dj alex'));
+        if (djAlex) {
+          console.info('[participant-persistence-finding-client]', djAlex);
+        }
       }
     } finally {
       setGraphLoading(false);
