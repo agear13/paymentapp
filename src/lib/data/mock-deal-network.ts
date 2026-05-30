@@ -127,6 +127,10 @@ export interface RecentDeal {
   lastContactedAt?: string;
   /** Manual timeline entries */
   activityLog?: DealActivityEntry[];
+  /** AI Agreement Extractor provenance — set when a project is created via conversation import. */
+  createdVia?: string;
+  extractorVersion?: string;
+  sourceType?: string;
 }
 
 export interface FunnelStage {

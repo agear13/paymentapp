@@ -66,6 +66,7 @@
     "@walletconnect/auth-client": "2.1.2"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "@aws-sdk/client-s3": "^3.1049.0",
     "@hashgraph/sdk": "^2.78.0",
     "@hookform/resolvers": "^5.2.2",
