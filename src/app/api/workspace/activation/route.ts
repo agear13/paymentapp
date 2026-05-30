@@ -17,6 +17,23 @@ import {
   runOperationalApiRoute,
 } from '@/lib/operations/dev/api-route-diagnostics.server';
 
+function logActivationTrace(
+  ctx: ReturnType<typeof createOperationalApiRouteContext>,
+  phase: string,
+  extra: Record<string, unknown> = {}
+): void {
+  console.info('[activation-trace]', {
+    requestId: ctx.requestId,
+    correlationId: ctx.correlationId,
+    route: ctx.route,
+    projectId: ctx.projectId,
+    phase,
+    dbQueryCount: extra.dbQueryCount ?? undefined,
+    at: new Date().toISOString(),
+    ...extra,
+  });
+}
+
 /** GET /api/workspace/activation — derived activation snapshot from canonical operational graph */
 export async function GET(request: Request) {
   const ctx = createOperationalApiRouteContext({
@@ -66,6 +83,10 @@ export async function GET(request: Request) {
         initializationDurationMs,
         success: true,
       });
+      logActivationTrace(ctx, 'initialization-complete', {
+        initializationDurationMs,
+        organizationId: org.id,
+      });
 
       const onboardingState = initSnapshot.onboarding;
       ctx.projectId =
@@ -96,6 +117,16 @@ export async function GET(request: Request) {
         phase: 'pilot-snapshot+parallel-db',
         durationMs: Date.now() - parallelStartedAt,
         success: true,
+        extra: {
+          projectCount: snapshot.deals.length,
+          participantCount: snapshot.participants.length,
+        },
+      });
+      logActivationTrace(ctx, 'pilot-snapshot-complete', {
+        durationMs: Date.now() - parallelStartedAt,
+        projectCount: snapshot.deals.length,
+        participantCount: snapshot.participants.length,
+        organizationId: org.id,
       });
 
       const rails = merchantRowToRailFlags(merchant);
@@ -124,6 +155,11 @@ export async function GET(request: Request) {
         graphBuildDurationMs,
         success: true,
       });
+      logActivationTrace(ctx, 'graph-build-complete', {
+        graphBuildDurationMs,
+        participantCount: graph.summary.participantCount,
+        obligationCount: graph.obligations.length,
+      });
 
       const activationInput = {
         hasOrganization: true,
@@ -144,9 +180,26 @@ export async function GET(request: Request) {
         primaryProjectId,
       };
 
+      const blockerStartedAt = Date.now();
       const activation = activationFromOperationalGraph(graph, activationInput);
       const nextAction = deriveNextRecommendedAction(activation);
+      const blockerDerivationDurationMs = Date.now() - blockerStartedAt;
+      logActivationTrace(ctx, 'blocker-derivation-complete', {
+        blockerDerivationDurationMs,
+        releaseEligibleCount: graph.summary.releaseReadyCount,
+        payoutReadyCount: graph.summary.payoutReadyCount,
+      });
+
       const persistedTruth = compensation.participantCount > 0;
+
+      logActivationTrace(ctx, 'request-complete', {
+        totalDurationMs: Date.now() - ctx.startedAt,
+        initializationDurationMs,
+        graphBuildDurationMs,
+        blockerDerivationDurationMs,
+        projectCount: snapshot.deals.length,
+        participantCount: compensation.participantCount,
+      });
 
       return apiResponse({
         activation: {
@@ -162,6 +215,11 @@ export async function GET(request: Request) {
       });
     } catch (e) {
       console.error('[workspace/activation GET]', e);
+      logActivationTrace(ctx, 'request-error', {
+        totalDurationMs: Date.now() - ctx.startedAt,
+        errorMessage: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
+      });
       const { activation, nextAction } = safeDeriveActivationResponse({
         hasOrganization: true,
         onboardingCompleted: false,

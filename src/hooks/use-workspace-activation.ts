@@ -14,6 +14,8 @@ import {
   parseOperationalApiJson,
   readOperationalApiResponseDiagnostics,
 } from '@/lib/operations/dev/operational-api-fetch-diagnostics';
+import { logCoordinationFetch } from '@/lib/operations/dev/coordination-fetch-trace';
+import { recordCoordinationActivationRequest } from '@/lib/operations/dev/coordination-request-count';
 
 export const WORKSPACE_ACTIVATION_REFRESH_EVENT = 'workspace-activation-refresh';
 
@@ -47,6 +49,9 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
 
     let cancelled = false;
     setLoading(true);
+    const activationRequestId = logCoordinationFetch('activation-start', {});
+    recordCoordinationActivationRequest();
+    const activationStartedAt = performance.now();
 
     void (async () => {
       try {
@@ -67,6 +72,11 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
               nextAction: createFallbackNextAction(),
             });
           }
+          logCoordinationFetch('activation-complete', {
+            requestId: activationRequestId,
+            durationMs: Math.round(performance.now() - activationStartedAt),
+            success: false,
+          });
           return;
         }
         const json = parseOperationalApiJson<{
@@ -93,11 +103,22 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
             correlationId: payload.correlationId,
           });
           setDegraded(Boolean(payload.activation.degraded));
+          logCoordinationFetch('activation-complete', {
+            requestId: activationRequestId,
+            projectId: payload.activation.primaryProjectId ?? null,
+            durationMs: Math.round(performance.now() - activationStartedAt),
+            success: true,
+          });
         } else if (!cancelled) {
           setDegraded(true);
           setData({
             activation: createFallbackActivation(),
             nextAction: createFallbackNextAction(),
+          });
+          logCoordinationFetch('activation-complete', {
+            requestId: activationRequestId,
+            durationMs: Math.round(performance.now() - activationStartedAt),
+            success: false,
           });
         }
       } catch {
@@ -108,6 +129,11 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
             nextAction: createFallbackNextAction(),
           });
         }
+        logCoordinationFetch('activation-complete', {
+          requestId: activationRequestId,
+          durationMs: Math.round(performance.now() - activationStartedAt),
+          success: false,
+        });
       } finally {
         if (!cancelled) setLoading(false);
       }

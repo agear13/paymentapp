@@ -98,6 +98,10 @@ import {
   readOperationalApiResponseDiagnostics,
 } from '@/lib/operations/dev/operational-api-fetch-diagnostics';
 import {
+  beginCoordinationRequestCount,
+  flushCoordinationRequestCount,
+} from '@/lib/operations/dev/coordination-request-count';
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -457,11 +461,13 @@ function DealNetworkObligationsPageContent() {
 
   React.useEffect(() => {
     beginOperationalPageLoadTrace('payout-obligations');
+    beginCoordinationRequestCount('payout-obligations');
   }, []);
 
   React.useEffect(() => {
     if (!activationLoading && !loading) {
       flushOperationalPageLoadTrace();
+      flushCoordinationRequestCount();
     }
   }, [activationLoading, loading]);
 

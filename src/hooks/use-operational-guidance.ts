@@ -43,6 +43,8 @@ import {
 import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-operational-workspace-currency';
 import { traceOperationalRender } from '@/lib/operations/dev/operational-render-trace';
 import { warnLegacyOperationalPath } from '@/lib/operations/dev/warn-legacy-operational-path';
+import { logCoordinationFetch } from '@/lib/operations/dev/coordination-fetch-trace';
+import { recordCoordinationSnapshotRequest } from '@/lib/operations/dev/coordination-request-count';
 
 export type OperationalGuidanceOptions = {
   enabled?: boolean;
@@ -187,10 +189,14 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
   const loadGraph = React.useCallback(async () => {
     if (options?.enabled === false) return;
     setGraphLoading(true);
+    const snapshotRequestId = logCoordinationFetch('snapshot-start', {
+      projectId: projectId ?? null,
+    });
+    recordCoordinationSnapshotRequest();
+    const fetchStartedAt = performance.now();
     try {
       const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
       const route = `/api/operations/coordination-snapshot${qs}`;
-      const fetchStartedAt = performance.now();
       const res = await fetch(route, {
         cache: 'no-store',
         credentials: 'include',
@@ -204,6 +210,12 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
       );
       if (!diagnostics.shouldParseJson) {
         setGraphSnapshotConverged(false);
+        logCoordinationFetch('snapshot-complete', {
+          requestId: snapshotRequestId,
+          projectId: projectId ?? null,
+          durationMs: Math.round(performance.now() - fetchStartedAt),
+          success: false,
+        });
         return;
       }
       const json = parseOperationalApiJson<{
@@ -219,6 +231,12 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
       }>(route, diagnostics.bodyText);
       if (!json.data) {
         setGraphSnapshotConverged(false);
+        logCoordinationFetch('snapshot-complete', {
+          requestId: snapshotRequestId,
+          projectId: projectId ?? null,
+          durationMs: Math.round(performance.now() - fetchStartedAt),
+          success: false,
+        });
         return;
       }
       const projection = parseCoordinationSnapshotProjection({
@@ -230,6 +248,12 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
       if (!projection) {
         setGraph(emptyGraph());
         setGraphSnapshotConverged(false);
+        logCoordinationFetch('snapshot-complete', {
+          requestId: snapshotRequestId,
+          projectId: projectId ?? null,
+          durationMs: Math.round(performance.now() - fetchStartedAt),
+          success: false,
+        });
         return;
       }
       if (json.data.auditTimeline?.length) {
@@ -237,6 +261,12 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
       }
       setGraph(projection);
       setGraphSnapshotConverged(true);
+      logCoordinationFetch('snapshot-complete', {
+        requestId: snapshotRequestId,
+        projectId: projectId ?? null,
+        durationMs: Math.round(performance.now() - fetchStartedAt),
+        success: true,
+      });
       if (json.data?.participantDiagnostics?.length) {
         console.info('[operational-sync] coordination-snapshot participantDiagnostics', {
           projectId: projectId ?? null,
@@ -260,11 +290,13 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     } finally {
       setGraphLoading(false);
     }
-  }, [options?.enabled, projectId, graphReadyForProjection]);
+  }, [options?.enabled, projectId]);
 
   React.useEffect(() => {
+    if (options?.enabled === false) return;
+    if (loading) return;
     void loadGraph();
-  }, [loadGraph]);
+  }, [loadGraph, loading, options?.enabled]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;

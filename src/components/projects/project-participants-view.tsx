@@ -42,7 +42,7 @@ import {
   applyCompensationProfileToParticipant,
 } from '@/lib/participants/participant-compensation';
 import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
-import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
+import { deriveParticipantViewStats } from '@/lib/operations/selectors/derive-participant-view-stats';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
@@ -506,28 +506,14 @@ export function ProjectParticipantsView() {
     );
   }, [hydratedParticipants, pinnedOrder]);
 
-  const stats = React.useMemo(() => {
-    if (!canonicalKpis) {
-      return {
-        pendingAgreements: 0,
-        missingOnboarding: 0,
-        readyForPayout: 0,
-        activeAttribution: 0,
-      };
-    }
-    const missingOnboarding = graph.participants.filter(
-      (p) => !p.payoutReadiness.payoutConfirmed
-    ).length;
-    return {
-      readyForPayout: canonicalKpis.payoutReadyCount,
-      pendingAgreements: Math.max(
-        0,
-        canonicalKpis.participantCount - canonicalKpis.approvedAgreementCount
-      ),
-      activeAttribution: canonicalKpis.attributionActiveCount,
-      missingOnboarding,
-    };
-  }, [canonicalKpis, graph.participants]);
+  const stats = React.useMemo(
+    () =>
+      deriveParticipantViewStats({
+        canonicalKpis,
+        graphParticipants: graph.participants ?? [],
+      }),
+    [canonicalKpis, graph.participants]
+  );
 
   React.useEffect(() => {
     if (!canonicalKpis || !recentlySavedParticipantId) return;
@@ -712,7 +698,7 @@ export function ProjectParticipantsView() {
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Missing confirmation</CardDescription>
-                <CardTitle className="text-2xl">{stats.missingOnboarding}</CardTitle>
+                <CardTitle className="text-2xl">{stats.missingConfirmation}</CardTitle>
               </CardHeader>
             </Card>
             <Card>

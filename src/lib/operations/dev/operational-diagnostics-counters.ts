@@ -48,7 +48,6 @@ export function getOperationalDiagnosticsCounterSnapshot() {
     manualRecoveryCount,
   };
 }
-
 export function resetOperationalDiagnosticsCountersForTests(): void {
   timeoutRecoveryCount = 0;
   staleRenderCount = 0;

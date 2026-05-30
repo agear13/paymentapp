@@ -1,7 +1,8 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import { useOperationalCoordinationContext } from '@/contexts/operational-coordination-context';
+import { isWorkspaceCoordinationRoute } from '@/lib/operations/routing/is-workspace-coordination-route';
 import { OperationalStatusBar } from '@/components/operations/operational-status-bar';
 
 /**
@@ -9,24 +10,20 @@ import { OperationalStatusBar } from '@/components/operations/operational-status
  */
 export function DashboardOperationalStatus() {
   const pathname = usePathname() ?? '/dashboard';
+  const coordination = useOperationalCoordinationContext();
 
-  if (pathname === '/dashboard' || pathname === '/dashboard/') {
+  if (!isWorkspaceCoordinationRoute(pathname) || !coordination) {
     return null;
   }
 
-  if (pathname.match(/\/dashboard\/projects\/[^/]+/)) {
-    return null;
-  }
-
-  const { guidance, loading, degraded } = useOperationalCoordinationState({
-    traceSurface: 'dashboard-operational-status',
-  });
+  const { guidance, loading, degraded, activation } = coordination;
 
   return (
     <OperationalStatusBar
       guidance={guidance}
       loading={loading}
       degraded={degraded}
+      activation={activation}
       compact
       sticky
       className="-mx-6 -mt-6 mb-6"

@@ -15,6 +15,7 @@ import { AppHeader } from '@/components/dashboard/app-header';
 import { OperationalChunkRecovery } from '@/components/operational/operational-chunk-recovery';
 import { CustomerFacingOriginProvider } from '@/components/operational/customer-facing-origin-provider';
 import { DashboardOperationalStatus } from '@/components/operations/dashboard-operational-status';
+import { OperationalCoordinationProvider } from '@/components/operations/operational-coordination-provider';
 
 interface DashboardLayoutClientProps {
   children: React.ReactNode;
@@ -37,21 +38,23 @@ export function DashboardLayoutClient({
       configured={customerFacingConfigured}
       infrastructureOverride={infrastructureOverride}
     >
-      <SidebarProvider>
-        <OperationalChunkRecovery scope="dashboard-layout" />
-        <div className="flex h-screen w-full overflow-hidden">
-          <AppSidebar productProfile={productProfile} />
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <AppHeader productProfile={productProfile} />
-            <main className="flex-1 overflow-y-auto bg-muted/30 p-6">
-              <div className="mx-auto max-w-6xl space-y-6">
-                <DashboardOperationalStatus />
-                {children}
-              </div>
-            </main>
+      <OperationalCoordinationProvider>
+        <SidebarProvider>
+          <OperationalChunkRecovery scope="dashboard-layout" />
+          <div className="flex h-screen w-full overflow-hidden">
+            <AppSidebar productProfile={productProfile} />
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <AppHeader productProfile={productProfile} />
+              <main className="flex-1 overflow-y-auto bg-muted/30 p-6">
+                <div className="mx-auto max-w-6xl space-y-6">
+                  <DashboardOperationalStatus />
+                  {children}
+                </div>
+              </main>
+            </div>
           </div>
-        </div>
-      </SidebarProvider>
+        </SidebarProvider>
+      </OperationalCoordinationProvider>
     </CustomerFacingOriginProvider>
   );
 }

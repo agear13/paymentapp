@@ -18,6 +18,10 @@ import {
   useCanonicalOperationalState,
   type CanonicalOperationalStateOptions,
 } from '@/hooks/use-canonical-operational-state';
+import {
+  requiresLocalOperationalInstance,
+  useOperationalCoordinationContext,
+} from '@/contexts/operational-coordination-context';
 
 export type OperationalCoordinationStateOptions = CanonicalOperationalStateOptions & {
   releaseCapabilities?: OperationalCapabilities;
@@ -26,7 +30,7 @@ export type OperationalCoordinationStateOptions = CanonicalOperationalStateOptio
 /**
  * Unified operational coordination hook — delegates to canonical reducer state.
  */
-export function useOperationalCoordinationState(options?: OperationalCoordinationStateOptions) {
+export function useOperationalCoordinationStateCore(options?: OperationalCoordinationStateOptions) {
   const canonical = useCanonicalOperationalState(options);
   const operationalCapabilities =
     options?.releaseCapabilities ?? CONSERVATIVE_RELEASE_CAPABILITIES;
@@ -221,4 +225,19 @@ export function useOperationalCoordinationState(options?: OperationalCoordinatio
     reloadCoordinationSnapshot: canonical.reloadCoordinationSnapshot,
     refreshOperationalState: canonical.refresh,
   };
+}
+
+/** Returns shared workspace context when available; otherwise a local project-scoped instance. */
+export function useOperationalCoordinationState(options?: OperationalCoordinationStateOptions) {
+  const shared = useOperationalCoordinationContext();
+  const needsLocal = requiresLocalOperationalInstance(options);
+
+  const local = useOperationalCoordinationStateCore(
+    needsLocal || !shared ? options : { ...options, enabled: false }
+  );
+
+  if (!needsLocal && shared) {
+    return shared;
+  }
+  return local;
 }

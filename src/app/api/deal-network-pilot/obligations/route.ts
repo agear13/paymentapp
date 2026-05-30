@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { DealNetworkPilotObligationStatus } from '@prisma/client';
 import { requireAuth } from '@/lib/auth/middleware';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { prisma } from '@/lib/server/prisma';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { effectiveOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 import {
   createOperationalApiRouteContext,
+  getOperationalApiDbQueryCount,
   logOperationalApiRoutePhase,
   logParticipantPersistenceFinding,
   runOperationalApiRoute,
@@ -20,6 +22,22 @@ const PILOT_OBLIGATION_STATUSES = new Set<string>(
   Object.values(DealNetworkPilotObligationStatus)
 );
 
+function obligationsDegradedResponse(
+  ctx: ReturnType<typeof createOperationalApiRouteContext>,
+  input: { errorMessage: string; status?: number }
+) {
+  return NextResponse.json(
+    {
+      data: [],
+      degraded: true,
+      correlationId: ctx.correlationId,
+      requestId: ctx.requestId,
+      errorMessage: input.errorMessage,
+    },
+    { status: input.status ?? 200 }
+  );
+}
+
 /**
  * GET /api/deal-network-pilot/obligations?dealId=&status=&participantId=
  * Lists derived obligation rows for the authenticated pilot user (read-only).
@@ -33,9 +51,22 @@ export async function GET(request: Request) {
   });
 
   return runOperationalApiRoute(ctx, async () => {
+    const routeStartedAt = Date.now();
+    let organizationId: string | null = null;
+
     try {
-      const queryStartedAt = Date.now();
+      const authStartedAt = Date.now();
       const user = await requireAuth();
+      const org = await getOrganizationForAuthenticatedUser(user.id).catch(() => null);
+      organizationId = org?.id ?? null;
+
+      logOperationalApiRoutePhase(ctx, {
+        phase: 'auth',
+        durationMs: Date.now() - authStartedAt,
+        success: true,
+        extra: { organizationId, userId: user.id },
+      });
+
       const dealId = searchParams.get('dealId')?.trim();
       const statusParam = searchParams.get('status')?.trim();
       const participantId = searchParams.get('participantId')?.trim();
@@ -45,6 +76,7 @@ export async function GET(request: Request) {
           ? (statusParam as DealNetworkPilotObligationStatus)
           : undefined;
 
+      const queryStartedAt = Date.now();
       const rows = await prisma.deal_network_pilot_obligations.findMany({
         where: {
           user_id: user.id,
@@ -74,14 +106,22 @@ export async function GET(request: Request) {
           },
         },
       });
+      const prismaDurationMs = Date.now() - queryStartedAt;
 
       logOperationalApiRoutePhase(ctx, {
         phase: 'obligations-query',
-        durationMs: Date.now() - queryStartedAt,
+        durationMs: prismaDurationMs,
         success: true,
-        extra: { rowCount: rows.length },
+        dbQueryCount: getOperationalApiDbQueryCount(),
+        extra: {
+          rowCount: rows.length,
+          organizationId,
+          projectId: dealId ?? ctx.projectId,
+          prismaDurationMs,
+        },
       });
 
+      const mapStartedAt = Date.now();
       const data = rows.map((row) => {
         const { participant, ...rest } = row;
         const payload = participant?.participant_payload as Partial<DemoParticipant> | null | undefined;
@@ -131,14 +171,45 @@ export async function GET(request: Request) {
         return { ...rest, participant: participantOut };
       });
 
-      return NextResponse.json({ data });
+      logOperationalApiRoutePhase(ctx, {
+        phase: 'obligations-map',
+        durationMs: Date.now() - mapStartedAt,
+        success: true,
+        extra: {
+          totalDurationMs: Date.now() - routeStartedAt,
+          organizationId,
+        },
+      });
+
+      return NextResponse.json({ data, correlationId: ctx.correlationId });
     } catch (e: unknown) {
-      const err = e as { statusCode?: number; message?: string };
+      const err = e as { statusCode?: number; message?: string; name?: string };
       if (err.statusCode === 401) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
+
+      logOperationalApiRoutePhase(ctx, {
+        phase: 'obligations-error',
+        failure: true,
+        success: false,
+        durationMs: Date.now() - routeStartedAt,
+        dbQueryCount: getOperationalApiDbQueryCount(),
+        errorMessage: err.message ?? String(e),
+        extra: {
+          organizationId,
+          projectId: ctx.projectId,
+          errorName: err.name ?? 'UnknownError',
+          stack: e instanceof Error ? e.stack : undefined,
+        },
+      });
+
       console.error('[deal-network-pilot/obligations GET]', e);
-      return NextResponse.json({ error: 'Failed to load obligations' }, { status: 500 });
+
+      return obligationsDegradedResponse(ctx, {
+        errorMessage:
+          err.message ??
+          'Obligations could not be loaded. The workspace remains available in degraded mode.',
+      });
     }
   });
 }

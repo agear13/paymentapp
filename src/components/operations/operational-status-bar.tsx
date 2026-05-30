@@ -8,7 +8,7 @@ import { OperationalStatePill } from '@/components/operations/operational-state-
 import { SafeOperationalLink } from '@/components/operations/safe-operational-link';
 import { opTypeMeta } from '@/lib/design/operational-typography';
 import { opSpace } from '@/lib/design/operational-spacing';
-import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
+import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -17,6 +17,7 @@ export type OperationalStatusBarProps = {
   guidance: OperationalGuidanceBundle | null;
   loading?: boolean;
   degraded?: boolean;
+  activation?: WorkspaceActivationSnapshot | null;
   compact?: boolean;
   sticky?: boolean;
   className?: string;
@@ -26,11 +27,12 @@ export function OperationalStatusBar({
   guidance,
   loading,
   degraded,
+  activation: activationProp,
   compact = true,
   sticky,
   className,
 }: OperationalStatusBarProps) {
-  const { activation } = useWorkspaceActivation();
+  const activation = activationProp ?? null;
 
   if (loading) {
     return (
