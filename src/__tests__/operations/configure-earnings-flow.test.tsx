@@ -91,7 +91,17 @@ function renderRow(
 describe('configure earnings flow', () => {
   describe('initializeCompensationDraft', () => {
     it('returns safe defaults for draft participants without compensation profile', () => {
-      const draft = initializeCompensationDraft(draftParticipant());
+      const draft = initializeCompensationDraft(
+        buildProjectParticipant({
+          name: 'Draft Alex',
+          role: 'Contributor',
+          project: baseDeal(),
+          participationModel: 'fixed_payout',
+          commissionKind: 'fixed_amount',
+          commissionValue: 0,
+          enableCustomerAttribution: false,
+        })
+      );
       expect(draft.compensationType).toBe('FIXED_FEE');
       expect(draft.configured).toBe(false);
       expect(draft.customerAttributionEnabled).toBe(false);

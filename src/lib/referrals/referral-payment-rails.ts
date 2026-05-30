@@ -32,6 +32,25 @@ export type MerchantRailAvailability = {
   manual: boolean;
 };
 
+export function merchantRailAvailabilityFromSettings(
+  settings: {
+    stripe_account_id?: string | null;
+    hedera_account_id?: string | null;
+    wise_profile_id?: string | null;
+    wise_enabled?: boolean | null;
+  } | null
+  | undefined,
+  options?: { globalWiseEnabled?: boolean }
+): MerchantRailAvailability {
+  const globalWiseEnabled = options?.globalWiseEnabled ?? false;
+  return {
+    stripe: !!settings?.stripe_account_id,
+    hedera: !!settings?.hedera_account_id,
+    wise: globalWiseEnabled && !!settings?.wise_enabled && !!settings?.wise_profile_id,
+    manual: true,
+  };
+}
+
 export function defaultReferralPaymentRails(): ReferralPaymentRail[] {
   return ['stripe'];
 }
@@ -170,6 +189,44 @@ export function referralRailToPaymentMethod(
     default:
       return null;
   }
+}
+
+/** Lock payment link to one rail only when the referral checkout exposes a single option. */
+export function resolveReferralPaymentLinkMethod(input: {
+  checkoutConfig: unknown;
+  merchant: MerchantRailAvailability;
+}): 'STRIPE' | 'WISE' | 'HEDERA' | 'MANUAL_BANK' | null {
+  const resolved = resolveAvailablePaymentRails(input);
+  if (resolved.length === 1) {
+    return referralRailToPaymentMethod(resolved[0]);
+  }
+  return null;
+}
+
+export function filterPaymentMethodsByReferralRails(input: {
+  methods: {
+    stripe: boolean;
+    hedera: boolean;
+    wise: boolean;
+    crypto?: boolean;
+    manualBank?: boolean;
+  };
+  resolvedRails: ReferralPaymentRail[];
+}): {
+  stripe: boolean;
+  hedera: boolean;
+  wise: boolean;
+  crypto?: boolean;
+  manualBank?: boolean;
+} {
+  const allow = (rail: ReferralPaymentRail) => input.resolvedRails.includes(rail);
+  return {
+    stripe: input.methods.stripe && allow('stripe'),
+    hedera: input.methods.hedera && allow('hedera'),
+    wise: input.methods.wise && allow('wise'),
+    crypto: input.methods.crypto,
+    manualBank: input.methods.manualBank && allow('manual'),
+  };
 }
 
 export function customerRailLabel(rail: ReferralPaymentRail): string {

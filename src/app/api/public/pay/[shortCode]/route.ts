@@ -138,6 +138,15 @@ export async function GET(
       },
     });
 
+    let referralCheckoutConfig: unknown = null;
+    if (paymentLink.referral_link_id) {
+      const referralLink = await prisma.referral_links.findUnique({
+        where: { id: paymentLink.referral_link_id },
+        select: { checkout_config: true },
+      });
+      referralCheckoutConfig = referralLink?.checkout_config ?? null;
+    }
+
     // Wise is available when:
     // a) global config.features.wisePayments === true (ENABLE_WISE_PAYMENTS + WISE_API_TOKEN)
     // b) payment link allows WISE (payment_method is WISE or null for all methods)
@@ -157,7 +166,7 @@ export async function GET(
     const wiseAvailable = globalWiseEnabled && linkAllowsWise && merchantWiseConfigured;
 
     // Determine available payment methods (invoice-only links never expose checkout rails here)
-    const availablePaymentMethods = {
+    let availablePaymentMethods = {
       stripe:
         !invoiceOnly && allowsStripe && !!merchantSettings?.stripe_account_id,
       hedera:
@@ -166,6 +175,26 @@ export async function GET(
       crypto: allowsCrypto,
       manualBank: allowsManualBank,
     };
+
+    if (referralCheckoutConfig) {
+      const {
+        resolveAvailablePaymentRails,
+        filterPaymentMethodsByReferralRails,
+        merchantRailAvailabilityFromSettings,
+      } = await import('@/lib/referrals/referral-payment-rails');
+      const resolvedRails = resolveAvailablePaymentRails({
+        checkoutConfig: referralCheckoutConfig,
+        merchant: merchantRailAvailabilityFromSettings(merchantSettings, {
+          globalWiseEnabled: config.features.wisePayments,
+        }),
+      });
+      if (resolvedRails.length > 0) {
+        availablePaymentMethods = filterPaymentMethodsByReferralRails({
+          methods: availablePaymentMethods,
+          resolvedRails,
+        });
+      }
+    }
 
     // Select best FX snapshot:
     // 1. If selectedToken is provided, find matching snapshot

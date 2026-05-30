@@ -1,6 +1,8 @@
 import {
   getConfiguredReferralPaymentRails,
   resolveAvailablePaymentRails,
+  resolveReferralPaymentLinkMethod,
+  filterPaymentMethodsByReferralRails,
 } from '@/lib/referrals/referral-payment-rails';
 
 describe('referral payment rails', () => {
@@ -29,5 +31,33 @@ describe('referral payment rails', () => {
       referralPaymentRails: ['stripe', 'invalid', 'hedera'],
     });
     expect(configured).toEqual(['stripe', 'hedera']);
+  });
+
+  it('leaves payment method unset when multiple referral rails are available', () => {
+    const method = resolveReferralPaymentLinkMethod({
+      checkoutConfig: {
+        referralCommerce: { enabledPaymentRails: ['stripe', 'hedera'] },
+      },
+      merchant: { stripe: true, wise: false, hedera: true, manual: false },
+    });
+    expect(method).toBeNull();
+  });
+
+  it('locks payment method when only one referral rail resolves', () => {
+    const method = resolveReferralPaymentLinkMethod({
+      checkoutConfig: {
+        referralCommerce: { enabledPaymentRails: ['stripe', 'hedera'] },
+      },
+      merchant: { stripe: true, wise: false, hedera: false, manual: false },
+    });
+    expect(method).toBe('STRIPE');
+  });
+
+  it('filters public pay methods by referral rails', () => {
+    const filtered = filterPaymentMethodsByReferralRails({
+      methods: { stripe: true, hedera: true, wise: true },
+      resolvedRails: ['stripe', 'hedera'],
+    });
+    expect(filtered).toEqual({ stripe: true, hedera: true, wise: false });
   });
 });

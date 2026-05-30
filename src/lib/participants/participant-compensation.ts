@@ -10,6 +10,9 @@ import type {
   ParticipantCompensationType,
   ParticipantPayoutDestinationStatus,
 } from '@/lib/participants/participant-compensation-types';
+import type { ParticipantReferralCommerce } from '@/lib/referrals/referral-commerce-config';
+import type { ProjectParticipationModel } from '@/lib/projects/participant-entitlement';
+import type { CommissionStructureKind } from '@/lib/deal-network-demo/commission-structure';
 import {
   hasPersistedCompensationTerms,
   isParticipantCompensationExempt,
@@ -57,6 +60,63 @@ export function inferCompensationTypeFromParticipant(
   if (participant.participationModel === 'fixed_payout') return 'FIXED_FEE';
   if (participant.commissionKind === 'pct_deal_value') return 'REVENUE_SHARE';
   return 'FIXED_FEE';
+}
+
+/** Persist commercial terms from project invite when operator configured them at add time. */
+export function buildInviteCompensationProfile(input: {
+  participationModel: ProjectParticipationModel;
+  commissionKind: CommissionStructureKind;
+  commissionValue: number;
+  enableCustomerAttribution: boolean;
+  referralCommerce?: ParticipantReferralCommerce;
+}): ParticipantCompensationProfile | undefined {
+  const {
+    participationModel,
+    commissionValue,
+    enableCustomerAttribution,
+    referralCommerce,
+  } = input;
+  const configuredAt = new Date().toISOString();
+  const attributionCommerce =
+    referralCommerce?.commissionMode === 'referral_commerce' &&
+    (participationModel === 'customer_attribution' || enableCustomerAttribution);
+
+  if (attributionCommerce) {
+    const pct = referralCommerce!.commerceCommissionPct ?? 10;
+    const serviceIds = referralCommerce!.enabledServiceIds ?? [];
+    return {
+      compensationType: 'COMMISSION',
+      percentage: pct,
+      configured: true,
+      configuredAt,
+      customerAttributionEnabled: true,
+      commissionSourceMode: serviceIds.length > 0 ? 'selected' : 'all_active',
+      commissionServiceIds: serviceIds,
+      revenueSources: [],
+    };
+  }
+
+  if (participationModel === 'revenue_share' && commissionValue > 0) {
+    return {
+      compensationType: 'REVENUE_SHARE',
+      percentage: commissionValue,
+      configured: true,
+      configuredAt,
+      revenueSources: [],
+    };
+  }
+
+  if (participationModel === 'fixed_payout' && commissionValue > 0) {
+    return {
+      compensationType: 'FIXED_FEE',
+      fixedAmount: commissionValue,
+      configured: true,
+      configuredAt,
+      revenueSources: [],
+    };
+  }
+
+  return undefined;
 }
 
 export function defaultCompensationProfile(

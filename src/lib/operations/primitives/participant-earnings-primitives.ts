@@ -20,7 +20,16 @@ export function hasPersistedCompensationTerms(
   if (!participant) return false;
   if (isParticipantCompensationExempt(participant)) return true;
   const profile = participant.compensationProfile;
-  if (!profile) return false;
+  if (!profile) {
+    const commerce = participant.referralCommerce;
+    if (commerce?.commissionMode === 'referral_commerce') {
+      const pct = commerce.commerceCommissionPct;
+      if (Number.isFinite(pct) && (pct as number) >= 0) {
+        return participant.participationModel === 'customer_attribution';
+      }
+    }
+    return false;
+  }
   if (profile.configured === true) return true;
   if (profile.configuredAt) return true;
   const hasProfileAmount =

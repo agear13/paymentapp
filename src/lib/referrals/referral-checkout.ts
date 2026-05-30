@@ -16,10 +16,12 @@ import {
 } from '@/lib/referrals/commission-attribution-snapshot';
 import { isServiceAllowedForReferral } from '@/lib/referrals/referral-commerce-config';
 import {
-  referralRailToPaymentMethod,
+  resolveReferralPaymentLinkMethod,
+  merchantRailAvailabilityFromSettings,
   type ReferralPaymentRail,
 } from '@/lib/referrals/referral-payment-rails';
 import { getPaymentLinkUrl } from '@/lib/runtime/customer-facing-url';
+import config from '@/lib/config/env';
 
 export interface ReferralCheckoutResult {
   success: boolean;
@@ -49,6 +51,7 @@ export interface ReferralServiceCheckoutParams {
   successUrl?: string;
   cancelUrl?: string;
   correlationId?: string;
+  paymentRail?: ReferralPaymentRail;
 }
 
 async function loadReferralLinkForCheckout(code: string) {
@@ -65,7 +68,13 @@ async function loadReferralLinkForCheckout(code: string) {
       organizations: {
         include: {
           merchant_settings: {
-            select: { stripe_account_id: true, display_name: true },
+            select: {
+              stripe_account_id: true,
+              hedera_account_id: true,
+              wise_profile_id: true,
+              wise_enabled: true,
+              display_name: true,
+            },
           },
         },
       },
@@ -131,7 +140,12 @@ export async function createReferralCheckoutSession(
 
     const snapshotMeta = buildCommissionAttributionMetadataFromReferralLink(referralLink);
 
-    const paymentMethod = referralRailToPaymentMethod(paymentRail);
+    const paymentMethod = resolveReferralPaymentLinkMethod({
+      checkoutConfig: referralLink.checkout_config,
+      merchant: merchantRailAvailabilityFromSettings(merchantSettings, {
+        globalWiseEnabled: config.features.wisePayments,
+      }),
+    });
 
     const paymentLink = await prisma.payment_links.create({
       data: {
@@ -300,7 +314,12 @@ export async function createReferralServiceCheckoutSession(
     const now = new Date();
     const snapshotMeta = buildCommissionAttributionMetadataFromReferralLink(referralLink);
 
-    const paymentMethod = referralRailToPaymentMethod(paymentRail);
+    const paymentMethod = resolveReferralPaymentLinkMethod({
+      checkoutConfig: referralLink.checkout_config,
+      merchant: merchantRailAvailabilityFromSettings(merchantSettings, {
+        globalWiseEnabled: config.features.wisePayments,
+      }),
+    });
 
     if (paymentRail === 'stripe' && !merchantSettings?.stripe_account_id) {
       return { success: false, error: 'Card payments are not configured for this merchant' };

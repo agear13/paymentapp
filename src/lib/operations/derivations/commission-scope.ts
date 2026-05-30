@@ -57,12 +57,31 @@ function resolvePercentage(
   profile?: ParticipantCompensationProfile
 ): number | null {
   const fromProfile = profile?.percentage;
-  if (Number.isFinite(fromProfile)) return fromProfile as number;
-  if (participant.commissionKind === 'pct_deal_value' && Number.isFinite(participant.commissionValue)) {
+  if (Number.isFinite(fromProfile) && (fromProfile as number) > 0) {
+    return fromProfile as number;
+  }
+
+  const commercePct = participant.referralCommerce?.commerceCommissionPct;
+  if (
+    isCatalogScopedCommission(participant) &&
+    Number.isFinite(commercePct) &&
+    (commercePct as number) > 0
+  ) {
+    return commercePct as number;
+  }
+
+  if (
+    participant.commissionKind === 'pct_deal_value' &&
+    Number.isFinite(participant.commissionValue) &&
+    participant.commissionValue > 0
+  ) {
     return participant.commissionValue;
   }
-  const commercePct = participant.referralCommerce?.commerceCommissionPct;
-  if (Number.isFinite(commercePct)) return commercePct as number;
+
+  if (Number.isFinite(fromProfile)) return fromProfile as number;
+  if (Number.isFinite(commercePct) && (commercePct as number) > 0) {
+    return commercePct as number;
+  }
   return null;
 }
 

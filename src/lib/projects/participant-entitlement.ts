@@ -20,6 +20,7 @@ import {
 import { DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
 import { draftParticipantDefaults } from '@/lib/operations/guards/hydration-guards';
 import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
+import { buildInviteCompensationProfile } from '@/lib/participants/participant-compensation';
 
 export type ProjectParticipationModel =
   | 'fixed_payout'
@@ -107,13 +108,30 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
       enableCustomerAttribution: input.enableCustomerAttribution,
     });
 
+  const compensationProfile = buildInviteCompensationProfile({
+    participationModel: input.participationModel,
+    commissionKind: input.commissionKind,
+    commissionValue: input.commissionValue,
+    enableCustomerAttribution: input.enableCustomerAttribution,
+    referralCommerce,
+  });
+
+  const commissionValue =
+    compensationProfile?.compensationType === 'COMMISSION'
+      ? (compensationProfile.percentage ?? input.commissionValue)
+      : compensationProfile?.compensationType === 'REVENUE_SHARE'
+        ? (compensationProfile.percentage ?? input.commissionValue)
+        : compensationProfile?.compensationType === 'FIXED_FEE'
+          ? (compensationProfile.fixedAmount ?? input.commissionValue)
+          : input.commissionValue;
+
   return {
     id,
     name: input.name.trim(),
     email,
     role: ROLE_TO_DEMO[input.role],
     commissionKind: input.commissionKind,
-    commissionValue: input.commissionValue,
+    commissionValue,
     status: 'Pending',
     approvalStatus: 'Pending approval',
     onboardingStatus: 'NOT_STARTED',
@@ -134,6 +152,7 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
     participantLifecycle: 'DRAFT',
     agreementLifecycle: 'NOT_CREATED',
     payoutOnboardingPhase: 'NOT_STARTED',
+    ...(compensationProfile ? { compensationProfile } : {}),
     ...draftParticipantDefaults(),
   };
 }
@@ -226,6 +245,16 @@ export function earningsStructureSummary(
   participant: DemoParticipant,
   workspaceCurrency?: string
 ): string {
+  const commercePct = participant.referralCommerce?.commerceCommissionPct;
+  if (
+    !participant?.compensationProfile?.configured &&
+    participant?.commissionValue === 0 &&
+    participant.referralCommerce?.commissionMode === 'referral_commerce' &&
+    Number.isFinite(commercePct) &&
+    (commercePct as number) > 0
+  ) {
+    return `${commercePct}% catalog commission`;
+  }
   if (!participant?.compensationProfile?.configured && participant?.commissionValue === 0) {
     return 'Earnings not configured';
   }
