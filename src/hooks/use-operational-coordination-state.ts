@@ -27,6 +27,25 @@ export type OperationalCoordinationStateOptions = CanonicalOperationalStateOptio
   releaseCapabilities?: OperationalCapabilities;
 };
 
+function overlayReleaseCapabilities(
+  shared: ReturnType<typeof useOperationalCoordinationStateCore>,
+  releaseCapabilities: OperationalCapabilities
+) {
+  const readiness = deriveOperationalReadinessState({
+    operationalOnboarding: shared.operationalOnboarding,
+    operationalInitialization: shared.operationalInitialization,
+    graphSnapshotConverged: shared.graphSnapshotConverged,
+    activationLoading: shared.loading,
+    operationalCapabilities: releaseCapabilities,
+    workspace: shared.workspaceContext,
+  });
+  return {
+    ...shared,
+    readiness,
+    releaseInteraction: readiness.releaseInteraction,
+  };
+}
+
 /**
  * Unified operational coordination hook — delegates to canonical reducer state.
  */
@@ -237,7 +256,9 @@ export function useOperationalCoordinationState(options?: OperationalCoordinatio
   );
 
   if (!needsLocal && shared) {
-    return shared;
+    return options?.releaseCapabilities
+      ? overlayReleaseCapabilities(shared, options.releaseCapabilities)
+      : shared;
   }
   return local;
 }

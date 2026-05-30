@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   PAYOUTS_HUB_HREF,
+  PAYOUTS_OBLIGATIONS_HREF,
   PAYOUTS_SETTLEMENTS_HREF,
 } from '@/lib/navigation/operator-nav';
 import { PAYOUT_TRUST_COPY } from '@/lib/payouts/payout-trust-copy';
@@ -88,6 +89,7 @@ import { cn } from '@/lib/utils';
 import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
 import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import type { OperationalCapabilities } from '@/lib/operations/capabilities/derive-operational-capabilities';
 import { subscribeOperationalWindowEvents } from '@/lib/operations/orchestration/operational-event-bus';
 import { useOperationalTimelineProjection } from '@/hooks/use-operational-timeline-projection';
 import { safeObligationsProjection } from '@/lib/operations/coordination/safe-obligations-projection';
@@ -426,7 +428,11 @@ function matchesSearch(row: ObligationRow, query: string): boolean {
   return haystack.includes(q);
 }
 
-function DealNetworkObligationsPageContent() {
+function DealNetworkObligationsPageContent({
+  releaseCapabilities,
+}: {
+  releaseCapabilities?: OperationalCapabilities;
+}) {
   const { currency: orgCurrency } = useOrganizationCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -440,7 +446,10 @@ function DealNetworkObligationsPageContent() {
     graphSnapshotConverged,
     releaseInteraction,
     kpis,
-  } = useOperationalCoordinationState({ traceSurface: 'obligations-page' });
+  } = useOperationalCoordinationState({
+    traceSurface: 'obligations-page',
+    releaseCapabilities,
+  });
   const timelineProjection = useOperationalTimelineProjection();
   const isPayoutsRoute = pathname?.startsWith('/dashboard/payouts') ?? false;
   const backHref = isPayoutsRoute ? PAYOUTS_HUB_HREF : '/dashboard/partners/deal-network';
@@ -1063,14 +1072,18 @@ function DealNetworkObligationsPageContent() {
   );
 }
 
-export default function DealNetworkObligationsPage() {
+export default function DealNetworkObligationsPage({
+  releaseCapabilities,
+}: {
+  releaseCapabilities?: OperationalCapabilities;
+} = {}) {
   return (
     <React.Suspense
       fallback={
         <div className="mx-auto max-w-7xl p-8 text-muted-foreground text-sm">Loading obligations…</div>
       }
     >
-      <DealNetworkObligationsPageContent />
+      <DealNetworkObligationsPageContent releaseCapabilities={releaseCapabilities} />
     </React.Suspense>
   );
 }
