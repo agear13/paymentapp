@@ -47,6 +47,9 @@ interface ReviewPartyCardProps {
   party: ReviewedParty;
   originalParty: ExtractedParty | undefined;
   entryPoint: ExtractorEntryPoint;
+  /** When set, fixed amounts were nulled because the extracted currency is unsupported.
+   *  Used to show the original extracted value as a reference below the blank input. */
+  extractedCurrency?: string;
   duplicateMatch?: DuplicateMatch;
   duplicateResolution?: 'update' | 'create';
   onDuplicateResolutionChange?: (resolution: 'update' | 'create') => void;
@@ -58,6 +61,7 @@ export function ReviewPartyCard({
   party,
   originalParty,
   entryPoint,
+  extractedCurrency,
   duplicateMatch,
   duplicateResolution,
   onDuplicateResolutionChange,
@@ -196,8 +200,12 @@ export function ReviewPartyCard({
       {party.participationModel === 'fixed_payout' && (
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Label className="text-xs">Fixed amount</Label>
-            {originalParty && <ConfidenceBadge confidence={originalParty.fixedAmount.confidence} />}
+            <Label className="text-xs">
+              Fixed amount (AUD or USD)
+            </Label>
+            {originalParty && !extractedCurrency && (
+              <ConfidenceBadge confidence={originalParty.fixedAmount.confidence} />
+            )}
           </div>
           <Input
             type="number"
@@ -206,9 +214,17 @@ export function ReviewPartyCard({
             onChange={(e) =>
               onChange({ ...party, fixedAmount: e.target.value ? Number(e.target.value) : null })
             }
-            placeholder="0"
-            className="h-8 text-sm"
+            placeholder="Enter converted amount"
+            className={cn('h-8 text-sm', extractedCurrency && party.fixedAmount === null && 'border-amber-400 focus-visible:ring-amber-400')}
           />
+          {extractedCurrency && originalParty && originalParty.fixedAmount.value != null && (
+            <p className="text-xs text-muted-foreground">
+              Original extracted:{' '}
+              <span className="font-medium text-amber-700 dark:text-amber-400">
+                {extractedCurrency} {originalParty.fixedAmount.value.toLocaleString()}
+              </span>
+            </p>
+          )}
         </div>
       )}
 

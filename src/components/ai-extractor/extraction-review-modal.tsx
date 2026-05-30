@@ -27,7 +27,7 @@ import type { ExtractionResult, ExtractorEntryPoint, SourceType } from '@/lib/ai
 import type { ReviewedParty, ReviewFormState } from '@/lib/ai-extractor/review-form-types';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
-import { reviewFormFromExtraction } from '@/lib/ai-extractor/review-form-types';
+import { reviewFormFromExtraction, isSupportedCurrency } from '@/lib/ai-extractor/review-form-types';
 import { buildExtractionSummary } from '@/lib/ai-extractor/extraction-summary';
 import { detectDuplicates, defaultResolutions } from '@/lib/ai-extractor/duplicate-detection';
 import { mapReviewToRecentDeal, mapReviewToParticipants, mapSinglePartyToParticipant } from '@/lib/ai-extractor/extraction-mapper';
@@ -37,7 +37,7 @@ import { toast } from 'sonner';
 import { ConfidenceBadge } from './confidence-badge';
 import { ReviewPartyCard } from './review-party-card';
 
-const CURRENCIES = ['AUD', 'USD', 'GBP', 'EUR', 'NZD', 'IDR', 'SGD'] as const;
+const CURRENCIES = ['AUD', 'USD'] as const;
 
 function newEmptyParty(): ReviewedParty {
   return {
@@ -97,6 +97,13 @@ export function ExtractionReviewModal({
 
   const summary = React.useMemo(() => buildExtractionSummary(result), [result]);
 
+  // Currency safety: the system stores values only in AUD or USD.
+  // If the conversation contained a different currency the numeric amounts were nulled
+  // in reviewFormFromExtraction — the operator must enter converted AUD/USD values.
+  const extractedCurrency = result.currency.value;
+  const isUnsupportedCurrency =
+    result.currency.confidence !== 'absent' && !isSupportedCurrency(extractedCurrency);
+
   // Duplicate matches for Entry Point B.
   const duplicateMatches = React.useMemo(() => {
     if (entryPoint !== 'participant_add' || !existingParticipants) return [];
@@ -126,6 +133,20 @@ export function ExtractionReviewModal({
     if (entryPoint === 'project_create' && !form.projectName.trim()) {
       return 'Project name is required.';
     }
+
+    if (isUnsupportedCurrency) {
+      if (entryPoint === 'project_create' && !form.projectValue) {
+        return `Convert the project value from ${extractedCurrency} to AUD or USD before saving.`;
+      }
+      const unconverted = form.parties.filter(
+        (p) => p.name.trim() && p.participationModel === 'fixed_payout' && p.fixedAmount === null
+      );
+      if (unconverted.length > 0) {
+        const names = unconverted.map((p) => p.name.trim()).join(', ');
+        return `Convert the payout amount from ${extractedCurrency} to AUD or USD for: ${names}.`;
+      }
+    }
+
     return null;
   };
 
@@ -274,6 +295,27 @@ export function ExtractionReviewModal({
             <AlertDescription className="text-xs">{conf.text}</AlertDescription>
           </Alert>
 
+          {/* Unsupported currency warning — shown whenever extracted currency is not AUD/USD */}
+          {isUnsupportedCurrency && (
+            <Alert className="border-amber-500/40 bg-amber-500/8 text-amber-900 dark:text-amber-200">
+              <AlertDescription className="text-xs space-y-1.5">
+                <p className="font-medium">
+                  ⚠ This conversation contains values denominated in {extractedCurrency}.
+                  Projects currently support AUD and USD only.
+                  Please convert the amounts before creating the project.
+                </p>
+                {result.projectValue.value != null && (
+                  <p>
+                    Original extracted amount:{' '}
+                    <span className="font-semibold">
+                      {extractedCurrency} {result.projectValue.value.toLocaleString()}
+                    </span>
+                  </p>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* AI Summary */}
           <div className="rounded-lg border bg-muted/10 p-4 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI Summary</p>
@@ -377,8 +419,12 @@ export function ExtractionReviewModal({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <Label className="text-xs">Project Value</Label>
-                    <ConfidenceBadge confidence={result.projectValue.confidence} />
+                    <Label className="text-xs">
+                      Project Value {isUnsupportedCurrency ? '(AUD or USD)' : ''}
+                    </Label>
+                    {!isUnsupportedCurrency && (
+                      <ConfidenceBadge confidence={result.projectValue.confidence} />
+                    )}
                   </div>
                   <Input
                     type="number"
@@ -387,14 +433,27 @@ export function ExtractionReviewModal({
                     onChange={(e) =>
                       setForm((f) => ({ ...f, projectValue: e.target.value ? Number(e.target.value) : null }))
                     }
-                    placeholder="0"
-                    className="h-8 text-sm"
+                    placeholder={isUnsupportedCurrency ? 'Enter converted amount' : '0'}
+                    className={cn(
+                      'h-8 text-sm',
+                      isUnsupportedCurrency && form.projectValue === null && 'border-amber-400 focus-visible:ring-amber-400'
+                    )}
                   />
+                  {isUnsupportedCurrency && result.projectValue.value != null && (
+                    <p className="text-xs text-muted-foreground">
+                      Original:{' '}
+                      <span className="font-medium text-amber-700 dark:text-amber-400">
+                        {extractedCurrency} {result.projectValue.value.toLocaleString()}
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <Label className="text-xs">Currency</Label>
-                    <ConfidenceBadge confidence={result.currency.confidence} />
+                    {!isUnsupportedCurrency && (
+                      <ConfidenceBadge confidence={result.currency.confidence} />
+                    )}
                   </div>
                   <Select
                     value={CURRENCIES.includes(form.currency as typeof CURRENCIES[number]) ? form.currency : 'AUD'}
@@ -458,6 +517,7 @@ export function ExtractionReviewModal({
                     party={party}
                     originalParty={originalParty}
                     entryPoint={entryPoint}
+                    extractedCurrency={isUnsupportedCurrency ? extractedCurrency : undefined}
                     duplicateMatch={dupMatch}
                     duplicateResolution={form.duplicateResolutions[party.id]}
                     onDuplicateResolutionChange={(resolution) =>
