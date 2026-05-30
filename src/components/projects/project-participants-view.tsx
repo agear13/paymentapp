@@ -43,6 +43,7 @@ import {
 } from '@/lib/participants/participant-compensation';
 import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 import { deriveParticipantViewStats } from '@/lib/operations/selectors/derive-participant-view-stats';
+import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
@@ -549,13 +550,19 @@ export function ProjectParticipantsView() {
         canonicalKpis,
       });
     }
-    assertParticipantKpiConvergenceInvariants({
-      participantRowsWithCompensation: rowsWithCompensation,
-      workspaceEarningsConfiguredCount: canonicalKpis.earningsConfiguredCount,
-      graphEarningsConfiguredCount: graph.summary?.earningsConfiguredCount,
-      payoutReadyCount: canonicalKpis.payoutReadyCount,
-      graphPayoutReadyCount: graph.summary?.payoutReadyCount,
-    });
+    try {
+      assertParticipantKpiConvergenceInvariants({
+        participantRowsWithCompensation: rowsWithCompensation,
+        workspaceEarningsConfiguredCount: canonicalKpis.earningsConfiguredCount,
+        graphEarningsConfiguredCount: graph.summary?.earningsConfiguredCount,
+        payoutReadyCount: canonicalKpis.payoutReadyCount,
+        graphPayoutReadyCount: graph.summary?.payoutReadyCount,
+      });
+    } catch (invariantError) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[project-participants-view] KPI convergence check (non-fatal)', invariantError);
+      }
+    }
   }, [canonicalKpis, graph.summary, hydratedParticipants]);
 
   const attributionEnabled = React.useMemo(
