@@ -112,6 +112,8 @@ export async function extractAgreementFromText(rawText: string): Promise<Extract
       return degradedResult('AI returned an unexpected response format. Please fill in all fields manually.');
     }
     responseText = block.text.trim();
+    console.error('[ai-extractor] raw response length:', responseText.length);
+    console.error('[ai-extractor] raw response text:', responseText);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return degradedResult(`AI service error: ${message}. Please fill in all fields manually.`);
@@ -120,13 +122,30 @@ export async function extractAgreementFromText(rawText: string): Promise<Extract
   let parsed: unknown;
   try {
     parsed = JSON.parse(responseText);
-  } catch {
+    console.error('[ai-extractor] JSON.parse succeeded. Top-level keys:', Object.keys(parsed as object));
+  } catch (parseErr) {
+    console.error('[ai-extractor] JSON.parse failed:', parseErr);
+    console.error('[ai-extractor] raw text that failed to parse:', responseText);
     return degradedResult('Could not parse AI response. Please fill in all fields manually.');
   }
 
   try {
     return validateExtractionResult(parsed);
-  } catch {
+  } catch (validationErr) {
+    console.error('[ai-extractor] Zod validation failed.');
+    console.error('[ai-extractor] parsed object:', JSON.stringify(parsed, null, 2));
+    if (
+      validationErr &&
+      typeof validationErr === 'object' &&
+      'issues' in validationErr
+    ) {
+      console.error(
+        '[ai-extractor] Zod issues:',
+        JSON.stringify((validationErr as { issues: unknown[] }).issues, null, 2)
+      );
+    } else {
+      console.error('[ai-extractor] validation error (non-Zod):', validationErr);
+    }
     return degradedResult('AI response did not match expected format. Please fill in all fields manually.');
   }
 }
