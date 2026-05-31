@@ -21,7 +21,7 @@ const ExtractionFieldSchema = <T extends z.ZodTypeAny>(valueSchema: T) =>
   z.object({
     value: valueSchema,
     confidence: z.enum(['high', 'medium', 'low', 'absent']),
-    rawSnippet: z.string().optional(),
+    rawSnippet: z.string().nullable().optional(),
   });
 
 const ExtractedPartySchema = z.object({
@@ -47,7 +47,7 @@ const ExtractedPaymentTermSchema = z.object({
 const ExtractionUncertaintySchema = z.object({
   field: z.string(),
   issue: z.string(),
-  snippet: z.string().optional(),
+  snippet: z.string().nullable().optional(),
 });
 
 const ExtractionResultSchema = z.object({
