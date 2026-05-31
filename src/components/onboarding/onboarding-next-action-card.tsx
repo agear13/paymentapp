@@ -5,10 +5,9 @@ import { usePathname } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
-import {
-  createFallbackNextAction,
-  deriveNextRecommendedAction,
-} from '@/lib/onboarding/next-recommended-action';
+import { deriveNextRecommendedAction } from '@/lib/onboarding/next-recommended-action';
+
+import { createFallbackNextAction } from '@/lib/onboarding/workspace-activation-fallback';
 import {
   collectionSettlementHref,
   resolveContextualNextStep,
