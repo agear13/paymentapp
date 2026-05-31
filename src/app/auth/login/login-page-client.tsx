@@ -153,18 +153,35 @@ export function LoginPageClient() {
           <div className="space-y-8 max-w-lg">
             <div className="space-y-4">
               <h1 className="text-4xl font-bold tracking-tight">
-                {mode === 'signin'
-                  ? 'Structured operational finance'
-                  : 'Set up your workspace'}
+                Every commercial agreement starts in a conversation.
               </h1>
               <p className="text-xl text-muted-foreground leading-relaxed">
                 {mode === 'signin'
-                  ? 'Obligations, payout readiness, and reconciliation for every party on your events.'
-                  : 'Coordinate obligations across venues, promoters, suppliers, and contractors.'}
+                  ? 'Sign in to your Agreement Intelligence workspace. Review agreements, obligations, approvals and settlement readiness in one place.'
+                  : 'Import agreements from WhatsApp, email and meetings. Generate structured obligations, approvals and settlement workflows automatically.'}
               </p>
             </div>
 
             <div className="space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-1">Agreement Intelligence</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Extract commercial terms automatically from any conversation channel
+                  </p>
+                </div>
+              </div>
+
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
                   <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -177,9 +194,9 @@ export function LoginPageClient() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-1">Coordinate obligations across teams</h3>
+                  <h3 className="font-semibold mb-1">Participant Coordination</h3>
                   <p className="text-sm text-muted-foreground">
-                    Promoters, DJs, suppliers, contractors, and affiliates on one event register
+                    Track obligations across contractors, suppliers, affiliates and partners
                   </p>
                 </div>
               </div>
@@ -191,20 +208,14 @@ export function LoginPageClient() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
                     />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-1">Real-time payout visibility</h3>
+                  <h3 className="font-semibold mb-1">Settlement Visibility</h3>
                   <p className="text-sm text-muted-foreground">
-                    Funded, partially funded, and blocked lines before finance releases payment
+                    See what is funded, owed and ready to settle before payment leaves
                   </p>
                 </div>
               </div>
@@ -216,14 +227,14 @@ export function LoginPageClient() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
                     />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-1">Audit-ready reconciliation</h3>
+                  <h3 className="font-semibold mb-1">Audit-Ready Records</h3>
                   <p className="text-sm text-muted-foreground">
-                    Xero sync and structured records with fewer manual checks at month-end
+                    Structured history of agreements, approvals and obligations
                   </p>
                 </div>
               </div>
@@ -259,8 +270,8 @@ export function LoginPageClient() {
             </h2>
             <p className="text-muted-foreground mt-2">
               {mode === 'signin'
-                ? 'Sign in to review obligations, payout states, and reconciliation'
-                : 'Create a workspace for your venue, agency, or event operation'}
+                ? 'Agreement Intelligence · Obligations · Settlement'
+                : 'Create a workspace to start turning conversations into obligations'}
             </p>
           </div>
 
