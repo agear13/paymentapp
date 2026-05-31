@@ -79,6 +79,7 @@ import { OperatorEmptyState } from '@/components/operations/operator-empty-state
 import { cn } from '@/lib/utils';
 import { OperationalDiagnosticsPanel } from '@/components/operations/operational-diagnostics-panel';
 import { CreateFromConversationButton } from '@/components/ai-extractor/create-from-conversation-button';
+import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
 
 const ONBOARDING_CHECKLIST = [
   'Add participants',
