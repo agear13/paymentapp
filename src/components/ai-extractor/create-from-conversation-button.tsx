@@ -36,10 +36,12 @@ export function CreateFromConversationButton({
   const [reviewOpen, setReviewOpen] = React.useState(false);
   const [extractionResult, setExtractionResult] = React.useState<ExtractionResult | null>(null);
   const [sourceType, setSourceType] = React.useState<SourceType>('whatsapp');
+  const [rawConversationText, setRawConversationText] = React.useState<string>('');
 
-  const handleExtracted = React.useCallback((result: ExtractionResult, st: SourceType) => {
+  const handleExtracted = React.useCallback((result: ExtractionResult, st: SourceType, rawText: string) => {
     setExtractionResult(result);
     setSourceType(st);
+    setRawConversationText(rawText);
     setReviewOpen(true);
   }, []);
 
@@ -70,6 +72,7 @@ export function CreateFromConversationButton({
           result={extractionResult}
           entryPoint={entryPoint}
           sourceType={sourceType}
+          rawConversationText={rawConversationText}
           existingDeal={existingDeal}
           existingParticipants={existingParticipants}
           onComplete={onComplete}

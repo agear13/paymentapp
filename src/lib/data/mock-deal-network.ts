@@ -131,6 +131,9 @@ export interface RecentDeal {
   createdVia?: string;
   extractorVersion?: string;
   sourceType?: string;
+  /** Original conversation text from which this project was extracted. Stored for audit and reference. */
+  importedConversation?: string;
+  importedAt?: string;
 }
 
 export interface FunnelStage {

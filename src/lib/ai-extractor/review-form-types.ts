@@ -28,6 +28,8 @@ export interface ReviewFormState {
   parties: ReviewedParty[];
   /** Keyed by ReviewedParty.id — only populated for Entry Point B when duplicates detected. */
   duplicateResolutions: Record<string, 'update' | 'create'>;
+  /** Original conversation text pasted by the operator. Stored on the deal for permanent audit access. */
+  rawConversationText?: string;
 }
 
 /** AUD and USD are the only currencies the system can store and calculate with correctly. */

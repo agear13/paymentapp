@@ -36,6 +36,8 @@ import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-dem
 import { toast } from 'sonner';
 import { ConfidenceBadge } from './confidence-badge';
 import { ReviewPartyCard } from './review-party-card';
+import { PostExtractionPrompt } from './post-extraction-prompt';
+import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
 
 const CURRENCIES = ['AUD', 'USD'] as const;
 
@@ -62,6 +64,8 @@ interface ExtractionReviewModalProps {
   existingDeal?: RecentDeal;
   /** Required for Entry Point B — existing participants for duplicate detection. */
   existingParticipants?: DemoParticipant[];
+  /** Original conversation text — stored on the deal for permanent audit access. */
+  rawConversationText?: string;
   /** Entry Point A: called with new deal id. Entry Point B: called with no args. Entry Point C: called with new participants. */
   onComplete: (dealId?: string, participants?: DemoParticipant[]) => void;
 }
@@ -72,6 +76,7 @@ export function ExtractionReviewModal({
   result,
   entryPoint,
   sourceType,
+  rawConversationText,
   existingDeal,
   existingParticipants,
   onComplete,
@@ -82,6 +87,9 @@ export function ExtractionReviewModal({
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [uncertaintiesOpen, setUncertaintiesOpen] = React.useState(true);
+  const [postPromptOpen, setPostPromptOpen] = React.useState(false);
+  const [createdParticipants, setCreatedParticipants] = React.useState<DemoParticipant[]>([]);
+  const [createdProjectName, setCreatedProjectName] = React.useState<string | undefined>(undefined);
 
   // Re-initialise form when result changes (new extraction).
   React.useEffect(() => {
@@ -91,9 +99,10 @@ export function ExtractionReviewModal({
       const matches = detectDuplicates(base.parties, existingParticipants);
       base.duplicateResolutions = defaultResolutions(matches);
     }
+    base.rawConversationText = rawConversationText;
     setForm(base);
     setSaveError(null);
-  }, [result, entryPoint, sourceType, existingDeal?.id, existingParticipants]);
+  }, [result, entryPoint, sourceType, existingDeal?.id, existingParticipants, rawConversationText]);
 
   const summary = React.useMemo(() => buildExtractionSummary(result), [result]);
 
@@ -181,6 +190,17 @@ export function ExtractionReviewModal({
             ? `${pCount} participant${pCount !== 1 ? 's' : ''} added`
             : newDeal.dealName,
         });
+        appendOperationalAuditEntry({
+          id: `conversation-import-${newDeal.id}`,
+          type: 'compensation_updated',
+          title: 'Conversation imported',
+          description: `${pCount} participant${pCount !== 1 ? 's' : ''} created from imported conversation.`,
+          timestamp: new Date().toISOString(),
+          projectId: newDeal.id,
+        });
+        setCreatedParticipants(newParticipants);
+        setCreatedProjectName(newDeal.dealName);
+        setPostPromptOpen(true);
         onComplete(newDeal.id);
 
       } else if (entryPoint === 'participant_add' && existingDeal) {
@@ -233,6 +253,14 @@ export function ExtractionReviewModal({
         toast.success('Participants added from conversation', {
           description: parts.join(', ') || `Added to ${existingDeal.dealName}`,
         });
+        appendOperationalAuditEntry({
+          id: `conversation-import-participants-${Date.now()}`,
+          type: 'compensation_updated',
+          title: 'Conversation imported',
+          description: `${addedCount} participant${addedCount !== 1 ? 's' : ''} created from imported conversation.`,
+          timestamp: new Date().toISOString(),
+          projectId: existingDeal.id,
+        });
         onComplete();
 
       } else if (entryPoint === 'onboarding') {
@@ -281,7 +309,7 @@ export function ExtractionReviewModal({
     onboarding: 'Add to Project',
   }[entryPoint];
 
-  return (
+  return (<>
     <Dialog open={open} onOpenChange={(o) => { if (!saving) onOpenChange(o); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -580,5 +608,12 @@ export function ExtractionReviewModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+
+    <PostExtractionPrompt
+      open={postPromptOpen}
+      onOpenChange={setPostPromptOpen}
+      participants={createdParticipants}
+      projectName={createdProjectName}
+    />
+  </>);
 }

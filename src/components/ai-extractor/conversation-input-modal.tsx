@@ -37,7 +37,7 @@ interface ConversationInputModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   entryPoint: ExtractorEntryPoint;
-  onExtracted: (result: ExtractionResult, sourceType: SourceType) => void;
+  onExtracted: (result: ExtractionResult, sourceType: SourceType, rawText: string) => void;
 }
 
 export function ConversationInputModal({
@@ -73,7 +73,7 @@ export function ConversationInputModal({
       }
       const result = await res.json() as ExtractionResult;
       onOpenChange(false);
-      onExtracted(result, sourceType);
+      onExtracted(result, sourceType, rawText.trim());
     } catch {
       setError('Could not reach the extraction service. Check your connection and try again.');
     } finally {
