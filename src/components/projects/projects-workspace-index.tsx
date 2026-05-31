@@ -17,6 +17,7 @@ import {
 } from '@/lib/projects/project-workspace-summary';
 import { useDealNetworkExperience } from '@/components/deal-network-demo/deal-network-experience-provider';
 import { useToast } from '@/hooks/use-toast';
+import { CreateFromConversationButton } from '@/components/ai-extractor/create-from-conversation-button';
 
 export function ProjectsWorkspaceIndex() {
   const router = useRouter();
@@ -130,10 +131,22 @@ export function ProjectsWorkspaceIndex() {
             workspace.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} size="lg">
-          <Plus className="mr-2 h-4 w-4" />
-          Create project
-        </Button>
+        <div className="flex items-center gap-2">
+          <CreateFromConversationButton
+            entryPoint="project_create"
+            onComplete={(dealId) => {
+              if (dealId) {
+                void reload();
+                router.push(`/dashboard/projects/${encodeURIComponent(dealId)}`);
+                router.refresh();
+              }
+            }}
+          />
+          <Button onClick={() => setCreateOpen(true)} size="lg">
+            <Plus className="mr-2 h-4 w-4" />
+            Create project
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -153,10 +166,21 @@ export function ProjectsWorkspaceIndex() {
               and coordinate payouts in one place.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center pb-8">
-            <Button onClick={() => setCreateOpen(true)} size="lg">
+          <CardContent className="flex flex-col items-center gap-3 pb-8">
+            <CreateFromConversationButton
+              entryPoint="project_create"
+              size="lg"
+              onComplete={(dealId) => {
+                if (dealId) {
+                  void reload();
+                  router.push(`/dashboard/projects/${encodeURIComponent(dealId)}`);
+                  router.refresh();
+                }
+              }}
+            />
+            <Button variant="ghost" onClick={() => setCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Create project
+              Create project manually
             </Button>
           </CardContent>
         </Card>

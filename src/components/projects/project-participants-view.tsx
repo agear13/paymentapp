@@ -79,6 +79,8 @@ import { opSurface } from '@/lib/design/operational-surfaces';
 import { OperatorEmptyState } from '@/components/operations/operator-empty-state';
 import { cn } from '@/lib/utils';
 import { OperationalDiagnosticsPanel } from '@/components/operations/operational-diagnostics-panel';
+import { CreateFromConversationButton } from '@/components/ai-extractor/create-from-conversation-button';
+import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
 
 const ONBOARDING_CHECKLIST = [
   'Add participants',
@@ -679,6 +681,14 @@ export function ProjectParticipantsView() {
             <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefreshing}>
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
+            {deal && (
+              <CreateFromConversationButton
+                entryPoint="participant_add"
+                existingDeal={deal}
+                existingParticipants={projectParticipants}
+                onComplete={() => void refresh({ scope: 'participants', silent: false, force: true })}
+              />
+            )}
             <Button onClick={() => setInviteOpen(true)}>
               <UserPlus className="mr-2 h-4 w-4" />
               Invite participant
@@ -729,8 +739,17 @@ export function ProjectParticipantsView() {
               title={EMPTY_STATE_COPY.participantEarnings.title}
               body={EMPTY_STATE_COPY.participantEarnings.body}
             />
-            <div className="flex justify-center -mt-2">
-              <Button onClick={() => setInviteOpen(true)}>
+            <div className="flex flex-wrap justify-center gap-2 -mt-2">
+              {deal && (
+                <CreateFromConversationButton
+                  entryPoint="participant_add"
+                  existingDeal={deal}
+                  existingParticipants={projectParticipants}
+                  onComplete={() => void refresh({ scope: 'participants', silent: false, force: true })}
+                  size="lg"
+                />
+              )}
+              <Button variant="outline" size="lg" onClick={() => setInviteOpen(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 {EMPTY_STATE_COPY.participantEarnings.cta}
               </Button>

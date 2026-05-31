@@ -86,6 +86,8 @@ import {
   saveOnboardingDraft,
 } from '@/lib/onboarding/onboarding-draft-persistence';
 import { createOperationId } from '@/lib/onboarding/mutation-resilience';
+import { CreateFromConversationButton } from '@/components/ai-extractor/create-from-conversation-button';
+import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 
 const workspaceSchema = z.object({
   workspaceName: z.string().min(2, 'Workspace name is required').max(255),
@@ -187,6 +189,7 @@ export function WorkflowOnboardingForm() {
   const [projectId, setProjectId] = React.useState<string | null>(null);
   const [projectName, setProjectName] = React.useState('');
   const [confirmedParticipants, setConfirmedParticipants] = React.useState<DraftParticipant[]>([]);
+  const [participantInputMode, setParticipantInputMode] = React.useState<'conversation' | 'manual'>('conversation');
   const [draftParticipant, setDraftParticipant] = React.useState<DraftParticipant>(EMPTY_PARTICIPANT());
   const [collectionPreference, setCollectionPreference] = React.useState<CollectionPreferenceId | null>(
     null
@@ -880,6 +883,73 @@ export function WorkflowOnboardingForm() {
             banking or KYC required yet.
           </p>
 
+          {/* Input mode choice */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium">How was this arrangement made?</p>
+            <div className="space-y-2">
+              {([
+                { value: 'conversation', label: 'Create From Conversation', description: 'Paste a WhatsApp, email, or other message and Provvypay extracts who gets paid.' },
+                { value: 'manual', label: 'Add Participants Manually', description: 'Enter participant details one by one.' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setParticipantInputMode(opt.value)}
+                  className={cn(
+                    'w-full rounded-lg border p-4 text-left transition-colors hover:bg-accent/40',
+                    participantInputMode === opt.value && 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className={cn(
+                      'mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border',
+                      participantInputMode === opt.value ? 'border-primary bg-primary' : 'border-muted-foreground/40'
+                    )}>
+                      {participantInputMode === opt.value && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                      )}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium">{opt.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Conversation import */}
+          {participantInputMode === 'conversation' && (
+            <div className="flex flex-col items-start gap-3">
+              <CreateFromConversationButton
+                entryPoint="onboarding"
+                existingDeal={projectId ? { id: projectId, dealName: projectName, partner: '', value: 0, introducer: '', closer: '', status: 'Pending', lastUpdated: new Date().toISOString(), paymentStatus: 'Not Paid' } : undefined}
+                onComplete={(_dealId, participants) => {
+                  if (participants && participants.length > 0) {
+                    const asDraft: DraftParticipant[] = participants.map((p: DemoParticipant) => ({
+                      name: p.name,
+                      email: p.email ?? '',
+                      role: (p.role === 'Introducer' ? 'Referrer' : p.role === 'Connector' ? 'Partner' : p.role === 'Contributor' ? 'Contractor' : 'Contractor') as OnboardingParticipantRole,
+                    }));
+                    setConfirmedParticipants((prev) => [...prev, ...asDraft]);
+                    setParticipantInputMode('manual');
+                  }
+                }}
+                size="lg"
+              />
+              {confirmedParticipants.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Or{' '}
+                  <button type="button" className="underline hover:text-foreground" onClick={() => setParticipantInputMode('manual')}>
+                    add participants manually instead
+                  </button>
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Confirmed participants list — shown in both modes */}
           {confirmedParticipants.length > 0 ? (
             <div className="space-y-2">
               {confirmedParticipants.map((p, index) => (
@@ -899,43 +969,46 @@ export function WorkflowOnboardingForm() {
             </div>
           ) : null}
 
-          <Card className="p-4 space-y-3">
-            <Input
-              placeholder="Name"
-              value={draftParticipant.name}
-              onChange={(e) => setDraftParticipant({ ...draftParticipant, name: e.target.value })}
-            />
-            <Input
-              type="email"
-              placeholder="Email (optional)"
-              value={draftParticipant.email}
-              onChange={(e) => setDraftParticipant({ ...draftParticipant, email: e.target.value })}
-            />
-            <Select
-              value={draftParticipant.role}
-              onValueChange={(v) =>
-                setDraftParticipant({ ...draftParticipant, role: v as OnboardingParticipantRole })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ONBOARDING_PARTICIPANT_ROLES.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>
-                    {r.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {ONBOARDING_PARTICIPANT_ROLES.find((r) => r.value === draftParticipant.role)?.description}
-            </p>
-            <Button type="button" variant="outline" size="sm" onClick={commitDraftParticipant}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add participant
-            </Button>
-          </Card>
+          {/* Manual entry form — shown when mode is manual */}
+          {participantInputMode === 'manual' && (
+            <Card className="p-4 space-y-3">
+              <Input
+                placeholder="Name"
+                value={draftParticipant.name}
+                onChange={(e) => setDraftParticipant({ ...draftParticipant, name: e.target.value })}
+              />
+              <Input
+                type="email"
+                placeholder="Email (optional)"
+                value={draftParticipant.email}
+                onChange={(e) => setDraftParticipant({ ...draftParticipant, email: e.target.value })}
+              />
+              <Select
+                value={draftParticipant.role}
+                onValueChange={(v) =>
+                  setDraftParticipant({ ...draftParticipant, role: v as OnboardingParticipantRole })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ONBOARDING_PARTICIPANT_ROLES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {ONBOARDING_PARTICIPANT_ROLES.find((r) => r.value === draftParticipant.role)?.description}
+              </p>
+              <Button type="button" variant="outline" size="sm" onClick={commitDraftParticipant}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add participant
+              </Button>
+            </Card>
+          )}
 
           <div className="flex justify-between">
             <Button type="button" variant="ghost" onClick={() => setStep('project')}>
