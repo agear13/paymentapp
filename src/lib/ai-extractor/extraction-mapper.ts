@@ -128,6 +128,29 @@ export function mapSinglePartyToParticipant(
 }
 
 /**
+ * Merge AI-extracted compensation onto an existing participant without overwriting
+ * lifecycle identity (id, inviteToken, approval/agreement state).
+ */
+export function mergeExtractedCompensationIntoExistingParticipant(
+  existing: DemoParticipant,
+  built: DemoParticipant
+): DemoParticipant {
+  const base: DemoParticipant = {
+    ...existing,
+    participantNotes: built.participantNotes,
+  };
+  if (built.compensationProfile) {
+    return applyCompensationProfileToParticipant(base, built.compensationProfile);
+  }
+  return {
+    ...base,
+    commissionKind: built.commissionKind,
+    commissionValue: built.commissionValue,
+    participationModel: built.participationModel,
+  };
+}
+
+/**
  * Build all DemoParticipants from the operator-reviewed extraction form state.
  * Works for all three entry points — the caller supplies the correct project object
  * (newly created for Entry Point A, fetched from snapshot for B and C).

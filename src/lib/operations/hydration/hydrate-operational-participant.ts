@@ -15,6 +15,7 @@ import {
   hasPersistedCompensationTerms,
   isParticipantCompensationExempt,
 } from '@/lib/operations/primitives/participant-earnings-primitives';
+import { repairScalarCompensationProfile } from '@/lib/participants/repair-scalar-compensation-profile';
 
 const DEV = process.env.NODE_ENV === 'development';
 
@@ -77,6 +78,9 @@ function hydrateCompensationProfile(
 export function backfillOperationalParticipantState(
   participant: DemoParticipant
 ): DemoParticipant {
+  const { participant: compensationRepaired } = repairScalarCompensationProfile(participant);
+  participant = compensationRepaired;
+
   if (participant.payoutVerificationConfirmed === undefined) {
     warnMissingField('payoutVerificationConfirmed', participant.id);
   }

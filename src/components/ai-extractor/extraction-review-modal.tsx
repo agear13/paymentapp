@@ -30,7 +30,12 @@ import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import { reviewFormFromExtraction, isSupportedCurrency } from '@/lib/ai-extractor/review-form-types';
 import { buildExtractionSummary } from '@/lib/ai-extractor/extraction-summary';
 import { detectDuplicates, defaultResolutions } from '@/lib/ai-extractor/duplicate-detection';
-import { mapReviewToRecentDeal, mapReviewToParticipants, mapSinglePartyToParticipant } from '@/lib/ai-extractor/extraction-mapper';
+import {
+  mapReviewToRecentDeal,
+  mapReviewToParticipants,
+  mapSinglePartyToParticipant,
+  mergeExtractedCompensationIntoExistingParticipant,
+} from '@/lib/ai-extractor/extraction-mapper';
 import { EXTRACTOR_VERSION, SOURCE_TYPE_LABELS } from '@/lib/ai-extractor/extraction-types';
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import { toast } from 'sonner';
@@ -222,13 +227,7 @@ export function ExtractionReviewModal({
           if (resolution === 'update' && match) {
             updatedParticipants = updatedParticipants.map((ep) =>
               ep.id === match.existingParticipant.id
-                ? {
-                    ...ep,
-                    commissionKind: built.commissionKind,
-                    commissionValue: built.commissionValue,
-                    participationModel: built.participationModel,
-                    participantNotes: built.participantNotes,
-                  }
+                ? mergeExtractedCompensationIntoExistingParticipant(ep, built)
                 : ep
             );
             updatedCount++;

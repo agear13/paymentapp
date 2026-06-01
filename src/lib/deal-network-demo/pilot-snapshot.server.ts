@@ -46,6 +46,7 @@ export function dealRowToRecentDeal(row: {
 }
 
 import { normalizeParticipant } from '@/lib/operational/safe-operational-hydration';
+import { repairScalarCompensationProfile } from '@/lib/participants/repair-scalar-compensation-profile';
 
 export function participantRowToDemo(row: {
   id: string;
@@ -369,12 +370,42 @@ export async function getPilotSnapshotForUser(userId: string): Promise<PilotSnap
   if (dealIds.length === 0) {
     return { deals: [], participants: [] };
   }
-  const participants = await prisma.deal_network_pilot_participants.findMany({
+  const participantRows = await prisma.deal_network_pilot_participants.findMany({
     where: { deal_id: { in: dealIds } },
   });
+
+  const participants = await Promise.all(
+    participantRows.map(async (row) => {
+      const payload = row.participant_payload as unknown as DemoParticipant;
+      const { participant: repaired, repaired: didRepair } = repairScalarCompensationProfile({
+        ...payload,
+        id: row.id,
+        dealId: row.deal_id,
+        inviteToken: row.invite_token,
+      });
+      if (didRepair) {
+        await prisma.deal_network_pilot_participants.update({
+          where: { id: row.id },
+          data: {
+            participant_payload: {
+              ...repaired,
+              id: row.id,
+              dealId: row.deal_id,
+              inviteToken: row.invite_token,
+            } as unknown as Prisma.InputJsonValue,
+          },
+        });
+      }
+      return participantRowToDemo({
+        ...row,
+        participant_payload: repaired as unknown as Prisma.JsonValue,
+      });
+    })
+  );
+
   return {
     deals: deals.map(dealRowToRecentDeal),
-    participants: participants.map(participantRowToDemo),
+    participants,
   };
 }
 
