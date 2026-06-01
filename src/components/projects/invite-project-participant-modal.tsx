@@ -107,6 +107,10 @@ export function InviteProjectParticipantModal({
   const [enableCustomerAttribution, setEnableCustomerAttribution] = React.useState(false);
   const [referralCommerce, setReferralCommerce] =
     React.useState<ParticipantReferralCommerce>(defaultReferralCommerce());
+  const [manualPayoutMethod, setManualPayoutMethod] =
+    React.useState<import('@/lib/participants/manual-payout-method').ManualPayoutMethod | null>(
+      null
+    );
   const [saving, setSaving] = React.useState(false);
   const [agreementLink, setAgreementLink] = React.useState<string | null>(null);
 
@@ -221,6 +225,7 @@ export function InviteProjectParticipantModal({
           participationModel === 'customer_attribution' ? 0 : commissionValue,
         enableCustomerAttribution: attributionEnabled,
         referralCommerce: commerce,
+        manualPayoutMethod: manualPayoutMethod ?? undefined,
         sendInvite: !!email.trim(),
       });
 
@@ -472,6 +477,8 @@ export function InviteProjectParticipantModal({
                     organizationId={organizationId}
                     value={referralCommerce}
                     onChange={setReferralCommerce}
+                    manualPayoutMethod={manualPayoutMethod}
+                    onManualPayoutChange={setManualPayoutMethod}
                     tone="operational"
                     hideEnableToggle
                   />

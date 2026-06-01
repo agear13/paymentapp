@@ -31,6 +31,8 @@ export type OperationalEvent = {
   participantId?: string;
   timestamp: string;
   source: 'server' | 'client';
+  /** When true, subscribers append audit only — do not re-run convergence. */
+  notificationOnly?: boolean;
   payload?: Record<string, unknown>;
   /** Replay-safe correlation identifier when emitted by orchestration. */
   correlationId?: string;
@@ -43,6 +45,7 @@ export type OperationalEvent = {
 export type OperationalMutationKind =
   | 'agreement_approval'
   | 'participant_earnings_save'
+  | 'funding_source_crud'
   | 'funding_update'
   | 'payout_verification'
   | 'attribution_update'
@@ -53,6 +56,7 @@ export type OperationalMutationKind =
 export const MUTATION_TO_OPERATIONAL_EVENT: Record<OperationalMutationKind, OperationalEventType> = {
   agreement_approval: 'AGREEMENT_APPROVED',
   participant_earnings_save: 'PARTICIPANT_COMPENSATION_UPDATED',
+  funding_source_crud: 'FUNDING_SOURCE_UPDATED',
   funding_update: 'FUNDING_ALLOCATION_RESERVED',
   payout_verification: 'PAYOUT_STATE_UPDATED',
   attribution_update: 'ATTRIBUTION_CONFIGURATION_UPDATED',

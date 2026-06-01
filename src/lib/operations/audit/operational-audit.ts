@@ -23,6 +23,7 @@ export const OPERATIONAL_AUDIT_EVENT_TYPES = [
   'settlement_infrastructure_ready',
   'operational_graph_initialization_failed',
   'conversation_imported',
+  'compensation_extraction_incomplete',
 ] as const;
 
 export type OperationalAuditEventType = (typeof OPERATIONAL_AUDIT_EVENT_TYPES)[number];
@@ -80,6 +81,7 @@ const AUDIT_TITLES: Record<OperationalAuditEventType, string> = {
   settlement_infrastructure_ready: 'Settlement infrastructure ready',
   operational_graph_initialization_failed: 'Operational graph initialization failed',
   conversation_imported: 'Conversation imported',
+  compensation_extraction_incomplete: 'Compensation terms require review',
 };
 
 export function auditEntryFromOperationalEvent(event: OperationalEvent): OperationalAuditEntry | null {
@@ -106,8 +108,20 @@ function describeAuditEvent(type: OperationalAuditEventType, event: OperationalE
         : 'Participant approved participation agreement.';
     case 'obligations_generated':
       return `Obligation count: ${event.payload?.obligationCount ?? 'updated'}`;
-    case 'funding_linked':
+    case 'funding_linked': {
+      const action = event.payload?.fundingAction as string | undefined;
+      const name = event.payload?.sourceName as string | undefined;
+      const amount = event.payload?.amount as number | undefined;
+      const currency = event.payload?.currency as string | undefined;
+      const status = event.payload?.status as string | undefined;
+      if (name && amount != null && currency) {
+        const amountLabel = `${currency} ${Number(amount).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+        if (action === 'added') return `${name} added · ${amountLabel} · ${status ?? 'recorded'}`;
+        if (action === 'updated') return `${name} updated · ${amountLabel} · ${status ?? 'recorded'}`;
+        if (action === 'removed') return `${name} removed · ${amountLabel}`;
+      }
       return 'Funding source changed — obligations and readiness recomputed.';
+    }
     case 'funding_reserved_against_obligations':
       return 'Funding allocated and reserved against payout obligations.';
     case 'compensation_updated':

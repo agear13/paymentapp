@@ -8,6 +8,7 @@ import {
   type CommissionSettlementBasis,
 } from '@/lib/operations/derivations/commission-scope';
 import { hasPersistedCompensationTerms } from '@/lib/operations/primitives/participant-earnings-primitives';
+import { deriveIncompleteCompensationPresentation } from '@/lib/operations/presentation/incomplete-compensation-presentation';
 import { safeCompensationState } from '@/lib/operations/guards/hydration-guards';
 import type { ParticipantCompensationType } from '@/lib/participants/participant-compensation-types';
 
@@ -40,6 +41,16 @@ export function deriveCompensationState(
   const configured = hasPersistedCompensationTerms(participant);
   const exemptFromPayout = profile?.exemptFromPayout === true;
   const scope = deriveCommissionScope(participant, context);
+  const incompletePresentation = deriveIncompleteCompensationPresentation(participant);
+  const earningsPrimaryCompact = incompletePresentation
+    ? incompletePresentation.earningsPrimaryCompact
+    : formatCompactOperationalEarnings(scope, participant, context);
+  const earningsSecondary = incompletePresentation
+    ? incompletePresentation.earningsSecondary
+    : scope.earningsSecondary;
+  const earningsTitle = incompletePresentation
+    ? incompletePresentation.earningsTitle
+    : scope.earningsTitle;
 
   return {
     configured,
@@ -52,11 +63,11 @@ export function deriveCompensationState(
     scopeLabel: scope.scopeLabel,
     scopeDescription: scope.scopeDescription,
     earningsPrimary: scope.earningsPrimary,
-    earningsPrimaryCompact: formatCompactOperationalEarnings(scope, participant, context),
-    earningsSecondary: scope.earningsSecondary,
-    earningsTitle: scope.earningsTitle,
+    earningsPrimaryCompact,
+    earningsSecondary,
+    earningsTitle,
     eligibleCatalogItems: scope.eligibleCatalogItems,
-    earningsSummary: formatCompactOperationalEarnings(scope, participant, context),
+    earningsSummary: earningsPrimaryCompact,
     storageState,
   };
 }

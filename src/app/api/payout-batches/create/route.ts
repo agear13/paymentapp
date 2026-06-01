@@ -21,7 +21,10 @@ import {
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import { assertBatchInvariants } from '@/lib/operations/dev/operational-invariants';
-import { pilotReleaseBatchPreferred } from '@/lib/operations/orchestration/pilot-release-batch.server';
+import {
+  createPilotReleaseBatch,
+  pilotReleaseBatchPreferred,
+} from '@/lib/operations/orchestration/pilot-release-batch.server';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -97,10 +100,76 @@ export async function POST(request: NextRequest) {
       minThreshold,
     });
 
+    if (pilotBatch.usePilot && pilotBatch.lines.length > 0) {
+      const participantTotals = new Map<string, number>();
+      for (const line of pilotBatch.lines) {
+        participantTotals.set(
+          line.participantId,
+          (participantTotals.get(line.participantId) ?? 0) + line.amount
+        );
+      }
+      const aboveThreshold = [...participantTotals.values()].filter((a) => a >= minThreshold).length;
+
+      if (aboveThreshold === 0) {
+        return NextResponse.json(
+          {
+            error: 'No payees above threshold',
+            message: `No pilot obligations >= ${minThreshold} ${currencyUpper} for eligible participants.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      const pilotCreated = await createPilotReleaseBatch({
+        organizationId,
+        createdBy: user.id,
+        currency: currencyUpper,
+        minThreshold,
+        lines: pilotBatch.lines,
+      });
+
+      if (!pilotCreated) {
+        return NextResponse.json(
+          {
+            error: 'No payees above threshold',
+            message: `No pilot obligations >= ${minThreshold} ${currencyUpper}.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      assertBatchInvariants({
+        batchCreated: true,
+        eligibleParticipantCount: eligibility.participantCount,
+        includedParticipantCount: pilotCreated.payoutCount,
+      });
+
+      const operationalSync = await orchestrateOperationalMutation({
+        userId: user.id,
+        mutation: 'release_batch_generated',
+        projectId: graph.projectId ?? undefined,
+      });
+
+      return NextResponse.json(
+        {
+          data: {
+            id: pilotCreated.batchId,
+            currency: pilotCreated.currency,
+            status: pilotCreated.status,
+            payoutCount: pilotCreated.payoutCount,
+            totalAmount: pilotCreated.totalAmount,
+            source: 'pilot_obligations',
+          },
+          ...operationalSyncJson(operationalSync),
+        },
+        { status: 201 }
+      );
+    }
+
     assertBatchInvariants({
       batchCreated: false,
       eligibleParticipantCount: eligibility.participantCount,
-      includedParticipantCount: pilotBatch.lines.length > 0 ? pilotBatch.eligibleCount : 0,
+      includedParticipantCount: 0,
     });
 
     const lines = await prisma.commission_obligation_lines.findMany({

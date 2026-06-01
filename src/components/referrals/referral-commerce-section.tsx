@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import type { ManualPayoutMethod } from '@/lib/participants/manual-payout-method';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import type {
@@ -26,6 +28,8 @@ type Props = {
   organizationId: string | null;
   value: ParticipantReferralCommerce;
   onChange: (next: ParticipantReferralCommerce) => void;
+  manualPayoutMethod?: ManualPayoutMethod | null;
+  onManualPayoutChange?: (next: ManualPayoutMethod | null) => void;
   disabled?: boolean;
   /** Operational project workspace copy vs legacy pilot labels. */
   tone?: 'pilot' | 'operational';
@@ -37,10 +41,13 @@ export function ReferralCommerceSection({
   organizationId,
   value,
   onChange,
+  manualPayoutMethod,
+  onManualPayoutChange,
   disabled,
   tone = 'pilot',
   hideEnableToggle = false,
 }: Props) {
+  const manualRailEnabled = (value.enabledPaymentRails ?? ['stripe']).includes('manual');
   const operational = tone === 'operational';
   const [services, setServices] = React.useState<OrganizationServiceOption[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -267,6 +274,62 @@ export function ReferralCommerceSection({
                   })}
                 </ul>
               </div>
+
+              {manualRailEnabled && onManualPayoutChange ? (
+                <div className="space-y-3 pt-2 border-t">
+                  <Label>Manual settlement instructions</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Shown to customers when manual settlement is enabled. Stored on this participant,
+                    not on individual payment links.
+                  </p>
+                  <div className="grid gap-2">
+                    <Label htmlFor="manual-payout-label">Label</Label>
+                    <Input
+                      id="manual-payout-label"
+                      value={manualPayoutMethod?.label ?? ''}
+                      disabled={disabled}
+                      placeholder="Revolut"
+                      onChange={(e) => {
+                        const label = e.target.value;
+                        if (!label.trim() && !manualPayoutMethod?.instructions?.trim()) {
+                          onManualPayoutChange(null);
+                          return;
+                        }
+                        onManualPayoutChange({
+                          type: 'manual',
+                          label,
+                          instructions: manualPayoutMethod?.instructions ?? '',
+                          attachments: manualPayoutMethod?.attachments,
+                        });
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="manual-payout-instructions">Instructions</Label>
+                    <Textarea
+                      id="manual-payout-instructions"
+                      value={manualPayoutMethod?.instructions ?? ''}
+                      disabled={disabled}
+                      rows={4}
+                      placeholder="Account details and payment reference for the customer"
+                      onChange={(e) => {
+                        const instructions = e.target.value;
+                        const label = manualPayoutMethod?.label?.trim() ?? '';
+                        if (!label || !instructions.trim()) {
+                          onManualPayoutChange(null);
+                          return;
+                        }
+                        onManualPayoutChange({
+                          type: 'manual',
+                          label,
+                          instructions,
+                          attachments: manualPayoutMethod?.attachments,
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               <div className="flex items-center gap-2">
                 <Checkbox

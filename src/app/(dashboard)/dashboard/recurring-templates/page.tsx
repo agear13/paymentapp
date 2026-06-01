@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 import { useOrganization } from '@/hooks/use-organization';
+import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
+import { formatRecurringIntervalLabel } from '@/lib/recurring-templates/format-recurring-interval-label';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,12 +44,13 @@ type RecurringTemplateRow = {
 export default function RecurringTemplatesPage() {
   const { toast } = useToast();
   const { isLoading: isOrgLoading } = useOrganization();
+  const { currency: orgCurrency, isLoading: orgCurrencyLoading } = useOrganizationCurrency();
   const [templates, setTemplates] = React.useState<RecurringTemplateRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
 
   const [amount, setAmount] = React.useState('100');
-  const [currency, setCurrency] = React.useState('AUD');
+  const [currency, setCurrency] = React.useState(orgCurrency);
   const [description, setDescription] = React.useState('');
   const [customerEmail, setCustomerEmail] = React.useState('');
   const [interval, setInterval] = React.useState<'weekly' | 'monthly' | 'custom'>('monthly');
@@ -83,6 +86,10 @@ export default function RecurringTemplatesPage() {
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  React.useEffect(() => {
+    if (!orgCurrencyLoading) setCurrency(orgCurrency);
+  }, [orgCurrency, orgCurrencyLoading]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -237,7 +244,12 @@ export default function RecurringTemplatesPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="intervalCount">Every N periods</Label>
+                <Label htmlFor="intervalCount">
+                  {formatRecurringIntervalLabel(
+                    interval,
+                    Number(intervalCount) || 1
+                  ).replace(/^Every /, 'Every N ')}
+                </Label>
                 <Input
                   id="intervalCount"
                   type="number"
@@ -247,6 +259,10 @@ export default function RecurringTemplatesPage() {
                   onChange={(e) => setIntervalCount(e.target.value)}
                   required
                 />
+                <p className="text-xs text-muted-foreground">
+                  Preview:{' '}
+                  {formatRecurringIntervalLabel(interval, Number(intervalCount) || 1)}
+                </p>
               </div>
             </div>
             <div className="grid gap-2">
@@ -318,12 +334,7 @@ export default function RecurringTemplatesPage() {
                       {t.amount} {t.currency}
                     </TableCell>
                     <TableCell className="text-sm">
-                      {t.interval === 'weekly' &&
-                        `Every ${t.intervalCount} week${t.intervalCount > 1 ? 's' : ''}`}
-                      {t.interval === 'monthly' &&
-                        `Every ${t.intervalCount} month${t.intervalCount > 1 ? 's' : ''}`}
-                      {t.interval === 'custom' &&
-                        `Every ${t.intervalCount} day${t.intervalCount > 1 ? 's' : ''}`}
+                      {formatRecurringIntervalLabel(t.interval, t.intervalCount)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm">
                       {format(new Date(t.nextRunAt), 'PPp')}

@@ -9,6 +9,8 @@ import {
   sumPilotFundingForDeal,
 } from '@/lib/deal-network-demo/pilot-project-funding.server';
 import { sumConfirmedFundingForProject } from '@/lib/projects/funding-sources/confirmed-funding.server';
+import { listProjectFundingSources } from '@/lib/projects/funding-sources/funding-sources.server';
+import { buildProjectTreasurySummary } from '@/lib/projects/funding-sources/treasury-summary';
 import type { RawObligationInput } from '@/lib/operations/derivations/derive-obligation-state';
 import {
   resolveObligationAmountFunded,
@@ -134,11 +136,26 @@ export async function resolveOperationalCoordinationSnapshot(
 
   const obligations = obligationsFromRows(obligationRows, participantsById, projectCurrency);
 
+  let hasFundingSourceRows = false;
+  let pendingFunding = 0;
+  let forecastFunding = 0;
+
   if (deal) {
     const strait = isStraitProjectDeal(deal);
     const railFunding = strait ? await sumPilotFundingForDeal(deal.id) : 0;
     confirmedFunding = await sumConfirmedFundingForProject(input.userId, deal.id, railFunding);
     fundingAllocated = confirmedFunding > 0;
+
+    const fundingSources = await listProjectFundingSources(input.userId, deal.id);
+    hasFundingSourceRows = fundingSources.length > 0;
+    const treasuryRollup = buildProjectTreasurySummary({
+      fundingSources,
+      obligationsTotal,
+      legacyConfirmedFunding: railFunding,
+      defaultCurrency: projectCurrency,
+    });
+    pendingFunding = treasuryRollup.pendingFunding;
+    forecastFunding = treasuryRollup.forecastFunding;
   }
 
   const obligationStatusByParticipant = Object.fromEntries(
@@ -154,10 +171,14 @@ export async function resolveOperationalCoordinationSnapshot(
     fundingAllocated,
     obligationStatusByParticipant,
     funding: {
-      fundingSourceConnected: fundingAllocated || obligationsTotal > 0,
+      hasFundingSourceRows,
+      fundingSourceConnected:
+        hasFundingSourceRows || fundingAllocated || obligationsTotal > 0,
       confirmedFunding,
       obligationsTotal,
       obligationsFunded,
+      pendingFunding,
+      forecastFunding,
     },
     projectCurrency,
   };

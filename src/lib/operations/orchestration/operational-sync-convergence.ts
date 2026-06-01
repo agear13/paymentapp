@@ -187,10 +187,18 @@ async function runOperationalSyncConvergence(
   }
 
   if (sync?.operationalEvent) {
-    dispatchOperationalEvent({ ...sync.operationalEvent, source: 'client' });
+    dispatchOperationalEvent({
+      ...sync.operationalEvent,
+      source: 'client',
+      notificationOnly: true,
+    });
   }
   if (sync?.completionEvent) {
-    dispatchOperationalEvent({ ...sync.completionEvent, source: 'client' });
+    dispatchOperationalEvent({
+      ...sync.completionEvent,
+      source: 'client',
+      notificationOnly: true,
+    });
   }
   if (sync?.auditEntry) {
     handlers.onAudit?.(sync.auditEntry);
@@ -203,10 +211,6 @@ async function runOperationalSyncConvergence(
 
   recordPhase('activation-sync', options);
   handlers.notifyActivation?.();
-
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('operational-coordination-reload'));
-  }
 
   if (options?.verify) {
     await options.verify();

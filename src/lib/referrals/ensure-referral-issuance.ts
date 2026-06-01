@@ -18,8 +18,10 @@ import {
   type ParticipantReferralCommerce,
   commerceCommissionPctDecimal,
   mergeReferralCommerceIntoCheckoutConfig,
+  mergeManualPayoutMethodIntoCheckoutConfig,
   normalizeReferralCommerce,
 } from '@/lib/referrals/referral-commerce-config';
+import type { ManualPayoutMethod } from '@/lib/participants/manual-payout-method';
 
 export type EnsureReferralIssuanceInput = {
   organizationId: string;
@@ -35,6 +37,7 @@ export type EnsureReferralIssuanceInput = {
   commissionValue?: number;
   projectLabel?: string | null;
   referralCommerce?: ParticipantReferralCommerce | null;
+  manualPayoutMethod?: ManualPayoutMethod | null;
 };
 
 function isReferralCommerceMode(commerce?: ParticipantReferralCommerce | null): boolean {
@@ -51,10 +54,14 @@ function buildIssuanceCheckoutConfig(input: EnsureReferralIssuanceInput): Record
     commissionValue: input.commissionValue ?? 10,
     issuedAt: new Date().toISOString(),
   };
+  let next = base;
   if (input.referralCommerce) {
-    return mergeReferralCommerceIntoCheckoutConfig(base, normalizeReferralCommerce(input.referralCommerce));
+    next = mergeReferralCommerceIntoCheckoutConfig(base, normalizeReferralCommerce(input.referralCommerce));
   }
-  return base;
+  if (input.manualPayoutMethod) {
+    next = mergeManualPayoutMethodIntoCheckoutConfig(next, input.manualPayoutMethod);
+  }
+  return next;
 }
 
 async function syncCheckoutConfigOnLink(

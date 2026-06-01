@@ -21,7 +21,14 @@ import {
   formatTreasuryAmount,
 } from '@/lib/projects/funding-sources/format-funding-source';
 import type { ProjectFundingSourceDto, ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
-import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-convergence';
+import {
+  applyOperationalSyncRefresh,
+  parseOperationalSync,
+  type OperationalSyncHandlers,
+} from '@/lib/operations/orchestration/operational-sync-client';
+import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
+import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
+import { toast } from 'sonner';
 import { createInvoiceHref } from '@/lib/navigation/payment-routes';
 
 type ProjectFundingSourcesPanelProps = {
@@ -92,10 +99,28 @@ export function ProjectFundingSourcesPanel({
         `/api/projects/${encodeURIComponent(projectId)}/funding-sources/${encodeURIComponent(sourceId)}`,
         { method: 'DELETE', credentials: 'include' }
       );
-      if (res.ok) {
-        await load();
-        onTreasuryChange?.();
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        fundingSourceAudit?: OperationalAuditEntry;
+        operationalSync?: unknown;
+      };
+      if (!res.ok) {
+        toast.error(json.error ?? 'Failed to remove funding source');
+        return;
       }
+      if (json.fundingSourceAudit) {
+        appendOperationalAuditEntry(json.fundingSourceAudit);
+      }
+      if (operationalSyncHandlers) {
+        const sync = parseOperationalSync(json);
+        await applyOperationalSyncRefresh(operationalSyncHandlers, sync, {
+          mutation: 'funding_source_crud',
+          projectId,
+          surface: 'project-funding-sources-panel',
+        });
+      }
+      await load();
+      onTreasuryChange?.();
     } finally {
       setDeletingId(null);
     }

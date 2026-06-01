@@ -69,6 +69,103 @@ export async function derivePilotReleaseBatchLines(
   return lines;
 }
 
+export type CreatePilotReleaseBatchResult = {
+  batchId: string;
+  currency: string;
+  status: string;
+  payoutCount: number;
+  totalAmount: number;
+};
+
+/** Create payout batch from pilot obligation lines (Projects E2E path). */
+export async function createPilotReleaseBatch(input: {
+  organizationId: string;
+  createdBy: string;
+  currency: string;
+  minThreshold: number;
+  lines: PilotReleaseBatchLine[];
+}): Promise<CreatePilotReleaseBatchResult | null> {
+  const currencyUpper = input.currency.toUpperCase();
+  const grouped = new Map<
+    string,
+    { amount: number; lines: PilotReleaseBatchLine[]; name: string }
+  >();
+
+  for (const line of input.lines) {
+    const key = line.participantId;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.amount += line.amount;
+      existing.lines.push(line);
+    } else {
+      grouped.set(key, {
+        amount: line.amount,
+        lines: [line],
+        name: line.participantName,
+      });
+    }
+  }
+
+  const payees = Array.from(grouped.entries()).filter(([, g]) => g.amount >= input.minThreshold);
+  if (payees.length === 0) return null;
+
+  const totalAmount = payees.reduce((sum, [, g]) => sum + g.amount, 0);
+
+  const [batch] = await prisma.$transaction(async (tx) => {
+    const batch = await tx.payout_batches.create({
+      data: {
+        organization_id: input.organizationId,
+        currency: currencyUpper,
+        status: 'DRAFT',
+        payout_count: payees.length,
+        total_amount: totalAmount,
+        created_by: input.createdBy,
+      },
+    });
+
+    for (const [participantId, group] of payees) {
+      const defaultMethod = await tx.payout_methods.findFirst({
+        where: {
+          organization_id: input.organizationId,
+          user_id: participantId,
+          is_default: true,
+          status: 'ACTIVE',
+        },
+      });
+
+      await tx.payouts.create({
+        data: {
+          organization_id: input.organizationId,
+          batch_id: batch.id,
+          user_id: participantId,
+          payout_method_id: defaultMethod?.id ?? undefined,
+          currency: currencyUpper,
+          gross_amount: group.amount,
+          fee_amount: 0,
+          net_amount: group.amount,
+          status: 'DRAFT',
+        },
+      });
+
+      const obligationIds = group.lines.map((l) => l.obligationId);
+      await tx.deal_network_pilot_obligations.updateMany({
+        where: { id: { in: obligationIds } },
+        data: { status: DealNetworkPilotObligationStatus.PENDING_APPROVAL },
+      });
+    }
+
+    return [batch];
+  });
+
+  return {
+    batchId: batch.id,
+    currency: batch.currency,
+    status: batch.status,
+    payoutCount: batch.payout_count,
+    totalAmount: Number(batch.total_amount),
+  };
+}
+
 /** Returns pilot lines when graph-eligible; empty when ledger path should be used. */
 export async function pilotReleaseBatchPreferred(
   input: PilotReleaseBatchInput

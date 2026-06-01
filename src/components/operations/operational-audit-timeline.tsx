@@ -28,6 +28,7 @@ const TYPE_LABELS: Partial<Record<OperationalAuditEntry['type'], string>> = {
   attribution_configured: 'Attribution',
   payout_state_updated: 'Payout',
   conversation_imported: 'Import',
+  compensation_extraction_incomplete: 'Review',
 };
 
 function ConversationImportTimelineItem({ entry }: { entry: OperationalAuditEntry }) {

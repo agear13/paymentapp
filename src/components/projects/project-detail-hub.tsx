@@ -23,6 +23,7 @@ import { ProjectFundingSourcesPanel } from '@/components/projects/project-fundin
 import { ProjectOperationalCompletenessCard } from '@/components/projects/project-operational-completeness-card';
 import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
 import {
+  projectAllocationsPath,
   projectFundingPath,
   projectParticipantsPath,
   projectPayoutsPath,
@@ -105,6 +106,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
     );
   }
 
+  const allocationsHref = projectAllocationsPath(projectId);
   const participantsHref = projectParticipantsPath(projectId);
   const fundingHref = projectFundingPath(projectId);
   const payoutsHref = projectPayoutsPath(projectId);
@@ -143,9 +145,14 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
             </p>
           )}
         </div>
-        <Button asChild className="w-fit">
-          <Link href={participantsHref}>Manage participants</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild className="w-fit">
+            <Link href={allocationsHref}>Plan allocations</Link>
+          </Button>
+          <Button asChild variant="outline" className="w-fit">
+            <Link href={participantsHref}>Manage participants</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">

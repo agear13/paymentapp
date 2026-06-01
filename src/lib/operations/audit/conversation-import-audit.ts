@@ -15,6 +15,10 @@ import {
 import type { ReviewFormState } from '@/lib/ai-extractor/review-form-types';
 import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
 import { mergeAuditTimeline } from '@/lib/operations/audit/operational-audit';
+import {
+  describeExtractedCompensationGap,
+  wasExtractedCompensationIncomplete,
+} from '@/lib/ai-extractor/compensation-review-validation';
 import { participationModelLabel } from '@/lib/projects/participant-entitlement';
 
 export type {
@@ -216,4 +220,64 @@ export function formatPartyCompensationTerms(party: ConversationImportPartyRecor
     return party.fixedAmount != null ? `Fixed payout ${party.fixedAmount}` : 'Fixed payout';
   }
   return participationModelLabel(party.participationModel);
+}
+
+function formatConfidenceLabel(confidence: ExtractionConfidence): string {
+  if (confidence === 'high') return 'High';
+  if (confidence === 'medium') return 'Medium';
+  if (confidence === 'low') return 'Low';
+  return 'Absent';
+}
+
+export function formatPartyCompensationModelForAudit(
+  party: ConversationImportPartyRecord
+): string {
+  if (party.participationModel === 'revenue_share') return 'Revenue Share';
+  if (party.participationModel === 'fixed_payout') return 'Fixed Payout';
+  if (party.participationModel === 'customer_attribution') return 'Customer Attribution';
+  return participationModelLabel(party.participationModel);
+}
+
+export function formatPartyExtractedValueForAudit(
+  party: ConversationImportPartyRecord
+): string {
+  if (party.participationModel === 'revenue_share') {
+    return party.revenueSharePct != null ? `${party.revenueSharePct}%` : 'Not Found';
+  }
+  if (party.participationModel === 'fixed_payout') {
+    return party.fixedAmount != null ? String(party.fixedAmount) : 'Not Found';
+  }
+  return 'Attribution-based';
+}
+
+export function formatPartyAmountConfidenceForAudit(
+  party: ConversationImportPartyRecord
+): string {
+  return formatConfidenceLabel(party.amountConfidence);
+}
+
+export function buildIncompleteExtractionCompensationAuditEntries(input: {
+  projectId: string;
+  result: ExtractionResult;
+  importedAt?: string;
+}): OperationalAuditEntry[] {
+  const timestamp = input.importedAt ?? new Date().toISOString();
+  const entries: OperationalAuditEntry[] = [];
+
+  for (const original of input.result.parties) {
+    if (!original.name.value.trim()) continue;
+    if (!wasExtractedCompensationIncomplete(original)) continue;
+    const description = describeExtractedCompensationGap(original);
+    if (!description) continue;
+    entries.push({
+      id: `comp-extraction-incomplete-${original.id}-${timestamp}`,
+      type: 'compensation_extraction_incomplete',
+      title: 'Compensation terms require review',
+      description,
+      timestamp,
+      projectId: input.projectId,
+    });
+  }
+
+  return entries;
 }

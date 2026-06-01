@@ -7,6 +7,7 @@ import {
   createProjectFundingSource,
   listProjectFundingSources,
 } from '@/lib/projects/funding-sources/funding-sources.server';
+import { buildFundingSourceAuditEntry } from '@/lib/operations/audit/funding-source-audit';
 import {
   orchestrateOperationalMutation,
   operationalSyncJson,
@@ -81,11 +82,24 @@ export async function POST(
 
     const operationalSync = await orchestrateOperationalMutation({
       userId: user.id,
-      mutation: 'funding_update',
+      mutation: 'funding_source_crud',
       projectId,
     });
 
-    return NextResponse.json({ data: created, ...operationalSyncJson(operationalSync) }, { status: 201 });
+    const fundingSourceAudit = buildFundingSourceAuditEntry({
+      projectId,
+      action: 'added',
+      source: created,
+    });
+
+    return NextResponse.json(
+      {
+        data: created,
+        fundingSourceAudit,
+        ...operationalSyncJson(operationalSync),
+      },
+      { status: 201 }
+    );
   } catch (e: unknown) {
     const err = e as { statusCode?: number };
     if (err.statusCode === 401) {

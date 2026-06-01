@@ -175,18 +175,26 @@ export async function updateProjectFundingSource(
   return rowToFundingSourceDto(row);
 }
 
+export async function getProjectFundingSource(
+  userId: string,
+  projectId: string,
+  sourceId: string
+): Promise<ProjectFundingSourceDto | null> {
+  const row = await prisma.project_funding_sources.findFirst({
+    where: { id: sourceId, user_id: userId, project_id: projectId },
+  });
+  return row ? rowToFundingSourceDto(row) : null;
+}
+
 export async function deleteProjectFundingSource(
   userId: string,
   projectId: string,
   sourceId: string
-): Promise<boolean> {
-  const existing = await prisma.project_funding_sources.findFirst({
-    where: { id: sourceId, user_id: userId, project_id: projectId },
-    select: { id: true },
-  });
-  if (!existing) return false;
+): Promise<ProjectFundingSourceDto | null> {
+  const existing = await getProjectFundingSource(userId, projectId, sourceId);
+  if (!existing) return null;
   await prisma.project_funding_sources.delete({ where: { id: sourceId } });
-  return true;
+  return existing;
 }
 
 /** Confirmed inflows from payment rails not yet mirrored as funding source rows. */

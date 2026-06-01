@@ -30,9 +30,10 @@ import {
   parseOperationalSync,
   type OperationalSyncResponse,
 } from '@/lib/operations/orchestration/operational-sync-client';
-import { createPostConvergenceVerifier } from '@/lib/operations/dev/post-convergence-verifier';
 import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-convergence';
 import { logOperationalSyncConvergence } from '@/lib/operations/orchestration/operational-sync-convergence';
+import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
+import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
 
 type AddFundingSourceDialogProps = {
   projectId: string;
@@ -87,7 +88,7 @@ export function AddFundingSourceDialog({
     setSubmitting(true);
     setError(null);
     logOperationalSyncConvergence('mutation-start', {
-      mutation: 'funding_update',
+      mutation: 'funding_source_crud',
       projectId,
       surface: 'add-funding-source-dialog',
     });
@@ -114,29 +115,19 @@ export function AddFundingSourceDialog({
       }
       const json = (await res.json()) as {
         data: ProjectFundingSourceDto;
+        fundingSourceAudit?: OperationalAuditEntry;
         operationalSync?: OperationalSyncResponse['operationalSync'];
       };
+      if (json.fundingSourceAudit) {
+        appendOperationalAuditEntry(json.fundingSourceAudit);
+      }
       if (operationalSyncHandlers) {
         const sync = parseOperationalSync(json);
-        await applyOperationalSyncRefresh(
-          operationalSyncHandlers,
-          sync,
-          { mutation: 'funding_update', projectId, surface: 'add-funding-source-dialog' },
-          createPostConvergenceVerifier({
-            mutation: 'funding_update',
-            projectId,
-            surface: 'add-funding-source-dialog',
-            participants: [],
-            sync: sync
-              ? {
-                  payoutReadyCount: sync.payoutReadyCount,
-                  obligationCount: sync.obligationCount,
-                  releaseEligibleObligationCount: sync.releaseEligibleObligationCount,
-                }
-              : undefined,
-            treasuryHasFundingSources: true,
-          })
-        );
+        await applyOperationalSyncRefresh(operationalSyncHandlers, sync, {
+          mutation: 'funding_source_crud',
+          projectId,
+          surface: 'add-funding-source-dialog',
+        });
       }
       reset();
       onOpenChange(false);

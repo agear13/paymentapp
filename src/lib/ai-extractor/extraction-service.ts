@@ -74,7 +74,7 @@ function degradedResult(reason: string): ExtractionResult {
     projectName: { value: null, confidence: 'absent' },
     projectDescription: { value: null, confidence: 'absent' },
     projectValue: { value: null, confidence: 'absent' },
-    currency: { value: 'AUD', confidence: 'absent' },
+    currency: { value: null, confidence: 'absent' },
     counterparty: { value: null, confidence: 'absent' },
     parties: [],
     paymentTerms: [],

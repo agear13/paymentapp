@@ -152,22 +152,36 @@ export function OperatorSettlementsWorkspace({
         const res = await fetch(`/api/operations/release-batch-eligibility?${qs}`, {
           credentials: 'include',
         });
-        if (!res.ok) return;
         const json = (await res.json()) as {
           data?: { lineCount: number; participantCount: number; total: number };
+          error?: string;
+          message?: string;
         };
+        if (cancelled) return;
+        if (!res.ok) {
+          toast.error(json.message ?? json.error ?? 'Could not load release eligibility preview');
+          setEligiblePreview({ lineCount: 0, participantCount: 0, total: 0, loading: false });
+          return;
+        }
         const preview = json.data;
-        if (!cancelled && preview) {
+        if (preview) {
           setEligiblePreview({
             lineCount: preview.lineCount,
             participantCount: preview.participantCount,
             total: preview.total,
             loading: false,
           });
+        } else {
+          setEligiblePreview({ lineCount: 0, participantCount: 0, total: 0, loading: false });
         }
       } catch {
         if (!cancelled) {
+          toast.error('Could not load release eligibility preview');
           setEligiblePreview({ lineCount: 0, participantCount: 0, total: 0, loading: false });
+        }
+      } finally {
+        if (!cancelled) {
+          setEligiblePreview((p) => (p.loading ? { ...p, loading: false } : p));
         }
       }
     })();
@@ -185,8 +199,21 @@ export function OperatorSettlementsWorkspace({
   };
 
   const handleCreateBatch = async () => {
-    if (!organizationId || !releaseInteraction.releaseInteractionEnabled) return;
-    if (!capabilities.canCreateReleaseBatch) return;
+    if (!organizationId || !releaseInteraction.releaseInteractionEnabled) {
+      toast.error(
+        releaseInteraction.interactionGuidance ??
+          'Release actions are not available until operational coordination is ready.'
+      );
+      return;
+    }
+    if (!capabilities.canCreateReleaseBatch) {
+      toast.error(
+        capabilities.disabledReason ??
+          releaseInteraction.interactionGuidance ??
+          'You cannot create a release batch right now.'
+      );
+      return;
+    }
     const threshold = parseFloat(createThreshold);
     if (isNaN(threshold) || threshold < 0) {
       toast.error('Enter a valid minimum threshold');

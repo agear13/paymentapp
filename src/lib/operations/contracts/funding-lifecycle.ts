@@ -13,8 +13,8 @@ export const CANONICAL_FUNDING_LIFECYCLE = [
 export type CanonicalFundingLifecycle = (typeof CANONICAL_FUNDING_LIFECYCLE)[number];
 
 export const FUNDING_LIFECYCLE_LABELS: Record<CanonicalFundingLifecycle, string> = {
-  UNLINKED: 'No funding source connected',
-  SOURCE_CONNECTED: 'Funding source connected',
+  UNLINKED: 'No funding source added',
+  SOURCE_CONNECTED: 'Funding source added',
   FUNDING_RESERVED: 'Funding reserved',
   FUNDING_SETTLED: 'Funding settled',
   RELEASE_FUNDED: 'Release funded',
@@ -48,7 +48,7 @@ export function fundingLifecycleBlocker(
     case 'FUNDING_RESERVED':
       return 'Funding reserved but not yet settled for obligations';
     case 'FUNDING_SETTLED':
-      return 'Obligations not yet fully funded for release';
+      return 'Funding secured. Allocation to payout obligations pending.';
     default:
       return null;
   }

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Trash2 } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import {
+  getPartyCompensationWarnings,
+  isHybridCompensationParty,
+  revenueComponentActive,
+  fixedComponentActive,
+} from '@/lib/ai-extractor/compensation-review-validation';
 import type { ExtractedParty, ExtractorEntryPoint } from '@/lib/ai-extractor/extraction-types';
 import type { ReviewedParty } from '@/lib/ai-extractor/review-form-types';
 import type { DuplicateMatch } from '@/lib/ai-extractor/duplicate-detection';
@@ -55,6 +61,8 @@ interface ReviewPartyCardProps {
   onDuplicateResolutionChange?: (resolution: 'update' | 'create') => void;
   onChange: (updated: ReviewedParty) => void;
   onRemove: () => void;
+  /** Set when save validation failed for this party. */
+  validationMessage?: string | null;
 }
 
 export function ReviewPartyCard({
@@ -67,12 +75,27 @@ export function ReviewPartyCard({
   onDuplicateResolutionChange,
   onChange,
   onRemove,
+  validationMessage,
 }: ReviewPartyCardProps) {
   const partyConfidence = originalParty ? derivePartyConfidence(originalParty) : 'absent';
   const roles = entryPoint === 'onboarding' ? ONBOARDING_ROLE_OPTIONS : ROLE_OPTIONS;
+  const hybrid = isHybridCompensationParty(party, originalParty);
+  const compensationWarnings = getPartyCompensationWarnings(party, originalParty);
+  const showRevenueField =
+    party.participationModel === 'revenue_share' ||
+    (hybrid && revenueComponentActive(party, originalParty));
+  const showFixedField =
+    party.participationModel === 'fixed_payout' ||
+    (hybrid && fixedComponentActive(party, originalParty));
 
   return (
-    <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
+    <div
+      className={cn(
+        'rounded-lg border bg-muted/20 p-4 space-y-3',
+        (compensationWarnings.length > 0 || validationMessage) &&
+          'border-amber-500/40 ring-1 ring-amber-500/20'
+      )}
+    >
       {/* Card header — name + participant confidence + remove */}
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -116,6 +139,23 @@ export function ReviewPartyCard({
           </div>
         </div>
       )}
+
+      {compensationWarnings.map((warning) => (
+        <div
+          key={warning.kind}
+          className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 space-y-0.5"
+        >
+          <p className="text-xs font-medium text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {warning.title}
+          </p>
+          <p className="text-xs text-amber-800/90 dark:text-amber-300/90">{warning.message}</p>
+        </div>
+      ))}
+
+      {validationMessage ? (
+        <p className="text-xs text-destructive font-medium">{validationMessage}</p>
+      ) : null}
 
       {/* Name */}
       <div className="space-y-1">
@@ -196,8 +236,8 @@ export function ReviewPartyCard({
         </div>
       </div>
 
-      {/* Amount field — conditional on model */}
-      {party.participationModel === 'fixed_payout' && (
+      {/* Amount fields — conditional on model or hybrid structure */}
+      {showFixedField && (
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Label className="text-xs">
@@ -215,7 +255,12 @@ export function ReviewPartyCard({
               onChange({ ...party, fixedAmount: e.target.value ? Number(e.target.value) : null })
             }
             placeholder="Enter converted amount"
-            className={cn('h-8 text-sm', extractedCurrency && party.fixedAmount === null && 'border-amber-400 focus-visible:ring-amber-400')}
+            className={cn(
+              'h-8 text-sm',
+              (extractedCurrency && party.fixedAmount === null) || compensationWarnings.some((w) => w.kind === 'fixed_payout_missing_amount' || w.kind === 'hybrid_incomplete')
+                ? 'border-amber-400 focus-visible:ring-amber-400'
+                : undefined
+            )}
           />
           {extractedCurrency && originalParty && originalParty.fixedAmount.value != null && (
             <p className="text-xs text-muted-foreground">
@@ -228,7 +273,7 @@ export function ReviewPartyCard({
         </div>
       )}
 
-      {party.participationModel === 'revenue_share' && (
+      {showRevenueField && (
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Label className="text-xs">Revenue share %</Label>
@@ -242,10 +287,21 @@ export function ReviewPartyCard({
             onChange={(e) =>
               onChange({ ...party, revenueSharePct: e.target.value ? Number(e.target.value) : null })
             }
-            placeholder="0"
-            className="h-8 text-sm"
+            placeholder="Enter percentage"
+            className={cn(
+              'h-8 text-sm',
+              compensationWarnings.some((w) => w.kind === 'revenue_share_missing_pct' || w.kind === 'hybrid_incomplete')
+                ? 'border-amber-400 focus-visible:ring-amber-400'
+                : undefined
+            )}
           />
         </div>
+      )}
+
+      {party.participationModel === 'customer_attribution' && !hybrid && (
+        <p className="text-xs text-muted-foreground">
+          Customer attribution earnings — no fixed percentage or amount required.
+        </p>
       )}
 
       {/* Notes */}

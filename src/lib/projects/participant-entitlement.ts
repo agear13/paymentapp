@@ -52,6 +52,7 @@ export type BuildProjectParticipantInput = {
   commissionValue: number;
   enableCustomerAttribution: boolean;
   referralCommerce?: ParticipantReferralCommerce;
+  manualPayoutMethod?: import('@/lib/participants/manual-payout-method').ManualPayoutMethod;
   sendInvite?: boolean;
 };
 
@@ -144,6 +145,7 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
     payoutDueDate: input.payoutDueDate?.trim() || undefined,
     participantNotes: input.notes?.trim() || undefined,
     referralCommerce,
+    manualPayoutMethod: input.manualPayoutMethod,
     workspaceSource: 'project',
     participationModel: input.participationModel,
     attributionStatus: 'inactive',

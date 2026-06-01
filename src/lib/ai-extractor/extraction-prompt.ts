@@ -54,7 +54,7 @@ EXTRACTION RULES:
 
 3. If a percentage is mentioned without a base (e.g. "15% of sales"), use "revenue_share".
 
-4. Currency defaults to "AUD" if not specified. Detect and use: USD, GBP, EUR, NZD, IDR, SGD if present in the text.
+4. Extract currency only when explicitly stated in the text (ISO codes such as AUD, USD, GBP, EUR, NZD, IDR, SGD). If absent, set currency confidence to "absent" and value to null — do not guess a default.
 
 5. If the same field has contradictory values at different points in the conversation, add an entry to "uncertainties" and use the LATER-mentioned value with confidence "low".
 

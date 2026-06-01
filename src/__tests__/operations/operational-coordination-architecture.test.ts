@@ -149,7 +149,9 @@ describe('readiness hierarchy', () => {
 
     expect(hierarchy.funding.ready).toBe(false);
     expect(hierarchy.release.ready).toBe(false);
-    expect(hierarchy.funding.blockers.some((b) => b.toLowerCase().includes('reserved'))).toBe(true);
+    expect(
+      hierarchy.funding.blockers.some((b) => b.toLowerCase().includes('funding'))
+    ).toBe(true);
   });
 });
 
@@ -161,7 +163,7 @@ describe('funding coordination semantics', () => {
       obligationsTotal: 500,
       obligationsFunded: 0,
     });
-    expect(connected.primaryLabel).toContain('awaiting reservation');
+    expect(connected.primaryLabel).toContain('Funding source added');
 
     const reserved = deriveFundingCoordinationStage({
       fundingSourceConnected: true,
@@ -171,6 +173,9 @@ describe('funding coordination semantics', () => {
     });
     expect(reserved.fundingSettled).toBe(true);
     expect(reserved.releaseFunded).toBe(false);
+    expect(reserved.blockerLabel).toBe(
+      'Funding secured. Allocation to payout obligations pending.'
+    );
   });
 });
 

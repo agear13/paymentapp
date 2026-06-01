@@ -29,8 +29,8 @@ export async function getProjectWorkspaceSummaryForUser(userId: string, projectI
     payoutReadyCount: projection.payoutReadyCount,
     participantCount: projection.participantCount,
     blockerCount: projection.blockerCount,
-    fundingLabel: projection.fundingLabel,
-    fundingSubcopy: projection.fundingSubcopy,
+    fundingLabel: treasury?.fundingLabel ?? projection.fundingLabel,
+    fundingSubcopy: treasury?.fundingSubcopy ?? projection.fundingSubcopy,
     needsAttention: projection.needsAttention,
   });
   const deals = snapshot.deals.filter((d) => !d.archived);

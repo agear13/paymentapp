@@ -28,6 +28,7 @@ import type { ReviewedParty, ReviewFormState } from '@/lib/ai-extractor/review-f
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import { reviewFormFromExtraction, isSupportedCurrency } from '@/lib/ai-extractor/review-form-types';
+import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { buildExtractionSummary } from '@/lib/ai-extractor/extraction-summary';
 import { detectDuplicates, defaultResolutions } from '@/lib/ai-extractor/duplicate-detection';
 import {
@@ -46,8 +47,10 @@ import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store
 import {
   appendConversationImportToDeal,
   buildConversationImportAuditRecord,
+  buildIncompleteExtractionCompensationAuditEntries,
   conversationImportToAuditEntry,
 } from '@/lib/operations/audit/conversation-import-audit';
+import { validateReviewFormCompensation } from '@/lib/ai-extractor/compensation-review-validation';
 
 const CURRENCIES = ['AUD', 'USD'] as const;
 
@@ -91,11 +94,20 @@ export function ExtractionReviewModal({
   existingParticipants,
   onComplete,
 }: ExtractionReviewModalProps) {
+  const { currency: workspaceCurrency } = useOrganizationCurrency();
+  const currencyContext = React.useMemo(
+    () => ({
+      project: existingDeal ?? null,
+      workspaceCurrency,
+    }),
+    [existingDeal, workspaceCurrency]
+  );
   const [form, setForm] = React.useState<ReviewFormState>(() =>
-    reviewFormFromExtraction(result, entryPoint, sourceType, existingDeal?.id)
+    reviewFormFromExtraction(result, entryPoint, sourceType, existingDeal?.id, currencyContext)
   );
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [partyValidationErrors, setPartyValidationErrors] = React.useState<Record<string, string>>({});
   const [uncertaintiesOpen, setUncertaintiesOpen] = React.useState(true);
   const [postPromptOpen, setPostPromptOpen] = React.useState(false);
   const [createdParticipants, setCreatedParticipants] = React.useState<DemoParticipant[]>([]);
@@ -103,7 +115,13 @@ export function ExtractionReviewModal({
 
   // Re-initialise form when result changes (new extraction).
   React.useEffect(() => {
-    const base = reviewFormFromExtraction(result, entryPoint, sourceType, existingDeal?.id);
+    const base = reviewFormFromExtraction(
+      result,
+      entryPoint,
+      sourceType,
+      existingDeal?.id,
+      currencyContext
+    );
     // Detect duplicates for Entry Point B.
     if (entryPoint === 'participant_add' && existingParticipants && existingParticipants.length > 0) {
       const matches = detectDuplicates(base.parties, existingParticipants);
@@ -112,7 +130,16 @@ export function ExtractionReviewModal({
     base.rawConversationText = rawConversationText;
     setForm(base);
     setSaveError(null);
-  }, [result, entryPoint, sourceType, existingDeal?.id, existingParticipants, rawConversationText]);
+    setPartyValidationErrors({});
+  }, [
+    result,
+    entryPoint,
+    sourceType,
+    existingDeal?.id,
+    existingParticipants,
+    rawConversationText,
+    currencyContext,
+  ]);
 
   const summary = React.useMemo(() => buildExtractionSummary(result), [result]);
 
@@ -134,6 +161,12 @@ export function ExtractionReviewModal({
       const parties = [...f.parties];
       parties[index] = updated;
       return { ...f, parties };
+    });
+    setPartyValidationErrors((prev) => {
+      if (!prev[updated.id]) return prev;
+      const next = { ...prev };
+      delete next[updated.id];
+      return next;
     });
   };
 
@@ -166,6 +199,19 @@ export function ExtractionReviewModal({
       }
     }
 
+    const originalsById = new Map(result.parties.map((p) => [p.id, p]));
+    const compensationIssues = validateReviewFormCompensation(form.parties, originalsById);
+    if (compensationIssues.length > 0) {
+      const nextErrors: Record<string, string> = {};
+      for (const issue of compensationIssues) {
+        nextErrors[issue.partyId] = issue.blockSaveMessage;
+      }
+      setPartyValidationErrors(nextErrors);
+      const names = compensationIssues.map((i) => i.partyName).join(', ');
+      return `Complete compensation terms for: ${names}. Enter missing amounts, change the model, or remove the participant.`;
+    }
+
+    setPartyValidationErrors({});
     return null;
   };
 
@@ -208,6 +254,13 @@ export function ExtractionReviewModal({
             : newDeal.dealName,
         });
         appendOperationalAuditEntry(conversationImportToAuditEntry(newDeal.id, importRecord));
+        for (const entry of buildIncompleteExtractionCompensationAuditEntries({
+          projectId: newDeal.id,
+          result,
+          importedAt: importRecord.importedAt,
+        })) {
+          appendOperationalAuditEntry(entry);
+        }
         setCreatedParticipants(newParticipants);
         setCreatedProjectName(newDeal.dealName);
         setPostPromptOpen(true);
@@ -267,6 +320,13 @@ export function ExtractionReviewModal({
         appendOperationalAuditEntry(
           conversationImportToAuditEntry(existingDeal.id, importRecord)
         );
+        for (const entry of buildIncompleteExtractionCompensationAuditEntries({
+          projectId: existingDeal.id,
+          result,
+          importedAt: importRecord.importedAt,
+        })) {
+          appendOperationalAuditEntry(entry);
+        }
         onComplete();
 
       } else if (entryPoint === 'onboarding') {
@@ -562,6 +622,7 @@ export function ExtractionReviewModal({
                     }
                     onChange={(updated) => updateParty(index, updated)}
                     onRemove={() => removeParty(index)}
+                    validationMessage={partyValidationErrors[party.id] ?? null}
                   />
                 );
               })}

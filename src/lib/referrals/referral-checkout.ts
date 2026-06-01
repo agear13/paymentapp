@@ -14,7 +14,11 @@ import {
   buildCommissionAttributionMetadataFromReferralLink,
   commissionSnapshotToPrismaJson,
 } from '@/lib/referrals/commission-attribution-snapshot';
-import { isServiceAllowedForReferral } from '@/lib/referrals/referral-commerce-config';
+import {
+  isServiceAllowedForReferral,
+  parseManualPayoutMethodFromCheckoutConfig,
+} from '@/lib/referrals/referral-commerce-config';
+import { manualPayoutMethodToPaymentLinkFields } from '@/lib/participants/manual-payout-method';
 import {
   resolveReferralPaymentLinkMethod,
   merchantRailAvailabilityFromSettings,
@@ -147,6 +151,12 @@ export async function createReferralCheckoutSession(
       }),
     });
 
+    const manualMethod = parseManualPayoutMethodFromCheckoutConfig(referralLink.checkout_config);
+    const manualFields =
+      paymentMethod === 'MANUAL_BANK' && manualMethod
+        ? manualPayoutMethodToPaymentLinkFields(manualMethod, currency)
+        : {};
+
     const paymentLink = await prisma.payment_links.create({
       data: {
         id: randomUUID(),
@@ -161,6 +171,7 @@ export async function createReferralCheckoutSession(
         referral_link_id: referralLink.id,
         referral_code_id: referralLink.referral_code?.id ?? null,
         payment_method: paymentMethod,
+        ...manualFields,
         attribution_referral_code: code,
         attributed_participant_user_id:
           referralLink.referral_code?.participant_user_id ?? referralLink.created_by_user_id ?? null,
@@ -321,6 +332,12 @@ export async function createReferralServiceCheckoutSession(
       }),
     });
 
+    const manualMethodSvc = parseManualPayoutMethodFromCheckoutConfig(referralLink.checkout_config);
+    const manualFieldsSvc =
+      paymentMethod === 'MANUAL_BANK' && manualMethodSvc
+        ? manualPayoutMethodToPaymentLinkFields(manualMethodSvc, currency)
+        : {};
+
     if (paymentRail === 'stripe' && !merchantSettings?.stripe_account_id) {
       return { success: false, error: 'Card payments are not configured for this merchant' };
     }
@@ -340,6 +357,7 @@ export async function createReferralServiceCheckoutSession(
         referral_code_id: referralLink.referral_code?.id ?? null,
         organization_service_id: service.id,
         payment_method: paymentMethod,
+        ...manualFieldsSvc,
         attribution_referral_code: code,
         attributed_participant_user_id:
           referralLink.referral_code?.participant_user_id ?? referralLink.created_by_user_id ?? null,

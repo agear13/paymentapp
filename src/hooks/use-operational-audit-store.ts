@@ -19,7 +19,7 @@ export function appendOperationalAuditEntry(entry: OperationalAuditEntry): void 
 }
 
 export function setOperationalAuditEntries(entries: OperationalAuditEntry[]): void {
-  globalEntries = mergeAuditTimeline([], entries);
+  globalEntries = mergeAuditTimeline(globalEntries, entries);
   for (const listener of listeners) listener(globalEntries);
 }
 

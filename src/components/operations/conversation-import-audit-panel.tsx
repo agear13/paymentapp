@@ -2,8 +2,11 @@
 
 import { ConfidenceBadge } from '@/components/ai-extractor/confidence-badge';
 import type { ConversationImportAuditPayload } from '@/lib/operations/audit/conversation-import-audit-types';
-import { formatPartyCompensationTerms } from '@/lib/operations/audit/conversation-import-audit';
-import { participationModelLabel } from '@/lib/projects/participant-entitlement';
+import {
+  formatPartyAmountConfidenceForAudit,
+  formatPartyCompensationModelForAudit,
+  formatPartyExtractedValueForAudit,
+} from '@/lib/operations/audit/conversation-import-audit';
 import { formatApprovalTimestamp } from '@/lib/projects/participant-compensation-copy';
 import { cn } from '@/lib/utils';
 
@@ -67,10 +70,24 @@ export function ConversationImportAuditPanel({
                   <ConfidenceBadge confidence={party.partyConfidence} />
                 </div>
                 <p className="text-xs text-muted-foreground">{party.role}</p>
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span>{participationModelLabel(party.participationModel)}</span>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="font-medium">{formatPartyCompensationTerms(party)}</span>
+                <div className="rounded border bg-muted/30 px-2.5 py-2 space-y-1.5 text-xs">
+                  <p className="font-medium">{formatPartyCompensationModelForAudit(party)}</p>
+                  <p className="text-muted-foreground">
+                    {party.participationModel === 'revenue_share'
+                      ? 'Percentage'
+                      : party.participationModel === 'fixed_payout'
+                        ? 'Amount'
+                        : 'Terms'}
+                    :{' '}
+                    <span className="font-medium text-foreground">
+                      {formatPartyExtractedValueForAudit(party)}
+                    </span>
+                  </p>
+                  <p className="text-muted-foreground flex items-center gap-1.5">
+                    Confidence:{' '}
+                    <ConfidenceBadge confidence={party.amountConfidence} />
+                    <span className="sr-only">{formatPartyAmountConfidenceForAudit(party)}</span>
+                  </p>
                 </div>
                 <div className="flex flex-wrap gap-3 pt-1">
                   <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">

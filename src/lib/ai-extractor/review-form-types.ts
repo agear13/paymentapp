@@ -1,9 +1,12 @@
+import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type {
   ExtractionResult,
   ExtractorEntryPoint,
   ParticipationModelOption,
   SourceType,
 } from './extraction-types';
+import { resolveReviewFormCurrency } from '@/lib/currency/resolve-review-form-currency';
+import { PLATFORM_FALLBACK_CURRENCY } from '@/lib/currency/resolve-catalog-default-currency';
 
 export interface ReviewedParty {
   id: string;
@@ -44,10 +47,20 @@ export function reviewFormFromExtraction(
   result: ExtractionResult,
   entryPoint: ExtractorEntryPoint,
   sourceType: SourceType,
-  existingDealId?: string
+  existingDealId?: string,
+  context?: {
+    project?: Pick<RecentDeal, 'projectValueCurrency'> | null;
+    workspaceCurrency?: string | null;
+  }
 ): ReviewFormState {
   const extractedCurrency = result.currency.value;
-  const currencySupported = isSupportedCurrency(extractedCurrency);
+  const resolvedCurrency = resolveReviewFormCurrency({
+    extractedCurrency,
+    extractedConfidence: result.currency.confidence,
+    project: context?.project ?? null,
+    workspaceCurrency: context?.workspaceCurrency,
+  });
+  const currencySupported = isSupportedCurrency(resolvedCurrency);
 
   // For unsupported currencies (IDR, SGD, etc.) null out all fixed numeric amounts.
   // Revenue share % is currency-neutral and is preserved. The operator must enter
@@ -59,7 +72,7 @@ export function reviewFormFromExtraction(
     projectName: result.projectName.value ?? '',
     projectDescription: result.projectDescription.value ?? '',
     projectValue: currencySupported ? result.projectValue.value : null,
-    currency: currencySupported ? extractedCurrency : 'AUD',
+    currency: currencySupported ? resolvedCurrency : PLATFORM_FALLBACK_CURRENCY,
     counterparty: result.counterparty.value ?? '',
     parties: result.parties.map((p) => ({
       id: p.id,

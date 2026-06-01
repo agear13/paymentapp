@@ -1,8 +1,9 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { RefreshCw, UserPlus } from 'lucide-react';
+import { ClipboardList, RefreshCw, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +27,7 @@ import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-
 import { OperatorPayoutVerificationInfo } from '@/components/projects/operator-payout-verification-info';
 import type { DemoParticipantRole } from '@/components/deal-network-demo/invite-participant-modal';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
+import { projectAllocationsPath } from '@/lib/projects/project-routes';
 import {
   applyParticipantAgreementGenerated,
   applyParticipantAgreementShared,
@@ -82,7 +84,8 @@ import { CreateFromConversationButton } from '@/components/ai-extractor/create-f
 import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
 
 const ONBOARDING_CHECKLIST = [
-  'Add participants',
+  'Plan allocations (roles and budgets)',
+  'Invite participants',
   'Configure compensation structures',
   'Send agreements',
   'Confirm payout details externally',
@@ -672,7 +675,8 @@ export function ProjectParticipantsView() {
               />
             ) : (
               <p className="text-muted-foreground mt-1 text-sm">
-                Add participants, then configure how each earns before obligations or payout release.
+                Plan allocations first, then invite participants and configure earnings before payout
+                release.
               </p>
             )}
           </div>
@@ -688,9 +692,15 @@ export function ProjectParticipantsView() {
                 onComplete={() => void refresh({ scope: 'participants', silent: false, force: true })}
               />
             )}
-            <Button onClick={() => setInviteOpen(true)}>
+            <Button variant="outline" onClick={() => setInviteOpen(true)}>
               <UserPlus className="mr-2 h-4 w-4" />
               Invite participant
+            </Button>
+            <Button asChild>
+              <Link href={projectAllocationsPath(projectId)}>
+                <ClipboardList className="mr-2 h-4 w-4" />
+                Add allocation
+              </Link>
             </Button>
           </div>
         </div>
@@ -748,6 +758,12 @@ export function ProjectParticipantsView() {
                   size="lg"
                 />
               )}
+              <Button variant="outline" size="lg" asChild>
+                <Link href={projectAllocationsPath(projectId)}>
+                  <ClipboardList className="mr-2 h-4 w-4" />
+                  Add allocation
+                </Link>
+              </Button>
               <Button variant="outline" size="lg" onClick={() => setInviteOpen(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 {EMPTY_STATE_COPY.participantEarnings.cta}

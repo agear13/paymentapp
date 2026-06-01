@@ -104,6 +104,8 @@ export interface DemoParticipant {
   companyName?: string;
   /** Operator referral commerce configuration (invite/agreement time). */
   referralCommerce?: import('@/lib/referrals/referral-commerce-config').ParticipantReferralCommerce;
+  /** Participant-level manual payout instructions (shared with checkout / payment links). */
+  manualPayoutMethod?: import('@/lib/participants/manual-payout-method').ManualPayoutMethod;
   /** Project operator workspace vs Rabbit Hole / Strait pilot. */
   workspaceSource?: 'project' | 'pilot';
   participationModel?: import('@/lib/projects/participant-entitlement').ProjectParticipationModel;

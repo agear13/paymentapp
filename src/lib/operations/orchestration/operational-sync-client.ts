@@ -74,9 +74,16 @@ export function subscribeProjectOperationalEvents(
   const convergenceHandlers = toOperationalSyncHandlers(handlers);
   return subscribeOperationalWindowEvents((event) => {
     if (event.projectId && event.projectId !== projectId) return;
+    if (event.notificationOnly) {
+      const auditFromPayload = event.payload?.auditEntry as OperationalAuditEntry | undefined;
+      if (auditFromPayload) {
+        handlers.onAudit?.(auditFromPayload);
+      }
+      return;
+    }
     void applyOperationalSyncRefresh(
       convergenceHandlers,
-      { invalidatedScopes: ['all'], operationalEvent: event },
+      { invalidatedScopes: ['funding'], operationalEvent: event },
       { mutation: 'other', projectId: event.projectId ?? projectId }
     );
   });

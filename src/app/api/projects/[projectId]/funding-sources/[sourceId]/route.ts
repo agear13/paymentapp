@@ -7,6 +7,7 @@ import {
   deleteProjectFundingSource,
   updateProjectFundingSource,
 } from '@/lib/projects/funding-sources/funding-sources.server';
+import { buildFundingSourceAuditEntry } from '@/lib/operations/audit/funding-source-audit';
 import {
   orchestrateOperationalMutation,
   operationalSyncJson,
@@ -62,11 +63,17 @@ export async function PATCH(
 
     const operationalSync = await orchestrateOperationalMutation({
       userId: user.id,
-      mutation: 'funding_update',
+      mutation: 'funding_source_crud',
       projectId,
     });
 
-    return NextResponse.json({ data: updated, ...operationalSyncJson(operationalSync) });
+    const fundingSourceAudit = buildFundingSourceAuditEntry({
+      projectId,
+      action: 'updated',
+      source: updated,
+    });
+
+    return NextResponse.json({ data: updated, fundingSourceAudit, ...operationalSyncJson(operationalSync) });
   } catch (e: unknown) {
     const err = e as { statusCode?: number };
     if (err.statusCode === 401) {
@@ -89,18 +96,24 @@ export async function DELETE(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    const ok = await deleteProjectFundingSource(user.id, projectId, sourceId);
-    if (!ok) {
+    const removed = await deleteProjectFundingSource(user.id, projectId, sourceId);
+    if (!removed) {
       return NextResponse.json({ error: 'Funding source not found' }, { status: 404 });
     }
 
     const operationalSync = await orchestrateOperationalMutation({
       userId: user.id,
-      mutation: 'funding_update',
+      mutation: 'funding_source_crud',
       projectId,
     });
 
-    return NextResponse.json({ ok: true, ...operationalSyncJson(operationalSync) });
+    const fundingSourceAudit = buildFundingSourceAuditEntry({
+      projectId,
+      action: 'removed',
+      source: removed,
+    });
+
+    return NextResponse.json({ ok: true, fundingSourceAudit, ...operationalSyncJson(operationalSync) });
   } catch (e: unknown) {
     const err = e as { statusCode?: number };
     if (err.statusCode === 401) {

@@ -6,6 +6,12 @@ export type ReferralCommissionMode = 'project_revenue_share' | 'referral_commerc
 
 import type { ReferralPaymentRail } from '@/lib/referrals/referral-payment-rails';
 import { defaultReferralPaymentRails } from '@/lib/referrals/referral-payment-rails';
+import {
+  normalizeManualPayoutMethod,
+  type ManualPayoutMethod,
+} from '@/lib/participants/manual-payout-method';
+
+export type { ManualPayoutMethod };
 
 export type ParticipantReferralCommerce = {
   /** When false, no referral link is issued on approval. Default true when omitted (legacy). */
@@ -20,6 +26,8 @@ export type ParticipantReferralCommerce = {
   /** When false, hide custom-amount checkout on the referral landing. */
   allowCustomAmount?: boolean;
 };
+
+const MANUAL_PAYOUT_KEY = 'manualPayoutMethod';
 
 const CONFIG_KEY = 'referralCommerce';
 
@@ -37,6 +45,26 @@ export function defaultReferralCommerce(): ParticipantReferralCommerce {
 export function shouldIssueReferralLink(commerce?: ParticipantReferralCommerce | null): boolean {
   if (!commerce) return true;
   return commerce.createReferralLink !== false;
+}
+
+export function parseManualPayoutMethodFromCheckoutConfig(
+  config: unknown
+): ManualPayoutMethod | null {
+  if (!config || typeof config !== 'object') return null;
+  const raw = (config as Record<string, unknown>)[MANUAL_PAYOUT_KEY];
+  return normalizeManualPayoutMethod(raw as Partial<ManualPayoutMethod>);
+}
+
+export function mergeManualPayoutMethodIntoCheckoutConfig(
+  base: Record<string, unknown>,
+  method: ManualPayoutMethod | null | undefined
+): Record<string, unknown> {
+  const normalized = normalizeManualPayoutMethod(method ?? undefined);
+  if (!normalized) {
+    const { [MANUAL_PAYOUT_KEY]: _removed, ...rest } = base;
+    return rest;
+  }
+  return { ...base, [MANUAL_PAYOUT_KEY]: normalized };
 }
 
 export function parseReferralCommerceFromCheckoutConfig(

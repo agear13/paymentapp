@@ -311,10 +311,7 @@ export function useOperationalGuidance(options?: OperationalGuidanceOptions) {
     if (!projectId) return;
     return subscribeProjectOperationalEvents(projectId, {
       invalidate: () => undefined,
-      refreshSilent: async () => {
-        await loadGraph();
-        await refresh();
-      },
+      refreshSilent: async () => undefined,
       onAudit: appendOperationalAuditEntry,
     });
   }, [projectId, loadGraph, refresh]);

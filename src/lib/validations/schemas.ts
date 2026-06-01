@@ -810,6 +810,41 @@ export const CreateProjectFundingSourceSchema = z.object({
 
 export const UpdateProjectFundingSourceSchema = CreateProjectFundingSourceSchema.partial();
 
+export const ProjectAllocationBudgetTypeSchema = z.enum([
+  'FIXED',
+  'PERCENTAGE',
+  'REVENUE_SHARE',
+  'ATTRIBUTION',
+]);
+
+export const ProjectAllocationStatusSchema = z.enum([
+  'PLANNED',
+  'ASSIGNED',
+  'PENDING_APPROVAL',
+  'APPROVED',
+  'OBLIGATION_CREATED',
+  'SETTLED',
+]);
+
+export const CreateProjectAllocationSchema = z.object({
+  title: z.string().min(1).max(255),
+  role: z.string().min(1).max(128),
+  description: z.string().max(8000).optional().nullable(),
+  budgetType: ProjectAllocationBudgetTypeSchema,
+  budgetValue: z.number().min(0),
+  currency: z.string().length(3).optional(),
+  notes: z.string().max(8000).optional().nullable(),
+});
+
+export const UpdateProjectAllocationSchema = CreateProjectAllocationSchema.partial().extend({
+  participantId: z.string().min(1).max(255).nullable().optional(),
+  status: ProjectAllocationStatusSchema.optional(),
+});
+
+export const AssignProjectAllocationSchema = z.object({
+  participantId: z.string().min(1).max(255).nullable(),
+});
+
 
 
 

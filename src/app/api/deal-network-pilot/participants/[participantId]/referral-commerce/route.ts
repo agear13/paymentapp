@@ -13,8 +13,26 @@ import {
   shouldIssueReferralLink,
   type ParticipantReferralCommerce,
 } from '@/lib/referrals/referral-commerce-config';
+import {
+  normalizeManualPayoutMethod,
+  type ManualPayoutMethod,
+} from '@/lib/participants/manual-payout-method';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { dealRowToRecentDeal, participantRowToDemo } from '@/lib/deal-network-demo/pilot-snapshot.server';
+
+const ManualPayoutSchema = z.object({
+  type: z.literal('manual'),
+  label: z.string().min(1).max(128),
+  instructions: z.string().min(1).max(8000),
+  attachments: z
+    .array(
+      z.object({
+        label: z.string().min(1).max(128),
+        url: z.string().url().max(2048),
+      })
+    )
+    .optional(),
+});
 
 const BodySchema = z.object({
   referralCommerce: z.object({
@@ -22,7 +40,12 @@ const BodySchema = z.object({
     commissionMode: z.enum(['project_revenue_share', 'referral_commerce']),
     commerceCommissionPct: z.number().min(0).max(100).optional(),
     enabledServiceIds: z.array(z.string().uuid()).optional(),
+    enabledPaymentRails: z
+      .array(z.enum(['stripe', 'wise', 'hedera', 'manual']))
+      .optional(),
+    allowCustomAmount: z.boolean().optional(),
   }),
+  manualPayoutMethod: ManualPayoutSchema.nullable().optional(),
 });
 
 export async function PATCH(
@@ -57,8 +80,12 @@ export async function PATCH(
   const referralCommerce: ParticipantReferralCommerce = normalizeReferralCommerce(
     parsed.data.referralCommerce
   );
+  const manualPayoutMethod: ManualPayoutMethod | undefined =
+    parsed.data.manualPayoutMethod === null
+      ? undefined
+      : normalizeManualPayoutMethod(parsed.data.manualPayoutMethod) ?? undefined;
   const cur = row.participant_payload as unknown as DemoParticipant;
-  const next: DemoParticipant = { ...cur, referralCommerce };
+  const next: DemoParticipant = { ...cur, referralCommerce, manualPayoutMethod };
   await prisma.deal_network_pilot_participants.update({
     where: { id: row.id },
     data: { participant_payload: next as unknown as Prisma.InputJsonValue },
@@ -78,6 +105,7 @@ export async function PATCH(
       commissionValue: next.commissionValue,
       projectLabel: deal.dealName,
       referralCommerce,
+      manualPayoutMethod: manualPayoutMethod ?? null,
     });
     referralIssuance = { code: issued.code, referralUrl: issued.referralUrl };
     await prisma.deal_network_pilot_participants.update({

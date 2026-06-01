@@ -4,6 +4,10 @@ export function projectOverviewPath(projectId: string): string {
   return `/dashboard/projects/${encodeURIComponent(projectId)}`;
 }
 
+export function projectAllocationsPath(projectId: string): string {
+  return `/dashboard/projects/${encodeURIComponent(projectId)}/allocations`;
+}
+
 export function projectParticipantsPath(projectId: string): string {
   return `/dashboard/projects/${encodeURIComponent(projectId)}/participants`;
 }
@@ -26,6 +30,7 @@ export function projectActivityPath(projectId: string): string {
 
 export type ProjectWorkspaceTab =
   | 'overview'
+  | 'allocations'
   | 'participants'
   | 'funding'
   | 'obligations'
@@ -35,6 +40,7 @@ export type ProjectWorkspaceTab =
 export function projectTabFromPathname(pathname: string, projectId: string): ProjectWorkspaceTab {
   const base = projectOverviewPath(projectId);
   if (pathname === base) return 'overview';
+  if (pathname.startsWith(`${base}/allocations`)) return 'allocations';
   if (pathname.startsWith(`${base}/participants`)) return 'participants';
   if (pathname.startsWith(`${base}/funding`)) return 'funding';
   if (pathname.startsWith(`${base}/obligations`)) return 'obligations';

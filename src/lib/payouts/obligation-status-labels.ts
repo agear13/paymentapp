@@ -25,7 +25,7 @@ function unfundedLabel(stage?: FundingCoordinationStage | null): string {
   if (!stage.fundingSourceConnected) return 'No funding source connected';
   if (!stage.fundingReserved) return 'Funding source connected — awaiting reservation';
   if (!stage.fundingSettled) return 'Funding reserved — awaiting settlement';
-  return stage.blockerLabel ?? 'Obligations not yet fully funded for release';
+  return stage.blockerLabel ?? 'Funding secured. Allocation to payout obligations pending.';
 }
 
 function partiallyFundedLabel(stage?: FundingCoordinationStage | null): string {

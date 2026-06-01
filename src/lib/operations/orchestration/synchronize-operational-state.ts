@@ -16,6 +16,7 @@ export type OperationalSyncScope = 'participant' | 'obligation' | 'payout' | 'fu
 export type OperationalMutationKind =
   | 'agreement_approval'
   | 'participant_earnings_save'
+  | 'funding_source_crud'
   | 'funding_update'
   | 'payout_verification'
   | 'attribution_update'
@@ -43,7 +44,8 @@ const INVALIDATE_MAP: Record<OperationalSyncScope, OperationalSyncScope[]> = {
 const MUTATION_SCOPE: Record<OperationalMutationKind, OperationalSyncScope> = {
   agreement_approval: 'all',
   participant_earnings_save: 'all',
-  funding_update: 'all',
+  funding_source_crud: 'funding',
+  funding_update: 'funding',
   payout_verification: 'all',
   attribution_update: 'all',
   snapshot_persist: 'all',

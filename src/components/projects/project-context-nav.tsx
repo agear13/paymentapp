@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   projectActivityPath,
+  projectAllocationsPath,
   projectFundingPath,
   projectObligationsPath,
   projectOverviewPath,
@@ -19,6 +20,7 @@ type ProjectContextNavProps = {
 
 const TABS = [
   { id: 'overview' as const, label: 'Overview' },
+  { id: 'allocations' as const, label: 'Allocations' },
   { id: 'participants' as const, label: 'Participants' },
   { id: 'funding' as const, label: 'Funding sources' },
   { id: 'obligations' as const, label: 'Obligations' },
@@ -30,6 +32,8 @@ function hrefForTab(projectId: string, tab: (typeof TABS)[number]['id']): string
   switch (tab) {
     case 'overview':
       return projectOverviewPath(projectId);
+    case 'allocations':
+      return projectAllocationsPath(projectId);
     case 'participants':
       return projectParticipantsPath(projectId);
     case 'funding':

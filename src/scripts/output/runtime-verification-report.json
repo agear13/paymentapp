@@ -1,0 +1,155 @@
+{
+  "verifiedAt": "2026-06-01T09:12:00.030Z",
+  "hasDatabaseUrl": true,
+  "tables": {
+    "deal_network_pilot_deals": false,
+    "project_funding_sources": false,
+    "payout_batches": true
+  },
+  "issue1E1F_currency": {
+    "matrix": [
+      {
+        "label": "extracted USD high",
+        "context": {
+          "extractedCurrency": "USD",
+          "extractedConfidence": "high",
+          "project": {
+            "projectValueCurrency": "AUD"
+          },
+          "workspaceCurrency": "EUR"
+        },
+        "resolved": "USD"
+      },
+      {
+        "label": "absent extraction → project AUD",
+        "context": {
+          "extractedCurrency": null,
+          "extractedConfidence": "absent",
+          "project": {
+            "projectValueCurrency": "AUD"
+          },
+          "workspaceCurrency": "USD"
+        },
+        "resolved": "AUD"
+      },
+      {
+        "label": "absent extraction → workspace USD",
+        "context": {
+          "extractedCurrency": null,
+          "extractedConfidence": "absent",
+          "project": null,
+          "workspaceCurrency": "USD"
+        },
+        "resolved": "USD"
+      },
+      {
+        "label": "unsupported IDR → workspace AUD",
+        "context": {
+          "extractedCurrency": "IDR",
+          "extractedConfidence": "high",
+          "project": null,
+          "workspaceCurrency": "AUD"
+        },
+        "resolved": "AUD"
+      },
+      {
+        "label": "all absent → platform default",
+        "context": {
+          "extractedCurrency": null,
+          "extractedConfidence": "absent",
+          "project": null,
+          "workspaceCurrency": null
+        },
+        "resolved": "AUD"
+      }
+    ]
+  },
+  "issue1C1D_semanticSimulation": {
+    "note": "DB-free runtime semantics — confirms Option C copy without persistence",
+    "scenarios": [
+      {
+        "label": "no source",
+        "input": {
+          "fundingSourceConnected": false,
+          "confirmedFunding": 0,
+          "obligationsTotal": 1000,
+          "obligationsFunded": 0
+        },
+        "stage": {
+          "fundingSourceConnected": false,
+          "fundingReserved": false,
+          "fundingSettled": false,
+          "releaseFunded": false,
+          "primaryLabel": "No funding source added",
+          "blockerLabel": "Add a funding source to coordinate obligations"
+        }
+      },
+      {
+        "label": "source added not confirmed",
+        "input": {
+          "hasFundingSourceRows": true,
+          "fundingSourceConnected": false,
+          "confirmedFunding": 0
+        },
+        "stage": {
+          "fundingSourceConnected": false,
+          "fundingReserved": false,
+          "fundingSettled": false,
+          "releaseFunded": false,
+          "primaryLabel": "Funding source added",
+          "blockerLabel": "Confirm or clear funding before payout release"
+        }
+      },
+      {
+        "label": "1D secured allocation pending",
+        "input": {
+          "fundingSourceConnected": true,
+          "confirmedFunding": 1000,
+          "obligationsFunded": 0
+        },
+        "stage": {
+          "fundingSourceConnected": true,
+          "fundingReserved": true,
+          "fundingSettled": true,
+          "releaseFunded": false,
+          "primaryLabel": "Funding secured — allocation pending",
+          "blockerLabel": "Funding secured. Allocation to payout obligations pending."
+        }
+      }
+    ]
+  },
+  "organizationIdFromMember": "c8fdfa6d-6035-4169-b1a6-1723826962ef",
+  "userId": "1d8a6c65-c3ca-4b1a-bec6-406e6e0f2554",
+  "organizationId": "c8fdfa6d-6035-4169-b1a6-1723826962ef",
+  "issue1B_createPayout": {
+    "path": "ledger_commission_obligation_lines",
+    "postedUnpaidLines": 0,
+    "existingBatchCount": 0,
+    "recentBatches": [],
+    "note": "Pilot tables absent — use org with POSTED lines + --execute-1b against pilot-enabled DB for full create path"
+  },
+  "issue1C1D_fundingState": {
+    "skipped": true,
+    "reason": "project_funding_sources / pilot deals not in connected database"
+  },
+  "issue1H_convergence": {
+    "skipped": true,
+    "reason": "no pilot project — run against DB with deal_network_pilot_deals migrated"
+  },
+  "issue1A_manualPayout": {
+    "skipped": true,
+    "schemaReference": {
+      "type": "manual",
+      "label": "Revolut",
+      "instructions": "...",
+      "attachments": [
+        {
+          "label": "string",
+          "url": "https://..."
+        }
+      ],
+      "storageLocation": "deal_network_pilot_participants.participant_payload.manualPayoutMethod",
+      "checkoutConfigKey": "manualPayoutMethod"
+    }
+  }
+}
