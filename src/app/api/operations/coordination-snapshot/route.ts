@@ -7,6 +7,7 @@ import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selecto
 import { resolveOperationalInitializationSnapshot } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
 import { listOperationalTransitions } from '@/lib/operations/onboarding/persist-operational-transition.server';
 import { mergeInitializationAuditTimeline } from '@/lib/operations/audit/derive-audit-timeline-from-transitions';
+import { mergeConversationImportAuditTimeline } from '@/lib/operations/audit/conversation-import-audit';
 import {
   createOperationalApiRouteContext,
   logOperationalApiRoutePhase,
@@ -104,7 +105,11 @@ export async function GET(request: Request) {
       });
 
       const auditTimeline = mergeInitializationAuditTimeline(
-        deriveAuditTimelineFromGraph(graph, graph.projectId ?? undefined),
+        mergeConversationImportAuditTimeline(
+          deriveAuditTimelineFromGraph(graph, graph.projectId ?? undefined),
+          pilotSnapshot.deals,
+          graph.projectId ?? undefined
+        ),
         transitions
       );
 

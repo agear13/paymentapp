@@ -6,6 +6,7 @@ import type { ParticipantCompensationProfile } from '@/lib/participants/particip
 import type { OperationalParticipantRole } from '@/lib/projects/participants-for-project';
 import type { ReviewFormState, ReviewedParty } from './review-form-types';
 import { EXTRACTOR_VERSION, EXTRACTOR_CREATED_VIA, SOURCE_TYPE_LABELS } from './extraction-types';
+import type { ConversationImportAuditRecord } from '@/lib/operations/audit/conversation-import-audit';
 
 // Normalised role string → OperationalParticipantRole. Unknown strings fall back to 'Contributor'.
 const ROLE_NORMALISATION_MAP: Record<string, OperationalParticipantRole> = {
@@ -46,7 +47,10 @@ export function mapRoleStringToOperationalRole(raw: string): OperationalParticip
  * Called only for Entry Point A (new project from conversation).
  * The returned deal is a draft — status 'Pending', paymentStatus 'Not Paid'.
  */
-export function mapReviewToRecentDeal(review: ReviewFormState): RecentDeal {
+export function mapReviewToRecentDeal(
+  review: ReviewFormState,
+  importRecord?: ConversationImportAuditRecord
+): RecentDeal {
   const id = `demo-${Date.now()}`;
   const primaryParty = review.parties[0];
 
@@ -73,7 +77,8 @@ export function mapReviewToRecentDeal(review: ReviewFormState): RecentDeal {
     extractorVersion: EXTRACTOR_VERSION,
     sourceType: SOURCE_TYPE_LABELS[review.sourceType] ?? review.sourceType,
     importedConversation: review.rawConversationText,
-    importedAt: new Date().toISOString(),
+    importedAt: importRecord?.importedAt ?? new Date().toISOString(),
+    ...(importRecord ? { conversationImportHistory: [importRecord] } : {}),
   };
 }
 

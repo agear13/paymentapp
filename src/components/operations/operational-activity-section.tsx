@@ -3,6 +3,9 @@
 import * as React from 'react';
 import { OperationalAuditTimeline } from '@/components/operations/operational-audit-timeline';
 import { useOperationalAuditStore } from '@/hooks/use-operational-audit-store';
+import { useOptionalProjectWorkspace } from '@/components/projects/project-workspace-provider';
+import { deriveConversationImportAuditTimeline } from '@/lib/operations/audit/conversation-import-audit';
+import { mergeAuditTimeline } from '@/lib/operations/audit/operational-audit';
 import {
   Collapsible,
   CollapsibleContent,
@@ -31,7 +34,14 @@ export function OperationalActivitySection({
   maxItems = 12,
   className,
 }: OperationalActivitySectionProps) {
-  const entries = useOperationalAuditStore({ projectId, participantId });
+  const storeEntries = useOperationalAuditStore({ projectId, participantId });
+  const workspace = useOptionalProjectWorkspace();
+
+  const entries = React.useMemo(() => {
+    if (!projectId || !workspace?.deal) return storeEntries;
+    const fromDeal = deriveConversationImportAuditTimeline([workspace.deal], projectId);
+    return mergeAuditTimeline(storeEntries, fromDeal);
+  }, [projectId, storeEntries, workspace?.deal]);
 
   return (
     <Collapsible defaultOpen={defaultOpen} className={className}>

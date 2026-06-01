@@ -5,6 +5,10 @@ import { useProjectContext, type ProjectContextValue } from '@/hooks/use-project
 
 const ProjectWorkspaceContext = React.createContext<ProjectContextValue | null>(null);
 
+export function useOptionalProjectWorkspace(): ProjectContextValue | null {
+  return React.useContext(ProjectWorkspaceContext);
+}
+
 export function ProjectWorkspaceProvider({
   projectId,
   children,

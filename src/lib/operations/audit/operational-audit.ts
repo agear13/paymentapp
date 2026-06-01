@@ -1,4 +1,5 @@
 import type { OperationalEvent, OperationalEventType } from '@/lib/operations/contracts/operational-events';
+import type { ConversationImportAuditPayload } from '@/lib/operations/audit/conversation-import-audit';
 
 export const OPERATIONAL_AUDIT_EVENT_TYPES = [
   'agreement_shared',
@@ -21,6 +22,7 @@ export const OPERATIONAL_AUDIT_EVENT_TYPES = [
   'operational_graph_initialized',
   'settlement_infrastructure_ready',
   'operational_graph_initialization_failed',
+  'conversation_imported',
 ] as const;
 
 export type OperationalAuditEventType = (typeof OPERATIONAL_AUDIT_EVENT_TYPES)[number];
@@ -34,6 +36,8 @@ export type OperationalAuditEntry = {
   projectId?: string;
   participantId?: string;
   actor?: string;
+  /** Full conversation import audit payload — persisted via deal snapshot. */
+  conversationImport?: ConversationImportAuditPayload;
 };
 
 const EVENT_TO_AUDIT: Partial<Record<OperationalEventType, OperationalAuditEventType>> = {
@@ -75,6 +79,7 @@ const AUDIT_TITLES: Record<OperationalAuditEventType, string> = {
   operational_graph_initialized: 'Operational graph initialized',
   settlement_infrastructure_ready: 'Settlement infrastructure ready',
   operational_graph_initialization_failed: 'Operational graph initialization failed',
+  conversation_imported: 'Conversation imported',
 };
 
 export function auditEntryFromOperationalEvent(event: OperationalEvent): OperationalAuditEntry | null {

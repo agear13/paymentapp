@@ -43,6 +43,11 @@ import { ConfidenceBadge } from './confidence-badge';
 import { ReviewPartyCard } from './review-party-card';
 import { PostExtractionPrompt } from './post-extraction-prompt';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
+import {
+  appendConversationImportToDeal,
+  buildConversationImportAuditRecord,
+  conversationImportToAuditEntry,
+} from '@/lib/operations/audit/conversation-import-audit';
 
 const CURRENCIES = ['AUD', 'USD'] as const;
 
@@ -171,9 +176,16 @@ export function ExtractionReviewModal({
     setSaveError(null);
 
     try {
+      const importRecord = buildConversationImportAuditRecord({
+        form,
+        result,
+        entryPoint,
+        sourceType,
+      });
+
       if (entryPoint === 'project_create') {
         // Entry Point A: create new project + participants.
-        const newDeal = mapReviewToRecentDeal(form);
+        const newDeal = mapReviewToRecentDeal(form, importRecord);
         const newParticipants = mapReviewToParticipants(form, newDeal);
         const snapshot = await fetchPilotSnapshot();
         const existing = snapshot ?? { deals: [], participants: [] };
@@ -195,14 +207,7 @@ export function ExtractionReviewModal({
             ? `${pCount} participant${pCount !== 1 ? 's' : ''} added`
             : newDeal.dealName,
         });
-        appendOperationalAuditEntry({
-          id: `conversation-import-${newDeal.id}`,
-          type: 'compensation_updated',
-          title: 'Conversation imported',
-          description: `${pCount} participant${pCount !== 1 ? 's' : ''} created from imported conversation.`,
-          timestamp: new Date().toISOString(),
-          projectId: newDeal.id,
-        });
+        appendOperationalAuditEntry(conversationImportToAuditEntry(newDeal.id, importRecord));
         setCreatedParticipants(newParticipants);
         setCreatedProjectName(newDeal.dealName);
         setPostPromptOpen(true);
@@ -237,7 +242,14 @@ export function ExtractionReviewModal({
           }
         }
 
-        const ok = await persistPilotSnapshot({ deals: existing.deals, participants: updatedParticipants });
+        const updatedDeals = existing.deals.map((d) =>
+          d.id === existingDeal.id ? appendConversationImportToDeal(d, importRecord) : d
+        );
+
+        const ok = await persistPilotSnapshot({
+          deals: updatedDeals,
+          participants: updatedParticipants,
+        });
         if (!ok) throw new Error('Could not save participants. Please try again.');
         await fetch('/api/deal-network-pilot/obligations/refresh', {
           method: 'POST',
@@ -252,14 +264,9 @@ export function ExtractionReviewModal({
         toast.success('Participants added from conversation', {
           description: parts.join(', ') || `Added to ${existingDeal.dealName}`,
         });
-        appendOperationalAuditEntry({
-          id: `conversation-import-participants-${Date.now()}`,
-          type: 'compensation_updated',
-          title: 'Conversation imported',
-          description: `${addedCount} participant${addedCount !== 1 ? 's' : ''} created from imported conversation.`,
-          timestamp: new Date().toISOString(),
-          projectId: existingDeal.id,
-        });
+        appendOperationalAuditEntry(
+          conversationImportToAuditEntry(existingDeal.id, importRecord)
+        );
         onComplete();
 
       } else if (entryPoint === 'onboarding') {

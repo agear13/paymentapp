@@ -134,6 +134,8 @@ export interface RecentDeal {
   /** Original conversation text from which this project was extracted. Stored for audit and reference. */
   importedConversation?: string;
   importedAt?: string;
+  /** Append-only audit history for each Create From Conversation import. */
+  conversationImportHistory?: import('@/lib/operations/audit/conversation-import-audit').ConversationImportAuditRecord[];
 }
 
 export interface FunnelStage {
