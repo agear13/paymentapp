@@ -1,7 +1,7 @@
 'use client';
 
 import { ConfidenceBadge } from '@/components/ai-extractor/confidence-badge';
-import type { ConversationImportAuditPayload } from '@/lib/operations/audit/conversation-import-audit';
+import type { ConversationImportAuditPayload } from '@/lib/operations/audit/conversation-import-audit-types';
 import { formatPartyCompensationTerms } from '@/lib/operations/audit/conversation-import-audit';
 import { participationModelLabel } from '@/lib/projects/participant-entitlement';
 import { formatApprovalTimestamp } from '@/lib/projects/participant-compensation-copy';

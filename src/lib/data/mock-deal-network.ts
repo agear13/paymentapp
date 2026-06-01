@@ -135,7 +135,7 @@ export interface RecentDeal {
   importedConversation?: string;
   importedAt?: string;
   /** Append-only audit history for each Create From Conversation import. */
-  conversationImportHistory?: import('@/lib/operations/audit/conversation-import-audit').ConversationImportAuditRecord[];
+  conversationImportHistory?: import('@/lib/operations/audit/conversation-import-audit-types').ConversationImportAuditRecord[];
 }
 
 export interface FunnelStage {

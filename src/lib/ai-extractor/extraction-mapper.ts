@@ -6,7 +6,7 @@ import type { ParticipantCompensationProfile } from '@/lib/participants/particip
 import type { OperationalParticipantRole } from '@/lib/projects/participants-for-project';
 import type { ReviewFormState, ReviewedParty } from './review-form-types';
 import { EXTRACTOR_VERSION, EXTRACTOR_CREATED_VIA, SOURCE_TYPE_LABELS } from './extraction-types';
-import type { ConversationImportAuditRecord } from '@/lib/operations/audit/conversation-import-audit';
+import type { ConversationImportAuditRecord } from '@/lib/operations/audit/conversation-import-audit-types';
 
 // Normalised role string → OperationalParticipantRole. Unknown strings fall back to 'Contributor'.
 const ROLE_NORMALISATION_MAP: Record<string, OperationalParticipantRole> = {

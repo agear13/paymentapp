@@ -1,5 +1,5 @@
 import type { OperationalEvent, OperationalEventType } from '@/lib/operations/contracts/operational-events';
-import type { ConversationImportAuditPayload } from '@/lib/operations/audit/conversation-import-audit';
+import type { ConversationImportAuditPayload } from '@/lib/operations/audit/conversation-import-audit-types';
 
 export const OPERATIONAL_AUDIT_EVENT_TYPES = [
   'agreement_shared',
