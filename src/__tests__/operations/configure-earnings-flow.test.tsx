@@ -40,7 +40,8 @@ function draftParticipant(): DemoParticipant {
   });
 }
 
-function unconfiguredDraftParticipant(): DemoParticipant {
+/** participationModel set, terms not persisted — earnings show "Needs review". */
+function incompleteDraftParticipant(): DemoParticipant {
   const p = draftParticipant();
   return {
     ...p,
@@ -53,6 +54,21 @@ function unconfiguredDraftParticipant(): DemoParticipant {
       commissionServiceIds: [],
     },
   };
+}
+
+/** No participation model or compensation profile — earnings show "Not configured". */
+function noCompensationStructureParticipant(): DemoParticipant {
+  return {
+    id: 'no-structure-1',
+    name: 'Volunteer Pat',
+    email: '',
+    role: 'Contributor',
+    commissionKind: 'fixed_amount',
+    commissionValue: 0,
+    status: 'Pending',
+    approvalStatus: 'Pending approval',
+    inviteToken: 'tok-none',
+  } as DemoParticipant;
 }
 
 function legacyParticipant(): DemoParticipant {
@@ -119,27 +135,29 @@ describe('configure earnings flow', () => {
   });
 
   describe('participant table earnings action', () => {
-    it('opens compensation locally for draft participant via earnings cell', () => {
+    it('opens compensation locally for incomplete draft participant via earnings cell', () => {
       const onConfigure = jest.fn();
-      renderRow(unconfiguredDraftParticipant(), onConfigure);
-      fireEvent.click(screen.getByRole('button', { name: /Not configured/i }));
+      renderRow(incompleteDraftParticipant(), onConfigure);
+      expect(screen.getByText('Needs review')).toBeTruthy();
+      expect(screen.getByText('Compensation amount missing')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: /Needs review/i }));
       expect(onConfigure).toHaveBeenCalledTimes(1);
       expect(onConfigure.mock.calls[0][0].name).toBe('Draft Alex');
     });
 
     it('opens compensation for participant without agreement', () => {
       const onConfigure = jest.fn();
-      const p = prepareParticipantForCompensationEdit(unconfiguredDraftParticipant());
+      const p = prepareParticipantForCompensationEdit(incompleteDraftParticipant());
       expect(p.agreementLifecycle).toBe('NOT_CREATED');
       renderRow(p, onConfigure);
-      fireEvent.click(screen.getByRole('button', { name: /Not configured/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Needs review/i }));
       expect(onConfigure).toHaveBeenCalledTimes(1);
     });
 
     it('opens compensation for participant without attribution enabled', () => {
       const onConfigure = jest.fn();
       const p = {
-        ...prepareParticipantForCompensationEdit(unconfiguredDraftParticipant()),
+        ...prepareParticipantForCompensationEdit(incompleteDraftParticipant()),
         compensationProfile: {
           compensationType: 'FIXED_FEE' as const,
           configured: false,
@@ -149,11 +167,20 @@ describe('configure earnings flow', () => {
         },
       };
       renderRow(p, onConfigure);
-      fireEvent.click(screen.getByRole('button', { name: /Not configured/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Needs review/i }));
       expect(onConfigure).toHaveBeenCalledTimes(1);
       expect(onConfigure.mock.calls[0][0].compensationProfile?.customerAttributionEnabled).toBe(
         false
       );
+    });
+
+    it('shows Not configured when participant has no compensation structure', () => {
+      const onConfigure = jest.fn();
+      renderRow(noCompensationStructureParticipant(), onConfigure);
+      expect(screen.getByText('Not configured')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: /Not configured/i }));
+      expect(onConfigure).toHaveBeenCalledTimes(1);
+      expect(onConfigure.mock.calls[0][0].name).toBe('Volunteer Pat');
     });
   });
 
