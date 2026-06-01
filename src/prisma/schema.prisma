@@ -1092,52 +1092,8 @@ model deal_network_pilot_deals {
   pilot_payment_events payment_events[] @relation("PilotDealPaymentEvents")
   linked_payment_links payment_links[] @relation("PilotDealPaymentLinks")
   funding_sources  project_funding_sources[]
-  allocations      project_allocations[]
 
   @@index([user_id])
-}
-
-enum ProjectAllocationBudgetType {
-  FIXED
-  PERCENTAGE
-  REVENUE_SHARE
-  ATTRIBUTION
-}
-
-enum ProjectAllocationStatus {
-  PLANNED
-  ASSIGNED
-  PENDING_APPROVAL
-  APPROVED
-  OBLIGATION_CREATED
-  SETTLED
-}
-
-/// Planned economic roles/budgets before participants, agreements, or obligations exist.
-model project_allocations {
-  id                   String                      @id @default(uuid()) @db.Uuid
-  project_id           String                      @db.VarChar(255)
-  user_id              String                      @db.VarChar(255)
-  title                String
-  role                 String                      @db.VarChar(128)
-  description          String?                     @db.Text
-  budget_type          ProjectAllocationBudgetType
-  budget_value         Decimal                     @db.Decimal(18, 4)
-  currency             String                      @default("USD") @db.Char(3)
-  planned_budget_value Decimal                     @db.Decimal(18, 4)
-  actual_budget_value  Decimal?                    @db.Decimal(18, 4)
-  participant_id       String?                     @db.VarChar(255)
-  status               ProjectAllocationStatus     @default(PLANNED)
-  notes                String?                     @db.Text
-  created_at           DateTime                    @default(now()) @db.Timestamptz(6)
-  updated_at           DateTime                    @updatedAt @db.Timestamptz(6)
-
-  deal        deal_network_pilot_deals          @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  participant deal_network_pilot_participants? @relation(fields: [participant_id], references: [id], onDelete: SetNull)
-
-  @@index([project_id])
-  @@index([user_id, project_id])
-  @@index([participant_id])
 }
 
 /// Operational treasury: expected inflows per project (rail-agnostic; separate from obligation allocation).
@@ -1256,7 +1212,6 @@ model deal_network_pilot_participants {
 
   deal         deal_network_pilot_deals          @relation(fields: [deal_id], references: [id], onDelete: Cascade)
   obligations  deal_network_pilot_obligations[]
-  allocations  project_allocations[]
 
   @@index([deal_id])
 }

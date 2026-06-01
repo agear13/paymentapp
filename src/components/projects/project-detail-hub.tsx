@@ -23,7 +23,7 @@ import { ProjectFundingSourcesPanel } from '@/components/projects/project-fundin
 import { ProjectOperationalCompletenessCard } from '@/components/projects/project-operational-completeness-card';
 import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
 import {
-  projectAllocationsPath,
+  projectCommercialRolesPath,
   projectFundingPath,
   projectParticipantsPath,
   projectPayoutsPath,
@@ -106,7 +106,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
     );
   }
 
-  const allocationsHref = projectAllocationsPath(projectId);
+  const commercialRolesHref = projectCommercialRolesPath(projectId);
   const participantsHref = projectParticipantsPath(projectId);
   const fundingHref = projectFundingPath(projectId);
   const payoutsHref = projectPayoutsPath(projectId);
@@ -147,7 +147,7 @@ export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild className="w-fit">
-            <Link href={allocationsHref}>Plan allocations</Link>
+            <Link href={commercialRolesHref}>Plan commercial roles</Link>
           </Button>
           <Button asChild variant="outline" className="w-fit">
             <Link href={participantsHref}>Manage participants</Link>

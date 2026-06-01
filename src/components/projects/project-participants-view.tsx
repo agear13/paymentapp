@@ -27,7 +27,7 @@ import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-
 import { OperatorPayoutVerificationInfo } from '@/components/projects/operator-payout-verification-info';
 import type { DemoParticipantRole } from '@/components/deal-network-demo/invite-participant-modal';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
-import { projectAllocationsPath } from '@/lib/projects/project-routes';
+import { projectCommercialRolesPath } from '@/lib/projects/project-routes';
 import {
   applyParticipantAgreementGenerated,
   applyParticipantAgreementShared,
@@ -692,15 +692,15 @@ export function ProjectParticipantsView() {
                 onComplete={() => void refresh({ scope: 'participants', silent: false, force: true })}
               />
             )}
+            <Button asChild>
+              <Link href={projectCommercialRolesPath(projectId)}>
+                <ClipboardList className="mr-2 h-4 w-4" />
+                Add commercial role
+              </Link>
+            </Button>
             <Button variant="outline" onClick={() => setInviteOpen(true)}>
               <UserPlus className="mr-2 h-4 w-4" />
               Invite participant
-            </Button>
-            <Button asChild>
-              <Link href={projectAllocationsPath(projectId)}>
-                <ClipboardList className="mr-2 h-4 w-4" />
-                Add allocation
-              </Link>
             </Button>
           </div>
         </div>
@@ -758,10 +758,10 @@ export function ProjectParticipantsView() {
                   size="lg"
                 />
               )}
-              <Button variant="outline" size="lg" asChild>
-                <Link href={projectAllocationsPath(projectId)}>
+              <Button size="lg" asChild>
+                <Link href={projectCommercialRolesPath(projectId)}>
                   <ClipboardList className="mr-2 h-4 w-4" />
-                  Add allocation
+                  Add commercial role
                 </Link>
               </Button>
               <Button variant="outline" size="lg" onClick={() => setInviteOpen(true)}>

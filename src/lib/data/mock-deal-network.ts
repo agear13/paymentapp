@@ -136,6 +136,11 @@ export interface RecentDeal {
   importedAt?: string;
   /** Append-only audit history for each Create From Conversation import. */
   conversationImportHistory?: import('@/lib/operations/audit/conversation-import-audit-types').ConversationImportAuditRecord[];
+  /**
+   * Lightweight planning layer (stored in deal_payload JSON only).
+   * Not used by operational graph, obligations, funding, or settlement.
+   */
+  commercialRoles?: import('@/lib/projects/commercial-roles/types').CommercialRole[];
 }
 
 export interface FunnelStage {

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { ClipboardList, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react';
+import { Briefcase, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,20 +16,25 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
-import { AddAllocationDialog } from '@/components/projects/add-allocation-dialog';
-import { AssignAllocationDialog } from '@/components/projects/assign-allocation-dialog';
+import { AddCommercialRoleDialog } from '@/components/projects/add-commercial-role-dialog';
+import { AssignCommercialRoleDialog } from '@/components/projects/assign-commercial-role-dialog';
 import { InviteProjectParticipantModal } from '@/components/projects/invite-project-participant-modal';
 import { useOrganization } from '@/hooks/use-organization';
 import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-operational-workspace-currency';
 import {
-  allocationStatusLabel,
-  formatAllocationBudget,
-} from '@/lib/projects/allocations/format-allocation';
-import type { ProjectAllocationDto } from '@/lib/projects/allocations/types';
+  commercialRoleStatusLabel,
+  formatCommercialRoleBudget,
+} from '@/lib/projects/commercial-roles/format-commercial-role';
+import {
+  commercialRolesFromDeal,
+  participantNameForCommercialRole,
+  removeCommercialRoleFromDeals,
+} from '@/lib/projects/commercial-roles/commercial-roles-payload';
+import type { CommercialRole } from '@/lib/projects/commercial-roles/types';
 import { projectParticipantsPath } from '@/lib/projects/project-routes';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 
-export function ProjectAllocationsView() {
+export function ProjectCommercialRolesView() {
   const {
     projectId,
     summary,
@@ -43,38 +48,31 @@ export function ProjectAllocationsView() {
     notFound,
   } = useProjectWorkspace();
   const { organizationId } = useOrganization();
-  const [allocations, setAllocations] = React.useState<ProjectAllocationDto[]>([]);
-  const [listLoading, setListLoading] = React.useState(true);
   const [addOpen, setAddOpen] = React.useState(false);
   const [inviteOpen, setInviteOpen] = React.useState(false);
-  const [assignTarget, setAssignTarget] = React.useState<ProjectAllocationDto | null>(null);
+  const [assignTarget, setAssignTarget] = React.useState<CommercialRole | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
 
   const currency = resolveOperationalWorkspaceCurrency({
     projectCurrency: deal?.projectValueCurrency,
   });
 
-  const loadAllocations = React.useCallback(async () => {
-    setListLoading(true);
-    try {
-      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/allocations`, {
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      if (!res.ok) throw new Error('Failed to load');
-      const json = (await res.json()) as { data: ProjectAllocationDto[] };
-      setAllocations(Array.isArray(json.data) ? json.data : []);
-    } catch {
-      setAllocations([]);
-      toast.error('Could not load allocations');
-    } finally {
-      setListLoading(false);
-    }
-  }, [projectId]);
+  const roles = React.useMemo(() => commercialRolesFromDeal(deal), [deal]);
 
-  React.useEffect(() => {
-    void loadAllocations();
-  }, [loadAllocations]);
+  const persistDeals = React.useCallback(
+    async (nextDeals: typeof allDeals) => {
+      setSaving(true);
+      try {
+        const ok = await saveSnapshot(nextDeals, allParticipants);
+        if (!ok) throw new Error('Save failed');
+        return true;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [allParticipants, saveSnapshot]
+  );
 
   const handleInviteSubmit = async (participant: DemoParticipant) => {
     const next = [...allParticipants, participant];
@@ -84,18 +82,15 @@ export function ProjectAllocationsView() {
     return participant;
   };
 
-  const handleDelete = async (id: string) => {
-    setDeletingId(id);
+  const handleDelete = async (roleId: string) => {
+    setDeletingId(roleId);
     try {
-      const res = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/allocations/${encodeURIComponent(id)}`,
-        { method: 'DELETE', credentials: 'include' }
-      );
-      if (!res.ok) throw new Error('Delete failed');
-      toast.success('Allocation removed');
-      await loadAllocations();
+      const nextDeals = removeCommercialRoleFromDeals(allDeals, projectId, roleId);
+      const ok = await persistDeals(nextDeals);
+      if (!ok) throw new Error('Delete failed');
+      toast.success('Commercial role removed');
     } catch {
-      toast.error('Could not remove allocation');
+      toast.error('Could not remove commercial role');
     } finally {
       setDeletingId(null);
     }
@@ -113,47 +108,50 @@ export function ProjectAllocationsView() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Allocations</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Commercial roles</h1>
           <p className="text-muted-foreground mt-1 text-sm max-w-2xl">
-            Plan roles and budgets before participants join. Allocations are not agreements,
-            obligations, or payables — they guide how you structure the project.
+            Plan roles and budgets before participants join. Stored on the project record for
+            workflow validation only — not agreements, obligations, funding, or settlements.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="icon" onClick={() => void loadAllocations()} disabled={listLoading}>
-            <RefreshCw className={`h-4 w-4 ${listLoading ? 'animate-spin' : ''}`} />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => void refresh({ scope: 'all', silent: false, force: true })}
+            disabled={saving}
+          >
+            <RefreshCw className={`h-4 w-4 ${saving ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="outline" onClick={() => setInviteOpen(true)}>
             <UserPlus className="mr-2 h-4 w-4" />
             Invite participant
           </Button>
           <Button onClick={() => setAddOpen(true)}>
-            <ClipboardList className="mr-2 h-4 w-4" />
-            Add allocation
+            <Briefcase className="mr-2 h-4 w-4" />
+            Add commercial role
           </Button>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Planned allocations</CardTitle>
+          <CardTitle className="text-lg">Planned commercial roles</CardTitle>
           <CardDescription>
-            Assign participants when ready. Existing agreement, obligation, funding, and payout
-            workflows are unchanged.
+            Assign participants when ready. Agreement, obligation, funding, and payout workflows are
+            unchanged.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {listLoading ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">Loading allocations…</p>
-          ) : allocations.length === 0 ? (
+          {roles.length === 0 ? (
             <div className="py-10 text-center space-y-4">
               <p className="text-sm text-muted-foreground">
-                No allocations yet. Add planned roles such as DJ, promoter, or supplier before
+                No commercial roles yet. Add planned roles such as DJ, promoter, or supplier before
                 inviting people.
               </p>
               <Button onClick={() => setAddOpen(true)}>
-                <ClipboardList className="mr-2 h-4 w-4" />
-                Add allocation
+                <Briefcase className="mr-2 h-4 w-4" />
+                Add commercial role
               </Button>
             </div>
           ) : (
@@ -161,7 +159,7 @@ export function ProjectAllocationsView() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Planned role</TableHead>
+                    <TableHead>Role</TableHead>
                     <TableHead>Budget</TableHead>
                     <TableHead>Assigned to</TableHead>
                     <TableHead>Status</TableHead>
@@ -169,30 +167,28 @@ export function ProjectAllocationsView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {allocations.map((a) => (
-                    <TableRow key={a.id}>
+                  {roles.map((r) => (
+                    <TableRow key={r.id}>
                       <TableCell>
-                        <div className="font-medium">{a.title}</div>
-                        <div className="text-xs text-muted-foreground">{a.role}</div>
+                        <div className="font-medium">{r.title}</div>
+                        {r.description ? (
+                          <div className="text-xs text-muted-foreground line-clamp-2">
+                            {r.description}
+                          </div>
+                        ) : null}
                       </TableCell>
-                      <TableCell>{formatAllocationBudget(a)}</TableCell>
+                      <TableCell>{formatCommercialRoleBudget(r, currency)}</TableCell>
                       <TableCell>
-                        {a.participantName ? (
-                          <span>{a.participantName}</span>
-                        ) : (
+                        {participantNameForCommercialRole(r, projectParticipants) ?? (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{allocationStatusLabel(a.status)}</Badge>
+                        <Badge variant="outline">{commercialRoleStatusLabel(r.status)}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setAssignTarget(a)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => setAssignTarget(r)}>
                             <Users className="h-4 w-4 mr-1" />
                             Assign
                           </Button>
@@ -200,9 +196,9 @@ export function ProjectAllocationsView() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            disabled={deletingId === a.id}
-                            onClick={() => void handleDelete(a.id)}
-                            aria-label={`Remove ${a.title}`}
+                            disabled={deletingId === r.id || saving}
+                            onClick={() => void handleDelete(r.id)}
+                            aria-label={`Remove ${r.title}`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -219,29 +215,35 @@ export function ProjectAllocationsView() {
 
       <p className="text-xs text-muted-foreground">
         Next:{' '}
-        <Link href={projectParticipantsPath(projectId)} className="text-primary underline-offset-2 hover:underline">
+        <Link
+          href={projectParticipantsPath(projectId)}
+          className="text-primary underline-offset-2 hover:underline"
+        >
           Participants
         </Link>{' '}
         for agreements and earnings, then obligations, funding, and payouts as today.
       </p>
 
-      <AddAllocationDialog
+      <AddCommercialRoleDialog
         projectId={projectId}
+        allDeals={allDeals}
         open={addOpen}
         onOpenChange={setAddOpen}
-        defaultCurrency={currency}
-        onCreated={() => void loadAllocations()}
+        onSave={persistDeals}
+        onCreated={() => toast.success('Commercial role added')}
       />
 
-      <AssignAllocationDialog
+      <AssignCommercialRoleDialog
         projectId={projectId}
-        allocation={assignTarget}
+        role={assignTarget}
+        allDeals={allDeals}
         participants={projectParticipants}
         open={assignTarget != null}
         onOpenChange={(open) => {
           if (!open) setAssignTarget(null);
         }}
-        onAssigned={() => void loadAllocations()}
+        onSave={persistDeals}
+        onAssigned={() => toast.success('Participant linked')}
       />
 
       <InviteProjectParticipantModal

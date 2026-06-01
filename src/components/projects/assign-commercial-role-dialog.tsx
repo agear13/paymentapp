@@ -18,61 +18,59 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { ProjectAllocationDto } from '@/lib/projects/allocations/types';
+import type { CommercialRole } from '@/lib/projects/commercial-roles/types';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import type { RecentDeal } from '@/lib/data/mock-deal-network';
+import { assignCommercialRoleInDeals } from '@/lib/projects/commercial-roles/commercial-roles-payload';
 
-type AssignAllocationDialogProps = {
+type AssignCommercialRoleDialogProps = {
   projectId: string;
-  allocation: ProjectAllocationDto | null;
+  role: CommercialRole | null;
+  allDeals: RecentDeal[];
   participants: DemoParticipant[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAssigned?: (allocation: ProjectAllocationDto) => void;
+  onSave: (deals: RecentDeal[]) => Promise<boolean>;
+  onAssigned?: () => void;
 };
 
-export function AssignAllocationDialog({
+export function AssignCommercialRoleDialog({
   projectId,
-  allocation,
+  role,
+  allDeals,
   participants,
   open,
   onOpenChange,
+  onSave,
   onAssigned,
-}: AssignAllocationDialogProps) {
+}: AssignCommercialRoleDialogProps) {
   const [participantId, setParticipantId] = React.useState<string>('__none__');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (open && allocation) {
-      setParticipantId(allocation.participantId ?? '__none__');
+    if (open && role) {
+      setParticipantId(role.participantId ?? '__none__');
       setError(null);
     }
-  }, [open, allocation]);
+  }, [open, role]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!allocation) return;
+    if (!role) return;
+    const nextId = participantId === '__none__' ? null : participantId;
+    if (nextId && !participants.some((p) => p.id === nextId)) {
+      setError('Select a participant on this project.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/allocations/${encodeURIComponent(allocation.id)}`,
-        {
-          method: 'PATCH',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            participantId: participantId === '__none__' ? null : participantId,
-          }),
-        }
-      );
-      if (!res.ok) {
-        const json = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(json.error ?? 'Failed to assign participant');
-      }
-      const json = (await res.json()) as { data: ProjectAllocationDto };
+      const nextDeals = assignCommercialRoleInDeals(allDeals, projectId, role.id, nextId);
+      const ok = await onSave(nextDeals);
+      if (!ok) throw new Error('Failed to assign participant');
       onOpenChange(false);
-      onAssigned?.(json.data);
+      onAssigned?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -80,7 +78,7 @@ export function AssignAllocationDialog({
     }
   };
 
-  if (!allocation) return null;
+  if (!role) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -89,8 +87,8 @@ export function AssignAllocationDialog({
           <DialogHeader>
             <DialogTitle>Assign participant</DialogTitle>
             <DialogDescription>
-              Link {allocation.title} to a project participant. This does not create an agreement
-              or obligation.
+              Link {role.title} to a project participant. This does not create an agreement,
+              obligation, funding entry, or settlement.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -113,7 +111,7 @@ export function AssignAllocationDialog({
             </div>
             {participants.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                Invite a participant first, then return here to assign this allocation.
+                Invite a participant first, then return here to assign this commercial role.
               </p>
             ) : null}
             {error ? <p className="text-sm text-destructive">{error}</p> : null}

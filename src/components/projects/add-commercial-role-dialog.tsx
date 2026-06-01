@@ -20,87 +20,74 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { ProjectAllocationBudgetType, ProjectAllocationDto } from '@/lib/projects/allocations/types';
-import { budgetTypeLabel } from '@/lib/projects/allocations/format-allocation';
+import type { CommercialRoleBudgetType } from '@/lib/projects/commercial-roles/types';
+import { commercialRoleBudgetTypeLabel } from '@/lib/projects/commercial-roles/format-commercial-role';
+import {
+  addCommercialRoleToDeals,
+  type CreateCommercialRoleInput,
+} from '@/lib/projects/commercial-roles/commercial-roles-payload';
+import type { RecentDeal } from '@/lib/data/mock-deal-network';
 
-const BUDGET_TYPES: ProjectAllocationBudgetType[] = [
+const BUDGET_TYPES: CommercialRoleBudgetType[] = [
   'FIXED',
-  'PERCENTAGE',
   'REVENUE_SHARE',
-  'ATTRIBUTION',
+  'CUSTOMER_ATTRIBUTION',
 ];
 
-type AddAllocationDialogProps = {
+type AddCommercialRoleDialogProps = {
   projectId: string;
+  allDeals: RecentDeal[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultCurrency?: string;
-  onCreated?: (allocation: ProjectAllocationDto) => void;
+  onSave: (deals: RecentDeal[]) => Promise<boolean>;
+  onCreated?: () => void;
 };
 
-export function AddAllocationDialog({
+export function AddCommercialRoleDialog({
   projectId,
+  allDeals,
   open,
   onOpenChange,
-  defaultCurrency = 'USD',
+  onSave,
   onCreated,
-}: AddAllocationDialogProps) {
+}: AddCommercialRoleDialogProps) {
   const [title, setTitle] = React.useState('');
-  const [role, setRole] = React.useState('');
-  const [budgetType, setBudgetType] = React.useState<ProjectAllocationBudgetType>('FIXED');
+  const [budgetType, setBudgetType] = React.useState<CommercialRoleBudgetType>('FIXED');
   const [budgetValue, setBudgetValue] = React.useState('');
-  const [currency, setCurrency] = React.useState(defaultCurrency);
   const [description, setDescription] = React.useState('');
-  const [notes, setNotes] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (open) setCurrency(defaultCurrency);
-  }, [open, defaultCurrency]);
-
   const reset = () => {
     setTitle('');
-    setRole('');
     setBudgetType('FIXED');
     setBudgetValue('');
     setDescription('');
-    setNotes('');
     setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedValue = Number(budgetValue);
-    if (!title.trim() || !role.trim() || !Number.isFinite(parsedValue) || parsedValue < 0) {
-      setError('Enter a title, role, and valid budget value.');
+    if (!title.trim() || !Number.isFinite(parsedValue) || parsedValue < 0) {
+      setError('Enter a title and valid budget value.');
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/allocations`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          role: role.trim(),
-          budgetType,
-          budgetValue: parsedValue,
-          currency,
-          description: description.trim() || null,
-          notes: notes.trim() || null,
-        }),
-      });
-      if (!res.ok) {
-        const json = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(json.error ?? 'Failed to add allocation');
-      }
-      const json = (await res.json()) as { data: ProjectAllocationDto };
+      const input: CreateCommercialRoleInput = {
+        title: title.trim(),
+        description: description.trim() || null,
+        budgetType,
+        budgetValue: parsedValue,
+      };
+      const nextDeals = addCommercialRoleToDeals(allDeals, projectId, input);
+      const ok = await onSave(nextDeals);
+      if (!ok) throw new Error('Could not save commercial role');
       reset();
       onOpenChange(false);
-      onCreated?.(json.data);
+      onCreated?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -119,28 +106,19 @@ export function AddAllocationDialog({
       <DialogContent className="max-w-md">
         <form onSubmit={(e) => void handleSubmit(e)}>
           <DialogHeader>
-            <DialogTitle>Add allocation</DialogTitle>
+            <DialogTitle>Add commercial role</DialogTitle>
             <DialogDescription>
               Plan a role and budget before inviting a participant or creating agreements.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="alloc-title">Title</Label>
+              <Label htmlFor="cr-title">Title</Label>
               <Input
-                id="alloc-title"
+                id="cr-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="DJ"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="alloc-role">Role</Label>
-              <Input
-                id="alloc-role"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                placeholder="Performer"
               />
             </div>
             <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
@@ -148,7 +126,7 @@ export function AddAllocationDialog({
                 <Label>Budget type</Label>
                 <Select
                   value={budgetType}
-                  onValueChange={(v) => setBudgetType(v as ProjectAllocationBudgetType)}
+                  onValueChange={(v) => setBudgetType(v as CommercialRoleBudgetType)}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -156,16 +134,16 @@ export function AddAllocationDialog({
                   <SelectContent>
                     {BUDGET_TYPES.map((t) => (
                       <SelectItem key={t} value={t}>
-                        {budgetTypeLabel(t)}
+                        {commercialRoleBudgetTypeLabel(t)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="alloc-value">Budget value</Label>
+                <Label htmlFor="cr-value">Budget value</Label>
                 <Input
-                  id="alloc-value"
+                  id="cr-value"
                   type="number"
                   min={0}
                   step={budgetType === 'FIXED' ? '0.01' : '0.1'}
@@ -175,21 +153,10 @@ export function AddAllocationDialog({
                 />
               </div>
             </div>
-            {budgetType === 'FIXED' ? (
-              <div className="grid gap-2">
-                <Label htmlFor="alloc-currency">Currency</Label>
-                <Input
-                  id="alloc-currency"
-                  maxLength={3}
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-                />
-              </div>
-            ) : null}
             <div className="grid gap-2">
-              <Label htmlFor="alloc-desc">Description (optional)</Label>
+              <Label htmlFor="cr-desc">Description (optional)</Label>
               <Textarea
-                id="alloc-desc"
+                id="cr-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
@@ -202,7 +169,7 @@ export function AddAllocationDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Saving…' : 'Add allocation'}
+              {submitting ? 'Saving…' : 'Add commercial role'}
             </Button>
           </DialogFooter>
         </form>
