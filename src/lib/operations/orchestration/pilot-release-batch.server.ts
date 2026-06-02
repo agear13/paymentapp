@@ -9,6 +9,9 @@ import {
   filterPilotReleaseBatchLines,
   scopeReleaseBatchToParticipants,
 } from '@/lib/operations/payouts/scope-release-batch-participants';
+import type { PilotReleaseBatchLine } from '@/lib/operations/payouts/pilot-release-batch-types';
+
+export type { PilotReleaseBatchLine } from '@/lib/operations/payouts/pilot-release-batch-types';
 
 export type PilotReleaseBatchInput = {
   userId: string;
@@ -18,14 +21,6 @@ export type PilotReleaseBatchInput = {
   minThreshold?: number;
   /** When set, only these participants are included in derived lines. */
   participantIds?: string[];
-};
-
-export type PilotReleaseBatchLine = {
-  obligationId: string;
-  participantId: string;
-  participantName: string;
-  amount: number;
-  currency: string;
 };
 
 /** Canonical pilot obligation → release batch lines — same graph as eligibility preview. */

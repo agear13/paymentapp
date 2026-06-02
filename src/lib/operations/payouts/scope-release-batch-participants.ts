@@ -1,5 +1,5 @@
 import type { ReleaseBatchEligibility } from '@/lib/operations/selectors/derive-release-batch-eligibility';
-import type { PilotReleaseBatchLine } from '@/lib/operations/orchestration/pilot-release-batch.server';
+import type { PilotReleaseBatchLine } from '@/lib/operations/payouts/pilot-release-batch-types';
 
 export type ScopeReleaseBatchResult =
   | { ok: true; scopedEligibility: ReleaseBatchEligibility; participantIds: string[] }
