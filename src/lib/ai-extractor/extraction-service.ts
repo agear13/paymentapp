@@ -40,7 +40,7 @@ const ExtractedPartySchema = z.object({
 const ExtractedPaymentTermSchema = z.object({
   description: ExtractionFieldSchema(z.string()),
   amount: ExtractionFieldSchema(z.number().nullable()),
-  currency: ExtractionFieldSchema(z.string()),
+  currency: ExtractionFieldSchema(z.string().nullable()),
   dueCondition: ExtractionFieldSchema(z.string().nullable()),
 });
 
@@ -54,7 +54,7 @@ const ExtractionResultSchema = z.object({
   projectName: ExtractionFieldSchema(z.string().nullable()),
   projectDescription: ExtractionFieldSchema(z.string().nullable()),
   projectValue: ExtractionFieldSchema(z.number().nullable()),
-  currency: ExtractionFieldSchema(z.string()),
+  currency: ExtractionFieldSchema(z.string().nullable()),
   counterparty: ExtractionFieldSchema(z.string().nullable()),
   parties: z.array(ExtractedPartySchema),
   paymentTerms: z.array(ExtractedPaymentTermSchema),

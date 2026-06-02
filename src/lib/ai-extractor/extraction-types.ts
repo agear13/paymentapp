@@ -38,7 +38,7 @@ export interface ExtractedParty {
 export interface ExtractedPaymentTerm {
   description: ExtractionField<string>;
   amount: ExtractionField<number | null>;
-  currency: ExtractionField<string>;
+  currency: ExtractionField<string | null>;
   dueCondition: ExtractionField<string | null>;
 }
 
@@ -46,7 +46,7 @@ export interface ExtractionResult {
   projectName: ExtractionField<string | null>;
   projectDescription: ExtractionField<string | null>;
   projectValue: ExtractionField<number | null>;
-  currency: ExtractionField<string>;
+  currency: ExtractionField<string | null>;
   counterparty: ExtractionField<string | null>;
   parties: ExtractedParty[];
   paymentTerms: ExtractedPaymentTerm[];
