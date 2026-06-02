@@ -24,6 +24,9 @@ function isPositiveNumber(value: number | null | undefined): value is number {
 }
 
 export function revenueComponentActive(party: ReviewedParty, original?: ExtractedParty): boolean {
+  // Attribution % lives in revenueSharePct but is not a separate revenue-share leg.
+  if (party.participationModel === 'customer_attribution') return false;
+  if (original?.participationModel.value === 'customer_attribution') return false;
   if (party.participationModel === 'revenue_share') return true;
   if (party.revenueSharePct != null) return true;
   if (original?.participationModel.value === 'revenue_share') return true;
@@ -37,7 +40,7 @@ export function fixedComponentActive(party: ReviewedParty, original?: ExtractedP
   return original?.fixedAmount.value != null;
 }
 
-function attributionComponentActive(party: ReviewedParty, original?: ExtractedParty): boolean {
+export function attributionComponentActive(party: ReviewedParty, original?: ExtractedParty): boolean {
   if (party.participationModel === 'customer_attribution') return true;
   return original?.participationModel.value === 'customer_attribution';
 }

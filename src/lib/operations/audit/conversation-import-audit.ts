@@ -83,6 +83,9 @@ export function buildConversationImportAuditRecord(input: {
       participationModel,
       fixedAmount: reviewed.fixedAmount,
       revenueSharePct: reviewed.revenueSharePct,
+      extractedFixedAmount: extracted.fixedAmount.value,
+      extractedRevenueSharePct: extracted.revenueSharePct.value,
+      extractedCurrencyCode: input.form.extractedCurrencyCode ?? undefined,
       partyConfidence: derivePartyConfidence(extracted),
       nameConfidence: extracted.name.confidence,
       participationModelConfidence: extracted.participationModel.confidence,
@@ -108,6 +111,85 @@ export function buildConversationImportAuditRecord(input: {
       overallConfidence: input.result.overallConfidence,
     },
     parties,
+    extractedCurrencyCode: input.form.extractedCurrencyCode ?? undefined,
+    extractedProjectValue: input.result.projectValue.value,
+  };
+}
+
+/** One-time migration: legacy scalar import → single history row (not used for timeline derivation). */
+export function buildLegacyConversationImportRecord(
+  deal: RecentDeal
+): ConversationImportAuditRecord | null {
+  if (!deal.importedConversation?.trim()) return null;
+  return {
+    id: `legacy-${deal.id}`,
+    importedAt: deal.importedAt ?? deal.lastUpdated,
+    extractedAt: deal.importedAt ?? deal.lastUpdated,
+    sourceType: deal.sourceType ?? 'Unknown',
+    extractorVersion: deal.extractorVersion ?? EXTRACTOR_VERSION,
+    entryPoint: 'project_create',
+    rawConversationText: deal.importedConversation,
+    extractionSummary: {
+      oneLiner: 'Imported from conversation (legacy record — summary not captured at import).',
+      participantCount: 0,
+      fixedPayoutCount: 0,
+      revenueShareCount: 0,
+      attributionCount: 0,
+      agreementTypeLabel: 'Unknown',
+      overallConfidence: 'absent',
+    },
+    parties: [],
+  };
+}
+
+/**
+ * Ensures `conversationImportHistory` is populated for legacy deals that only have
+ * `importedConversation`. Does not replace or truncate existing history.
+ */
+export function materializeConversationImportHistoryForDeal(deal: RecentDeal): RecentDeal {
+  const history = deal.conversationImportHistory ?? [];
+  if (history.length > 0) return deal;
+  const legacy = buildLegacyConversationImportRecord(deal);
+  if (!legacy) return deal;
+  return { ...deal, conversationImportHistory: [legacy] };
+}
+
+/**
+ * Append-only merge when persisting deals: never drop prior import records.
+ * Incoming payloads that omit history (stale client snapshot) keep stored history.
+ */
+export function mergeConversationImportHistoryOnDeal(
+  existing: RecentDeal | null | undefined,
+  incoming: RecentDeal
+): RecentDeal {
+  const existingDeal = existing
+    ? materializeConversationImportHistoryForDeal(existing)
+    : null;
+
+  // Never materialize legacy from `importedConversation` on incoming alone — stale
+  // client payloads often omit history while still carrying the latest scalar text.
+  const existingHistory = existingDeal?.conversationImportHistory ?? [];
+  const incomingHistory = incoming.conversationImportHistory ?? [];
+
+  const seen = new Set(existingHistory.map((r) => r.id));
+  const mergedHistory = [...existingHistory];
+  for (const record of incomingHistory) {
+    if (!seen.has(record.id)) {
+      mergedHistory.push(record);
+      seen.add(record.id);
+    }
+  }
+
+  const history =
+    mergedHistory.length > 0
+      ? mergedHistory
+      : incomingHistory.length > 0
+        ? incomingHistory
+        : existingHistory;
+
+  return {
+    ...incoming,
+    conversationImportHistory: history.length > 0 ? history : undefined,
   };
 }
 
@@ -115,13 +197,14 @@ export function appendConversationImportToDeal(
   deal: RecentDeal,
   record: ConversationImportAuditRecord
 ): RecentDeal {
-  const history = [...(deal.conversationImportHistory ?? []), record];
+  const base = materializeConversationImportHistoryForDeal(deal);
+  const history = [...(base.conversationImportHistory ?? []), record];
   return {
-    ...deal,
-    importedConversation: record.rawConversationText || deal.importedConversation,
+    ...base,
+    importedConversation: record.rawConversationText || base.importedConversation,
     importedAt: record.importedAt,
-    sourceType: record.sourceType || deal.sourceType,
-    extractorVersion: record.extractorVersion || deal.extractorVersion,
+    sourceType: record.sourceType || base.sourceType,
+    extractorVersion: record.extractorVersion || base.extractorVersion,
     conversationImportHistory: history,
   };
 }
@@ -159,29 +242,6 @@ export function conversationImportToAuditEntry(
   };
 }
 
-function legacyDealImportRecord(deal: RecentDeal): ConversationImportAuditRecord | null {
-  if (!deal.importedConversation?.trim()) return null;
-  return {
-    id: `legacy-${deal.id}`,
-    importedAt: deal.importedAt ?? deal.lastUpdated,
-    extractedAt: deal.importedAt ?? deal.lastUpdated,
-    sourceType: deal.sourceType ?? 'Unknown',
-    extractorVersion: deal.extractorVersion ?? EXTRACTOR_VERSION,
-    entryPoint: 'project_create',
-    rawConversationText: deal.importedConversation,
-    extractionSummary: {
-      oneLiner: 'Imported from conversation (legacy record — summary not captured at import).',
-      participantCount: 0,
-      fixedPayoutCount: 0,
-      revenueShareCount: 0,
-      attributionCount: 0,
-      agreementTypeLabel: 'Unknown',
-      overallConfidence: 'absent',
-    },
-    parties: [],
-  };
-}
-
 export function deriveConversationImportAuditTimeline(
   deals: RecentDeal[],
   projectId?: string
@@ -189,14 +249,9 @@ export function deriveConversationImportAuditTimeline(
   const entries: OperationalAuditEntry[] = [];
   for (const deal of deals) {
     if (projectId && deal.id !== projectId) continue;
-    const history = deal.conversationImportHistory ?? [];
-    if (history.length > 0) {
-      for (const record of history) {
-        entries.push(conversationImportToAuditEntry(deal.id, record));
-      }
-    } else {
-      const legacy = legacyDealImportRecord(deal);
-      if (legacy) entries.push(conversationImportToAuditEntry(deal.id, legacy));
+    const history = materializeConversationImportHistoryForDeal(deal).conversationImportHistory ?? [];
+    for (const record of history) {
+      entries.push(conversationImportToAuditEntry(deal.id, record));
     }
   }
   return entries.sort(

@@ -167,6 +167,12 @@ export function applyCompensationProfileToParticipant(
           ...next.compensationProfile!,
           customerAttributionEnabled: profile.customerAttributionEnabled ?? true,
         };
+        if (profile.percentage != null && next.referralCommerce?.commissionMode === 'referral_commerce') {
+          next.referralCommerce = {
+            ...next.referralCommerce,
+            commerceCommissionPct: profile.percentage,
+          };
+        }
       }
       break;
     case 'FIXED_FEE':

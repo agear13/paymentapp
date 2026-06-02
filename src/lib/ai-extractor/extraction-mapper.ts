@@ -6,7 +6,15 @@ import type { ParticipantCompensationProfile } from '@/lib/participants/particip
 import type { OperationalParticipantRole } from '@/lib/projects/participants-for-project';
 import type { ReviewFormState, ReviewedParty } from './review-form-types';
 import { EXTRACTOR_VERSION, EXTRACTOR_CREATED_VIA, SOURCE_TYPE_LABELS } from './extraction-types';
+import type { ExtractedParty } from './extraction-types';
 import type { ConversationImportAuditRecord } from '@/lib/operations/audit/conversation-import-audit-types';
+import { appendConversationImportToDeal } from '@/lib/operations/audit/conversation-import-audit';
+import {
+  attributionComponentActive,
+  isHybridCompensationParty,
+  isFixedPayoutAmountComplete,
+  isRevenueSharePctComplete,
+} from '@/lib/ai-extractor/compensation-review-validation';
 
 // Normalised role string → OperationalParticipantRole. Unknown strings fall back to 'Contributor'.
 const ROLE_NORMALISATION_MAP: Record<string, OperationalParticipantRole> = {
@@ -42,6 +50,70 @@ export function mapRoleStringToOperationalRole(raw: string): OperationalParticip
   return ROLE_NORMALISATION_MAP[normalised] ?? 'Contributor';
 }
 
+function buildCompensationProfileFromReview(
+  party: ReviewedParty,
+  original?: ExtractedParty
+): ParticipantCompensationProfile | undefined {
+  const configuredAt = new Date().toISOString();
+
+  if (isHybridCompensationParty(party, original)) {
+    if (!isRevenueSharePctComplete(party) || !isFixedPayoutAmountComplete(party)) {
+      return undefined;
+    }
+    const attribution = attributionComponentActive(party, original);
+    return {
+      compensationType: 'HYBRID',
+      percentage: party.revenueSharePct!,
+      fixedAmount: party.fixedAmount!,
+      customerAttributionEnabled: attribution,
+      configured: true,
+      configuredAt,
+    };
+  }
+
+  if (party.participationModel === 'revenue_share' && isRevenueSharePctComplete(party)) {
+    return {
+      compensationType: 'REVENUE_SHARE',
+      percentage: party.revenueSharePct!,
+      configured: true,
+      configuredAt,
+    };
+  }
+
+  if (party.participationModel === 'fixed_payout' && isFixedPayoutAmountComplete(party)) {
+    return {
+      compensationType: 'FIXED_FEE',
+      fixedAmount: party.fixedAmount!,
+      configured: true,
+      configuredAt,
+    };
+  }
+
+  if (
+    party.participationModel === 'customer_attribution' ||
+    attributionComponentActive(party, original)
+  ) {
+    const pct = party.revenueSharePct ?? original?.revenueSharePct.value ?? null;
+    if (pct != null && Number.isFinite(pct) && pct > 0) {
+      return {
+        compensationType: 'COMMISSION',
+        percentage: pct,
+        customerAttributionEnabled: true,
+        configured: true,
+        configuredAt,
+      };
+    }
+    return {
+      compensationType: 'COMMISSION',
+      customerAttributionEnabled: true,
+      configured: true,
+      configuredAt,
+    };
+  }
+
+  return undefined;
+}
+
 /**
  * Build a RecentDeal from the operator-reviewed extraction form state.
  * Called only for Entry Point A (new project from conversation).
@@ -59,7 +131,7 @@ export function mapReviewToRecentDeal(
   const projectValueCurrency =
     review.currency === 'AUD' || review.currency === 'USD' ? review.currency : 'AUD';
 
-  return {
+  const base: RecentDeal = {
     id,
     dealName: review.projectName.trim() || 'Untitled Project',
     partner: review.counterparty?.trim() || primaryParty?.name?.trim() || '',
@@ -78,8 +150,9 @@ export function mapReviewToRecentDeal(
     sourceType: SOURCE_TYPE_LABELS[review.sourceType] ?? review.sourceType,
     importedConversation: review.rawConversationText,
     importedAt: importRecord?.importedAt ?? new Date().toISOString(),
-    ...(importRecord ? { conversationImportHistory: [importRecord] } : {}),
   };
+
+  return importRecord ? appendConversationImportToDeal(base, importRecord) : base;
 }
 
 /**
@@ -90,9 +163,11 @@ export function mapReviewToRecentDeal(
 export function mapSinglePartyToParticipant(
   party: ReviewedParty,
   project: RecentDeal,
-  provenanceTag: string
+  provenanceTag: string,
+  original?: ExtractedParty
 ): DemoParticipant {
   const role = mapRoleStringToOperationalRole(party.role);
+  const hybrid = isHybridCompensationParty(party, original);
   const commissionKind = participationModelToCommissionKind(party.participationModel);
   const commissionValue =
     party.participationModel === 'fixed_payout'
@@ -109,26 +184,15 @@ export function mapSinglePartyToParticipant(
     role,
     project,
     notes: participantNotes,
-    participationModel: party.participationModel,
+    participationModel: hybrid ? 'revenue_share' : party.participationModel,
     commissionKind,
     commissionValue,
-    enableCustomerAttribution: party.participationModel === 'customer_attribution',
+    enableCustomerAttribution:
+      party.participationModel === 'customer_attribution' ||
+      attributionComponentActive(party, original),
   });
 
-  // Auto-configure compensation profile so earnings register as configured immediately.
-  // Without this, hasPersistedCompensationTerms() returns false and agreements show
-  // "Earnings not configured" despite the extracted values being present.
-  const configuredAt = new Date().toISOString();
-  let profile: ParticipantCompensationProfile | undefined;
-
-  if (party.participationModel === 'revenue_share' && (party.revenueSharePct ?? 0) > 0) {
-    profile = { compensationType: 'REVENUE_SHARE', percentage: party.revenueSharePct!, configured: true, configuredAt };
-  } else if (party.participationModel === 'fixed_payout' && (party.fixedAmount ?? 0) > 0) {
-    profile = { compensationType: 'FIXED_FEE', fixedAmount: party.fixedAmount!, configured: true, configuredAt };
-  } else if (party.participationModel === 'customer_attribution') {
-    profile = { compensationType: 'COMMISSION', customerAttributionEnabled: true, configured: true, configuredAt };
-  }
-
+  const profile = buildCompensationProfileFromReview(party, original);
   return profile ? applyCompensationProfileToParticipant(built, profile) : built;
 }
 
@@ -162,11 +226,14 @@ export function mergeExtractedCompensationIntoExistingParticipant(
  */
 export function mapReviewToParticipants(
   review: ReviewFormState,
-  project: RecentDeal
+  project: RecentDeal,
+  originalsById?: Map<string, ExtractedParty>
 ): DemoParticipant[] {
   const provenanceTag = `[AI Import: ${SOURCE_TYPE_LABELS[review.sourceType] ?? review.sourceType} · ${EXTRACTOR_VERSION}]`;
 
   return review.parties
     .filter((p) => p.name.trim().length > 0)
-    .map((party) => mapSinglePartyToParticipant(party, project, provenanceTag));
+    .map((party) =>
+      mapSinglePartyToParticipant(party, project, provenanceTag, originalsById?.get(party.id))
+    );
 }

@@ -144,7 +144,8 @@ describe('compensation review validation — acceptance scenarios', () => {
     expect(isRevenueSharePctComplete(reviewed)).toBe(true);
     expect(isFixedPayoutAmountComplete(reviewed)).toBe(true);
 
-    const mapped = mapSinglePartyToParticipant(reviewed, baseDeal(), '[AI Import]');
+    const mapped = mapSinglePartyToParticipant(reviewed, baseDeal(), '[AI Import]', original);
+    expect(mapped.compensationProfile?.compensationType).toBe('HYBRID');
     expect(isParticipantEarningsConfigured(hydrateOperationalParticipant(mapped))).toBe(true);
   });
 

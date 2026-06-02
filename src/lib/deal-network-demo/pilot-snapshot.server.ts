@@ -47,6 +47,10 @@ export function dealRowToRecentDeal(row: {
 
 import { normalizeParticipant } from '@/lib/operational/safe-operational-hydration';
 import { repairScalarCompensationProfile } from '@/lib/participants/repair-scalar-compensation-profile';
+import {
+  materializeConversationImportHistoryForDeal,
+  mergeConversationImportHistoryOnDeal,
+} from '@/lib/operations/audit/conversation-import-audit';
 
 export function participantRowToDemo(row: {
   id: string;
@@ -404,7 +408,9 @@ export async function getPilotSnapshotForUser(userId: string): Promise<PilotSnap
   );
 
   return {
-    deals: deals.map(dealRowToRecentDeal),
+    deals: deals.map((row) =>
+      materializeConversationImportHistoryForDeal(dealRowToRecentDeal(row))
+    ),
     participants,
   };
 }
@@ -428,7 +434,17 @@ export async function syncPilotSnapshotForUser(
     }
 
     for (const deal of deals) {
-      const data = dealToPrismaData(deal, userId);
+      const existingRow = await tx.deal_network_pilot_deals.findUnique({
+        where: { id: deal.id },
+        select: { deal_payload: true },
+      });
+      const existingDeal = existingRow
+        ? materializeConversationImportHistoryForDeal(
+            dealRowToRecentDeal({ id: deal.id, deal_payload: existingRow.deal_payload })
+          )
+        : null;
+      const mergedDeal = mergeConversationImportHistoryOnDeal(existingDeal, deal);
+      const data = dealToPrismaData(mergedDeal, userId);
       await tx.deal_network_pilot_deals.upsert({
         where: { id: deal.id },
         create: { id: deal.id, ...data },

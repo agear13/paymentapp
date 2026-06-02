@@ -6,6 +6,8 @@
     "components/operations/**/*.tsx",
     "lib/payouts/obligation-status-labels.ts",
     "lib/payouts/payout-attention-summary.ts",
+    "lib/payouts/create-participant-release-batch.ts",
+    "lib/operations/payouts/scope-release-batch-participants.ts",
     "hooks/use-operational-guidance.ts",
     "hooks/use-operational-audit-store.ts",
     "hooks/use-global-operational-sync.ts",

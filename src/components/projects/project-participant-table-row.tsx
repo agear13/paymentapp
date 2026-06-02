@@ -29,6 +29,8 @@ import {
   payoutVerificationLabelFromContract,
 } from '@/lib/operations/contracts/participant-presentation';
 import { participantTableCellClass } from '@/components/projects/participant-table-layout';
+import { ParticipantReleaseButton } from '@/components/projects/participant-release-button';
+import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-client';
 
 function StackedOperationalCell({
   chip,
@@ -62,6 +64,12 @@ export type ProjectParticipantTableRowProps = {
   onPayoutVerificationChange: (id: string, confirmed: boolean) => void;
   onEdit: (p: DemoParticipant) => void;
   onConfigureCompensation: (p: DemoParticipant) => void;
+  organizationId?: string | null;
+  workspaceCurrency?: string;
+  releaseReady?: boolean;
+  canRelease?: boolean;
+  releaseDisabledReason?: string | null;
+  releaseSyncHandlers?: OperationalSyncHandlers;
 };
 
 function ProjectParticipantTableRowComponent({
@@ -73,6 +81,12 @@ function ProjectParticipantTableRowComponent({
   onPayoutVerificationChange,
   onEdit,
   onConfigureCompensation,
+  organizationId,
+  workspaceCurrency = 'AUD',
+  releaseReady = false,
+  canRelease = false,
+  releaseDisabledReason,
+  releaseSyncHandlers,
 }: ProjectParticipantTableRowProps) {
   const hydrated = React.useMemo(
     () => hydrateParticipant(participant, catalogContext),
@@ -205,7 +219,19 @@ function ProjectParticipantTableRowComponent({
       </TableCell>
 
       <TableCell className={participantTableCellClass('actions')}>
-        <div className="flex justify-end items-center w-full">
+        <div className="flex justify-end items-center gap-1.5 w-full">
+          {releaseSyncHandlers ? (
+            <ParticipantReleaseButton
+              participantId={hydrated.id}
+              participantName={participantDisplayName(hydrated)}
+              organizationId={organizationId}
+              currency={workspaceCurrency}
+              releaseReady={releaseReady}
+              canRelease={canRelease}
+              disabledReason={releaseDisabledReason}
+              syncHandlers={releaseSyncHandlers}
+            />
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

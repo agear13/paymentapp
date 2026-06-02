@@ -9,8 +9,13 @@ export type ConversationImportPartyRecord = {
   role: string;
   email?: string;
   participationModel: ParticipationModelOption;
+  /** Operator-reviewed amounts (AUD/USD after conversion when required). */
   fixedAmount: number | null;
   revenueSharePct: number | null;
+  /** Original extraction values — preserved even when review amounts are nulled for unsupported currency. */
+  extractedFixedAmount?: number | null;
+  extractedRevenueSharePct?: number | null;
+  extractedCurrencyCode?: string | null;
   partyConfidence: ExtractionConfidence;
   nameConfidence: ExtractionConfidence;
   participationModelConfidence: ExtractionConfidence;
@@ -38,6 +43,9 @@ export type ConversationImportAuditRecord = {
   rawConversationText: string;
   extractionSummary: ConversationImportExtractionSummary;
   parties: ConversationImportPartyRecord[];
+  /** ISO currency from extraction when explicitly stated (may be unsupported). */
+  extractedCurrencyCode?: string | null;
+  extractedProjectValue?: number | null;
 };
 
 export type ConversationImportAuditPayload = {

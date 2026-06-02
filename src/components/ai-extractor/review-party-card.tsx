@@ -140,6 +140,18 @@ export function ReviewPartyCard({
         </div>
       )}
 
+      {hybrid && compensationWarnings.length === 0 && (
+        <div className="rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2 space-y-1">
+          <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
+            Hybrid compensation detected
+          </p>
+          <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
+            Both fixed and percentage terms will be saved. Confirm each amount in AUD or USD before
+            generating agreements — this is the safest launch path for mixed compensation.
+          </p>
+        </div>
+      )}
+
       {compensationWarnings.map((warning) => (
         <div
           key={warning.kind}

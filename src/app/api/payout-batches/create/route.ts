@@ -25,6 +25,11 @@ import {
   createPilotReleaseBatch,
   pilotReleaseBatchPreferred,
 } from '@/lib/operations/orchestration/pilot-release-batch.server';
+import {
+  filterPilotReleaseBatchLines,
+  normalizeReleaseParticipantIds,
+  scopeReleaseBatchToParticipants,
+} from '@/lib/operations/payouts/scope-release-batch-participants';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -42,6 +47,8 @@ const CreateBatchSchema = z.object({
   currency: z.string().length(3),
   minThreshold: z.number().min(0).optional(),
   roleFilter: z.enum(['CONSULTANT', 'BD_PARTNER']).optional(),
+  /** When set, only these participant ids are included (additive partial release). */
+  participantIds: z.array(z.string().min(1)).min(1).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -67,7 +74,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { organizationId, currency, minThreshold = 50, roleFilter } = parsed.data;
+    const { organizationId, currency, minThreshold = 50, roleFilter, participantIds } =
+      parsed.data;
+    const scopedParticipantIds = normalizeReleaseParticipantIds(participantIds);
 
     const canManage = await checkUserPermission(user.id, organizationId, 'manage_ledger');
     if (!canManage) {
@@ -92,17 +101,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const scoped = scopeReleaseBatchToParticipants(eligibility, scopedParticipantIds);
+    if (!scoped.ok) {
+      return NextResponse.json(
+        { error: scoped.error, message: scoped.message },
+        { status: 400 }
+      );
+    }
+    const batchEligibility = scoped.scopedEligibility;
+
     const pilotBatch = await pilotReleaseBatchPreferred({
       userId: user.id,
       organizationId,
       projectId: graph.projectId ?? undefined,
       currency: currencyUpper,
       minThreshold,
+      participantIds: scopedParticipantIds,
     });
 
-    if (pilotBatch.usePilot && pilotBatch.lines.length > 0) {
+    const pilotLines = filterPilotReleaseBatchLines(
+      pilotBatch.lines,
+      scopedParticipantIds
+    );
+
+    if (pilotBatch.usePilot && pilotLines.length > 0) {
       const participantTotals = new Map<string, number>();
-      for (const line of pilotBatch.lines) {
+      for (const line of pilotLines) {
         participantTotals.set(
           line.participantId,
           (participantTotals.get(line.participantId) ?? 0) + line.amount
@@ -125,14 +149,17 @@ export async function POST(request: NextRequest) {
         createdBy: user.id,
         currency: currencyUpper,
         minThreshold,
-        lines: pilotBatch.lines,
+        lines: pilotLines,
       });
 
       if (!pilotCreated) {
+        const duplicateHint = scopedParticipantIds
+          ? ' Obligations may already be in a pending payout batch.'
+          : '';
         return NextResponse.json(
           {
             error: 'No payees above threshold',
-            message: `No pilot obligations >= ${minThreshold} ${currencyUpper}.`,
+            message: `No pilot obligations >= ${minThreshold} ${currencyUpper}.${duplicateHint}`,
           },
           { status: 400 }
         );
@@ -140,7 +167,7 @@ export async function POST(request: NextRequest) {
 
       assertBatchInvariants({
         batchCreated: true,
-        eligibleParticipantCount: eligibility.participantCount,
+        eligibleParticipantCount: batchEligibility.participantCount,
         includedParticipantCount: pilotCreated.payoutCount,
       });
 
@@ -149,6 +176,8 @@ export async function POST(request: NextRequest) {
         mutation: 'release_batch_generated',
         projectId: graph.projectId ?? undefined,
       });
+
+      const releasedName = batchEligibility.eligibleParticipants[0]?.participantName;
 
       return NextResponse.json(
         {
@@ -159,6 +188,8 @@ export async function POST(request: NextRequest) {
             payoutCount: pilotCreated.payoutCount,
             totalAmount: pilotCreated.totalAmount,
             source: 'pilot_obligations',
+            participantIds: scopedParticipantIds ?? undefined,
+            releasedParticipantName: releasedName,
           },
           ...operationalSyncJson(operationalSync),
         },
@@ -193,8 +224,11 @@ export async function POST(request: NextRequest) {
       { amount: number; lines: (typeof lines)[0][]; role: string }
     >();
 
+    const allowedPayees = scopedParticipantIds ? new Set(scopedParticipantIds) : null;
+
     for (const line of lines) {
       const key = line.payee_user_id;
+      if (allowedPayees && !allowedPayees.has(key)) continue;
       const amount = Number(line.amount);
       if (!grouped.has(key)) {
         grouped.set(key, { amount: 0, lines: [], role: line.role });
@@ -217,10 +251,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (payeesAboveThreshold.length === 0) {
+      const duplicateHint = scopedParticipantIds
+        ? ' Selected participant may have no posted unpaid lines or may already be linked to a payout.'
+        : '';
       return NextResponse.json(
         {
           error: 'No payees above threshold',
-          message: `No unpaid obligations >= ${minThreshold} ${currencyUpper}. ${eligibility.participantCount} participant(s) are release-eligible in the operational graph — verify ledger lines are posted.`,
+          message: `No unpaid obligations >= ${minThreshold} ${currencyUpper}.${duplicateHint} ${eligibility.participantCount} participant(s) are release-eligible in the operational graph — verify ledger lines are posted.`,
         },
         { status: 400 }
       );
@@ -306,7 +343,7 @@ export async function POST(request: NextRequest) {
 
     assertBatchInvariants({
       batchCreated: true,
-      eligibleParticipantCount: eligibility.participantCount,
+      eligibleParticipantCount: batchEligibility.participantCount,
       includedParticipantCount: payeesAboveThreshold.length,
     });
 
@@ -316,6 +353,10 @@ export async function POST(request: NextRequest) {
       projectId: graph.projectId ?? undefined,
     });
 
+    const releasedName = batchEligibility.eligibleParticipants.find((p) =>
+      payeesAboveThreshold.some((payee) => payee.userId === p.participantId)
+    )?.participantName;
+
     return NextResponse.json(
       {
         data: {
@@ -324,6 +365,8 @@ export async function POST(request: NextRequest) {
           status: batch.status,
           payoutCount: batch.payout_count,
           totalAmount: Number(batch.total_amount),
+          participantIds: scopedParticipantIds ?? undefined,
+          releasedParticipantName: releasedName,
         },
         ...operationalSyncJson(operationalSync),
       },

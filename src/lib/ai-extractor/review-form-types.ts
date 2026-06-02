@@ -7,6 +7,10 @@ import type {
 } from './extraction-types';
 import { resolveReviewFormCurrency } from '@/lib/currency/resolve-review-form-currency';
 import { PLATFORM_FALLBACK_CURRENCY } from '@/lib/currency/resolve-catalog-default-currency';
+import {
+  extractedCurrencyDisplayCode,
+  isExtractedCurrencyExplicitlyUnsupported,
+} from '@/lib/ai-extractor/extraction-currency';
 
 export interface ReviewedParty {
   id: string;
@@ -33,6 +37,10 @@ export interface ReviewFormState {
   duplicateResolutions: Record<string, 'update' | 'create'>;
   /** Original conversation text pasted by the operator. Stored on the deal for permanent audit access. */
   rawConversationText?: string;
+  /** ISO code from extraction when explicitly stated (may be unsupported). */
+  extractedCurrencyCode: string | null;
+  /** When true, fixed amounts are withheld until operator enters AUD/USD equivalents. */
+  extractedCurrencyUnsupported: boolean;
 }
 
 /** AUD and USD are the only currencies the system can store and calculate with correctly. */
@@ -54,25 +62,33 @@ export function reviewFormFromExtraction(
   }
 ): ReviewFormState {
   const extractedCurrency = result.currency.value;
+  const extractedCurrencyUnsupported = isExtractedCurrencyExplicitlyUnsupported(
+    result.currency
+  );
+  const extractedCurrencyCode = extractedCurrencyDisplayCode(result.currency);
   const resolvedCurrency = resolveReviewFormCurrency({
     extractedCurrency,
     extractedConfidence: result.currency.confidence,
     project: context?.project ?? null,
     workspaceCurrency: context?.workspaceCurrency,
   });
-  const currencySupported = isSupportedCurrency(resolvedCurrency);
+  const operationalCurrency = isSupportedCurrency(resolvedCurrency)
+    ? resolvedCurrency
+    : PLATFORM_FALLBACK_CURRENCY;
 
-  // For unsupported currencies (IDR, SGD, etc.) null out all fixed numeric amounts.
-  // Revenue share % is currency-neutral and is preserved. The operator must enter
-  // AUD/USD equivalents manually — the original values are shown as reference in the UI.
+  // Null fixed amounts when extraction named an unsupported ISO currency — do not
+  // treat workspace AUD/USD fallback as permission to store IDR-scale numbers as AUD.
+  // Revenue share % is currency-neutral and is preserved.
   return {
     entryPoint,
     existingDealId,
     sourceType,
     projectName: result.projectName.value ?? '',
     projectDescription: result.projectDescription.value ?? '',
-    projectValue: currencySupported ? result.projectValue.value : null,
-    currency: currencySupported ? resolvedCurrency : PLATFORM_FALLBACK_CURRENCY,
+    projectValue: extractedCurrencyUnsupported
+      ? null
+      : result.projectValue.value,
+    currency: operationalCurrency,
     counterparty: result.counterparty.value ?? '',
     parties: result.parties.map((p) => ({
       id: p.id,
@@ -80,10 +96,13 @@ export function reviewFormFromExtraction(
       email: p.email.value ?? '',
       role: p.role.value,
       participationModel: p.participationModel.value,
-      fixedAmount: currencySupported ? p.fixedAmount.value : null,
+      fixedAmount: extractedCurrencyUnsupported ? null : p.fixedAmount.value,
       revenueSharePct: p.revenueSharePct.value,
       notes: p.notes.value ?? '',
     })),
     duplicateResolutions: {},
+    rawConversationText: undefined,
+    extractedCurrencyCode,
+    extractedCurrencyUnsupported,
   };
 }

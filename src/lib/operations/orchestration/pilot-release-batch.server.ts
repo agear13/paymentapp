@@ -5,6 +5,10 @@ import { prisma } from '@/lib/server/prisma';
 import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selectors/resolve-operational-coordination.server';
 import { deriveReleaseBatchEligibility } from '@/lib/operations/selectors/derive-release-batch-eligibility';
 import { assertBatchInvariants } from '@/lib/operations/dev/operational-invariants';
+import {
+  filterPilotReleaseBatchLines,
+  scopeReleaseBatchToParticipants,
+} from '@/lib/operations/payouts/scope-release-batch-participants';
 
 export type PilotReleaseBatchInput = {
   userId: string;
@@ -12,6 +16,8 @@ export type PilotReleaseBatchInput = {
   projectId?: string;
   currency: string;
   minThreshold?: number;
+  /** When set, only these participants are included in derived lines. */
+  participantIds?: string[];
 };
 
 export type PilotReleaseBatchLine = {
@@ -36,9 +42,12 @@ export async function derivePilotReleaseBatchLines(
     minThreshold: input.minThreshold ?? 0,
   });
 
+  const scoped = scopeReleaseBatchToParticipants(eligibility, input.participantIds);
+  const effectiveEligibility = scoped.ok ? scoped.scopedEligibility : eligibility;
+
   const lines: PilotReleaseBatchLine[] = [];
 
-  for (const eligible of eligibility.eligibleParticipants) {
+  for (const eligible of effectiveEligibility.eligibleParticipants) {
     const obligations = await prisma.deal_network_pilot_obligations.findMany({
       where: {
         user_id: input.userId,
@@ -62,11 +71,11 @@ export async function derivePilotReleaseBatchLines(
 
   assertBatchInvariants({
     batchCreated: false,
-    eligibleParticipantCount: eligibility.participantCount,
-    includedParticipantCount: eligibility.participantCount,
+    eligibleParticipantCount: effectiveEligibility.participantCount,
+    includedParticipantCount: effectiveEligibility.participantCount,
   });
 
-  return lines;
+  return filterPilotReleaseBatchLines(lines, input.participantIds);
 }
 
 export type CreatePilotReleaseBatchResult = {
@@ -179,7 +188,8 @@ export async function pilotReleaseBatchPreferred(
     minThreshold: input.minThreshold ?? 0,
   });
 
-  if (eligibility.participantCount === 0) {
+  const scoped = scopeReleaseBatchToParticipants(eligibility, input.participantIds);
+  if (!scoped.ok || scoped.scopedEligibility.participantCount === 0) {
     return { usePilot: false, lines: [], eligibleCount: 0 };
   }
 
@@ -187,6 +197,6 @@ export async function pilotReleaseBatchPreferred(
   return {
     usePilot: lines.length > 0,
     lines,
-    eligibleCount: eligibility.participantCount,
+    eligibleCount: scoped.scopedEligibility.participantCount,
   };
 }

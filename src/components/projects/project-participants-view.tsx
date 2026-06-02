@@ -113,6 +113,7 @@ export function ProjectParticipantsView() {
     graph,
     kpis: canonicalKpis,
     guidance,
+    releaseInteraction,
     reloadCoordinationSnapshot,
   } = useOperationalCoordinationState({
     scope: 'project',
@@ -196,6 +197,25 @@ export function ProjectParticipantsView() {
     () => ({ catalogItems, workspaceCurrency }),
     [catalogItems, workspaceCurrency]
   );
+
+  const releaseReadyByParticipantId = React.useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const row of graph?.participants ?? []) {
+      map.set(
+        row.participant.id,
+        row.readinessHierarchy.releaseReady === true
+      );
+    }
+    return map;
+  }, [graph?.participants]);
+
+  const canCreateParticipantRelease =
+    releaseInteraction.canCreateReleaseBatch &&
+    releaseInteraction.releaseInteractionEnabled;
+  const releaseDisabledReason =
+    releaseInteraction.disabledReason ??
+    releaseInteraction.interactionGuidance ??
+    null;
 
   useProjectWorkspaceSmartPolling({ enabled: Boolean(deal?.id), scope: 'participants' });
 
@@ -689,7 +709,7 @@ export function ProjectParticipantsView() {
                 entryPoint="participant_add"
                 existingDeal={deal}
                 existingParticipants={projectParticipants}
-                onComplete={() => void refresh({ scope: 'participants', silent: false, force: true })}
+                onComplete={() => void refresh({ scope: 'all', silent: false, force: true })}
               />
             )}
             <Button asChild>
@@ -754,7 +774,7 @@ export function ProjectParticipantsView() {
                   entryPoint="participant_add"
                   existingDeal={deal}
                   existingParticipants={projectParticipants}
-                  onComplete={() => void refresh({ scope: 'participants', silent: false, force: true })}
+                  onComplete={() => void refresh({ scope: 'all', silent: false, force: true })}
                   size="lg"
                 />
               )}
@@ -857,6 +877,12 @@ export function ProjectParticipantsView() {
                           onPayoutVerificationChange={updatePayoutVerification}
                           onEdit={setEditParticipant}
                           onConfigureCompensation={openCompensationConfig}
+                          organizationId={organizationId}
+                          workspaceCurrency={workspaceCurrency}
+                          releaseReady={releaseReadyByParticipantId.get(p.id) === true}
+                          canRelease={canCreateParticipantRelease}
+                          releaseDisabledReason={releaseDisabledReason}
+                          releaseSyncHandlers={syncHandlers}
                         />
                       </SafeParticipantBoundary>
                     ))}

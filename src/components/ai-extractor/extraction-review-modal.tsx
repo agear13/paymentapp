@@ -50,7 +50,10 @@ import {
   buildIncompleteExtractionCompensationAuditEntries,
   conversationImportToAuditEntry,
 } from '@/lib/operations/audit/conversation-import-audit';
-import { validateReviewFormCompensation } from '@/lib/ai-extractor/compensation-review-validation';
+import {
+  fixedComponentActive,
+  validateReviewFormCompensation,
+} from '@/lib/ai-extractor/compensation-review-validation';
 
 const CURRENCIES = ['AUD', 'USD'] as const;
 
@@ -143,12 +146,10 @@ export function ExtractionReviewModal({
 
   const summary = React.useMemo(() => buildExtractionSummary(result), [result]);
 
-  // Currency safety: the system stores values only in AUD or USD.
-  // If the conversation contained a different currency the numeric amounts were nulled
-  // in reviewFormFromExtraction — the operator must enter converted AUD/USD values.
-  const extractedCurrency = result.currency.value;
-  const isUnsupportedCurrency =
-    result.currency.confidence !== 'absent' && !isSupportedCurrency(extractedCurrency);
+  // Currency safety: unsupported ISO codes nulled fixed amounts in reviewFormFromExtraction.
+  const extractedCurrency =
+    form.extractedCurrencyCode ?? result.currency.value?.trim().toUpperCase() ?? null;
+  const isUnsupportedCurrency = form.extractedCurrencyUnsupported;
 
   // Duplicate matches for Entry Point B.
   const duplicateMatches = React.useMemo(() => {
@@ -186,20 +187,23 @@ export function ExtractionReviewModal({
       return 'Project name is required.';
     }
 
-    if (isUnsupportedCurrency) {
+    const originalsById = new Map(result.parties.map((p) => [p.id, p]));
+
+    if (isUnsupportedCurrency && extractedCurrency) {
       if (entryPoint === 'project_create' && !form.projectValue) {
         return `Convert the project value from ${extractedCurrency} to AUD or USD before saving.`;
       }
       const unconverted = form.parties.filter(
-        (p) => p.name.trim() && p.participationModel === 'fixed_payout' && p.fixedAmount === null
+        (p) =>
+          p.name.trim() &&
+          fixedComponentActive(p, originalsById.get(p.id)) &&
+          (p.fixedAmount == null || p.fixedAmount <= 0)
       );
       if (unconverted.length > 0) {
         const names = unconverted.map((p) => p.name.trim()).join(', ');
         return `Convert the payout amount from ${extractedCurrency} to AUD or USD for: ${names}.`;
       }
     }
-
-    const originalsById = new Map(result.parties.map((p) => [p.id, p]));
     const compensationIssues = validateReviewFormCompensation(form.parties, originalsById);
     if (compensationIssues.length > 0) {
       const nextErrors: Record<string, string> = {};
@@ -232,7 +236,8 @@ export function ExtractionReviewModal({
       if (entryPoint === 'project_create') {
         // Entry Point A: create new project + participants.
         const newDeal = mapReviewToRecentDeal(form, importRecord);
-        const newParticipants = mapReviewToParticipants(form, newDeal);
+        const originalsById = new Map(result.parties.map((p) => [p.id, p]));
+        const newParticipants = mapReviewToParticipants(form, newDeal, originalsById);
         const snapshot = await fetchPilotSnapshot();
         const existing = snapshot ?? { deals: [], participants: [] };
         const ok = await persistPilotSnapshot({
@@ -277,10 +282,16 @@ export function ExtractionReviewModal({
         let addedCount = 0;
         let updatedCount = 0;
 
+        const originalsById = new Map(result.parties.map((p) => [p.id, p]));
         for (const party of form.parties.filter((p) => p.name.trim().length > 0)) {
           const resolution = form.duplicateResolutions[party.id] ?? 'create';
           const match = duplicateMatches.find((m) => m.extractedPartyId === party.id);
-          const built = mapSinglePartyToParticipant(party, existingDeal, provenanceTag);
+          const built = mapSinglePartyToParticipant(
+            party,
+            existingDeal,
+            provenanceTag,
+            originalsById.get(party.id)
+          );
 
           if (resolution === 'update' && match) {
             updatedParticipants = updatedParticipants.map((ep) =>
@@ -343,7 +354,8 @@ export function ExtractionReviewModal({
           lastUpdated: new Date().toISOString(),
           paymentStatus: 'Not Paid',
         };
-        const newParticipants = mapReviewToParticipants(form, projectDeal);
+        const originalsById = new Map(result.parties.map((p) => [p.id, p]));
+        const newParticipants = mapReviewToParticipants(form, projectDeal, originalsById);
         onOpenChange(false);
         const pCount = newParticipants.length;
         toast.success('Participants added', {
@@ -390,13 +402,14 @@ export function ExtractionReviewModal({
           </Alert>
 
           {/* Unsupported currency warning — shown whenever extracted currency is not AUD/USD */}
-          {isUnsupportedCurrency && (
+          {isUnsupportedCurrency && extractedCurrency && (
             <Alert className="border-amber-500/40 bg-amber-500/8 text-amber-900 dark:text-amber-200">
               <AlertDescription className="text-xs space-y-1.5">
-                <p className="font-medium">
-                  ⚠ This conversation contains values denominated in {extractedCurrency}.
-                  Projects currently support AUD and USD only.
-                  Please convert the amounts before creating the project.
+                <p className="font-medium">Unsupported Currency Detected</p>
+                <p>
+                  This conversation contains values denominated in {extractedCurrency}. Projects
+                  support AUD and USD only. Enter converted AUD/USD amounts before saving or
+                  generating agreements.
                 </p>
                 {result.projectValue.value != null && (
                   <p>
@@ -611,7 +624,9 @@ export function ExtractionReviewModal({
                     party={party}
                     originalParty={originalParty}
                     entryPoint={entryPoint}
-                    extractedCurrency={isUnsupportedCurrency ? extractedCurrency : undefined}
+                    extractedCurrency={
+                      isUnsupportedCurrency && extractedCurrency ? extractedCurrency : undefined
+                    }
                     duplicateMatch={dupMatch}
                     duplicateResolution={form.duplicateResolutions[party.id]}
                     onDuplicateResolutionChange={(resolution) =>

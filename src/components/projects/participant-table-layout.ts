@@ -8,7 +8,7 @@ export const PARTICIPANT_TABLE_COLUMNS = [
   { key: 'attribution', width: '16%', minWidth: 160 },
   { key: 'payout', width: '16%', minWidth: 160 },
   { key: 'earnings', width: '14%', minWidth: 140 },
-  { key: 'actions', width: '4%', minWidth: 52 },
+  { key: 'actions', width: '10%', minWidth: 120 },
 ] as const;
 
 export function participantTableHeadClass(index: number): string {
@@ -34,7 +34,7 @@ export function participantTableCellClass(
     case 'earnings':
       return `${base} whitespace-normal min-w-[140px]`;
     case 'actions':
-      return `${base} w-[52px] min-w-[52px] max-w-[52px] p-2 align-middle`;
+      return `${base} min-w-[120px] p-2 align-middle whitespace-nowrap`;
     default:
       return base;
   }
