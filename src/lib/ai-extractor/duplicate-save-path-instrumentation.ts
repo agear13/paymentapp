@@ -8,6 +8,10 @@ import {
 } from '@/lib/ai-extractor/extraction-mapper';
 import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
 import type { ReviewFormState } from '@/lib/ai-extractor/review-form-types';
+import {
+  logPersistenceBoundaryParticipant,
+  startPersistenceBoundarySession,
+} from '@/lib/ai-extractor/persistence-boundary-instrumentation';
 
 export type DuplicateSaveBranch = 'update' | 'create';
 
@@ -99,6 +103,8 @@ export function runParticipantAddSaveBranchTrace(input: {
   const { label, form, result, existingDeal, duplicateMatchesAtSave, snapshotParticipants, provenanceTag } =
     input;
 
+  startPersistenceBoundarySession(label);
+
   const dealId = existingDeal.id;
   const beforeAll = [...snapshotParticipants];
   const beforeOnDeal = participantsOnDeal(beforeAll, dealId);
@@ -120,6 +126,10 @@ export function runParticipantAddSaveBranchTrace(input: {
       provenanceTag,
       originalsById.get(party.id)
     );
+    logPersistenceBoundaryParticipant('afterMapSinglePartyToParticipant', built, {
+      partyId: party.id,
+      partyName: party.name,
+    });
 
     const partyMatches = duplicateMatchesAtSave
       .filter((m) => m.extractedPartyId === party.id)
@@ -138,15 +148,25 @@ export function runParticipantAddSaveBranchTrace(input: {
       enteredBranch = 'update';
       existingParticipantIdUpdated = match.existingParticipant.id;
       existingUpdatedIds.add(match.existingParticipant.id);
-      updatedParticipants = updatedParticipants.map((ep) =>
-        ep.id === match.existingParticipant.id
-          ? mergeExtractedCompensationIntoExistingParticipant(ep, built)
-          : ep
-      );
+      updatedParticipants = updatedParticipants.map((ep) => {
+        if (ep.id !== match.existingParticipant.id) return ep;
+        const merged = mergeExtractedCompensationIntoExistingParticipant(ep, built);
+        logPersistenceBoundaryParticipant(
+          'afterMergeExtractedCompensationIntoExistingParticipant',
+          merged,
+          { partyId: party.id, existingParticipantId: ep.id, branch: 'update' }
+        );
+        return merged;
+      });
     } else {
       enteredBranch = 'create';
       updatedParticipants.push(built);
       newCreated.push({ participantId: built.id, name: built.name });
+      logPersistenceBoundaryParticipant(
+        'afterMergeExtractedCompensationIntoExistingParticipant',
+        built,
+        { partyId: party.id, branch: 'create', mergeSkipped: true }
+      );
     }
 
     partyTraces.push({

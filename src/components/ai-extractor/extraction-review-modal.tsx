@@ -32,17 +32,12 @@ import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { buildExtractionSummary } from '@/lib/ai-extractor/extraction-summary';
 import { detectDuplicates, defaultResolutions } from '@/lib/ai-extractor/duplicate-detection';
 import { mapReviewToRecentDeal, mapReviewToParticipants } from '@/lib/ai-extractor/extraction-mapper';
+import { runParticipantAddSaveBranchTrace } from '@/lib/ai-extractor/duplicate-save-path-instrumentation';
 import {
-  logDuplicateSavePathReport,
-  runParticipantAddSaveBranchTrace,
-} from '@/lib/ai-extractor/duplicate-save-path-instrumentation';
-import { runCompensationPipelineTraceForImport } from '@/lib/ai-extractor/compensation-pipeline-trace-runner';
-import {
-  createReviewFormLifecycleSession,
-  recordReviewFormLifecycleEvent,
-  reviewFormLifecycleTracingEnabled,
-  type ReviewFormLifecycleSession,
-} from '@/lib/ai-extractor/review-form-lifecycle-instrumentation';
+  logPersistenceBoundaryParticipant,
+  logPersistenceBoundaryParticipants,
+  startPersistenceBoundarySession,
+} from '@/lib/ai-extractor/persistence-boundary-instrumentation';
 import { EXTRACTOR_VERSION, SOURCE_TYPE_LABELS } from '@/lib/ai-extractor/extraction-types';
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import { toast } from 'sonner';
@@ -111,16 +106,6 @@ export function ExtractionReviewModal({
     }),
     [existingDeal, workspaceCurrency]
   );
-  const lifecycleSessionRef = React.useRef<ReviewFormLifecycleSession | null>(null);
-  const lifecycleResultFingerprintRef = React.useRef<string>('');
-  const lifecyclePendingAfterSetFormRef = React.useRef(false);
-  const lifecycleModalOpenLoggedRef = React.useRef<string | false>(false);
-
-  const extractionFingerprint = React.useMemo(
-    () => result.parties.map((p) => p.id).join('|'),
-    [result]
-  );
-
   const [form, setForm] = React.useState<ReviewFormState>(() =>
     reviewFormFromExtraction(
       result,
@@ -130,9 +115,6 @@ export function ExtractionReviewModal({
       currencyContext
     )
   );
-  const formLifecycleRef = React.useRef(form);
-  formLifecycleRef.current = form;
-
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [partyValidationErrors, setPartyValidationErrors] = React.useState<Record<string, string>>({});
@@ -140,18 +122,6 @@ export function ExtractionReviewModal({
   const [postPromptOpen, setPostPromptOpen] = React.useState(false);
   const [createdParticipants, setCreatedParticipants] = React.useState<DemoParticipant[]>([]);
   const [createdProjectName, setCreatedProjectName] = React.useState<string | undefined>(undefined);
-
-  const ensureLifecycleSession = React.useCallback(() => {
-    if (!reviewFormLifecycleTracingEnabled) return null;
-    if (
-      !lifecycleSessionRef.current ||
-      lifecycleResultFingerprintRef.current !== extractionFingerprint
-    ) {
-      lifecycleSessionRef.current = createReviewFormLifecycleSession(result);
-      lifecycleResultFingerprintRef.current = extractionFingerprint;
-    }
-    return lifecycleSessionRef.current;
-  }, [result, extractionFingerprint]);
 
   // Re-initialise form when result changes (new extraction).
   React.useEffect(() => {
@@ -162,61 +132,12 @@ export function ExtractionReviewModal({
       existingDeal?.id,
       currencyContext
     );
-
-    const lifecycleSession = ensureLifecycleSession();
-    if (lifecycleSession) {
-      if (lifecycleSession.events.length === 0) {
-        recordReviewFormLifecycleEvent({
-          session: lifecycleSession,
-          stage: 'useState.initializer',
-          form: base,
-          result,
-          open,
-          meta: { note: 'first mount (replaces useState lazy initializer; avoids TDZ)' },
-        });
-      }
-      recordReviewFormLifecycleEvent({
-        session: lifecycleSession,
-        stage: 'useEffect.reinit.afterReviewFormFromExtraction',
-        form: base,
-        result,
-        open,
-        meta: {
-          effectDeps: [
-            'result',
-            'entryPoint',
-            'sourceType',
-            'existingDeal?.id',
-            'existingParticipants',
-            'rawConversationText',
-            'currencyContext',
-          ],
-        },
-      });
-    }
-
-    let duplicateMatchCount = 0;
     // Detect duplicates for Entry Point B.
     if (entryPoint === 'participant_add' && existingParticipants && existingParticipants.length > 0) {
       const matches = detectDuplicates(base.parties, existingParticipants);
-      duplicateMatchCount = matches.length;
       base.duplicateResolutions = defaultResolutions(matches);
-
-      if (lifecycleSession) {
-        recordReviewFormLifecycleEvent({
-          session: lifecycleSession,
-          stage: 'useEffect.reinit.afterDuplicateDetection',
-          form: base,
-          result,
-          open,
-          duplicateMatchCount,
-          meta: { duplicateResolutions: base.duplicateResolutions },
-        });
-      }
     }
-
     base.rawConversationText = rawConversationText;
-    lifecyclePendingAfterSetFormRef.current = reviewFormLifecycleTracingEnabled;
     setForm(base);
     setSaveError(null);
     setPartyValidationErrors({});
@@ -228,51 +149,7 @@ export function ExtractionReviewModal({
     existingParticipants,
     rawConversationText,
     currencyContext,
-    open,
-    ensureLifecycleSession,
   ]);
-
-  // First paint when the modal opens (once per open + extraction fingerprint).
-  React.useLayoutEffect(() => {
-    if (!open) {
-      lifecycleModalOpenLoggedRef.current = false;
-      return;
-    }
-    if (!reviewFormLifecycleTracingEnabled) return;
-    const logKey = `${extractionFingerprint}:open`;
-    if (lifecycleModalOpenLoggedRef.current === logKey) return;
-    lifecycleModalOpenLoggedRef.current = logKey;
-    const lifecycleSession = ensureLifecycleSession();
-    if (!lifecycleSession) return;
-    recordReviewFormLifecycleEvent({
-      session: lifecycleSession,
-      stage: 'afterModalRender',
-      form: formLifecycleRef.current,
-      result,
-      open,
-      meta: { note: 'useLayoutEffect when modal open (form as rendered)' },
-    });
-  }, [open, extractionFingerprint, ensureLifecycleSession, result]);
-
-  // Committed React state after setForm from re-init effect.
-  React.useEffect(() => {
-    if (
-      !lifecyclePendingAfterSetFormRef.current ||
-      !reviewFormLifecycleTracingEnabled ||
-      !lifecycleSessionRef.current
-    ) {
-      return;
-    }
-    lifecyclePendingAfterSetFormRef.current = false;
-    recordReviewFormLifecycleEvent({
-      session: lifecycleSessionRef.current,
-      stage: 'useEffect.reinit.afterSetFormCommitted',
-      form,
-      result,
-      open,
-      meta: { note: 'form state after re-init setForm flushed' },
-    });
-  }, [form, result, open]);
 
   const summary = React.useMemo(() => buildExtractionSummary(result), [result]);
 
@@ -288,40 +165,11 @@ export function ExtractionReviewModal({
   }, [entryPoint, existingParticipants, form.parties]);
 
   const updateParty = (index: number, updated: ReviewedParty) => {
-    const prior = form.parties[index];
     setForm((f) => {
       const parties = [...f.parties];
       parties[index] = updated;
       return { ...f, parties };
     });
-    if (
-      reviewFormLifecycleTracingEnabled &&
-      prior &&
-      lifecycleSessionRef.current &&
-      (prior.fixedAmount !== updated.fixedAmount ||
-        prior.revenueSharePct !== updated.revenueSharePct ||
-        prior.participationModel !== updated.participationModel)
-    ) {
-      const nextForm: ReviewFormState = {
-        ...form,
-        parties: form.parties.map((p, i) => (i === index ? updated : p)),
-      };
-      recordReviewFormLifecycleEvent({
-        session: lifecycleSessionRef.current,
-        stage: 'party.onChange',
-        form: nextForm,
-        result,
-        open,
-        meta: {
-          partyId: updated.id,
-          prior: {
-            participationModel: prior.participationModel,
-            fixedAmount: prior.fixedAmount,
-            revenueSharePct: prior.revenueSharePct,
-          },
-        },
-      });
-    }
     setPartyValidationErrors((prev) => {
       if (!prev[updated.id]) return prev;
       const next = { ...prev };
@@ -379,35 +227,8 @@ export function ExtractionReviewModal({
   };
 
   const handleSave = async () => {
-    const lifecycleSession = ensureLifecycleSession();
-    if (lifecycleSession) {
-      const duplicateMatchCount =
-        entryPoint === 'participant_add' && existingParticipants
-          ? detectDuplicates(form.parties, existingParticipants).length
-          : 0;
-      recordReviewFormLifecycleEvent({
-        session: lifecycleSession,
-        stage: 'beforeHandleSave',
-        form,
-        result,
-        open,
-        duplicateMatchCount,
-      });
-    }
-
     const err = validate();
     if (err) { setSaveError(err); return; }
-
-    if (lifecycleSession) {
-      recordReviewFormLifecycleEvent({
-        session: lifecycleSession,
-        stage: 'insideHandleSave',
-        form,
-        result,
-        open,
-        meta: { note: 'after validate() passed, before persist' },
-      });
-    }
 
     setSaving(true);
     setSaveError(null);
@@ -425,13 +246,26 @@ export function ExtractionReviewModal({
         const newDeal = mapReviewToRecentDeal(form, importRecord);
         const originalsById = new Map(result.parties.map((p) => [p.id, p]));
         const newParticipants = mapReviewToParticipants(form, newDeal, originalsById);
+        startPersistenceBoundarySession(`project_create:${newDeal.id}`);
+        for (const p of newParticipants) {
+          logPersistenceBoundaryParticipant('afterMapSinglePartyToParticipant', p, {
+            entryPoint: 'project_create',
+          });
+        }
         const snapshot = await fetchPilotSnapshot();
         const existing = snapshot ?? { deals: [], participants: [] };
-        const ok = await persistPilotSnapshot({
+        const persistPayload = {
           deals: [newDeal, ...existing.deals.filter((d) => d.id !== newDeal.id)],
           participants: [...existing.participants, ...newParticipants],
-        });
+        };
+        const ok = await persistPilotSnapshot(persistPayload);
         if (!ok) throw new Error('Could not save project. Please try again.');
+        const readBack = await fetchPilotSnapshot();
+        if (readBack) {
+          logPersistenceBoundaryParticipants('afterReadSnapshotBack', readBack.participants, {
+            entryPoint: 'project_create',
+          });
+        }
         await fetch('/api/deal-network-pilot/obligations/refresh', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -469,25 +303,6 @@ export function ExtractionReviewModal({
         let addedCount = 0;
         let updatedCount = 0;
 
-        for (const party of form.parties.filter((p) => p.name.trim().length > 0)) {
-          const match = duplicateMatches.find((m) => m.extractedPartyId === party.id);
-          const resolution = form.duplicateResolutions[party.id] ?? 'create';
-          runCompensationPipelineTraceForImport({
-            label: `participant_add:${existingDeal.id}:${party.name.trim()}`,
-            result,
-            formAtSave: form,
-            party,
-            project: existingDeal,
-            provenanceTag,
-            entryPoint,
-            sourceType: form.sourceType,
-            currencyContext,
-            existingParticipantsForDuplicate: existingParticipants,
-            mergeExistingParticipant:
-              resolution === 'update' && match ? match.existingParticipant : null,
-          });
-        }
-
         const { report: saveBranchReport, updatedParticipants: nextParticipants } =
           runParticipantAddSaveBranchTrace({
             label: `participant_add:${existingDeal.id}`,
@@ -498,7 +313,6 @@ export function ExtractionReviewModal({
             snapshotParticipants: updatedParticipants,
             provenanceTag,
           });
-        logDuplicateSavePathReport(saveBranchReport);
         updatedParticipants = nextParticipants;
         addedCount = saveBranchReport.partyTraces.filter((t) => t.enteredBranch === 'create').length;
         updatedCount = saveBranchReport.partyTraces.filter((t) => t.enteredBranch === 'update').length;
@@ -512,6 +326,13 @@ export function ExtractionReviewModal({
           participants: updatedParticipants,
         });
         if (!ok) throw new Error('Could not save participants. Please try again.');
+        const readBack = await fetchPilotSnapshot();
+        if (readBack) {
+          logPersistenceBoundaryParticipants('afterReadSnapshotBack', readBack.participants, {
+            entryPoint: 'participant_add',
+            dealId: existingDeal.id,
+          });
+        }
         await fetch('/api/deal-network-pilot/obligations/refresh', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
