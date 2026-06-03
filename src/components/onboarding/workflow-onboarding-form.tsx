@@ -92,6 +92,7 @@ import {
   logOnboardingPipelineDemoParticipants,
   logOnboardingPipelineDrafts,
 } from '@/lib/ai-extractor/onboarding-pipeline-instrumentation';
+import { mapDemoParticipantToOnboardingDraft } from '@/lib/onboarding/onboarding-participant-persist';
 
 const workspaceSchema = z.object({
   workspaceName: z.string().min(2, 'Workspace name is required').max(255),
@@ -936,11 +937,9 @@ export function WorkflowOnboardingForm() {
                     logOnboardingPipelineDemoParticipants('onCompletePayload', participants, {
                       caller: 'workflow-onboarding-form.onComplete',
                     });
-                    const asDraft: DraftParticipant[] = participants.map((p: DemoParticipant) => ({
-                      name: p.name,
-                      email: p.email ?? '',
-                      role: (p.role === 'Introducer' ? 'Referrer' : p.role === 'Connector' ? 'Partner' : p.role === 'Contributor' ? 'Contractor' : 'Contractor') as OnboardingParticipantRole,
-                    }));
+                    const asDraft: DraftParticipant[] = participants.map((p) =>
+                      mapDemoParticipantToOnboardingDraft(p)
+                    );
                     setConfirmedParticipants((prev) => [...prev, ...asDraft]);
                     setParticipantInputMode('manual');
                   }

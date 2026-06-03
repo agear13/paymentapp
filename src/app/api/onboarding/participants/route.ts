@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
@@ -7,10 +6,6 @@ import {
   getPilotSnapshotForUser,
   syncPilotSnapshotForUser,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
-import { buildOnboardingParticipant } from '@/lib/onboarding/build-onboarding-project';
-import {
-  ONBOARDING_PARTICIPANT_ROLE_VALUES,
-} from '@/lib/onboarding/operator-onboarding-types';
 import {
   getOperatorOnboardingState,
   saveOperatorOnboardingState,
@@ -23,17 +18,11 @@ import {
   logOnboardingPipelineDemoParticipants,
   logOnboardingPipelineDrafts,
 } from '@/lib/ai-extractor/onboarding-pipeline-instrumentation';
-
-const participantSchema = z.object({
-  name: z.string().min(1).max(255),
-  email: z.union([z.string().email(), z.literal('')]).optional(),
-  role: z.enum(ONBOARDING_PARTICIPANT_ROLE_VALUES),
-});
-
-const schema = z.object({
-  projectId: z.string().min(1),
-  participants: z.array(participantSchema).max(20),
-});
+import {
+  onboardingDraftFromRequestBody,
+  onboardingParticipantsPostSchema,
+  participantsFromOnboardingDrafts,
+} from '@/lib/onboarding/onboarding-participant-persist';
 
 /** POST /api/onboarding/participants — add participants to the onboarding project (canonical pilot model). */
 export async function POST(request: NextRequest) {
@@ -42,7 +31,7 @@ export async function POST(request: NextRequest) {
     return apiError('Unauthorized', 401);
   }
 
-  const { data: body, error } = await validateBody(request, schema);
+  const { data: body, error } = await validateBody(request, onboardingParticipantsPostSchema);
   if (error) {
     return error;
   }
@@ -63,16 +52,9 @@ export async function POST(request: NextRequest) {
     return apiError('Project not found', 404);
   }
 
-  const newParticipants = body.participants
-    .filter((p) => p.name.trim())
-    .map((p) =>
-      buildOnboardingParticipant({
-        name: p.name,
-        email: p.email?.trim() || undefined,
-        role: p.role,
-        deal,
-      })
-    );
+  const drafts = body.participants.map(onboardingDraftFromRequestBody);
+
+  const newParticipants = participantsFromOnboardingDrafts(drafts, deal);
 
   logOnboardingPipelineDemoParticipants('storageWrite', newParticipants, {
     projectId: body.projectId,

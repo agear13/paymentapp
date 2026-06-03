@@ -25,12 +25,18 @@ import {
   ONBOARDING_PARTICIPANT_ROLES,
   type OnboardingParticipantRole,
 } from '@/lib/onboarding/operator-onboarding-types';
+import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
+import type { ProjectParticipationModel } from '@/lib/projects/participant-entitlement';
 
 export type OnboardingDraftParticipant = {
   name: string;
   email: string;
   role: OnboardingParticipantRole;
   notes?: string;
+  /** From conversation import — optional for manual rows. */
+  participationModel?: ProjectParticipationModel;
+  commissionValue?: number;
+  compensationProfile?: ParticipantCompensationProfile;
 };
 
 type OnboardingParticipantCardProps = {
@@ -66,6 +72,15 @@ export function OnboardingParticipantCard({
             {participant.role}
             {participant.email ? ` · ${participant.email}` : ''}
           </p>
+          {participant.compensationProfile ? (
+            <p className="text-xs text-muted-foreground truncate">
+              {participant.participationModel ?? '—'}
+              {participant.commissionValue != null ? ` · ${participant.commissionValue}` : ''}
+              {participant.compensationProfile.compensationType
+                ? ` · ${participant.compensationProfile.compensationType}`
+                : ''}
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 gap-1">
           <Button

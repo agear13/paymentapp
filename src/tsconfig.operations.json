@@ -21,6 +21,9 @@
     "app/api/deal-network-pilot/**/*.ts",
     "app/api/onboarding/bootstrap-project/route.ts",
     "app/api/onboarding/participants/route.ts",
+    "lib/onboarding/onboarding-participant-persist.ts",
+    "lib/onboarding/build-onboarding-project.ts",
+    "lib/onboarding/operator-onboarding-types.ts",
     "app/api/projects/**/funding-sources/**/*.ts"
   ],
   "exclude": [
