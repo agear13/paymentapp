@@ -88,8 +88,8 @@ export function buildParticipantIdentityRow(input: {
           compensationType: profile.compensationType,
           fixedAmount: profile.fixedAmount ?? null,
           percentage: profile.percentage ?? null,
-          configured: profile.configured ?? null,
-          configuredAt: profile.configuredAt ?? null,
+          configured: profile?.configured ?? undefined,
+          configuredAt: profile?.configuredAt ?? undefined,
         }
       : null,
     commissionValue: participant.commissionValue,
