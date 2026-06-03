@@ -50,6 +50,14 @@ export function mapRoleStringToOperationalRole(raw: string): OperationalParticip
   return ROLE_NORMALISATION_MAP[normalised] ?? 'Contributor';
 }
 
+/** Exposed for compensation pipeline tracing only — same logic as import save path. */
+export function traceBuildCompensationProfileFromReview(
+  party: ReviewedParty,
+  original?: ExtractedParty
+): ParticipantCompensationProfile | undefined {
+  return buildCompensationProfileFromReview(party, original);
+}
+
 function buildCompensationProfileFromReview(
   party: ReviewedParty,
   original?: ExtractedParty
