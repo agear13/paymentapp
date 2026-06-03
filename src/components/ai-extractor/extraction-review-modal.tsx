@@ -31,12 +31,11 @@ import { reviewFormFromExtraction, isSupportedCurrency } from '@/lib/ai-extracto
 import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { buildExtractionSummary } from '@/lib/ai-extractor/extraction-summary';
 import { detectDuplicates, defaultResolutions } from '@/lib/ai-extractor/duplicate-detection';
+import { mapReviewToRecentDeal, mapReviewToParticipants } from '@/lib/ai-extractor/extraction-mapper';
 import {
-  mapReviewToRecentDeal,
-  mapReviewToParticipants,
-  mapSinglePartyToParticipant,
-  mergeExtractedCompensationIntoExistingParticipant,
-} from '@/lib/ai-extractor/extraction-mapper';
+  logDuplicateSavePathReport,
+  runParticipantAddSaveBranchTrace,
+} from '@/lib/ai-extractor/duplicate-save-path-instrumentation';
 import { EXTRACTOR_VERSION, SOURCE_TYPE_LABELS } from '@/lib/ai-extractor/extraction-types';
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import { toast } from 'sonner';
@@ -282,29 +281,20 @@ export function ExtractionReviewModal({
         let addedCount = 0;
         let updatedCount = 0;
 
-        const originalsById = new Map(result.parties.map((p) => [p.id, p]));
-        for (const party of form.parties.filter((p) => p.name.trim().length > 0)) {
-          const resolution = form.duplicateResolutions[party.id] ?? 'create';
-          const match = duplicateMatches.find((m) => m.extractedPartyId === party.id);
-          const built = mapSinglePartyToParticipant(
-            party,
+        const { report: saveBranchReport, updatedParticipants: nextParticipants } =
+          runParticipantAddSaveBranchTrace({
+            label: `participant_add:${existingDeal.id}`,
+            form,
+            result,
             existingDeal,
+            duplicateMatchesAtSave: duplicateMatches,
+            snapshotParticipants: updatedParticipants,
             provenanceTag,
-            originalsById.get(party.id)
-          );
-
-          if (resolution === 'update' && match) {
-            updatedParticipants = updatedParticipants.map((ep) =>
-              ep.id === match.existingParticipant.id
-                ? mergeExtractedCompensationIntoExistingParticipant(ep, built)
-                : ep
-            );
-            updatedCount++;
-          } else {
-            updatedParticipants.push(built);
-            addedCount++;
-          }
-        }
+          });
+        logDuplicateSavePathReport(saveBranchReport);
+        updatedParticipants = nextParticipants;
+        addedCount = saveBranchReport.partyTraces.filter((t) => t.enteredBranch === 'create').length;
+        updatedCount = saveBranchReport.partyTraces.filter((t) => t.enteredBranch === 'update').length;
 
         const updatedDeals = existing.deals.map((d) =>
           d.id === existingDeal.id ? appendConversationImportToDeal(d, importRecord) : d
