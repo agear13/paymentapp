@@ -115,13 +115,31 @@ export function ExtractionReviewModal({
   const lifecycleResultFingerprintRef = React.useRef<string>('');
   const lifecyclePendingAfterSetFormRef = React.useRef(false);
   const lifecycleModalOpenLoggedRef = React.useRef<string | false>(false);
-  const formLifecycleRef = React.useRef(form);
-  formLifecycleRef.current = form;
 
   const extractionFingerprint = React.useMemo(
     () => result.parties.map((p) => p.id).join('|'),
     [result]
   );
+
+  const [form, setForm] = React.useState<ReviewFormState>(() =>
+    reviewFormFromExtraction(
+      result,
+      entryPoint,
+      sourceType,
+      existingDeal?.id,
+      currencyContext
+    )
+  );
+  const formLifecycleRef = React.useRef(form);
+  formLifecycleRef.current = form;
+
+  const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [partyValidationErrors, setPartyValidationErrors] = React.useState<Record<string, string>>({});
+  const [uncertaintiesOpen, setUncertaintiesOpen] = React.useState(true);
+  const [postPromptOpen, setPostPromptOpen] = React.useState(false);
+  const [createdParticipants, setCreatedParticipants] = React.useState<DemoParticipant[]>([]);
+  const [createdProjectName, setCreatedProjectName] = React.useState<string | undefined>(undefined);
 
   const ensureLifecycleSession = React.useCallback(() => {
     if (!reviewFormLifecycleTracingEnabled) return null;
@@ -135,37 +153,6 @@ export function ExtractionReviewModal({
     return lifecycleSessionRef.current;
   }, [result, extractionFingerprint]);
 
-  const [form, setForm] = React.useState<ReviewFormState>(() => {
-    const initial = reviewFormFromExtraction(
-      result,
-      entryPoint,
-      sourceType,
-      existingDeal?.id,
-      currencyContext
-    );
-    if (reviewFormLifecycleTracingEnabled) {
-      const session = createReviewFormLifecycleSession(result);
-      lifecycleSessionRef.current = session;
-      lifecycleResultFingerprintRef.current = result.parties.map((p) => p.id).join('|');
-      recordReviewFormLifecycleEvent({
-        session,
-        stage: 'useState.initializer',
-        form: initial,
-        result,
-        open,
-        meta: { note: 'useState lazy initializer (before first paint)' },
-      });
-    }
-    return initial;
-  });
-  const [saving, setSaving] = React.useState(false);
-  const [saveError, setSaveError] = React.useState<string | null>(null);
-  const [partyValidationErrors, setPartyValidationErrors] = React.useState<Record<string, string>>({});
-  const [uncertaintiesOpen, setUncertaintiesOpen] = React.useState(true);
-  const [postPromptOpen, setPostPromptOpen] = React.useState(false);
-  const [createdParticipants, setCreatedParticipants] = React.useState<DemoParticipant[]>([]);
-  const [createdProjectName, setCreatedProjectName] = React.useState<string | undefined>(undefined);
-
   // Re-initialise form when result changes (new extraction).
   React.useEffect(() => {
     const base = reviewFormFromExtraction(
@@ -178,6 +165,16 @@ export function ExtractionReviewModal({
 
     const lifecycleSession = ensureLifecycleSession();
     if (lifecycleSession) {
+      if (lifecycleSession.events.length === 0) {
+        recordReviewFormLifecycleEvent({
+          session: lifecycleSession,
+          stage: 'useState.initializer',
+          form: base,
+          result,
+          open,
+          meta: { note: 'first mount (replaces useState lazy initializer; avoids TDZ)' },
+        });
+      }
       recordReviewFormLifecycleEvent({
         session: lifecycleSession,
         stage: 'useEffect.reinit.afterReviewFormFromExtraction',

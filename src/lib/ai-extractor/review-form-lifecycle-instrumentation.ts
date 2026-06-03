@@ -2,6 +2,12 @@ import type { ExtractedParty, ExtractionResult } from '@/lib/ai-extractor/extrac
 import { traceBuildCompensationProfileFromReview } from '@/lib/ai-extractor/extraction-mapper';
 import type { ReviewFormState, ReviewedParty } from '@/lib/ai-extractor/review-form-types';
 
+/** No-op when lifecycle tracing is disabled (tests). Declared first to avoid import TDZ. */
+export const reviewFormLifecycleTracingEnabled =
+  typeof process !== 'undefined'
+    ? process.env.NEXT_PUBLIC_REVIEW_FORM_LIFECYCLE_TRACE !== '0'
+    : true;
+
 /** Lifecycle checkpoints for the extraction review modal (React useState form, not RHF). */
 export type ReviewFormLifecycleStage =
   | 'useState.initializer'
@@ -268,9 +274,3 @@ export function logReviewFormLifecycleEvent(event: ReviewFormLifecycleEvent): vo
     w.__REVIEW_FORM_LIFECYCLE_TRACES__ = sessions;
   }
 }
-
-/** No-op when lifecycle tracing is disabled (tests). */
-export const reviewFormLifecycleTracingEnabled =
-  typeof process !== 'undefined'
-    ? process.env.NEXT_PUBLIC_REVIEW_FORM_LIFECYCLE_TRACE !== '0'
-    : true;
