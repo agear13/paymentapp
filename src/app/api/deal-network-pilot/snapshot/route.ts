@@ -10,7 +10,6 @@ import {
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { logPersistenceBoundaryParticipantsFromList } from '@/lib/ai-extractor/persistence-boundary-instrumentation';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,11 +37,6 @@ export async function POST(request: Request) {
     };
     const deals = Array.isArray(body.deals) ? body.deals : [];
     const participants = Array.isArray(body.participants) ? body.participants : [];
-    logPersistenceBoundaryParticipantsFromList('insidePersistPilotSnapshotBeforeWrite', participants, {
-      side: 'server',
-      userId: user.id,
-      participantCount: participants.length,
-    });
     await syncPilotSnapshotForUser(user.id, deals, participants);
     const operationalSync = await orchestrateOperationalMutation({
       userId: user.id,

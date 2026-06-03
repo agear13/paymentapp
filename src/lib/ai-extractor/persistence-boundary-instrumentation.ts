@@ -64,6 +64,16 @@ export const persistenceBoundaryTracingEnabled =
     ? process.env.NEXT_PUBLIC_PERSISTENCE_BOUNDARY_TRACE !== '0'
     : true;
 
+if (typeof console !== 'undefined') {
+  console.log('[persistence-boundary-loaded]', {
+    persistenceBoundaryTracingEnabled,
+    envFlag:
+      typeof process !== 'undefined'
+        ? process.env.NEXT_PUBLIC_PERSISTENCE_BOUNDARY_TRACE ?? '(unset)'
+        : 'browser',
+  });
+}
+
 export function classifyTrackedPersistenceParty(name: string): TrackedPersistenceParty | null {
   const n = name.trim().toLowerCase();
   if (n.includes('island') && (n.includes('dj') || n.includes('djs'))) return 'island_djs';
@@ -149,6 +159,7 @@ function computeFirstLoss(
 }
 
 export function startPersistenceBoundarySession(label: string): string {
+  console.log('[persistence-boundary-stage]', 'startPersistenceBoundarySession', { label });
   sessionCounter += 1;
   const sessionId = `persist-boundary-${Date.now()}-${sessionCounter}`;
   activeSession = {
@@ -174,10 +185,25 @@ function emitStageEvent(
   participant: DemoParticipant,
   meta?: Record<string, unknown>
 ): void {
-  if (!persistenceBoundaryTracingEnabled || !activeSession) return;
+  console.log('[persistence-boundary-stage]', stage, {
+    participantName: participant.name,
+    participantId: participant.id,
+    meta,
+  });
+  if (!persistenceBoundaryTracingEnabled) {
+    console.log('[persistence-boundary-stage-skipped]', stage, 'tracingDisabled');
+    return;
+  }
+  if (!activeSession) {
+    console.log('[persistence-boundary-stage-skipped]', stage, 'noActiveSession');
+    return;
+  }
 
   const tracked = classifyTrackedPersistenceParty(participant.name);
-  if (!tracked) return;
+  if (!tracked) {
+    console.log('[persistence-boundary-stage-skipped]', stage, 'notTrackedParty', participant.name);
+    return;
+  }
 
   const snap = snapParticipantForPersistenceBoundary(participant);
   const prior = activeSession.lastByTracked[tracked];
@@ -234,6 +260,7 @@ export function logPersistenceBoundaryParticipant(
   participant: DemoParticipant,
   meta?: Record<string, unknown>
 ): void {
+  console.log('[persistence-boundary-stage]', stage, { caller: 'logPersistenceBoundaryParticipant' });
   emitStageEvent(stage, participant, meta);
 }
 
@@ -242,6 +269,11 @@ export function logPersistenceBoundaryParticipants(
   participants: DemoParticipant[],
   meta?: Record<string, unknown>
 ): void {
+  console.log('[persistence-boundary-stage]', stage, {
+    caller: 'logPersistenceBoundaryParticipants',
+    participantCount: participants.length,
+    meta,
+  });
   for (const participant of participants) {
     if (classifyTrackedPersistenceParty(participant.name)) {
       emitStageEvent(stage, participant, meta);
@@ -255,7 +287,15 @@ export function logPersistenceBoundaryParticipantsFromList(
   participants: DemoParticipant[],
   meta?: Record<string, unknown>
 ): void {
-  if (!persistenceBoundaryTracingEnabled) return;
+  console.log('[persistence-boundary-stage]', stage, {
+    caller: 'logPersistenceBoundaryParticipantsFromList',
+    participantCount: participants.length,
+    meta,
+  });
+  if (!persistenceBoundaryTracingEnabled) {
+    console.log('[persistence-boundary-stage-skipped]', stage, 'tracingDisabled');
+    return;
+  }
   if (!activeSession) {
     startPersistenceBoundarySession(`server:${stage}`);
   }

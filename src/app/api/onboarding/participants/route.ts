@@ -18,6 +18,11 @@ import {
 import {
   runOperationalInitializationConvergence,
 } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
+import {
+  ensureOnboardingPipelineSessionForServer,
+  logOnboardingPipelineDemoParticipants,
+  logOnboardingPipelineDrafts,
+} from '@/lib/ai-extractor/onboarding-pipeline-instrumentation';
 
 const participantSchema = z.object({
   name: z.string().min(1).max(255),
@@ -42,6 +47,11 @@ export async function POST(request: NextRequest) {
     return error;
   }
 
+  ensureOnboardingPipelineSessionForServer(`api:onboarding/participants:${body.projectId}`);
+  logOnboardingPipelineDrafts('apiRequestBodyReceived', body.participants, {
+    projectId: body.projectId,
+  });
+
   const org = await getOrganizationForAuthenticatedUser(user.id);
   if (!org) {
     return apiError('Organization required', 400);
@@ -64,10 +74,22 @@ export async function POST(request: NextRequest) {
       })
     );
 
+  logOnboardingPipelineDemoParticipants('storageWrite', newParticipants, {
+    projectId: body.projectId,
+    participantIds: newParticipants.map((p) => p.id),
+  });
+
   await syncPilotSnapshotForUser(user.id, snapshot.deals, [
     ...snapshot.participants,
     ...newParticipants,
   ]);
+
+  const afterSnapshot = await getPilotSnapshotForUser(user.id);
+  const writtenIds = new Set(newParticipants.map((p) => p.id));
+  const readBack = afterSnapshot.participants.filter((p) => writtenIds.has(p.id));
+  logOnboardingPipelineDemoParticipants('storageReadBack', readBack, {
+    projectId: body.projectId,
+  });
 
   const prev = (await getOperatorOnboardingState(org.id)) ?? { step: 'participants' as const };
   await saveOperatorOnboardingState(org.id, user.id, {

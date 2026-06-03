@@ -88,6 +88,10 @@ import {
 import { createOperationId } from '@/lib/onboarding/mutation-resilience';
 import { CreateFromConversationButton } from '@/components/ai-extractor/create-from-conversation-button';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import {
+  logOnboardingPipelineDemoParticipants,
+  logOnboardingPipelineDrafts,
+} from '@/lib/ai-extractor/onboarding-pipeline-instrumentation';
 
 const workspaceSchema = z.object({
   workspaceName: z.string().min(2, 'Workspace name is required').max(255),
@@ -591,10 +595,12 @@ export function WorkflowOnboardingForm() {
       if (!skip) {
         const valid = allParticipantsToSubmit();
         if (valid.length > 0) {
+          const postBody = { projectId, participants: valid };
+          logOnboardingPipelineDrafts('clientPostPayload', valid, { projectId });
           const res = await fetch('/api/onboarding/participants', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId, participants: valid }),
+            body: JSON.stringify(postBody),
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
@@ -927,6 +933,9 @@ export function WorkflowOnboardingForm() {
                 existingDeal={projectId ? { id: projectId, dealName: projectName, partner: '', value: 0, introducer: '', closer: '', status: 'Pending', lastUpdated: new Date().toISOString(), paymentStatus: 'Not Paid' } : undefined}
                 onComplete={(_dealId, participants) => {
                   if (participants && participants.length > 0) {
+                    logOnboardingPipelineDemoParticipants('onCompletePayload', participants, {
+                      caller: 'workflow-onboarding-form.onComplete',
+                    });
                     const asDraft: DraftParticipant[] = participants.map((p: DemoParticipant) => ({
                       name: p.name,
                       email: p.email ?? '',

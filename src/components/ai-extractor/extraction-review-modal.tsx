@@ -34,10 +34,9 @@ import { detectDuplicates, defaultResolutions } from '@/lib/ai-extractor/duplica
 import { mapReviewToRecentDeal, mapReviewToParticipants } from '@/lib/ai-extractor/extraction-mapper';
 import { runParticipantAddSaveBranchTrace } from '@/lib/ai-extractor/duplicate-save-path-instrumentation';
 import {
-  logPersistenceBoundaryParticipant,
-  logPersistenceBoundaryParticipants,
-  startPersistenceBoundarySession,
-} from '@/lib/ai-extractor/persistence-boundary-instrumentation';
+  logOnboardingPipelineDemoParticipants,
+  startOnboardingPipelineSession,
+} from '@/lib/ai-extractor/onboarding-pipeline-instrumentation';
 import { EXTRACTOR_VERSION, SOURCE_TYPE_LABELS } from '@/lib/ai-extractor/extraction-types';
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import { toast } from 'sonner';
@@ -246,12 +245,6 @@ export function ExtractionReviewModal({
         const newDeal = mapReviewToRecentDeal(form, importRecord);
         const originalsById = new Map(result.parties.map((p) => [p.id, p]));
         const newParticipants = mapReviewToParticipants(form, newDeal, originalsById);
-        startPersistenceBoundarySession(`project_create:${newDeal.id}`);
-        for (const p of newParticipants) {
-          logPersistenceBoundaryParticipant('afterMapSinglePartyToParticipant', p, {
-            entryPoint: 'project_create',
-          });
-        }
         const snapshot = await fetchPilotSnapshot();
         const existing = snapshot ?? { deals: [], participants: [] };
         const persistPayload = {
@@ -260,12 +253,6 @@ export function ExtractionReviewModal({
         };
         const ok = await persistPilotSnapshot(persistPayload);
         if (!ok) throw new Error('Could not save project. Please try again.');
-        const readBack = await fetchPilotSnapshot();
-        if (readBack) {
-          logPersistenceBoundaryParticipants('afterReadSnapshotBack', readBack.participants, {
-            entryPoint: 'project_create',
-          });
-        }
         await fetch('/api/deal-network-pilot/obligations/refresh', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -326,13 +313,6 @@ export function ExtractionReviewModal({
           participants: updatedParticipants,
         });
         if (!ok) throw new Error('Could not save participants. Please try again.');
-        const readBack = await fetchPilotSnapshot();
-        if (readBack) {
-          logPersistenceBoundaryParticipants('afterReadSnapshotBack', readBack.participants, {
-            entryPoint: 'participant_add',
-            dealId: existingDeal.id,
-          });
-        }
         await fetch('/api/deal-network-pilot/obligations/refresh', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -374,10 +354,18 @@ export function ExtractionReviewModal({
         };
         const originalsById = new Map(result.parties.map((p) => [p.id, p]));
         const newParticipants = mapReviewToParticipants(form, projectDeal, originalsById);
+        startOnboardingPipelineSession(`onboarding:${projectDeal.id}`);
+        logOnboardingPipelineDemoParticipants('mapReviewToParticipants', newParticipants, {
+          entryPoint: 'onboarding',
+          projectId: projectDeal.id,
+        });
         onOpenChange(false);
         const pCount = newParticipants.length;
         toast.success('Participants added', {
           description: `${pCount} participant${pCount !== 1 ? 's' : ''} added to ${projectDeal.dealName}`,
+        });
+        logOnboardingPipelineDemoParticipants('onCompletePayload', newParticipants, {
+          entryPoint: 'onboarding',
         });
         onComplete(undefined, newParticipants);
       }

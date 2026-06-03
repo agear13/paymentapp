@@ -15,7 +15,10 @@ import {
   runOperationalApiRoute,
 } from '@/lib/operations/dev/api-route-diagnostics.server';
 import { buildParticipantEarningsPersistenceDiagnostic } from '@/lib/operations/dev/participant-earnings-persistence-diagnostic';
-import { logPersistenceBoundaryParticipant } from '@/lib/ai-extractor/persistence-boundary-instrumentation';
+import {
+  logOnboardingPipelineDemoParticipants,
+  logOnboardingPipelineDiagnostic,
+} from '@/lib/ai-extractor/onboarding-pipeline-instrumentation';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,15 +118,18 @@ export async function GET(request: Request) {
       );
 
       for (const row of graph.participants) {
-        logPersistenceBoundaryParticipant(
-          'coordinationHydrationBeforeParticipantDiagnostics',
-          row.participant,
-          { projectId: projectId ?? null, route: ctx.route }
-        );
+        logOnboardingPipelineDemoParticipants('coordinationSnapshotParticipant', [row.participant], {
+          projectId: projectId ?? null,
+          route: ctx.route,
+        });
       }
 
       const participantDiagnostics = graph.participants.map((p) => {
         const diagnostic = buildParticipantEarningsPersistenceDiagnostic(p.participant);
+        logOnboardingPipelineDiagnostic('participantDiagnosticsInput', diagnostic, {
+          projectId: projectId ?? null,
+          route: ctx.route,
+        });
         logParticipantPersistenceFinding({
           correlationId: ctx.correlationId,
           route: ctx.route,

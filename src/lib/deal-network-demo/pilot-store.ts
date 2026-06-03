@@ -1,6 +1,5 @@
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { logPersistenceBoundaryParticipants } from '@/lib/ai-extractor/persistence-boundary-instrumentation';
 
 export interface PilotStoreData {
   deals: RecentDeal[];
@@ -23,14 +22,6 @@ export async function fetchPilotSnapshot(): Promise<PilotStoreData | null> {
 
 /** Persist full pilot snapshot for the current user (replaces prior sync pattern). */
 export async function persistPilotSnapshot(data: PilotStoreData): Promise<boolean> {
-  logPersistenceBoundaryParticipants('beforePersistPilotSnapshot', data.participants, {
-    side: 'client',
-    participantCount: data.participants.length,
-  });
-  logPersistenceBoundaryParticipants('insidePersistPilotSnapshotBeforeWrite', data.participants, {
-    side: 'client',
-    participantCount: data.participants.length,
-  });
   const res = await fetch('/api/deal-network-pilot/snapshot', {
     method: 'POST',
     credentials: 'include',
