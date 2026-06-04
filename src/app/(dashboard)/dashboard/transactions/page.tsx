@@ -9,6 +9,7 @@ import { prisma } from '@/lib/server/prisma';
 import { redirect } from 'next/navigation';
 import { TransactionsTable } from '@/components/dashboard/transactions-table';
 import { PaymentLinksTransactionsEmpty } from '@/components/payment-links/payment-links-empty-guidance';
+import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 
 export default async function TransactionsPage() {
   // Get current user's organization with proper data isolation
@@ -57,6 +58,7 @@ export default async function TransactionsPage() {
   // Filter by payment method
   const stripeEvents = allEvents.filter(e => e.payment_method === 'STRIPE');
   const hederaEvents = allEvents.filter(e => e.payment_method === 'HEDERA');
+  const showPropagationTraceHints = isBetaAdminEmail(user.email);
 
   return (
     <div className="space-y-6">
@@ -65,6 +67,18 @@ export default async function TransactionsPage() {
         <p className="text-muted-foreground">
           View all payment transactions across Stripe, Wise, and Hedera.
         </p>
+        {showPropagationTraceHints && (
+          <p className="text-xs text-muted-foreground mt-2 max-w-3xl">
+            Commission trace (beta admin): use the Stripe Payment Intent in the Transaction ID column, or
+            short code, with{' '}
+            <code className="text-[11px] bg-muted px-1 rounded">
+              GET /api/admin/commission-propagation-trace?stripePaymentIntentId=pi_…
+            </code>
+            . Enable live settlement logs with{' '}
+            <code className="text-[11px] bg-muted px-1 rounded">COMMISSION_PROPAGATION_TRACE=true</code> on
+            Render.
+          </p>
+        )}
       </div>
 
       <Tabs defaultValue="all" className="space-y-4">
@@ -84,7 +98,7 @@ export default async function TransactionsPage() {
             </CardHeader>
             <CardContent>
               {allEvents.length > 0 ? (
-                <TransactionsTable events={allEvents} />
+                <TransactionsTable events={allEvents} showPropagationTraceHints={showPropagationTraceHints} />
               ) : (
                 <PaymentLinksTransactionsEmpty />
               )}
@@ -102,7 +116,7 @@ export default async function TransactionsPage() {
             </CardHeader>
             <CardContent>
               {stripeEvents.length > 0 ? (
-                <TransactionsTable events={stripeEvents} />
+                <TransactionsTable events={stripeEvents} showPropagationTraceHints={showPropagationTraceHints} />
               ) : allEvents.length === 0 ? (
                 <PaymentLinksTransactionsEmpty />
               ) : (
@@ -124,7 +138,7 @@ export default async function TransactionsPage() {
             </CardHeader>
             <CardContent>
               {hederaEvents.length > 0 ? (
-                <TransactionsTable events={hederaEvents} />
+                <TransactionsTable events={hederaEvents} showPropagationTraceHints={showPropagationTraceHints} />
               ) : allEvents.length === 0 ? (
                 <PaymentLinksTransactionsEmpty />
               ) : (

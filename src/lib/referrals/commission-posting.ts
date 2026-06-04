@@ -11,6 +11,7 @@ import { provisionCommissionLedgerAccounts } from '@/lib/ledger/ledger-account-p
 import { LEDGER_ACCOUNTS } from '@/lib/ledger/account-mapping';
 import { calculateStripeFee } from '@/lib/ledger/posting-rules/stripe';
 import { log } from '@/lib/logger';
+import { commissionPropagationTrace } from '@/lib/referrals/commission-propagation-trace';
 
 /** Single split from session metadata (from referral_link_splits at checkout) */
 export interface ReferralSplitMeta {
@@ -241,7 +242,16 @@ export async function applyRevenueShareSplits(
   const rootId = resolveCommissionRootId(params);
 
   try {
-    return await applyRevenueShareSplitsInternal(params);
+    const result = await applyRevenueShareSplitsInternal(params);
+    if (result.posted) {
+      commissionPropagationTrace('commission_apply_complete', {
+        commissionRootId: rootId,
+        paymentLinkId,
+        correlationId,
+        posted: true,
+      });
+    }
+    return result;
   } catch (err: any) {
     log.error(
       'Commission posting unexpected error (webhook-safe, returning 200)',
@@ -270,6 +280,11 @@ async function applyRevenueShareSplitsInternal(
   const meta = extractReferralMetadata(commissionMd);
   if (!meta) {
     log.info('Commission skipped: no referral metadata', { commissionRootId: rootId, paymentLinkId });
+    commissionPropagationTrace('commission_skipped_no_metadata', {
+      commissionRootId: rootId,
+      paymentLinkId,
+      correlationId,
+    });
     return { posted: false };
   }
 
@@ -303,6 +318,11 @@ async function applyRevenueShareSplitsInternal(
       paymentLinkId,
       consultantAmount: consultantAmountRounded,
       bdPartnerAmount: bdPartnerAmountRounded,
+    });
+    commissionPropagationTrace('commission_skipped_below_minimum', {
+      commissionRootId: rootId,
+      paymentLinkId,
+      correlationId,
     });
     return { posted: false };
   }
@@ -465,6 +485,13 @@ async function applyRevenueShareSplitsInternal(
       },
     });
     obligationId = obligation.id;
+    commissionPropagationTrace('commission_obligation_created', {
+      commissionRootId: rootId,
+      paymentLinkId,
+      obligationId,
+      correlationId,
+      path: 'legacy_rules',
+    });
   } catch (obligErr: any) {
     if (obligErr?.code === 'P2002') {
       log.info('Commission obligation already exists (idempotent)', { commissionRootId: rootId });
@@ -472,8 +499,20 @@ async function applyRevenueShareSplitsInternal(
         where: { stripe_event_id: rootId },
       });
       if (existing) obligationId = existing.id;
+      commissionPropagationTrace('commission_obligation_exists_idempotent', {
+        commissionRootId: rootId,
+        paymentLinkId,
+        obligationId,
+        correlationId,
+      });
     } else {
       log.warn('Commission obligation create failed (non-blocking)', {
+        error: obligErr instanceof Error ? obligErr.message : String(obligErr),
+      });
+      commissionPropagationTrace('commission_obligation_create_failed', {
+        commissionRootId: rootId,
+        paymentLinkId,
+        correlationId,
         error: obligErr instanceof Error ? obligErr.message : String(obligErr),
       });
     }
@@ -550,6 +589,12 @@ async function applyRevenueShareSplitsFromSplitsInternal(
   const aboveMin = splitAmounts.filter((s) => s.amount >= 0.01);
   if (aboveMin.length === 0) {
     log.info('Commission skipped: all split amounts below minimum', { commissionRootId: rootId, paymentLinkId });
+    commissionPropagationTrace('commission_skipped_below_minimum', {
+      commissionRootId: rootId,
+      paymentLinkId,
+      correlationId,
+      path: 'splits',
+    });
     return { posted: false };
   }
 
@@ -633,6 +678,14 @@ async function applyRevenueShareSplitsFromSplitsInternal(
     });
     obligationId = obligation.id;
     createdObligation = true;
+    commissionPropagationTrace('commission_obligation_created', {
+      commissionRootId: rootId,
+      paymentLinkId,
+      obligationId,
+      correlationId,
+      path: 'splits',
+      itemCount: aboveMin.length,
+    });
   } catch (obligErr: unknown) {
     const err = obligErr as { code?: string };
     if (err?.code === 'P2002') {
@@ -641,8 +694,22 @@ async function applyRevenueShareSplitsFromSplitsInternal(
         where: { stripe_event_id: rootId },
       });
       if (existing) obligationId = existing.id;
+      commissionPropagationTrace('commission_obligation_exists_idempotent', {
+        commissionRootId: rootId,
+        paymentLinkId,
+        obligationId,
+        correlationId,
+        path: 'splits',
+      });
     } else {
       log.warn('Commission obligation create failed (non-blocking)', {
+        error: obligErr instanceof Error ? obligErr.message : String(obligErr),
+      });
+      commissionPropagationTrace('commission_obligation_create_failed', {
+        commissionRootId: rootId,
+        paymentLinkId,
+        correlationId,
+        path: 'splits',
         error: obligErr instanceof Error ? obligErr.message : String(obligErr),
       });
     }
@@ -673,6 +740,14 @@ async function applyRevenueShareSplitsFromSplitsInternal(
         }
       }
     }
+    commissionPropagationTrace('commission_items_created', {
+      commissionRootId: rootId,
+      paymentLinkId,
+      obligationId,
+      correlationId,
+      path: 'splits',
+      splitCount: aboveMin.length,
+    });
     const payeeUserId = (s: (typeof aboveMin)[0]) => s.beneficiary_id || 'PENDING_BENEFICIARY';
     try {
       await prisma.commission_obligation_lines.createMany({

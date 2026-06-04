@@ -19,6 +19,7 @@ import {
 import { loadReferralCodesForParticipant } from '@/lib/referrals/participant-referral-codes';
 
 import { referralTrace } from '@/lib/referrals/referral-trace';
+import { commissionPropagationTrace } from '@/lib/referrals/commission-propagation-trace';
 
 
 
@@ -168,6 +169,12 @@ export async function GET(request: NextRequest) {
 
       commissionItemsCount: obligationItems.length,
 
+    });
+
+    commissionPropagationTrace('participant_dashboard_query', {
+      userId: auth.user.id,
+      commissionItemsCount: obligationItems.length,
+      invoicesCount: invoices.length,
     });
 
 

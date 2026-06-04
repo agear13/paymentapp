@@ -47,9 +47,11 @@ type PaymentEvent = {
 
 interface TransactionsTableProps {
   events: PaymentEvent[];
+  /** Beta admin: show internal IDs + propagation lookup hint */
+  showPropagationTraceHints?: boolean;
 }
 
-export function TransactionsTable({ events }: TransactionsTableProps) {
+export function TransactionsTable({ events, showPropagationTraceHints = false }: TransactionsTableProps) {
   // Helper to format date consistently (avoid hydration issues)
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', {
@@ -122,6 +124,11 @@ export function TransactionsTable({ events }: TransactionsTableProps) {
                       {event.payment_links.invoice_reference && (
                         <span className="text-xs text-muted-foreground">
                           {event.payment_links.invoice_reference}
+                        </span>
+                      )}
+                      {showPropagationTraceHints && (
+                        <span className="text-[10px] text-muted-foreground font-mono mt-1 leading-snug">
+                          pe:{event.id.slice(0, 8)}… pl:{event.payment_link_id.slice(0, 8)}…
                         </span>
                       )}
                     </div>

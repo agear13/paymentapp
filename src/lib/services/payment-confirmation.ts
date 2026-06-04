@@ -34,6 +34,7 @@ import {
 } from '@/lib/payments/state-machine';
 import { validateLedgerInvariant } from '@/lib/ledger/invariant-checker';
 import { orchestrateFundingAfterInvoiceSettlement } from '@/lib/operations/funding/bridge-invoice-settlement.server';
+import { commissionPropagationTrace } from '@/lib/referrals/commission-propagation-trace';
 
 export interface ConfirmPaymentParams {
   paymentLinkId: string;
@@ -586,6 +587,15 @@ export async function confirmPayment(
       replayNoop: result.alreadyProcessed === true,
     });
 
+    if (result.success && result.paymentEventId && result.alreadyProcessed === false) {
+      commissionPropagationTrace('payment_confirmed_committed', {
+        correlationId,
+        paymentEventId: result.paymentEventId,
+        paymentLinkId,
+        provider,
+      });
+    }
+
     // Validate cumulative ledger balance against committed data.
     // This runs after the transaction commits so the global prisma client
     // can see the new entries. A failure here is a monitoring signal — the
@@ -687,6 +697,18 @@ export async function confirmPayment(
             paymentLinkReferralLinkId,
             paymentLinkCommissionSnapshot: link.commission_attribution_snapshot ?? null,
           });
+          commissionPropagationTrace('commission_metadata_resolved', {
+            correlationId,
+            paymentEventId: result.paymentEventId,
+            paymentLinkId,
+            referralLinkId: paymentLinkReferralLinkId,
+            hasReferralMetadata: Boolean(referralMetadata?.referral_link_id),
+          });
+          commissionPropagationTrace('commission_apply_enter', {
+            correlationId,
+            paymentEventId: result.paymentEventId,
+            paymentLinkId,
+          });
           await applyRevenueShareSplits({
             stripeEventId: result.paymentEventId,
             commissionSourceId: result.paymentEventId,
@@ -710,6 +732,12 @@ export async function confirmPayment(
           }
         );
       }
+    } else if (result.success && result.paymentEventId && result.alreadyProcessed === true) {
+      commissionPropagationTrace('commission_block_skipped_idempotent', {
+        correlationId,
+        paymentEventId: result.paymentEventId,
+        paymentLinkId,
+      });
     }
 
     if (result.success && result.paymentEventId && result.alreadyProcessed === false) {

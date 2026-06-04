@@ -4,6 +4,7 @@ import { prisma } from '@/lib/server/prisma';
 import {
   orchestrateOperationalMutation,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+import { commissionPropagationTrace } from '@/lib/referrals/commission-propagation-trace';
 
 /**
  * Bridges invoice settlement (PAYMENT_CONFIRMED) into operational funding orchestration.
@@ -25,7 +26,18 @@ export async function orchestrateFundingAfterInvoiceSettlement(
     });
     pilotDealId = link?.pilot_deal_id ?? null;
   }
-  if (!pilotDealId) return;
+  if (!pilotDealId) {
+    commissionPropagationTrace('funding_orchestration_skipped_no_pilot_deal', {
+      paymentEventId,
+      paymentLinkId: event?.payment_link_id ?? null,
+    });
+    return;
+  }
+
+  commissionPropagationTrace('funding_orchestration_started', {
+    paymentEventId,
+    pilotDealId,
+  });
 
   const deal = await prisma.deal_network_pilot_deals.findUnique({
     where: { id: pilotDealId },
