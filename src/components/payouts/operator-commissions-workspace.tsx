@@ -283,16 +283,11 @@ export function OperatorCommissionsWorkspace({
         '/api/deal-network-pilot/obligations',
         pilotRes
       );
+      if (pilotRes.status === 401) {
+        throw new Error('You need to be signed in to view participant earnings.');
+      }
       if (!pilotDiagnostics.shouldParseJson) {
-        if (
-          !shouldSuppressOperationalErrorToast({
-            status: pilotRes.status,
-            message: pilotDiagnostics.bodyPreview,
-            releaseInteraction,
-          })
-        ) {
-          throw new Error('Failed to load earnings');
-        }
+        // Align with obligations page: gateway 502/499 must not fatal the whole workspace.
         setPilotRows([]);
       } else {
         const pilotJson = parseOperationalApiJson<{ data?: PilotObligation[]; error?: string }>(
@@ -359,7 +354,7 @@ export function OperatorCommissionsWorkspace({
     }
   }, [
     organizationId,
-    releaseInteraction,
+    releaseInteraction.canQueryReferralCommissionLedger,
     showInitializationShell,
   ]);
 
