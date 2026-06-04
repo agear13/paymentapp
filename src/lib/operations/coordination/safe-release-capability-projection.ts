@@ -17,6 +17,7 @@ export function safeReleaseCapabilityProjection(
         canCreateReleaseBatch: false,
         canSubmitRelease: false,
         canUseBetaSettlementFeatures: false,
+        canViewAttributionCommissions: true,
         disabledReason: 'Release capabilities are still loading.',
       },
       activationLoading: true,

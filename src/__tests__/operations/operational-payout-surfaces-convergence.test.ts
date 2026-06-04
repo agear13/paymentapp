@@ -24,12 +24,52 @@ const betaAdminCaps = deriveOperationalCapabilities({
 });
 
 describe('participant earnings beta lockdown', () => {
-  it('enables attribution commission ledger for beta admin when graph is ready', () => {
+  it('shows attribution commissions for normal operators while settlement stays beta-locked', () => {
+    const state = deriveReleaseInteractionState({
+      operationalCapabilities: betaLockedCaps,
+      graphReady: true,
+      graphSnapshotConverged: true,
+    });
+    expect(betaLockedCaps.canUseBetaSettlementFeatures).toBe(false);
+    expect(state.canViewAttributionCommissions).toBe(true);
+    expect(state.canQueryReferralCommissionLedger).toBe(false);
+    expect(state.releaseInteractionEnabled).toBe(false);
+    expect(state.disabledCategory).toBe('beta_locked');
+  });
+
+  it('enables attribution view while graph is still converging', () => {
+    const state = deriveReleaseInteractionState({
+      operationalCapabilities: betaLockedCaps,
+      graphReady: false,
+      graphSnapshotConverged: false,
+    });
+    expect(state.canViewAttributionCommissions).toBe(true);
+    expect(state.canQueryReferralCommissionLedger).toBe(false);
+    expect(state.releaseInteractionEnabled).toBe(false);
+    expect(state.disabledCategory).toBe('settlement_initializing');
+  });
+
+  it('hides attribution when view_payment_links capability is denied on server caps', () => {
+    const caps = deriveOperationalCapabilities({
+      isBetaAdmin: false,
+      betaLockdownEnabled: true,
+      canViewAttributionCommissions: false,
+    });
+    const state = deriveReleaseInteractionState({
+      operationalCapabilities: caps,
+      graphReady: true,
+      graphSnapshotConverged: true,
+    });
+    expect(state.canViewAttributionCommissions).toBe(false);
+  });
+
+  it('enables settlement ledger for beta admin when graph is ready', () => {
     const state = deriveReleaseInteractionState({
       operationalCapabilities: betaAdminCaps,
       graphReady: true,
       graphSnapshotConverged: true,
     });
+    expect(state.canViewAttributionCommissions).toBe(true);
     expect(state.canQueryReferralCommissionLedger).toBe(true);
     expect(state.releaseInteractionEnabled).toBe(true);
   });

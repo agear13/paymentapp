@@ -41,6 +41,7 @@ import { OperationalSettlementInitialization } from '@/components/operations/ope
 import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import type { OperationalCapabilities } from '@/lib/operations/capabilities/derive-operational-capabilities';
+import { logAttributionRuntimeDiag } from '@/lib/operations/dev/attribution-runtime-diag';
 import { shouldSuppressOperationalErrorToast } from '@/lib/operations/coordination/operational-fetch-guards';
 import {
   parseOperationalApiJson,
@@ -227,6 +228,7 @@ export function OperatorCommissionsWorkspace({
   const { currency: orgCurrency } = useOrganizationCurrency();
   const {
     releaseInteraction,
+    readiness,
     settlementInitialization,
     operationalOnboarding,
     operationalInitialization,
@@ -240,16 +242,24 @@ export function OperatorCommissionsWorkspace({
   });
 
   React.useEffect(() => {
-    console.info('[ATTRIBUTION_COMMISSIONS]', {
+    logAttributionRuntimeDiag('OperatorCommissionsWorkspace(client)', {
       isBetaAdmin,
       canUseBetaSettlementFeatures: releaseCapabilities.canUseBetaSettlementFeatures,
+      canViewAttributionCommissions: releaseInteraction.canViewAttributionCommissions,
       canQueryReferralCommissionLedger: releaseInteraction.canQueryReferralCommissionLedger,
-      surface: 'OperatorCommissionsWorkspace(client)',
+      releaseInteractionEnabled: releaseInteraction.releaseInteractionEnabled,
+      graphReady: readiness.graphReadyForProjection,
+      graphSnapshotConverged,
+      releaseCapabilitiesPassedToWorkspace: true,
     });
   }, [
     isBetaAdmin,
     releaseCapabilities.canUseBetaSettlementFeatures,
+    readiness.graphReadyForProjection,
+    graphSnapshotConverged,
+    releaseInteraction.canViewAttributionCommissions,
     releaseInteraction.canQueryReferralCommissionLedger,
+    releaseInteraction.releaseInteractionEnabled,
   ]);
   const [pilotRows, setPilotRows] = React.useState<PilotObligation[]>([]);
   const [attributionEarnings, setAttributionEarnings] = React.useState<AttributionEarningsSummary[]>(
@@ -266,6 +276,15 @@ export function OperatorCommissionsWorkspace({
 
   const fetchAll = React.useCallback(async () => {
     if (showInitializationShell) {
+      console.info('[ATTRIBUTION_FETCH]', {
+        executed: false,
+        blockedBy: 'showInitializationShell',
+        canViewAttributionCommissions: releaseInteraction.canViewAttributionCommissions,
+        canQueryReferralCommissionLedger: releaseInteraction.canQueryReferralCommissionLedger,
+        releaseInteractionEnabled: releaseInteraction.releaseInteractionEnabled,
+        graphReady: readiness.graphReadyForProjection,
+        graphSnapshotConverged,
+      });
       setPilotRows([]);
       setAttributionEarnings([]);
       setOrgPosted([]);
@@ -297,17 +316,65 @@ export function OperatorCommissionsWorkspace({
         setPilotRows(pilotJson.data ?? []);
       }
 
-      if (organizationId && releaseInteraction.canQueryReferralCommissionLedger) {
+      const graphReady = readiness.graphReadyForProjection;
+      const canFetchAttribution =
+        Boolean(organizationId) && releaseInteraction.canViewAttributionCommissions;
+
+      if (!canFetchAttribution) {
+        console.info('[ATTRIBUTION_FETCH]', {
+          executed: false,
+          canViewAttributionCommissions: releaseInteraction.canViewAttributionCommissions,
+          canQueryReferralCommissionLedger: releaseInteraction.canQueryReferralCommissionLedger,
+          releaseInteractionEnabled: releaseInteraction.releaseInteractionEnabled,
+          graphReady,
+          graphSnapshotConverged,
+          organizationId: organizationId ?? null,
+          blockedBy: !organizationId
+            ? 'organizationId'
+            : !releaseInteraction.canViewAttributionCommissions
+              ? 'canViewAttributionCommissions'
+              : 'unknown',
+        });
+        setAttributionEarnings([]);
+        setOrgPosted([]);
+      } else {
+        console.info('[ATTRIBUTION_FETCH]', {
+          executed: true,
+          canViewAttributionCommissions: releaseInteraction.canViewAttributionCommissions,
+          canQueryReferralCommissionLedger: releaseInteraction.canQueryReferralCommissionLedger,
+          releaseInteractionEnabled: releaseInteraction.releaseInteractionEnabled,
+          graphReady,
+          graphSnapshotConverged,
+        });
+
         const attrRes = await fetch('/api/commissions/attribution-earnings', {
           credentials: 'include',
           cache: 'no-store',
         });
+        const attrBodyText = await attrRes.text();
+        let attrRowCount = 0;
         if (attrRes.ok) {
-          const attrJson = await attrRes.json().catch(() => ({}));
-          setAttributionEarnings(attrJson.data ?? []);
+          try {
+            const attrJson = JSON.parse(attrBodyText) as {
+              data?: AttributionEarningsSummary[];
+            };
+            const rows = attrJson.data ?? [];
+            attrRowCount = rows.length;
+            setAttributionEarnings(rows);
+          } catch {
+            setAttributionEarnings([]);
+          }
         } else {
           setAttributionEarnings([]);
         }
+
+        console.info('[ATTRIBUTION_FETCH]', {
+          stage: 'response',
+          httpStatus: attrRes.status,
+          responsePayloadLength: attrBodyText.length,
+          rowCount: attrRowCount,
+          ok: attrRes.ok,
+        });
 
         const orgRes = await fetch(
           `/api/commissions/obligations?organizationId=${organizationId}&status=POSTED`,
@@ -335,9 +402,6 @@ export function OperatorCommissionsWorkspace({
           );
           setOrgPosted(orgJson.data ?? []);
         }
-      } else {
-        setAttributionEarnings([]);
-        setOrgPosted([]);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load participant earnings';
@@ -354,7 +418,10 @@ export function OperatorCommissionsWorkspace({
     }
   }, [
     organizationId,
+    releaseInteraction.canViewAttributionCommissions,
     releaseInteraction.canQueryReferralCommissionLedger,
+    readiness.graphReadyForProjection,
+    graphSnapshotConverged,
     showInitializationShell,
   ]);
 
@@ -532,7 +599,7 @@ export function OperatorCommissionsWorkspace({
         <p className="text-muted-foreground text-sm">Loading…</p>
       ) : (
         <div className="space-y-8">
-          {releaseInteraction.canQueryReferralCommissionLedger ? (
+          {releaseInteraction.canViewAttributionCommissions ? (
             <section className="space-y-3 pb-6 border-b border-border/20">
               <div>
                 <h2 className="text-xl font-semibold tracking-tight">Attribution commissions</h2>

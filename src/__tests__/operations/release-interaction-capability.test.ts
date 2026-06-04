@@ -58,6 +58,7 @@ describe('release interaction capability convergence', () => {
     });
     expect(state.releaseInteractionEnabled).toBe(false);
     expect(state.canCreateReleaseBatch).toBe(false);
+    expect(state.canViewAttributionCommissions).toBe(true);
     expect(state.canQueryReferralCommissionLedger).toBe(false);
     expect(state.disabledCategory).toBe('beta_locked');
     expect(state.interactionGuidance).toMatch(/beta/i);
@@ -71,6 +72,7 @@ describe('release interaction capability convergence', () => {
     });
     expect(state.releaseInteractionEnabled).toBe(true);
     expect(state.canQueryReleaseHistory).toBe(true);
+    expect(state.canViewAttributionCommissions).toBe(true);
     expect(state.canQueryReferralCommissionLedger).toBe(true);
     expect(state.canCreateReleaseBatch).toBe(true);
     expect(state.disabledReason).toBeNull();

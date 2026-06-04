@@ -16,8 +16,13 @@ export type ReleaseInteractionState = {
   canPreviewReleaseEligibility: boolean;
   canCreateReleaseBatch: boolean;
   canSubmitRelease: boolean;
-  /** Beta-gated referral commission ledger (distinct from pilot obligation reads). */
+  /**
+   * Beta-gated settlement commission ledger (legacy obligations API / release archive).
+   * Coupled to canUseBetaSettlementFeatures — not used for Attribution Commissions UI.
+   */
   canQueryReferralCommissionLedger: boolean;
+  /** Per-purchase attribution earnings — independent of settlement beta lockdown and graph convergence. */
+  canViewAttributionCommissions: boolean;
   disabledReason: string | null;
   disabledCategory: ReleaseInteractionDisabledCategory;
   interactionGuidance: string | null;
@@ -27,6 +32,7 @@ export const CONSERVATIVE_RELEASE_CAPABILITIES: OperationalCapabilities = {
   canCreateReleaseBatch: false,
   canSubmitRelease: false,
   canUseBetaSettlementFeatures: false,
+  canViewAttributionCommissions: true,
   disabledReason: 'Release capabilities are still loading.',
 };
 
@@ -49,6 +55,7 @@ function disabledReleaseInteractionState(
     canCreateReleaseBatch: false,
     canSubmitRelease: false,
     canQueryReferralCommissionLedger: false,
+    canViewAttributionCommissions: operationalCapabilities.canViewAttributionCommissions,
     disabledReason: guidance,
     disabledCategory: category,
     interactionGuidance: guidance,
@@ -109,6 +116,7 @@ export function deriveReleaseInteractionState(
       canCreateReleaseBatch: operationalCapabilities.canCreateReleaseBatch,
       canSubmitRelease: operationalCapabilities.canSubmitRelease,
       canQueryReferralCommissionLedger: operationalCapabilities.canUseBetaSettlementFeatures,
+      canViewAttributionCommissions: operationalCapabilities.canViewAttributionCommissions,
       disabledReason: null,
       disabledCategory: null,
       interactionGuidance: null,
