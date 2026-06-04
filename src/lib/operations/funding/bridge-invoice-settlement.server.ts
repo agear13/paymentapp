@@ -34,12 +34,13 @@ export async function resolvePilotDealContextForSettlement(input: {
       select: {
         pilot_deal_id: true,
         organization_id: true,
-        referral_links: { select: { slug: true } },
+        referral_link_id: true,
+        commission_referral_link: { select: { slug: true } },
       },
     });
     if (!pilotDealId) pilotDealId = link?.pilot_deal_id ?? null;
     organizationId = link?.organization_id ?? null;
-    referralSlug = link?.referral_links?.slug ?? null;
+    referralSlug = link?.commission_referral_link?.slug ?? null;
   }
 
   if (!pilotDealId && organizationId && referralSlug) {
