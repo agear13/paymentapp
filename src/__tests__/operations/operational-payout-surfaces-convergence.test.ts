@@ -18,7 +18,22 @@ const betaLockedCaps = deriveOperationalCapabilities({
   betaLockdownEnabled: true,
 });
 
+const betaAdminCaps = deriveOperationalCapabilities({
+  isBetaAdmin: true,
+  betaLockdownEnabled: true,
+});
+
 describe('participant earnings beta lockdown', () => {
+  it('enables attribution commission ledger for beta admin when graph is ready', () => {
+    const state = deriveReleaseInteractionState({
+      operationalCapabilities: betaAdminCaps,
+      graphReady: true,
+      graphSnapshotConverged: true,
+    });
+    expect(state.canQueryReferralCommissionLedger).toBe(true);
+    expect(state.releaseInteractionEnabled).toBe(true);
+  });
+
   it('does not treat beta 403 as unexpected when release interaction disabled', () => {
     const state = deriveReleaseInteractionState({
       operationalCapabilities: betaLockedCaps,

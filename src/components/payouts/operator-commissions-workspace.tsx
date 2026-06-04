@@ -40,6 +40,7 @@ import { OperationalActivitySection } from '@/components/operations/operational-
 import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
 import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import type { OperationalCapabilities } from '@/lib/operations/capabilities/derive-operational-capabilities';
 import { shouldSuppressOperationalErrorToast } from '@/lib/operations/coordination/operational-fetch-guards';
 import {
   parseOperationalApiJson,
@@ -213,7 +214,15 @@ function OperationalSectionBlock({
   );
 }
 
-export function OperatorCommissionsWorkspace() {
+type OperatorCommissionsWorkspaceProps = {
+  releaseCapabilities: OperationalCapabilities;
+  isBetaAdmin: boolean;
+};
+
+export function OperatorCommissionsWorkspace({
+  releaseCapabilities,
+  isBetaAdmin,
+}: OperatorCommissionsWorkspaceProps) {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const { currency: orgCurrency } = useOrganizationCurrency();
   const {
@@ -225,7 +234,23 @@ export function OperatorCommissionsWorkspace() {
     guidance,
     graphSnapshotConverged,
     kpis,
-  } = useOperationalCoordinationState({ traceSurface: 'operator-commissions-workspace' });
+  } = useOperationalCoordinationState({
+    releaseCapabilities,
+    traceSurface: 'operator-commissions-workspace',
+  });
+
+  React.useEffect(() => {
+    console.info('[ATTRIBUTION_COMMISSIONS]', {
+      isBetaAdmin,
+      canUseBetaSettlementFeatures: releaseCapabilities.canUseBetaSettlementFeatures,
+      canQueryReferralCommissionLedger: releaseInteraction.canQueryReferralCommissionLedger,
+      surface: 'OperatorCommissionsWorkspace(client)',
+    });
+  }, [
+    isBetaAdmin,
+    releaseCapabilities.canUseBetaSettlementFeatures,
+    releaseInteraction.canQueryReferralCommissionLedger,
+  ]);
   const [pilotRows, setPilotRows] = React.useState<PilotObligation[]>([]);
   const [attributionEarnings, setAttributionEarnings] = React.useState<AttributionEarningsSummary[]>(
     []
