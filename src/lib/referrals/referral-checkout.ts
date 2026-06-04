@@ -25,6 +25,7 @@ import {
   type ReferralPaymentRail,
 } from '@/lib/referrals/referral-payment-rails';
 import { getPaymentLinkUrl } from '@/lib/runtime/customer-facing-url';
+import { resolvePilotDealFromReferralSlug } from '@/lib/referrals/pilot-referral-slug.server';
 import config from '@/lib/config/env';
 
 export interface ReferralCheckoutResult {
@@ -143,6 +144,14 @@ export async function createReferralCheckoutSession(
     const now = new Date();
 
     const snapshotMeta = buildCommissionAttributionMetadataFromReferralLink(referralLink);
+    const pilotDealFromSlug =
+      referralLink.slug != null
+        ? await resolvePilotDealFromReferralSlug({
+            slug: referralLink.slug,
+            organizationId: referralLink.organization_id,
+          })
+        : null;
+    const pilotDealIdToStore = pilotDealFromSlug?.pilotDealId ?? null;
 
     const paymentMethod = resolveReferralPaymentLinkMethod({
       checkoutConfig: referralLink.checkout_config,
@@ -177,6 +186,7 @@ export async function createReferralCheckoutSession(
           referralLink.referral_code?.participant_user_id ?? referralLink.created_by_user_id ?? null,
         attribution_source: AttributionSource.REFERRAL_CHECKOUT,
         commission_attribution_snapshot: commissionSnapshotToPrismaJson(snapshotMeta),
+        pilot_deal_id: pilotDealIdToStore,
         created_at: now,
         updated_at: now,
       },
@@ -324,6 +334,14 @@ export async function createReferralServiceCheckoutSession(
     const shortCode = await generateUniqueShortCode();
     const now = new Date();
     const snapshotMeta = buildCommissionAttributionMetadataFromReferralLink(referralLink);
+    const pilotDealFromSlugSvc =
+      referralLink.slug != null
+        ? await resolvePilotDealFromReferralSlug({
+            slug: referralLink.slug,
+            organizationId: referralLink.organization_id,
+          })
+        : null;
+    const pilotDealIdToStoreSvc = pilotDealFromSlugSvc?.pilotDealId ?? null;
 
     const paymentMethod = resolveReferralPaymentLinkMethod({
       checkoutConfig: referralLink.checkout_config,
@@ -363,6 +381,7 @@ export async function createReferralServiceCheckoutSession(
           referralLink.referral_code?.participant_user_id ?? referralLink.created_by_user_id ?? null,
         attribution_source: AttributionSource.REFERRAL_SERVICE_SELECTION,
         commission_attribution_snapshot: commissionSnapshotToPrismaJson(snapshotMeta),
+        pilot_deal_id: pilotDealIdToStoreSvc,
         created_at: now,
         updated_at: now,
       },
