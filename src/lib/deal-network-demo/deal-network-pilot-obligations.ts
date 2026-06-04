@@ -29,6 +29,7 @@ import {
 import { sumConfirmedFundingForProject } from '@/lib/projects/funding-sources/confirmed-funding.server';
 import { effectiveOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 import { resolvePersistedObligationStatus } from '@/lib/operations/derivations/derive-obligation-allocation-status';
+import { usesProjectObligationSettlement } from '@/lib/operations/derivations/derive-compensation-settlement-basis';
 
 function payoutLineToObligationStatus(
   participant: DemoParticipant,
@@ -91,12 +92,13 @@ export async function refreshDealNetworkPilotObligationsForDeal(
   if (!deal?.id || deal.id === '__placeholder__') return;
 
   const dealParticipants = participants.filter((p) => p.dealId === deal.id);
+  const projectParticipants = dealParticipants.filter(usesProjectObligationSettlement);
   const roleAmounts = roleAmountsFromDeal(deal);
   const currency = 'USD';
 
   const rows: Prisma.deal_network_pilot_obligationsCreateManyInput[] = [];
 
-  const pilotRows = dealParticipants.map(demoParticipantToPilotRow);
+  const pilotRows = projectParticipants.map(demoParticipantToPilotRow);
   const joint = computeParticipantCommissionTotalsForDeal(deal.value, roleAmounts, pilotRows);
 
   const participantLines: Array<{
@@ -105,7 +107,7 @@ export async function refreshDealNetworkPilotObligationsForDeal(
     resolved: ReturnType<typeof resolveParticipantCommissionUsd>;
   }> = [];
 
-  for (const p of dealParticipants) {
+  for (const p of projectParticipants) {
     const payout = effectiveParticipantPayoutStatus(p, deal);
     const resolved = resolveParticipantCommissionUsd(
       {

@@ -157,24 +157,33 @@ export function applyCompensationProfileToParticipant(
 
   switch (profile.compensationType) {
     case 'REVENUE_SHARE':
-    case 'COMMISSION':
-      next.participationModel =
-        profile.compensationType === 'COMMISSION' ? 'customer_attribution' : 'revenue_share';
+      next.participationModel = 'revenue_share';
       next.commissionKind = 'pct_deal_value';
       next.commissionValue = profile.percentage ?? 0;
-      if (profile.compensationType === 'COMMISSION' && profile.configured) {
-        next.compensationProfile = {
-          ...next.compensationProfile!,
-          customerAttributionEnabled: profile.customerAttributionEnabled ?? true,
+      break;
+    case 'COMMISSION': {
+      next.participationModel = 'customer_attribution';
+      const attributionEnabled = profile.customerAttributionEnabled ?? true;
+      next.compensationProfile = {
+        ...next.compensationProfile!,
+        customerAttributionEnabled: attributionEnabled,
+      };
+      if (attributionEnabled) {
+        // Do not project deal.value — settlement uses commission_obligation_items per purchase.
+        next.commissionKind = 'catalog_attribution';
+        next.commissionValue = profile.percentage ?? 0;
+      } else {
+        next.commissionKind = 'pct_deal_value';
+        next.commissionValue = profile.percentage ?? 0;
+      }
+      if (profile.percentage != null && next.referralCommerce?.commissionMode === 'referral_commerce') {
+        next.referralCommerce = {
+          ...next.referralCommerce,
+          commerceCommissionPct: profile.percentage,
         };
-        if (profile.percentage != null && next.referralCommerce?.commissionMode === 'referral_commerce') {
-          next.referralCommerce = {
-            ...next.referralCommerce,
-            commerceCommissionPct: profile.percentage,
-          };
-        }
       }
       break;
+    }
     case 'FIXED_FEE':
     case 'REIMBURSEMENT':
       next.participationModel = 'fixed_payout';

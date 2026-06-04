@@ -80,6 +80,23 @@ type OrgCommission = {
   shortCode?: string;
 };
 
+type AttributionEarningsSummary = {
+  participantId: string;
+  participantName: string;
+  dealId: string | null;
+  dealName: string | null;
+  outstandingAmount: number;
+  paidAmount: number;
+  currency: string;
+  items: Array<{
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    shortCode: string | null;
+  }>;
+};
+
 type SectionEmphasis = 'primary' | 'caution' | 'muted' | 'default';
 
 type OperationalSection = {
@@ -210,6 +227,9 @@ export function OperatorCommissionsWorkspace() {
     kpis,
   } = useOperationalCoordinationState({ traceSurface: 'operator-commissions-workspace' });
   const [pilotRows, setPilotRows] = React.useState<PilotObligation[]>([]);
+  const [attributionEarnings, setAttributionEarnings] = React.useState<AttributionEarningsSummary[]>(
+    []
+  );
   const [orgPosted, setOrgPosted] = React.useState<OrgCommission[]>([]);
   const [loading, setLoading] = React.useState(true);
 
@@ -222,6 +242,7 @@ export function OperatorCommissionsWorkspace() {
   const fetchAll = React.useCallback(async () => {
     if (showInitializationShell) {
       setPilotRows([]);
+      setAttributionEarnings([]);
       setOrgPosted([]);
       setLoading(false);
       return;
@@ -257,6 +278,17 @@ export function OperatorCommissionsWorkspace() {
       }
 
       if (organizationId && releaseInteraction.canQueryReferralCommissionLedger) {
+        const attrRes = await fetch('/api/commissions/attribution-earnings', {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (attrRes.ok) {
+          const attrJson = await attrRes.json().catch(() => ({}));
+          setAttributionEarnings(attrJson.data ?? []);
+        } else {
+          setAttributionEarnings([]);
+        }
+
         const orgRes = await fetch(
           `/api/commissions/obligations?organizationId=${organizationId}&status=POSTED`,
           { credentials: 'include', cache: 'no-store' }
@@ -284,6 +316,7 @@ export function OperatorCommissionsWorkspace() {
           setOrgPosted(orgJson.data ?? []);
         }
       } else {
+        setAttributionEarnings([]);
         setOrgPosted([]);
       }
     } catch (err) {
@@ -478,15 +511,66 @@ export function OperatorCommissionsWorkspace() {
       {loading ? (
         <p className="text-muted-foreground text-sm">Loading…</p>
       ) : (
-        <div className="space-y-2">
-          {sections.map((section) => (
-            <OperationalSectionBlock
-              key={section.id}
-              section={section}
-              orgCurrency={orgCurrency}
-              canCreateReleaseBatch={releaseInteraction.canCreateReleaseBatch}
-            />
-          ))}
+        <div className="space-y-8">
+          {releaseInteraction.canQueryReferralCommissionLedger ? (
+            <section className="space-y-3 pb-6 border-b border-border/20">
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight">Attribution commissions</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Earned per qualifying customer purchase — sourced from posted commission items,
+                  not project deal value.
+                </p>
+              </div>
+              {attributionEarnings.length === 0 ? (
+                <PayoutEmptyState
+                  iconVariant="earnings"
+                  title="No attribution commissions yet"
+                  description="Commissions appear here after customers pay through participant referral links."
+                />
+              ) : (
+                <ul className="divide-y divide-border/20">
+                  {attributionEarnings.map((row) => (
+                    <li
+                      key={row.participantId}
+                      className="flex items-center justify-between gap-4 py-3 text-sm"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{row.participantName}</p>
+                        <p className="text-muted-foreground/80 text-xs truncate">
+                          {row.dealName ?? 'Attribution'} · {row.items.length} purchase
+                          {row.items.length === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                      <span className="shrink-0 tabular-nums font-semibold">
+                        {formatPayoutCurrency(
+                          row.outstandingAmount,
+                          row.currency,
+                          orgCurrency
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : null}
+
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight mb-1">Project obligations</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Revenue share, fixed fees, and milestones funded from project deal value.
+            </p>
+            <div className="space-y-2">
+              {sections.map((section) => (
+                <OperationalSectionBlock
+                  key={section.id}
+                  section={section}
+                  orgCurrency={orgCurrency}
+                  canCreateReleaseBatch={releaseInteraction.canCreateReleaseBatch}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

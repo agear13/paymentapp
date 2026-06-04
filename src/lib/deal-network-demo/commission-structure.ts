@@ -10,7 +10,9 @@ export type CommissionStructureKind =
   | 'pct_deal_value'
   | 'fixed_amount'
   | 'pct_of_participant'
-  | 'formula_advanced';
+  | 'formula_advanced'
+  /** Catalog / referral attribution — amounts come from commission_obligation_items, not deal.value */
+  | 'catalog_attribution';
 
 export const COMMISSION_STRUCTURE_OPTIONS: { value: CommissionStructureKind; label: string }[] = [
   { value: 'pct_deal_value', label: 'Percentage of Deal Value' },
@@ -138,6 +140,14 @@ export function resolveCommissionWithValidation(
   input: ParticipantCommissionInput,
   ctx: CommissionContext
 ): CommissionValidationResult {
+  if (input.commissionKind === 'catalog_attribution') {
+    return {
+      total: 0,
+      previewLine: 'Catalog attribution — earned per qualifying customer purchase',
+      valid: true,
+    };
+  }
+
   const dealValue = ctx.dealValue;
   if (!Number.isFinite(dealValue) || dealValue <= 0) {
     return { total: 0, previewLine: 'Deal value is required.', valid: false, error: 'Deal value is required.' };

@@ -62,8 +62,19 @@ export function compensationRequiresAttribution(classification: CompensationClas
   return classification === 'ATTRIBUTED_REFERRAL_COMMISSION';
 }
 
+/** Pilot deal_network_pilot_obligations — not attribution commission rows. */
+export function compensationGeneratesProjectObligations(
+  classification: CompensationClassification
+): boolean {
+  return (
+    classification === 'PROJECT_REVENUE_SHARE' ||
+    classification === 'FIXED_PROJECT_PAYOUT' ||
+    classification === 'SERVICE_COMMISSION'
+  );
+}
+
 export function compensationGeneratesObligations(classification: CompensationClassification): boolean {
-  return classification !== 'UNCONFIGURED';
+  return compensationGeneratesProjectObligations(classification);
 }
 
 export function normalizeProfileClassification(
