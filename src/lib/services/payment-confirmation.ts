@@ -7,6 +7,7 @@
 import {
   PaymentEventRecordStatus,
   PaymentEventSourceType,
+  type PaymentLinkStatus,
 } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
@@ -18,19 +19,16 @@ import { validatePostingBalance } from '@/lib/ledger/balance-validation';
 import config from '@/lib/config/env';
 import { normalizeHederaTransactionId } from '@/lib/hedera/txid';
 import { createReferralConversionFromPaymentConfirmed } from '@/lib/referrals/payment-conversion';
-import type Stripe from 'stripe';
-import {
-  applyRevenueShareSplits,
-  coerceJsonToCommissionMetadata,
-  parseReferralSplitsFromMetadata,
-} from '@/lib/referrals/commission-posting';
-import { isCompleteCommissionAttributionMetadata } from '@/lib/referrals/commission-attribution-snapshot';
+import { applyRevenueShareSplits } from '@/lib/referrals/commission-posting';
+import { resolveReferralCommissionMetadata } from '@/lib/referrals/commission-metadata.server';
+import { reconcileCommissionArtifactsForPaymentEvent } from '@/lib/referrals/commission-reconcile.server';
 import { assertPaymentLinksUpdateDataValid } from '@/lib/payments/payment-links-update-guard';
 import { getFxService } from '@/lib/fx';
 import { getFxSnapshotService } from '@/lib/fx/fx-snapshot-service';
 import {
   transitionPaymentLinkState,
   InvalidPaymentLinkTransitionError,
+  isValidTransition,
 } from '@/lib/payments/state-machine';
 import { validateLedgerInvariant } from '@/lib/ledger/invariant-checker';
 import { orchestrateFundingAfterInvoiceSettlement } from '@/lib/operations/funding/bridge-invoice-settlement.server';
@@ -38,7 +36,7 @@ import { commissionPropagationTrace } from '@/lib/referrals/commission-propagati
 
 export interface ConfirmPaymentParams {
   paymentLinkId: string;
-  provider: 'stripe' | 'hedera' | 'wise';
+  provider: 'stripe' | 'hedera' | 'wise' | 'manual';
   /** Stripe event_id, Hedera tx_id, or Wise transfer_id/event_id */
   providerRef: string;
   paymentIntentId?: string; // For Stripe
@@ -60,94 +58,54 @@ export interface ConfirmPaymentResult {
   error?: string;
 }
 
-function setCommissionMetaIfEmpty(
-  out: Record<string, string>,
-  key: string,
-  value: string | null | undefined
-) {
-  const cur = out[key];
-  if (cur != null && String(cur).trim() !== '') return;
-  if (value == null || String(value).trim() === '') return;
-  out[key] = String(value);
+/**
+ * Payment link statuses from which confirmPayment may transition to PAID and create settlement artifacts.
+ * OPEN: automated rails + R1 operator manual settlement.
+ * PAID_UNVERIFIED / REQUIRES_REVIEW: R3 assisted bank/crypto review approval.
+ * If link is already PAID without PAYMENT_CONFIRMED, settlement artifacts are backfilled (no transition).
+ */
+export const CONFIRM_PAYMENT_SETTLEMENT_ENTRY_STATUSES: readonly PaymentLinkStatus[] = [
+  'OPEN',
+  'PAID_UNVERIFIED',
+  'REQUIRES_REVIEW',
+] as const;
+
+async function runCommissionReconcileAfterSettlement(params: {
+  paymentEventId: string;
+  paymentLinkId: string;
+  grossAmount: number;
+  currency: string;
+  correlationId: string;
+  orchestrateFunding: boolean;
+}): Promise<void> {
+  try {
+    await reconcileCommissionArtifactsForPaymentEvent(params.paymentEventId, {
+      grossAmount: params.grossAmount,
+      currency: params.currency,
+      correlationId: params.correlationId,
+      orchestrateFunding: params.orchestrateFunding,
+    });
+  } catch (reconcileErr: unknown) {
+    log.error(
+      'Commission artifact reconcile failed (non-blocking)',
+      reconcileErr instanceof Error ? reconcileErr : undefined,
+      {
+        correlationId: params.correlationId,
+        paymentLinkId: params.paymentLinkId,
+        paymentEventId: params.paymentEventId,
+        error: reconcileErr instanceof Error ? reconcileErr.message : String(reconcileErr),
+      }
+    );
+  }
 }
 
-/**
- * Merge payment event metadata with immutable `payment_links.commission_attribution_snapshot`,
- * then load splits/rules from DB only if commission parsers still lack a full shape.
- * Invoice snapshot wins over sparse event metadata for commission keys when complete.
- */
-async function resolveReferralCommissionMetadata(params: {
-  paymentEventMetadata: unknown;
-  paymentLinkReferralLinkId: string | null;
-  paymentLinkCommissionSnapshot: unknown;
-}): Promise<Stripe.Metadata | undefined> {
-  const base = coerceJsonToCommissionMetadata(params.paymentEventMetadata);
-  const snapMd = coerceJsonToCommissionMetadata(params.paymentLinkCommissionSnapshot);
-
-  let out: Record<string, string> = { ...(base ?? {}) };
-  if (snapMd && isCompleteCommissionAttributionMetadata(snapMd)) {
-    out = {
-      ...out,
-      ...Object.fromEntries(
-        Object.entries(snapMd).filter(([, v]) => v != null && String(v).trim() !== '')
-      ),
-    };
-  }
-
-  const fromEvent = String(out.referral_link_id ?? '').trim();
-  if (!fromEvent && params.paymentLinkReferralLinkId) {
-    out.referral_link_id = params.paymentLinkReferralLinkId;
-  }
-
-  const rid = String(out.referral_link_id ?? '').trim();
-  if (!rid) {
-    return Object.keys(out).length > 0 ? (out as Stripe.Metadata) : undefined;
-  }
-
-  let md = out as Stripe.Metadata;
-  if (isCompleteCommissionAttributionMetadata(md)) {
-    return md;
-  }
-
-  const refLink = await prisma.referral_links.findUnique({
-    where: { id: rid },
-    include: {
-      referral_link_splits: { orderBy: { sort_order: 'asc' } },
-      referral_rules: { orderBy: { created_at: 'desc' }, take: 1 },
-    },
-  });
-  if (!refLink) {
-    return Object.keys(out).length > 0 ? (out as Stripe.Metadata) : undefined;
-  }
-
-  setCommissionMetaIfEmpty(out, 'referral_code', refLink.code);
-
-  const splits = refLink.referral_link_splits;
-  const rule = refLink.referral_rules[0];
-  if (splits.length > 0) {
-    if (!parseReferralSplitsFromMetadata(out as Stripe.Metadata)) {
-      out.referral_splits = JSON.stringify(
-        splits.map((s) => ({
-          split_id: s.id,
-          label: s.label,
-          percentage: Number(s.percentage),
-          beneficiary_id: s.beneficiary_id ?? null,
-          sort_order: s.sort_order,
-        }))
-      );
-    }
-    // Matches referral-checkout: multi-split commissions use GROSS basis.
-    setCommissionMetaIfEmpty(out, 'commission_basis', 'GROSS');
-  } else if (rule) {
-    setCommissionMetaIfEmpty(out, 'consultant_id', rule.consultant_id ?? '');
-    setCommissionMetaIfEmpty(out, 'bd_partner_id', rule.bd_partner_id ?? '');
-    setCommissionMetaIfEmpty(out, 'consultant_pct', rule.consultant_pct.toString());
-    setCommissionMetaIfEmpty(out, 'bd_partner_pct', rule.bd_partner_pct.toString());
-    setCommissionMetaIfEmpty(out, 'commission_basis', rule.basis);
-  }
-
-  md = out as Stripe.Metadata;
-  return Object.keys(out).length > 0 ? md : undefined;
+function referralProviderForConfirmPayment(
+  provider: ConfirmPaymentParams['provider']
+): 'stripe' | 'hedera' | 'wise' | 'manual' {
+  if (provider === 'hedera') return 'hedera';
+  if (provider === 'wise') return 'wise';
+  if (provider === 'manual') return 'manual';
+  return 'stripe';
 }
 
 /**
@@ -207,7 +165,9 @@ export async function confirmPayment(
         ? await checkStripeIdempotency(providerRef)
         : provider === 'wise'
           ? await checkWiseIdempotency(normalizedProviderRef)
-          : await checkHederaIdempotency(normalizedProviderRef, providerRef);
+          : provider === 'manual'
+            ? await checkManualIdempotency(normalizedProviderRef, paymentLinkId)
+            : await checkHederaIdempotency(normalizedProviderRef, providerRef);
 
     if (idempotencyCheck.exists) {
       log.info('Payment already processed (idempotent)', {
@@ -229,12 +189,7 @@ export async function confirmPayment(
             paymentEventId: idempotencyCheck.eventId,
             grossAmount: amountReceived,
             currency: currencyReceived,
-            provider:
-              provider === 'hedera'
-                ? 'hedera'
-                : provider === 'wise'
-                  ? 'wise'
-                  : 'stripe',
+            provider: referralProviderForConfirmPayment(provider),
             ...(provider === 'stripe' && { stripePaymentIntentId: paymentIntentId }),
             ...(provider === 'hedera' && { hederaTransactionId: normalizedProviderRef }),
             ...(provider === 'wise' && { wiseTransferId: transactionId || normalizedProviderRef }),
@@ -242,6 +197,15 @@ export async function confirmPayment(
         } catch {
           // Ignore - already processed path
         }
+
+        await runCommissionReconcileAfterSettlement({
+          paymentEventId: idempotencyCheck.eventId,
+          paymentLinkId,
+          grossAmount: amountReceived,
+          currency: currencyReceived,
+          correlationId,
+          orchestrateFunding: true,
+        });
       }
 
       return earlyResult;
@@ -287,52 +251,63 @@ export async function confirmPayment(
         };
       }
 
-      // Secondary guard: link already marked as PAID without a confirmed row (defensive).
+      // Transition to PAID when not already paid (OPEN, PAID_UNVERIFIED, REQUIRES_REVIEW per state machine).
+      // If already PAID without PAYMENT_CONFIRMED (legacy review path), backfill settlement only.
       if (paymentLink.status === 'PAID') {
-        log.warn('Payment link already paid but no PAYMENT_CONFIRMED found (defensive skip)', {
+        log.info('confirmPayment: link already PAID, backfilling settlement artifacts', {
           correlationId,
           paymentLinkId,
-          status: paymentLink.status,
+          provider,
         });
-        await getFxSnapshotService().ensureSettlementFxSnapshot(tx, {
-          id: paymentLinkId,
-          currency: paymentLink.invoice_currency ?? paymentLink.currency,
-          invoice_currency: paymentLink.invoice_currency ?? paymentLink.currency,
-        });
-        return {
-          success: true,
-          alreadyProcessed: true,
-          paymentEventId: undefined,
-        };
-      }
-
-      // Enforce valid OPEN -> PAID transition via core state machine.
-      try {
-        await transitionPaymentLinkState({
-          tx,
-          paymentLinkId,
-          targetState: 'PAID',
-          source: `confirmPayment:${provider}`,
-          reason: 'settlement_confirmed',
-          metadata: {
-            providerRef: normalizedProviderRef,
-          },
-        });
-      } catch (err) {
-        if (err instanceof InvalidPaymentLinkTransitionError) {
-          log.error(
-            'Invalid payment link state transition during settlement',
-            err,
-            {
-              correlationId,
-              paymentLinkId,
-              provider,
-              currentStatus: paymentLink.status,
-              targetStatus: 'PAID',
-            }
+      } else {
+        if (!isValidTransition(paymentLink.status, 'PAID')) {
+          throw new InvalidPaymentLinkTransitionError(
+            paymentLinkId,
+            paymentLink.status,
+            'PAID',
+            `confirmPayment:${provider}`
           );
         }
-        throw err;
+        if (
+          !CONFIRM_PAYMENT_SETTLEMENT_ENTRY_STATUSES.includes(
+            paymentLink.status as PaymentLinkStatus
+          )
+        ) {
+          throw new InvalidPaymentLinkTransitionError(
+            paymentLinkId,
+            paymentLink.status,
+            'PAID',
+            `confirmPayment:${provider}`
+          );
+        }
+        try {
+          await transitionPaymentLinkState({
+            tx,
+            paymentLinkId,
+            targetState: 'PAID',
+            source: `confirmPayment:${provider}`,
+            reason: 'settlement_confirmed',
+            metadata: {
+              providerRef: normalizedProviderRef,
+              priorStatus: paymentLink.status,
+            },
+          });
+        } catch (err) {
+          if (err instanceof InvalidPaymentLinkTransitionError) {
+            log.error(
+              'Invalid payment link state transition during settlement',
+              err,
+              {
+                correlationId,
+                paymentLinkId,
+                provider,
+                currentStatus: paymentLink.status,
+                targetStatus: 'PAID',
+              }
+            );
+          }
+          throw err;
+        }
       }
 
       // 2. Create payment event with idempotency fields
@@ -341,7 +316,9 @@ export async function confirmPayment(
           ? PaymentEventSourceType.STRIPE
           : provider === 'hedera'
             ? PaymentEventSourceType.CRYPTO
-            : PaymentEventSourceType.WISE;
+            : provider === 'manual'
+              ? PaymentEventSourceType.MANUAL
+              : PaymentEventSourceType.WISE;
 
       const paymentEventData: any = {
         payment_link_id: paymentLinkId,
@@ -413,6 +390,12 @@ export async function confirmPayment(
         paymentEventData.metadata = {
           ...paymentEventData.metadata,
           wise_event_id: providerRef,
+        };
+      } else if (provider === 'manual') {
+        paymentEventData.metadata = {
+          ...paymentEventData.metadata,
+          manual_settlement: true,
+          operator_settlement: true,
         };
       }
 
@@ -511,6 +494,25 @@ export async function confirmPayment(
         );
 
         log.info('Wise ledger entries posted (atomic)', { correlationId, paymentLinkId });
+      } else if (provider === 'manual') {
+        // Reuse Wise clearing posting rule (DR 1055 / CR 1200) — no fee; operator off-rail settlement.
+        await postWiseSettlement(
+          {
+            paymentLinkId,
+            organizationId: paymentLink.organization_id,
+            wiseTransferId: `manual-${normalizedProviderRef}`,
+            grossAmount: amountReceived.toString(),
+            currency: currencyReceived,
+            correlationId,
+          },
+          tx,
+        );
+
+        log.info('Manual operator settlement ledger posted (atomic, via Wise clearing)', {
+          correlationId,
+          paymentLinkId,
+          providerRef: normalizedProviderRef,
+        });
       }
 
       // 5. Queue Xero sync if enabled (idempotent upsert)
@@ -635,12 +637,7 @@ export async function confirmPayment(
           paymentEventId: result.paymentEventId,
           grossAmount: amountReceived,
           currency: currencyReceived,
-          provider:
-            provider === 'hedera'
-              ? 'hedera'
-              : provider === 'wise'
-                ? 'wise'
-                : 'stripe',
+          provider: referralProviderForConfirmPayment(provider),
           ...(provider === 'stripe' && { stripePaymentIntentId: paymentIntentId }),
           ...(provider === 'hedera' && { hederaTransactionId: normalizedProviderRef }),
           ...(provider === 'wise' && { wiseTransferId: transactionId || normalizedProviderRef }),
@@ -738,6 +735,14 @@ export async function confirmPayment(
         paymentEventId: result.paymentEventId,
         paymentLinkId,
       });
+      await runCommissionReconcileAfterSettlement({
+        paymentEventId: result.paymentEventId,
+        paymentLinkId,
+        grossAmount: amountReceived,
+        currency: currencyReceived,
+        correlationId,
+        orchestrateFunding: true,
+      });
     }
 
     if (result.success && result.paymentEventId && result.alreadyProcessed === false) {
@@ -818,5 +823,30 @@ async function checkWiseIdempotency(transferIdOrEventId: string) {
     },
   });
   return { exists: !!existing, eventId: existing?.id };
+}
+
+/**
+ * Operator manual settlement — one PAYMENT_CONFIRMED per link (source_reference stable per link).
+ */
+async function checkManualIdempotency(sourceReference: string, paymentLinkId: string) {
+  const onLink = await prisma.payment_events.findFirst({
+    where: {
+      payment_link_id: paymentLinkId,
+      event_type: 'PAYMENT_CONFIRMED',
+    },
+    select: { id: true },
+  });
+  if (onLink) {
+    return { exists: true, eventId: onLink.id };
+  }
+
+  const byRef = await prisma.payment_events.findFirst({
+    where: {
+      source_reference: sourceReference,
+      event_type: 'PAYMENT_CONFIRMED',
+    },
+    select: { id: true },
+  });
+  return { exists: !!byRef, eventId: byRef?.id };
 }
 

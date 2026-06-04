@@ -1,143 +1,118 @@
 /**
- * Xero Queue Backfill Endpoint
- * Queues syncs for paid payment links that were never queued
+ * Xero Queue Backfill Endpoint (organization-scoped; global admin-only)
+ * GET  — preview PAID links missing xero_syncs
+ * POST — queue missing syncs
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { prisma } from '@/lib/server/prisma';
-import { queueXeroSync } from '@/lib/xero/queue-service';
 import { logger } from '@/lib/logger';
+import {
+  authorizeXeroBackfill,
+  executeXeroBackfill,
+  previewXeroBackfill,
+  type XeroBackfillScope,
+} from '@/lib/xero/xero-backfill.server';
+
+const postBodySchema = z.object({
+  organizationId: z.string().uuid().optional(),
+  organization_id: z.string().uuid().optional(),
+  scope: z.enum(['organization', 'global']).optional(),
+});
+
+function resolveOrganizationId(
+  organizationId?: string,
+  organization_id?: string
+): string | undefined {
+  return organizationId ?? organization_id;
+}
+
+function resolveScope(
+  scopeParam: string | null,
+  bodyScope?: XeroBackfillScope
+): XeroBackfillScope | undefined {
+  if (bodyScope) return bodyScope;
+  if (scopeParam === 'global' || scopeParam === 'organization') {
+    return scopeParam;
+  }
+  return undefined;
+}
+
+async function requireUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { user: null as null, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+  return { user, response: null };
+}
 
 /**
  * POST /api/xero/queue/backfill
- * 
- * Find all PAID payment links without corresponding xero_syncs
- * and queue them for syncing
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    // Require authentication
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, response: authResponse } = await requireUser();
+    if (authResponse) return authResponse;
 
-    if (authError || !user) {
+    const body = await request.json().catch(() => ({}));
+    const parsed = postBodySchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Unauthorized - please log in' },
-        { status: 401 }
+        { error: 'Invalid request body', details: parsed.error.flatten() },
+        { status: 400 }
       );
     }
 
-    logger.info({ userId: user.id }, 'Starting Xero sync backfill');
+    const organizationId = resolveOrganizationId(
+      parsed.data.organizationId,
+      parsed.data.organization_id
+    );
+    const scope = resolveScope(null, parsed.data.scope);
 
-    // Get all paid payment links
-    const paidPaymentLinks = await prisma.payment_links.findMany({
-      where: { status: 'PAID' },
-      select: {
-        id: true,
-        short_code: true,
-        amount: true,
-        currency: true,
-        organization_id: true,
-        updated_at: true,
-      },
+    const auth = await authorizeXeroBackfill({
+      userId: user!.id,
+      organizationId,
+      scope,
     });
 
-    // Get existing syncs
-    const existingSyncs = await prisma.xero_syncs.findMany({
-      select: {
-        payment_link_id: true,
-      },
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: auth.error, code: auth.code },
+        { status: auth.status }
+      );
+    }
+
+    const result = await executeXeroBackfill({
+      userId: auth.userId,
+      scope: auth.scope,
+      organizationId: auth.organizationId,
     });
 
-    const existingSyncPaymentIds = new Set(
-      existingSyncs.map((s) => s.payment_link_id)
-    );
-
-    // Find paid links without syncs
-    const linksWithoutSyncs = paidPaymentLinks.filter(
-      (link) => !existingSyncPaymentIds.has(link.id)
-    );
-
-    logger.info(
-      {
-        totalPaid: paidPaymentLinks.length,
-        withoutSyncs: linksWithoutSyncs.length,
-      },
-      'Found payment links to backfill'
-    );
-
-    if (linksWithoutSyncs.length === 0) {
+    if (result.queued === 0 && result.failed === 0) {
       return NextResponse.json({
         success: true,
         message: 'No payment links need backfilling',
         queued: 0,
+        scope: result.scope,
+        organizationId: result.organizationId,
       });
     }
 
-    // Queue each missing sync
-    const results = [];
-    for (const link of linksWithoutSyncs) {
-      try {
-        const syncId = await queueXeroSync({
-          paymentLinkId: link.id,
-          organizationId: link.organization_id,
-          priority: 0,
-        });
-
-        results.push({
-          paymentLinkId: link.id,
-          shortCode: link.short_code,
-          success: true,
-          syncId,
-        });
-
-        logger.info(
-          {
-            paymentLinkId: link.id,
-            shortCode: link.short_code,
-            syncId,
-          },
-          'Queued sync for payment link'
-        );
-      } catch (error: any) {
-        results.push({
-          paymentLinkId: link.id,
-          shortCode: link.short_code,
-          success: false,
-          error: error.message,
-        });
-
-        logger.error(
-          {
-            paymentLinkId: link.id,
-            shortCode: link.short_code,
-            error: error.message,
-          },
-          'Failed to queue sync for payment link'
-        );
-      }
-    }
-
-    const successCount = results.filter((r) => r.success).length;
-    const failureCount = results.filter((r) => !r.success).length;
-
-    logger.info(
-      {
-        userId: user.id,
-        queued: successCount,
-        failed: failureCount,
-      },
-      'Xero sync backfill completed'
-    );
-
     return NextResponse.json({
       success: true,
-      message: `Queued ${successCount} syncs for processing`,
+      message: `Queued ${result.queued} syncs for processing`,
+      scope: result.scope,
+      organizationId: result.organizationId,
       results: {
-        queued: successCount,
-        failed: failureCount,
-        details: results,
+        queued: result.queued,
+        failed: result.failed,
+        details: result.details,
       },
     });
   } catch (error) {
@@ -145,86 +120,69 @@ export async function POST() {
     logger.error({ error: errorMessage }, 'Error during Xero sync backfill');
 
     return NextResponse.json(
-      {
-        success: false,
-        error: errorMessage,
-      },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
 }
 
 /**
- * GET /api/xero/queue/backfill
- * 
- * Preview what would be backfilled without actually doing it
+ * GET /api/xero/queue/backfill?organization_id=...&scope=organization|global
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Require authentication
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, response: authResponse } = await requireUser();
+    if (authResponse) return authResponse;
 
-    if (authError || !user) {
+    const { searchParams } = new URL(request.url);
+    const organizationId = resolveOrganizationId(
+      searchParams.get('organization_id') ?? undefined,
+      searchParams.get('organizationId') ?? undefined
+    );
+    const scope = resolveScope(searchParams.get('scope'), undefined);
+
+    const auth = await authorizeXeroBackfill({
+      userId: user!.id,
+      organizationId,
+      scope,
+    });
+
+    if (!auth.ok) {
       return NextResponse.json(
-        { error: 'Unauthorized - please log in' },
-        { status: 401 }
+        { error: auth.error, code: auth.code },
+        { status: auth.status }
       );
     }
 
-    // Get all paid payment links
-    const paidPaymentLinks = await prisma.payment_links.findMany({
-      where: { status: 'PAID' },
-      select: {
-        id: true,
-        short_code: true,
-        amount: true,
-        currency: true,
-        organization_id: true,
-        updated_at: true,
-      },
+    const preview = await previewXeroBackfill({
+      scope: auth.scope,
+      organizationId: auth.organizationId,
     });
-
-    // Get existing syncs
-    const existingSyncs = await prisma.xero_syncs.findMany({
-      select: {
-        payment_link_id: true,
-      },
-    });
-
-    const existingSyncPaymentIds = new Set(
-      existingSyncs.map((s) => s.payment_link_id)
-    );
-
-    // Find paid links without syncs
-    const linksWithoutSyncs = paidPaymentLinks.filter(
-      (link) => !existingSyncPaymentIds.has(link.id)
-    );
 
     return NextResponse.json({
-      totalPaidLinks: paidPaymentLinks.length,
-      linksWithSyncs: paidPaymentLinks.length - linksWithoutSyncs.length,
-      linksWithoutSyncs: linksWithoutSyncs.length,
-      previewLinks: linksWithoutSyncs.map((link) => ({
+      success: true,
+      scope: preview.scope,
+      organizationId: preview.organizationId,
+      totalPaidLinks: preview.totalPaidLinks,
+      linksWithSyncs: preview.linksWithSyncs,
+      linksWithoutSyncs: preview.linksWithoutSyncs,
+      previewLinks: preview.previewLinks.map((link) => ({
+        paymentLinkId: link.paymentLinkId,
         shortCode: link.shortCode,
         amount: link.amount,
         currency: link.currency,
-        paidAt: link.updated_at,
+        paidAt: link.paidAt,
       })),
       message:
-        linksWithoutSyncs.length > 0
-          ? `POST to this endpoint to queue ${linksWithoutSyncs.length} syncs`
-          : 'All paid links already have syncs',
+        preview.linksWithoutSyncs > 0
+          ? `POST to this endpoint to queue ${preview.linksWithoutSyncs} syncs`
+          : 'All paid links in scope already have syncs',
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      {
-        success: false,
-        error: errorMessage,
-      },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
 }
-

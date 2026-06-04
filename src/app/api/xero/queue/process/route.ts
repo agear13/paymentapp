@@ -8,6 +8,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processQueue } from '@/lib/xero/queue-processor';
 import { logger } from '@/lib/logger';
+import {
+  cronAuthFailureResponse,
+  verifyCronRequest,
+} from '@/lib/jobs/cron-request-auth';
 
 /**
  * POST /api/xero/queue/process
@@ -23,16 +27,12 @@ import { logger } from '@/lib/logger';
  */
 export async function POST(request: NextRequest) {
   try {
-    // Verify cron secret for security
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      logger.warn('Unauthorized queue process attempt');
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    const authFailure = verifyCronRequest(request);
+    if (authFailure) {
+      if (authFailure.kind === 'unauthorized') {
+        logger.warn('Unauthorized queue process attempt');
+      }
+      return cronAuthFailureResponse(authFailure);
     }
 
     // Get batch size from query params

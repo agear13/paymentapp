@@ -6,6 +6,15 @@ import { acquireJobLease, releaseJobLease, renewJobLease } from '@/lib/jobs/job-
 
 export async function POST(request: NextRequest) {
   const startedAt = Date.now();
+  const cronSecret = request.headers.get('x-cron-secret');
+  const expectedSecret = process.env.CRON_SECRET;
+  if (!expectedSecret) {
+    return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 503 });
+  }
+  if (cronSecret !== expectedSecret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const leaseTtlSeconds =
     Number.parseInt(process.env.LEDGER_INTEGRITY_LEASE_TTL_SECONDS || '900', 10) || 900;
   const chunkSize =
@@ -23,14 +32,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const cronSecret = request.headers.get('x-cron-secret');
-    const expectedSecret = process.env.CRON_SECRET;
-    if (!expectedSecret) {
-      return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 503 });
-    }
-    if (cronSecret !== expectedSecret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const settled = await prisma.payment_events.findMany({

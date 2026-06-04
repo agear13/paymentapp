@@ -5,7 +5,6 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -92,7 +91,10 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ organizationId }),
+        body: JSON.stringify({
+          organizationId,
+          scope: 'organization',
+        }),
       });
 
       if (!response.ok) {
@@ -277,15 +279,6 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
                 )}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              <Link
-                href="/api/xero/debug"
-                target="_blank"
-                className="underline hover:text-foreground"
-              >
-                View detailed sync diagnostics
-              </Link>
-            </p>
           </CollapsibleContent>
         </Collapsible>
       </CardContent>

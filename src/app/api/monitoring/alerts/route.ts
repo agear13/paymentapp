@@ -11,6 +11,10 @@ import { evaluateAllAlerts, getAlertRules } from '@/lib/monitoring/alert-rules';
 import { logger } from '@/lib/logger';
 import { hasOrganizationAccess } from '@/lib/auth/organization-access';
 import { checkAdminAuth } from '@/lib/auth/admin.server';
+import {
+  cronAuthFailureResponse,
+  verifyCronRequest,
+} from '@/lib/jobs/cron-request-auth';
 
 /**
  * GET /api/monitoring/alerts?organization_id=xxx
@@ -104,25 +108,12 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    // Verify cron secret or admin auth
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    // Allow either cron secret or authenticated global admin.
-    let authorized = false;
-    
-    if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
-      authorized = true;
-    } else {
+    const cronAuthFailure = verifyCronRequest(request);
+    if (cronAuthFailure) {
       const adminAuth = await checkAdminAuth();
-      authorized = !!adminAuth.isAdmin;
-    }
-
-    if (!authorized) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      if (!adminAuth.isAdmin) {
+        return cronAuthFailureResponse(cronAuthFailure);
+      }
     }
 
     const body = await request.json();

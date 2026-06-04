@@ -11,7 +11,7 @@ import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { CryptoConfirmationReviewSchema } from '@/lib/validations/schemas';
 import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
-import { createReferralConversionFromPaymentConfirmed } from '@/lib/referrals/payment-conversion';
+import { executeAssistedReviewSettlement } from '@/lib/payments/assisted-review-settlement.server';
 
 export async function POST(
   request: NextRequest,
@@ -95,47 +95,37 @@ export async function POST(
       });
     }
 
-    if (!['PAID_UNVERIFIED', 'REQUIRES_REVIEW'].includes(link.status)) {
+    const settlement = await executeAssistedReviewSettlement({
+      confirmationId: id,
+      rail: 'MANUAL_BANK',
+      actorUserId: user.id,
+    });
+
+    if (!settlement.success) {
+      loggers.api.error(
+        { confirmationId: id, paymentLinkId: link.id, error: settlement.error },
+        'BANK_REVIEW_SETTLEMENT_CONFIRM_FAILED'
+      );
       return NextResponse.json(
-        { error: 'Invoice is not in a state that can be marked valid.' },
+        { error: settlement.error ?? 'Settlement failed' },
         { status: 400 }
       );
     }
 
-    await prisma.$transaction(async (tx) => {
-      await transitionPaymentLinkState({
-        tx,
-        paymentLinkId: link.id,
-        targetState: 'PAID',
-        source: 'manual-bank-confirmation-review',
-        reason: 'merchant_mark_valid',
-        metadata: { actorUserId: user.id, confirmationId: id },
-      });
-    });
     await prisma.manual_bank_payment_confirmations.update({
       where: { id },
       data: { reviewed_at: new Date(), status: 'APPROVED' },
     });
 
-    const paymentEvent = await prisma.payment_events.findFirst({
-      where: { payment_link_id: link.id, event_type: 'PAYMENT_CONFIRMED' },
-      orderBy: { created_at: 'desc' },
-    });
-    if (paymentEvent) {
-      try {
-        await createReferralConversionFromPaymentConfirmed({
-          paymentLinkId: link.id,
-          paymentEventId: paymentEvent.id,
-          grossAmount: Number(link.amount),
-          currency: link.currency,
-          provider: 'manual',
-        });
-      } catch {
-        /* non-blocking */
-      }
-    }
-
-    loggers.api.info({ confirmationId: id, paymentLinkId: link.id }, 'Manual bank invoice marked valid (PAID)');
+    loggers.api.info(
+      {
+        confirmationId: id,
+        paymentLinkId: link.id,
+        paymentEventId: settlement.paymentEventId,
+        alreadyProcessed: settlement.alreadyProcessed,
+      },
+      'BANK_REVIEW_SETTLEMENT_CONFIRMED'
+    );
     return NextResponse.json({
       message: 'Invoice marked as paid.',
       data: { id, action: 'mark_valid', paymentLinkId: link.id },

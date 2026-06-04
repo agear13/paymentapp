@@ -1,6 +1,8 @@
 /**
  * POST /api/payment-links/[id]/manual-settlement
  * Operator-only: mark invoice as paid without checkout, or reopen after a mistaken mark.
+ *
+ * mark_paid converges through confirmPayment() (R1) — PAYMENT_CONFIRMED, ledger, commission, funding, Xero.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -11,10 +13,8 @@ import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
 import { paymentEventBlocksReopenAfterPaid } from '@/lib/payments/payment-link-external-evidence';
+import { executeOperatorManualInvoiceSettlement } from '@/lib/payments/manual-invoice-settlement.server';
 import { revalidatePath } from 'next/cache';
-import config from '@/lib/config/env';
-import { queueXeroSync } from '@/lib/xero/queue-service';
-import { orchestrateFundingAfterManualInvoiceSettlement } from '@/lib/operations/funding/bridge-invoice-settlement.server';
 
 const bodySchema = z.object({
   action: z.enum(['mark_paid', 'reopen']),
@@ -90,48 +90,77 @@ export async function POST(
       settlementEvidence.some((event) => paymentEventBlocksReopenAfterPaid(event));
 
     if (action === 'mark_paid') {
-      if (link.status !== 'OPEN') {
+      loggers.payment.info(
+        {
+          event: 'manual_settlement_mark_paid_started',
+          paymentLinkId: link.id,
+          organizationId: link.organization_id,
+          actorUserId: user.id,
+          priorStatus: link.status,
+        },
+        'Operator manual mark paid — invoking canonical confirmPayment'
+      );
+
+      const result = await executeOperatorManualInvoiceSettlement({
+        paymentLinkId: link.id,
+        actorUserId: user.id,
+      });
+
+      if (!result.success) {
+        loggers.payment.warn(
+          {
+            event: 'manual_settlement_mark_paid_failed',
+            paymentLinkId: link.id,
+            actorUserId: user.id,
+            error: result.error,
+          },
+          'Manual settlement failed before invoice reached PAID'
+        );
         return NextResponse.json(
-          { error: 'Only open invoices can be marked paid manually' },
+          {
+            error:
+              result.error ||
+              'Payment confirmation failed. Invoice was not marked paid; settlement and ledger were not applied.',
+            code: 'MANUAL_SETTLEMENT_CONFIRM_FAILED',
+          },
           { status: 400 }
         );
       }
-      await prisma.$transaction(async (tx) => {
-        await transitionPaymentLinkState({
-          tx,
-          paymentLinkId: link.id,
-          targetState: 'PAID',
-          source: 'manual-settlement-api',
-          reason: 'operator_mark_paid',
-          metadata: { actorUserId: user.id },
-        });
-      });
-      if (config.features.xeroSync) {
-        try {
-          await queueXeroSync({
-            paymentLinkId: link.id,
-            organizationId: link.organization_id,
-            syncType: 'PAYMENT',
-          });
-        } catch (queueError: unknown) {
-          loggers.xero.error(
-            'Failed to queue Xero payment sync after manual mark paid',
-            {
-              paymentLinkId: link.id,
-              organizationId: link.organization_id,
-              error: queueError instanceof Error ? queueError.message : String(queueError),
-            }
-          );
-        }
-      }
+
       try {
-        await orchestrateFundingAfterManualInvoiceSettlement(link.id);
-      } catch (orchErr: unknown) {
-        loggers.api.warn('Operational funding orchestration after manual mark paid failed', {
+        await prisma.audit_logs.create({
+          data: {
+            organization_id: link.organization_id,
+            user_id: user.id,
+            entity_type: 'PaymentLink',
+            entity_id: link.id,
+            action: 'MANUAL_SETTLEMENT_CONFIRMED',
+            old_values: { status: link.status },
+            new_values: {
+              status: 'PAID',
+              paymentEventId: result.paymentEventId ?? null,
+              alreadyProcessed: result.alreadyProcessed ?? false,
+              settlementPath: 'confirmPayment:manual',
+            },
+          },
+        });
+      } catch (auditErr: unknown) {
+        loggers.api.warn('Audit log failed after manual settlement', {
           paymentLinkId: link.id,
-          error: orchErr instanceof Error ? orchErr.message : String(orchErr),
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
         });
       }
+
+      loggers.payment.info(
+        {
+          event: 'manual_settlement_mark_paid_complete',
+          paymentLinkId: link.id,
+          paymentEventId: result.paymentEventId,
+          alreadyProcessed: result.alreadyProcessed,
+          actorUserId: user.id,
+        },
+        'Operator manual mark paid completed via confirmPayment'
+      );
     } else {
       if (
         link.status !== 'PAID' &&

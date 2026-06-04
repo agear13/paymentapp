@@ -13,8 +13,13 @@ import { PaymentLinkStatusSchema } from '@/lib/validations/schemas';
 import {
   transitionPaymentLinkState,
   isValidTransition,
-  getValidNextStates,
 } from '@/lib/payments/state-machine';
+import {
+  buildPaidTransitionBlockedPayload,
+  getStatusApiAllowedNextStates,
+  isStatusBlockedViaStatusApi,
+  PAID_TRANSITION_BLOCKED_CODE,
+} from '@/lib/payments/payment-link-status-api-policy';
 import { prisma } from '@/lib/server/prisma';
 
 const StatusTransitionSchema = z.object({
@@ -87,9 +92,57 @@ export async function POST(
     const body = await request.json();
     const { status: newStatus } = StatusTransitionSchema.parse(body);
 
+    // R2: PAID is settlement truth — not writable via this API (confirmPayment / dedicated routes only).
+    if (isStatusBlockedViaStatusApi(newStatus)) {
+      const blocked = buildPaidTransitionBlockedPayload(currentLink.status);
+
+      loggers.payment.warn(
+        {
+          event: 'payment_link_status_api_paid_blocked',
+          code: PAID_TRANSITION_BLOCKED_CODE,
+          paymentLinkId: id,
+          organizationId: currentLink.organization_id,
+          from: currentLink.status,
+          to: newStatus,
+          userId: user.id,
+          validTransitions: blocked.validTransitions,
+        },
+        'Blocked PAID transition via payment-link status API — settlement required'
+      );
+
+      try {
+        await prisma.audit_logs.create({
+          data: {
+            organization_id: currentLink.organization_id,
+            user_id: user.id,
+            entity_type: 'PaymentLink',
+            entity_id: id,
+            action: 'STATUS_TRANSITION_BLOCKED',
+            old_values: { status: currentLink.status },
+            new_values: {
+              attemptedStatus: newStatus,
+              code: PAID_TRANSITION_BLOCKED_CODE,
+              reason: 'paid_requires_confirm_payment_or_dedicated_flow',
+              canonicalSettlement: blocked.canonicalSettlement,
+            },
+          },
+        });
+      } catch (auditErr: unknown) {
+        loggers.api.error(
+          {
+            paymentLinkId: id,
+            error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+          },
+          'Failed to write audit log for blocked PAID status transition'
+        );
+      }
+
+      return NextResponse.json(blocked, { status: 409 });
+    }
+
     // Validate transition
     if (!isValidTransition(currentLink.status, newStatus)) {
-      const validStates = getValidNextStates(currentLink.status);
+      const validStates = getStatusApiAllowedNextStates(currentLink.status);
       return NextResponse.json(
         {
           error: `Invalid status transition from ${currentLink.status} to ${newStatus}`,
@@ -248,7 +301,7 @@ export async function GET(
     }
 
     const lastEvent = paymentLink.payment_events[0];
-    const validTransitions = getValidNextStates(currentStatus);
+    const validTransitions = getStatusApiAllowedNextStates(currentStatus);
 
     let transactionInfo = null;
     const txId =

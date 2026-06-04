@@ -19,14 +19,15 @@
 import 'server-only';
 
 import { createUserClient } from '@/lib/supabase/server';
+import config from '@/lib/config/env';
 import { isBetaAdminEmail, BETA_ADMIN_EMAILS, requireBetaAdminOrThrow } from './admin-shared';
 
 // Re-export client-safe helpers for convenience in server code
 export { isBetaAdminEmail, BETA_ADMIN_EMAILS, requireBetaAdminOrThrow };
 
 /**
- * Check if the current user is an admin based on ADMIN_EMAILS allowlist
- * @returns {Promise<{isAdmin: boolean, userEmail: string | null, user: any | null, error: string | null}>}
+ * Check if the current user is an admin based on ADMIN_EMAIL_ALLOWLIST (B5 C4).
+ * Legacy ADMIN_EMAILS is merged at startup; see config.admin.emailAllowlist.
  */
 export async function checkAdminAuth(): Promise<{
   isAdmin: boolean;
@@ -50,11 +51,12 @@ export async function checkAdminAuth(): Promise<{
 
   const userEmail = user.email?.toLowerCase() ?? null;
 
-  // Check if user email is in admin allowlist
-  const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(e => e.trim().toLowerCase()) || [];
+  const adminEmails = config.admin.emailAllowlist;
 
   if (adminEmails.length === 0) {
-    console.warn('ADMIN_EMAILS environment variable not configured');
+    console.warn(
+      'Admin allowlist not configured; set ADMIN_EMAIL_ALLOWLIST (ADMIN_EMAILS is deprecated)'
+    );
     return {
       isAdmin: false,
       userEmail,

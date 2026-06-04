@@ -3,7 +3,10 @@
  * Validates all required environment variables and exposes typed config
  */
 
-import { z } from 'zod';
+import { z, type ZodError } from 'zod';
+import { resolveAdminEmailAllowlist } from '@/lib/config/admin-email-allowlist';
+import { assertProductionEnvGuards } from '@/lib/config/production-env-guards';
+import { printZodEnvValidationFailures } from '@/lib/config/env-validation-diagnostics';
 
 // Environment variable schema
 const envSchema = z.object({
@@ -70,8 +73,12 @@ const envSchema = z.object({
   /** Beta lockdown mode - restrict Revenue Share and Platform Preview to admin only */
   BETA_LOCKDOWN_MODE: z.string().optional().default('true'),
 
-  // Beta/Admin
+  // Beta/Admin — ADMIN_EMAIL_ALLOWLIST is authoritative; ADMIN_EMAILS is deprecated (B5 C4)
   ADMIN_EMAIL_ALLOWLIST: z.string().optional(),
+  ADMIN_EMAILS: z.string().optional(),
+
+  // B3 scheduled jobs (required in production via production-env-guards)
+  CRON_SECRET: z.string().optional(),
   
   // Sentry (optional)
   SENTRY_DSN: z.string().url().optional(),
@@ -126,6 +133,8 @@ function buildTimePlaceholderRecord(): Record<string, string | undefined> {
     WISE_WEBHOOK_SECRET: process.env.WISE_WEBHOOK_SECRET,
     DEFAULT_WISE_PROFILE_ID: process.env.DEFAULT_WISE_PROFILE_ID,
     ADMIN_EMAIL_ALLOWLIST: process.env.ADMIN_EMAIL_ALLOWLIST,
+    ADMIN_EMAILS: process.env.ADMIN_EMAILS,
+    CRON_SECRET: process.env.CRON_SECRET,
     SENTRY_DSN: process.env.SENTRY_DSN,
     R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
     R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
@@ -175,15 +184,13 @@ function validateEnv() {
   }
 
   try {
-    return envSchema.parse(process.env);
+    const parsed = envSchema.parse(process.env);
+    assertProductionEnvGuards(parsed, process.env);
+    return parsed;
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('❌ Invalid environment variables:');
-      if (error.errors && Array.isArray(error.errors)) {
-        error.errors.forEach((err) => {
-          console.error(`  - ${err.path.join('.')}: ${err.message}`);
-        });
-      }
+      printZodEnvValidationFailures(error as ZodError);
       throw new Error('Environment validation failed');
     }
     throw error;
@@ -293,9 +300,12 @@ export const config = {
     betaLockdown: ['true', '1'].includes((env.BETA_LOCKDOWN_MODE || 'true').toLowerCase()),
   },
   
-  // Admin
+  // Admin (B5 C4: resolved from ADMIN_EMAIL_ALLOWLIST + deprecated ADMIN_EMAILS)
   admin: {
-    emailAllowlist: env.ADMIN_EMAIL_ALLOWLIST?.split(',').map(e => e.trim()) || [],
+    emailAllowlist: resolveAdminEmailAllowlist({
+      ADMIN_EMAIL_ALLOWLIST: env.ADMIN_EMAIL_ALLOWLIST,
+      ADMIN_EMAILS: env.ADMIN_EMAILS,
+    }),
   },
   
   // Monitoring
@@ -323,12 +333,12 @@ export const config = {
 // Export for use throughout the application
 export { env };
 
-// Helper to check if user is admin
+// Helper to check if user is admin (uses resolved ADMIN_EMAIL_ALLOWLIST)
 export function isAdminEmail(email: string): boolean {
   if (config.admin.emailAllowlist.length === 0) {
     return false;
   }
-  return config.admin.emailAllowlist.includes(email.toLowerCase());
+  return config.admin.emailAllowlist.includes(email.trim().toLowerCase());
 }
 
 // Log configuration on startup (but hide secrets)

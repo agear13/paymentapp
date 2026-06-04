@@ -11,10 +11,16 @@ export default async function ConversionsPage({
   const supabase = await createClient();
   const auth = await checkAdminAuth();
   const { isAdmin, userEmail } = auth;
-  const hasAdminEmailsEnv = !!process.env.ADMIN_EMAILS;
+  const hasAdminAllowlistEnv = !!process.env.ADMIN_EMAIL_ALLOWLIST;
+  const hasLegacyAdminEmailsEnv = !!process.env.ADMIN_EMAILS;
   const showDebug = process.env.NODE_ENV !== 'production' || (await searchParams).debug === '1';
 
-  console.log('[ADMIN_DEBUG]', { userEmail: userEmail ?? 'no user', isAdmin, hasAdminEmailsEnv });
+  console.log('[ADMIN_DEBUG]', {
+    userEmail: userEmail ?? 'no user',
+    isAdmin,
+    hasAdminAllowlistEnv,
+    hasLegacyAdminEmailsEnv,
+  });
 
   // Fetch all referral conversions with related data
   const { data: conversions, error } = await supabase
@@ -52,7 +58,8 @@ export default async function ConversionsPage({
           <CardContent className="text-sm space-y-1">
             <p><span className="font-medium">userEmail:</span> {userEmail ?? 'no user'}</p>
             <p><span className="font-medium">isAdmin:</span> {String(isAdmin)}</p>
-            <p><span className="font-medium">ADMIN_EMAILS env set:</span> {String(hasAdminEmailsEnv)}</p>
+            <p><span className="font-medium">ADMIN_EMAIL_ALLOWLIST set:</span> {String(hasAdminAllowlistEnv)}</p>
+            <p><span className="font-medium">ADMIN_EMAILS (deprecated) set:</span> {String(hasLegacyAdminEmailsEnv)}</p>
           </CardContent>
         </Card>
       )}

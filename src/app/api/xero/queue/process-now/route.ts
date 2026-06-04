@@ -1,6 +1,6 @@
 /**
  * Xero Queue Manual Trigger (ops / automation)
- * Requires either CRON_SECRET (same as /api/xero/queue/process) or global admin (ADMIN_EMAILS).
+ * Requires either CRON_SECRET (same as /api/xero/queue/process) or global admin (ADMIN_EMAIL_ALLOWLIST).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,7 +18,7 @@ function isAuthorizedCron(request: NextRequest): boolean {
 /**
  * POST /api/xero/queue/process-now
  *
- * Authorization: `Authorization: Bearer <CRON_SECRET>` (automation) or global admin session (ADMIN_EMAILS).
+ * Authorization: `Authorization: Bearer <CRON_SECRET>` (automation) or global admin session (ADMIN_EMAIL_ALLOWLIST).
  */
 export async function POST(request: NextRequest) {
   try {

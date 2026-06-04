@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'crypto';
 
-export type CorrelationSource = 'stripe' | 'hedera' | 'xero' | 'system';
+export type CorrelationSource = 'stripe' | 'hedera' | 'wise' | 'manual' | 'xero' | 'system';
 
 /**
  * Generate a correlation ID for tracking payment flow

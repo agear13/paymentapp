@@ -34,8 +34,17 @@ const HEDERA_VERIFY_PATH = path.join(
   'app',
   'api',
   'hedera',
-  'confirm',
+  'transactions',
+  'verify',
   'route.ts'
+);
+const HEDERA_MIRROR_SETTLEMENT_PATH = path.join(
+  __dirname,
+  '..',
+  '..',
+  'lib',
+  'hedera',
+  'hedera-mirror-settlement.server.ts'
 );
 const HEDERA_CHECKER_PATH = path.join(
   __dirname,
@@ -146,11 +155,13 @@ describe('Settlement concurrency and replay safety', () => {
 
   it('D) Hedera duplicate verification replay converges via confirmPayment', () => {
     const verifySource = fs.readFileSync(HEDERA_VERIFY_PATH, 'utf-8');
+    const adapterSource = fs.readFileSync(HEDERA_MIRROR_SETTLEMENT_PATH, 'utf-8');
     const checkerSource = fs.readFileSync(HEDERA_CHECKER_PATH, 'utf-8');
     const confirmationSource = fs.readFileSync(PAYMENT_CONFIRMATION_PATH, 'utf-8');
 
-    expect(verifySource).toContain("provider: 'hedera'");
-    expect(verifySource).toContain('confirmPayment({');
+    expect(verifySource).toContain('executeHederaMirrorSettlement');
+    expect(adapterSource).toContain("provider: 'hedera'");
+    expect(adapterSource).toContain('confirmPayment({');
     expect(checkerSource).toContain("provider: 'hedera'");
     expect(checkerSource).toContain('confirmPayment({');
     expect(confirmationSource).toContain('checkHederaIdempotency');
