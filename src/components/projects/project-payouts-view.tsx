@@ -32,7 +32,7 @@ export function ProjectPayoutsView() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Payout coordination for this project: obligations first, then disbursement.
+          Payout coordination for this agreement: obligations first, then settlement.
         </p>
       </div>
 
@@ -48,7 +48,7 @@ export function ProjectPayoutsView() {
           <CardContent className="space-y-3">
             <Badge variant="outline">{summary.payoutLabel}</Badge>
             <Button asChild variant="outline" size="sm">
-              <Link href={projectObligationsPath(projectId)}>View project obligations</Link>
+              <Link href={projectObligationsPath(projectId)}>View agreement obligations</Link>
             </Button>
           </CardContent>
         </Card>

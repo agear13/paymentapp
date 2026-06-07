@@ -7,8 +7,7 @@ export function PaymentLinksLedgerEntriesEmpty() {
   return (
     <div className="rounded-lg border border-dashed bg-muted/30 px-6 py-10 text-center">
       <p className="text-foreground mx-auto max-w-md text-sm leading-relaxed">
-        No payments have been received yet. Your first payment will automatically appear here once
-        it is posted to the ledger.
+        No coordinated funding yet. Revenue from invoices will appear here once it is posted to the ledger.
       </p>
       <Button className="mt-4" variant="secondary" size="sm" asChild>
         <Link href={CREATE_INVOICE_HREF}>Create invoice</Link>
@@ -22,7 +21,7 @@ export function PaymentLinksTransactionsEmpty() {
   return (
     <div className="rounded-lg border border-dashed bg-muted/30 px-6 py-10 text-center">
       <p className="text-foreground mx-auto max-w-md text-sm leading-relaxed">
-        Transactions appear once payments are attempted or received.
+        Funding activity appears once collection is attempted or confirmed.
       </p>
       <Button className="mt-4" variant="secondary" size="sm" asChild>
         <Link href={CREATE_INVOICE_HREF}>Create invoice</Link>

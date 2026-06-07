@@ -13,18 +13,18 @@ export function ProjectContextHeader({ className }: { className?: string }) {
   const { deal, summary, projectParticipants } = useProjectWorkspace();
   if (!deal) return null;
 
-  const name = summary?.name ?? deal.dealName ?? 'Project';
+  const name = summary?.name ?? deal.dealName ?? 'Agreement';
   const count = projectParticipants.length;
   const ready = projectParticipants.filter((p) => p.compensationProfile?.configured).length;
 
   return (
     <header className={cn(opSurface('inset', 'flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2'), className)}>
       <div className="min-w-0">
-        <p className={opTypeMeta}>Project coordination</p>
+        <p className={opTypeMeta}>Agreement coordination</p>
         <h1 className={cn(opTypePageTitle, 'mt-0.5 truncate')}>{name}</h1>
         <p className={cn(opTypeBodySnug, 'mt-1')}>
           {count === 0
-            ? 'Add participants to coordinate earnings, obligations, and payouts for this project.'
+            ? 'Add participants to coordinate earnings, obligations, and settlement for this agreement.'
             : `${count} participant${count === 1 ? '' : 's'} · ${ready} earnings configured`}
         </p>
       </div>
@@ -32,7 +32,7 @@ export function ProjectContextHeader({ className }: { className?: string }) {
         href={`/dashboard/projects/${encodeURIComponent(deal.id)}`}
         className="text-sm font-medium text-primary shrink-0 hover:underline underline-offset-2 transition-colors duration-150"
       >
-        Project overview
+        Agreement overview
       </Link>
     </header>
   );

@@ -101,7 +101,7 @@ export function ProjectCommercialRolesView() {
   }
 
   if (notFound || !summary || !deal) {
-    return <p className="text-muted-foreground p-6">Project not found.</p>;
+    return <p className="text-muted-foreground p-6">Agreement not found.</p>;
   }
 
   return (

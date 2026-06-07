@@ -235,7 +235,7 @@ export default function DealNetworkPage() {
     return recentDealToFeatured(
       {
         id: '__placeholder__',
-        dealName: isProjectMode ? 'No project yet' : 'No deal yet',
+        dealName: isProjectMode ? 'No agreement yet' : 'No deal yet',
         partner: '—',
         value: 0,
         introducer: '',
@@ -896,9 +896,9 @@ export default function DealNetworkPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold tracking-tight">
-              {isProjectMode ? 'Projects' : 'Commission Operations'}
+              {isProjectMode ? 'Agreements' : 'Commission Operations'}
             </h1>
-            <Badge variant="secondary">{isProjectMode ? 'Projects' : 'Pilot'}</Badge>
+            <Badge variant="secondary">{isProjectMode ? 'Agreements' : 'Pilot'}</Badge>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Button type="button" variant="outline" size="sm" asChild>
@@ -916,7 +916,7 @@ export default function DealNetworkPage() {
               }}
             >
               <Plus className="h-4 w-4 mr-1" />
-              {isProjectMode ? 'Create project' : 'Create Deal'}
+              {isProjectMode ? 'Create agreement' : 'Create Deal'}
             </Button>
           </div>
         </div>
@@ -1448,7 +1448,7 @@ export default function DealNetworkPage() {
                           if (!activeDeal) {
                             return (
                               <span className="text-sm text-muted-foreground">
-                                {isProjectMode ? 'No project selected' : 'No deal selected'}
+                                {isProjectMode ? 'No agreement selected' : 'No deal selected'}
                               </span>
                             );
                           }
@@ -1819,7 +1819,7 @@ export default function DealNetworkPage() {
           <div className="flex flex-wrap gap-2 shrink-0">
             <Button type="button" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4 mr-1" />
-              {isProjectMode ? 'Create project' : 'Create deal'}
+              {isProjectMode ? 'Create agreement' : 'Create deal'}
             </Button>
             <Button type="button" variant="outline" onClick={() => setExportOpen(true)}>
               <Download className="h-4 w-4 mr-1" />
@@ -1981,7 +1981,7 @@ export default function DealNetworkPage() {
                     className="text-center text-sm text-muted-foreground py-8"
                   >
                     {isProjectMode
-                      ? 'No projects yet. Create your first project to populate the pipeline and KPI cards.'
+                      ? 'No agreements yet. Create your first agreement to populate the pipeline and KPI cards.'
                       : 'No pilot deals yet. Create your first deal to populate the pipeline and KPI cards.'}
                   </TableCell>
                 </TableRow>

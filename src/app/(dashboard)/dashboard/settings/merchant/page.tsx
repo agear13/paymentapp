@@ -8,7 +8,7 @@ export default async function MerchantSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Collection & settlement setup</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Collection & settlement infrastructure</h1>
         <p className="text-muted-foreground">
           {isPilot
             ? 'Configure how your pilot workspace collects revenue and coordinates settlement.'

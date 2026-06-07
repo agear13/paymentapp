@@ -167,9 +167,9 @@ export function NotificationPreferencesClient({ organizationId }: NotificationPr
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="payment-confirmed-email">Payment Confirmed</Label>
+                <Label htmlFor="payment-confirmed-email">Funding confirmed</Label>
                 <p className="text-sm text-muted-foreground">
-                  Receive emails when payments are successfully processed
+                  Receive emails when funding is successfully recorded
                 </p>
               </div>
               <Switch
@@ -284,9 +284,9 @@ export function NotificationPreferencesClient({ organizationId }: NotificationPr
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="payment-confirmed-inapp">Payment Confirmed</Label>
+                <Label htmlFor="payment-confirmed-inapp">Funding confirmed</Label>
                 <p className="text-sm text-muted-foreground">
-                  Show in-app notifications for successful payments
+                  Show in-app notifications when funding is confirmed
                 </p>
               </div>
               <Switch

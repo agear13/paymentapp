@@ -32,8 +32,8 @@ import { ProjectSectionErrorBoundary } from '@/components/projects/project-secti
 
 const HUB_LINKS = [
   { title: 'Obligations', href: PAYOUTS_OBLIGATIONS_HREF, icon: FileCheck },
-  { title: 'Participant earnings', href: PAYOUTS_COMMISSIONS_HREF, icon: CircleDollarSign },
-  { title: 'Payout releases', href: PAYOUTS_SETTLEMENTS_HREF, icon: History },
+  { title: 'Earnings & readiness', href: PAYOUTS_COMMISSIONS_HREF, icon: CircleDollarSign },
+  { title: 'Settlement releases', href: PAYOUTS_SETTLEMENTS_HREF, icon: History },
 ] as const;
 
 function PayoutsHubContent({
@@ -118,8 +118,8 @@ function PayoutsHubContent({
       </Collapsible>
 
       <OperationalActivitySection
-        title="Payout activity"
-        emptyMessage="Release, funding, and coordination events appear here as payouts progress."
+        title="Settlement activity"
+        emptyMessage="Settlement, funding, and coordination events appear here as obligations progress."
         defaultOpen={false}
       />
     </>
@@ -139,12 +139,12 @@ export function PayoutsHubPage() {
   } = useOperationalCoordinationState({ traceSurface: 'payouts-hub-page' });
 
   return (
-    <ProjectSectionErrorBoundary sectionTitle="Payouts" boundaryScope="payouts">
+    <ProjectSectionErrorBoundary sectionTitle="Settlement" boundaryScope="payouts">
       <div className={opPage()}>
         <header>
-          <h1 className={opTypePageTitle}>Payouts</h1>
+          <h1 className={opTypePageTitle}>Settlement</h1>
           <p className={cn(opTypeBodySnug, 'mt-1 max-w-xl')}>
-            Coordinate what is owed, what is ready, and what has been released.
+            Coordinate obligations, settlement readiness, and completed releases across agreements.
           </p>
         </header>
 

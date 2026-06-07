@@ -284,7 +284,7 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
     navigator.clipboard.writeText(url);
     toast({
       title: 'URL Copied',
-      description: 'Payment link URL copied to clipboard',
+      description: 'Invoice link copied to clipboard',
     });
   };
 
@@ -358,7 +358,7 @@ export const PaymentLinksTable: React.FC<PaymentLinksTableProps> = ({
       <div className="flex h-[400px] items-center justify-center rounded-md border border-dashed">
         <div className="text-center">
           <p className="text-sm text-muted-foreground">
-            No invoices found. Create your first invoice to get started.
+            No invoices found. Create your first invoice to fund an agreement.
           </p>
         </div>
       </div>

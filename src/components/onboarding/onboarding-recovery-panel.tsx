@@ -60,7 +60,7 @@ export function OnboardingRecoveryPanel({
         <div className="flex items-start gap-2">
           <Info className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="font-medium">Project created — setup still processing</p>
+            <p className="font-medium">Agreement created — setup still processing</p>
             <p className="text-muted-foreground">{mutation.recoveryMessage}</p>
             {mutation.operationalWarning ? (
               <p className="text-muted-foreground text-xs">{mutation.operationalWarning}</p>

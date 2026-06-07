@@ -306,8 +306,8 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                     <span className="text-lg font-bold">P</span>
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">Projects</span>
-                    <span className="truncate text-xs text-muted-foreground">Payout coordination</span>
+                    <span className="truncate font-semibold">Agreements</span>
+                    <span className="truncate text-xs text-muted-foreground">Settlement coordination</span>
                   </div>
                 </Link>
               </SidebarMenuButton>
@@ -324,7 +324,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                   <SidebarMenuButton asChild isActive={isDealNetworkSectionActive}>
                     <Link href={pilotHome}>
                       <Handshake className="size-4" />
-                      <span>Projects</span>
+                      <span>Agreements</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -432,7 +432,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Provvypay</span>
-                  <span className="truncate text-xs text-muted-foreground">Payment Platform</span>
+                  <span className="truncate text-xs text-muted-foreground">Agreement Intelligence Platform</span>
                 </div>
               </Link>
             </SidebarMenuButton>

@@ -47,7 +47,7 @@ export const REPORTS_EXPORTS_HREF = '/dashboard/reports/exports';
 
 const DEAL_NETWORK_BASE = '/dashboard/partners/deal-network';
 
-/** Primary workflow navigation — Projects and Payouts are always visible. */
+/** Primary workflow navigation — Agreements and Settlement are always visible. */
 export function getOperatorNavSections(
   productProfile: DashboardProductProfile
 ): OperatorNavSection[] {
@@ -56,31 +56,31 @@ export function getOperatorNavSections(
   const sections: OperatorNavSection[] = [
     {
       id: 'home',
-      title: 'Home',
+      title: 'Dashboard',
       href: '/dashboard',
       icon: LayoutDashboard,
     },
     {
       id: 'projects',
-      title: 'Projects',
+      title: 'Agreements',
       href: '/dashboard/projects',
       icon: FolderKanban,
     },
     {
       id: 'payments',
-      title: 'Payments',
+      title: 'Funding',
       href: '/dashboard/payments',
       icon: Wallet,
       items: [
         { title: 'Overview', href: '/dashboard/payments' },
         { title: 'Invoices', href: '/dashboard/payment-links', icon: LinkIcon },
-        { title: 'Recurring', href: '/dashboard/recurring-templates', icon: Repeat },
-        { title: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
+        { title: 'Recurring schedules', href: '/dashboard/recurring-templates', icon: Repeat },
+        { title: 'Funding activity', href: '/dashboard/transactions', icon: CreditCard },
       ],
     },
     {
       id: 'payouts',
-      title: 'Payouts',
+      title: 'Settlement',
       href: PAYOUTS_HUB_HREF,
       icon: Banknote,
       items: [
@@ -91,12 +91,12 @@ export function getOperatorNavSections(
           icon: FileCheck,
         },
         {
-          title: 'Participant earnings',
+          title: 'Earnings & readiness',
           href: PAYOUTS_COMMISSIONS_HREF,
           icon: CircleDollarSign,
         },
         {
-          title: 'Payout releases',
+          title: 'Settlement releases',
           href: PAYOUTS_SETTLEMENTS_HREF,
           icon: History,
         },
@@ -104,7 +104,7 @@ export function getOperatorNavSections(
     },
     {
       id: 'reports',
-      title: 'Reports',
+      title: 'Reporting',
       href: '/dashboard/reports',
       icon: BarChart3,
       items: [
@@ -124,7 +124,7 @@ export function getOperatorNavSections(
           href: '/dashboard/settings/organization',
           icon: Building2,
         },
-        { title: 'Collection & settlement', href: '/dashboard/settings/merchant' },
+        { title: 'Collection & settlement infrastructure', href: '/dashboard/settings/merchant' },
         { title: 'Team', href: '/dashboard/settings/team' },
         {
           title: 'Integrations',

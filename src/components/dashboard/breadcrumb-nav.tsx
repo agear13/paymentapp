@@ -24,20 +24,20 @@ import {
 } from '@/lib/projects/get-project-display-name';
 
 const pathTitles: Record<string, string> = {
-  dashboard: 'Home',
-  projects: 'Projects',
+  dashboard: 'Dashboard',
+  projects: 'Agreements',
   partners: 'Partners',
   participants: 'Participants',
-  payments: 'Payments',
-  payouts: 'Payouts',
-  reports: 'Reports',
+  payments: 'Funding',
+  payouts: 'Settlement',
+  reports: 'Reporting',
   settings: 'Settings',
   'payment-links': 'Invoices',
-  'recurring-templates': 'Recurring',
+  'recurring-templates': 'Recurring schedules',
   ledger: 'Ledger',
-  transactions: 'Transactions',
+  transactions: 'Funding activity',
   organization: 'Organization',
-  merchant: 'Collection & settlement setup',
+  merchant: 'Collection & settlement infrastructure',
   team: 'Team',
   integrations: 'Integrations',
   services: 'Service catalog',
@@ -45,7 +45,7 @@ const pathTitles: Record<string, string> = {
   privacy: 'Privacy',
   'deal-network': 'Coordination workspace',
   programs: 'Participants',
-  commissions: 'Commissions',
+  commissions: 'Earnings',
   obligations: 'Obligations',
   funding: 'Funding',
   activity: 'Activity',
@@ -150,7 +150,7 @@ export function BreadcrumbNav({ productProfile }: BreadcrumbNavProps) {
   if (settingsIdx !== -1) {
     const pageSegment = segments[settingsIdx + 1];
     const settingsCrumbs = [
-      { href: '/dashboard', title: 'Home', isLast: false },
+      { href: '/dashboard', title: 'Dashboard', isLast: false },
       { href: SETTINGS_HOME, title: 'Settings', isLast: !pageSegment },
       ...(pageSegment
         ? [

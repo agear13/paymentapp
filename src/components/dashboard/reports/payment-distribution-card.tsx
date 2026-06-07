@@ -104,7 +104,7 @@ export function PaymentDistributionCard({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Payment distribution</CardTitle>
+          <CardTitle>Funding by collection method</CardTitle>
           <CardDescription>Loading…</CardDescription>
         </CardHeader>
         <CardContent>
@@ -118,7 +118,7 @@ export function PaymentDistributionCard({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Payment distribution</CardTitle>
+          <CardTitle>Funding by collection method</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-amber-800">{error}</p>
@@ -138,9 +138,9 @@ export function PaymentDistributionCard({
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
         <div>
-          <CardTitle>Payment distribution</CardTitle>
+          <CardTitle>Funding by collection method</CardTitle>
           <CardDescription>
-            Revenue share and payment method mix for the selected period.
+            Funding by collection method and revenue share for the selected period.
           </CardDescription>
         </div>
         {hasActivity ? (
@@ -159,7 +159,7 @@ export function PaymentDistributionCard({
       <CardContent>
         {!hasActivity ? (
           <div className="rounded-lg border border-dashed bg-muted/30 px-6 py-8 text-center">
-            <p className="text-sm font-medium">No payments have been received yet</p>
+            <p className="text-sm font-medium">No coordinated funding yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Your first payment will automatically appear here.
             </p>

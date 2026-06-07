@@ -98,15 +98,15 @@ export function NoPaymentLinks({ onCreate }: { onCreate?: () => void }) {
           />
         </svg>
       }
-      title="No payment links yet"
-      description="Create your first payment link to start accepting crypto payments. It only takes a few seconds!"
+      title="No invoices yet"
+      description="Create your first invoice to fund agreement obligations."
       action={
         onCreate && (
           <button
             onClick={onCreate}
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
-            Create Payment Link
+            Create invoice
           </button>
         )
       }
@@ -143,8 +143,8 @@ export function NoTransactions() {
           />
         </svg>
       }
-      title="No transactions yet"
-      description="Your transactions will appear here once customers start making payments."
+      title="No funding activity yet"
+      description="Funding activity will appear here once invoices are paid or obligations are funded."
     />
   );
 }

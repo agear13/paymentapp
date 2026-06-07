@@ -55,7 +55,7 @@ export function OperationalCommandCenterHero({
   return (
     <header className={cn(opSpace.heroY, `pb-5 border-b ${opDivider}`)}>
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className={opTypePageTitle}>Workspace coordination</h1>
+        <h1 className={opTypePageTitle}>Agreement coordination</h1>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <OperationalStatePill phase={workspacePhase} scope="workspace" />
@@ -75,11 +75,11 @@ export function OperationalCommandCenterHero({
           <div className="mt-4 surface-intelligence p-4 rounded-lg">
             <ProgressiveOperationalPanel
               title={OPERATOR_LABELS.releaseBlocked}
-              summary={`${labelSafeToRelease(conf)} — complete setup to unlock payout release.`}
+              summary={`${labelSafeToRelease(conf)} — complete setup to unlock settlement.`}
               missingItems={missingBullets.length > 0 ? missingBullets : undefined}
             >
               <p className="text-sm text-foreground/80">
-                Align funding, participant earnings, and obligations before releasing payouts.
+                Align funding, participant earnings, and obligations before settlement proceeds.
               </p>
             </ProgressiveOperationalPanel>
           </div>

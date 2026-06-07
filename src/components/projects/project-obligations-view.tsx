@@ -121,7 +121,7 @@ export function ProjectObligationsView() {
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <CardTitle>Project obligations</CardTitle>
+              <CardTitle>Agreement obligations</CardTitle>
               <CardDescription>
                 Operational allocation. Payout readiness follows funding sources and settlement
                 state.
@@ -142,7 +142,7 @@ export function ProjectObligationsView() {
             </div>
           ) : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6">
-              No obligations recorded for this project yet. They appear when participants are
+              No obligations recorded for this agreement yet. They appear when participants are
               allocated. Funding sources affect payout readiness, not whether obligations exist.
             </p>
           ) : (

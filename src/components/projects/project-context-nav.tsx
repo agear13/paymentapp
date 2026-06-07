@@ -19,12 +19,12 @@ type ProjectContextNavProps = {
 };
 
 const TABS = [
-  { id: 'overview' as const, label: 'Overview' },
-  { id: 'commercialRoles' as const, label: 'Commercial roles' },
+  { id: 'overview' as const, label: 'Summary' },
+  { id: 'commercialRoles' as const, label: 'Commercial terms' },
   { id: 'participants' as const, label: 'Participants' },
-  { id: 'funding' as const, label: 'Funding sources' },
+  { id: 'funding' as const, label: 'Funding' },
   { id: 'obligations' as const, label: 'Obligations' },
-  { id: 'payouts' as const, label: 'Payouts' },
+  { id: 'payouts' as const, label: 'Settlement readiness' },
   { id: 'activity' as const, label: 'Activity' },
 ];
 
@@ -54,7 +54,7 @@ export function ProjectContextNav({ projectId }: ProjectContextNavProps) {
   return (
     <nav
       className="flex flex-wrap gap-0.5 border-b border-border/80 pb-px"
-      aria-label="Project sections"
+      aria-label="Agreement sections"
     >
       {TABS.map((tab) => {
         const href = hrefForTab(projectId, tab.id);

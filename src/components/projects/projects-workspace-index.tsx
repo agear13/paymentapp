@@ -107,13 +107,13 @@ export function ProjectsWorkspaceIndex() {
       const ok = await persistPilotSnapshot({ deals: nextDeals, participants });
       if (!ok) {
         toast({
-          title: 'Could not save project',
-          description: 'Try again from the project workspace.',
+          title: 'Could not save agreement',
+          description: 'Try again from the agreements workspace.',
           variant: 'destructive',
         });
         return;
       }
-      toast({ title: 'Project created', description: deal.dealName });
+      toast({ title: 'Agreement created', description: deal.dealName });
       setCreateOpen(false);
       router.push(`/dashboard/projects/${encodeURIComponent(deal.id)}`);
       router.refresh();
@@ -125,9 +125,9 @@ export function ProjectsWorkspaceIndex() {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Agreements</h1>
           <p className="text-muted-foreground mt-1 max-w-2xl">
-            Coordinate participants, funding, obligations, and payouts per project in one
+            Coordinate participants, funding, obligations, and settlement per agreement in one
             workspace.
           </p>
         </div>
@@ -144,7 +144,7 @@ export function ProjectsWorkspaceIndex() {
           />
           <Button onClick={() => setCreateOpen(true)} size="lg">
             <Plus className="mr-2 h-4 w-4" />
-            Create project
+            Create agreement
           </Button>
         </div>
       </div>
@@ -152,7 +152,7 @@ export function ProjectsWorkspaceIndex() {
       {loading ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin mr-2" />
-          Loading projects…
+          Loading agreements…
         </div>
       ) : summaries.length === 0 ? (
         <Card className="border-dashed">
@@ -160,10 +160,10 @@ export function ProjectsWorkspaceIndex() {
             <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
               <FolderKanban className="h-6 w-6 text-primary" />
             </div>
-            <CardTitle>Create your first project</CardTitle>
+            <CardTitle>Create your first agreement</CardTitle>
             <CardDescription className="max-w-md mx-auto">
-              Start by naming a project. You will add participants, link funding, track obligations,
-              and coordinate payouts in one place.
+              Start by naming an agreement. You will add participants, link funding, track obligations,
+              and coordinate settlement in one place.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-3 pb-8">
@@ -180,7 +180,7 @@ export function ProjectsWorkspaceIndex() {
             />
             <Button variant="ghost" onClick={() => setCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Create project manually
+              Create agreement manually
             </Button>
           </CardContent>
         </Card>
@@ -199,10 +199,10 @@ export function ProjectsWorkspaceIndex() {
             {summaries.length === 1 ? (
               <Card className="border-dashed bg-muted/10 h-fit">
                 <CardHeader>
-                  <CardTitle className="text-base">How projects work</CardTitle>
+                  <CardTitle className="text-base">How agreements work</CardTitle>
                   <CardDescription>
-                    Each project coordinates one operational engagement from participant agreements
-                    through payout readiness.
+                    Each agreement coordinates one commercial relationship from participant approvals
+                    through settlement readiness.
                   </CardDescription>
                 </CardHeader>
               </Card>

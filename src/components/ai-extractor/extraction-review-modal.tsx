@@ -261,7 +261,7 @@ export function ExtractionReviewModal({
         });
         onOpenChange(false);
         const pCount = newParticipants.length;
-        toast.success('Project created from conversation', {
+        toast.success('Agreement created from conversation', {
           description: pCount > 0
             ? `${pCount} participant${pCount !== 1 ? 's' : ''} added`
             : newDeal.dealName,
@@ -504,7 +504,7 @@ export function ExtractionReviewModal({
 
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs">Project Name</Label>
+                  <Label className="text-xs">Agreement name</Label>
                   <ConfidenceBadge confidence={result.projectName.confidence} />
                 </div>
                 <Input

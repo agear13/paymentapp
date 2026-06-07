@@ -4,12 +4,12 @@ import { CreditCard, Link as LinkIcon, Repeat } from 'lucide-react';
 export default function PaymentsPage() {
   return (
     <SectionHubPage
-      title="Payments"
-      description="Collect customer funds through invoices, recurring billing, and payment activity."
+      title="Funding"
+      description="Coordinate revenue collection that funds agreement obligations — invoices, recurring schedules, and funding activity."
       links={[
         {
           title: 'Invoices',
-          description: 'Create and manage payment links and invoices.',
+          description: 'Create and manage invoices for your customers.',
           href: '/dashboard/payment-links',
           icon: LinkIcon,
         },
@@ -20,8 +20,8 @@ export default function PaymentsPage() {
           icon: Repeat,
         },
         {
-          title: 'Transactions',
-          description: 'Review customer payment activity and status.',
+          title: 'Funding activity',
+          description: 'Review funding events and collection status across your agreements.',
           href: '/dashboard/transactions',
           icon: CreditCard,
         },

@@ -111,7 +111,7 @@ export function CreateDealModalProject({
           latestUpdate: projectDescription.trim() || undefined,
         };
     onCreate(next);
-    toast.success(editDeal ? 'Project updated' : 'Project created');
+    toast.success(editDeal ? 'Agreement updated' : 'Agreement created');
     onOpenChange(false);
   }
 
@@ -148,16 +148,16 @@ export function CreateDealModalProject({
         }}
       >
         <DialogHeader className="px-6 pt-6 shrink-0">
-          <DialogTitle>{editDeal ? 'Edit project' : 'Create project'}</DialogTitle>
+          <DialogTitle>{editDeal ? 'Edit agreement' : 'Create agreement'}</DialogTitle>
           <DialogDescription>
-            Name your project, optionally describe it, and paste a payment link when you have one. Referral roles
+            Name your agreement, optionally describe it, and paste an invoice link when you have one. Referral roles
             stay stored in the background for compatibility but are not used in this mode.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col max-h-[min(90vh,calc(100vh-2rem))]">
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4">
             <div className="space-y-2">
-              <Label htmlFor="dn-proj-name">Project name</Label>
+              <Label htmlFor="dn-proj-name">Agreement name</Label>
               <Input
                 id="dn-proj-name"
                 value={dealName}
@@ -207,7 +207,7 @@ export function CreateDealModalProject({
                 inputMode="url"
                 value={linkedPaymentUrl}
                 onChange={(e) => setLinkedPaymentUrl(e.target.value)}
-                placeholder="Paste payment link URL for later funding linkage"
+                placeholder="Paste invoice URL for later funding linkage"
               />
               <p className="text-xs text-muted-foreground">
                 Stored on the project for when you connect inbound payments.
@@ -219,7 +219,7 @@ export function CreateDealModalProject({
               Cancel
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              {editDeal ? 'Save changes' : 'Create project'}
+              {editDeal ? 'Save changes' : 'Create agreement'}
             </Button>
           </div>
         </form>

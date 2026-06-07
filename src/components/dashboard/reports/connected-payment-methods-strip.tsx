@@ -117,7 +117,7 @@ export function ConnectedPaymentMethodsStrip({
     <section className="rounded-lg border bg-muted/20 px-4 py-3">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold">Connected payment methods</h2>
+          <h2 className="text-sm font-semibold">Collection & settlement infrastructure</h2>
           <p className="text-xs text-muted-foreground">
             Your active payment and settlement rails.
           </p>
@@ -143,7 +143,7 @@ export function ConnectedPaymentMethodsStrip({
       <div className="mt-3 flex flex-wrap gap-2">
         {visibleRails.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            No payment methods connected yet. Configure collection &amp; settlement in settings.
+            No collection infrastructure connected yet. Configure collection &amp; settlement in settings.
           </p>
         ) : (
           visibleRails.map((rail) => <RailChip key={rail.id} rail={rail} />)

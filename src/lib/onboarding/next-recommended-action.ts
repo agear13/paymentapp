@@ -37,17 +37,17 @@ export function deriveNextRecommendedAction(
   if (!activation.projectCreated) {
     return {
       id: 'project',
-      title: 'Create your first project',
-      description: 'Projects organize participants, compensation, obligations, and payout releases.',
+      title: 'Create your first agreement',
+      description: 'Agreements organize participants, commercial terms, obligations, and settlement.',
       href: '/onboarding',
-      ctaLabel: 'Create project',
+      ctaLabel: 'Create agreement',
     };
   }
 
   if (activation.participantCount === 0) {
     return {
       id: 'participants',
-      title: 'Add participants to your project',
+      title: 'Add participants to your agreement',
       description: 'Participants define who participates in revenue and settlement coordination.',
       href: participantsManagementHref(activation),
       ctaLabel: 'Add participants',

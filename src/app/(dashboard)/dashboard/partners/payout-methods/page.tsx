@@ -245,7 +245,7 @@ export default function PayoutMethodsPage() {
                 <Input
                   value={createHandle}
                   onChange={(e) => setCreateHandle(e.target.value)}
-                  placeholder="payee@example.com"
+                  placeholder="participant@example.com"
                 />
               </div>
             )}

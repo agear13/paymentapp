@@ -68,7 +68,7 @@ export function PaymentLinksGuardrailModal({
       default:
         return {
           title: 'Setup required',
-          description: 'Adjust your payment configuration before creating this invoice.',
+          description: 'Complete your collection & settlement infrastructure before creating this invoice.',
         };
     }
   }, [kind, setup.wiseIncomplete]);

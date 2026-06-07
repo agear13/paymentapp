@@ -949,9 +949,9 @@ export default function PaymentLinksPage() {
       <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancel Payment Link?</AlertDialogTitle>
+            <AlertDialogTitle>Cancel invoice?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to cancel this payment link? This action cannot be
+              Are you sure you want to cancel this invoice? This action cannot be
               undone and the link will no longer be accessible to customers.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -962,7 +962,7 @@ export default function PaymentLinksPage() {
               disabled={isCanceling}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isCanceling ? 'Canceling...' : 'Yes, Cancel Link'}
+              {isCanceling ? 'Canceling...' : 'Yes, cancel invoice'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -876,10 +876,10 @@ function DealNetworkObligationsPageContent({
             <div className="flex flex-col gap-2 pt-2 sm:flex-row">
               <Select value={dealFilter} onValueChange={setDealFilter}>
                 <SelectTrigger className="h-9">
-                  <SelectValue placeholder="All projects" />
+                  <SelectValue placeholder="All agreements" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All projects</SelectItem>
+                  <SelectItem value="__all__">All agreements</SelectItem>
                   {dealOptions.map(([id, label]) => (
                     <SelectItem key={id} value={id}>
                       {label}

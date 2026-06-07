@@ -129,7 +129,7 @@ export function ReportsPageClient({ organizationId }: ReportsPageClientProps) {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Reporting</h1>
           <p className="text-muted-foreground max-w-2xl">
             Your financial operations center — reconciliation integrity, revenue outcomes, and
             audit-ready ledger visibility.

@@ -2,7 +2,7 @@
  * Human-readable project labels — never expose internal IDs in UI.
  */
 
-export const UNTITLED_PROJECT_LABEL = 'Untitled project';
+export const UNTITLED_PROJECT_LABEL = 'Untitled agreement';
 
 export type ProjectNameSource = {
   name?: string | null;

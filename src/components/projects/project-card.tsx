@@ -60,12 +60,12 @@ export function ProjectCard({ project }: ProjectCardProps) {
             </div>
             <div className="flex items-center gap-2 text-muted-foreground">
               <Banknote className="h-3.5 w-3.5 shrink-0" />
-              <span>Payouts: {project.payoutLabel}</span>
+              <span>Settlement: {project.payoutLabel}</span>
             </div>
           </dl>
 
           <div className="flex items-center text-sm font-medium text-primary pt-1">
-            Open project
+            Open agreement
             <ArrowRight className="ml-1 h-4 w-4" />
           </div>
         </CardContent>

@@ -63,9 +63,9 @@ export default async function TransactionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Funding activity</h1>
         <p className="text-muted-foreground">
-          View all payment transactions across Stripe, Wise, and Hedera.
+          View funding events across Stripe, Wise, and Hedera that support agreement obligations.
         </p>
         {showPropagationTraceHints && (
           <p className="text-xs text-muted-foreground mt-2 max-w-3xl">
@@ -91,9 +91,9 @@ export default async function TransactionsPage() {
         <TabsContent value="all" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>All Transactions</CardTitle>
+              <CardTitle>All funding activity</CardTitle>
               <CardDescription>
-                Complete transaction history across Stripe, Wise, and Hedera.
+                Complete funding history across Stripe, Wise, and Hedera.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -109,7 +109,7 @@ export default async function TransactionsPage() {
         <TabsContent value="stripe" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Stripe Transactions</CardTitle>
+              <CardTitle>Stripe funding activity</CardTitle>
               <CardDescription>
                 Fiat payment transactions via Stripe.
               </CardDescription>
@@ -121,7 +121,7 @@ export default async function TransactionsPage() {
                 <PaymentLinksTransactionsEmpty />
               ) : (
                 <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
-                  No Stripe transactions yet.
+                  No Stripe funding activity yet.
                 </div>
               )}
             </CardContent>
@@ -131,7 +131,7 @@ export default async function TransactionsPage() {
         <TabsContent value="hedera" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Hedera Transactions</CardTitle>
+              <CardTitle>Hedera funding activity</CardTitle>
               <CardDescription>
                 Cryptocurrency transactions via Hedera network.
               </CardDescription>
@@ -143,7 +143,7 @@ export default async function TransactionsPage() {
                 <PaymentLinksTransactionsEmpty />
               ) : (
                 <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
-                  No Hedera transactions yet.
+                  No Hedera funding activity yet.
                 </div>
               )}
             </CardContent>

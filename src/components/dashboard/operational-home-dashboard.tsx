@@ -20,19 +20,19 @@ type OperationalHomeDashboardProps = {
 
 const WORKFLOW_STEPS = [
   {
-    label: 'Projects',
+    label: 'Agreements',
     href: '/dashboard/projects',
     icon: FolderKanban,
-    description: 'Operational workspaces',
+    description: 'Commercial relationships',
   },
   {
-    label: 'Payments',
+    label: 'Funding',
     href: '/dashboard/payments',
     icon: Wallet,
     description: 'Invoices & collection',
   },
   {
-    label: 'Payouts',
+    label: 'Settlement',
     href: PAYOUTS_OBLIGATIONS_HREF,
     icon: FileCheck,
     description: 'Obligations & readiness',
@@ -47,14 +47,14 @@ export function OperationalHomeDashboard({
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Operational command center</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Agreement coordination overview</h1>
           <p className="text-muted-foreground mt-1">
-            Track payout readiness, obligations, approvals, reconciliation, and funding activity
-            across projects.
+            Track settlement readiness, obligations, approvals, reconciliation, and funding activity
+            across agreements.
           </p>
         </div>
         <Button asChild>
-          <Link href="/dashboard/projects">Create project</Link>
+          <Link href="/dashboard/projects">Create agreement</Link>
         </Button>
       </div>
 
@@ -63,7 +63,7 @@ export function OperationalHomeDashboard({
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Settlement coordination flow</CardTitle>
             <CardDescription>
-              Coordinate revenue, obligations, approvals, and payout readiness across projects.
+              Coordinate revenue, obligations, approvals, and settlement readiness across agreements.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -96,7 +96,7 @@ export function OperationalHomeDashboard({
       {!hasActiveCoordination ? (
         <Card className="border-dashed bg-muted/10">
           <CardContent className="py-6 text-center text-sm text-muted-foreground">
-            No active payout coordination yet. Create a project to begin coordinating participants,
+            No active settlement coordination yet. Create an agreement to begin coordinating participants,
             funding, and settlement readiness.
           </CardContent>
         </Card>
@@ -139,7 +139,7 @@ export function OperationalHomeDashboard({
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <AlertCircle className="h-3.5 w-3.5" />
-        <span>Operational alerts and live counts update as your projects progress.</span>
+        <span>Operational alerts and live counts update as your agreements progress.</span>
       </div>
     </div>
   );

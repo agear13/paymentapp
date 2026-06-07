@@ -105,7 +105,7 @@ export function RevenueSummaryCard({
       <CardContent>
         {isEmpty ? (
           <div className="rounded-lg border border-dashed bg-muted/30 px-6 py-8 text-center">
-            <p className="text-sm font-medium">No payments have been received yet</p>
+            <p className="text-sm font-medium">No coordinated funding yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Your first payment will automatically appear here.
             </p>
