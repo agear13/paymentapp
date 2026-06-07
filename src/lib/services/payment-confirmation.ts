@@ -8,6 +8,7 @@ import {
   PaymentEventRecordStatus,
   PaymentEventSourceType,
   type PaymentLinkStatus,
+  type PaymentMethod,
 } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
@@ -106,6 +107,19 @@ function referralProviderForConfirmPayment(
   if (provider === 'wise') return 'wise';
   if (provider === 'manual') return 'manual';
   return 'stripe';
+}
+
+/** Maps confirmPayment provider (+ metadata rail) to a valid PaymentMethod on payment_events. */
+export function resolvePaymentMethodForEvent(
+  provider: ConfirmPaymentParams['provider'],
+  metadata?: Record<string, unknown>
+): PaymentMethod | null {
+  if (provider === 'manual') {
+    const rail = metadata?.rail;
+    if (rail === 'MANUAL_BANK' || rail === 'CRYPTO') return rail;
+    return 'MANUAL';
+  }
+  return provider.toUpperCase() as PaymentMethod;
 }
 
 /**
@@ -324,7 +338,7 @@ export async function confirmPayment(
         payment_link_id: paymentLinkId,
         organization_id: paymentLink.organization_id,
         event_type: 'PAYMENT_CONFIRMED',
-        payment_method: provider.toUpperCase(),
+        payment_method: resolvePaymentMethodForEvent(provider, metadata),
         source_type: sourceType,
         source_reference: normalizedProviderRef,
         gross_amount: amountReceived,

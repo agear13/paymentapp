@@ -23,6 +23,7 @@ import { hasPersistedCompensationTerms } from '@/lib/operations/primitives/parti
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 import type { ProjectWorkspaceSummary } from '@/lib/projects/project-workspace-summary';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
+import { deriveAgreementHealth } from '@/lib/agreements/health/derive-agreement-health';
 import { projectParticipantsPath } from '@/lib/projects/project-routes';
 
 const BLOCKER_CATEGORY_LABELS: Record<OperationalReleaseBlockerDetail['category'], string> = {
@@ -441,11 +442,33 @@ export function deriveAgreementIntelligence(input: AgreementIntelligenceInput): 
 
   const enrichedInput: AgreementIntelligenceEnrichedInput = { ...input, snapshot };
 
+  const settlementBlockers = deriveSettlementBlockers(enrichedInput);
+
+  const health = deriveAgreementHealth({
+    projectId: input.projectId,
+    agreementName: input.summary.name,
+    deal: input.deal,
+    summary: input.summary,
+    participants: input.participants,
+    snapshot,
+    treasury: input.treasury,
+    kpis: input.kpis,
+    graph: {
+      releaseReadyCount: input.graph.summary.releaseReadyCount,
+      participantCount: input.graph.summary.participantCount,
+      blockerCount: input.graph.summary.blockerCount,
+    },
+    releaseConfidenceLevel: input.guidance.releaseConfidence.level,
+    settlementBlockers,
+    recordTrend: typeof window !== 'undefined',
+  });
+
   return {
     snapshot,
     primaryRecommendation: derivePrimaryRecommendation(enrichedInput),
-    settlementBlockers: deriveSettlementBlockers(enrichedInput),
+    settlementBlockers,
     fundingFunnel: deriveFundingFunnel(enrichedInput),
     participantActions: deriveParticipantActions(input),
+    health,
   };
 }

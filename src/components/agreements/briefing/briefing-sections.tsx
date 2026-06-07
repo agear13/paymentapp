@@ -525,14 +525,15 @@ export function BriefingIntelligencePanel({
 }: {
   intelligence: Pick<
     AgreementIntelligenceOutput,
-    'snapshot' | 'primaryRecommendation' | 'settlementBlockers'
+    'snapshot' | 'primaryRecommendation' | 'settlementBlockers' | 'health'
   >;
 }) {
-  const { snapshot, primaryRecommendation, settlementBlockers } = intelligence;
+  const { snapshot, primaryRecommendation, settlementBlockers, health } = intelligence;
   const criticalBlocker = settlementBlockers.find((b) => b.severity === 'blocking') ?? settlementBlockers[0];
 
   const items = [
-    { label: 'Agreement health', value: snapshot.healthLabel, accent: 'intelligence' as const },
+    { label: 'Agreement health', value: `${health.score} · ${health.categoryLabel}`, accent: 'intelligence' as const },
+    { label: 'Health trend', value: health.trend.label, accent: 'default' as const },
     {
       label: 'Settlement readiness',
       value: `${snapshot.settlementReadinessScore}%`,

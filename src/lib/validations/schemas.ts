@@ -38,7 +38,27 @@ export const PaymentEventTypeSchema = z.enum([
   'RECURRING_EXECUTION',
 ]);
 
-export const PaymentMethodSchema = z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO', 'MANUAL_BANK']);
+/** Collection rails selectable on payment_links (not operator mark-paid). */
+export const PaymentLinkMethodSchema = z.enum([
+  'STRIPE',
+  'HEDERA',
+  'WISE',
+  'CRYPTO',
+  'MANUAL_BANK',
+]);
+
+/** Settlement rails recorded on payment_events (includes operator off-rail settlement). */
+export const PaymentEventMethodSchema = z.enum([
+  'STRIPE',
+  'HEDERA',
+  'WISE',
+  'CRYPTO',
+  'MANUAL_BANK',
+  'MANUAL',
+]);
+
+/** @deprecated Use PaymentLinkMethodSchema or PaymentEventMethodSchema */
+export const PaymentMethodSchema = PaymentLinkMethodSchema;
 
 /** Merchant-uploaded invoice attachment metadata stored in Supabase Storage. */
 export const PaymentLinkAttachmentInputSchema = z
@@ -270,7 +290,7 @@ export const CreatePaymentLinkSchema = z.object({
     .datetime('Invalid datetime format')
     .optional()
     .or(z.date().optional()),
-  paymentMethod: PaymentMethodSchema.optional(),
+  paymentMethod: PaymentLinkMethodSchema.optional(),
   /** Invoice-only public page (no online checkout UI). */
   invoiceOnlyMode: z.boolean().optional(),
   /** When payment_method = HEDERA */
@@ -363,7 +383,7 @@ export const UpdatePaymentLinkSchema = z
     dueDate: z.coerce.date().nullable().optional(),
     expiresAt: z.coerce.date().nullable().optional(),
     invoiceOnlyMode: z.boolean().optional(),
-    paymentMethod: PaymentMethodSchema.nullable().optional(),
+    paymentMethod: PaymentLinkMethodSchema.nullable().optional(),
     hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']).nullable().optional(),
     cryptoNetwork: z.string().min(1).max(255).nullable().optional(),
     cryptoAddress: z.string().min(1).max(512).nullable().optional(),
@@ -508,7 +528,7 @@ export const PaymentEventSchema = z.object({
   id: uuidSchema,
   paymentLinkId: uuidSchema,
   eventType: PaymentEventTypeSchema,
-  paymentMethod: PaymentMethodSchema.nullable(),
+  paymentMethod: PaymentEventMethodSchema.nullable(),
   stripePaymentIntentId: z.string().max(255).nullable(),
   hederaTransactionId: hederaTransactionIdSchema.nullable(),
   amountReceived: z.number().nullable(),
@@ -520,7 +540,7 @@ export const PaymentEventSchema = z.object({
 export const CreatePaymentEventSchema = z.object({
   paymentLinkId: uuidSchema,
   eventType: PaymentEventTypeSchema,
-  paymentMethod: PaymentMethodSchema.optional(),
+  paymentMethod: PaymentEventMethodSchema.optional(),
   stripePaymentIntentId: z.string().max(255).optional(),
   hederaTransactionId: hederaTransactionIdSchema.optional(),
   amountReceived: z.number().positive().optional(),
@@ -711,7 +731,7 @@ export const PaginationSchema = z.object({
 export const PaymentLinkFiltersSchema = z.object({
   status: PaymentLinkStatusSchema.optional(),
   currency: currencyCodeSchema.optional(),
-  paymentMethod: PaymentMethodSchema.optional(),
+  paymentMethod: PaymentLinkMethodSchema.optional(),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
   search: z.string().max(255).optional(), // Search in description or invoice reference
@@ -722,7 +742,7 @@ export const PaymentLinkStatusResponseSchema = z.object({
   status: PaymentLinkStatusSchema,
   lastEventType: PaymentEventTypeSchema.nullable(),
   lastEventTimestamp: z.date().nullable(),
-  paymentMethod: PaymentMethodSchema.nullable(),
+  paymentMethod: PaymentEventMethodSchema.nullable(),
   transactionId: z.string().nullable(),
 });
 

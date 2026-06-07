@@ -672,6 +672,8 @@ enum PaymentMethod {
   CRYPTO
   /// Manual bank transfer instructions (bank/Wise/Revolut/other), payer confirms submitted transfer.
   MANUAL_BANK
+  /// Operator off-rail settlement (mark paid) without a specific automated collection rail.
+  MANUAL
 }
 
 enum CryptoPaymentConfirmationStatus {

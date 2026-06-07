@@ -386,6 +386,7 @@ export function composeAgreementBriefingSnapshot(input: {
 
 export const BRIEFING_SECTIONS = [
   { id: 'briefing-recommendation', label: 'Recommendation' },
+  { id: 'briefing-health', label: 'Health' },
   { id: 'briefing-funnel', label: 'Progress' },
   { id: 'briefing-blockers', label: 'Blockers' },
   { id: 'briefing-summary', label: 'Summary' },

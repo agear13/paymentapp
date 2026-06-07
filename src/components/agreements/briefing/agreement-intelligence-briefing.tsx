@@ -19,6 +19,7 @@ import { BriefingSectionNav } from '@/components/agreements/briefing/briefing-se
 import { BriefingRecommendedActionHero } from '@/components/agreements/briefing/briefing-recommended-action-hero';
 import { BriefingFundingFunnel } from '@/components/agreements/briefing/briefing-funding-funnel';
 import { BriefingSettlementBlockersPanel } from '@/components/agreements/briefing/briefing-settlement-blockers-panel';
+import { BriefingAgreementHealth } from '@/components/agreements/health/briefing-agreement-health';
 import {
   BriefingActivitySection,
   BriefingApprovalsSection,
@@ -198,6 +199,8 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
       <BriefingRecommendedActionHero recommendation={intelligence.primaryRecommendation} />
 
       <BriefingSectionNav projectId={projectId} />
+
+      <BriefingAgreementHealth health={intelligence.health} />
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-6 min-w-0">

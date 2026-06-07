@@ -75,6 +75,8 @@ describe('confirmPayment manual provider (R1)', () => {
     expect(confirmSource).toContain("provider: 'stripe' | 'hedera' | 'wise' | 'manual'");
     expect(confirmSource).toContain('PaymentEventSourceType.MANUAL');
     expect(confirmSource).toContain("provider === 'manual'");
+    expect(confirmSource).toContain('resolvePaymentMethodForEvent');
+    expect(confirmSource).not.toContain('payment_method: provider.toUpperCase()');
     expect(confirmSource).toContain('checkManualIdempotency');
     expect(confirmSource).toContain('Manual operator settlement ledger posted');
   });

@@ -3,13 +3,16 @@ import { ArrowRight, Users, Wallet, Banknote } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { ProjectWorkspaceSummary } from '@/lib/projects/project-workspace-summary';
+import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
+import { AgreementHealthScoreBadge } from '@/components/agreements/health/briefing-agreement-health';
 import { formatParticipantPayoutReadiness } from '@/lib/projects/format-participant-payout-readiness';
 
 type ProjectCardProps = {
   project: ProjectWorkspaceSummary;
+  health?: AgreementHealthSnapshot;
 };
 
-export function ProjectCard({ project }: ProjectCardProps) {
+export function ProjectCard({ project, health }: ProjectCardProps) {
   const participantLabel = formatParticipantPayoutReadiness(
     project.participantsReady,
     project.participantCount
@@ -30,7 +33,9 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 <CardDescription className="line-clamp-2 mt-1">{project.description}</CardDescription>
               ) : null}
             </div>
-            {project.needsAttention ? (
+            {health ? (
+              <AgreementHealthScoreBadge health={health} />
+            ) : project.needsAttention ? (
               <Badge variant="outline" className="shrink-0 border-amber-500/50 text-amber-800">
                 Needs attention
               </Badge>

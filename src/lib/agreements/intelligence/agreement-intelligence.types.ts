@@ -1,4 +1,5 @@
 import type { AgreementBriefingSnapshot } from '@/lib/agreements/agreement-briefing.model';
+import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
 
 export type AgreementRecommendationUrgency = 'critical' | 'high' | 'medium' | 'low';
 
@@ -50,4 +51,5 @@ export type AgreementIntelligenceOutput = {
   settlementBlockers: AgreementSettlementBlocker[];
   fundingFunnel: AgreementFundingFunnelStep[];
   participantActions: AgreementParticipantAction[];
+  health: AgreementHealthSnapshot;
 };

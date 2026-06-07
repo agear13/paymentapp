@@ -1,12 +1,15 @@
 'use client';
 
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import { useAgreementHealthPortfolio } from '@/hooks/use-agreement-health-portfolio';
 import { deriveOperationalSeverity } from '@/lib/operations/severity';
 import { deduplicateAttentionItems } from '@/lib/operations/explainability/deduplicate-operational-actions';
 import { OperationalCommandCenterHero } from '@/components/operations/operational-command-center-hero';
 import { OperationalAttentionBoard } from '@/components/operations/operational-attention-board';
 import { RecentOperationalEvents } from '@/components/operations/recent-operational-events';
 import { OperationalAuditTimeline } from '@/components/operations/operational-audit-timeline';
+import { AgreementHealthOverview } from '@/components/agreements/health/agreement-health-overview';
+import { AgreementComparativeIntelligence } from '@/components/agreements/health/agreement-comparative-intelligence';
 import { opPage } from '@/lib/design/operational-spacing';
 import { opCollapsibleTrigger } from '@/lib/design/operational-surfaces';
 import {
@@ -19,6 +22,7 @@ import { ChevronDown } from 'lucide-react';
 export function OperationalHomeCommandCenter() {
   const { guidance, loading, workspaceContext, activation, auditTimeline, kpis } =
     useOperationalCoordinationState({ traceSurface: 'operational-home-command-center' });
+  const { portfolio, snapshots, loading: healthLoading } = useAgreementHealthPortfolio();
   const primaryAction = guidance.actions[0] ?? null;
 
   const attentionItems = deduplicateAttentionItems(
@@ -47,6 +51,8 @@ export function OperationalHomeCommandCenter() {
 
   return (
     <div className={opPage()}>
+      <AgreementHealthOverview portfolio={portfolio} loading={healthLoading} />
+
       <OperationalCommandCenterHero
         guidance={guidance}
         attentionItems={attentionItems}
@@ -55,6 +61,10 @@ export function OperationalHomeCommandCenter() {
       />
 
       <OperationalAttentionBoard items={attentionItems} calmMode />
+
+      {snapshots.length > 1 ? (
+        <AgreementComparativeIntelligence snapshots={snapshots} loading={healthLoading} />
+      ) : null}
 
       <Collapsible>
         <CollapsibleTrigger className={opCollapsibleTrigger}>

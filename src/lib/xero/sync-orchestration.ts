@@ -37,7 +37,7 @@ async function getLatestConfirmedPaymentEvent(paymentLinkId: string) {
   });
 }
 
-function derivePaymentMethod(
+export function derivePaymentMethod(
   paymentEvent: {
     payment_method: string | null;
     source_type: string | null;
@@ -48,10 +48,10 @@ function derivePaymentMethod(
   if (candidate === 'STRIPE' || candidate === 'HEDERA' || candidate === 'WISE') {
     return candidate;
   }
-  if (candidate === 'MANUAL_BANK') {
+  if (candidate === 'MANUAL_BANK' || candidate === 'MANUAL') {
     return 'WISE';
   }
-  if (paymentEvent.source_type === 'WISE') {
+  if (paymentEvent.source_type === 'WISE' || paymentEvent.source_type === 'MANUAL') {
     return 'WISE';
   }
   return 'STRIPE';

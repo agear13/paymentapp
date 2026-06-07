@@ -10,6 +10,9 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import { CreateDealModal } from '@/components/deal-network-demo/create-deal-modal';
 import { ProjectCard } from '@/components/projects/project-card';
+import { AgreementHealthOverview } from '@/components/agreements/health/agreement-health-overview';
+import { AgreementComparativeIntelligence } from '@/components/agreements/health/agreement-comparative-intelligence';
+import { useAgreementHealthPortfolio } from '@/hooks/use-agreement-health-portfolio';
 import {
   sortProjectsForWorkspace,
   summarizeProject,
@@ -28,6 +31,13 @@ export function ProjectsWorkspaceIndex() {
   const [participants, setParticipants] = React.useState<DemoParticipant[]>([]);
   const [summaries, setSummaries] = React.useState<ProjectWorkspaceSummary[]>([]);
   const [createOpen, setCreateOpen] = React.useState(false);
+  const { portfolio, snapshots, loading: healthLoading } = useAgreementHealthPortfolio({
+    enabled: !loading && deals.length > 0,
+  });
+  const healthByProjectId = React.useMemo(
+    () => new Map(snapshots.map((s) => [s.projectId, s])),
+    [snapshots]
+  );
 
   const reload = React.useCallback(async () => {
     setLoading(true);
@@ -186,6 +196,12 @@ export function ProjectsWorkspaceIndex() {
         </Card>
       ) : (
         <div className="space-y-6">
+          <AgreementHealthOverview portfolio={portfolio} loading={healthLoading} compact />
+
+          {snapshots.length > 1 ? (
+            <AgreementComparativeIntelligence snapshots={snapshots} loading={healthLoading} />
+          ) : null}
+
           <div
             className={
               summaries.length === 1
@@ -194,7 +210,11 @@ export function ProjectsWorkspaceIndex() {
             }
           >
             {summaries.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+              <ProjectCard
+                key={project.id}
+                project={project}
+                health={healthByProjectId.get(project.id)}
+              />
             ))}
             {summaries.length === 1 ? (
               <Card className="border-dashed bg-muted/10 h-fit">
