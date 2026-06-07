@@ -5,16 +5,20 @@ import { useOperationalCoordinationState } from '@/hooks/use-operational-coordin
 import { useOperationalAuditStore } from '@/hooks/use-operational-audit-store';
 import { deriveConversationImportAuditTimeline } from '@/lib/operations/audit/conversation-import-audit';
 import { mergeAuditTimeline } from '@/lib/operations/audit/operational-audit';
-import { compressOperationalBlockers } from '@/lib/operations/explainability/deduplicate-operational-actions';
-import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-operational-workspace-currency';
+import { deriveAgreementIntelligence } from '@/lib/agreements/intelligence/agreement-intelligence-engine';
+import type { BriefingObligationRowInput } from '@/lib/agreements/agreement-briefing.model';
 import {
-  composeAgreementBriefingSnapshot,
-  type BriefingObligationRowInput,
-} from '@/lib/agreements/agreement-briefing.model';
+  emptyOperationalGraphFunding,
+  emptyOperationalGraphSummary,
+} from '@/lib/operations/selectors/operational-coordination-snapshot';
+import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-operational-workspace-currency';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
 import { BriefingSectionNav } from '@/components/agreements/briefing/briefing-section-nav';
+import { BriefingRecommendedActionHero } from '@/components/agreements/briefing/briefing-recommended-action-hero';
+import { BriefingFundingFunnel } from '@/components/agreements/briefing/briefing-funding-funnel';
+import { BriefingSettlementBlockersPanel } from '@/components/agreements/briefing/briefing-settlement-blockers-panel';
 import {
   BriefingActivitySection,
   BriefingApprovalsSection,
@@ -48,7 +52,13 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
   const [obligationRows, setObligationRows] = React.useState<BriefingObligationRowInput[]>([]);
   const [obligationsLoading, setObligationsLoading] = React.useState(true);
 
-  const { guidance, graph, workspaceContext, kpis } = useOperationalCoordinationState({
+  const {
+    guidance,
+    graph,
+    workspaceContext,
+    kpis,
+    releaseBlockers,
+  } = useOperationalCoordinationState({
     scope: 'project',
     project: deal ?? undefined,
     participants: projectParticipants,
@@ -103,6 +113,43 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
     void loadTreasuryAndObligations();
   }, [loadTreasuryAndObligations]);
 
+  const intelligence = React.useMemo(() => {
+    if (!summary || !deal) return null;
+
+    const coordinationGraph = graph ?? {
+      participants: [],
+      obligations: [],
+      summary: emptyOperationalGraphSummary(),
+      funding: emptyOperationalGraphFunding(),
+    };
+
+    return deriveAgreementIntelligence({
+      projectId,
+      deal,
+      summary,
+      participants: projectParticipants,
+      obligationRows,
+      treasury,
+      kpis,
+      graph: coordinationGraph,
+      guidance,
+      releaseBlockers,
+      workspaceContext,
+    });
+  }, [
+    deal,
+    graph,
+    guidance,
+    kpis,
+    obligationRows,
+    projectId,
+    projectParticipants,
+    releaseBlockers,
+    summary,
+    treasury,
+    workspaceContext,
+  ]);
+
   if (loading && !summary) {
     return <ProjectOperationalLoadingState variant="loading" />;
   }
@@ -116,7 +163,7 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
     );
   }
 
-  if (!summary || !deal) {
+  if (!summary || !deal || !intelligence) {
     return (
       <ProjectOperationalLoadingState
         variant="configuring"
@@ -128,23 +175,6 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
       />
     );
   }
-
-  const blockerLabels = compressOperationalBlockers(
-    guidance.explanation.blockers,
-    guidance.actions[0]?.action
-  ).map((b) => b.replace(/\.$/, ''));
-
-  const snapshot = composeAgreementBriefingSnapshot({
-    deal,
-    summary,
-    participants: projectParticipants,
-    obligationRows,
-    treasury,
-    kpis,
-    graphParticipants: graph.participants,
-    releaseConfidenceLevel: guidance.releaseConfidence.level,
-    blockerLabels,
-  });
 
   const currency = resolveOperationalWorkspaceCurrency({
     projectCurrency: treasury?.currency ?? deal.projectValueCurrency,
@@ -165,17 +195,25 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
         </p>
       ) : null}
 
+      <BriefingRecommendedActionHero recommendation={intelligence.primaryRecommendation} />
+
       <BriefingSectionNav projectId={projectId} />
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-6 min-w-0">
-          <BriefingSummarySection snapshot={snapshot} projectId={projectId} />
-          <BriefingParticipantsSection snapshot={snapshot} projectId={projectId} />
-          <BriefingCommercialTermsSection snapshot={snapshot} projectId={projectId} />
-          <BriefingObligationsSection snapshot={snapshot} projectId={projectId} />
-          <BriefingApprovalsSection snapshot={snapshot} />
+          <BriefingFundingFunnel steps={intelligence.fundingFunnel} />
+          <BriefingSettlementBlockersPanel blockers={intelligence.settlementBlockers} />
+          <BriefingSummarySection snapshot={intelligence.snapshot} projectId={projectId} />
+          <BriefingParticipantsSection
+            snapshot={intelligence.snapshot}
+            projectId={projectId}
+            participantActions={intelligence.participantActions}
+          />
+          <BriefingCommercialTermsSection snapshot={intelligence.snapshot} projectId={projectId} />
+          <BriefingObligationsSection snapshot={intelligence.snapshot} projectId={projectId} />
+          <BriefingApprovalsSection snapshot={intelligence.snapshot} />
           <BriefingSettlementSection
-            snapshot={snapshot}
+            snapshot={intelligence.snapshot}
             projectId={projectId}
             currency={currency}
             releaseConfidence={guidance.releaseConfidence}
@@ -185,7 +223,7 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
           <BriefingAuditSection auditEntries={auditEntries} />
         </div>
 
-        <BriefingIntelligencePanel snapshot={snapshot} />
+        <BriefingIntelligencePanel intelligence={intelligence} />
       </div>
 
       {obligationsLoading ? (

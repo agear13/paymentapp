@@ -11,6 +11,10 @@ import {
   Users,
 } from 'lucide-react';
 import type { AgreementBriefingSnapshot, BriefingObligationGroup } from '@/lib/agreements/agreement-briefing.model';
+import type {
+  AgreementIntelligenceOutput,
+  AgreementParticipantAction,
+} from '@/lib/agreements/intelligence/agreement-intelligence.types';
 import { BriefingSectionShell } from '@/components/agreements/briefing/briefing-section-shell';
 import { BriefingScoreRing } from '@/components/agreements/briefing/briefing-score-ring';
 import { IntelligenceBadge } from '@/components/provvypay/intelligence-badge';
@@ -126,12 +130,17 @@ export function BriefingSummarySection({
 export function BriefingParticipantsSection({
   snapshot,
   projectId,
-}: Pick<BriefingSectionsProps, 'snapshot' | 'projectId'>) {
+  participantActions = [],
+}: Pick<BriefingSectionsProps, 'snapshot' | 'projectId'> & {
+  participantActions?: AgreementParticipantAction[];
+}) {
+  const actionByParticipant = new Map(participantActions.map((a) => [a.participantId, a]));
+
   return (
     <BriefingSectionShell
       id="briefing-participants"
       title="Participants"
-      description="Parties to this agreement — roles, approvals, and settlement path."
+      description="Parties to this agreement — roles, approvals, settlement path, and required actions."
     >
       {snapshot.participants.length === 0 ? (
         <p className="text-sm text-muted-foreground py-4">
@@ -140,7 +149,9 @@ export function BriefingParticipantsSection({
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {snapshot.participants.map((participant) => (
+          {snapshot.participants.map((participant) => {
+            const action = actionByParticipant.get(participant.id);
+            return (
             <div
               key={participant.id}
               className="relative rounded-xl border border-[rgba(124,92,255,0.12)] bg-white p-4 shadow-sm"
@@ -177,10 +188,39 @@ export function BriefingParticipantsSection({
                       {participant.settlementStatus}
                     </Badge>
                   </div>
+                  {action ? (
+                    <div
+                      className={cn(
+                        'mt-4 rounded-lg border px-3 py-2.5 text-sm',
+                        action.isBlocking
+                          ? 'border-amber-500/25 bg-amber-50/60 dark:bg-amber-950/20'
+                          : 'border-[rgba(29,111,66,0.15)] bg-[rgba(223,247,232,0.35)]'
+                      )}
+                    >
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Required action
+                      </p>
+                      <p className="font-medium mt-1">{action.requiredAction}</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <Badge variant="outline" className="text-[10px]">
+                          {action.status}
+                        </Badge>
+                        <Badge variant="outline" className="text-[10px] capitalize">
+                          Priority: {action.priority}
+                        </Badge>
+                      </div>
+                      {action.ctaHref && action.ctaLabel ? (
+                        <Button asChild variant="link" size="sm" className="h-auto p-0 mt-2">
+                          <Link href={action.ctaHref}>{action.ctaLabel}</Link>
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
       <Button asChild variant="outline" size="sm" className="mt-2">
@@ -480,7 +520,17 @@ export function BriefingAuditSection({ auditEntries }: Pick<BriefingSectionsProp
   );
 }
 
-export function BriefingIntelligencePanel({ snapshot }: { snapshot: AgreementBriefingSnapshot }) {
+export function BriefingIntelligencePanel({
+  intelligence,
+}: {
+  intelligence: Pick<
+    AgreementIntelligenceOutput,
+    'snapshot' | 'primaryRecommendation' | 'settlementBlockers'
+  >;
+}) {
+  const { snapshot, primaryRecommendation, settlementBlockers } = intelligence;
+  const criticalBlocker = settlementBlockers.find((b) => b.severity === 'blocking') ?? settlementBlockers[0];
+
   const items = [
     { label: 'Agreement health', value: snapshot.healthLabel, accent: 'intelligence' as const },
     {
@@ -508,6 +558,31 @@ export function BriefingIntelligencePanel({ snapshot }: { snapshot: AgreementBri
 
   return (
     <aside className="space-y-4 lg:sticky lg:top-24 h-fit">
+      {primaryRecommendation ? (
+        <div className="surface-intelligence p-4 space-y-3 border-2 border-[rgba(124,92,255,0.2)]">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[rgb(124,92,255)]">
+            Do this next
+          </p>
+          <p className="text-sm font-semibold leading-snug">{primaryRecommendation.action}</p>
+          <Button asChild size="sm" className="w-full">
+            <Link href={primaryRecommendation.ctaHref}>
+              {primaryRecommendation.ctaLabel}
+              <ArrowRight className="ml-2 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+      ) : null}
+
+      {criticalBlocker ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 p-4 space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+            Critical blocker
+          </p>
+          <p className="text-sm font-medium">{criticalBlocker.label}</p>
+          <p className="text-xs text-muted-foreground">{criticalBlocker.resolution}</p>
+        </div>
+      ) : null}
+
       <div className="surface-intelligence p-5 space-y-4">
         <IntelligenceBadge />
         <p className="text-sm font-semibold">Agreement Intelligence</p>
