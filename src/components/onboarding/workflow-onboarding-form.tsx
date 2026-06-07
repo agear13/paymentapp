@@ -26,7 +26,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import {
   Collapsible,
   CollapsibleContent,
@@ -53,19 +52,41 @@ import {
 } from 'lucide-react';
 import {
   ONBOARDING_USE_CASES,
-  ONBOARDING_STEP_ORDER,
   ONBOARDING_PARTICIPANT_ROLES,
+  ONBOARDING_START_METHODS,
+  ONBOARDING_AGREEMENT_TEMPLATES,
+  ONBOARDING_IMPORT_SOURCES,
   COLLECTION_PREFERENCES,
-  onboardingStepIndex,
-  onboardingStepLabel,
-  onboardingStepTitle,
-  onboardingStepSubtext,
   normalizeOnboardingStep,
   type OnboardingStep,
   type OnboardingUseCaseId,
+  type OnboardingStartMethodId,
+  type OnboardingTemplateId,
   type OnboardingParticipantRole,
   type CollectionPreferenceId,
 } from '@/lib/onboarding/operator-onboarding-types';
+import {
+  buildInsightsFromExtraction,
+  buildInsightsFromManual,
+  buildInsightsFromTemplate,
+  rebuildInsightFromParticipants,
+  type AgreementIntelligenceInsight,
+} from '@/lib/onboarding/agreement-intelligence-insights';
+import { AgreementIntelligenceReport } from '@/components/onboarding/agreement-intelligence-report';
+import { OnboardingPricingPanel } from '@/components/onboarding/onboarding-pricing-panel';
+import { OnboardingTemplateGallery } from '@/components/onboarding/onboarding-template-gallery';
+import { OnboardingVisualHeader } from '@/components/provvypay/onboarding-visual-header';
+import { trackOnboardingActivation } from '@/lib/onboarding/onboarding-activation-analytics';
+import {
+  buildDemoAgreementInsight,
+  demoCreationSourceLabel,
+  DEMO_AGREEMENT_NAME,
+  DEMO_PARTICIPANTS,
+  DEMO_USE_CASE,
+} from '@/lib/onboarding/onboarding-demo-workspace';
+import type { ExtractionResult, SourceType } from '@/lib/ai-extractor/extraction-types';
+import { SOURCE_TYPE_LABELS } from '@/lib/ai-extractor/extraction-types';
+import { reviewFormFromExtraction } from '@/lib/ai-extractor/review-form-types';
 import {
   WORKSPACE_CURRENCIES,
   DEFAULT_WORKSPACE_CURRENCY,
@@ -86,13 +107,6 @@ import {
   saveOnboardingDraft,
 } from '@/lib/onboarding/onboarding-draft-persistence';
 import { createOperationId } from '@/lib/onboarding/mutation-resilience';
-import { CreateFromConversationButton } from '@/components/ai-extractor/create-from-conversation-button';
-import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import {
-  logOnboardingPipelineDemoParticipants,
-  logOnboardingPipelineDrafts,
-} from '@/lib/ai-extractor/onboarding-pipeline-instrumentation';
-import { mapDemoParticipantToOnboardingDraft } from '@/lib/onboarding/onboarding-participant-persist';
 
 const workspaceSchema = z.object({
   workspaceName: z.string().min(2, 'Workspace name is required').max(255),
@@ -128,32 +142,21 @@ function setOrgCookie() {
   document.cookie = 'provvypay_has_org=true; path=/; max-age=31536000';
 }
 
-function OnboardingProgress({ step }: { step: OnboardingStep }) {
-  const stepNumber = onboardingStepIndex(step) + 1;
-  const totalSteps = ONBOARDING_STEP_ORDER.length;
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-4">
-        <Badge variant="secondary">
-          Step {stepNumber} of {totalSteps}
-        </Badge>
-        <span className="text-sm text-muted-foreground">{onboardingStepLabel(step)}</span>
-      </div>
-      <div className="flex gap-1">
-        {ONBOARDING_STEP_ORDER.map((s, i) => (
-          <div
-            key={s}
-            className={cn(
-              'h-1 flex-1 rounded-full transition-colors',
-              i <= onboardingStepIndex(step) ? 'bg-primary' : 'bg-muted'
-            )}
-          />
-        ))}
-      </div>
-    </div>
+const selectionCardClass = (isSelected: boolean) =>
+  cn(
+    'relative rounded-xl border p-5 text-left transition-all duration-200 hover:border-[rgba(124,92,255,0.25)] hover:shadow-sm',
+    isSelected
+      ? 'border-[rgb(124,92,255)] bg-[rgba(124,92,255,0.06)] ring-2 ring-[rgba(124,92,255,0.12)] shadow-sm'
+      : 'border-[rgba(124,92,255,0.12)] bg-white'
   );
-}
+
+const selectionCardCompactClass = (isSelected: boolean) =>
+  cn(
+    'rounded-xl border p-3 text-left text-sm transition-all duration-200 hover:border-[rgba(124,92,255,0.25)]',
+    isSelected
+      ? 'border-[rgb(124,92,255)] bg-[rgba(124,92,255,0.06)] ring-2 ring-[rgba(124,92,255,0.12)]'
+      : 'border-[rgba(124,92,255,0.12)] bg-white'
+  );
 
 const COLLECTION_ICONS = {
   invoices: FileText,
@@ -162,39 +165,29 @@ const COLLECTION_ICONS = {
   decide_later: CalendarClock,
 } as const;
 
-function CompactOnboardingHeader({ step }: { step: OnboardingStep }) {
-  const subtext = onboardingStepSubtext(step);
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <span className="text-sm font-bold text-primary-foreground">P</span>
-          </div>
-          <span className="text-lg font-bold">Provvypay</span>
-        </Link>
-      </div>
-      <OnboardingProgress step={step} />
-      <div>
-        <h2 className="text-xl font-semibold">{onboardingStepTitle(step)}</h2>
-        {subtext ? <p className="text-sm text-muted-foreground mt-1">{subtext}</p> : null}
-      </div>
-    </div>
-  );
-}
-
 export function WorkflowOnboardingForm() {
   const router = useRouter();
   const [step, setStep] = React.useState<OnboardingStep>('workspace');
   const [isLoading, setIsLoading] = React.useState(false);
   const [useCase, setUseCase] = React.useState<OnboardingUseCaseId | null>(null);
   const [selectedUseCase, setSelectedUseCase] = React.useState<OnboardingUseCaseId | null>(null);
+  const [startMethod, setStartMethod] = React.useState<OnboardingStartMethodId | null>(null);
+  const [selectedStartMethod, setSelectedStartMethod] = React.useState<OnboardingStartMethodId | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = React.useState<OnboardingTemplateId | null>(null);
+  const [importSourceType, setImportSourceType] = React.useState<SourceType>('whatsapp');
+  const [importRawText, setImportRawText] = React.useState('');
+  const [importExtracting, setImportExtracting] = React.useState(false);
+  const [_extractionResult, setExtractionResult] = React.useState<ExtractionResult | null>(null);
+  const [agreementInsight, setAgreementInsight] = React.useState<AgreementIntelligenceInsight | null>(null);
+  const [isExploreMode, setIsExploreMode] = React.useState(false);
+  const [selectedPlanId, setSelectedPlanId] = React.useState('starter');
+  const agreementReviewTrackedRef = React.useRef(false);
+  const completeViewTrackedRef = React.useRef(false);
   const [organizationId, setOrganizationId] = React.useState<string | null>(null);
   const [merchantSettingsId, setMerchantSettingsId] = React.useState<string | null>(null);
   const [projectId, setProjectId] = React.useState<string | null>(null);
   const [projectName, setProjectName] = React.useState('');
   const [confirmedParticipants, setConfirmedParticipants] = React.useState<DraftParticipant[]>([]);
-  const [participantInputMode, setParticipantInputMode] = React.useState<'conversation' | 'manual'>('conversation');
   const [draftParticipant, setDraftParticipant] = React.useState<DraftParticipant>(EMPTY_PARTICIPANT());
   const [collectionPreference, setCollectionPreference] = React.useState<CollectionPreferenceId | null>(
     null
@@ -258,7 +251,7 @@ export function WorkflowOnboardingForm() {
     if (draft.merchantSettingsId) setMerchantSettingsId(draft.merchantSettingsId);
     if (draft.projectId) setProjectId(draft.projectId);
     if (draft.participants?.length) setConfirmedParticipants(draft.participants);
-    if (draft.step) setStep(normalizeOnboardingStep(draft.step));
+    if (draft.step) setStep(normalizeOnboardingStep(draft.step, Boolean(draft.organizationId)));
     if (draft.lastOperationId) bootstrapOperationIdRef.current = draft.lastOperationId;
 
     (async () => {
@@ -271,11 +264,22 @@ export function WorkflowOnboardingForm() {
             organizationId?: string;
             state?: {
               step?: OnboardingStep;
+              workspace_name?: string;
               merchantSettingsId?: string;
               projectId?: string;
               onboarding_use_case?: OnboardingUseCaseId;
               collection_preference?: CollectionPreferenceId;
             };
+          };
+          hasOrganization?: boolean;
+          organizationId?: string;
+          state?: {
+            step?: OnboardingStep;
+            workspace_name?: string;
+            merchantSettingsId?: string;
+            projectId?: string;
+            onboarding_use_case?: OnboardingUseCaseId;
+            collection_preference?: CollectionPreferenceId;
           };
         };
         const payload = data.data ?? data;
@@ -310,7 +314,138 @@ export function WorkflowOnboardingForm() {
   }, []);
 
   const selectedUseCaseMeta = ONBOARDING_USE_CASES.find((u) => u.id === useCase);
-  const isWelcomeStep = step === 'workspace' || step === 'use_case';
+  const isWelcomeStep = step === 'workspace' || step === 'start_method';
+
+  function mapReviewRoleToOnboardingRole(role: string): OnboardingParticipantRole {
+    const match = ONBOARDING_PARTICIPANT_ROLES.find(
+      (r) => r.value.toLowerCase() === role.toLowerCase() || r.label.toLowerCase() === role.toLowerCase()
+    );
+    return match?.value ?? 'Partner';
+  }
+
+  function participantsFromExtraction(result: ExtractionResult): DraftParticipant[] {
+    const form = reviewFormFromExtraction(result, 'onboarding', importSourceType);
+    return form.parties
+      .filter((p) => p.name.trim())
+      .map((p) => ({
+        name: p.name.trim(),
+        email: p.email.trim(),
+        role: mapReviewRoleToOnboardingRole(p.role),
+      }));
+  }
+
+  async function bootstrapAgreementProject(
+    name: string,
+    description?: string,
+    estimatedValue?: number
+  ): Promise<string | null> {
+    const currency = projectForm.getValues('defaultCurrency') || DEFAULT_WORKSPACE_CURRENCY;
+    projectForm.setValue('projectName', name);
+    if (description) projectForm.setValue('description', description);
+
+    const res = await fetch('/api/onboarding/bootstrap-project', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectName: name,
+        description,
+        estimatedValue,
+        defaultCurrency: currency,
+        onboarding_use_case: useCase ?? selectedUseCase ?? undefined,
+        onboarding_context: selectedUseCaseMeta?.title,
+        operationId: bootstrapOperationIdRef.current,
+        existingProjectId: projectId ?? undefined,
+      }),
+    });
+
+    const payload = await res.json().catch(() => ({}));
+    const data = payload.data ?? payload;
+    if (!res.ok || !data.organizationId || !data.projectId) {
+      toast.error(payload.error || 'Failed to create agreement');
+      return null;
+    }
+
+    setOrganizationId(data.organizationId);
+    setMerchantSettingsId(data.merchantSettingsId ?? null);
+    setProjectId(data.projectId);
+    setProjectName(name);
+    window.localStorage.setItem('provvypay.organizationId', data.organizationId);
+    setOrgCookie();
+    notifyWorkspaceActivationRefresh();
+    return data.projectId as string;
+  }
+
+  async function persistParticipantsForProject(
+    participants: DraftParticipant[],
+    targetProjectId?: string
+  ): Promise<boolean> {
+    const activeProjectId = targetProjectId ?? projectId;
+    if (!activeProjectId || participants.length === 0) return true;
+    const res = await fetch('/api/onboarding/participants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: activeProjectId, participants }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || 'Failed to save agreement participants');
+      return false;
+    }
+    setConfirmedParticipants(participants);
+    return true;
+  }
+
+  async function enterAgreementReview(
+    participants: DraftParticipant[],
+    insight: AgreementIntelligenceInsight
+  ) {
+    setConfirmedParticipants(participants);
+    setAgreementInsight(insight);
+    agreementReviewTrackedRef.current = false;
+    trackOnboardingActivation('agreement_intelligence_generated', {
+      organizationId,
+      projectId,
+      agreementType: insight.agreementType,
+      readinessScore: insight.readinessScore,
+      source: insight.creationSource,
+    });
+    trackOnboardingActivation('agreement_created', {
+      organizationId,
+      projectId,
+      source: insight.creationSource,
+    });
+    await persistState('agreement_review');
+    setStep('agreement_review');
+  }
+
+  React.useEffect(() => {
+    if (step !== 'agreement_review' || !agreementInsight || agreementReviewTrackedRef.current) {
+      return;
+    }
+    agreementReviewTrackedRef.current = true;
+    trackOnboardingActivation('agreement_readiness_viewed', {
+      organizationId,
+      projectId,
+      readinessScore: agreementInsight.readinessScore,
+      agreementType: agreementInsight.agreementType,
+    });
+  }, [step, agreementInsight, organizationId, projectId]);
+
+  React.useEffect(() => {
+    if (step !== 'complete' || completeViewTrackedRef.current) return;
+    completeViewTrackedRef.current = true;
+    trackOnboardingActivation('workspace_ready_viewed', { organizationId, projectId, exploreMode: isExploreMode });
+    trackOnboardingActivation('plan_viewed', { organizationId, projectId });
+  }, [step, organizationId, projectId, isExploreMode]);
+
+  function handlePlanSelect(planId: string) {
+    setSelectedPlanId(planId);
+    trackOnboardingActivation('plan_selected', {
+      organizationId,
+      projectId,
+      planId,
+    });
+  }
 
   async function onWorkspaceSubmit(values: z.infer<typeof workspaceSchema>) {
     setIsLoading(true);
@@ -343,7 +478,7 @@ export function WorkflowOnboardingForm() {
         body: JSON.stringify({
           organizationId: data.organizationId,
           state: {
-            step: 'use_case',
+            step: 'start_method',
             workspace_name: values.workspaceName,
             workspace_industry: values.industry,
             workspace_team_size: values.teamSize,
@@ -352,8 +487,11 @@ export function WorkflowOnboardingForm() {
           },
         }),
       });
-      setStep('use_case');
+      setStep('start_method');
       notifyWorkspaceActivationRefresh();
+      trackOnboardingActivation('workspace_created', {
+        organizationId: data.organizationId,
+      });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to create workspace');
     } finally {
@@ -395,6 +533,7 @@ export function WorkflowOnboardingForm() {
             completed: true,
             completedAt: new Date().toISOString(),
             onboarding_use_case: useCase ?? undefined,
+            onboarding_start_method: startMethod ?? undefined,
             onboarding_context: selectedUseCaseMeta?.title,
             collection_preference: collectionPreference ?? undefined,
             organizationId,
@@ -405,20 +544,226 @@ export function WorkflowOnboardingForm() {
       });
     }
     clearOnboardingDraft();
-    const params = new URLSearchParams({ workspace: 'ready' });
-    if (projectName.trim()) params.set('project', projectName.trim());
     notifyWorkspaceActivationRefresh();
-    router.push(`/dashboard?${params.toString()}`);
+    router.push(
+      projectId
+        ? `/dashboard/projects/${encodeURIComponent(projectId)}`
+        : '/dashboard?workspace=ready'
+    );
     router.refresh();
+  }
+
+  async function handleStartMethodContinue() {
+    if (!selectedStartMethod) return;
+    setStartMethod(selectedStartMethod);
+    trackOnboardingActivation('agreement_creation_method_selected', {
+      organizationId,
+      method: selectedStartMethod,
+    });
+    saveOnboardingDraft({ step: selectedStartMethod === 'import' ? 'import_source' : selectedStartMethod === 'template' ? 'template_select' : 'project' });
+    await persistState(
+      selectedStartMethod === 'import'
+        ? 'import_source'
+        : selectedStartMethod === 'template'
+          ? 'template_select'
+          : 'project',
+      { onboarding_start_method: selectedStartMethod }
+    );
+
+    if (selectedStartMethod === 'import') {
+      setStep('import_source');
+    } else if (selectedStartMethod === 'template') {
+      setStep('template_select');
+    } else {
+      setStep('project');
+    }
+  }
+
+  async function handleImportExtract() {
+    if (!importRawText.trim()) {
+      toast.error('Paste your commercial discussion to continue');
+      return;
+    }
+    trackOnboardingActivation('conversation_import_started', {
+      organizationId,
+      source: importSourceType,
+    });
+    setImportExtracting(true);
+    try {
+      const res = await fetch('/api/ai-extractor/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          rawText: importRawText.trim(),
+          sourceHint: SOURCE_TYPE_LABELS[importSourceType],
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? 'Extraction failed');
+      }
+      const result = (await res.json()) as ExtractionResult;
+      setExtractionResult(result);
+
+      const participants = participantsFromExtraction(result);
+      const agreementName =
+        result.projectName.value?.trim() ||
+        result.counterparty.value?.trim() ||
+        'Imported Agreement';
+
+      const bootstrappedId = await bootstrapAgreementProject(
+        agreementName,
+        result.projectDescription.value ?? undefined,
+        result.projectValue.value ?? undefined
+      );
+      if (!bootstrappedId) return;
+
+      const saved = await persistParticipantsForProject(participants, bootstrappedId);
+      if (!saved) return;
+
+      const insight = buildInsightsFromExtraction(result, participants);
+      trackOnboardingActivation('conversation_import_completed', {
+        organizationId,
+        projectId: bootstrappedId,
+        source: importSourceType,
+        readinessScore: insight.readinessScore,
+      });
+      toast.success('Agreement Intelligence ready');
+      await enterAgreementReview(participants, insight);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not analyze agreement');
+    } finally {
+      setImportExtracting(false);
+    }
+  }
+
+  async function handleTemplateContinue() {
+    if (!selectedTemplate) return;
+    const template = ONBOARDING_AGREEMENT_TEMPLATES.find((t) => t.id === selectedTemplate);
+    if (!template) return;
+
+    trackOnboardingActivation('template_selected', {
+      organizationId,
+      templateId: selectedTemplate,
+    });
+
+    setUseCase(template.useCaseId);
+    setSelectedUseCase(template.useCaseId);
+
+    const participants: DraftParticipant[] = template.participants.map((p) => ({
+      name: p.name,
+      email: '',
+      role: p.role,
+    }));
+
+    setIsLoading(true);
+    try {
+      const bootstrappedId = await bootstrapAgreementProject(template.agreementName, template.description);
+      if (!bootstrappedId) return;
+
+      const saved = await persistParticipantsForProject(participants, bootstrappedId);
+      if (!saved) return;
+
+      const insight = buildInsightsFromTemplate(selectedTemplate, participants);
+      toast.success('Template agreement configured');
+      await enterAgreementReview(participants, insight);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   async function handleUseCaseContinue() {
     if (!selectedUseCase) return;
     setUseCase(selectedUseCase);
+    trackOnboardingActivation('workflow_selected', {
+      organizationId,
+      projectId,
+      method: selectedUseCase,
+    });
     const meta = ONBOARDING_USE_CASES.find((u) => u.id === selectedUseCase);
-    saveOnboardingDraft({ useCase: selectedUseCase, context: meta?.title, step: 'project' });
-    await persistState('project');
-    setStep('project');
+    saveOnboardingDraft({ useCase: selectedUseCase, context: meta?.title, step: 'funding' });
+    await persistState('funding');
+    setStep('funding');
+  }
+
+  async function handleAgreementReviewContinue() {
+    setIsLoading(true);
+    try {
+      if (projectId && confirmedParticipants.length > 0) {
+        await persistParticipantsForProject(confirmedParticipants);
+      }
+
+      if (isExploreMode) {
+        setUseCase(DEMO_USE_CASE);
+        setSelectedUseCase(DEMO_USE_CASE);
+        setCollectionPreference('decide_later');
+        await persistState('complete', {
+          onboarding_use_case: DEMO_USE_CASE,
+          collection_preference: 'decide_later',
+        });
+        setStep('complete');
+        return;
+      }
+
+      await persistState('use_case');
+      setStep('use_case');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleSkipAndExplore() {
+    if (!organizationId) {
+      toast.error('Create your workspace first, then explore the demo agreement');
+      return;
+    }
+
+    setIsLoading(true);
+    trackOnboardingActivation('skip_and_explore_selected', { organizationId });
+
+    try {
+      setIsExploreMode(true);
+      setStartMethod(null);
+      setUseCase(DEMO_USE_CASE);
+      setSelectedUseCase(DEMO_USE_CASE);
+      setProjectName(DEMO_AGREEMENT_NAME);
+      projectForm.setValue('projectName', DEMO_AGREEMENT_NAME);
+
+      const bootstrappedId = await bootstrapAgreementProject(
+        DEMO_AGREEMENT_NAME,
+        'Demo revenue share agreement for exploration.'
+      );
+      if (!bootstrappedId) return;
+
+      const saved = await persistParticipantsForProject(DEMO_PARTICIPANTS, bootstrappedId);
+      if (!saved) return;
+
+      trackOnboardingActivation('demo_workspace_created', {
+        organizationId,
+        projectId: bootstrappedId,
+        exploreMode: true,
+      });
+
+      const insight = buildDemoAgreementInsight();
+      toast.success('Demo agreement ready');
+      await enterAgreementReview(DEMO_PARTICIPANTS, insight);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function finishOnboardingWithProviders() {
+    setIsLoading(true);
+    try {
+      await saveOptionalProviders(railsForm.getValues());
+      await persistState('complete');
+      setStep('complete');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to complete setup');
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   React.useEffect(() => {
@@ -544,11 +889,11 @@ export function WorkflowOnboardingForm() {
       notifyWorkspaceActivationRefresh();
 
       if (successMutation.status === 'PARTIAL_SUCCESS') {
-        toast.message('Project created', {
+        toast.message('Agreement created', {
           description: successMutation.operationalWarning,
         });
       } else {
-        toast.success('Project created');
+        toast.success('Agreement created');
       }
       setStep('participants');
     } catch {
@@ -588,34 +933,33 @@ export function WorkflowOnboardingForm() {
 
   async function onParticipantsContinue(skip: boolean) {
     if (!projectId) {
-      toast.error('Create a project first');
+      toast.error('Create an agreement first');
       return;
     }
     setIsLoading(true);
     try {
-      if (!skip) {
-        const valid = allParticipantsToSubmit();
-        if (valid.length > 0) {
-          const postBody = { projectId, participants: valid };
-          logOnboardingPipelineDrafts('clientPostPayload', valid, { projectId });
-          const res = await fetch('/api/onboarding/participants', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(postBody),
-          });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || 'Failed to add participants');
-          }
-          setConfirmedParticipants(valid);
-          setDraftParticipant(EMPTY_PARTICIPANT());
-          toast.success(`Added ${valid.length} participant${valid.length === 1 ? '' : 's'}`);
-        }
+      const valid = skip ? confirmedParticipants : allParticipantsToSubmit();
+      if (!skip && valid.length === 0) {
+        toast.error('Add at least one agreement participant');
+        return;
       }
-      await persistState('funding');
-      setStep('funding');
+
+      if (valid.length > 0) {
+        const saved = await persistParticipantsForProject(valid);
+        if (!saved) return;
+        setDraftParticipant(EMPTY_PARTICIPANT());
+        toast.success(`Captured ${valid.length} participant${valid.length === 1 ? '' : 's'}`);
+      }
+
+      const insight = buildInsightsFromManual({
+        agreementName: projectName || projectForm.getValues('projectName'),
+        participants: valid,
+        description: projectForm.getValues('description'),
+        creationSource: 'manual',
+      });
+      await enterAgreementReview(valid, insight);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to save participants');
+      toast.error(e instanceof Error ? e.message : 'Failed to save agreement participants');
     } finally {
       setIsLoading(false);
     }
@@ -623,7 +967,7 @@ export function WorkflowOnboardingForm() {
 
   async function onFundingContinue() {
     if (!collectionPreference) {
-      toast.error('Select how you usually collect money');
+      toast.error('Select how revenue will be collected');
       return;
     }
     setIsLoading(true);
@@ -652,18 +996,7 @@ export function WorkflowOnboardingForm() {
       throw new Error('Failed to save provider settings');
     }
     notifyWorkspaceActivationRefresh();
-    toast.success('Provider settings saved');
-  }
-
-  async function finishOnboardingWithProviders() {
-    setIsLoading(true);
-    try {
-      await saveOptionalProviders(railsForm.getValues());
-      await finishOnboarding();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to complete setup');
-      setIsLoading(false);
-    }
+    toast.success('Settlement infrastructure saved');
   }
 
   const stepBody = (
@@ -671,8 +1004,8 @@ export function WorkflowOnboardingForm() {
       {step === 'workspace' && (
         <div className="space-y-6">
           <p className="text-muted-foreground text-sm">
-            This workspace coordinates revenue, obligations, approvals, and payouts across your
-            projects. You can create additional projects later.
+            This workspace coordinates agreements, obligations, approvals, and settlement across
+            your commercial arrangements. You can create additional agreements later.
           </p>
           <Form {...workspaceForm}>
             <form
@@ -752,15 +1085,146 @@ export function WorkflowOnboardingForm() {
         </div>
       )}
 
+      {step === 'start_method' && (
+        <div className="space-y-6">
+          <div>
+            <p className="text-muted-foreground text-sm">
+              Provvypay transforms conversations into structured agreements with participants,
+              obligations, and settlement readiness.
+            </p>
+            <p className="text-muted-foreground text-sm mt-2">
+              All three paths are first-class workflows — choose the one that matches how your
+              arrangement was formed.
+            </p>
+          </div>
+          <div className="grid gap-3">
+            {ONBOARDING_START_METHODS.map((item) => {
+              const isSelected = selectedStartMethod === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedStartMethod(item.id)}
+                  className={selectionCardClass(isSelected)}
+                >
+                  {isSelected ? (
+                    <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <Check className="h-3 w-3" />
+                    </span>
+                  ) : null}
+                  <p className="font-medium pr-6">{item.title}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
+                  {item.id === 'import' ? (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Supported sources: WhatsApp, Email, Slack, SMS, Meeting Notes, Contract Text
+                    </p>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isLoading || !organizationId}
+              onClick={handleSkipAndExplore}
+            >
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Skip Setup And Explore
+            </Button>
+            <Button type="button" disabled={!selectedStartMethod} onClick={handleStartMethodContinue}>
+              Continue
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {step === 'import_source' && (
+        <div className="space-y-6">
+          <p className="text-muted-foreground text-sm">
+            Select where this commercial discussion took place. Agreement Intelligence adapts to
+            each source format.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {ONBOARDING_IMPORT_SOURCES.map((source) => (
+              <button
+                key={source}
+                type="button"
+                onClick={() => setImportSourceType(source)}
+                className={selectionCardCompactClass(importSourceType === source)}
+              >
+                {SOURCE_TYPE_LABELS[source]}
+              </button>
+            ))}
+          </div>
+          <div className="flex justify-between">
+            <Button type="button" variant="ghost" onClick={() => setStep('start_method')}>
+              Back
+            </Button>
+            <Button type="button" onClick={() => setStep('import_content')}>
+              Continue
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {step === 'import_content' && (
+        <div className="space-y-6">
+          <p className="text-muted-foreground text-sm">
+            Paste your {SOURCE_TYPE_LABELS[importSourceType]} conversation, email thread, meeting
+            notes, or contract text. Provvypay will extract participants, obligations, and
+            commercial terms automatically.
+          </p>
+          <Textarea
+            value={importRawText}
+            onChange={(e) => setImportRawText(e.target.value)}
+            placeholder="Paste your commercial discussion here…"
+            rows={10}
+          />
+          <div className="flex justify-between">
+            <Button type="button" variant="ghost" onClick={() => setStep('import_source')}>
+              Back
+            </Button>
+            <Button type="button" disabled={importExtracting} onClick={handleImportExtract}>
+              {importExtracting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Analyze Agreement
+              <Sparkles className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {step === 'template_select' && (
+        <div className="space-y-6">
+          <OnboardingTemplateGallery
+            selectedTemplateId={selectedTemplate}
+            onSelectTemplate={setSelectedTemplate}
+          />
+          <div className="flex justify-between">
+            <Button type="button" variant="ghost" onClick={() => setStep('start_method')}>
+              Back
+            </Button>
+            <Button type="button" disabled={!selectedTemplate || isLoading} onClick={handleTemplateContinue}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Continue
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {step === 'use_case' && (
         <div className="space-y-6">
           <div>
             <p className="text-muted-foreground text-sm">
-              Provvypay helps coordinate revenue, obligations, approvals, and payouts across
-              multiple parties.
+              Workflows determine how obligations and settlements are coordinated for this agreement.
             </p>
             <p className="text-muted-foreground text-sm mt-2">
-              Choose your primary workflow. You can create additional workflows later.
+              Choose the workflow that best matches your commercial arrangement. You can add more
+              workflows later.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -771,10 +1235,7 @@ export function WorkflowOnboardingForm() {
                   key={item.id}
                   type="button"
                   onClick={() => setSelectedUseCase(item.id)}
-                  className={cn(
-                    'relative rounded-lg border p-4 text-left transition-colors hover:bg-accent/40',
-                    isSelected && 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                  )}
+                  className={selectionCardClass(isSelected)}
                 >
                   {isSelected ? (
                     <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -787,7 +1248,10 @@ export function WorkflowOnboardingForm() {
               );
             })}
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-between">
+            <Button type="button" variant="ghost" onClick={() => setStep('agreement_review')}>
+              Back
+            </Button>
             <Button type="button" disabled={!selectedUseCase} onClick={handleUseCaseContinue}>
               Continue
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -799,12 +1263,8 @@ export function WorkflowOnboardingForm() {
       {step === 'project' && (
         <div className="space-y-6">
           <p className="text-muted-foreground text-sm">
-            Projects are where you coordinate participants, obligations, revenue, and payouts.
-            {selectedUseCaseMeta ? (
-              <span className="block mt-1 text-foreground/80">
-                Starting with: <strong>{selectedUseCaseMeta.title}</strong>
-              </span>
-            ) : null}
+            Define the commercial arrangement you are coordinating. Agreement Intelligence will
+            analyze these details before you configure settlement.
           </p>
           <Form {...projectForm}>
             <form onSubmit={projectForm.handleSubmit(onProjectSubmit)} className="space-y-4">
@@ -813,9 +1273,9 @@ export function WorkflowOnboardingForm() {
                 name="projectName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Project name</FormLabel>
+                    <FormLabel>Agreement name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Saturday Beach Event" {...field} />
+                      <Input placeholder="Coastal Promotions Revenue Share" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -826,9 +1286,13 @@ export function WorkflowOnboardingForm() {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description (optional)</FormLabel>
+                    <FormLabel>Commercial terms (optional)</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="What is this project coordinating?" rows={3} {...field} />
+                      <Textarea
+                        placeholder="Describe revenue structure, settlement timing, and approval requirements…"
+                        rows={3}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -851,7 +1315,7 @@ export function WorkflowOnboardingForm() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Default currency: {projectForm.watch('defaultCurrency')} (set in workspace setup).
-                Change it anytime under Collection & settlement setup.
+                Change it anytime under Revenue collection & settlement setup.
               </p>
               {bootstrapMutation &&
               bootstrapMutation.status !== 'SUCCESS' ? (
@@ -869,12 +1333,12 @@ export function WorkflowOnboardingForm() {
                 />
               ) : null}
               <div className="flex justify-between pt-2">
-                <Button type="button" variant="ghost" onClick={() => setStep('use_case')}>
+                <Button type="button" variant="ghost" onClick={() => setStep('start_method')}>
                   Back
                 </Button>
                 <Button type="submit" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Create project
+                  Continue
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
@@ -886,78 +1350,10 @@ export function WorkflowOnboardingForm() {
       {step === 'participants' && (
         <div className="space-y-6">
           <p className="text-muted-foreground text-sm">
-            Add promoters, suppliers, contractors, and other payout parties to your project. No
-            banking or KYC required yet.
+            Add the parties involved in this agreement. Banking and tax details can be captured
+            later — Agreement Intelligence will identify any gaps.
           </p>
 
-          {/* Input mode choice */}
-          <div className="space-y-2">
-            <p className="text-sm font-medium">How was this arrangement made?</p>
-            <div className="space-y-2">
-              {([
-                { value: 'conversation', label: 'Create From Conversation', description: 'Paste a WhatsApp, email, or other message and Provvypay extracts who gets paid.' },
-                { value: 'manual', label: 'Add Participants Manually', description: 'Enter participant details one by one.' },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setParticipantInputMode(opt.value)}
-                  className={cn(
-                    'w-full rounded-lg border p-4 text-left transition-colors hover:bg-accent/40',
-                    participantInputMode === opt.value && 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className={cn(
-                      'mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border',
-                      participantInputMode === opt.value ? 'border-primary bg-primary' : 'border-muted-foreground/40'
-                    )}>
-                      {participantInputMode === opt.value && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                      )}
-                    </span>
-                    <div>
-                      <p className="text-sm font-medium">{opt.label}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Conversation import */}
-          {participantInputMode === 'conversation' && (
-            <div className="flex flex-col items-start gap-3">
-              <CreateFromConversationButton
-                entryPoint="onboarding"
-                existingDeal={projectId ? { id: projectId, dealName: projectName, partner: '', value: 0, introducer: '', closer: '', status: 'Pending', lastUpdated: new Date().toISOString(), paymentStatus: 'Not Paid' } : undefined}
-                onComplete={(_dealId, participants) => {
-                  if (participants && participants.length > 0) {
-                    logOnboardingPipelineDemoParticipants('onCompletePayload', participants, {
-                      caller: 'workflow-onboarding-form.onComplete',
-                    });
-                    const asDraft: DraftParticipant[] = participants.map((p) =>
-                      mapDemoParticipantToOnboardingDraft(p)
-                    );
-                    setConfirmedParticipants((prev) => [...prev, ...asDraft]);
-                    setParticipantInputMode('manual');
-                  }
-                }}
-                size="lg"
-              />
-              {confirmedParticipants.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Or{' '}
-                  <button type="button" className="underline hover:text-foreground" onClick={() => setParticipantInputMode('manual')}>
-                    add participants manually instead
-                  </button>
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Confirmed participants list — shown in both modes */}
           {confirmedParticipants.length > 0 ? (
             <div className="space-y-2">
               {confirmedParticipants.map((p, index) => (
@@ -977,46 +1373,44 @@ export function WorkflowOnboardingForm() {
             </div>
           ) : null}
 
-          {/* Manual entry form — shown when mode is manual */}
-          {participantInputMode === 'manual' && (
-            <Card className="p-4 space-y-3">
-              <Input
-                placeholder="Name"
-                value={draftParticipant.name}
-                onChange={(e) => setDraftParticipant({ ...draftParticipant, name: e.target.value })}
-              />
-              <Input
-                type="email"
-                placeholder="Email (optional)"
-                value={draftParticipant.email}
-                onChange={(e) => setDraftParticipant({ ...draftParticipant, email: e.target.value })}
-              />
-              <Select
-                value={draftParticipant.role}
-                onValueChange={(v) =>
-                  setDraftParticipant({ ...draftParticipant, role: v as OnboardingParticipantRole })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ONBOARDING_PARTICIPANT_ROLES.map((r) => (
-                    <SelectItem key={r.value} value={r.value}>
-                      {r.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {ONBOARDING_PARTICIPANT_ROLES.find((r) => r.value === draftParticipant.role)?.description}
-              </p>
-              <Button type="button" variant="outline" size="sm" onClick={commitDraftParticipant}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add participant
-              </Button>
-            </Card>
-          )}
+          <Card className="p-4 space-y-3">
+            <p className="text-sm font-medium">Agreement Participants</p>
+            <Input
+              placeholder="Name"
+              value={draftParticipant.name}
+              onChange={(e) => setDraftParticipant({ ...draftParticipant, name: e.target.value })}
+            />
+            <Input
+              type="email"
+              placeholder="Email (optional)"
+              value={draftParticipant.email}
+              onChange={(e) => setDraftParticipant({ ...draftParticipant, email: e.target.value })}
+            />
+            <Select
+              value={draftParticipant.role}
+              onValueChange={(v) =>
+                setDraftParticipant({ ...draftParticipant, role: v as OnboardingParticipantRole })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ONBOARDING_PARTICIPANT_ROLES.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {ONBOARDING_PARTICIPANT_ROLES.find((r) => r.value === draftParticipant.role)?.description}
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={commitDraftParticipant}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add participant
+            </Button>
+          </Card>
 
           <div className="flex justify-between">
             <Button type="button" variant="ghost" onClick={() => setStep('project')}>
@@ -1033,12 +1427,63 @@ export function WorkflowOnboardingForm() {
               </Button>
               <Button type="button" disabled={isLoading} onClick={() => onParticipantsContinue(false)}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Continue
+                Analyze Agreement
+                <Sparkles className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </div>
         </div>
       )}
+
+      {step === 'agreement_review' && agreementInsight ? (
+        <div className="space-y-6">
+          <AgreementIntelligenceReport
+            insight={agreementInsight}
+            analyzing={importExtracting}
+            editableSection={
+              <div className="space-y-3">
+                {confirmedParticipants.map((p, index) => (
+                  <OnboardingParticipantCard
+                    key={`review-${p.name}-${index}`}
+                    participant={p}
+                    onUpdate={(next) => {
+                      const nextParticipants = confirmedParticipants.map((row, i) =>
+                        i === index ? next : row
+                      );
+                      setConfirmedParticipants(nextParticipants);
+                      setAgreementInsight(
+                        rebuildInsightFromParticipants(
+                          agreementInsight,
+                          nextParticipants,
+                          projectForm.getValues('description')
+                        )
+                      );
+                    }}
+                    onRemove={() => {
+                      const next = confirmedParticipants.filter((_, i) => i !== index);
+                      setConfirmedParticipants(next);
+                      setAgreementInsight(
+                        rebuildInsightFromParticipants(
+                          agreementInsight,
+                          next,
+                          projectForm.getValues('description')
+                        )
+                      );
+                    }}
+                  />
+                ))}
+              </div>
+            }
+          />
+          <div className="flex justify-end">
+            <Button type="button" disabled={isLoading} onClick={handleAgreementReviewContinue}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Continue
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {step === 'funding' && (
         <div className="space-y-6">
@@ -1051,10 +1496,7 @@ export function WorkflowOnboardingForm() {
                   key={item.id}
                   type="button"
                   onClick={() => setCollectionPreference(item.id)}
-                  className={cn(
-                    'relative rounded-lg border p-4 text-left transition-colors hover:bg-accent/40',
-                    isSelected && 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                  )}
+                  className={selectionCardClass(isSelected)}
                 >
                   {isSelected ? (
                     <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -1069,7 +1511,7 @@ export function WorkflowOnboardingForm() {
             })}
           </div>
           <div className="flex justify-between">
-            <Button type="button" variant="ghost" onClick={() => setStep('participants')}>
+            <Button type="button" variant="ghost" onClick={() => setStep('use_case')}>
               Back
             </Button>
             <Button type="button" disabled={!collectionPreference || isLoading} onClick={onFundingContinue}>
@@ -1084,7 +1526,7 @@ export function WorkflowOnboardingForm() {
       {step === 'payment_rails' && (
         <div className="space-y-6">
           <OnboardingProviderChecklist />
-          <Card className="p-5 border-primary/20 bg-primary/[0.03]">
+          <Card className="p-5 surface-intelligence border-0">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -1097,12 +1539,12 @@ export function WorkflowOnboardingForm() {
                     />
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Accept card payments and coordinate payout flows with Stripe Connect.
+                    Coordinate card revenue collection and settlement flows with Stripe Connect.
                   </p>
                 </div>
                 <Button asChild className="shrink-0">
                   <Link href="/dashboard/settings/merchant?onboarding=continue#payment-rails">
-                    Connect Stripe
+                    Configure Stripe
                   </Link>
                 </Button>
               </div>
@@ -1115,7 +1557,7 @@ export function WorkflowOnboardingForm() {
           <Collapsible open={advancedProvidersOpen} onOpenChange={setAdvancedProvidersOpen}>
             <CollapsibleTrigger asChild>
               <Button type="button" variant="ghost" className="w-full justify-between px-0 hover:bg-transparent">
-                <span className="text-sm font-medium">Other ways to collect and settle funds</span>
+                <span className="text-sm font-medium">Other settlement infrastructure</span>
                 <ChevronDown
                   className={cn('h-4 w-4 transition-transform', advancedProvidersOpen && 'rotate-180')}
                 />
@@ -1139,7 +1581,7 @@ export function WorkflowOnboardingForm() {
                       <FormControl>
                         <Input placeholder="Wise profile ID" {...field} />
                       </FormControl>
-                      <FormDescription>International bank transfer payouts.</FormDescription>
+                      <FormDescription>International bank transfer settlement.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1170,18 +1612,18 @@ export function WorkflowOnboardingForm() {
           </Collapsible>
 
           <p className="text-sm text-muted-foreground rounded-lg border bg-muted/30 px-4 py-3">
-            You can also record manual bank transfers or wallet payments without connecting a
-            provider.
+            You can also record manual settlements or external wallet transfers without connecting
+            infrastructure now.
           </p>
 
           <Card className="p-4 bg-muted/20">
             <div className="flex items-start gap-3">
               <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div className="space-y-2 flex-1">
-                <p className="text-sm font-medium">Need help choosing providers?</p>
+                <p className="text-sm font-medium">Need help choosing settlement infrastructure?</p>
                 <p className="text-sm text-muted-foreground">
-                  Provvypay Co-Pilot can recommend payout setups based on your workflow, countries,
-                  contractors, and settlement needs.
+                  Provvypay Co-Pilot can recommend settlement setups based on your workflow,
+                  countries, participants, and coordination needs.
                 </p>
                 <Button
                   type="button"
@@ -1210,10 +1652,59 @@ export function WorkflowOnboardingForm() {
               </Button>
               <Button type="button" disabled={isLoading} onClick={finishOnboardingWithProviders}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Go to workspace
+                Continue
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {step === 'complete' && (
+        <div className="space-y-8">
+          {agreementInsight ? (
+            <p className="text-sm text-muted-foreground surface-intelligence px-4 py-3">
+              {demoCreationSourceLabel(agreementInsight.creationSource)}
+            </p>
+          ) : null}
+
+          <div className="surface-settlement px-4 py-4 space-y-3">
+            <ul className="space-y-2 text-sm">
+              {[
+                'Participants Identified',
+                'Commercial Terms Captured',
+                'Obligations Extracted',
+                'Settlement Workflow Configured',
+                'Agreement Intelligence Complete',
+              ].map((item) => (
+                <li key={item} className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <OnboardingPricingPanel
+            selectedPlanId={selectedPlanId}
+            onSelectPlan={handlePlanSelect}
+          />
+
+          <div className="flex flex-col sm:flex-row gap-3 justify-between">
+            {projectId ? (
+              <Button type="button" variant="outline" asChild>
+                <Link href={`/dashboard/projects/${encodeURIComponent(projectId)}`}>
+                  View Agreement
+                </Link>
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button type="button" disabled={isLoading} onClick={finishOnboarding}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Start Using Provvypay
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </div>
         </div>
       )}
@@ -1232,17 +1723,18 @@ export function WorkflowOnboardingForm() {
 
   if (isWelcomeStep) {
     return (
-      <div className="w-full max-w-2xl space-y-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight">Welcome to Provvypay</h1>
-          <p className="mt-2 text-muted-foreground max-w-lg mx-auto">
-            Set up your workspace for coordinating revenue, obligations, and payouts across
-            multiple parties in a few guided steps.
-          </p>
-        </div>
-        <OnboardingProgress step={step} />
-        <div>
-          <h2 className="text-xl font-semibold mb-4">{onboardingStepTitle(step)}</h2>
+      <div className="w-full space-y-10">
+        {step === 'workspace' ? (
+          <div className="space-y-3 text-center animate-in fade-in duration-500">
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Welcome to Provvypay</h1>
+            <p className="text-muted-foreground max-w-lg mx-auto leading-relaxed">
+              Agreement Intelligence for commercial coordination. Set up your workspace, create your
+              first agreement, and configure settlement in a few guided steps.
+            </p>
+          </div>
+        ) : null}
+        <OnboardingVisualHeader step={step} centered={step === 'workspace'} />
+        <div key={step} className="animate-in fade-in slide-in-from-bottom-3 duration-500">
           {stepBody}
         </div>
       </div>
@@ -1250,9 +1742,11 @@ export function WorkflowOnboardingForm() {
   }
 
   return (
-    <div className="w-full max-w-2xl space-y-6">
-      <CompactOnboardingHeader step={step} />
-      {stepBody}
+    <div className="w-full space-y-10">
+      <OnboardingVisualHeader step={step} />
+      <div key={step} className="animate-in fade-in slide-in-from-bottom-3 duration-500">
+        {stepBody}
+      </div>
     </div>
   );
 }

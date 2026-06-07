@@ -62,13 +62,15 @@ export function OperationalHomeCommandCenter() {
           <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200" />
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-3 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200">
-          {auditTimeline.length > 0 ? (
-            <OperationalAuditTimeline entries={auditTimeline} />
-          ) : guidance.timeline.length > 0 ? (
-            <RecentOperationalEvents events={guidance.timeline} compact />
-          ) : (
-            <RecentOperationalEvents events={guidance.timeline} compact />
-          )}
+          <div className="surface-agreement-card p-4">
+            {auditTimeline.length > 0 ? (
+              <OperationalAuditTimeline entries={auditTimeline} />
+            ) : guidance.timeline.length > 0 ? (
+              <RecentOperationalEvents events={guidance.timeline} compact />
+            ) : (
+              <RecentOperationalEvents events={guidance.timeline} compact />
+            )}
+          </div>
         </CollapsibleContent>
       </Collapsible>
     </div>

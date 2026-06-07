@@ -26,7 +26,18 @@ const requiredVars = [
   'ENCRYPTION_KEY',
 ];
 
+const productionJobVars = [
+  'CRON_SECRET',
+];
+
+const recommendedProductionVars = [
+  'ADMIN_EMAIL_ALLOWLIST',
+];
+
 const optionalVars = [
+  'CRON_BASE_URL',
+  'ADMIN_EMAILS',
+  'ALLOW_STRIPE_TEST_KEYS',
   'DIRECT_URL',
   'SESSION_SECRET',
   'NEXT_PUBLIC_HEDERA_USDC_TOKEN_ID',
@@ -103,11 +114,35 @@ function validateVariable(varName, value) {
   }
 
   if (varName === 'STRIPE_WEBHOOK_SECRET') {
+    if (value.toLowerCase() === 'disabled') {
+      return { valid: false, error: 'Must not be "disabled" in production (B5 C1)' };
+    }
     if (!value.startsWith('whsec_')) {
       return { valid: false, error: 'Must start with "whsec_"' };
     }
   }
 
+  if (varName === 'CRON_SECRET') {
+    if (value.length < 16) {
+      return { valid: false, error: 'Must be at least 16 characters (B5 C3)' };
+    }
+  }
+
+  return { valid: true };
+}
+
+function validateProductionStripeKeys() {
+  if (process.env.ALLOW_STRIPE_TEST_KEYS === 'true') {
+    return { valid: true };
+  }
+  const sk = process.env.STRIPE_SECRET_KEY;
+  const pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  if (sk && sk.startsWith('sk_test_')) {
+    return { valid: false, error: 'STRIPE_SECRET_KEY must be sk_live_ in production (B5 C5) or set ALLOW_STRIPE_TEST_KEYS=true' };
+  }
+  if (pk && pk.startsWith('pk_test_')) {
+    return { valid: false, error: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY must be pk_live_ in production (B5 C5) or set ALLOW_STRIPE_TEST_KEYS=true' };
+  }
   return { valid: true };
 }
 
@@ -139,6 +174,51 @@ function main() {
       console.log(`✅ ${varName}`);
       console.log(`   ${maskedValue}\n`);
       validCount++;
+    }
+  });
+
+  console.log('\n📋 BACKGROUND JOBS (B3 — required in production):\n');
+
+  productionJobVars.forEach((varName) => {
+    const value = process.env[varName];
+    const validation = validateVariable(varName, value);
+    if (!validation.valid) {
+      console.log(`❌ ${varName}`);
+      console.log(`   ${validation.error}\n`);
+      hasErrors = true;
+      missingCount++;
+    } else {
+      const maskedValue =
+        value.length > 20
+          ? `${value.substring(0, 6)}...${value.substring(value.length - 4)}`
+          : '***';
+      console.log(`✅ ${varName}`);
+      console.log(`   ${maskedValue}\n`);
+      validCount++;
+    }
+  });
+
+  if (process.env.NODE_ENV === 'production') {
+    console.log('\n📋 PRODUCTION HARDENING (B5):\n');
+    const stripeProd = validateProductionStripeKeys();
+    if (!stripeProd.valid) {
+      console.log(`❌ Stripe live keys`);
+      console.log(`   ${stripeProd.error}\n`);
+      hasErrors = true;
+      missingCount++;
+    } else {
+      console.log(`✅ Stripe live keys (or ALLOW_STRIPE_TEST_KEYS override)\n`);
+      validCount++;
+    }
+  }
+
+  console.log('\n📋 RECOMMENDED (production admin — B5 C4):\n');
+  recommendedProductionVars.forEach((varName) => {
+    const value = process.env[varName];
+    if (value?.trim()) {
+      console.log(`✅ ${varName} (configured)`);
+    } else {
+      console.log(`⚠️  ${varName} (not set — admin routes may deny access)`);
     }
   });
 

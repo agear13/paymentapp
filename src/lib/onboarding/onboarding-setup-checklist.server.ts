@@ -32,7 +32,7 @@ export async function getOnboardingSetupChecklist(
   const workspaceActivated = onboardingState?.completed === true;
 
   return [
-    { id: 'stripe', label: 'Stripe connected', complete: stripeConnected },
+    { id: 'stripe', label: 'Stripe settlement configured', complete: stripeConnected },
     {
       id: 'currency',
       label: 'Default currency configured',
@@ -40,7 +40,7 @@ export async function getOnboardingSetupChecklist(
     },
     {
       id: 'revenue',
-      label: 'Revenue collection ready',
+      label: 'Agreement ready for settlement',
       complete: revenueCollectionReady,
     },
     {

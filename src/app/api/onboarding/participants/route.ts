@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
   const prev = (await getOperatorOnboardingState(org.id)) ?? { step: 'participants' as const };
   await saveOperatorOnboardingState(org.id, user.id, {
     ...prev,
-    step: 'funding',
+    step: 'agreement_review',
     projectId: deal.id,
     organizationId: org.id,
   });

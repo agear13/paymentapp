@@ -66,11 +66,13 @@ export function OperationalCommandCenterHero({
         ) : null}
       </div>
 
-      <div className={opSurface('raised', opSpace.surfacePad)}>
-        <ReleaseConfidenceSummary confidence={guidance.releaseConfidence} compact calmMode />
+      <div className={cn(opSurface('metric'), opSpace.surfacePad)}>
+        <div className="surface-settlement p-4 rounded-lg">
+          <ReleaseConfidenceSummary confidence={guidance.releaseConfidence} compact calmMode />
+        </div>
 
         {conf === 'BLOCKED' || missingBullets.length > 0 ? (
-          <div className="mt-4">
+          <div className="mt-4 surface-intelligence p-4 rounded-lg">
             <ProgressiveOperationalPanel
               title={OPERATOR_LABELS.releaseBlocked}
               summary={`${labelSafeToRelease(conf)} — complete setup to unlock payout release.`}

@@ -1,24 +1,24 @@
 export const COLLECTION_PREFERENCES = [
   {
     id: 'invoices',
-    title: 'Invoice-based collection',
+    title: 'Invoice Collection',
     description:
-      'Formal billing and settlement coordination for clients, suppliers, and project work.',
+      'Formal billing and settlement coordination for clients, suppliers, and commercial work.',
   },
   {
     id: 'payment_links',
-    title: 'Link-based collection',
-    description: 'Quick payments for bookings, deposits, sponsorships, and events.',
+    title: 'Payment Link Collection',
+    description: 'Quick revenue collection for bookings, deposits, sponsorships, and events.',
   },
   {
     id: 'manual_transfers',
-    title: 'Manual payment tracking',
-    description: 'Track external bank transfers, cash payments, or offline settlement activity.',
+    title: 'External Settlement Tracking',
+    description: 'Track external bank transfers, cash settlements, or offline settlement activity.',
   },
   {
     id: 'decide_later',
-    title: 'Configure later',
-    description: 'Skip setup for now and configure collection methods inside your workspace.',
+    title: 'Configure Later',
+    description: 'Skip setup for now and configure revenue collection inside your workspace.',
   },
 ] as const;
 

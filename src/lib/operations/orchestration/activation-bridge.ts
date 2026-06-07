@@ -60,11 +60,11 @@ function buildLegacyChecklist(input: WorkspaceActivationInput): ActivationCheckl
     { id: 'participants', label: 'Participants added', complete: input.participantCount > 0 },
     {
       id: 'compensation',
-      label: 'Participant compensation configured',
+      label: 'Commercial terms captured',
       complete: input.participantsConfigured,
     },
-    { id: 'provider', label: 'Payment provider connected', complete: provider },
-    { id: 'revenue', label: 'Revenue collection ready', complete: revenue },
+    { id: 'provider', label: 'Settlement infrastructure configured', complete: provider },
+    { id: 'revenue', label: 'Agreement ready for settlement', complete: revenue },
     { id: 'obligations', label: 'Obligations tracked', complete: input.obligationCount > 0 },
     {
       id: 'release',

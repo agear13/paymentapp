@@ -1,20 +1,18 @@
 # Provvypay Production Infrastructure on Render
-# 
-# Phase 1 Deployment: Web Service Only
-# Worker and cron services will be added in Phase 2
+#
+# B3: HTTP-triggered jobs run on provvypay-api; Render cron services invoke them via
+#     scripts/render-cron-invoke.mjs with CRON_SECRET (see docs/b3-*.md).
 #
 # Services:
-#   - Web: Next.js API server
-#   - Worker: Background job processor (Xero sync, retries) [DISABLED]
-#   - Cron: Scheduled tasks (FX rates, reconciliation) [DISABLED]
+#   - Web: Next.js API server (health: /api/health)
+#   - Cron: Scheduled HTTP invokes (one target per service)
+#   - Worker: [not enabled] — use API jobs + cron only
 #   - Database: Native Postgres
 #
 # Setup:
-#   1. Create Environment Group "provvypay-production" in Render dashboard
-#   2. Add all variables from .env.production to the group
-#   3. Push this file to GitHub
-#   4. In Render: New + → Blueprint → Connect repo → Apply
-#   5. After deployment: Shell into web service → npx prisma migrate deploy
+#   1. Create Environment Group "provvypay-production" with CRON_SECRET + app URL
+#   2. Push this file → Render Blueprint → Apply
+#   3. Shell into web service → npx prisma migrate deploy
 
 services:
   # Main API Server
@@ -25,9 +23,7 @@ services:
     plan: starter
     branch: main
     rootDir: src
-    # NODE_ENV=production omits devDependencies by default; Next.js build needs typescript/@types.
     buildCommand: npm ci --include=dev --legacy-peer-deps && BUILD_ID=${RENDER_GIT_COMMIT:-unknown} GIT_SHA=${RENDER_GIT_COMMIT:-unknown} npm run build
-
     startCommand: npm run start
     healthCheckPath: /api/health
     minInstances: 1
@@ -39,9 +35,6 @@ services:
         sync: false
       - key: ALLOW_INFRASTRUCTURE_DOMAINS
         sync: false
-      # Object storage (Cloudflare R2) — add to provvypay-production group:
-      # R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL
-      # Optional: ASSET_CDN_URL
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID
@@ -62,58 +55,107 @@ services:
           property: connectionString
       - fromGroup: provvypay-production
 
-  # Background Worker - DISABLED FOR PHASE 1
+  # --- B3: Scheduled background jobs (HTTP → provvypay-api) ---
+  - type: cron
+    name: provvypay-cron-expired-links
+    env: node
+    region: oregon
+    schedule: "*/5 * * * *"
+    branch: main
+    rootDir: src
+    buildCommand: "true"
+    startCommand: node scripts/render-cron-invoke.mjs expired-links
+    envVars:
+      - fromGroup: provvypay-production
+
+  - type: cron
+    name: provvypay-cron-recurring-templates
+    env: node
+    region: oregon
+    schedule: "*/5 * * * *"
+    branch: main
+    rootDir: src
+    buildCommand: "true"
+    startCommand: node scripts/render-cron-invoke.mjs recurring-templates
+    envVars:
+      - fromGroup: provvypay-production
+
+  - type: cron
+    name: provvypay-cron-xero-queue
+    env: node
+    region: oregon
+    schedule: "*/5 * * * *"
+    branch: main
+    rootDir: src
+    buildCommand: "true"
+    startCommand: node scripts/render-cron-invoke.mjs xero-queue
+    envVars:
+      - fromGroup: provvypay-production
+
+  - type: cron
+    name: provvypay-cron-stuck-payments
+    env: node
+    region: oregon
+    schedule: "*/15 * * * *"
+    branch: main
+    rootDir: src
+    buildCommand: "true"
+    startCommand: node scripts/render-cron-invoke.mjs stuck-payments
+    envVars:
+      - fromGroup: provvypay-production
+
+  - type: cron
+    name: provvypay-cron-stripe-reconciliation
+    env: node
+    region: oregon
+    schedule: "*/10 * * * *"
+    branch: main
+    rootDir: src
+    buildCommand: "true"
+    startCommand: node scripts/render-cron-invoke.mjs stripe-reconciliation
+    envVars:
+      - fromGroup: provvypay-production
+
+  - type: cron
+    name: provvypay-cron-ledger-integrity
+    env: node
+    region: oregon
+    schedule: "0 */6 * * *"
+    branch: main
+    rootDir: src
+    buildCommand: "true"
+    startCommand: node scripts/render-cron-invoke.mjs ledger-integrity
+    envVars:
+      - fromGroup: provvypay-production
+
+  - type: cron
+    name: provvypay-cron-system-integrity
+    env: node
+    region: oregon
+    schedule: "0 */4 * * *"
+    branch: main
+    rootDir: src
+    buildCommand: "true"
+    startCommand: node scripts/render-cron-invoke.mjs system-integrity
+    envVars:
+      - fromGroup: provvypay-production
+
+  - type: cron
+    name: provvypay-cron-monitoring-alerts
+    env: node
+    region: oregon
+    schedule: "0 * * * *"
+    branch: main
+    rootDir: src
+    buildCommand: "true"
+    startCommand: node scripts/render-cron-invoke.mjs monitoring-alerts
+    envVars:
+      - fromGroup: provvypay-production
+
+  # Background Worker — not used (B3 uses HTTP jobs on web + cron invoke)
   # - type: worker
   #   name: provvypay-worker
-  #   env: node
-  #   region: oregon
-  #   plan: starter
-  #   branch: main
-  #   rootDir: src
-  #   buildCommand: npm ci && npx prisma generate
-  #   startCommand: npm run worker
-  #   envVars:
-  #     - key: NODE_ENV
-  #       value: production
-  #     - key: DATABASE_URL
-  #       fromDatabase:
-  #         name: provvypay-db
-  #         property: connectionString
-  #     - fromGroup: provvypay-production
-
-  # Cron: FX Rates (Hourly) - DISABLED FOR PHASE 1
-  # - type: cron
-  #   name: provvypay-cron-fx
-  #   env: node
-  #   region: oregon
-  #   schedule: "0 * * * *"
-  #   branch: main
-  #   rootDir: src
-  #   buildCommand: npm ci && npx prisma generate
-  #   startCommand: npm run cron:fx-rates
-  #   envVars:
-  #     - key: DATABASE_URL
-  #       fromDatabase:
-  #         name: provvypay-db
-  #         property: connectionString
-  #     - fromGroup: provvypay-production
-
-  # Cron: Reconciliation (Daily 2 AM) - DISABLED FOR PHASE 1
-  # - type: cron
-  #   name: provvypay-cron-reconcile
-  #   env: node
-  #   region: oregon
-  #   schedule: "0 2 * * *"
-  #   branch: main
-  #   rootDir: src
-  #   buildCommand: npm ci && npx prisma generate
-  #   startCommand: npm run cron:reconcile
-  #   envVars:
-  #     - key: DATABASE_URL
-  #       fromDatabase:
-  #         name: provvypay-db
-  #         property: connectionString
-  #     - fromGroup: provvypay-production
+  #   ...
 
 databases:
   - name: provvypay-db
@@ -121,4 +163,3 @@ databases:
     user: provvypay
     region: oregon
     plan: basic-1gb
-

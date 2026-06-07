@@ -23,6 +23,22 @@ export const opSurfaceAction =
 export const opSurfaceWarning =
   'rounded-lg border border-border/60 bg-muted/20';
 
+/** Agreement Intelligence accent — purple gradient surface */
+export const opSurfaceIntelligence =
+  'rounded-lg border border-[rgba(124,92,255,0.15)] bg-gradient-to-br from-[rgba(124,92,255,0.06)] via-white to-[rgba(124,92,255,0.03)] shadow-sm';
+
+/** Settlement readiness accent — green surface */
+export const opSurfaceSettlement =
+  'rounded-lg border border-[rgba(29,111,66,0.15)] bg-[rgb(var(--settlement-success))]/50 shadow-sm';
+
+/** Top-level metric cards — clean white */
+export const opSurfaceMetric =
+  'rounded-lg border border-[rgba(124,92,255,0.08)] bg-white shadow-sm';
+
+/** Activity / timeline — neutral inset */
+export const opSurfaceActivity =
+  'rounded-lg border border-border/50 bg-muted/20';
+
 export const opDivider = 'border-border/70';
 export const opDividerSubtle = 'border-border/50';
 
@@ -37,7 +53,17 @@ export const opCtaButton =
   'transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/50';
 
 export function opSurface(
-  variant: 'base' | 'raised' | 'inset' | 'critical' | 'action' | 'warning' = 'raised',
+  variant:
+    | 'base'
+    | 'raised'
+    | 'inset'
+    | 'critical'
+    | 'action'
+    | 'warning'
+    | 'intelligence'
+    | 'settlement'
+    | 'metric'
+    | 'activity' = 'raised',
   className?: string
 ) {
   const map = {
@@ -47,6 +73,10 @@ export function opSurface(
     critical: opSurfaceCritical,
     action: opSurfaceAction,
     warning: opSurfaceWarning,
+    intelligence: opSurfaceIntelligence,
+    settlement: opSurfaceSettlement,
+    metric: opSurfaceMetric,
+    activity: opSurfaceActivity,
   };
   return cn(map[variant], opSpace.surfacePadCompact, className);
 }

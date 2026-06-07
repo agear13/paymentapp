@@ -3,26 +3,36 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* PROVVYPAY BRAND COLORS */
-  --primary: 81 112 255;           /* #5170ff - Vivid Blue */
+  /* PROVVYPAY AGREEMENT INTELLIGENCE BRAND */
+  --primary: 124 92 255;            /* #7C5CFF */
   --primary-foreground: 255 255 255;
-  --primary-hover: 61 92 224;       /* #3d5ce0 */
-  --primary-active: 41 72 204;      /* #2948cc */
+  --primary-hover: 106 75 255;      /* #6A4BFF */
+  --primary-active: 90 62 230;
+
+  /* INTELLIGENCE SURFACES */
+  --intelligence-bg: 15 16 39;      /* #0F1027 */
+  --intelligence-surface: 23 25 55; /* #171937 */
+  --intelligence-border: 124 92 255; /* used with alpha */
+  --agreement-card: 255 255 255;
+
+  /* SETTLEMENT */
+  --settlement-success: 223 247 232; /* #DFF7E8 */
+  --settlement-success-text: 29 111 66; /* #1D6F42 */
   
   /* BACKGROUNDS */
-  --background: 255 255 255;        /* #ffffff */
-  --foreground: 0 0 0;             /* #000000 */
+  --background: 255 255 255;
+  --foreground: 15 16 39;
   --card: 255 255 255;
-  --card-foreground: 0 0 0;
-  --popover: 255 255 255;          /* #ffffff */
-  --popover-foreground: 0 0 0;
+  --card-foreground: 15 16 39;
+  --popover: 255 255 255;
+  --popover-foreground: 15 16 39;
   
   /* NEUTRALS */
-  --muted: 168 168 168;            /* #a8a8a8 - Secondary text */
-  --muted-foreground: 115 115 115; /* #737373 */
-  --border: 229 229 229;           /* #e5e5e5 */
-  --input: 212 212 212;            /* #d4d4d4 */
-  --ring: 81 112 255;              /* #5170ff - Focus rings */
+  --muted: 243 244 246;
+  --muted-foreground: 102 112 133; /* #667085 */
+  --border: 229 231 235;
+  --input: 212 212 216;
+  --ring: 124 92 255;
   
   /* SECONDARY COLORS */
   --secondary: 245 245 245;        /* #f5f5f5 */
@@ -31,20 +41,20 @@
   --accent-foreground: 23 23 23;
   
   /* STATUS COLORS (Fintech) */
-  --success: 22 163 74;            /* #16a34a - PAID */
-  --warning: 245 158 11;           /* #f59e0b - PENDING */
-  --info: 81 112 255;              /* #5170ff - OPEN/INFO */
-  --destructive: 220 38 38;        /* #dc2626 - ERROR/EXPIRED */
+  --success: 29 111 66;            /* #1D6F42 */
+  --warning: 245 158 11;
+  --info: 124 92 255;
+  --destructive: 220 38 38;
   
   /* SIDEBAR */
-  --sidebar: 250 250 250;          /* #fafafa - Slightly off-white */
-  --sidebar-foreground: 38 38 38;  /* #262626 */
-  --sidebar-primary: 81 112 255;   /* #5170ff - Brand color for active */
+  --sidebar: 250 250 252;
+  --sidebar-foreground: 15 16 39;
+  --sidebar-primary: 124 92 255;
   --sidebar-primary-foreground: 255 255 255;
-  --sidebar-accent: 245 245 245;
-  --sidebar-accent-foreground: 23 23 23;
-  --sidebar-border: 229 229 229;
-  --sidebar-ring: 81 112 255;      /* #5170ff */
+  --sidebar-accent: 245 243 255;
+  --sidebar-accent-foreground: 15 16 39;
+  --sidebar-border: 229 231 235;
+  --sidebar-ring: 124 92 255;
   
   /* CRYPTO TOKEN COLORS (preserve for reports) */
   --token-stripe: 99 91 255;       /* #635BFF */
@@ -117,6 +127,10 @@
   --color-success: rgb(var(--success));
   --color-warning: rgb(var(--warning));
   --color-info: rgb(var(--info));
+  --color-intelligence-bg: rgb(var(--intelligence-bg));
+  --color-intelligence-surface: rgb(var(--intelligence-surface));
+  --color-settlement-success: rgb(var(--settlement-success));
+  --color-settlement-success-text: rgb(var(--settlement-success-text));
   
   /* Sidebar colors */
   --color-sidebar: rgb(var(--sidebar));
@@ -180,7 +194,7 @@ body {
   --accent-foreground: 250 250 250;
   --sidebar: 23 23 23;
   --sidebar-foreground: 250 250 250;
-  --sidebar-primary: 81 112 255;      /* Keep brand color in dark mode */
+  --sidebar-primary: 124 92 255;
   --sidebar-primary-foreground: 255 255 255;
   --sidebar-border: 38 38 38;
   --sidebar-accent: 38 38 38;
@@ -261,5 +275,51 @@ body {
   /* Trust indicator (last updated, etc) */
   .trust-indicator {
     @apply text-xs text-muted-foreground flex items-center gap-1;
+  }
+
+  /* Agreement Intelligence surfaces */
+  .surface-intelligence {
+    @apply rounded-xl border border-[rgba(124,92,255,0.15)] bg-gradient-to-br from-[rgba(124,92,255,0.06)] via-white to-[rgba(124,92,255,0.03)] shadow-sm;
+  }
+
+  .surface-agreement-card {
+    @apply rounded-xl border border-[rgba(124,92,255,0.12)] bg-white shadow-sm;
+  }
+
+  .surface-settlement {
+    @apply rounded-xl border border-[rgba(29,111,66,0.15)] bg-[rgb(var(--settlement-success))] text-[rgb(var(--settlement-success-text))];
+  }
+
+  .surface-elevated {
+    @apply rounded-2xl border border-[rgba(124,92,255,0.12)] bg-white shadow-lg shadow-[rgba(124,92,255,0.08)];
+  }
+
+  .text-intelligence-gradient {
+    @apply bg-gradient-to-r from-[#7C5CFF] to-[#9B7CFF] bg-clip-text text-transparent;
+  }
+
+  @keyframes intelligence-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(124, 92, 255, 0.25); }
+    50% { box-shadow: 0 0 0 6px rgba(124, 92, 255, 0.08); }
+  }
+
+  .animate-intelligence-pulse {
+    animation: intelligence-pulse 2.4s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(124, 92, 255, 0.08) 0%,
+      rgba(124, 92, 255, 0.18) 50%,
+      rgba(124, 92, 255, 0.08) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
   }
 }

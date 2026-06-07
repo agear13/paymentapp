@@ -25,10 +25,10 @@ export function OnboardingContinuationBanner({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-2">
             <Badge variant="secondary">Onboarding setup</Badge>
-            <h2 className="text-lg font-semibold">Finish connecting your payment providers</h2>
+            <h2 className="text-lg font-semibold">Finish configuring settlement infrastructure</h2>
             <p className="text-sm text-muted-foreground max-w-2xl">
-              Connect providers to begin collecting revenue and coordinating payouts across your
-              projects.
+              Configure settlement infrastructure to coordinate revenue collection and obligations
+              across your agreements.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:shrink-0">
