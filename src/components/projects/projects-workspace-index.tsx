@@ -21,6 +21,7 @@ import {
 import { useDealNetworkExperience } from '@/components/deal-network-demo/deal-network-experience-provider';
 import { useToast } from '@/hooks/use-toast';
 import { CreateFromConversationButton } from '@/components/ai-extractor/create-from-conversation-button';
+import { trackOutcomeOnce } from '@/lib/agreements/validation/agreement-intelligence-analytics';
 
 export function ProjectsWorkspaceIndex() {
   const router = useRouter();
@@ -124,6 +125,7 @@ export function ProjectsWorkspaceIndex() {
         return;
       }
       toast({ title: 'Agreement created', description: deal.dealName });
+      trackOutcomeOnce('outcome_first_agreement', { agreementName: deal.dealName, projectId: deal.id });
       setCreateOpen(false);
       router.push(`/dashboard/projects/${encodeURIComponent(deal.id)}`);
       router.refresh();

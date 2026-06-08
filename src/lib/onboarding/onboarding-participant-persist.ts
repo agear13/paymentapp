@@ -1,6 +1,9 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { OnboardingDraftParticipant } from '@/components/onboarding/onboarding-participant-card';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
+import { mapReviewToParticipants } from '@/lib/ai-extractor/extraction-mapper';
+import type { ExtractionResult, SourceType } from '@/lib/ai-extractor/extraction-types';
+import { reviewFormFromExtraction } from '@/lib/ai-extractor/review-form-types';
 import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
 import {
   PARTICIPANT_COMPENSATION_TYPES,
@@ -68,6 +71,26 @@ function normalizeCompensationProfile(
     customerAttributionEnabled: raw.customerAttributionEnabled,
     exemptFromPayout: raw.exemptFromPayout,
   };
+}
+
+/**
+ * Map AI extraction → onboarding POST drafts using the same compensation path as workspace import
+ * (reviewFormFromExtraction → mapReviewToParticipants → mapDemoParticipantToOnboardingDraft).
+ */
+export function onboardingDraftsFromExtraction(
+  result: ExtractionResult,
+  deal: RecentDeal,
+  sourceType: SourceType,
+  workspaceCurrency?: string | null
+): OnboardingDraftParticipant[] {
+  const form = reviewFormFromExtraction(result, 'onboarding', sourceType, undefined, {
+    project: deal,
+    workspaceCurrency,
+  });
+  const originalsById = new Map(result.parties.map((party) => [party.id, party]));
+  return mapReviewToParticipants(form, deal, originalsById)
+    .filter((participant) => participant.name.trim().length > 0)
+    .map((participant) => mapDemoParticipantToOnboardingDraft(participant));
 }
 
 /** Map validated POST body row to onboarding draft (single source of truth). */

@@ -44,6 +44,7 @@ import { ConfidenceBadge } from './confidence-badge';
 import { ReviewPartyCard } from './review-party-card';
 import { PostExtractionPrompt } from './post-extraction-prompt';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
+import { trackOutcomeOnce } from '@/lib/agreements/validation/agreement-intelligence-analytics';
 import {
   appendConversationImportToDeal,
   buildConversationImportAuditRecord,
@@ -265,6 +266,10 @@ export function ExtractionReviewModal({
           description: pCount > 0
             ? `${pCount} participant${pCount !== 1 ? 's' : ''} added`
             : newDeal.dealName,
+        });
+        trackOutcomeOnce('outcome_first_agreement', {
+          projectId: newDeal.id,
+          agreementName: newDeal.dealName,
         });
         appendOperationalAuditEntry(conversationImportToAuditEntry(newDeal.id, importRecord));
         for (const entry of buildIncompleteExtractionCompensationAuditEntries({

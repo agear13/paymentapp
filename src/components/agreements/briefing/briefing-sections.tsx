@@ -25,6 +25,7 @@ import { ReleaseConfidenceSummary } from '@/components/operations/release-confid
 import { ProjectFundingSourcesPanel } from '@/components/projects/project-funding-sources-panel';
 import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability';
 import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
+import { trackParticipantActionClick, trackRecommendationCtaClick } from '@/lib/agreements/validation/agreement-intelligence-analytics';
 import {
   projectCommercialRolesPath,
   projectObligationsPath,
@@ -131,8 +132,10 @@ export function BriefingParticipantsSection({
   snapshot,
   projectId,
   participantActions = [],
+  agreementName,
 }: Pick<BriefingSectionsProps, 'snapshot' | 'projectId'> & {
   participantActions?: AgreementParticipantAction[];
+  agreementName?: string;
 }) {
   const actionByParticipant = new Map(participantActions.map((a) => [a.participantId, a]));
 
@@ -211,7 +214,18 @@ export function BriefingParticipantsSection({
                       </div>
                       {action.ctaHref && action.ctaLabel ? (
                         <Button asChild variant="link" size="sm" className="h-auto p-0 mt-2">
-                          <Link href={action.ctaHref}>{action.ctaLabel}</Link>
+                          <Link
+                            href={action.ctaHref}
+                            onClick={() =>
+                              trackParticipantActionClick({
+                                projectId,
+                                agreementName,
+                                participantId: participant.id,
+                              })
+                            }
+                          >
+                            {action.ctaLabel}
+                          </Link>
                         </Button>
                       ) : null}
                     </div>
@@ -522,11 +536,17 @@ export function BriefingAuditSection({ auditEntries }: Pick<BriefingSectionsProp
 
 export function BriefingIntelligencePanel({
   intelligence,
+  projectId,
+  agreementName,
+  onRecommendationCtaClick,
 }: {
   intelligence: Pick<
     AgreementIntelligenceOutput,
     'snapshot' | 'primaryRecommendation' | 'settlementBlockers' | 'health'
   >;
+  projectId?: string;
+  agreementName?: string;
+  onRecommendationCtaClick?: () => void;
 }) {
   const { snapshot, primaryRecommendation, settlementBlockers, health } = intelligence;
   const criticalBlocker = settlementBlockers.find((b) => b.severity === 'blocking') ?? settlementBlockers[0];
@@ -566,7 +586,20 @@ export function BriefingIntelligencePanel({
           </p>
           <p className="text-sm font-semibold leading-snug">{primaryRecommendation.action}</p>
           <Button asChild size="sm" className="w-full">
-            <Link href={primaryRecommendation.ctaHref}>
+            <Link
+              href={primaryRecommendation.ctaHref}
+              onClick={() => {
+                onRecommendationCtaClick?.();
+                if (projectId) {
+                  trackRecommendationCtaClick({
+                    projectId,
+                    agreementName,
+                    recommendationId: primaryRecommendation.action,
+                    recommendationAction: primaryRecommendation.action,
+                  });
+                }
+              }}
+            >
               {primaryRecommendation.ctaLabel}
               <ArrowRight className="ml-2 h-3.5 w-3.5" />
             </Link>

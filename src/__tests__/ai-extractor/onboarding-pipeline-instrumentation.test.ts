@@ -9,6 +9,9 @@ import {
   startOnboardingPipelineSession,
   getActiveOnboardingPipelineSession,
 } from '@/lib/ai-extractor/onboarding-pipeline-instrumentation';
+import { onboardingDraftsFromExtraction } from '@/lib/onboarding/onboarding-participant-persist';
+import type { RecentDeal } from '@/lib/data/mock-deal-network';
+import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
 
 function islandParticipant(): DemoParticipant {
   return {
@@ -46,6 +49,47 @@ describe('onboarding-pipeline-instrumentation', () => {
     const snap = snapDraftParticipant({ name: 'Island DJs', role: 'Performer' });
     expect(snap.compensationProfile).toBeNull();
     expect(classifyTrackedOnboardingParty('Coastal Promotions')).toBe('coastal_promotions');
+  });
+
+  it('onboardingDraftsFromExtraction preserves compensation (remediation path)', () => {
+    const deal: RecentDeal = {
+      id: 'deal-1',
+      dealName: 'Event',
+      partner: 'Venue',
+      value: 0,
+      introducer: '',
+      closer: '',
+      status: 'Pending',
+      lastUpdated: '2026-01-01T00:00:00.000Z',
+      paymentStatus: 'Not Paid',
+      projectValueCurrency: 'AUD',
+    };
+    const result = {
+      projectName: { value: 'Event', confidence: 'high' as const },
+      projectDescription: { value: null, confidence: 'absent' as const },
+      projectValue: { value: null, confidence: 'absent' as const },
+      currency: { value: 'AUD', confidence: 'high' as const },
+      counterparty: { value: null, confidence: 'absent' as const },
+      parties: [
+        {
+          id: 'ep-1',
+          name: { value: 'Island DJs', confidence: 'high' as const },
+          email: { value: null, confidence: 'absent' as const },
+          role: { value: 'Contractor', confidence: 'high' as const },
+          participationModel: { value: 'fixed_payout' as const, confidence: 'high' as const },
+          fixedAmount: { value: 2500, confidence: 'high' as const },
+          revenueSharePct: { value: null, confidence: 'absent' as const },
+          notes: { value: null, confidence: 'absent' as const },
+        },
+      ],
+      paymentTerms: [],
+      uncertainties: [],
+      overallConfidence: 'high' as const,
+      sourceHint: 'whatsapp',
+      extractedAt: '2026-01-01T00:00:00.000Z',
+    } satisfies ExtractionResult;
+    const drafts = onboardingDraftsFromExtraction(result, deal, 'whatsapp', 'AUD');
+    expect(drafts[0]?.compensationProfile?.fixedAmount).toBe(2500);
   });
 
   it('snapDemoParticipant preserves fixed amount', () => {

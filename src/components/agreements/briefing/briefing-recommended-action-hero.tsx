@@ -6,10 +6,14 @@ import type { AgreementPrimaryRecommendation } from '@/lib/agreements/intelligen
 import { IntelligenceBadge } from '@/components/provvypay/intelligence-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { trackRecommendationCtaClick } from '@/lib/agreements/validation/agreement-intelligence-analytics';
 import { cn } from '@/lib/utils';
 
 type BriefingRecommendedActionHeroProps = {
   recommendation: AgreementPrimaryRecommendation | null;
+  projectId?: string;
+  agreementName?: string;
+  onRecommendationCtaClick?: () => void;
 };
 
 const urgencyClass: Record<AgreementPrimaryRecommendation['urgency'], string> = {
@@ -26,7 +30,12 @@ const urgencyLabel: Record<AgreementPrimaryRecommendation['urgency'], string> = 
   low: 'Suggested',
 };
 
-export function BriefingRecommendedActionHero({ recommendation }: BriefingRecommendedActionHeroProps) {
+export function BriefingRecommendedActionHero({
+  recommendation,
+  projectId,
+  agreementName,
+  onRecommendationCtaClick,
+}: BriefingRecommendedActionHeroProps) {
   if (!recommendation) {
     return (
       <section
@@ -92,7 +101,20 @@ export function BriefingRecommendedActionHero({ recommendation }: BriefingRecomm
             <Sparkles className="h-6 w-6 text-[rgb(124,92,255)]" />
           </div>
           <Button asChild size="lg" className="w-full sm:w-auto">
-            <Link href={recommendation.ctaHref}>
+            <Link
+              href={recommendation.ctaHref}
+              onClick={() => {
+                onRecommendationCtaClick?.();
+                if (projectId) {
+                  trackRecommendationCtaClick({
+                    projectId,
+                    agreementName,
+                    recommendationId: recommendation.action,
+                    recommendationAction: recommendation.action,
+                  });
+                }
+              }}
+            >
               {recommendation.ctaLabel}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

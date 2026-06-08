@@ -8,11 +8,19 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+import { trackBlockerCtaClick } from '@/lib/agreements/validation/agreement-intelligence-analytics';
+
 type BriefingSettlementBlockersPanelProps = {
   blockers: AgreementSettlementBlocker[];
+  projectId?: string;
+  agreementName?: string;
 };
 
-export function BriefingSettlementBlockersPanel({ blockers }: BriefingSettlementBlockersPanelProps) {
+export function BriefingSettlementBlockersPanel({
+  blockers,
+  projectId,
+  agreementName,
+}: BriefingSettlementBlockersPanelProps) {
   return (
     <BriefingSectionShell
       id="briefing-blockers"
@@ -70,7 +78,21 @@ export function BriefingSettlementBlockersPanel({ blockers }: BriefingSettlement
                 </div>
                 {blocker.ctaHref && blocker.ctaLabel ? (
                   <Button asChild variant="outline" size="sm" className="shrink-0">
-                    <Link href={blocker.ctaHref}>{blocker.ctaLabel}</Link>
+                    <Link
+                      href={blocker.ctaHref}
+                      onClick={() => {
+                        if (projectId) {
+                          trackBlockerCtaClick({
+                            projectId,
+                            agreementName,
+                            blockerId: blocker.id,
+                            blockerLabel: blocker.label,
+                          });
+                        }
+                      }}
+                    >
+                      {blocker.ctaLabel}
+                    </Link>
                   </Button>
                 ) : null}
               </div>

@@ -31,6 +31,8 @@ import {
   BriefingSettlementSection,
   BriefingSummarySection,
 } from '@/components/agreements/briefing/briefing-sections';
+import { useAgreementIntelligenceTracking } from '@/hooks/use-agreement-intelligence-tracking';
+import { AgreementIntelligenceFeedbackPrompt } from '@/components/agreements/validation/agreement-intelligence-feedback-prompt';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
 type AgreementIntelligenceBriefingProps = {
@@ -188,6 +190,13 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
     void refresh({ scope: 'all', silent: true, force: true });
   };
 
+  const { markRecommendationActed } = useAgreementIntelligenceTracking({
+    projectId,
+    agreementName: summary.name,
+    intelligence,
+    enabled: Boolean(intelligence),
+  });
+
   return (
     <div className="space-y-6">
       {sectionErrors.participants ? (
@@ -196,7 +205,14 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
         </p>
       ) : null}
 
-      <BriefingRecommendedActionHero recommendation={intelligence.primaryRecommendation} />
+      <BriefingRecommendedActionHero
+        recommendation={intelligence.primaryRecommendation}
+        projectId={projectId}
+        agreementName={summary.name}
+        onRecommendationCtaClick={markRecommendationActed}
+      />
+
+      <AgreementIntelligenceFeedbackPrompt kind="recommendation" />
 
       <BriefingSectionNav projectId={projectId} />
 
@@ -205,12 +221,18 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-6 min-w-0">
           <BriefingFundingFunnel steps={intelligence.fundingFunnel} />
-          <BriefingSettlementBlockersPanel blockers={intelligence.settlementBlockers} />
+          <BriefingSettlementBlockersPanel
+            blockers={intelligence.settlementBlockers}
+            projectId={projectId}
+            agreementName={summary.name}
+          />
+          <AgreementIntelligenceFeedbackPrompt kind="blocker" />
           <BriefingSummarySection snapshot={intelligence.snapshot} projectId={projectId} />
           <BriefingParticipantsSection
             snapshot={intelligence.snapshot}
             projectId={projectId}
             participantActions={intelligence.participantActions}
+            agreementName={summary.name}
           />
           <BriefingCommercialTermsSection snapshot={intelligence.snapshot} projectId={projectId} />
           <BriefingObligationsSection snapshot={intelligence.snapshot} projectId={projectId} />
@@ -226,7 +248,12 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
           <BriefingAuditSection auditEntries={auditEntries} />
         </div>
 
-        <BriefingIntelligencePanel intelligence={intelligence} />
+        <BriefingIntelligencePanel
+          intelligence={intelligence}
+          projectId={projectId}
+          agreementName={summary.name}
+          onRecommendationCtaClick={markRecommendationActed}
+        />
       </div>
 
       {obligationsLoading ? (

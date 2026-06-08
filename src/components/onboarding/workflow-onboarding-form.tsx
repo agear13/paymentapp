@@ -77,6 +77,7 @@ import { OnboardingPricingPanel } from '@/components/onboarding/onboarding-prici
 import { OnboardingTemplateGallery } from '@/components/onboarding/onboarding-template-gallery';
 import { OnboardingVisualHeader } from '@/components/provvypay/onboarding-visual-header';
 import { trackOnboardingActivation } from '@/lib/onboarding/onboarding-activation-analytics';
+import { trackOutcomeOnce } from '@/lib/agreements/validation/agreement-intelligence-analytics';
 import {
   buildDemoAgreementInsight,
   demoCreationSourceLabel,
@@ -86,7 +87,8 @@ import {
 } from '@/lib/onboarding/onboarding-demo-workspace';
 import type { ExtractionResult, SourceType } from '@/lib/ai-extractor/extraction-types';
 import { SOURCE_TYPE_LABELS } from '@/lib/ai-extractor/extraction-types';
-import { reviewFormFromExtraction } from '@/lib/ai-extractor/review-form-types';
+import { onboardingDraftsFromExtraction } from '@/lib/onboarding/onboarding-participant-persist';
+import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import {
   WORKSPACE_CURRENCIES,
   DEFAULT_WORKSPACE_CURRENCY,
@@ -316,24 +318,6 @@ export function WorkflowOnboardingForm() {
   const selectedUseCaseMeta = ONBOARDING_USE_CASES.find((u) => u.id === useCase);
   const isWelcomeStep = step === 'workspace' || step === 'start_method';
 
-  function mapReviewRoleToOnboardingRole(role: string): OnboardingParticipantRole {
-    const match = ONBOARDING_PARTICIPANT_ROLES.find(
-      (r) => r.value.toLowerCase() === role.toLowerCase() || r.label.toLowerCase() === role.toLowerCase()
-    );
-    return match?.value ?? 'Partner';
-  }
-
-  function participantsFromExtraction(result: ExtractionResult): DraftParticipant[] {
-    const form = reviewFormFromExtraction(result, 'onboarding', importSourceType);
-    return form.parties
-      .filter((p) => p.name.trim())
-      .map((p) => ({
-        name: p.name.trim(),
-        email: p.email.trim(),
-        role: mapReviewRoleToOnboardingRole(p.role),
-      }));
-  }
-
   async function bootstrapAgreementProject(
     name: string,
     description?: string,
@@ -372,6 +356,10 @@ export function WorkflowOnboardingForm() {
     window.localStorage.setItem('provvypay.organizationId', data.organizationId);
     setOrgCookie();
     notifyWorkspaceActivationRefresh();
+    trackOutcomeOnce('outcome_first_agreement', {
+      projectId: data.projectId,
+      agreementName: name,
+    });
     return data.projectId as string;
   }
 
@@ -606,7 +594,6 @@ export function WorkflowOnboardingForm() {
       const result = (await res.json()) as ExtractionResult;
       setExtractionResult(result);
 
-      const participants = participantsFromExtraction(result);
       const agreementName =
         result.projectName.value?.trim() ||
         result.counterparty.value?.trim() ||
@@ -618,6 +605,28 @@ export function WorkflowOnboardingForm() {
         result.projectValue.value ?? undefined
       );
       if (!bootstrappedId) return;
+
+      const extractedCurrency = result.currency.value;
+      const dealForImport: RecentDeal = {
+        id: bootstrappedId,
+        dealName: agreementName,
+        partner: agreementName,
+        value: result.projectValue.value ?? 0,
+        introducer: '',
+        closer: '',
+        status: 'Pending',
+        lastUpdated: new Date().toISOString(),
+        paymentStatus: 'Not Paid',
+        projectValueCurrency:
+          extractedCurrency === 'AUD' || extractedCurrency === 'USD' ? extractedCurrency : 'AUD',
+      };
+
+      const participants = onboardingDraftsFromExtraction(
+        result,
+        dealForImport,
+        importSourceType,
+        projectForm.getValues('defaultCurrency') || DEFAULT_WORKSPACE_CURRENCY
+      );
 
       const saved = await persistParticipantsForProject(participants, bootstrappedId);
       if (!saved) return;
@@ -690,10 +699,6 @@ export function WorkflowOnboardingForm() {
   async function handleAgreementReviewContinue() {
     setIsLoading(true);
     try {
-      if (projectId && confirmedParticipants.length > 0) {
-        await persistParticipantsForProject(confirmedParticipants);
-      }
-
       if (isExploreMode) {
         setUseCase(DEMO_USE_CASE);
         setSelectedUseCase(DEMO_USE_CASE);

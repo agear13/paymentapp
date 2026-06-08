@@ -44,6 +44,7 @@ export const PAYOUTS_COMMISSIONS_HREF = '/dashboard/payouts/commissions';
 export const PAYOUTS_SETTLEMENTS_HREF = '/dashboard/payouts/settlements';
 export const REPORTS_LEDGER_HREF = '/dashboard/reports/ledger';
 export const REPORTS_EXPORTS_HREF = '/dashboard/reports/exports';
+export const REPORTS_AGREEMENT_INTELLIGENCE_HREF = '/dashboard/reports/agreement-intelligence';
 
 const DEAL_NETWORK_BASE = '/dashboard/partners/deal-network';
 
@@ -109,6 +110,7 @@ export function getOperatorNavSections(
       icon: BarChart3,
       items: [
         { title: 'Overview', href: '/dashboard/reports' },
+        { title: 'Agreement Intelligence', href: REPORTS_AGREEMENT_INTELLIGENCE_HREF, icon: Activity },
         { title: 'Ledger', href: REPORTS_LEDGER_HREF, icon: BookOpen },
         { title: 'Export Center', href: REPORTS_EXPORTS_HREF, icon: Download },
       ],
@@ -235,6 +237,13 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
 
   if (href === REPORTS_EXPORTS_HREF) {
     return path === REPORTS_EXPORTS_HREF || path.startsWith(`${REPORTS_EXPORTS_HREF}/`);
+  }
+
+  if (href === REPORTS_AGREEMENT_INTELLIGENCE_HREF) {
+    return (
+      path === REPORTS_AGREEMENT_INTELLIGENCE_HREF ||
+      path.startsWith(`${REPORTS_AGREEMENT_INTELLIGENCE_HREF}/`)
+    );
   }
 
   if (sectionId === 'reports') {
