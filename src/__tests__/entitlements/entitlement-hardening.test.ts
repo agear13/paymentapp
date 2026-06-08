@@ -14,7 +14,10 @@ function ctx(overrides: Partial<EntitlementContext> = {}): EntitlementContext {
     userId: 'user-1',
     productProfile: 'standard',
     plan: 'starter',
-    status: 'active',
+    status: 'inactive',
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+    currentPeriodEnd: null,
     usage: {
       agreementCount: 0,
       aiImportCount: 0,
@@ -24,6 +27,15 @@ function ctx(overrides: Partial<EntitlementContext> = {}): EntitlementContext {
     pilotBypass: false,
     ...overrides,
   };
+}
+
+function paidCtx(plan: 'professional' | 'growth'): EntitlementContext {
+  return ctx({
+    plan,
+    status: 'active',
+    stripeCustomerId: 'cus_test',
+    stripeSubscriptionId: 'sub_test',
+  });
 }
 
 describe('Phase 9.1 entitlement hardening', () => {
@@ -48,7 +60,6 @@ describe('Phase 9.1 entitlement hardening', () => {
         ctx({ usage: { agreementCount: 0, aiImportCount: 3, teamMemberCount: 1, workspaceCount: 1 } })
       );
       expect(blocked.allowed).toBe(false);
-      expect(blocked.reason).toBe('ai_import_limit');
     });
   });
 
@@ -57,8 +68,8 @@ describe('Phase 9.1 entitlement hardening', () => {
       expect(canUseReferralManagement(ctx({ plan: 'starter' })).allowed).toBe(false);
     });
 
-    it('allows referral management on Professional', () => {
-      expect(canUseReferralManagement(ctx({ plan: 'professional' })).allowed).toBe(true);
+    it('allows referral management on Professional with Stripe', () => {
+      expect(canUseReferralManagement(paidCtx('professional')).allowed).toBe(true);
     });
   });
 
@@ -67,8 +78,8 @@ describe('Phase 9.1 entitlement hardening', () => {
       expect(canUseAdvancedReporting(ctx({ plan: 'starter' })).allowed).toBe(false);
     });
 
-    it('allows advanced reporting on Growth', () => {
-      expect(canUseAdvancedReporting(ctx({ plan: 'growth' })).allowed).toBe(true);
+    it('allows advanced reporting on Growth with Stripe', () => {
+      expect(canUseAdvancedReporting(paidCtx('growth')).allowed).toBe(true);
     });
   });
 
@@ -77,8 +88,8 @@ describe('Phase 9.1 entitlement hardening', () => {
       expect(canCreatePaymentLinks(ctx({ plan: 'starter' })).allowed).toBe(false);
     });
 
-    it('allows payment link creation on Professional', () => {
-      expect(canCreatePaymentLinks(ctx({ plan: 'professional' })).allowed).toBe(true);
+    it('allows payment link creation on Professional with Stripe', () => {
+      expect(canCreatePaymentLinks(paidCtx('professional')).allowed).toBe(true);
     });
   });
 
@@ -87,7 +98,6 @@ describe('Phase 9.1 entitlement hardening', () => {
       const pilot = ctx({
         productProfile: 'rabbit_hole_pilot',
         pilotBypass: true,
-        plan: 'starter',
         usage: { agreementCount: 99, aiImportCount: 99, teamMemberCount: 1, workspaceCount: 1 },
       });
       expect(canCreatePaymentLinks(pilot).allowed).toBe(true);

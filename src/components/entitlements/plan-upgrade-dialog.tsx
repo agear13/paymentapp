@@ -43,12 +43,14 @@ export function PlanUpgradeDialog({
   organizationId,
 }: PlanUpgradeDialogProps) {
   const { refresh } = useEntitlements();
-  const [saving, setSaving] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const targetPlan = ONBOARDING_PRICING_PLANS.find((p) => p.id === requiredPlan);
 
   React.useEffect(() => {
     if (!open) return;
+    setError(null);
     trackEntitlementAnalytics('upgrade_prompt_opened', {
       organizationId,
       currentPlan,
@@ -70,24 +72,38 @@ export function PlanUpgradeDialog({
       return;
     }
 
-    if (!organizationId) {
+    if (requiredPlan !== 'professional' && requiredPlan !== 'growth') {
       onOpenChange(false);
       return;
     }
 
-    setSaving(true);
+    setLoading(true);
+    setError(null);
     try {
-      await fetch(`/api/organizations/${organizationId}/subscription`, {
-        method: 'PATCH',
+      const res = await fetch('/api/billing/create-checkout-session', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ plan: requiredPlan, status: 'active' }),
+        body: JSON.stringify({ plan: requiredPlan }),
       });
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: { url?: string };
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(json.error ?? 'Could not start checkout');
+      }
+      const url = json.data?.url;
+      if (!url) {
+        throw new Error('Checkout URL missing');
+      }
       invalidateEntitlementsCache();
       await refresh();
-      onOpenChange(false);
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Checkout failed');
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   }
 
@@ -117,14 +133,15 @@ export function PlanUpgradeDialog({
               ))}
             </ul>
           ) : null}
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Not now
           </Button>
-          <Button type="button" onClick={handleUpgradeClick} disabled={saving}>
-            {upgradeCta(requiredPlan)}
+          <Button type="button" onClick={handleUpgradeClick} disabled={loading}>
+            {loading ? 'Redirecting…' : upgradeCta(requiredPlan)}
           </Button>
         </DialogFooter>
       </DialogContent>

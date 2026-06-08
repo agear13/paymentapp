@@ -10,6 +10,11 @@ import {
   STARTER_MAX_AGREEMENTS,
   STARTER_MAX_AI_IMPORTS,
 } from '@/lib/entitlements/plans';
+import {
+  getEffectivePlan,
+  hasActivePaidSubscription,
+  requiresPaidSubscription,
+} from '@/lib/entitlements/subscription-state';
 
 function allowed(): EntitlementDecision {
   return { allowed: true };
@@ -29,7 +34,23 @@ function checkPlan(
   reason: string
 ): EntitlementDecision {
   if (ctx.pilotBypass) return allowed();
-  if (hasMinimumPlan(ctx.plan, requiredPlan)) return allowed();
+
+  const effectivePlan = getEffectivePlan(ctx);
+  if (hasMinimumPlan(effectivePlan, requiredPlan)) {
+    if (requiresPaidSubscription(requiredPlan) && !hasActivePaidSubscription(ctx)) {
+      return denied(requiredPlan, 'subscription_inactive');
+    }
+    return allowed();
+  }
+
+  if (
+    hasMinimumPlan(ctx.plan, requiredPlan) &&
+    requiresPaidSubscription(requiredPlan) &&
+    !hasActivePaidSubscription(ctx)
+  ) {
+    return denied(requiredPlan, 'subscription_inactive');
+  }
+
   return denied(requiredPlan, reason);
 }
 
@@ -39,7 +60,7 @@ export function isEntitlementGatingActive(ctx: EntitlementContext): boolean {
 
 export function canCreateAgreement(ctx: EntitlementContext): EntitlementDecision {
   if (ctx.pilotBypass) return allowed();
-  if (hasMinimumPlan(ctx.plan, 'professional')) return allowed();
+  if (hasMinimumPlan(getEffectivePlan(ctx), 'professional')) return allowed();
   if (ctx.usage.agreementCount < STARTER_MAX_AGREEMENTS) return allowed();
   return denied('professional', 'active_agreement_limit', {
     limit: STARTER_MAX_AGREEMENTS,
@@ -49,7 +70,7 @@ export function canCreateAgreement(ctx: EntitlementContext): EntitlementDecision
 
 export function canUseAiImport(ctx: EntitlementContext): EntitlementDecision {
   if (ctx.pilotBypass) return allowed();
-  if (hasMinimumPlan(ctx.plan, 'professional')) return allowed();
+  if (hasMinimumPlan(getEffectivePlan(ctx), 'professional')) return allowed();
   if (ctx.usage.aiImportCount < STARTER_MAX_AI_IMPORTS) return allowed();
   return denied('professional', 'ai_import_limit', {
     limit: STARTER_MAX_AI_IMPORTS,
@@ -88,7 +109,7 @@ export function canUseAutomatedSettlementCoordination(ctx: EntitlementContext): 
 export function canCreateAdditionalOrganization(ctx: EntitlementContext): EntitlementDecision {
   if (ctx.pilotBypass) return allowed();
   if (ctx.usage.workspaceCount < 1) return allowed();
-  if (hasMinimumPlan(ctx.plan, 'enterprise')) return allowed();
+  if (hasMinimumPlan(getEffectivePlan(ctx), 'enterprise')) return allowed();
   return denied('enterprise', 'multi_organisation_enterprise');
 }
 
@@ -140,7 +161,12 @@ export function buildWorkspaceEntitlements(ctx: EntitlementContext): WorkspaceEn
 
   return {
     plan: ctx.plan,
+    effectivePlan: getEffectivePlan(ctx),
     status: ctx.status,
+    hasActivePaidSubscription: hasActivePaidSubscription(ctx),
+    stripeCustomerId: ctx.stripeCustomerId,
+    stripeSubscriptionId: ctx.stripeSubscriptionId,
+    currentPeriodEnd: ctx.currentPeriodEnd?.toISOString() ?? null,
     usage: ctx.usage,
     pilotBypass: ctx.pilotBypass,
     features,

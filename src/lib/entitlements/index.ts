@@ -21,6 +21,13 @@ export {
 export { requireReferralManagementEntitlement } from '@/lib/entitlements/gate-referral-admin.server';
 
 export {
+  getEffectivePlan,
+  hasActivePaidSubscription,
+  isPaidFeatureAllowed,
+  requiresPaidSubscription,
+} from '@/lib/entitlements/subscription-state';
+
+export {
   canCreateAgreement,
   canUseAiImport,
   canCreatePaymentLinks,

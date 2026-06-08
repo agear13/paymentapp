@@ -35,6 +35,13 @@ import { generateCorrelationId } from '@/lib/services/correlation';
 import { confirmPayment } from '@/lib/services/payment-confirmation';
 import Stripe from 'stripe';
 import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
+import {
+  handleSaasCheckoutSessionCompleted,
+  handleSaasSubscriptionDeleted,
+  handleSaasSubscriptionUpdated,
+  isSaasBillingCheckoutSession,
+} from '@/lib/billing/stripe-subscription.server';
+import { SAAS_BILLING_CHECKOUT_TYPE } from '@/lib/billing/stripe-subscription-plans';
 
 /**
  * POST /api/stripe/webhook
@@ -204,6 +211,14 @@ export async function processStripeWebhookEvent(
 
     case 'checkout.session.expired':
       await handleCheckoutSessionExpired(event, correlationId);
+      break;
+
+    case 'customer.subscription.updated':
+      await handleCustomerSubscriptionUpdated(event, correlationId);
+      break;
+
+    case 'customer.subscription.deleted':
+      await handleCustomerSubscriptionDeleted(event, correlationId);
       break;
 
     case 'refund.created':
@@ -403,6 +418,12 @@ async function handlePaymentIntentCanceled(event: Stripe.Event, _correlationId?:
  */
 async function handleCheckoutSessionCompleted(event: Stripe.Event, correlationId: string) {
   const session = event.data.object as Stripe.Checkout.Session;
+
+  if (isSaasBillingCheckoutSession(session)) {
+    await handleSaasCheckoutSessionCompleted(session, correlationId);
+    return;
+  }
+
   const paymentLinkId = extractPaymentLinkId(session.metadata);
 
   if (!paymentLinkId) {
@@ -660,6 +681,26 @@ async function handleRefundObjectEvent(event: Stripe.Event, correlationId: strin
     },
     'Refund object event processed: REFUND_CONFIRMED created, ledger reversed, status updated'
   );
+}
+
+async function handleCustomerSubscriptionUpdated(event: Stripe.Event, correlationId: string) {
+  const subscription = event.data.object as Stripe.Subscription;
+  if (subscription.metadata?.billingType !== SAAS_BILLING_CHECKOUT_TYPE) {
+    log.info(
+      { correlationId, subscriptionId: subscription.id },
+      'Ignoring non-SaaS subscription update'
+    );
+    return;
+  }
+  await handleSaasSubscriptionUpdated(subscription, correlationId);
+}
+
+async function handleCustomerSubscriptionDeleted(event: Stripe.Event, correlationId: string) {
+  const subscription = event.data.object as Stripe.Subscription;
+  if (subscription.metadata?.billingType !== SAAS_BILLING_CHECKOUT_TYPE) {
+    return;
+  }
+  await handleSaasSubscriptionDeleted(subscription, correlationId);
 }
 
 // charge.refunded is NOT a write path: refund.created / refund.updated are the single source of truth.

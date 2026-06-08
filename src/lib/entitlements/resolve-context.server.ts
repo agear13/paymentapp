@@ -10,10 +10,19 @@ import type { EntitlementContext, SubscriptionPlan, SubscriptionStatus } from '@
 import { normalizeSubscriptionPlan } from '@/lib/entitlements/plans';
 import { getWorkspaceUsage } from '@/lib/entitlements/usage.server';
 import { buildWorkspaceEntitlements } from '@/lib/entitlements/workspace-entitlements';
+import { getEffectivePlan, hasActivePaidSubscription } from '@/lib/entitlements/subscription-state';
 
 function normalizeSubscriptionStatus(value: string | null | undefined): SubscriptionStatus {
-  if (value === 'trialing' || value === 'past_due' || value === 'canceled') return value;
-  return 'active';
+  if (
+    value === 'active' ||
+    value === 'trialing' ||
+    value === 'past_due' ||
+    value === 'canceled' ||
+    value === 'inactive'
+  ) {
+    return value;
+  }
+  return 'inactive';
 }
 
 function isPilotProfile(profile: DashboardProductProfile): boolean {
@@ -39,6 +48,9 @@ export async function resolveEntitlementContext(input: {
       id: true,
       subscription_plan: true,
       subscription_status: true,
+      stripe_customer_id: true,
+      stripe_subscription_id: true,
+      current_period_end: true,
     },
   });
 
@@ -54,6 +66,9 @@ export async function resolveEntitlementContext(input: {
     productProfile,
     plan,
     status,
+    stripeCustomerId: org?.stripe_customer_id ?? null,
+    stripeSubscriptionId: org?.stripe_subscription_id ?? null,
+    currentPeriodEnd: org?.current_period_end ?? null,
     usage,
     pilotBypass: isPilotProfile(productProfile),
   };
@@ -69,6 +84,7 @@ export async function getWorkspaceEntitlementsForUser(input: {
   return buildWorkspaceEntitlements(ctx);
 }
 
+/** @deprecated Use Stripe webhooks for Professional/Growth. Enterprise may still be set manually. */
 export async function updateOrganizationSubscription(input: {
   organizationId: string;
   plan: SubscriptionPlan;
@@ -86,4 +102,12 @@ export async function updateOrganizationSubscription(input: {
       subscription_status: true,
     },
   });
+}
+
+export function serializeEntitlementsSnapshot(ctx: EntitlementContext) {
+  return {
+    effectivePlan: getEffectivePlan(ctx),
+    hasActivePaidSubscription: hasActivePaidSubscription(ctx),
+    currentPeriodEnd: ctx.currentPeriodEnd?.toISOString() ?? null,
+  };
 }

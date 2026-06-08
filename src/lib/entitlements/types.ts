@@ -2,7 +2,7 @@ import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
 
 export type SubscriptionPlan = 'starter' | 'professional' | 'growth' | 'enterprise';
 
-export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
+export type SubscriptionStatus = 'inactive' | 'active' | 'trialing' | 'past_due' | 'canceled';
 
 export type EntitlementFeature =
   | 'create_agreement'
@@ -32,6 +32,9 @@ export type EntitlementContext = {
   productProfile: DashboardProductProfile;
   plan: SubscriptionPlan;
   status: SubscriptionStatus;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  currentPeriodEnd: Date | null;
   usage: WorkspaceUsage;
   /** When true, all entitlement checks pass (Rabbit Hole / Strait pilots). */
   pilotBypass: boolean;
@@ -47,7 +50,12 @@ export type EntitlementDecision = {
 
 export type WorkspaceEntitlements = {
   plan: SubscriptionPlan;
+  effectivePlan: SubscriptionPlan;
   status: SubscriptionStatus;
+  hasActivePaidSubscription: boolean;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  currentPeriodEnd: string | null;
   usage: WorkspaceUsage;
   pilotBypass: boolean;
   features: Record<EntitlementFeature, EntitlementDecision>;

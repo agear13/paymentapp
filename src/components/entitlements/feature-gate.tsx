@@ -63,6 +63,7 @@ export function FeatureGate({
       : feature === 'ai_import'
         ? decision?.reason === 'ai_import_limit'
         : false;
+  const subscriptionInactive = decision?.reason === 'subscription_inactive';
 
   const blocked = (
     <Card className="p-6 border-dashed">
@@ -71,10 +72,10 @@ export function FeatureGate({
           <Lock className="h-5 w-5 text-muted-foreground" />
         </div>
         <h3 className="font-semibold">
-          {upgradeHeadline(feature, atLimit)}
+          {upgradeHeadline(feature, atLimit, subscriptionInactive)}
         </h3>
         <p className="text-sm text-muted-foreground">
-          {upgradeBody(feature, requiredPlan, atLimit)}
+          {upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive)}
         </p>
         <Button type="button" onClick={() => setDialogOpen(true)}>
           {upgradeCta(requiredPlan)}
@@ -86,8 +87,8 @@ export function FeatureGate({
         requiredPlan={requiredPlan}
         featureName={FEATURE_DISPLAY_NAMES[feature]}
         currentPlan={entitlements?.plan ?? 'starter'}
-        headline={upgradeHeadline(feature, atLimit)}
-        body={upgradeBody(feature, requiredPlan, atLimit)}
+        headline={upgradeHeadline(feature, atLimit, subscriptionInactive)}
+        body={upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive)}
         organizationId={entitlements?.organizationId}
       />
     </Card>
@@ -134,6 +135,7 @@ export function GatedButton({
       : feature === 'ai_import'
         ? decision?.reason === 'ai_import_limit'
         : false;
+  const subscriptionInactive = decision?.reason === 'subscription_inactive';
 
   return (
     <>
@@ -156,8 +158,8 @@ export function GatedButton({
         requiredPlan={requiredPlan}
         featureName={FEATURE_DISPLAY_NAMES[feature]}
         currentPlan={plan}
-        headline={upgradeHeadline(feature, atLimit)}
-        body={upgradeBody(feature, requiredPlan, atLimit)}
+        headline={upgradeHeadline(feature, atLimit, subscriptionInactive)}
+        body={upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive)}
         organizationId={organizationId ?? entitlements?.organizationId}
       />
     </>

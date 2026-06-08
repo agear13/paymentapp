@@ -32,6 +32,7 @@ export async function requireEntitlement(input: {
       : input.feature === 'ai_import'
         ? decision.reason === 'ai_import_limit'
         : false;
+  const subscriptionInactive = decision.reason === 'subscription_inactive';
 
   const requiredPlan = decision.requiredPlan ?? 'professional';
 
@@ -43,8 +44,8 @@ export async function requireEntitlement(input: {
       featureName: FEATURE_DISPLAY_NAMES[input.feature],
       currentPlan: ctx.plan,
       requiredPlan,
-      headline: upgradeHeadline(input.feature, atLimit),
-      message: upgradeBody(input.feature, requiredPlan, atLimit),
+      headline: upgradeHeadline(input.feature, atLimit, subscriptionInactive),
+      message: upgradeBody(input.feature, requiredPlan, atLimit, subscriptionInactive),
       usage: ctx.usage,
       limit: decision.limit,
       current: decision.current,

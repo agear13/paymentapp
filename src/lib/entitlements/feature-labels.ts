@@ -17,7 +17,12 @@ export const FEATURE_DISPLAY_NAMES: Record<EntitlementFeature, string> = {
   custom_settlement_rules: 'Custom Settlement Rules',
 };
 
-export function upgradeHeadline(feature: EntitlementFeature, atLimit?: boolean): string {
+export function upgradeHeadline(
+  feature: EntitlementFeature,
+  atLimit?: boolean,
+  subscriptionInactive?: boolean
+): string {
+  if (subscriptionInactive) return 'Active subscription required';
   if (atLimit && feature === 'create_agreement') return 'Agreement limit reached';
   if (atLimit && feature === 'ai_import') return 'AI import limit reached';
   return `${FEATURE_DISPLAY_NAMES[feature]} requires an upgrade`;
@@ -26,8 +31,12 @@ export function upgradeHeadline(feature: EntitlementFeature, atLimit?: boolean):
 export function upgradeBody(
   feature: EntitlementFeature,
   requiredPlan: SubscriptionPlan,
-  atLimit?: boolean
+  atLimit?: boolean,
+  subscriptionInactive?: boolean
 ): string {
+  if (subscriptionInactive) {
+    return `Complete checkout to activate your ${requiredPlanLabel(requiredPlan)} subscription and unlock ${FEATURE_DISPLAY_NAMES[feature]}.`;
+  }
   switch (feature) {
     case 'create_agreement':
       return atLimit

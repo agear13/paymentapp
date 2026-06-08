@@ -527,10 +527,29 @@ export function WorkflowOnboardingForm() {
     if (plan !== 'starter' && plan !== 'professional' && plan !== 'growth' && plan !== 'enterprise') {
       return;
     }
+
+    if (plan === 'professional' || plan === 'growth') {
+      trackOnboardingActivation('plan_selected', { organizationId, projectId, planId: plan });
+      const res = await fetch('/api/billing/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ plan }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { data?: { url?: string }; error?: string };
+      if (res.ok && json.data?.url) {
+        window.location.href = json.data.url;
+      }
+      return;
+    }
+
     await fetch(`/api/organizations/${organizationId}/subscription`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan, status: 'active' }),
+      body: JSON.stringify({
+        plan,
+        status: plan === 'starter' ? 'inactive' : 'active',
+      }),
     });
     trackOnboardingActivation('plan_selected', { organizationId, projectId, planId: plan });
   }

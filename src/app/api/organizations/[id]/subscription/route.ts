@@ -11,10 +11,13 @@ import type { SubscriptionPlan, SubscriptionStatus } from '@/lib/entitlements/ty
 
 const patchSchema = z.object({
   plan: z.enum(['starter', 'professional', 'growth', 'enterprise']),
-  status: z.enum(['active', 'trialing', 'past_due', 'canceled']).optional(),
+  status: z.enum(['inactive', 'active', 'trialing', 'past_due', 'canceled']).optional(),
 });
 
-/** PATCH /api/organizations/[id]/subscription — persist plan selection (no billing). */
+/**
+ * PATCH /api/organizations/[id]/subscription
+ * Starter and Enterprise may be set manually. Professional/Growth require Stripe Checkout.
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -35,6 +38,13 @@ export async function PATCH(
     return error;
   }
 
+  if (body.plan === 'professional' || body.plan === 'growth') {
+    return apiError(
+      'Professional and Growth plans require Stripe Checkout. Use POST /api/billing/create-checkout-session.',
+      403
+    );
+  }
+
   const existing = await prisma.organizations.findUnique({
     where: { id },
     select: { subscription_plan: true },
@@ -43,10 +53,15 @@ export async function PATCH(
     ? (existing!.subscription_plan as SubscriptionPlan)
     : 'starter';
 
+  const status: SubscriptionStatus | undefined =
+    body.plan === 'starter'
+      ? (body.status ?? 'inactive')
+      : body.status;
+
   const updated = await updateOrganizationSubscription({
     organizationId: id,
     plan: body.plan,
-    status: body.status as SubscriptionStatus | undefined,
+    status,
   });
 
   const event =
