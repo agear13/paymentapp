@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { MessageSquare } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { GatedButton } from '@/components/entitlements/feature-gate';
+import { StarterLimitAlert } from '@/components/entitlements/starter-limit-alert';
 import type { ExtractionResult, ExtractorEntryPoint, SourceType } from '@/lib/ai-extractor/extraction-types';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
@@ -47,8 +48,10 @@ export function CreateFromConversationButton({
 
   return (
     <>
-      <Button
+      <StarterLimitAlert feature="ai_import" className="mb-3" />
+      <GatedButton
         type="button"
+        feature="ai_import"
         variant={variant}
         size={size}
         className={className}
@@ -56,7 +59,7 @@ export function CreateFromConversationButton({
       >
         <MessageSquare className="mr-2 h-4 w-4" />
         Create From Conversation
-      </Button>
+      </GatedButton>
 
       <ConversationInputModal
         open={inputOpen}

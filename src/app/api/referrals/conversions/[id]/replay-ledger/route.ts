@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPartnerLedgerEntryForReferralConversion } from '@/lib/referrals/partners-integration';
 import { checkAdminAuth } from '@/lib/auth/admin.server';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 
 /**
  * POST /api/referrals/conversions/[id]/replay-ledger
@@ -29,6 +30,19 @@ export async function POST(
         { error: authError || 'Forbidden' },
         { status: authError === 'Authentication required' ? 401 : 403 }
       );
+    }
+
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (org) {
+      const { requireReferralManagementEntitlement } = await import(
+        '@/lib/entitlements/gate-referral-admin.server'
+      );
+      const entitlementBlock = await requireReferralManagementEntitlement({
+        organizationId: org.id,
+        userId: user.id,
+        userEmail: user.email,
+      });
+      if (entitlementBlock) return entitlementBlock;
     }
 
     console.log('[REFERRAL_REPLAY_LEDGER] Admin triggered replay:', {

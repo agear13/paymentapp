@@ -10,6 +10,7 @@ import { redirect } from 'next/navigation';
 import { TransactionsTable } from '@/components/dashboard/transactions-table';
 import { PaymentLinksTransactionsEmpty } from '@/components/payment-links/payment-links-empty-guidance';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
+import { PaymentLinksPageGate } from '@/components/entitlements/payment-links-page-gate';
 
 export default async function TransactionsPage() {
   // Get current user's organization with proper data isolation
@@ -61,6 +62,7 @@ export default async function TransactionsPage() {
   const showPropagationTraceHints = isBetaAdminEmail(user.email);
 
   return (
+    <PaymentLinksPageGate>
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Funding activity</h1>
@@ -151,5 +153,6 @@ export default async function TransactionsPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </PaymentLinksPageGate>
   );
 }

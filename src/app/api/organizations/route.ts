@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
 
@@ -68,6 +69,18 @@ export async function POST(request: NextRequest) {
 
     if (existing) {
       return apiError('Organization already exists', 409);
+    }
+
+    const primaryOrg = await getOrganizationForAuthenticatedUser(user.id);
+    if (primaryOrg) {
+      const { requireEntitlement } = await import('@/lib/entitlements/gate-api.server');
+      const entitlementBlock = await requireEntitlement({
+        organizationId: primaryOrg.id,
+        userId: user.id,
+        userEmail: user.email,
+        feature: 'multi_organisation',
+      });
+      if (entitlementBlock) return entitlementBlock;
     }
 
     // Create organization and link to user in a transaction

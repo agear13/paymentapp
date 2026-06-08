@@ -71,6 +71,15 @@ export async function POST(request: NextRequest) {
 
     const organizationId = org.id;
 
+    const { requireEntitlement } = await import('@/lib/entitlements/gate-api.server');
+    const entitlementBlock = await requireEntitlement({
+      organizationId,
+      userId: user.id,
+      userEmail: user.email,
+      feature: 'payment_links',
+    });
+    if (entitlementBlock) return entitlementBlock;
+
     const canCreate = await checkUserPermission(
       user.id,
       organizationId,

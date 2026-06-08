@@ -6,6 +6,7 @@ import { getUserOrganization } from '@/lib/auth/get-org';
 import { prisma } from '@/lib/server/prisma';
 import { redirect } from 'next/navigation';
 import { OperationalLedgerPage } from '@/components/dashboard/ledger/operational-ledger-page';
+import { EntitlementPageShell } from '@/components/entitlements/entitlement-page-shell';
 
 export default async function ReportsLedgerPage() {
   const user = await getCurrentUser();
@@ -40,10 +41,12 @@ export default async function ReportsLedgerPage() {
   });
 
   return (
-    <OperationalLedgerPage
-      organizationId={org.id}
-      accounts={accounts}
-      entries={entries}
-    />
+    <EntitlementPageShell feature="advanced_reporting">
+      <OperationalLedgerPage
+        organizationId={org.id}
+        accounts={accounts}
+        entries={entries}
+      />
+    </EntitlementPageShell>
   );
 }

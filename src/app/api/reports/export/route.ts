@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { prisma } from '@/lib/server/prisma';
 
 /**
@@ -26,6 +27,20 @@ export async function GET(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (!org || org.id !== organizationId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { requireEntitlement } = await import('@/lib/entitlements/gate-api.server');
+    const entitlementBlock = await requireEntitlement({
+      organizationId: org.id,
+      userId: user.id,
+      userEmail: user.email,
+      feature: 'advanced_reporting',
+    });
+    if (entitlementBlock) return entitlementBlock;
 
     // Build date filter
     const dateFilter: any = {};

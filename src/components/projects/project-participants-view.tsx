@@ -17,6 +17,9 @@ import {
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { InviteProjectParticipantModal } from '@/components/projects/invite-project-participant-modal';
 import { useOrganization } from '@/hooks/use-organization';
+import { useEntitlements } from '@/hooks/use-entitlements';
+import { PlanUpgradeDialog } from '@/components/entitlements/plan-upgrade-dialog';
+import { FEATURE_DISPLAY_NAMES, upgradeBody, upgradeHeadline } from '@/lib/entitlements/feature-labels';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { useProjectWorkspaceSmartPolling } from '@/hooks/use-project-workspace-refresh';
 import { ProjectSectionErrorBoundary } from '@/components/projects/project-section-error-boundary';
@@ -178,6 +181,8 @@ export function ProjectParticipantsView() {
     [projectId]
   );
   const { organizationId } = useOrganization();
+  const { isAllowed, getDecision, entitlements, plan } = useEntitlements();
+  const [approvalUpgradeOpen, setApprovalUpgradeOpen] = React.useState(false);
   const searchParams = useSearchParams();
   const focusParticipantId = searchParams.get('participant');
   const [inviteOpen, setInviteOpen] = React.useState(false);
@@ -289,6 +294,10 @@ export function ProjectParticipantsView() {
 
   const openAgreementShare = React.useCallback(
     async (p: DemoParticipant) => {
+      if (!isAllowed('approval_workflows')) {
+        setApprovalUpgradeOpen(true);
+        return;
+      }
       const path = p.agreementUrl ?? participantAgreementPath(p.inviteToken);
       const url =
         typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
@@ -303,7 +312,7 @@ export function ProjectParticipantsView() {
       void saveSnapshot(allDeals, nextParticipants);
       setAgreementShareParticipant(updated);
     },
-    [allDeals, allParticipants, saveSnapshot]
+    [allDeals, allParticipants, isAllowed, saveSnapshot]
   );
 
   const updatePayoutVerification = React.useCallback(
@@ -925,6 +934,17 @@ export function ProjectParticipantsView() {
           onOpenChange={(open) => {
             if (!open) setAgreementShareParticipant(null);
           }}
+        />
+
+        <PlanUpgradeDialog
+          open={approvalUpgradeOpen}
+          onOpenChange={setApprovalUpgradeOpen}
+          requiredPlan={getDecision('approval_workflows')?.requiredPlan ?? 'growth'}
+          featureName={FEATURE_DISPLAY_NAMES.approval_workflows}
+          currentPlan={plan}
+          headline={upgradeHeadline('approval_workflows')}
+          body={upgradeBody('approval_workflows', getDecision('approval_workflows')?.requiredPlan ?? 'growth')}
+          organizationId={organizationId ?? entitlements?.organizationId}
         />
 
         <EditProjectParticipantDialog

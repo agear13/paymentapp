@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAdminAuth } from '@/lib/auth/admin.server';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 
 export async function POST(
   request: NextRequest,
@@ -19,6 +20,19 @@ export async function POST(
         { error: authError || 'Forbidden' },
         { status: authError === 'Authentication required' ? 401 : 403 }
       );
+    }
+
+    const org = await getOrganizationForAuthenticatedUser(user.id);
+    if (org) {
+      const { requireReferralManagementEntitlement } = await import(
+        '@/lib/entitlements/gate-referral-admin.server'
+      );
+      const entitlementBlock = await requireReferralManagementEntitlement({
+        organizationId: org.id,
+        userId: user.id,
+        userEmail: user.email,
+      });
+      if (entitlementBlock) return entitlementBlock;
     }
 
     // Use admin client for all DB operations (bypasses RLS)

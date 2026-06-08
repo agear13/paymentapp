@@ -1,7 +1,9 @@
 import { AgreementIntelligenceValidationDashboard } from '@/components/agreements/validation/agreement-intelligence-validation-dashboard';
+import { EntitlementPageShell } from '@/components/entitlements/entitlement-page-shell';
 
 export default function AgreementIntelligenceValidationPage() {
   return (
+    <EntitlementPageShell feature="advanced_reporting">
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Agreement Intelligence Validation</h1>
@@ -12,5 +14,6 @@ export default function AgreementIntelligenceValidationPage() {
       </div>
       <AgreementIntelligenceValidationDashboard />
     </div>
+    </EntitlementPageShell>
   );
 }

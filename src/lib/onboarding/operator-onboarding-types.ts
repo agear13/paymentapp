@@ -404,9 +404,8 @@ export const ONBOARDING_PRICING_PLANS = [
     tagline: 'Perfect for exploring Agreement Intelligence.',
     recommended: false,
     features: [
-      '1 Workspace',
-      '3 Agreements',
-      'Conversation Import',
+      '3 Active Agreements',
+      '3 AI Imports',
       'Manual Settlement Tracking',
       'Basic Reporting',
     ],
@@ -419,11 +418,10 @@ export const ONBOARDING_PRICING_PLANS = [
     recommended: true,
     features: [
       'Unlimited Agreements',
-      'Agreement Intelligence',
+      'Unlimited AI Imports',
       'Payment Links',
-      'Stripe Integration',
       'Referral Management',
-      'Settlement Workflows',
+      'Xero Integration',
     ],
   },
   {
@@ -433,11 +431,11 @@ export const ONBOARDING_PRICING_PLANS = [
     tagline: 'For agencies and multi-party operations.',
     recommended: false,
     features: [
-      'Multi-User Access',
+      'Everything in Professional',
+      'Multi-user Team Access',
       'Approval Workflows',
       'Advanced Reporting',
-      'Commission Automation',
-      'White Label Documents',
+      'Automated Settlement Coordination',
       'Priority Support',
     ],
   },
@@ -448,10 +446,11 @@ export const ONBOARDING_PRICING_PLANS = [
     tagline: 'For custom coordination workflows.',
     recommended: false,
     features: [
+      'Multi-Organisation',
       'API Access',
       'Custom Workflows',
-      'Dedicated Onboarding',
       'Custom Settlement Rules',
+      'Dedicated Onboarding',
     ],
   },
 ] as const;

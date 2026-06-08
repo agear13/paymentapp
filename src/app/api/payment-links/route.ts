@@ -300,6 +300,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No organization found for user' }, { status: 404 });
     }
 
+    const { requireEntitlement } = await import('@/lib/entitlements/gate-api.server');
+    const entitlementBlock = await requireEntitlement({
+      organizationId: org.id,
+      userId: user.id,
+      userEmail: user.email,
+      feature: 'payment_links',
+    });
+    if (entitlementBlock) return entitlementBlock;
+
     const organizationId = org.id;
 
     const rawBody = await request.json();

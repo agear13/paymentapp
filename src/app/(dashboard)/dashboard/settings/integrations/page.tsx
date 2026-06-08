@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { XeroConnection } from '@/components/dashboard/settings/xero-connection';
 import { XeroSyncQueue } from '@/components/dashboard/settings/xero-sync-queue';
 import { XeroAccountMapping } from '@/components/dashboard/settings/xero-account-mapping';
+import { XeroIntegrationsGate } from '@/components/entitlements/xero-integrations-gate';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getUserOrganization } from '@/lib/auth/get-org';
 import { redirect } from 'next/navigation';
@@ -194,27 +195,29 @@ export default async function IntegrationsPage() {
             Sync invoices and payments with your books.
           </p>
         </div>
-        <Card className="border-primary/20">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="text-2xl" aria-hidden>
-                📊
+        <XeroIntegrationsGate>
+          <Card className="border-primary/20">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="text-2xl" aria-hidden>
+                  📊
+                </div>
+                <div>
+                  <CardTitle>Xero</CardTitle>
+                  <CardDescription className="mt-1">
+                    Accounting sync for invoices and settled payments.
+                  </CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle>Xero</CardTitle>
-                <CardDescription className="mt-1">
-                  Accounting sync for invoices and settled payments.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <XeroConnection organizationId={organizationId} />
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <XeroConnection organizationId={organizationId} />
+            </CardContent>
+          </Card>
 
-        <XeroAccountMapping organizationId={organizationId} />
-        <XeroSyncQueue organizationId={organizationId} />
+          <XeroAccountMapping organizationId={organizationId} />
+          <XeroSyncQueue organizationId={organizationId} />
+        </XeroIntegrationsGate>
       </section>
     </div>
   );

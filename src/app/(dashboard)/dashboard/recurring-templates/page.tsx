@@ -25,6 +25,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { format } from 'date-fns';
+import { FeatureGate } from '@/components/entitlements/feature-gate';
 
 type RecurringTemplateRow = {
   id: string;
@@ -166,6 +167,7 @@ export default function RecurringTemplatesPage() {
   }
 
   return (
+    <FeatureGate feature="payment_links" mode="block">
     <div className="space-y-8 p-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Recurring invoices</h1>
@@ -353,5 +355,6 @@ export default function RecurringTemplatesPage() {
         </CardContent>
       </Card>
     </div>
+    </FeatureGate>
   );
 }

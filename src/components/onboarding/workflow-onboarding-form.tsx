@@ -98,6 +98,8 @@ import {
   type OnboardingDraftParticipant,
 } from '@/components/onboarding/onboarding-participant-card';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
+import { useEntitlements } from '@/hooks/use-entitlements';
+import { StarterLimitAlert } from '@/components/entitlements/starter-limit-alert';
 import { OnboardingProviderChecklist } from '@/components/onboarding/onboarding-provider-checklist';
 import {
   OnboardingRecoveryPanel,
@@ -200,6 +202,17 @@ export function WorkflowOnboardingForm() {
   const [bootstrapMutation, setBootstrapMutation] =
     React.useState<OnboardingRecoveryMutation | null>(null);
   const bootstrapOperationIdRef = React.useRef<string>(createOperationId());
+  const { isAllowed, pilotBypass } = useEntitlements();
+  const agreementAtLimit = !pilotBypass && !isAllowed('create_agreement');
+  const aiImportAtLimit = !pilotBypass && !isAllowed('ai_import');
+
+  const isStartMethodBlocked = React.useCallback(
+    (method: OnboardingStartMethodId) => {
+      if (method === 'import') return agreementAtLimit || aiImportAtLimit;
+      return agreementAtLimit;
+    },
+    [agreementAtLimit, aiImportAtLimit]
+  );
 
   function openCopilotGuide(topic: CopilotGuideTopic) {
     setCopilotTopic(topic);
@@ -508,9 +521,24 @@ export function WorkflowOnboardingForm() {
     });
   }
 
+  async function persistSelectedPlan() {
+    if (!organizationId) return;
+    const plan = selectedPlanId;
+    if (plan !== 'starter' && plan !== 'professional' && plan !== 'growth' && plan !== 'enterprise') {
+      return;
+    }
+    await fetch(`/api/organizations/${organizationId}/subscription`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan, status: 'active' }),
+    });
+    trackOnboardingActivation('plan_selected', { organizationId, projectId, planId: plan });
+  }
+
   async function finishOnboarding() {
     setOrgCookie();
     if (organizationId) {
+      await persistSelectedPlan();
       await fetch('/api/onboarding', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -543,6 +571,14 @@ export function WorkflowOnboardingForm() {
 
   async function handleStartMethodContinue() {
     if (!selectedStartMethod) return;
+    if (isStartMethodBlocked(selectedStartMethod)) {
+      toast.error(
+        selectedStartMethod === 'import' && aiImportAtLimit
+          ? 'Starter includes 3 AI imports. Upgrade to Professional for unlimited imports.'
+          : 'Starter includes 3 active agreements. Upgrade to Professional for unlimited agreements.'
+      );
+      return;
+    }
     setStartMethod(selectedStartMethod);
     trackOnboardingActivation('agreement_creation_method_selected', {
       organizationId,
@@ -570,6 +606,14 @@ export function WorkflowOnboardingForm() {
   async function handleImportExtract() {
     if (!importRawText.trim()) {
       toast.error('Paste your commercial discussion to continue');
+      return;
+    }
+    if (aiImportAtLimit) {
+      toast.error('Starter includes 3 AI imports. Upgrade to Professional for unlimited imports.');
+      return;
+    }
+    if (agreementAtLimit) {
+      toast.error('Starter includes 3 active agreements. Upgrade to Professional for unlimited agreements.');
       return;
     }
     trackOnboardingActivation('conversation_import_started', {
@@ -651,6 +695,10 @@ export function WorkflowOnboardingForm() {
 
   async function handleTemplateContinue() {
     if (!selectedTemplate) return;
+    if (agreementAtLimit) {
+      toast.error('Starter includes 3 active agreements. Upgrade to Professional for unlimited agreements.');
+      return;
+    }
     const template = ONBOARDING_AGREEMENT_TEMPLATES.find((t) => t.id === selectedTemplate);
     if (!template) return;
 
@@ -794,6 +842,10 @@ export function WorkflowOnboardingForm() {
   }, [projectForm, useCase, organizationId, merchantSettingsId, projectId, confirmedParticipants]);
 
   async function onProjectSubmit(values: ProjectFormValues) {
+    if (agreementAtLimit) {
+      toast.error('Starter includes 3 active agreements. Upgrade to Professional for unlimited agreements.');
+      return;
+    }
     setIsLoading(true);
     setBootstrapMutation(null);
 
@@ -1104,15 +1156,19 @@ export function WorkflowOnboardingForm() {
               arrangement was formed.
             </p>
           </div>
+          {agreementAtLimit ? <StarterLimitAlert feature="create_agreement" /> : null}
+          {aiImportAtLimit ? <StarterLimitAlert feature="ai_import" /> : null}
           <div className="grid gap-3">
             {ONBOARDING_START_METHODS.map((item) => {
               const isSelected = selectedStartMethod === item.id;
+              const blocked = isStartMethodBlocked(item.id);
               return (
                 <button
                   key={item.id}
                   type="button"
+                  disabled={blocked}
                   onClick={() => setSelectedStartMethod(item.id)}
-                  className={selectionCardClass(isSelected)}
+                  className={cn(selectionCardClass(isSelected), blocked && 'opacity-50 cursor-not-allowed')}
                 >
                   {isSelected ? (
                     <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -1140,7 +1196,14 @@ export function WorkflowOnboardingForm() {
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Skip Setup And Explore
             </Button>
-            <Button type="button" disabled={!selectedStartMethod} onClick={handleStartMethodContinue}>
+            <Button
+              type="button"
+              disabled={
+                !selectedStartMethod ||
+                (selectedStartMethod ? isStartMethodBlocked(selectedStartMethod) : false)
+              }
+              onClick={handleStartMethodContinue}
+            >
               Continue
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -1185,6 +1248,8 @@ export function WorkflowOnboardingForm() {
             notes, or contract text. Provvypay will extract participants, obligations, and
             commercial terms automatically.
           </p>
+          {aiImportAtLimit ? <StarterLimitAlert feature="ai_import" /> : null}
+          {agreementAtLimit ? <StarterLimitAlert feature="create_agreement" /> : null}
           <Textarea
             value={importRawText}
             onChange={(e) => setImportRawText(e.target.value)}
@@ -1195,7 +1260,11 @@ export function WorkflowOnboardingForm() {
             <Button type="button" variant="ghost" onClick={() => setStep('import_source')}>
               Back
             </Button>
-            <Button type="button" disabled={importExtracting} onClick={handleImportExtract}>
+            <Button
+              type="button"
+              disabled={importExtracting || aiImportAtLimit || agreementAtLimit}
+              onClick={handleImportExtract}
+            >
               {importExtracting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Analyze Agreement
               <Sparkles className="ml-2 h-4 w-4" />
@@ -1206,6 +1275,7 @@ export function WorkflowOnboardingForm() {
 
       {step === 'template_select' && (
         <div className="space-y-6">
+          {agreementAtLimit ? <StarterLimitAlert feature="create_agreement" /> : null}
           <OnboardingTemplateGallery
             selectedTemplateId={selectedTemplate}
             onSelectTemplate={setSelectedTemplate}
@@ -1214,7 +1284,11 @@ export function WorkflowOnboardingForm() {
             <Button type="button" variant="ghost" onClick={() => setStep('start_method')}>
               Back
             </Button>
-            <Button type="button" disabled={!selectedTemplate || isLoading} onClick={handleTemplateContinue}>
+            <Button
+              type="button"
+              disabled={!selectedTemplate || isLoading || agreementAtLimit}
+              onClick={handleTemplateContinue}
+            >
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Continue
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -1273,6 +1347,7 @@ export function WorkflowOnboardingForm() {
             Define the commercial arrangement you are coordinating. Agreement Intelligence will
             analyze these details before you configure settlement.
           </p>
+          {agreementAtLimit ? <StarterLimitAlert feature="create_agreement" /> : null}
           <Form {...projectForm}>
             <form onSubmit={projectForm.handleSubmit(onProjectSubmit)} className="space-y-4">
               <FormField
@@ -1343,7 +1418,7 @@ export function WorkflowOnboardingForm() {
                 <Button type="button" variant="ghost" onClick={() => setStep('start_method')}>
                   Back
                 </Button>
-                <Button type="submit" disabled={isLoading}>
+                <Button type="submit" disabled={isLoading || agreementAtLimit}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Continue
                   <ArrowRight className="ml-2 h-4 w-4" />

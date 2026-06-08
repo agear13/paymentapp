@@ -36,6 +36,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { FeatureGate } from '@/components/entitlements/feature-gate';
 import { usePolling } from '@/hooks/use-polling';
 import { exportToCSV, type ExportColumn } from '@/lib/export-csv';
 import { format } from 'date-fns';
@@ -679,6 +680,7 @@ export default function PaymentLinksPage() {
   };
 
   return (
+    <FeatureGate feature="payment_links" mode="block">
     <div className="space-y-6">
       <CustomerFacingDomainWarning />
       {/* Header */}
@@ -990,5 +992,6 @@ export default function PaymentLinksPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </FeatureGate>
   );
 }

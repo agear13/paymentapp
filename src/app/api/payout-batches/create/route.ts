@@ -83,6 +83,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const { requireEntitlement } = await import('@/lib/entitlements/gate-api.server');
+    const entitlementBlock = await requireEntitlement({
+      organizationId,
+      userId: user.id,
+      userEmail: user.email,
+      feature: 'automated_settlement_coordination',
+    });
+    if (entitlementBlock) return entitlementBlock;
+
     const currencyUpper = currency.toUpperCase();
 
     const graph = await resolveOperationalCoordinationSnapshot({ userId: user.id });

@@ -120,6 +120,16 @@ export async function POST(request: NextRequest) {
       splits: splitsInput,
     } = parsed.data;
 
+    const { requireReferralManagementEntitlement } = await import(
+      '@/lib/entitlements/gate-referral-admin.server'
+    );
+    const entitlementBlock = await requireReferralManagementEntitlement({
+      organizationId,
+      userId: user.id,
+      userEmail: user.email,
+    });
+    if (entitlementBlock) return entitlementBlock;
+
     const canCreate = await checkUserPermission(user.id, organizationId, 'create_payment_links');
     if (!canCreate) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -304,6 +314,16 @@ export async function GET(request: NextRequest) {
     if (!organizationId) {
       return NextResponse.json({ error: 'organizationId is required' }, { status: 400 });
     }
+
+    const { requireReferralManagementEntitlement } = await import(
+      '@/lib/entitlements/gate-referral-admin.server'
+    );
+    const entitlementBlock = await requireReferralManagementEntitlement({
+      organizationId,
+      userId: user.id,
+      userEmail: user.email,
+    });
+    if (entitlementBlock) return entitlementBlock;
 
     const canView = await checkUserPermission(user.id, organizationId, 'view_payment_links');
     if (!canView) {

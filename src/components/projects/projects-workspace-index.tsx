@@ -4,6 +4,8 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { FolderKanban, Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { GatedButton } from '@/components/entitlements/feature-gate';
+import { StarterLimitAlert } from '@/components/entitlements/starter-limit-alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
@@ -143,21 +145,24 @@ export function ProjectsWorkspaceIndex() {
             workspace.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <CreateFromConversationButton
-            entryPoint="project_create"
-            onComplete={(dealId) => {
-              if (dealId) {
-                void reload();
-                router.push(`/dashboard/projects/${encodeURIComponent(dealId)}`);
-                router.refresh();
-              }
-            }}
-          />
-          <Button onClick={() => setCreateOpen(true)} size="lg">
-            <Plus className="mr-2 h-4 w-4" />
-            Create agreement
-          </Button>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <StarterLimitAlert feature="create_agreement" className="w-full sm:max-w-lg" />
+          <div className="flex items-center gap-2">
+            <CreateFromConversationButton
+              entryPoint="project_create"
+              onComplete={(dealId) => {
+                if (dealId) {
+                  void reload();
+                  router.push(`/dashboard/projects/${encodeURIComponent(dealId)}`);
+                  router.refresh();
+                }
+              }}
+            />
+            <GatedButton feature="create_agreement" onClick={() => setCreateOpen(true)} size="lg">
+              <Plus className="mr-2 h-4 w-4" />
+              Create agreement
+            </GatedButton>
+          </div>
         </div>
       </div>
 
@@ -179,6 +184,7 @@ export function ProjectsWorkspaceIndex() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-3 pb-8">
+            <StarterLimitAlert feature="create_agreement" className="w-full max-w-md" />
             <CreateFromConversationButton
               entryPoint="project_create"
               size="lg"
@@ -190,10 +196,10 @@ export function ProjectsWorkspaceIndex() {
                 }
               }}
             />
-            <Button variant="ghost" onClick={() => setCreateOpen(true)}>
+            <GatedButton feature="create_agreement" variant="ghost" onClick={() => setCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Create agreement manually
-            </Button>
+            </GatedButton>
           </CardContent>
         </Card>
       ) : (

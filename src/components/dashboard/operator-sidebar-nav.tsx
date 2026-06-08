@@ -9,6 +9,8 @@ import {
   isOperatorSectionActive,
   shouldShowSectionOverviewSubLink,
 } from '@/lib/navigation/operator-nav';
+import { entitlementForNavHref, NAV_LOCKED_VISIBLE_HREFS } from '@/lib/entitlements/nav-entitlements';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -28,7 +30,16 @@ type OperatorSidebarNavProps = {
 };
 
 export function OperatorSidebarNav({ productProfile, path }: OperatorSidebarNavProps) {
-  const sections = getOperatorNavSections(productProfile);
+  const { isAllowed, pilotBypass } = useEntitlements();
+  const sections = getOperatorNavSections(productProfile).map((section) => ({
+    ...section,
+    items: section.items?.filter((item) => {
+      const feature = entitlementForNavHref(item.href);
+      if (!feature || pilotBypass) return true;
+      if (NAV_LOCKED_VISIBLE_HREFS.has(item.href)) return true;
+      return isAllowed(feature);
+    }),
+  }));
 
   return (
     <SidebarGroup>

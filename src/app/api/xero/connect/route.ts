@@ -58,6 +58,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const { requireEntitlement } = await import('@/lib/entitlements/gate-api.server');
+    const entitlementBlock = await requireEntitlement({
+      organizationId,
+      userId: user.id,
+      userEmail: user.email ?? undefined,
+      feature: 'xero_integration',
+    });
+    if (entitlementBlock) return entitlementBlock;
+
     // Generate authorization URL
     const authUrl = await generateAuthUrl();
 

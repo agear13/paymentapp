@@ -275,6 +275,21 @@ export async function POST(request: NextRequest) {
     const opId = body.operationId?.trim() || operationId;
     logBootstrap(opId, 'started', { userId: user.id, projectName: body.projectName });
 
+    const isNewAgreement = !body.existingProjectId?.trim();
+    if (isNewAgreement) {
+      const orgForGate = await getOrganizationForAuthenticatedUser(user.id);
+      if (orgForGate) {
+        const { requireEntitlement } = await import('@/lib/entitlements/gate-api.server');
+        const entitlementBlock = await requireEntitlement({
+          organizationId: orgForGate.id,
+          userId: user.id,
+          userEmail: user.email,
+          feature: 'create_agreement',
+        });
+        if (entitlementBlock) return entitlementBlock;
+      }
+    }
+
     try {
       const { mutation, httpStatus } = await runBootstrap(user.id, body, opId);
       const clientMutation = toClientMutationResult(mutation);

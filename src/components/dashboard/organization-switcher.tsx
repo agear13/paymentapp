@@ -13,6 +13,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useRouter } from 'next/navigation';
+import { useEntitlements } from '@/hooks/use-entitlements';
+import { PlanUpgradeDialog } from '@/components/entitlements/plan-upgrade-dialog';
+import { FEATURE_DISPLAY_NAMES, upgradeBody, upgradeHeadline } from '@/lib/entitlements/feature-labels';
 
 type Organization = {
   id: string;
@@ -26,6 +29,10 @@ export function OrganizationSwitcher() {
   const [selectedOrg, setSelectedOrg] = React.useState<Organization | null>(null);
   const [open, setOpen] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [upgradeOpen, setUpgradeOpen] = React.useState(false);
+  const { isAllowed, getDecision, plan, entitlements, pilotBypass } = useEntitlements();
+  const canCreateWorkspace = pilotBypass || isAllowed('multi_organisation');
+  const multiOrgDecision = getDecision('multi_organisation');
 
   // Fetch organizations on mount
   React.useEffect(() => {
@@ -90,6 +97,7 @@ export function OrganizationSwitcher() {
   }
 
   return (
+    <>
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
@@ -136,18 +144,34 @@ export function OrganizationSwitcher() {
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem 
+        <DropdownMenuItem
           className="gap-2"
+          disabled={!canCreateWorkspace}
           onSelect={() => {
+            if (!canCreateWorkspace) {
+              setUpgradeOpen(true);
+              return;
+            }
             router.push('/onboarding');
             setOpen(false);
           }}
         >
           <Plus className="h-4 w-4" />
-          <span>Create Organization</span>
+          <span>Create additional workspace</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <PlanUpgradeDialog
+      open={upgradeOpen}
+      onOpenChange={setUpgradeOpen}
+      requiredPlan={multiOrgDecision?.requiredPlan ?? 'enterprise'}
+      featureName={FEATURE_DISPLAY_NAMES.multi_organisation}
+      currentPlan={plan}
+      headline={upgradeHeadline('multi_organisation')}
+      body={upgradeBody('multi_organisation', multiOrgDecision?.requiredPlan ?? 'enterprise')}
+      organizationId={entitlements?.organizationId}
+    />
+    </>
   );
 }
 
