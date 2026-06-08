@@ -32,6 +32,14 @@ describe('computeOperationalReadiness', () => {
     expect(computeOperationalReadiness(15000, 0, 0, 14000)).toBe('ready');
   });
 
+  it('returns obligations_pending when compensated participants exist but no obligations', () => {
+    expect(computeOperationalReadiness(16500, 0, 0, 0, 2)).toBe('obligations_pending');
+  });
+
+  it('returns ready when no obligations and no eligible participants', () => {
+    expect(computeOperationalReadiness(16500, 0, 0, 0, 0)).toBe('ready');
+  });
+
   it('returns partially_funded when some confirmed funding exists', () => {
     expect(computeOperationalReadiness(5000, 0, 0, 14000)).toBe('partially_funded');
   });
@@ -42,6 +50,16 @@ describe('computeOperationalReadiness', () => {
 });
 
 describe('buildProjectTreasurySummary', () => {
+  it('flags obligations_pending when eligible participants exist without obligation rows', () => {
+    const summary = buildProjectTreasurySummary({
+      fundingSources: [],
+      obligationsTotal: 0,
+      legacyConfirmedFunding: 16500,
+      projectObligationEligibleParticipantCount: 2,
+    });
+    expect(summary.operationalReadiness).toBe('obligations_pending');
+    expect(summary.operationalReadiness).not.toBe('ready');
+  });
   it('keeps obligations when no funding is connected', () => {
     const summary = buildProjectTreasurySummary({
       fundingSources: [],

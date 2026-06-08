@@ -6,6 +6,7 @@ const READINESS_LABELS: Record<ObligationOperationalReadiness, string> = {
   awaiting_funding: 'Awaiting funding',
   blocked: 'Blocked',
   forecast_only: 'Forecast only',
+  obligations_pending: 'Needs review',
 };
 
 export function formatOperationalReadiness(readiness: ObligationOperationalReadiness): string {
@@ -24,6 +25,7 @@ export function operationalReadinessBadgeVariant(
     case 'forecast_only':
       return 'outline';
     case 'blocked':
+    case 'obligations_pending':
       return 'destructive';
     default:
       return 'outline';

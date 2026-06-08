@@ -148,6 +148,32 @@ export function resolveCommissionWithValidation(
     };
   }
 
+  if (input.commissionKind === 'fixed_amount') {
+    const fixed = input.commissionValue;
+    if (!Number.isFinite(fixed) || fixed < 0) {
+      return { total: 0, previewLine: 'Enter a valid fixed amount.', valid: false, error: 'Invalid fixed amount.' };
+    }
+    if (fixed > MAX_PILOT_MONEY) {
+      return {
+        total: 0,
+        previewLine: 'Fixed amount too large.',
+        valid: false,
+        error: `Enter an amount up to $${MAX_PILOT_MONEY.toLocaleString()}.`,
+      };
+    }
+    const total = roundMoney(fixed);
+    const dealValue = ctx.dealValue;
+    if (Number.isFinite(dealValue) && dealValue > 0 && total > dealValue) {
+      return {
+        total,
+        previewLine: `Fixed amount: $${total.toLocaleString()}`,
+        valid: false,
+        error: 'Fixed amount cannot exceed deal value.',
+      };
+    }
+    return { total, previewLine: `Fixed amount: $${total.toLocaleString()}`, valid: true };
+  }
+
   const dealValue = ctx.dealValue;
   if (!Number.isFinite(dealValue) || dealValue <= 0) {
     return { total: 0, previewLine: 'Deal value is required.', valid: false, error: 'Deal value is required.' };
@@ -168,31 +194,6 @@ export function resolveCommissionWithValidation(
       };
     }
     return { total, previewLine: `${pct}% of deal value → $${total.toLocaleString()}`, valid: true };
-  }
-
-  if (input.commissionKind === 'fixed_amount') {
-    const fixed = input.commissionValue;
-    if (!Number.isFinite(fixed) || fixed < 0) {
-      return { total: 0, previewLine: 'Enter a valid fixed amount.', valid: false, error: 'Invalid fixed amount.' };
-    }
-    if (fixed > MAX_PILOT_MONEY) {
-      return {
-        total: 0,
-        previewLine: 'Fixed amount too large.',
-        valid: false,
-        error: `Enter an amount up to $${MAX_PILOT_MONEY.toLocaleString()}.`,
-      };
-    }
-    const total = roundMoney(fixed);
-    if (total > dealValue) {
-      return {
-        total,
-        previewLine: `Fixed amount: $${total.toLocaleString()}`,
-        valid: false,
-        error: 'Fixed amount cannot exceed deal value.',
-      };
-    }
-    return { total, previewLine: `Fixed amount: $${total.toLocaleString()}`, valid: true };
   }
 
   if (input.commissionKind === 'pct_of_participant') {

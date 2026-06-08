@@ -26,15 +26,21 @@ export type TreasuryInputs = {
   /** Legacy rail-linked funding (payment events), counted toward confirmed settlement readiness. */
   legacyConfirmedFunding?: number;
   defaultCurrency?: string;
+  /** Participants with project-scoped compensation (excludes attribution-only rows). */
+  projectObligationEligibleParticipantCount?: number;
 };
 
 export function computeOperationalReadiness(
   confirmedFunding: number,
   pendingFunding: number,
   forecastFunding: number,
-  obligationsTotal: number
+  obligationsTotal: number,
+  projectObligationEligibleParticipantCount = 0
 ): ObligationOperationalReadiness {
-  if (obligationsTotal <= 0) return 'ready';
+  if (obligationsTotal <= 0) {
+    if (projectObligationEligibleParticipantCount > 0) return 'obligations_pending';
+    return 'ready';
+  }
   if (confirmedFunding + 0.005 >= obligationsTotal) return 'ready';
   if (confirmedFunding > 0) return 'partially_funded';
   if (pendingFunding > 0) return 'awaiting_funding';
@@ -51,6 +57,7 @@ export function computeProjectTreasuryHealth(
   readiness: ObligationOperationalReadiness
 ): ProjectTreasuryHealth {
   if (readiness === 'ready' && obligationsTotal > 0) return 'ready_for_payout';
+  if (readiness === 'obligations_pending') return 'settlement_risk';
   if (readiness === 'partially_funded') return 'partially_funded';
   if (readiness === 'forecast_only') return 'forecast_heavy';
   if (obligationsTotal > 0 && confirmedFunding + 0.005 < obligationsTotal && pendingFunding === 0) {
@@ -126,7 +133,8 @@ export function buildProjectTreasurySummary(input: TreasuryInputs): ProjectTreas
     confirmedFunding,
     pendingFunding,
     forecastFunding,
-    obligationsTotal
+    obligationsTotal,
+    input.projectObligationEligibleParticipantCount ?? 0
   );
 
   const obligationsReady =

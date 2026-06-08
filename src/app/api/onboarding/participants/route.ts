@@ -23,6 +23,7 @@ import {
   onboardingParticipantsPostSchema,
   participantsFromOnboardingDrafts,
 } from '@/lib/onboarding/onboarding-participant-persist';
+import { refreshProjectObligationsAfterParticipantPersist } from '@/lib/onboarding/refresh-onboarding-project-obligations.server';
 
 /** POST /api/onboarding/participants — add participants to the onboarding project (canonical pilot model). */
 export async function POST(request: NextRequest) {
@@ -65,6 +66,8 @@ export async function POST(request: NextRequest) {
     ...snapshot.participants,
     ...newParticipants,
   ]);
+
+  await refreshProjectObligationsAfterParticipantPersist(user.id, deal.id);
 
   const afterSnapshot = await getPilotSnapshotForUser(user.id);
   const writtenIds = new Set(newParticipants.map((p) => p.id));

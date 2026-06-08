@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { sumObligationsAmountForDeal, sumPilotFundingForDeal } from '@/lib/deal-network-demo/pilot-project-funding.server';
+import { countProjectObligationEligibleParticipants } from '@/lib/operations/derivations/derive-compensation-settlement-basis';
 import { buildProjectTreasurySummary } from '@/lib/projects/funding-sources/treasury-summary';
 import { recalculateOperationalFundingState } from '@/lib/operations/lifecycle/funding-lifecycle';
 import type { ProjectFundingSourceDto, ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
@@ -216,6 +217,11 @@ export async function getProjectTreasurySummaryForUser(
     legacyRailConfirmedFunding(projectId),
   ]);
 
+  const projectObligationEligibleParticipantCount = countProjectObligationEligibleParticipants(
+    snapshot.participants,
+    projectId
+  );
+
   const defaultCurrency =
     deal.projectValueCurrency === 'AUD'
       ? 'AUD'
@@ -229,5 +235,6 @@ export async function getProjectTreasurySummaryForUser(
     obligationsTotal,
     legacyConfirmedFunding: legacyConfirmed,
     defaultCurrency,
+    projectObligationEligibleParticipantCount,
   }).treasury;
 }

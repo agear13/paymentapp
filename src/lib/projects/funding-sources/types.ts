@@ -39,7 +39,9 @@ export type ObligationOperationalReadiness =
   | 'partially_funded'
   | 'awaiting_funding'
   | 'blocked'
-  | 'forecast_only';
+  | 'forecast_only'
+  /** Compensated project-obligation participants exist but no obligation rows materialized yet. */
+  | 'obligations_pending';
 
 export type ProjectTreasurySummary = {
   currency: string;

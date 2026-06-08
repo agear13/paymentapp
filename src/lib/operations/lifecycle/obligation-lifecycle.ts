@@ -37,6 +37,8 @@ export function obligationStateFromReadiness(
       return 'UNFUNDED';
     case 'forecast_only':
       return 'DRAFT';
+    case 'obligations_pending':
+      return 'NONE';
     default:
       return 'UNFUNDED';
   }

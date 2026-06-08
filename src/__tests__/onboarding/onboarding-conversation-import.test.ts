@@ -8,6 +8,7 @@ import {
   onboardingDraftsFromExtraction,
   participantsFromOnboardingDrafts,
 } from '@/lib/onboarding/onboarding-participant-persist';
+import { resolveParticipantCommissionUsd } from '@/lib/deal-network-demo/commission-structure';
 
 function field<T>(value: T, confidence: 'high' | 'medium' | 'low' | 'absent' = 'high') {
   return { value, confidence };
@@ -167,5 +168,17 @@ describe('onboarding conversation import remediation', () => {
     const afterDoubleAppend = appendOnboardingParticipants(afterImport, drafts, deal);
     expect(afterDoubleAppend).toHaveLength(6);
     expect(afterDoubleAppend.filter((p) => p.name === 'DJ Alex')).toHaveLength(2);
+  });
+
+  it('materializes DJ Alex fixed fee as a project-obligation line when deal value is zero', () => {
+    const zeroDeal: RecentDeal = { ...deal, value: 0 };
+    const drafts = onboardingDraftsFromExtraction(extraction, zeroDeal, 'whatsapp', 'AUD');
+    const persisted = participantsFromOnboardingDrafts(drafts, zeroDeal);
+    const dj = persisted.find((p) => p.name === 'DJ Alex')!;
+    const owed = resolveParticipantCommissionUsd(
+      { commissionKind: dj.commissionKind, commissionValue: dj.commissionValue },
+      zeroDeal.value
+    );
+    expect(owed.total).toBe(2000);
   });
 });

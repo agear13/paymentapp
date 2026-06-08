@@ -37,3 +37,13 @@ export function deriveCompensationSettlementBasis(
     ? 'ATTRIBUTION_COMMISSION'
     : 'PROJECT_OBLIGATION';
 }
+
+/** Count participants whose compensation should materialize deal_network_pilot_obligations rows. */
+export function countProjectObligationEligibleParticipants(
+  participants: DemoParticipant[],
+  dealId: string
+): number {
+  return participants.filter(
+    (participant) => participant.dealId === dealId && usesProjectObligationSettlement(participant)
+  ).length;
+}

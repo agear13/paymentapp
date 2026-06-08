@@ -631,6 +631,8 @@ export function WorkflowOnboardingForm() {
       const saved = await persistParticipantsForProject(participants, bootstrappedId);
       if (!saved) return;
 
+      notifyWorkspaceActivationRefresh();
+
       const insight = buildInsightsFromExtraction(result, participants);
       trackOnboardingActivation('conversation_import_completed', {
         organizationId,
