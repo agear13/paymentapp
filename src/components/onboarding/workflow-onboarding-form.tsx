@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -111,6 +111,10 @@ import {
   saveOnboardingDraft,
 } from '@/lib/onboarding/onboarding-draft-persistence';
 import { createOperationId } from '@/lib/onboarding/mutation-resilience';
+import {
+  startSaasCheckout,
+  type SaasCheckoutPlan,
+} from '@/lib/billing/start-saas-checkout.client';
 
 const workspaceSchema = z.object({
   workspaceName: z.string().min(2, 'Workspace name is required').max(255),
@@ -171,8 +175,10 @@ const COLLECTION_ICONS = {
 
 export function WorkflowOnboardingForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = React.useState<OnboardingStep>('workspace');
   const [isLoading, setIsLoading] = React.useState(false);
+  const [billingCheckoutLoading, setBillingCheckoutLoading] = React.useState(false);
   const [useCase, setUseCase] = React.useState<OnboardingUseCaseId | null>(null);
   const [selectedUseCase, setSelectedUseCase] = React.useState<OnboardingUseCaseId | null>(null);
   const [startMethod, setStartMethod] = React.useState<OnboardingStartMethodId | null>(null);
@@ -284,6 +290,8 @@ export function WorkflowOnboardingForm() {
               projectId?: string;
               onboarding_use_case?: OnboardingUseCaseId;
               collection_preference?: CollectionPreferenceId;
+              pending_billing_plan?: SaasCheckoutPlan;
+              completed?: boolean;
             };
           };
           hasOrganization?: boolean;
@@ -295,6 +303,8 @@ export function WorkflowOnboardingForm() {
             projectId?: string;
             onboarding_use_case?: OnboardingUseCaseId;
             collection_preference?: CollectionPreferenceId;
+            pending_billing_plan?: SaasCheckoutPlan;
+            completed?: boolean;
           };
         };
         const payload = data.data ?? data;
@@ -317,7 +327,14 @@ export function WorkflowOnboardingForm() {
         }
         if (state?.merchantSettingsId) setMerchantSettingsId(state.merchantSettingsId);
         if (state?.projectId) setProjectId(state.projectId);
-        if (state?.step && state.step !== 'complete') {
+        if (state?.pending_billing_plan) {
+          setSelectedPlanId(state.pending_billing_plan);
+        }
+        if (state?.completed) {
+          setStep('complete');
+        } else if (state?.step === 'complete') {
+          setStep('complete');
+        } else if (state?.step) {
           setStep(normalizeOnboardingStep(state.step, hasOrg));
         } else if (!hasOrg) {
           setStep('workspace');
@@ -327,6 +344,12 @@ export function WorkflowOnboardingForm() {
       }
     })();
   }, []);
+
+  React.useEffect(() => {
+    if (searchParams?.get('billing') !== 'canceled') return;
+    setStep('complete');
+    toast.message('Checkout canceled. Choose a plan to continue, or select Starter to enter the app.');
+  }, [searchParams]);
 
   const selectedUseCaseMeta = ONBOARDING_USE_CASES.find((u) => u.id === useCase);
   const isWelcomeStep = step === 'workspace' || step === 'start_method';
@@ -439,13 +462,88 @@ export function WorkflowOnboardingForm() {
     trackOnboardingActivation('plan_viewed', { organizationId, projectId });
   }, [step, organizationId, projectId, isExploreMode]);
 
-  function handlePlanSelect(planId: string) {
+  async function persistPendingBillingPlan(plan: SaasCheckoutPlan | null) {
+    if (!organizationId) return;
+
+    let existingState: Record<string, unknown> = {};
+    try {
+      const res = await fetch('/api/onboarding');
+      if (res.ok) {
+        const payload = (await res.json()) as { data?: { state?: Record<string, unknown> }; state?: Record<string, unknown> };
+        existingState = payload.data?.state ?? payload.state ?? {};
+      }
+    } catch {
+      /* non-blocking */
+    }
+
+    const nextState: Record<string, unknown> = {
+      ...existingState,
+      step: 'complete',
+      completed: false,
+      organizationId,
+      merchantSettingsId: merchantSettingsId ?? undefined,
+      projectId: projectId ?? undefined,
+      onboarding_use_case: useCase ?? undefined,
+      onboarding_context: selectedUseCaseMeta?.title,
+      collection_preference: collectionPreference ?? undefined,
+    };
+
+    if (plan) {
+      nextState.pending_billing_plan = plan;
+    } else {
+      delete nextState.pending_billing_plan;
+    }
+
+    await fetch('/api/onboarding', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        organizationId,
+        state: nextState,
+      }),
+    });
+  }
+
+  async function initiateBillingCheckout(plan: SaasCheckoutPlan) {
+    if (!organizationId) {
+      toast.error('Create your workspace before choosing a paid plan.');
+      return;
+    }
+
+    setBillingCheckoutLoading(true);
+    try {
+      setSelectedPlanId(plan);
+      trackOnboardingActivation('plan_selected', { organizationId, projectId, planId: plan });
+      await persistPendingBillingPlan(plan);
+
+      const result = await startSaasCheckout({ plan, context: 'onboarding' });
+      if ('error' in result) {
+        toast.error(result.error);
+        return;
+      }
+
+      window.location.href = result.url;
+    } finally {
+      setBillingCheckoutLoading(false);
+    }
+  }
+
+  async function handlePlanSelect(planId: string) {
+    if (planId === 'professional' || planId === 'growth') {
+      await initiateBillingCheckout(planId);
+      return;
+    }
+
     setSelectedPlanId(planId);
     trackOnboardingActivation('plan_selected', {
       organizationId,
       projectId,
       planId,
     });
+
+    if (planId === 'starter' && organizationId) {
+      await persistPendingBillingPlan(null);
+    }
   }
 
   async function onWorkspaceSubmit(values: z.infer<typeof workspaceSchema>) {
@@ -521,71 +619,71 @@ export function WorkflowOnboardingForm() {
     });
   }
 
-  async function persistSelectedPlan() {
+  async function completeStarterOnboarding() {
     if (!organizationId) return;
-    const plan = selectedPlanId;
-    if (plan !== 'starter' && plan !== 'professional' && plan !== 'growth' && plan !== 'enterprise') {
-      return;
-    }
-
-    if (plan === 'professional' || plan === 'growth') {
-      trackOnboardingActivation('plan_selected', { organizationId, projectId, planId: plan });
-      const res = await fetch('/api/billing/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ plan }),
-      });
-      const json = (await res.json().catch(() => ({}))) as { data?: { url?: string }; error?: string };
-      if (res.ok && json.data?.url) {
-        window.location.href = json.data.url;
-      }
-      return;
-    }
 
     await fetch(`/api/organizations/${organizationId}/subscription`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: 'starter', status: 'inactive' }),
+    });
+
+    trackOnboardingActivation('plan_selected', {
+      organizationId,
+      projectId,
+      planId: 'starter',
+    });
+
+    await fetch('/api/onboarding', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        plan,
-        status: plan === 'starter' ? 'inactive' : 'active',
+        organizationId,
+        state: {
+          step: 'complete',
+          completed: true,
+          completedAt: new Date().toISOString(),
+          onboarding_use_case: useCase ?? undefined,
+          onboarding_start_method: startMethod ?? undefined,
+          onboarding_context: selectedUseCaseMeta?.title,
+          collection_preference: collectionPreference ?? undefined,
+          organizationId,
+          merchantSettingsId: merchantSettingsId ?? undefined,
+          projectId: projectId ?? undefined,
+        },
       }),
     });
-    trackOnboardingActivation('plan_selected', { organizationId, projectId, planId: plan });
   }
 
   async function finishOnboarding() {
-    setOrgCookie();
-    if (organizationId) {
-      await persistSelectedPlan();
-      await fetch('/api/onboarding', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          organizationId,
-          state: {
-            step: 'complete',
-            completed: true,
-            completedAt: new Date().toISOString(),
-            onboarding_use_case: useCase ?? undefined,
-            onboarding_start_method: startMethod ?? undefined,
-            onboarding_context: selectedUseCaseMeta?.title,
-            collection_preference: collectionPreference ?? undefined,
-            organizationId,
-            merchantSettingsId: merchantSettingsId ?? undefined,
-            projectId: projectId ?? undefined,
-          },
-        }),
-      });
+    if (selectedPlanId === 'professional' || selectedPlanId === 'growth') {
+      toast.message('Complete Stripe checkout to activate your subscription.');
+      await initiateBillingCheckout(selectedPlanId);
+      return;
     }
-    clearOnboardingDraft();
-    notifyWorkspaceActivationRefresh();
-    router.push(
-      projectId
-        ? `/dashboard/projects/${encodeURIComponent(projectId)}`
-        : '/dashboard?workspace=ready'
-    );
-    router.refresh();
+
+    if (selectedPlanId === 'enterprise') {
+      toast.message('Contact sales to activate Enterprise.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      setOrgCookie();
+      await completeStarterOnboarding();
+      clearOnboardingDraft();
+      notifyWorkspaceActivationRefresh();
+      router.push(
+        projectId
+          ? `/dashboard/projects/${encodeURIComponent(projectId)}`
+          : '/dashboard?workspace=ready'
+      );
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to complete onboarding');
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   async function handleStartMethodContinue() {
@@ -1789,7 +1887,17 @@ export function WorkflowOnboardingForm() {
           <OnboardingPricingPanel
             selectedPlanId={selectedPlanId}
             onSelectPlan={handlePlanSelect}
+            checkoutLoading={billingCheckoutLoading}
           />
+
+          {selectedPlanId === 'professional' || selectedPlanId === 'growth' ? (
+            <Card className="p-4 surface-intelligence border-0">
+              <p className="text-sm text-muted-foreground">
+                Selecting Professional or Growth redirects you to Stripe Checkout. Onboarding
+                completes after payment succeeds — your workspace stays on Starter until then.
+              </p>
+            </Card>
+          ) : null}
 
           <div className="flex flex-col sm:flex-row gap-3 justify-between">
             {projectId ? (
@@ -1801,11 +1909,23 @@ export function WorkflowOnboardingForm() {
             ) : (
               <span />
             )}
-            <Button type="button" disabled={isLoading} onClick={finishOnboarding}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Start Using Provvypay
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+            {selectedPlanId === 'starter' ? (
+              <Button type="button" disabled={isLoading} onClick={finishOnboarding}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Start Using Provvypay
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            ) : selectedPlanId === 'professional' || selectedPlanId === 'growth' ? (
+              <Button
+                type="button"
+                disabled={billingCheckoutLoading}
+                onClick={() => initiateBillingCheckout(selectedPlanId as SaasCheckoutPlan)}
+              >
+                {billingCheckoutLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Continue to Checkout
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            ) : null}
           </div>
         </div>
       )}

@@ -34,6 +34,7 @@ const patchSchema = z.object({
     projectId: z.string().optional(),
     completed: z.boolean().optional(),
     completedAt: z.string().optional(),
+    pending_billing_plan: z.enum(['professional', 'growth']).optional(),
   }),
 });
 

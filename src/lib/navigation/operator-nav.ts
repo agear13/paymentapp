@@ -126,6 +126,11 @@ export function getOperatorNavSections(
           href: '/dashboard/settings/organization',
           icon: Building2,
         },
+        {
+          title: 'Billing',
+          href: '/dashboard/settings/billing',
+          icon: CreditCard,
+        },
         { title: 'Collection & settlement infrastructure', href: '/dashboard/settings/merchant' },
         { title: 'Team', href: '/dashboard/settings/team' },
         {

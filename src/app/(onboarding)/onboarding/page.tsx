@@ -1,5 +1,10 @@
+import { Suspense } from 'react';
 import { WorkflowOnboardingForm } from '@/components/onboarding/workflow-onboarding-form';
 
 export default function OnboardingPage() {
-  return <WorkflowOnboardingForm />;
+  return (
+    <Suspense fallback={null}>
+      <WorkflowOnboardingForm />
+    </Suspense>
+  );
 }

@@ -7,13 +7,15 @@ export const revalidate = 0;
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getUserOrganization } from '@/lib/auth/get-org';
+import { Suspense } from 'react';
 import { OperationalHomeCommandCenter } from '@/components/operations/operational-home-command-center';
 import { OnboardingWorkspacePreview } from '@/components/onboarding/onboarding-workspace-preview';
+import { BillingCheckoutSuccessHandler } from '@/components/billing/billing-checkout-success-handler';
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ workspace?: string; project?: string }>;
+  searchParams: Promise<{ workspace?: string; project?: string; billing?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) {
@@ -30,6 +32,9 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-8">
+      <Suspense fallback={null}>
+        <BillingCheckoutSuccessHandler />
+      </Suspense>
       {showWorkspacePreview ? (
         <OnboardingWorkspacePreview projectName={params.project} />
       ) : null}

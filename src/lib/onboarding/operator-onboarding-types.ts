@@ -266,6 +266,8 @@ export type OperatorOnboardingState = {
   projectId?: string;
   completed?: boolean;
   completedAt?: string;
+  /** Set when user selects Professional/Growth before Stripe checkout completes. */
+  pending_billing_plan?: 'professional' | 'growth';
 };
 
 /** Visible progress steps — agreement creation sub-steps map to start_method. */

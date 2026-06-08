@@ -64,6 +64,22 @@ export async function ensureStripeCustomerForOrganization(input: {
   return customer.id;
 }
 
+export type SaasCheckoutContext = 'onboarding' | 'upgrade';
+
+function resolveCheckoutReturnUrls(origin: string, context: SaasCheckoutContext) {
+  if (context === 'onboarding') {
+    return {
+      success_url: `${origin}/dashboard?billing=success`,
+      cancel_url: `${origin}/onboarding?billing=canceled`,
+    };
+  }
+
+  return {
+    success_url: `${origin}/dashboard?billing=success`,
+    cancel_url: `${origin}/dashboard?billing=canceled`,
+  };
+}
+
 export async function createSaasSubscriptionCheckoutSession(input: {
   organizationId: string;
   organizationName: string;
@@ -71,6 +87,7 @@ export async function createSaasSubscriptionCheckoutSession(input: {
   userEmail: string;
   plan: PaidStripePlan;
   stripeCustomerId?: string | null;
+  checkoutContext?: SaasCheckoutContext;
 }): Promise<{ url: string; sessionId: string }> {
   if (!isStripeEnabled) {
     throw new Error('Stripe billing is not configured');
@@ -89,12 +106,13 @@ export async function createSaasSubscriptionCheckoutSession(input: {
   });
 
   const origin = getBrandedAppOrigin();
+  const returnUrls = resolveCheckoutReturnUrls(origin, input.checkoutContext ?? 'upgrade');
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${origin}/dashboard?billing=success&plan=${input.plan}`,
-    cancel_url: `${origin}/dashboard?billing=canceled`,
+    success_url: returnUrls.success_url,
+    cancel_url: returnUrls.cancel_url,
     client_reference_id: input.organizationId,
     subscription_data: {
       metadata: {
@@ -116,6 +134,26 @@ export async function createSaasSubscriptionCheckoutSession(input: {
   }
 
   return { url: session.url, sessionId: session.id };
+}
+
+export async function createBillingPortalSession(input: {
+  stripeCustomerId: string;
+}): Promise<{ url: string }> {
+  if (!isStripeEnabled) {
+    throw new Error('Stripe billing is not configured');
+  }
+
+  const origin = getBrandedAppOrigin();
+  const session = await stripe.billingPortal.sessions.create({
+    customer: input.stripeCustomerId,
+    return_url: `${origin}/dashboard/settings/billing`,
+  });
+
+  if (!session.url) {
+    throw new Error('Stripe Billing Portal session URL missing');
+  }
+
+  return { url: session.url };
 }
 
 export async function applyStripeSubscriptionToOrganization(input: {

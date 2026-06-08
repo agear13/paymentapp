@@ -11,12 +11,14 @@ import { ONBOARDING_PRICING_PLANS } from '@/lib/onboarding/operator-onboarding-t
 type OnboardingPricingPanelProps = {
   selectedPlanId: string;
   onSelectPlan: (planId: string) => void;
+  checkoutLoading?: boolean;
   className?: string;
 };
 
 export function OnboardingPricingPanel({
   selectedPlanId,
   onSelectPlan,
+  checkoutLoading = false,
   className,
 }: OnboardingPricingPanelProps) {
   return (
@@ -38,6 +40,7 @@ export function OnboardingPricingPanel({
             <button
               key={plan.id}
               type="button"
+              disabled={checkoutLoading}
               onClick={() => onSelectPlan(plan.id)}
               className={cn(
                 'relative rounded-xl border p-5 text-left transition-all duration-200 hover:border-[rgba(124,92,255,0.25)] hover:shadow-sm',
@@ -80,9 +83,14 @@ export function OnboardingPricingPanel({
           </p>
         </Card>
       ) : selectedPlanId === 'enterprise' ? (
-        <Button type="button" variant="outline" className="w-full" asChild>
-          <a href="mailto:sales@provvypay.com">Contact Sales</a>
-        </Button>
+        <Card className="p-4 surface-intelligence border-0 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Enterprise is activated by our sales team. Contact us to discuss your requirements.
+          </p>
+          <Button type="button" variant="outline" className="w-full" asChild>
+            <a href="mailto:sales@provvypay.com?subject=Enterprise%20Plan%20Inquiry">Contact Sales</a>
+          </Button>
+        </Card>
       ) : null}
     </div>
   );

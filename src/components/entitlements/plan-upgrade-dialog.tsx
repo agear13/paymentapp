@@ -20,6 +20,7 @@ import {
   useEntitlements,
   invalidateEntitlementsCache,
 } from '@/hooks/use-entitlements';
+import { startSaasCheckout } from '@/lib/billing/start-saas-checkout.client';
 
 export type PlanUpgradeDialogProps = {
   open: boolean;
@@ -80,26 +81,16 @@ export function PlanUpgradeDialog({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/billing/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ plan: requiredPlan }),
+      const result = await startSaasCheckout({
+        plan: requiredPlan,
+        context: 'upgrade',
       });
-      const json = (await res.json().catch(() => ({}))) as {
-        data?: { url?: string };
-        error?: string;
-      };
-      if (!res.ok) {
-        throw new Error(json.error ?? 'Could not start checkout');
-      }
-      const url = json.data?.url;
-      if (!url) {
-        throw new Error('Checkout URL missing');
+      if ('error' in result) {
+        throw new Error(result.error);
       }
       invalidateEntitlementsCache();
       await refresh();
-      window.location.href = url;
+      window.location.href = result.url;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Checkout failed');
     } finally {
