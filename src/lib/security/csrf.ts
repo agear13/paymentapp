@@ -85,6 +85,75 @@ function getTokenFromHeader(request: NextRequest): string | null {
   return request.headers.get(CSRF_HEADER_NAME);
 }
 
+function decodeUriComponentChangesValue(value: string): boolean {
+  try {
+    return decodeURIComponent(value) !== value;
+  } catch {
+    return false;
+  }
+}
+
+function firstCsrfTokenDivergenceIndex(
+  cookieToken: string,
+  headerToken: string
+): number | null {
+  const maxLength = Math.max(cookieToken.length, headerToken.length);
+  for (let index = 0; index < maxLength; index += 1) {
+    const cookieCharCode =
+      index < cookieToken.length ? cookieToken.charCodeAt(index) : null;
+    const headerCharCode =
+      index < headerToken.length ? headerToken.charCodeAt(index) : null;
+    if (cookieCharCode !== headerCharCode) {
+      return index;
+    }
+  }
+  return null;
+}
+
+function logCsrfTokenPreComparison(
+  cookieToken: string,
+  headerToken: string
+): void {
+  const firstDivergenceIndex = firstCsrfTokenDivergenceIndex(
+    cookieToken,
+    headerToken
+  );
+
+  log.warn('CSRF token pre-comparison', {
+    cookieTokenRaw: cookieToken,
+    headerTokenRaw: headerToken,
+    cookieTokenLength: cookieToken.length,
+    headerTokenLength: headerToken.length,
+    cookieDecodeUriChanged: decodeUriComponentChangesValue(cookieToken),
+    headerDecodeUriChanged: decodeUriComponentChangesValue(headerToken),
+    firstDivergenceIndex,
+    cookieCharAtDivergence:
+      firstDivergenceIndex === null
+        ? null
+        : firstDivergenceIndex < cookieToken.length
+          ? cookieToken[firstDivergenceIndex]
+          : null,
+    headerCharAtDivergence:
+      firstDivergenceIndex === null
+        ? null
+        : firstDivergenceIndex < headerToken.length
+          ? headerToken[firstDivergenceIndex]
+          : null,
+    cookieCharCodeAtDivergence:
+      firstDivergenceIndex === null
+        ? null
+        : firstDivergenceIndex < cookieToken.length
+          ? cookieToken.charCodeAt(firstDivergenceIndex)
+          : null,
+    headerCharCodeAtDivergence:
+      firstDivergenceIndex === null
+        ? null
+        : firstDivergenceIndex < headerToken.length
+          ? headerToken.charCodeAt(firstDivergenceIndex)
+          : null,
+  });
+}
+
 /**
  * Validate CSRF token from request
  * 
@@ -98,6 +167,8 @@ export function validateCSRFToken(request: NextRequest): boolean {
   if (!cookieToken || !headerToken) {
     return false;
   }
+
+  logCsrfTokenPreComparison(cookieToken, headerToken);
 
   if (cookieToken !== headerToken) {
     return false;
