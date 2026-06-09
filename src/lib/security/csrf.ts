@@ -45,10 +45,23 @@ function signToken(token: string): string {
  */
 function verifyToken(token: string, signature: string): boolean {
   const expected = signToken(token);
-  return crypto.timingSafeEqual(
-    Buffer.from(expected, 'base64'),
-    Buffer.from(signature, 'base64')
-  );
+  const expectedBuffer = Buffer.from(expected, 'base64');
+  const signatureBuffer = Buffer.from(signature, 'base64');
+  if (expectedBuffer.length !== signatureBuffer.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
+}
+
+function isSignedCsrfTokenValid(signedToken: string): boolean {
+  const parts = signedToken.split('.');
+  if (parts.length !== 2) return false;
+  const [token, signature] = parts;
+  try {
+    return verifyToken(token, signature);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -96,6 +109,19 @@ export function createSignedCsrfToken(): string {
   const token = generateCSRFToken();
   const signature = signToken(token);
   return `${token}.${signature}`;
+}
+
+/**
+ * Returns a valid signed CSRF token for dashboard clients.
+ * Reuses the existing csrf_token cookie when its signature is valid so repeated
+ * bootstrap GETs do not rotate the cookie away from the in-memory client token.
+ */
+export function resolveClientCsrfToken(request: NextRequest): string {
+  const cookieToken = getTokenFromCookie(request);
+  if (cookieToken && isSignedCsrfTokenValid(cookieToken)) {
+    return cookieToken;
+  }
+  return createSignedCsrfToken();
 }
 
 export function setCSRFCookie(response: NextResponse, signedToken?: string): NextResponse {

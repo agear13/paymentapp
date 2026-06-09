@@ -10,7 +10,7 @@ import { logCsrfDiag } from '@/lib/security/csrf-diag.client';
 export function CsrfBootstrap() {
   useEffect(() => {
     logCsrfDiag('CsrfBootstrap', 'effect-start');
-    void ensureClientCsrfReady()
+    void ensureClientCsrfReady('CsrfBootstrap')
       .then(() => {
         logCsrfDiag('CsrfBootstrap', 'resolved');
       })

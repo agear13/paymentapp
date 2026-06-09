@@ -39,7 +39,7 @@ export function useClientCsrfReady(): { isReady: boolean; isPreparing: boolean }
     setIsPreparing(true);
     logCsrfDiag('useClientCsrfReady', 'effect-bootstrap-start', { effectId });
 
-    ensureClientCsrfReady()
+    ensureClientCsrfReady(`useClientCsrfReady:${effectId}`)
       .then(() => {
         thenExecuted = true;
         logCsrfDiag('useClientCsrfReady', 'then', {
