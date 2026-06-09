@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { refreshDealNetworkPilotObligationsForUser } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
 import { linkPaymentEventToPilotDeal } from '@/lib/deal-network-demo/pilot-deal-payment-events.server';
@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * Body: { dealId: string } — sets payment_events.pilot_deal_id for explicit deal binding.
  */
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ eventId: string }> }
 ) {
   try {

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth/middleware';
 import {
@@ -68,7 +68,7 @@ const patchSchema = z
  * Operator updates participant coordination state (project + pilot snapshot sync).
  */
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ participantId: string }> }
 ) {
   try {

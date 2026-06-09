@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import {
   getPilotSnapshotForUser,
@@ -13,7 +13,7 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
     const snapshot = await getPilotSnapshotForUser(user.id);
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth(request);
     const body = (await request.json()) as {

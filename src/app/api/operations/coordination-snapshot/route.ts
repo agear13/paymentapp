@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
@@ -23,7 +23,7 @@ import {
 export const dynamic = 'force-dynamic';
 
 /** GET /api/operations/coordination-snapshot?projectId= — authoritative operational graph */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const ctx = createOperationalApiRouteContext({
     route: '/api/operations/coordination-snapshot',
     request,

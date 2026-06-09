@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { participantRowToDemo } from '@/lib/deal-network-demo/pilot-snapshot.server';
@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * GET /api/deal-network-pilot/debug/participant-identity?projectId=<dealId>
  * Read-only identity probe for duplicate-row investigation (Island DJs / Coastal Promotions).
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
     const { searchParams } = new URL(request.url);

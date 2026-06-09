@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { DealNetworkPilotObligationStatus, type Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
@@ -134,7 +134,7 @@ function logDjAlexPersistenceFinding(
  * GET /api/deal-network-pilot/obligations?dealId=&status=&participantId=
  * Lists derived obligation rows for the authenticated pilot user (read-only).
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const ctx = createOperationalApiRouteContext({
     route: '/api/deal-network-pilot/obligations',

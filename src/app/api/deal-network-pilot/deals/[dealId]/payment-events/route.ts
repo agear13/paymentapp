@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { refreshDealNetworkPilotObligationsForUser } from '@/lib/deal-network-demo/deal-network-pilot-obligations';
 import {
@@ -36,7 +36,7 @@ export const dynamic = 'force-dynamic';
  * - link_payment_link: attach latest PAYMENT_CONFIRMED for a payment link to this deal
  */
 export async function POST(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ dealId: string }> }
 ) {
   try {

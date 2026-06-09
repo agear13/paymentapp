@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 
@@ -140,9 +141,13 @@ function parseJsonField(value?: string): Record<string, unknown> | undefined {
   }
 }
 
+function asInputJsonValue(value: Record<string, unknown>): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
+}
+
 export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
   try {
-    log.info({
+    log.info('Audit Event', {
       auditEvent: entry.eventType,
       severity: entry.severity,
       userId: entry.userId,
@@ -151,12 +156,15 @@ export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
       resource: entry.resource,
       resourceId: entry.resourceId,
       timestamp: entry.timestamp.toISOString(),
-    }, 'Audit Event');
+    });
 
     const resourceId = entry.resourceId;
     const isUuid =
       typeof resourceId === 'string' &&
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resourceId);
+
+    const oldValues = parseJsonField(entry.oldValue);
+    const newValues = parseJsonField(entry.newValue);
 
     await prisma.audit_logs.create({
       data: {
@@ -169,22 +177,18 @@ export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
         event_type: entry.eventType,
         severity: entry.severity,
         correlation_id: entry.correlationId ?? null,
-        old_values: parseJsonField(entry.oldValue) ?? undefined,
-        new_values: parseJsonField(entry.newValue) ?? undefined,
-        metadata: entry.metadata ?? undefined,
+        old_values: oldValues ? asInputJsonValue(oldValues) : undefined,
+        new_values: newValues ? asInputJsonValue(newValues) : undefined,
+        metadata: entry.metadata ? asInputJsonValue(entry.metadata) : undefined,
         ip_address: entry.ipAddress ?? null,
         user_agent: entry.userAgent ?? null,
         created_at: entry.timestamp,
       },
     });
   } catch (error: unknown) {
-    log.error(
-      {
-        error: error instanceof Error ? error.message : String(error),
-        eventType: entry.eventType,
-      },
-      'Failed to create audit log'
-    );
+    log.error('Failed to create audit log', error, {
+      eventType: entry.eventType,
+    });
   }
 }
 
@@ -504,7 +508,7 @@ export async function enforceRetentionPolicy(retentionDays: number = 90) {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-  log.info({ cutoffDate, retentionDays }, 'Enforcing audit log retention policy');
+  log.info('Enforcing audit log retention policy', { cutoffDate, retentionDays });
 
   try {
     await prisma.audit_logs.deleteMany({
@@ -515,10 +519,7 @@ export async function enforceRetentionPolicy(retentionDays: number = 90) {
       },
     });
   } catch (error: unknown) {
-    log.error(
-      { error: error instanceof Error ? error.message : String(error) },
-      'Failed to enforce audit log retention'
-    );
+    log.error('Failed to enforce audit log retention', error);
   }
 }
 

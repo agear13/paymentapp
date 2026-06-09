@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selectors/resolve-operational-coordination.server';
 import { deriveReleaseBatchEligibility } from '@/lib/operations/selectors/derive-release-batch-eligibility';
@@ -6,7 +6,7 @@ import { deriveReleaseBatchEligibility } from '@/lib/operations/selectors/derive
 export const dynamic = 'force-dynamic';
 
 /** GET /api/operations/release-batch-eligibility?currency=AUD&minThreshold=50&projectId= */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
     const { searchParams } = new URL(request.url);

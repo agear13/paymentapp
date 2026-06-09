@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import {
@@ -23,7 +23,7 @@ import { prisma } from '@/lib/server/prisma';
  * Does not require payout onboarding — only payout release is gated later.
  */
 export async function POST(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ participantId: string }> }
 ) {
   try {

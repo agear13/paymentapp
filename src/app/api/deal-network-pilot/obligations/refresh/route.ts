@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import {
   refreshDealNetworkPilotObligationsForDeal,
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * Rebuilds derived obligation rows from current pilot deal + participant data (read-only on source tables).
  * Body: { dealId?: string } — omit dealId to refresh all deals for the authenticated user.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth(request);
     const body = (await request.json().catch(() => ({}))) as { dealId?: string };
