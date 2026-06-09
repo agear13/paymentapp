@@ -104,12 +104,7 @@ import {
   useClientCsrfReady,
 } from '@/hooks/use-client-csrf-ready';
 import { useEntitlements } from '@/hooks/use-entitlements';
-import {
-  csrfAwareFetch,
-  getClientCsrfToken,
-  logBootstrapWorkspace403Proof,
-} from '@/lib/security/csrf-fetch.client';
-import { logCsrfDiag } from '@/lib/security/csrf-diag.client';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { StarterLimitAlert } from '@/components/entitlements/starter-limit-alert';
 import { OnboardingPlanEntitlementSummary } from '@/components/onboarding/onboarding-plan-entitlement-summary';
 import {
@@ -195,31 +190,6 @@ export function WorkflowOnboardingForm() {
   const { isReady: csrfReady, isPreparing: csrfPreparing } = useClientCsrfReady();
   const [step, setStep] = React.useState<OnboardingStep>('workspace');
   const [isLoading, setIsLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    logCsrfDiag('WorkflowOnboardingForm', 'isLoading-changed', { isLoading });
-  }, [isLoading]);
-
-  React.useEffect(() => {
-    if (step !== 'workspace') return;
-
-    const moduleToken = getClientCsrfToken();
-    const buttonDisabled = isLoading || !csrfReady;
-
-    logCsrfDiag('WorkflowOnboardingForm', 'workspace-button-state', {
-      csrfReady,
-      csrfPreparing,
-      isLoading,
-      hasModuleToken: moduleToken !== null,
-      moduleTokenPreview: moduleToken ? `${moduleToken.slice(0, 12)}...` : null,
-      buttonDisabled,
-      buttonDisabledReason: isLoading
-        ? 'isLoading'
-        : !csrfReady
-          ? '!csrfReady'
-          : 'enabled',
-    });
-  }, [step, csrfReady, csrfPreparing, isLoading]);
   const [billingCheckoutLoading, setBillingCheckoutLoading] = React.useState(false);
   const [useCase, setUseCase] = React.useState<OnboardingUseCaseId | null>(null);
   const [selectedUseCase, setSelectedUseCase] = React.useState<OnboardingUseCaseId | null>(null);
@@ -613,9 +583,6 @@ export function WorkflowOnboardingForm() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        if (res.status === 403) {
-          logBootstrapWorkspace403Proof(err.csrfDiag);
-        }
         throw new Error(err.error || 'Failed to create workspace');
       }
       const payload = await res.json();

@@ -14,8 +14,6 @@ import {
   isCsrfExemptPath,
   isMutatingMethod,
 } from '@/lib/security/csrf-policy';
-import { diagnoseCsrfValidation } from '@/lib/security/csrf-diag.server';
-
 function getCsrfSecret(): string {
   return resolveCsrfSecret();
 }
@@ -94,12 +92,28 @@ function getTokenFromHeader(request: NextRequest): string | null {
  * @returns True if CSRF token is valid
  */
 export function validateCSRFToken(request: NextRequest): boolean {
-  return diagnoseCsrfValidation(request, verifyToken).failingBranch === 'none';
-}
+  const cookieToken = getTokenFromCookie(request);
+  const headerToken = getTokenFromHeader(request);
 
-/** TEMP: remove after bootstrap-workspace CSRF 403 debugging. */
-export function getCsrfValidationDiagnostics(request: NextRequest) {
-  return diagnoseCsrfValidation(request, verifyToken);
+  if (!cookieToken || !headerToken) {
+    return false;
+  }
+
+  if (cookieToken !== headerToken) {
+    return false;
+  }
+
+  const parts = cookieToken.split('.');
+  if (parts.length !== 2) {
+    return false;
+  }
+
+  const [token, signature] = parts;
+  try {
+    return verifyToken(token, signature);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -169,8 +183,7 @@ export function csrfProtection(
   }
 
   // Validate CSRF token
-  const csrfDiag = getCsrfValidationDiagnostics(request);
-  if (csrfDiag.failingBranch !== 'none') {
+  if (!validateCSRFToken(request)) {
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
       request.headers.get('x-real-ip') ??
@@ -181,7 +194,6 @@ export function csrfProtection(
       method: request.method,
       path: pathname,
       ip: ip ?? null,
-      csrfDiag,
     });
 
     void import('@/lib/audit/audit-log').then(({ logSecurityEvent, AuditEventType, AuditSeverity }) =>
@@ -191,15 +203,12 @@ export function csrfProtection(
         ipAddress: ip,
         userAgent,
         resource: pathname,
-        reason: `CSRF validation failed: ${csrfDiag.failingBranch}`,
+        reason: 'CSRF validation failed',
       })
     );
 
     return NextResponse.json(
-      {
-        error: 'CSRF validation failed',
-        csrfDiag,
-      },
+      { error: 'CSRF validation failed' },
       { status: 403 }
     );
   }

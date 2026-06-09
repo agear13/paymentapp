@@ -1,107 +1,36 @@
 'use client';
 
-import { logCsrfDiag } from '@/lib/security/csrf-diag.client';
 import {
-  getActivePatchOwnerId,
-  getCsrfInstanceRegistrySummary,
-  getLastBootstrapWorkspaceProof,
-  registerCsrfModuleInstance,
-  recordCsrfInstall,
-  resetCsrfProofStateForTests,
-  setLastBootstrapWorkspaceProof,
-  sha256Hex,
-  type BootstrapWorkspaceProof,
-} from '@/lib/security/csrf-proof.client';
-
-/** TEMP: identifies duplicate client module instances in lifecycle logs. */
-const CSRF_MODULE_INSTANCE_ID =
-  typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID().slice(0, 8)
-    : Math.random().toString(36).slice(2, 10);
-
-const MODULE_REGISTRY = registerCsrfModuleInstance(CSRF_MODULE_INSTANCE_ID);
-
-logCsrfDiag('tokenLifecycle', 'module-loaded', {
-  moduleInstanceId: CSRF_MODULE_INSTANCE_ID,
-  uniqueInstanceCount: MODULE_REGISTRY.uniqueInstanceCount,
-  allInstanceIds: MODULE_REGISTRY.allInstanceIds,
-  loadedAt: Math.round(performance.now()),
-});
-
-let csrfToken: string | null = null;
-let interceptorInstalled = false;
-let csrfReadyPromise: Promise<void> | null = null;
-let nativeFetch: typeof window.fetch | null = null;
-let csrfIssuanceGeneration = 0;
-let installInterceptorAt: number | null = null;
-let patchedWindowFetch = false;
-
-function previewToken(value: string | null | undefined): string | null {
-  if (!value) return null;
-  return `${value.slice(0, 12)}...`;
-}
-
-function logTokenLifecycle(
-  event: string,
-  details?: Record<string, unknown>
-): void {
-  const registry = getCsrfInstanceRegistrySummary();
-  logCsrfDiag('tokenLifecycle', event, {
-    moduleInstanceId: CSRF_MODULE_INSTANCE_ID,
-    issuanceGeneration: csrfIssuanceGeneration,
-    moduleTokenPreview: previewToken(csrfToken),
-    interceptorInstalled,
-    patchedWindowFetch,
-    installInterceptorAt,
-    activePatchOwnerId: registry.activePatchOwnerId,
-    uniqueInstanceCount: registry.uniqueInstanceCount,
-    allInstanceIds: registry.allInstanceIds,
-    hasInFlightPromise: csrfReadyPromise !== null,
-    ...details,
-  });
-}
+  getProvvyPayCsrfGlobal,
+  resetProvvyPayCsrfGlobalForTests,
+} from '@/lib/security/csrf-global.client';
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-async function recordInstallProof(token: string, source: string, willPatchFetch: boolean): Promise<void> {
-  const moduleTokenSha256 = await sha256Hex(token);
-  const installTs = recordCsrfInstall(CSRF_MODULE_INSTANCE_ID, {
-    patchedWindowFetch: willPatchFetch,
-    moduleTokenSha256,
-  });
-  installInterceptorAt = installTs;
-  patchedWindowFetch = willPatchFetch;
-
-  logTokenLifecycle('install-interceptor', {
-    source,
-    installInterceptorAt: installTs,
-    patchedWindowFetch: willPatchFetch,
-    moduleTokenSha256,
-    activePatchOwnerId: getActivePatchOwnerId(),
-  });
+function bootstrapFetch(): typeof window.fetch {
+  const state = getProvvyPayCsrfGlobal();
+  return state.nativeFetch ?? window.fetch.bind(window);
 }
 
-export function installCsrfFetchInterceptor(token: string, source?: string): void {
-  const previousPreview = previewToken(csrfToken);
-  const willPatchFetch = !interceptorInstalled && typeof window !== 'undefined';
-  csrfToken = token;
+export function installCsrfFetchInterceptor(token: string): void {
+  const state = getProvvyPayCsrfGlobal();
+  state.csrfToken = token;
 
-  void recordInstallProof(token, source ?? 'unknown', willPatchFetch).catch(() => {
-    logTokenLifecycle('install-interceptor-proof-failed', {
-      source: source ?? 'unknown',
-      previousTokenPreview: previousPreview,
-      installedTokenPreview: previewToken(token),
-      willPatchFetch,
-    });
-  });
+  if (state.interceptorInstalled || typeof window === 'undefined') return;
+  state.interceptorInstalled = true;
 
-  if (interceptorInstalled || typeof window === 'undefined') return;
-  interceptorInstalled = true;
-
-  nativeFetch = window.fetch.bind(window);
+  state.nativeFetch = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const { csrfToken, nativeFetch } = getProvvyPayCsrfGlobal();
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
+    const method = (
+      init?.method || (input instanceof Request ? input.method : 'GET')
+    ).toUpperCase();
 
     if (
       csrfToken &&
@@ -110,51 +39,17 @@ export function installCsrfFetchInterceptor(token: string, source?: string): voi
       !url.startsWith('/api/public/') &&
       !url.startsWith('/api/stripe/create-checkout-session')
     ) {
-      const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-      const hadHeader = headers.has('x-csrf-token');
-      if (!hadHeader) {
+      const headers = new Headers(
+        init?.headers || (input instanceof Request ? input.headers : undefined)
+      );
+      if (!headers.has('x-csrf-token')) {
         headers.set('x-csrf-token', csrfToken);
       }
 
-      if (url === '/api/onboarding/bootstrap-workspace' || url.endsWith('/api/onboarding/bootstrap-workspace')) {
-        const headerValue = hadHeader ? headers.get('x-csrf-token') : csrfToken;
-        const requestTs = Math.round(performance.now());
-        const headerTokenSha256 = headerValue ? await sha256Hex(headerValue) : null;
-        const moduleTokenSha256 = csrfToken ? await sha256Hex(csrfToken) : null;
-        const proof: BootstrapWorkspaceProof = {
-          moduleInstanceId: CSRF_MODULE_INSTANCE_ID,
-          requestTs,
-          headerTokenSha256,
-          moduleTokenSha256,
-          patchedWindowFetchByThisInstance: patchedWindowFetch,
-          activePatchOwnerId: getActivePatchOwnerId(),
-          headerWasPresent: hadHeader,
-        };
-        setLastBootstrapWorkspaceProof(proof);
-
-        logTokenLifecycle('bootstrap-workspace-request', {
-          requestTs,
-          method,
-          headerWasPresent: hadHeader,
-          headerTokenSha256,
-          moduleTokenSha256,
-          patchedWindowFetchByThisInstance: patchedWindowFetch,
-          activePatchOwnerId: proof.activePatchOwnerId,
-          headerGeneratorInstanceId: CSRF_MODULE_INSTANCE_ID,
-        });
-      }
-
-      return nativeFetch!(input, { ...init, headers, credentials: init?.credentials ?? 'include' });
-    }
-
-    if (
-      MUTATING.has(method) &&
-      (url === '/api/onboarding/bootstrap-workspace' || url.endsWith('/api/onboarding/bootstrap-workspace'))
-    ) {
-      logTokenLifecycle('bootstrap-workspace-unpatched', {
-        method,
-        hasModuleToken: csrfToken !== null,
-        reason: !csrfToken ? 'no_module_token' : 'path_not_intercepted',
+      return nativeFetch!(input, {
+        ...init,
+        headers,
+        credentials: init?.credentials ?? 'include',
       });
     }
 
@@ -163,68 +58,12 @@ export function installCsrfFetchInterceptor(token: string, source?: string): voi
 }
 
 export function getClientCsrfToken(): string | null {
-  return csrfToken;
+  return getProvvyPayCsrfGlobal().csrfToken;
 }
 
-export function getCsrfModuleInstanceId(): string {
-  return CSRF_MODULE_INSTANCE_ID;
-}
-
-type ServerCsrfDiag = {
-  cookieTokenSha256?: string | null;
-  headerTokenSha256?: string | null;
-  failingBranch?: string;
-};
-
-/** TEMP: correlate client proof with server 403 diagnostics. */
-export function logBootstrapWorkspace403Proof(serverCsrfDiag: ServerCsrfDiag | null | undefined): void {
-  const last = getLastBootstrapWorkspaceProof();
-  const registry = getCsrfInstanceRegistrySummary();
-  const headerSha = serverCsrfDiag?.headerTokenSha256 ?? last?.headerTokenSha256 ?? null;
-  const cookieSha = serverCsrfDiag?.cookieTokenSha256 ?? null;
-  const moduleSha = last?.moduleTokenSha256 ?? null;
-
-  const headerMatchesModule = Boolean(headerSha && moduleSha && headerSha === moduleSha);
-  const headerDiffersFromCookie = Boolean(headerSha && cookieSha && headerSha !== cookieSha);
-  const staleInterceptor = headerMatchesModule && headerDiffersFromCookie;
-
-  logCsrfDiag('csrf403Proof', 'bootstrap-workspace', {
-    headerGeneratorInstanceId: last?.moduleInstanceId ?? null,
-    activePatchOwnerId: registry.activePatchOwnerId,
-    SHA256_header: headerSha,
-    SHA256_cookie: cookieSha,
-    SHA256_module: moduleSha,
-    headerMatchesModule,
-    headerDiffersFromCookie,
-    staleInterceptor,
-    failingBranch: serverCsrfDiag?.failingBranch ?? null,
-    uniqueInstanceCount: registry.uniqueInstanceCount,
-    allInstanceIds: registry.allInstanceIds,
-    installInterceptorAt: installInterceptorAt,
-    bootstrapRequestTs: last?.requestTs ?? null,
-    patchedWindowFetchByRequestInstance: last?.patchedWindowFetchByThisInstance ?? null,
-    instances: registry.instances,
-    lastBootstrapProof: last,
-  });
-}
-
-async function fetchAndInstallCsrfToken(source: string): Promise<void> {
-  const issuanceGeneration = ++csrfIssuanceGeneration;
-  logTokenLifecycle('csrf-token-fetch-start', {
-    source,
-    issuanceGeneration,
-    moduleTokenSha256: csrfToken ? await sha256Hex(csrfToken) : null,
-  });
-
-  const response = await fetch('/api/security/csrf-token', { credentials: 'include' });
-
-  logTokenLifecycle('csrf-token-fetch-response', {
-    source,
-    issuanceGeneration,
-    ok: response.ok,
-    status: response.status,
-    contentType: response.headers?.get?.('content-type') ?? null,
-    moduleTokenSha256: csrfToken ? await sha256Hex(csrfToken) : null,
+async function fetchAndInstallCsrfToken(): Promise<void> {
+  const response = await bootstrapFetch()('/api/security/csrf-token', {
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -235,68 +74,34 @@ async function fetchAndInstallCsrfToken(source: string): Promise<void> {
   const bodyToken =
     typeof data.csrfToken === 'string' ? (data.csrfToken as string) : null;
 
-  logTokenLifecycle('csrf-token-json-parsed', {
-    source,
-    issuanceGeneration,
-    csrfTokenType: typeof data.csrfToken,
-    bodyTokenSha256: bodyToken ? await sha256Hex(bodyToken) : null,
-    moduleTokenSha256: csrfToken ? await sha256Hex(csrfToken) : null,
-  });
-
   if (!bodyToken) {
     throw new Error('Invalid CSRF token response');
   }
 
-  installCsrfFetchInterceptor(bodyToken, source);
-  logTokenLifecycle('csrf-token-installed', {
-    source,
-    issuanceGeneration,
-    bodyTokenSha256: await sha256Hex(bodyToken),
-    moduleTokenSha256: await sha256Hex(csrfToken!),
-  });
+  installCsrfFetchInterceptor(bodyToken);
 }
 
 /**
  * Ensures a CSRF token is installed before authenticated dashboard/onboarding mutations.
- * Concurrent callers share a single in-flight bootstrap request.
+ * Concurrent callers — including separate bundled module instances — share one bootstrap.
  */
-export async function ensureClientCsrfReady(source = 'unspecified'): Promise<void> {
-  logTokenLifecycle('ensure-start', { source });
+export async function ensureClientCsrfReady(): Promise<void> {
+  const state = getProvvyPayCsrfGlobal();
 
-  if (csrfToken) {
-    logTokenLifecycle('ensure-skip-existing-token', {
-      source,
-      moduleTokenSha256: await sha256Hex(csrfToken),
-    });
+  if (state.csrfToken) {
     return;
   }
 
-  if (!csrfReadyPromise) {
-    csrfReadyPromise = fetchAndInstallCsrfToken(source).finally(() => {
-      logCsrfDiag('ensureClientCsrfReady', 'promise-finally', {
-        hasModuleToken: csrfToken !== null,
-        clearingInFlightPromise: csrfToken === null,
-      });
-      if (!csrfToken) {
-        csrfReadyPromise = null;
+  if (!state.csrfReadyPromise) {
+    state.csrfReadyPromise = fetchAndInstallCsrfToken().finally(() => {
+      const current = getProvvyPayCsrfGlobal();
+      if (!current.csrfToken) {
+        current.csrfReadyPromise = null;
       }
     });
   }
 
-  try {
-    await csrfReadyPromise;
-    logTokenLifecycle('ensure-resolved', {
-      source,
-      moduleTokenSha256: csrfToken ? await sha256Hex(csrfToken) : null,
-    });
-  } catch (error) {
-    logTokenLifecycle('ensure-rejected', {
-      source,
-      error: error instanceof Error ? error.message : String(error),
-      moduleTokenSha256: csrfToken ? await sha256Hex(csrfToken) : null,
-    });
-    throw error;
-  }
+  await state.csrfReadyPromise;
 }
 
 /**
@@ -306,23 +111,17 @@ export async function csrfAwareFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
-  await ensureClientCsrfReady('csrfAwareFetch');
+  await ensureClientCsrfReady();
   return fetch(input, init);
 }
 
 /** @internal Reset module state between tests. */
 export function resetClientCsrfStateForTests(): void {
-  csrfToken = null;
-  csrfReadyPromise = null;
-  csrfIssuanceGeneration = 0;
-  installInterceptorAt = null;
-  patchedWindowFetch = false;
+  const state = getProvvyPayCsrfGlobal();
 
-  if (interceptorInstalled && nativeFetch && typeof window !== 'undefined') {
-    window.fetch = nativeFetch;
+  if (state.interceptorInstalled && state.nativeFetch && typeof window !== 'undefined') {
+    window.fetch = state.nativeFetch;
   }
 
-  interceptorInstalled = false;
-  nativeFetch = null;
-  resetCsrfProofStateForTests();
+  resetProvvyPayCsrfGlobalForTests();
 }

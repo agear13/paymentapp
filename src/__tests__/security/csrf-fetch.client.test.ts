@@ -2,19 +2,13 @@
  * @jest-environment jsdom
  */
 
-import { webcrypto } from 'node:crypto';
-
-Object.defineProperty(globalThis, 'crypto', {
-  value: webcrypto,
-  configurable: true,
-});
-
 import {
   csrfAwareFetch,
   ensureClientCsrfReady,
   getClientCsrfToken,
   resetClientCsrfStateForTests,
 } from '@/lib/security/csrf-fetch.client';
+import { getProvvyPayCsrfGlobal } from '@/lib/security/csrf-global.client';
 
 const SIGNED_TOKEN = 'csrf-random-part.csrf-signature-part';
 
@@ -71,6 +65,26 @@ describe('ensureClientCsrfReady', () => {
     await Promise.all([first, second]);
 
     expect(getClientCsrfToken()).toBe(SIGNED_TOKEN);
+  });
+
+  it('shares bootstrap state across separate global accessors (duplicate bundles)', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ csrfToken: SIGNED_TOKEN }),
+    });
+
+    const stateA = getProvvyPayCsrfGlobal();
+    const stateB = getProvvyPayCsrfGlobal();
+    expect(stateA).toBe(stateB);
+
+    const first = ensureClientCsrfReady();
+    const second = ensureClientCsrfReady();
+
+    await Promise.all([first, second]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(stateA.csrfToken).toBe(SIGNED_TOKEN);
+    expect(stateB.csrfToken).toBe(SIGNED_TOKEN);
   });
 });
 
@@ -152,5 +166,32 @@ describe('csrfAwareFetch onboarding mutations', () => {
     const patchCall = fetchMock.mock.calls[2];
     expect(patchCall[0]).toBe('/api/onboarding');
     expect(patchCall[1]?.headers?.get('x-csrf-token')).toBe(SIGNED_TOKEN);
+  });
+
+  it('reads the latest token from global state when the interceptor runs', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ csrfToken: SIGNED_TOKEN }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true }),
+      });
+
+    await ensureClientCsrfReady();
+
+    const state = getProvvyPayCsrfGlobal();
+    const updatedToken = 'updated-token.updated-signature';
+    state.csrfToken = updatedToken;
+
+    await csrfAwareFetch('/api/onboarding/bootstrap-workspace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceName: 'Acme' }),
+    });
+
+    const mutationCall = fetchMock.mock.calls[1];
+    expect(mutationCall[1]?.headers?.get('x-csrf-token')).toBe(updatedToken);
   });
 });
