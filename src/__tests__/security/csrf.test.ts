@@ -78,6 +78,20 @@ describe('CSRF protection', () => {
     expect(enforceCsrfForRequest(request)?.status).toBe(403);
   });
 
+  it('accepts a percent-encoded csrf_token cookie against a decoded header', () => {
+    const encodedCookie = encodeURIComponent(signedToken);
+    const request = makeRequest({
+      method: 'POST',
+      path: '/api/onboarding/bootstrap-workspace',
+      csrfCookie: encodedCookie,
+      csrfHeader: signedToken,
+      sessionCookie,
+    });
+
+    expect(validateCSRFToken(request)).toBe(true);
+    expect(enforceCsrfForRequest(request)).toBeNull();
+  });
+
   it('cross-origin request without custom header fails', () => {
     const request = makeRequest({
       method: 'POST',

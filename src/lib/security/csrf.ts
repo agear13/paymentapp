@@ -63,6 +63,18 @@ function isSignedCsrfTokenValid(signedToken: string): boolean {
 }
 
 /**
+ * Cookie values in the Cookie header may arrive percent-encoded (%3D, %2F) while
+ * x-csrf-token is sent decoded. Normalize before compare or verify.
+ */
+function decodeCsrfCookieValue(rawCookieValue: string): string {
+  try {
+    return decodeURIComponent(rawCookieValue);
+  } catch {
+    return rawCookieValue;
+  }
+}
+
+/**
  * Extract CSRF token from cookie
  */
 function getTokenFromCookie(request: NextRequest): string | null {
@@ -75,7 +87,8 @@ function getTokenFromCookie(request: NextRequest): string | null {
   if (!csrfCookie) return null;
 
   // Use slice — token signatures are base64 and may contain '=' padding.
-  return csrfCookie.slice(`${CSRF_COOKIE_NAME}=`.length);
+  const rawCookieValue = csrfCookie.slice(`${CSRF_COOKIE_NAME}=`.length);
+  return decodeCsrfCookieValue(rawCookieValue);
 }
 
 /**
