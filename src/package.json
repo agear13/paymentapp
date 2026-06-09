@@ -35,6 +35,8 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "load:test": "tsx scripts/load-test-1000-users.ts",
+    "load:bench": "tsx scripts/production-load-benchmark.ts",
+    "load:stepped": "tsx scripts/route-load-stepped.ts",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:production": "dotenv -e ../.env.production -- prisma migrate deploy",

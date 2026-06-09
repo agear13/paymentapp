@@ -5,11 +5,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { isValidInternalAdminRequest } from '@/lib/security/internal-admin-auth.server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { computeReferralAllocations, type Allocation } from '@/lib/referrals/allocation-engine';
 import type { PaymentRule } from '@/lib/referrals/allocation-engine';
 
 export async function POST(request: NextRequest) {
+  if (!isValidInternalAdminRequest(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const {

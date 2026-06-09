@@ -7,7 +7,8 @@ const defaultBaseUrl = `http://127.0.0.1:${e2ePort}`;
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  workers: process.env.CI ? 1 : undefined,
+  // Limit parallel UI hits against a single `next dev` instance (cold compile + HMR).
+  workers: process.env.CI ? 1 : 2,
   timeout: 90_000,
   retries: process.env.CI ? 2 : 0,
   use: {

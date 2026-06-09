@@ -40,7 +40,7 @@ export async function POST(
   context: { params: Promise<{ dealId: string }> }
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const { dealId } = await context.params;
     const id = dealId?.trim();
     if (!id) {

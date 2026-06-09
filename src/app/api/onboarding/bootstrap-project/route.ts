@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
 import { prisma } from '@/lib/server/prisma';
@@ -262,10 +262,9 @@ export async function POST(request: NextRequest) {
   const operationId = createOperationId();
 
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return apiError('Unauthorized', 401);
-    }
+    const auth = await getCurrentUserForApi(request);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     const { data: body, error } = await validateBody(request, schema);
     if (error) {

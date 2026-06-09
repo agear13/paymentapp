@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { ONBOARDING_PRICING_PLANS } from '@/lib/onboarding/operator-onboarding-types';
+import { ProvvypayLegalSubscriptionNotice } from '@/components/legal/provvypay-legal-links';
+import { OnboardingPlanEntitlementSummary } from '@/components/onboarding/onboarding-plan-entitlement-summary';
 
 type OnboardingPricingPanelProps = {
   selectedPlanId: string;
@@ -75,13 +77,15 @@ export function OnboardingPricingPanel({
         })}
       </div>
 
-      {selectedPlanId === 'starter' ? (
-        <Card className="p-4 surface-intelligence border-0">
-          <p className="text-sm text-muted-foreground">
-            Starter is free and ideal for exploring Agreement Intelligence. Upgrade anytime from
-            Settings.
-          </p>
-        </Card>
+      {selectedPlanId === 'starter' ||
+      selectedPlanId === 'professional' ||
+      selectedPlanId === 'growth' ? (
+        <OnboardingPlanEntitlementSummary
+          planId={selectedPlanId}
+          onSelectProfessional={
+            selectedPlanId === 'starter' ? () => onSelectPlan('professional') : undefined
+          }
+        />
       ) : selectedPlanId === 'enterprise' ? (
         <Card className="p-4 surface-intelligence border-0 space-y-3">
           <p className="text-sm text-muted-foreground">
@@ -92,6 +96,8 @@ export function OnboardingPricingPanel({
           </Button>
         </Card>
       ) : null}
+
+      <ProvvypayLegalSubscriptionNotice />
     </div>
   );
 }

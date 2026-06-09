@@ -5,6 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
+import { AuditEventType, createAuditLog, AuditSeverity } from '@/lib/audit/audit-log';
+import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
@@ -77,16 +80,9 @@ export async function GET(request: NextRequest) {
 // PUT /api/settings/xero-mappings
 export async function PUT(request: NextRequest) {
   try {
-    // Get authenticated user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const auth = await getCurrentUserForApi(request);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     const body = await request.json();
     const { organizationId, ...mappings } = body;
@@ -189,6 +185,22 @@ export async function PUT(request: NextRequest) {
     logger.info('Updated Xero account mappings', {
       organizationId,
       mappingsCount: required.length,
+    });
+
+    const auditCtx = extractRequestAuditContext(request);
+    void createAuditLog({
+      eventType: AuditEventType.ADMIN_SETTINGS_CHANGED,
+      severity: AuditSeverity.INFO,
+      userId: user.id,
+      organizationId,
+      resource: 'xero_mappings',
+      resourceId: organizationId,
+      action: 'update',
+      newValue: JSON.stringify({ fieldsUpdated: required.length }),
+      ipAddress: auditCtx.ipAddress,
+      userAgent: auditCtx.userAgent,
+      correlationId: auditCtx.correlationId,
+      timestamp: new Date(),
     });
 
     return NextResponse.json({

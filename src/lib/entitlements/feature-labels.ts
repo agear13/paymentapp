@@ -1,5 +1,6 @@
 import type { EntitlementFeature, SubscriptionPlan } from '@/lib/entitlements/types';
 import { requiredPlanLabel } from '@/lib/entitlements/plans';
+import { starterLimitMessage } from '@/lib/entitlements/plan-onboarding-summaries';
 
 export const FEATURE_DISPLAY_NAMES: Record<EntitlementFeature, string> = {
   create_agreement: 'Agreements',
@@ -40,11 +41,11 @@ export function upgradeBody(
   switch (feature) {
     case 'create_agreement':
       return atLimit
-        ? 'Starter includes up to 3 active agreements. Upgrade to Professional for unlimited agreements.'
+        ? starterLimitMessage('create_agreement')
         : `Upgrade to ${requiredPlanLabel(requiredPlan)} to create more agreements.`;
     case 'ai_import':
       return atLimit
-        ? 'Starter includes 3 AI-powered agreement imports. Upgrade to Professional for unlimited imports.'
+        ? starterLimitMessage('ai_import')
         : `Upgrade to ${requiredPlanLabel(requiredPlan)} for unlimited AI imports.`;
     case 'payment_links':
       return 'Payment Links are available on Professional.';

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
 import { isSubscriptionPlan } from '@/lib/entitlements/plans';
@@ -22,10 +22,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return apiError('Unauthorized', 401);
-  }
+  const auth = await getCurrentUserForApi(request);
+  if (!auth.user) return auth.response!;
+  const user = auth.user;
 
   const { id } = await params;
   const org = await getOrganizationForAuthenticatedUser(user.id);

@@ -5,8 +5,11 @@
  * Compliance with SOC 2, ISO 27001, and GDPR audit requirements
  */
 
+import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
+
+const SYSTEM_AUDIT_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Audit event types
@@ -17,8 +20,13 @@ export enum AuditEventType {
   AUTH_LOGIN_FAILED = 'auth.login.failed',
   AUTH_LOGOUT = 'auth.logout',
   AUTH_PASSWORD_CHANGE = 'auth.password.change',
+  AUTH_PASSWORD_RESET_REQUESTED = 'auth.password.reset.requested',
+  AUTH_PASSWORD_RESET_COMPLETED = 'auth.password.reset.completed',
+  AUTH_EMAIL_VERIFIED = 'auth.email.verified',
+  AUTH_INVITE_ACCEPTED = 'auth.invite.accepted',
   AUTH_MFA_ENABLED = 'auth.mfa.enabled',
   AUTH_MFA_DISABLED = 'auth.mfa.disabled',
+  AUTH_MFA_RECOVERY_USED = 'auth.mfa.recovery.used',
   
   // Authorization Events
   ACCESS_GRANTED = 'access.granted',
@@ -34,13 +42,34 @@ export enum AuditEventType {
   
   // Payment Events
   PAYMENT_LINK_CREATED = 'payment.link.created',
+  PAYMENT_LINK_UPDATED = 'payment.link.updated',
   PAYMENT_LINK_CANCELED = 'payment.link.canceled',
   PAYMENT_RECEIVED = 'payment.received',
   PAYMENT_REFUNDED = 'payment.refunded',
-  
+  PAYMENT_SETTLEMENT_COMPLETED = 'payment.settlement.completed',
+
+  // Payout Events
+  PAYOUT_CREATED = 'payout.created',
+  PAYOUT_APPROVED = 'payout.approved',
+  PAYOUT_PAID = 'payout.paid',
+
+  // Commission Events
+  COMMISSION_CREATED = 'commission.created',
+  COMMISSION_MODIFIED = 'commission.modified',
+  COMMISSION_PAID = 'commission.paid',
+
+  // Organization Events
+  ORG_CREATED = 'org.created',
+  ORG_UPDATED = 'org.updated',
+  ORG_MEMBERSHIP_CHANGED = 'org.membership.changed',
+  ORG_ROLE_CHANGED = 'org.role.changed',
+  ORG_OWNERSHIP_TRANSFERRED = 'org.ownership.transferred',
+
   // Integration Events
   XERO_CONNECTED = 'xero.connected',
   XERO_DISCONNECTED = 'xero.disconnected',
+  WISE_SETTINGS_CHANGED = 'wise.settings.changed',
+  STRIPE_SETTINGS_CHANGED = 'stripe.settings.changed',
   XERO_SYNC_SUCCESS = 'xero.sync.success',
   XERO_SYNC_FAILED = 'xero.sync.failed',
   STRIPE_WEBHOOK_RECEIVED = 'stripe.webhook.received',
@@ -91,7 +120,8 @@ export interface AuditLogEntry {
   action?: string;
   oldValue?: string;
   newValue?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
+  correlationId?: string;
   timestamp: Date;
 }
 
@@ -101,34 +131,60 @@ export interface AuditLogEntry {
  * @param entry - Audit log entry data
  * @returns Created audit log entry
  */
+function parseJsonField(value?: string): Record<string, unknown> | undefined {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value) as Record<string, unknown>;
+  } catch {
+    return { raw: value };
+  }
+}
+
 export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
   try {
-    // Store in database (create audit_logs table if needed)
-    // For now, using structured logging
     log.info({
       auditEvent: entry.eventType,
       severity: entry.severity,
       userId: entry.userId,
       organizationId: entry.organizationId,
-      ipAddress: entry.ipAddress,
-      userAgent: entry.userAgent,
+      correlationId: entry.correlationId,
       resource: entry.resource,
       resourceId: entry.resourceId,
-      action: entry.action,
-      oldValue: entry.oldValue,
-      newValue: entry.newValue,
-      metadata: entry.metadata,
       timestamp: entry.timestamp.toISOString(),
     }, 'Audit Event');
 
-    // TODO: Store in dedicated audit_logs table for persistence
-    // await prisma.audit_logs.create({ data: entry });
-  } catch (error: any) {
-    // Never fail the operation due to audit log failure
-    log.error({
-      error: error.message,
-      entry,
-    }, 'Failed to create audit log');
+    const resourceId = entry.resourceId;
+    const isUuid =
+      typeof resourceId === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resourceId);
+
+    await prisma.audit_logs.create({
+      data: {
+        id: randomUUID(),
+        organization_id: entry.organizationId ?? null,
+        user_id: entry.userId ?? null,
+        entity_type: entry.resource ?? 'system',
+        entity_id: isUuid ? resourceId! : SYSTEM_AUDIT_ENTITY_ID,
+        action: entry.action ?? entry.eventType,
+        event_type: entry.eventType,
+        severity: entry.severity,
+        correlation_id: entry.correlationId ?? null,
+        old_values: parseJsonField(entry.oldValue) ?? undefined,
+        new_values: parseJsonField(entry.newValue) ?? undefined,
+        metadata: entry.metadata ?? undefined,
+        ip_address: entry.ipAddress ?? null,
+        user_agent: entry.userAgent ?? null,
+        created_at: entry.timestamp,
+      },
+    });
+  } catch (error: unknown) {
+    log.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        eventType: entry.eventType,
+      },
+      'Failed to create audit log'
+    );
   }
 }
 
@@ -354,10 +410,43 @@ export async function queryAuditLogs(filters: {
   limit?: number;
   offset?: number;
 }) {
-  // TODO: Implement database query when audit_logs table exists
-  // For now, return empty array
-  log.info(filters, 'Audit log query requested');
-  return [];
+  const rows = await prisma.audit_logs.findMany({
+    where: {
+      ...(filters.startDate || filters.endDate
+        ? {
+            created_at: {
+              ...(filters.startDate ? { gte: filters.startDate } : {}),
+              ...(filters.endDate ? { lte: filters.endDate } : {}),
+            },
+          }
+        : {}),
+      ...(filters.eventTypes?.length ? { event_type: { in: filters.eventTypes } } : {}),
+      ...(filters.userId ? { user_id: filters.userId } : {}),
+      ...(filters.organizationId ? { organization_id: filters.organizationId } : {}),
+      ...(filters.severity?.length ? { severity: { in: filters.severity } } : {}),
+    },
+    orderBy: { created_at: 'desc' },
+    take: filters.limit ?? 100,
+    skip: filters.offset ?? 0,
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    eventType: row.event_type ?? row.action,
+    severity: row.severity,
+    userId: row.user_id,
+    organizationId: row.organization_id,
+    resource: row.entity_type,
+    resourceId: row.entity_id,
+    action: row.action,
+    ipAddress: row.ip_address,
+    userAgent: row.user_agent,
+    correlationId: row.correlation_id,
+    metadata: row.metadata,
+    oldValue: row.old_values,
+    newValue: row.new_values,
+    timestamp: row.created_at,
+  }));
 }
 
 /**
@@ -417,14 +506,20 @@ export async function enforceRetentionPolicy(retentionDays: number = 90) {
 
   log.info({ cutoffDate, retentionDays }, 'Enforcing audit log retention policy');
 
-  // TODO: Implement database deletion when audit_logs table exists
-  // await prisma.audit_logs.deleteMany({
-  //   where: {
-  //     timestamp: {
-  //       lt: cutoffDate,
-  //     },
-  //   },
-  // });
+  try {
+    await prisma.audit_logs.deleteMany({
+      where: {
+        created_at: {
+          lt: cutoffDate,
+        },
+      },
+    });
+  } catch (error: unknown) {
+    log.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'Failed to enforce audit log retention'
+    );
+  }
 }
 
 

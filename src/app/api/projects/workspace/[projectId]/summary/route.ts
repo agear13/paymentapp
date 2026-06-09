@@ -6,11 +6,11 @@ export const dynamic = 'force-dynamic';
 
 /** GET — lightweight project shell: deal metadata + summary metrics only. */
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const { projectId } = await context.params;
     const result = await getProjectWorkspaceSummaryForUser(user.id, projectId);
 

@@ -12,9 +12,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth/middleware';
+import { AuthError } from '@/lib/auth/errors';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
-import { requireAuth } from '@/lib/auth/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import {
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Authentication
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     if (!user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -265,6 +266,15 @@ export async function GET(request: NextRequest) {
  * Kept in v2 for API consistency - no changes needed for create operation
  */
 export async function POST(request: NextRequest) {
+  try {
+    await requireAuth(request);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   // TODO: Import and re-use POST handler from v1
   // For now, redirect to v1 endpoint
   return NextResponse.json(

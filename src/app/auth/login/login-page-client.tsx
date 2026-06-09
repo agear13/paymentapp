@@ -9,6 +9,12 @@ import { Label } from '@/components/ui/label';
 import { ProvvypayLogoMark } from '@/components/provvypay/provvypay-logo-mark';
 import { MessageSquare, Users, Wallet } from 'lucide-react';
 import Link from 'next/link';
+import {
+  AuthLegalFooterLinks,
+  AuthMobileLegalLinks,
+  AuthSignupLegalNotice,
+} from '@/components/legal/auth-legal-links';
+import { emitAuthAuditEvent } from '@/lib/security/auth-audit.client';
 
 type AuthMode = 'signin' | 'signup';
 
@@ -88,10 +94,22 @@ export function LoginPageClient() {
       if (signInError) throw signInError;
 
       await waitForSession();
+      const { data: sessionData } = await supabase.auth.getSession();
+      void emitAuthAuditEvent({
+        eventType: 'auth.login.success',
+        email,
+        userId: sessionData.session?.user.id,
+      });
       router.replace(getPostAuthDestination());
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to login';
+      void emitAuthAuditEvent({
+        eventType: 'auth.login.failed',
+        email,
+        success: false,
+        reason: message,
+      });
       setError(message);
     } finally {
       setLoading(false);
@@ -197,15 +215,7 @@ export function LoginPageClient() {
             </div>
           </div>
 
-          <div className="flex items-center gap-6 text-sm text-white/50">
-            <span>© 2026 Provvypay</span>
-            <Link href="/legal/privacy" className="hover:text-white/80 transition-colors">
-              Privacy
-            </Link>
-            <Link href="/legal/terms" className="hover:text-white/80 transition-colors">
-              Terms
-            </Link>
-          </div>
+          <AuthLegalFooterLinks />
         </div>
       </div>
 
@@ -307,6 +317,8 @@ export function LoginPageClient() {
                 <div className="surface-settlement px-4 py-3 rounded-lg text-sm">{notice}</div>
               )}
 
+              {mode === 'signup' ? <AuthSignupLegalNotice /> : null}
+
               <Button type="submit" className="w-full h-11 text-base" disabled={loading}>
                 {loading ? (
                   <span className="flex items-center gap-2">
@@ -351,6 +363,8 @@ export function LoginPageClient() {
                 credentials
               </div>
             )}
+
+            <AuthMobileLegalLinks />
           </div>
         </div>
       </div>

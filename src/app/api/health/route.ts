@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/server/prisma';
 import { getStorageHealth } from '@/lib/storage/storage-service';
 
 export const dynamic = 'force-dynamic';
@@ -25,7 +24,7 @@ export async function GET() {
   }
 
   try {
-    // Check database connection
+    const { prisma } = await import('@/lib/server/prisma');
     await prisma.$queryRaw`SELECT 1`;
 
     const storageHealth = getStorageHealth();

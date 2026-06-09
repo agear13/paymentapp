@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Loader2, Download, Trash2, Shield, AlertTriangle } from "lucide-react";
+import { ProvvypayPrivacyLink } from "@/components/legal/provvypay-legal-links";
 
 export default function PrivacySettingsPage() {
   const [isExporting, setIsExporting] = useState(false);
@@ -419,13 +420,9 @@ export default function PrivacySettingsPage() {
           <div className="mt-6 pt-6 border-t border-gray-200">
             <p className="text-sm text-gray-600">
               For more information about how we handle your data, please review our{" "}
-              <a
-                href="/legal/privacy"
-                className="text-blue-600 hover:underline"
-                target="_blank"
-              >
+              <ProvvypayPrivacyLink className="text-blue-600 hover:underline">
                 Privacy Policy
-              </a>
+              </ProvvypayPrivacyLink>
               .
             </p>
           </div>

@@ -39,7 +39,7 @@ export async function GET(
     }
 
     // Authentication
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     if (!user) {
       return NextResponse.json(
         { error: 'Unauthorized' },

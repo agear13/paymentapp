@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Authentication
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Authentication
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

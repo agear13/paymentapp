@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { emitAuthAuditEvent } from '@/lib/security/auth-audit.client';
 
 export default function ResetPasswordPage() {
   const supabase = createClient();
@@ -64,6 +65,10 @@ export default function ResetPasswordPage() {
         redirectTo: `${window.location.origin}/auth/reset-password`,
       });
       if (resetError) throw resetError;
+      void emitAuthAuditEvent({
+        eventType: 'auth.password.reset.requested',
+        email,
+      });
       setMessage('Password reset email sent. Please check your inbox.');
     } catch (err: any) {
       setError(err?.message || 'Could not send reset email.');
@@ -93,6 +98,10 @@ export default function ResetPasswordPage() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
+      void emitAuthAuditEvent({
+        eventType: 'auth.password.reset.completed',
+        email,
+      });
       setMessage('Password updated successfully. You can now sign in.');
     } catch (err: any) {
       setError(err?.message || 'Could not update password.');

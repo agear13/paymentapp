@@ -19,6 +19,7 @@ import 'server-only';
 
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { enforceCsrfForRequest } from '@/lib/security/csrf'
 
 function getSupabaseEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -128,6 +129,11 @@ export async function updateSession(request: NextRequest) {
  * - { user: null, session: null, response: 401 } if not authenticated
  */
 export async function requireAuth(request: NextRequest) {
+  const csrfBlock = enforceCsrfForRequest(request)
+  if (csrfBlock) {
+    return { user: null, session: null, response: csrfBlock }
+  }
+
   const { url, anonKey } = getSupabaseEnv()
 
   const supabase = createServerClient(url, anonKey, {

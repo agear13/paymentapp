@@ -32,28 +32,44 @@ if (!process.env.DATABASE_URL) {
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
-const basePrisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: ['error', 'warn'],
+function resolveDatabaseUrl(): string {
+  const raw = process.env.DATABASE_URL ?? '';
+  const limit = process.env.PRISMA_CONNECTION_LIMIT?.trim();
+  if (!limit || raw.includes('connection_limit=')) {
+    return raw;
+  }
+  const separator = raw.includes('?') ? '&' : '?';
+  return `${raw}${separator}connection_limit=${encodeURIComponent(limit)}`;
+}
+
+function createPrismaClient(): PrismaClient {
+  return new PrismaClient({
+    log: process.env.NODE_ENV === 'production' ? ['error'] : ['error', 'warn'],
     datasources: {
       db: {
-        url: process.env.DATABASE_URL,
+        url: resolveDatabaseUrl(),
       },
     },
   });
-
-export const prisma = basePrisma.$extends({
-  query: {
-    $allModels: {
-      async $allOperations({ query, args }) {
-        incrementOperationalApiDbQueryCount();
-        return query(args);
-      },
-    },
-  },
-}) as unknown as PrismaClient;
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = basePrisma as PrismaClient;
 }
+
+const basePrisma = globalForPrisma.prisma ?? createPrismaClient();
+
+// Dev-only query counting adds AsyncLocalStorage overhead on every DB call.
+const prismaWithExtensions =
+  process.env.NODE_ENV === 'production'
+    ? basePrisma
+    : basePrisma.$extends({
+        query: {
+          $allModels: {
+            async $allOperations({ query, args }) {
+              incrementOperationalApiDbQueryCount();
+              return query(args);
+            },
+          },
+        },
+      });
+
+export const prisma = prismaWithExtensions as unknown as PrismaClient;
+
+globalForPrisma.prisma = basePrisma;

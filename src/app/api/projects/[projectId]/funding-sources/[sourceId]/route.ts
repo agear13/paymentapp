@@ -25,7 +25,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const { projectId, sourceId } = await context.params;
     const owned = await assertProjectOwnedByUser(user.id, projectId);
     if (!owned) {
@@ -85,11 +85,11 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ projectId: string; sourceId: string }> }
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const { projectId, sourceId } = await context.params;
     const owned = await assertProjectOwnedByUser(user.id, projectId);
     if (!owned) {

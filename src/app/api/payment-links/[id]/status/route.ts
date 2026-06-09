@@ -46,7 +46,7 @@ export async function POST(
     }
 
     // Authentication
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     if (!user) {
       return NextResponse.json(
         { error: 'Unauthorized' },

@@ -11,6 +11,7 @@ export type ProductionGuardEnv = {
 };
 
 const MIN_CRON_SECRET_LENGTH = 16;
+const MIN_CSRF_SECRET_LENGTH = 32;
 
 export function isStripeWebhookSecretValid(secret: string | undefined): boolean {
   const trimmed = secret?.trim() ?? '';
@@ -22,6 +23,11 @@ export function isStripeWebhookSecretValid(secret: string | undefined): boolean 
 export function isCronSecretValid(secret: string | undefined): boolean {
   const trimmed = secret?.trim() ?? '';
   return trimmed.length >= MIN_CRON_SECRET_LENGTH;
+}
+
+export function isCsrfSecretValid(secret: string | undefined): boolean {
+  const trimmed = secret?.trim() ?? '';
+  return trimmed.length >= MIN_CSRF_SECRET_LENGTH;
 }
 
 export function assertProductionEnvGuards(
@@ -44,6 +50,12 @@ export function assertProductionEnvGuards(
   if (!isCronSecretValid(processEnv.CRON_SECRET)) {
     errors.push(
       `CRON_SECRET is required in production (min ${MIN_CRON_SECRET_LENGTH} characters) for B3 scheduled jobs (C3).`
+    );
+  }
+
+  if (!isCsrfSecretValid(processEnv.CSRF_SECRET)) {
+    errors.push(
+      `CSRF_SECRET is required in production (min ${MIN_CSRF_SECRET_LENGTH} characters) for dashboard CSRF protection.`
     );
   }
 

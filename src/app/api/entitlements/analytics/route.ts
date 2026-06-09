@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
 import {
   ENTITLEMENT_ANALYTICS_EVENTS,
@@ -21,10 +21,9 @@ const schema = z.object({
 
 /** POST /api/entitlements/analytics — non-blocking entitlement funnel events. */
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return apiError('Unauthorized', 401);
-  }
+  const auth = await getCurrentUserForApi(request);
+  if (!auth.user) return auth.response!;
+  const user = auth.user;
 
   const { data: body, error } = await validateBody(request, schema);
   if (error) {

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
 import {
@@ -27,10 +27,9 @@ import { refreshProjectObligationsAfterParticipantPersist } from '@/lib/onboardi
 
 /** POST /api/onboarding/participants — add participants to the onboarding project (canonical pilot model). */
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return apiError('Unauthorized', 401);
-  }
+  const auth = await getCurrentUserForApi(request);
+  if (!auth.user) return auth.response!;
+  const user = auth.user;
 
   const { data: body, error } = await validateBody(request, onboardingParticipantsPostSchema);
   if (error) {

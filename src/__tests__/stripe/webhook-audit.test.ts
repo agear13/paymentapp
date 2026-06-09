@@ -37,12 +37,13 @@ describe('Stripe webhook audit', () => {
       expect(content).toContain('auditResult');
     });
 
-    it('on duplicate delivery returns 200 and does not run handlers (isDuplicate early return)', () => {
+    it('on terminal duplicate delivery returns 200 and does not run handlers', () => {
       const content = fs.readFileSync(WEBHOOK_ROUTE_PATH, 'utf-8');
-      expect(content).toContain('auditResult.isDuplicate');
+      expect(content).toContain('auditResult.isDuplicate && !auditResult.shouldReprocess');
       expect(content).toContain('Duplicate webhook delivery; skipping handlers');
       expect(content).toContain('duplicate: true');
       expect(content).toContain('processed: false');
+      expect(content).toContain('auditResult.shouldReprocess');
     });
 
     it('marks processing and outcome (PROCESSED / IGNORED / ERROR)', () => {
@@ -82,9 +83,11 @@ describe('Stripe webhook audit', () => {
       expect(content).toContain('extractStripeLinkage');
     });
 
-    it('recordStripeWebhookReceived returns isDuplicate and row', () => {
+    it('recordStripeWebhookReceived returns isDuplicate, shouldReprocess, and row', () => {
       const content = fs.readFileSync(STRIPE_AUDIT_PATH, 'utf-8');
       expect(content).toContain('isDuplicate');
+      expect(content).toContain('shouldReprocess');
+      expect(content).toContain('shouldReprocessStripeWebhookDelivery');
       expect(content).toContain('RecordReceivedResult');
     });
 
@@ -112,8 +115,7 @@ describe('Stripe webhook audit', () => {
       );
       expect(fs.existsSync(replayPath)).toBe(true);
       const content = fs.readFileSync(replayPath, 'utf-8');
-      expect(content).toContain('x-internal-admin-token');
-      expect(content).toContain('INTERNAL_ADMIN_TOKEN');
+      expect(content).toContain('isValidInternalAdminRequest');
       expect(content).toContain('provider_event_id');
       expect(content).toContain('markStripeWebhookProcessing');
       expect(content).toContain('processStripeWebhookEvent');

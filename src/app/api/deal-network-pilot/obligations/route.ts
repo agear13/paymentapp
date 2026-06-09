@@ -149,7 +149,7 @@ export async function GET(request: Request) {
 
       try {
         const authStartedAt = Date.now();
-        const user = await requireAuth();
+        const user = await requireAuth(request);
         const org = await getOrganizationForAuthenticatedUser(user.id).catch(() => null);
         organizationId = org?.id ?? null;
 

@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CreditCard, Check, Lock, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,31 @@ export const StripePaymentOption: React.FC<StripePaymentOptionProps> = ({
   currency,
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [activeCheckoutUrl, setActiveCheckoutUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAvailable || !paymentLinkId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch(
+          `/api/stripe/active-checkout-session?paymentLinkId=${encodeURIComponent(paymentLinkId)}`
+        );
+        if (!response.ok || cancelled) return;
+        const data = await response.json();
+        if (data.active && typeof data.url === 'string') {
+          setActiveCheckoutUrl(data.url);
+        }
+      } catch {
+        // Best-effort: page still works via POST reuse on Pay click.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAvailable, paymentLinkId]);
 
   const handlePayment = async () => {
     if (!isSelected || isProcessing) return;
@@ -59,8 +84,8 @@ export const StripePaymentOption: React.FC<StripePaymentOptionProps> = ({
         throw new Error(data.error || 'Failed to create checkout session');
       }
 
-      // Redirect to Stripe Checkout
       if (data.url) {
+        setActiveCheckoutUrl(data.url);
         window.location.href = data.url;
       } else {
         throw new Error('No checkout URL returned');
@@ -159,6 +184,12 @@ export const StripePaymentOption: React.FC<StripePaymentOptionProps> = ({
       </button>
 
       {/* Pay Now Button */}
+      {isSelected && isAvailable && activeCheckoutUrl && !isProcessing && (
+        <p className="text-xs text-slate-500 text-center">
+          An active secure checkout is ready — continuing avoids starting a second payment.
+        </p>
+      )}
+
       {isSelected && isAvailable && (
         <Button
           onClick={handlePayment}
@@ -174,7 +205,7 @@ export const StripePaymentOption: React.FC<StripePaymentOptionProps> = ({
           ) : (
             <>
               <Lock className="w-5 h-5 mr-2" />
-              Pay {currency} {amount}
+              {activeCheckoutUrl ? `Continue to pay ${currency} ${amount}` : `Pay ${currency} ${amount}`}
             </>
           )}
         </Button>

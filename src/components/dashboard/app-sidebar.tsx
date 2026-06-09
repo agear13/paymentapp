@@ -130,8 +130,22 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
       // Clear localStorage
       localStorage.clear();
       
-      // Sign out from Supabase
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+      const email = sessionData.session?.user.email ?? undefined;
+
       await supabase.auth.signOut();
+
+      void fetch('/api/auth/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType: 'auth.logout',
+          userId,
+          email,
+        }),
+        keepalive: true,
+      }).catch(() => undefined);
       
       // Redirect to login
       router.push('/auth/login');

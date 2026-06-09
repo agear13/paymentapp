@@ -13,14 +13,18 @@ import { cn } from '@/lib/utils';
 type OnboardingVisualHeaderProps = {
   step: OnboardingStep;
   centered?: boolean;
+  compact?: boolean;
   showIntelligenceBadge?: boolean;
+  showLogo?: boolean;
   className?: string;
 };
 
 export function OnboardingVisualHeader({
   step,
   centered = false,
+  compact = false,
   showIntelligenceBadge = true,
+  showLogo = true,
   className,
 }: OnboardingVisualHeaderProps) {
   const title = onboardingStepTitle(step);
@@ -28,22 +32,37 @@ export function OnboardingVisualHeader({
   const isIntelligenceStep = step === 'agreement_review';
 
   return (
-    <div className={cn('space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500', className)}>
-      {!centered ? (
-        <ProvvypayLogoMark size="sm" />
+    <div
+      className={cn(
+        'animate-in fade-in slide-in-from-bottom-2 duration-500',
+        compact ? 'space-y-4' : 'space-y-6',
+        className
+      )}
+    >
+      {showLogo ? (
+        <div className={cn(centered && 'flex justify-center')}>
+          <ProvvypayLogoMark size="sm" />
+        </div>
       ) : null}
 
       <OnboardingVisualProgress step={step} />
 
-      <div className={cn('space-y-3', centered && 'text-center')}>
+      <div className={cn('space-y-2', centered && 'text-center')}>
         {showIntelligenceBadge && isIntelligenceStep ? (
           <div className={cn(centered && 'flex justify-center')}>
             <IntelligenceBadge pulse />
           </div>
         ) : null}
-        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">{title}</h2>
+        <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
         {subtext ? (
-          <p className="text-base text-muted-foreground leading-relaxed max-w-xl">{subtext}</p>
+          <p
+            className={cn(
+              'text-sm sm:text-base text-muted-foreground leading-relaxed',
+              centered ? 'mx-auto max-w-md' : 'max-w-xl'
+            )}
+          >
+            {subtext}
+          </p>
         ) : null}
       </div>
     </div>

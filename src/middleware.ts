@@ -24,6 +24,10 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import {
+  CONTENT_SECURITY_POLICY,
+  CONTENT_SECURITY_POLICY_PRODUCTION,
+} from '@/lib/security/content-security-policy';
+import {
   isBetaAdminEmail,
   isRabbitHolePilotEmail,
   isStraitExperiencesPilotEmail,
@@ -202,6 +206,11 @@ function nextWithPathnameAndSecurityHeaders(request: NextRequest, pathname: stri
       'max-age=31536000; includeSubDomains; preload'
     );
   }
+  const csp =
+    process.env.NODE_ENV === 'production'
+      ? CONTENT_SECURITY_POLICY_PRODUCTION
+      : CONTENT_SECURITY_POLICY;
+  response.headers.set('Content-Security-Policy', csp);
   return response;
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
 import { prisma } from '@/lib/server/prisma';
@@ -15,10 +15,9 @@ const bodySchema = z.object({
 
 /** POST /api/billing/create-checkout-session — Stripe Checkout for SaaS subscription. */
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return apiError('Unauthorized', 401);
-  }
+  const auth = await getCurrentUserForApi(request);
+  if (!auth.user) return auth.response!;
+  const user = auth.user;
 
   if (!isStripeEnabled) {
     return apiError('Stripe billing is not configured', 503);

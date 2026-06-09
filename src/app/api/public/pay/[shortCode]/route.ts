@@ -7,6 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
+import {
+  cachePublicShortCodeMiss,
+  isPublicShortCodeNegativelyCached,
+} from '@/lib/cache/public-negative-cache';
 import { derivePaidAtFromEvents } from '@/lib/payments/paid-at';
 import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
 import { resolveMerchantBranding } from '@/lib/branding/resolve-merchant-branding';
@@ -31,6 +35,13 @@ export async function GET(
       return NextResponse.json(
         { error: 'Invalid short code format', code: 'INVALID_FORMAT' },
         { status: 400 }
+      );
+    }
+
+    if (isPublicShortCodeNegativelyCached(shortCode)) {
+      return NextResponse.json(
+        { error: 'Payment link not found', code: 'NOT_FOUND' },
+        { status: 404 }
       );
     }
 
@@ -76,6 +87,7 @@ export async function GET(
 
     // Payment link not found (lookup is always by payment_links.short_code — 8-char public id)
     if (!paymentLink) {
+      cachePublicShortCodeMiss(shortCode);
       loggers.api.warn(
         {
           shortCode,

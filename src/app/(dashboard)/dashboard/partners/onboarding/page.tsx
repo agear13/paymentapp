@@ -10,6 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { CheckCircle2, ArrowRight } from 'lucide-react';
+import {
+  ProvvypayPrivacyLink,
+  ProvvypayTermsLink,
+} from '@/components/legal/provvypay-legal-links';
 
 export default function PartnerOnboardingPage() {
   const router = useRouter();
@@ -171,7 +175,15 @@ export default function PartnerOnboardingPage() {
                     </Label>
                     <p className="text-sm text-muted-foreground">
                       By accepting, you agree to our partner program terms, including revenue
-                      allocation rules and payout schedules.
+                      allocation rules and payout schedules, and our{' '}
+                      <ProvvypayTermsLink className="text-primary hover:underline font-medium">
+                        Terms of Service
+                      </ProvvypayTermsLink>{' '}
+                      and{' '}
+                      <ProvvypayPrivacyLink className="text-primary hover:underline font-medium">
+                        Privacy Policy
+                      </ProvvypayPrivacyLink>
+                      .
                     </p>
                   </div>
                 </div>

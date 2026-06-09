@@ -2,6 +2,9 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
+import { AuditEventType, createAuditLog, AuditSeverity } from '@/lib/audit/audit-log';
+import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
@@ -73,11 +76,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getCurrentUser();
-    
-    if (!user) {
-      return apiError('Unauthorized', 401);
-    }
+    const auth = await getCurrentUserForApi(request);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     const { id } = await params;
     const { data: body, error } = await validateBody(request, updateMerchantSettingsSchema);
@@ -88,7 +89,13 @@ export async function PATCH(
 
     const existing = await prisma.merchant_settings.findUnique({
       where: { id },
-      select: { organization_id: true },
+      select: {
+        organization_id: true,
+        stripe_account_id: true,
+        wise_profile_id: true,
+        wise_enabled: true,
+        wise_currency: true,
+      },
     });
     if (!existing) {
       return apiError('Merchant settings not found', 404);
@@ -120,6 +127,54 @@ export async function PATCH(
     });
 
     log.info(`Updated merchant settings: ${id} by user ${user.id}`);
+
+    const auditCtx = extractRequestAuditContext(request);
+    if (body.stripeAccountId !== undefined) {
+      void createAuditLog({
+        eventType: AuditEventType.STRIPE_SETTINGS_CHANGED,
+        severity: AuditSeverity.INFO,
+        userId: user.id,
+        organizationId: existing.organization_id,
+        resource: 'merchant_settings',
+        resourceId: id,
+        action: 'update',
+        oldValue: JSON.stringify({ stripeAccountId: existing.stripe_account_id }),
+        newValue: JSON.stringify({ stripeAccountId: body.stripeAccountId }),
+        ipAddress: auditCtx.ipAddress,
+        userAgent: auditCtx.userAgent,
+        correlationId: auditCtx.correlationId,
+        timestamp: new Date(),
+      });
+    }
+    if (
+      body.wiseProfileId !== undefined ||
+      body.wiseEnabled !== undefined ||
+      body.wiseCurrency !== undefined
+    ) {
+      void createAuditLog({
+        eventType: AuditEventType.WISE_SETTINGS_CHANGED,
+        severity: AuditSeverity.INFO,
+        userId: user.id,
+        organizationId: existing.organization_id,
+        resource: 'merchant_settings',
+        resourceId: id,
+        action: 'update',
+        oldValue: JSON.stringify({
+          wiseProfileId: existing.wise_profile_id,
+          wiseEnabled: existing.wise_enabled,
+          wiseCurrency: existing.wise_currency,
+        }),
+        newValue: JSON.stringify({
+          wiseProfileId: body.wiseProfileId,
+          wiseEnabled: body.wiseEnabled,
+          wiseCurrency: body.wiseCurrency,
+        }),
+        ipAddress: auditCtx.ipAddress,
+        userAgent: auditCtx.userAgent,
+        correlationId: auditCtx.correlationId,
+        timestamp: new Date(),
+      });
+    }
 
     const railUpdated =
       body.stripeAccountId !== undefined ||
@@ -168,11 +223,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getCurrentUser();
-    
-    if (!user) {
-      return apiError('Unauthorized', 401);
-    }
+    const auth = await getCurrentUserForApi(request);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     const { id } = await params;
 

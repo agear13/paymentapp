@@ -4,23 +4,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
+import { AuditEventType, createAuditLog, AuditSeverity } from '@/lib/audit/audit-log';
+import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { disconnectXero } from '@/lib/xero';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authenticated user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const auth = await getCurrentUserForApi(request);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     // Get organization from request body
     const body = await request.json();
@@ -51,6 +46,21 @@ export async function POST(request: NextRequest) {
     logger.info('Xero connection disconnected', {
       organizationId,
       userId: user.id,
+    });
+
+    const auditCtx = extractRequestAuditContext(request);
+    void createAuditLog({
+      eventType: AuditEventType.XERO_DISCONNECTED,
+      severity: AuditSeverity.INFO,
+      userId: user.id,
+      organizationId,
+      resource: 'xero_integration',
+      resourceId: organizationId,
+      action: 'disconnect',
+      ipAddress: auditCtx.ipAddress,
+      userAgent: auditCtx.userAgent,
+      correlationId: auditCtx.correlationId,
+      timestamp: new Date(),
     });
 
     return NextResponse.json({

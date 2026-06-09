@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   let userId: string;
   let userEmail: string | undefined;
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(req);
     userId = user.id;
     userEmail = user.email ?? undefined;
   } catch (err) {

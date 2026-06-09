@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 /** GET /api/operations/release-batch-eligibility?currency=AUD&minThreshold=50&projectId= */
 export async function GET(request: Request) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const { searchParams } = new URL(request.url);
     const currency = (searchParams.get('currency') ?? 'AUD').trim();
     const minThreshold = Number(searchParams.get('minThreshold') ?? '0');

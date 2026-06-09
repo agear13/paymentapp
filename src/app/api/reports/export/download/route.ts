@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
+import { requireOrganizationAccessOrForbidden } from '@/lib/auth/require-organization-access-api.server';
 import {
   buildLedgerExportCsv,
   buildObligationsExportCsv,
@@ -46,6 +47,9 @@ export async function GET(req: NextRequest) {
     if (!EXPORT_TYPES.includes(type)) {
       return NextResponse.json({ error: 'Invalid export type' }, { status: 400 });
     }
+
+    const forbidden = await requireOrganizationAccessOrForbidden(user.id, organizationId);
+    if (forbidden) return forbidden;
 
     let csv: string;
     let filename: string;

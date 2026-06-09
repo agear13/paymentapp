@@ -406,10 +406,10 @@ export const ONBOARDING_PRICING_PLANS = [
     tagline: 'Perfect for exploring Agreement Intelligence.',
     recommended: false,
     features: [
-      '3 Active Agreements',
-      '3 AI Imports',
+      'Up to 3 Agreements',
+      'Up to 3 AI Imports',
+      'Single Workspace',
       'Manual Settlement Tracking',
-      'Basic Reporting',
     ],
   },
   {

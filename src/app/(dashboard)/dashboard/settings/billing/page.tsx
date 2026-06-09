@@ -1,4 +1,5 @@
 import { BillingSettingsPanel } from '@/components/dashboard/settings/billing-settings-panel';
+import { ProvvypayLegalSubscriptionNotice } from '@/components/legal/provvypay-legal-links';
 
 export default function BillingSettingsPage() {
   return (
@@ -11,6 +12,7 @@ export default function BillingSettingsPage() {
       </div>
 
       <BillingSettingsPanel />
+      <ProvvypayLegalSubscriptionNotice className="text-sm text-muted-foreground" />
     </div>
   );
 }

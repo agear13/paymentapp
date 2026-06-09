@@ -8,13 +8,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { log } from '@/lib/logger';
+import { resolveCsrfSecret } from '@/lib/security/csrf-secret.server';
+import {
+  hasSupabaseSessionCookie,
+  isCsrfExemptPath,
+  isMutatingMethod,
+} from '@/lib/security/csrf-policy';
 
 function getCsrfSecret(): string {
-  const secret = process.env.CSRF_SECRET;
-  if (!secret) {
-    throw new Error('CSRF_SECRET environment variable must be configured');
-  }
-  return secret;
+  return resolveCsrfSecret();
 }
 const CSRF_TOKEN_LENGTH = 32;
 const CSRF_COOKIE_NAME = 'csrf_token';
@@ -60,8 +62,8 @@ function getTokenFromCookie(request: NextRequest): string | null {
   
   if (!csrfCookie) return null;
 
-  const [, value] = csrfCookie.split('=');
-  return value;
+  // Use slice — token signatures are base64 and may contain '=' padding.
+  return csrfCookie.slice(`${CSRF_COOKIE_NAME}=`.length);
 }
 
 /**
@@ -119,17 +121,21 @@ export function validateCSRFToken(request: NextRequest): boolean {
 /**
  * Set CSRF token cookie in response
  */
-export function setCSRFCookie(response: NextResponse): NextResponse {
+export function createSignedCsrfToken(): string {
   const token = generateCSRFToken();
   const signature = signToken(token);
-  const signedToken = `${token}.${signature}`;
+  return `${token}.${signature}`;
+}
 
-  response.cookies.set(CSRF_COOKIE_NAME, signedToken, {
+export function setCSRFCookie(response: NextResponse, signedToken?: string): NextResponse {
+  const value = signedToken ?? createSignedCsrfToken();
+
+  response.cookies.set(CSRF_COOKIE_NAME, value, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
     path: '/',
-    maxAge: 60 * 60 * 24, // 24 hours
+    maxAge: 60 * 60 * 24,
   });
 
   return response;
@@ -167,14 +173,28 @@ export function csrfProtection(
 
   // Validate CSRF token
   if (!validateCSRFToken(request)) {
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+      request.headers.get('x-real-ip') ??
+      undefined;
+    const userAgent = request.headers.get('user-agent') ?? undefined;
+
     log.warn('CSRF validation failed', {
       method: request.method,
       path: pathname,
-      ip:
-        request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-        request.headers.get('x-real-ip') ??
-        null,
+      ip: ip ?? null,
     });
+
+    void import('@/lib/audit/audit-log').then(({ logSecurityEvent, AuditEventType, AuditSeverity }) =>
+      logSecurityEvent({
+        eventType: AuditEventType.SECURITY_CSRF_VIOLATION,
+        severity: AuditSeverity.WARNING,
+        ipAddress: ip,
+        userAgent,
+        resource: pathname,
+        reason: 'CSRF validation failed',
+      })
+    );
 
     return NextResponse.json(
       { error: 'CSRF validation failed' },
@@ -183,6 +203,25 @@ export function csrfProtection(
   }
 
   return null;
+}
+
+/**
+ * Enforce CSRF for cookie-authenticated API mutations.
+ * Returns 403 response when invalid; null when check passes or is not required.
+ */
+export function enforceCsrfForRequest(request: NextRequest): NextResponse | null {
+  if (!isMutatingMethod(request.method)) return null;
+
+  const pathname = new URL(request.url).pathname;
+  if (isCsrfExemptPath(pathname)) return null;
+
+  const cookieHeader = request.headers.get('cookie');
+  if (!hasSupabaseSessionCookie(cookieHeader)) return null;
+
+  if (request.headers.get('x-internal-admin-token')) return null;
+  if (request.headers.get('x-cron-secret')) return null;
+
+  return csrfProtection(request, { skipPaths: [] });
 }
 
 /**

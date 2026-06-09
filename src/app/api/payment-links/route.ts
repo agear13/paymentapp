@@ -24,6 +24,8 @@ import { insertPaymentLinkInTransaction } from '@/lib/payment-links/create-payme
 import { normalizeInvoiceReference } from '@/lib/payment-links/invoice-reference';
 import { runPaymentLinkPostCreateEffects } from '@/lib/payment-links/payment-link-post-create';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
+import { AuditEventType, logPaymentEvent } from '@/lib/audit/audit-log';
+import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 
 /** FX summary for list view (lightweight) */
 export interface FxSummary {
@@ -431,6 +433,24 @@ export async function POST(request: NextRequest) {
       organizationId: dbOrgId,
       invoiceCurrency: effectiveInvoiceCurrency,
       shortCode,
+    });
+
+    const auditCtx = extractRequestAuditContext(request);
+    void logPaymentEvent({
+      eventType: AuditEventType.PAYMENT_LINK_CREATED,
+      organizationId: dbOrgId,
+      paymentLinkId: paymentLink.id,
+      amount: validatedData.amount,
+      currency: effectiveInvoiceCurrency,
+      paymentMethod: resolvedPaymentMethod ?? undefined,
+      status: String(paymentLink.status),
+      metadata: {
+        userId: user.id,
+        shortCode,
+        correlationId: auditCtx.correlationId,
+        ipAddress: auditCtx.ipAddress,
+        userAgent: auditCtx.userAgent,
+      },
     });
 
     // Same camelCase shape as GET /api/payment-links so clients always get `shortCode` for /pay/{shortCode}

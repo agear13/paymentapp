@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: Request) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const body = (await request.json().catch(() => ({}))) as { dealId?: string };
     const dealId = typeof body.dealId === 'string' ? body.dealId.trim() : '';
 

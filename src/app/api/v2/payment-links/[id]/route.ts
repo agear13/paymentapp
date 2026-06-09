@@ -159,6 +159,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const auth = await requireAuth(request);
+  if (!auth.user) return auth.response!;
+
   // TODO: Import and re-use PATCH handler from v1
   return NextResponse.json(
     { error: 'Use PATCH /api/payment-links/[id] for now' },
@@ -176,6 +179,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const auth = await requireAuth(request);
+  if (!auth.user) return auth.response!;
+
   // TODO: Import and re-use DELETE handler from v1
   return NextResponse.json(
     { error: 'Use DELETE /api/payment-links/[id] for now' },

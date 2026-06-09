@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
+import { isValidInternalAdminRequest } from '@/lib/security/internal-admin-auth.server';
 import { prisma } from '@/lib/server/prisma';
 import {
   markStripeWebhookProcessing,
@@ -17,15 +17,7 @@ import Stripe from 'stripe';
 const PROVIDER_STRIPE = 'STRIPE';
 
 export async function POST(request: NextRequest) {
-  const adminToken = process.env.INTERNAL_ADMIN_TOKEN;
-  const headerToken = request.headers.get('x-internal-admin-token');
-
-  if (!adminToken || !headerToken) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const provided = Buffer.from(headerToken);
-  const expected = Buffer.from(adminToken);
-  if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
+  if (!isValidInternalAdminRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { logger } from '@/lib/logger';
 import {
   authorizeXeroBackfill,
@@ -39,17 +39,12 @@ function resolveScope(
   return undefined;
 }
 
-async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return { user: null as null, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+async function requireUser(request: NextRequest) {
+  const auth = await getCurrentUserForApi(request);
+  if (!auth.user) {
+    return { user: null as null, response: auth.response ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
-  return { user, response: null };
+  return { user: auth.user, response: null };
 }
 
 /**
@@ -57,7 +52,7 @@ async function requireUser() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { user, response: authResponse } = await requireUser();
+    const { user, response: authResponse } = await requireUser(request);
     if (authResponse) return authResponse;
 
     const body = await request.json().catch(() => ({}));
@@ -131,7 +126,7 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const { user, response: authResponse } = await requireUser();
+    const { user, response: authResponse } = await requireUser(request);
     if (authResponse) return authResponse;
 
     const { searchParams } = new URL(request.url);

@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: Request) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId')?.trim() || null;
     const patternsParam = searchParams.get('patterns')?.trim();

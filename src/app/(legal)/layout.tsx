@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { ReactNode } from "react";
+import {
+  ProvvypayPrivacyLink,
+  ProvvypayTermsLink,
+} from "@/components/legal/provvypay-legal-links";
 
 export default function LegalLayout({ children }: { children: ReactNode }) {
   return (
@@ -15,18 +19,12 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
               Provvypay
             </Link>
             <nav className="flex gap-6">
-              <Link
-                href="/legal/terms"
-                className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-              >
+              <ProvvypayTermsLink className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
                 Terms
-              </Link>
-              <Link
-                href="/legal/privacy"
-                className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-              >
+              </ProvvypayTermsLink>
+              <ProvvypayPrivacyLink className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
                 Privacy
-              </Link>
+              </ProvvypayPrivacyLink>
               <Link
                 href="/legal/cookies"
                 className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
@@ -49,12 +47,8 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
           <div className="text-center text-sm text-gray-500">
             <p>© {new Date().getFullYear()} Provvypay. All rights reserved.</p>
             <div className="mt-2 flex justify-center gap-4">
-              <Link href="/legal/terms" className="hover:text-gray-700">
-                Terms of Service
-              </Link>
-              <Link href="/legal/privacy" className="hover:text-gray-700">
-                Privacy Policy
-              </Link>
+              <ProvvypayTermsLink className="hover:text-gray-700">Terms of Service</ProvvypayTermsLink>
+              <ProvvypayPrivacyLink className="hover:text-gray-700">Privacy Policy</ProvvypayPrivacyLink>
               <Link href="/legal/cookies" className="hover:text-gray-700">
                 Cookie Policy
               </Link>

@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-06-08T12:03:14.744Z",
+  "baseUrl": "http://127.0.0.1:3456",
+  "path": "/api/public/pay/INVALID01",
+  "durationSeconds": 20,
+  "concurrencies": [
+    100,
+    250,
+    500,
+    1000
+  ],
+  "note": "CPU/memory samples reflect load-test client process unless LOAD_BENCH_TARGET_PID is set",
+  "breakingPoint": {
+    "concurrency": 100,
+    "errorRatePercent": 96.85,
+    "successfulRps": 0,
+    "reason": "error_rate_exceeded_5_percent"
+  },
+  "results": [
+    {
+      "path": "/api/public/pay/INVALID01",
+      "concurrency": 100,
+      "durationSeconds": 20,
+      "avgLatencyMs": 632,
+      "p95LatencyMs": 1616,
+      "p99LatencyMs": 3709,
+      "errorRatePercent": 96.85,
+      "successfulRps": 0,
+      "attemptedRps": 158.95,
+      "requestsSent": 3179,
+      "status2xx": 0,
+      "transportErrors": 0,
+      "cpuPercentAvg": 17.34,
+      "memoryMbAvg": 82.71
+    },
+    {
+      "path": "/api/public/pay/INVALID01",
+      "concurrency": 250,
+      "durationSeconds": 20,
+      "avgLatencyMs": 913,
+      "p95LatencyMs": 3330,
+      "p99LatencyMs": 9405,
+      "errorRatePercent": 94.3,
+      "successfulRps": 0,
+      "attemptedRps": 219.4,
+      "requestsSent": 4388,
+      "status2xx": 0,
+      "transportErrors": 720,
+      "cpuPercentAvg": 15.47,
+      "memoryMbAvg": 88.64
+    },
+    {
+      "path": "/api/public/pay/INVALID01",
+      "concurrency": 500,
+      "durationSeconds": 20,
+      "avgLatencyMs": 4726,
+      "p95LatencyMs": 12905,
+      "p99LatencyMs": 14817,
+      "errorRatePercent": 97.07,
+      "successfulRps": 0,
+      "attemptedRps": 853.95,
+      "requestsSent": 17079,
+      "status2xx": 0,
+      "transportErrors": 13437,
+      "cpuPercentAvg": 57.81,
+      "memoryMbAvg": 112.9
+    },
+    {
+      "path": "/api/public/pay/INVALID01",
+      "concurrency": 1000,
+      "durationSeconds": 20,
+      "avgLatencyMs": 8669,
+      "p95LatencyMs": 18228,
+      "p99LatencyMs": 19816,
+      "errorRatePercent": 97,
+      "successfulRps": 0,
+      "attemptedRps": 1667.15,
+      "requestsSent": 33343,
+      "status2xx": 0,
+      "transportErrors": 29558,
+      "cpuPercentAvg": 107.97,
+      "memoryMbAvg": 134.49
+    }
+  ]
+}

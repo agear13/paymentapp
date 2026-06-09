@@ -1,29 +1,64 @@
 /**
  * Authentication Middleware for Protected Routes
- * Use in API routes and server actions to enforce authentication
+ * Use in API routes and server actions to enforce authentication + CSRF.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { AuthError } from './errors'
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { enforceCsrfForRequest } from '@/lib/security/csrf';
+import { AuthError } from './errors';
 
 /**
- * Middleware to require authentication
- * Returns user if authenticated, throws error otherwise
+ * Require authentication for API route handlers (with CSRF on mutating requests).
+ * Returns the Supabase user or throws AuthError.
  */
-export async function requireAuth() {
-  const supabase = await createClient()
-  
+export async function requireAuth(request: NextRequest) {
+  const csrfBlock = enforceCsrfForRequest(request);
+  if (csrfBlock) {
+    throw new AuthError('CSRF validation failed', 'FORBIDDEN');
+  }
+
+  const supabase = await createClient();
+
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
 
   if (error || !user) {
-    throw new AuthError('Authentication required', 'UNAUTHENTICATED')
+    throw new AuthError('Authentication required', 'UNAUTHENTICATED');
   }
 
-  return user
+  return user;
+}
+
+/**
+ * Safe variant returning user or NextResponse (no throw).
+ */
+export async function requireAuthOrResponse(request: NextRequest) {
+  const csrfBlock = enforceCsrfForRequest(request);
+  if (csrfBlock) {
+    return { user: null as null, response: csrfBlock };
+  }
+
+  try {
+    const user = await requireAuth(request);
+    return { user, response: null as null };
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return {
+        user: null as null,
+        response: NextResponse.json(
+          { error: error.message, code: error.code },
+          { status: error.statusCode }
+        ),
+      };
+    }
+    return {
+      user: null as null,
+      response: NextResponse.json({ error: 'Internal server error' }, { status: 500 }),
+    };
+  }
 }
 
 /**
@@ -31,74 +66,53 @@ export async function requireAuth() {
  * Returns user if authenticated, null otherwise (no error thrown)
  */
 export async function getAuthUser() {
-  const supabase = await createClient()
-  
+  const supabase = await createClient();
+
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
 
-  return user
+  return user;
 }
 
 /**
  * API Route wrapper that requires authentication
  */
-export function withAuth<T = any>(
-  handler: (request: NextRequest, context: { user: any }) => Promise<Response>
+export function withAuth<T = unknown>(
+  handler: (request: NextRequest, context: { user: NonNullable<Awaited<ReturnType<typeof getAuthUser>>> }) => Promise<Response>
 ) {
-  return async (request: NextRequest, context?: any) => {
+  return async (request: NextRequest, context?: T) => {
     try {
-      const user = await requireAuth()
-      return handler(request, { ...context, user })
+      const user = await requireAuth(request);
+      return handler(request, { ...(context as object), user });
     } catch (error) {
       if (error instanceof AuthError) {
         return NextResponse.json(
           { error: error.message, code: error.code },
           { status: error.statusCode }
-        )
+        );
       }
-      
-      return NextResponse.json(
-        { error: 'Internal server error' },
-        { status: 500 }
-      )
+
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
-  }
+  };
 }
 
 /**
  * Check if user belongs to organization
  */
-export async function requireOrganizationAccess(
-  userId: string,
-  organizationId: string
-) {
-  const supabase = await createClient()
-  
-  // Query to check if user has access to organization
-  // This will need to be implemented based on your user_organizations table
+export async function requireOrganizationAccess(userId: string, organizationId: string) {
+  const supabase = await createClient();
+
   const { data, error } = await supabase
     .from('organizations')
     .select('id')
     .eq('id', organizationId)
-    .single()
+    .single();
 
   if (error || !data) {
-    throw new AuthError('Organization not found or access denied', 'FORBIDDEN')
+    throw new AuthError('Organization not found or access denied', 'FORBIDDEN');
   }
 
-  return data
+  return data;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

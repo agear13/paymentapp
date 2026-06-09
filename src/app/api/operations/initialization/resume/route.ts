@@ -1,14 +1,14 @@
-import { getCurrentUser } from '@/lib/auth/session';
+import { NextRequest } from 'next/server';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiError, apiResponse } from '@/lib/api/middleware';
 import { resumeOperationalInitialization } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
 
 /** POST /api/operations/initialization/resume — replay missing orchestration stages */
-export async function POST() {
-  const user = await getCurrentUser();
-  if (!user) {
-    return apiError('Unauthorized', 401);
-  }
+export async function POST(request: NextRequest) {
+  const auth = await getCurrentUserForApi(request);
+  if (!auth.user) return auth.response!;
+  const user = auth.user;
 
   const org = await getOrganizationForAuthenticatedUser(user.id);
   if (!org) {

@@ -36,6 +36,8 @@ export interface RecordReceivedParams {
 
 export interface RecordReceivedResult {
   isDuplicate: boolean;
+  /** When true, the POST handler must run business logic (e.g. prior attempt ended in ERROR). */
+  shouldReprocess: boolean;
   row: {
     id: string;
     provider: WebhookProvider;
@@ -44,6 +46,17 @@ export interface RecordReceivedResult {
     status: WebhookEventStatus;
     attempt_count: number;
   };
+}
+
+/** Terminal states — Stripe retries must not re-run handlers. */
+const TERMINAL_WEBHOOK_STATUSES: ReadonlySet<WebhookEventStatus> = new Set([
+  'PROCESSED',
+  'IGNORED',
+  'DUPLICATE',
+]);
+
+export function shouldReprocessStripeWebhookDelivery(status: WebhookEventStatus): boolean {
+  return !TERMINAL_WEBHOOK_STATUSES.has(status);
 }
 
 /**
@@ -117,7 +130,24 @@ export async function recordStripeWebhookReceived(
     },
   });
   if (existing) {
-    return { isDuplicate: true, row: existing };
+    const shouldReprocess = shouldReprocessStripeWebhookDelivery(existing.status);
+    if (shouldReprocess) {
+      await prisma.webhook_events.update({
+        where: { id: existing.id },
+        data: {
+          raw_body: rawBody,
+          parsed_event: event as unknown as import('@prisma/client').Prisma.InputJsonValue,
+          headers: allowlistHeaders(headers) as import('@prisma/client').Prisma.InputJsonValue,
+          correlation_id: correlationId,
+          organization_id: linkage.organization_id,
+          payment_link_id: linkage.payment_link_id,
+          stripe_payment_intent_id: linkage.stripe_payment_intent_id,
+          stripe_charge_id: linkage.stripe_charge_id,
+          stripe_refund_id: linkage.stripe_refund_id,
+        },
+      });
+    }
+    return { isDuplicate: true, shouldReprocess, row: existing };
   }
 
   try {
@@ -149,14 +179,20 @@ export async function recordStripeWebhookReceived(
         stripe_refund_id: linkage.stripe_refund_id,
       },
     });
-    return { isDuplicate: false, row };
+    return { isDuplicate: false, shouldReprocess: true, row };
   } catch (err: unknown) {
     const prismaErr = err as { code?: string };
     if (prismaErr?.code === 'P2002') {
       const existingRow = await prisma.webhook_events.findFirst({
         where: { provider: PROVIDER_STRIPE, provider_event_id: eventId },
       });
-      if (existingRow) return { isDuplicate: true, row: existingRow };
+      if (existingRow) {
+        return {
+          isDuplicate: true,
+          shouldReprocess: shouldReprocessStripeWebhookDelivery(existingRow.status),
+          row: existingRow,
+        };
+      }
     }
     throw err;
   }

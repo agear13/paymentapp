@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { apiError } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
@@ -58,11 +58,9 @@ function mapStorageError(error: unknown): { status: number; message: string } {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-
-    if (!user) {
-      return apiError('Unauthorized', 401);
-    }
+    const auth = await getCurrentUserForApi(request);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     const formData = await request.formData();
     const file = formData.get('logo') as File;

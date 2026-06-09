@@ -1,4 +1,9 @@
 import Link from 'next/link';
+import {
+  ProvvypayLegalFooterLinks,
+  ProvvypayPrivacyLink,
+  ProvvypayTermsLink,
+} from '@/components/legal/provvypay-legal-links';
 
 const PROBLEM_CHANNELS = [
   { name: 'WhatsApp', tone: 'bg-emerald-50 border-emerald-200 text-emerald-800' },
@@ -774,14 +779,14 @@ export function PublicLandingPage() {
               <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>
-                  <Link href="/legal/privacy" className="hover:text-primary transition-colors">
+                  <ProvvypayPrivacyLink className="hover:text-primary transition-colors">
                     Privacy
-                  </Link>
+                  </ProvvypayPrivacyLink>
                 </li>
                 <li>
-                  <Link href="/legal/terms" className="hover:text-primary transition-colors">
+                  <ProvvypayTermsLink className="hover:text-primary transition-colors">
                     Terms
-                  </Link>
+                  </ProvvypayTermsLink>
                 </li>
               </ul>
             </div>
@@ -805,14 +810,7 @@ export function PublicLandingPage() {
 
           <div className="border-t pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
             <p>© 2026 Provvypay. All rights reserved.</p>
-            <div className="flex items-center gap-6">
-              <Link href="/legal/privacy" className="hover:text-primary transition-colors">
-                Privacy Policy
-              </Link>
-              <Link href="/legal/terms" className="hover:text-primary transition-colors">
-                Terms of Service
-              </Link>
-            </div>
+            <ProvvypayLegalFooterLinks linkClassName="hover:text-primary transition-colors" />
           </div>
         </div>
       </footer>

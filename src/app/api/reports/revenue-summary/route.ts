@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
+import { requireOrganizationAccessOrForbidden } from '@/lib/auth/require-organization-access-api.server';
 import { prisma } from '@/lib/server/prisma';
 import { z } from 'zod';
 
@@ -38,6 +39,9 @@ export async function GET(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const forbidden = await requireOrganizationAccessOrForbidden(user.id, organizationId);
+    if (forbidden) return forbidden;
 
     // Build date filter
     const dateFilter: any = {};

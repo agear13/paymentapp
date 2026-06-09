@@ -16,6 +16,7 @@ import { OperationalChunkRecovery } from '@/components/operational/operational-c
 import { CustomerFacingOriginProvider } from '@/components/operational/customer-facing-origin-provider';
 import { DashboardOperationalStatus } from '@/components/operations/dashboard-operational-status';
 import { OperationalCoordinationProvider } from '@/components/operations/operational-coordination-provider';
+import { CsrfBootstrap } from '@/components/security/csrf-bootstrap';
 
 interface DashboardLayoutClientProps {
   children: React.ReactNode;
@@ -33,6 +34,8 @@ export function DashboardLayoutClient({
   infrastructureOverride,
 }: DashboardLayoutClientProps) {
   return (
+    <>
+    <CsrfBootstrap />
     <CustomerFacingOriginProvider
       origin={customerFacingOrigin}
       configured={customerFacingConfigured}
@@ -56,5 +59,6 @@ export function DashboardLayoutClient({
         </SidebarProvider>
       </OperationalCoordinationProvider>
     </CustomerFacingOriginProvider>
+    </>
   );
 }

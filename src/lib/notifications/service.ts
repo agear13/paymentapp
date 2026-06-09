@@ -332,8 +332,39 @@ function getInAppPreference(preferences: any, type: NotificationType): boolean {
 /**
  * Mark notification as read
  */
-export async function markNotificationAsRead(notificationId: string) {
-  return await prisma.notifications.update({
+export async function markNotificationAsRead(
+  notificationId: string,
+  userId: string,
+  userEmail?: string | null
+) {
+  const notification = await prisma.notifications.findUnique({
+    where: { id: notificationId },
+    select: {
+      id: true,
+      organization_id: true,
+      user_email: true,
+    },
+  });
+
+  if (!notification) {
+    throw new Error('Notification not found');
+  }
+
+  const { hasOrganizationAccess } = await import('@/lib/auth/organization-access');
+  const allowed = await hasOrganizationAccess(userId, notification.organization_id);
+  if (!allowed) {
+    throw new Error('Forbidden');
+  }
+
+  if (
+    notification.user_email &&
+    userEmail &&
+    notification.user_email.toLowerCase() !== userEmail.toLowerCase()
+  ) {
+    throw new Error('Forbidden');
+  }
+
+  return prisma.notifications.update({
     where: { id: notificationId },
     data: { read: true },
   });

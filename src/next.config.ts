@@ -1,4 +1,9 @@
 import type { NextConfig } from "next";
+import { PROVVYPAY_LEGAL_REDIRECTS } from "./lib/legal/provvypay-legal-redirects";
+import {
+  CONTENT_SECURITY_POLICY,
+  CONTENT_SECURITY_POLICY_PRODUCTION,
+} from "./lib/security/content-security-policy";
 
 const buildId =
   process.env.BUILD_ID ||
@@ -68,9 +73,28 @@ const nextConfig: NextConfig = {
     return config;
   },
 
+  async redirects() {
+    return [...PROVVYPAY_LEGAL_REDIRECTS];
+  },
+
   // 🔐 Cache Control for static assets (HTML no-store is handled in middleware.ts)
   async headers() {
     return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value:
+              process.env.NODE_ENV === "production"
+                ? CONTENT_SECURITY_POLICY_PRODUCTION
+                : CONTENT_SECURITY_POLICY,
+          },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
       // Hashed Next.js static assets — safe to cache indefinitely by content hash.
       {
         source: "/_next/static/:path*",

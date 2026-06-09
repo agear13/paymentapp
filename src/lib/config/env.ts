@@ -45,6 +45,8 @@ const envSchema = z.object({
   // Encryption
   ENCRYPTION_KEY: z.string().min(1),
   SESSION_SECRET: z.string().optional(),
+  /** HMAC secret for CSRF double-submit tokens (min 32 chars; required in production) */
+  CSRF_SECRET: z.string().min(32).optional(),
 
   // Redis (optional)
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
+import { AuditEventType, logDataEvent } from '@/lib/audit/audit-log';
+import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
 
@@ -15,11 +18,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getCurrentUser();
-    
-    if (!user) {
-      return apiError('Unauthorized', 401);
-    }
+    const auth = await getCurrentUserForApi(request);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     const { id } = await params;
 
@@ -45,7 +46,11 @@ export async function PATCH(
       return error;
     }
 
-    // Update organization
+    const previous = await prisma.organizations.findUnique({
+      where: { id },
+      select: { name: true },
+    });
+
     const organization = await prisma.organizations.update({
       where: { id },
       data: {
@@ -54,6 +59,19 @@ export async function PATCH(
     });
 
     log.info({ organizationId: id, userId: user.id }, 'Updated organization');
+
+    const auditCtx = extractRequestAuditContext(request);
+    void logDataEvent({
+      eventType: AuditEventType.ORG_UPDATED,
+      userId: user.id,
+      organizationId: id,
+      resource: 'organization',
+      resourceId: id,
+      action: 'update',
+      oldValue: previous,
+      newValue: { name: organization.name },
+      ipAddress: auditCtx.ipAddress,
+    });
 
     return apiResponse(organization);
   } catch (error) {
@@ -103,15 +121,13 @@ export async function GET(
 
 // DELETE /api/organizations/[id] - Remove organization (OWNER only)
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getCurrentUser();
-
-    if (!user) {
-      return apiError('Unauthorized', 401);
-    }
+    const auth = await getCurrentUserForApi(request);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     const { id } = await params;
 

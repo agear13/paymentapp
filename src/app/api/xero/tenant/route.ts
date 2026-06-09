@@ -4,23 +4,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { updateSelectedTenant } from '@/lib/xero';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authenticated user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const auth = await getCurrentUserForApi(request);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     // Get data from request body
     const body = await request.json();

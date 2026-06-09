@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/session'
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server'
 import { prisma } from '@/lib/server/prisma'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -86,10 +87,9 @@ export async function GET(req: NextRequest) {
  */
 export async function PUT(req: NextRequest) {
   try {
-    const user = await getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await getCurrentUserForApi(req)
+    if (!auth.user) return auth.response!
+    const user = auth.user
 
     const organizationId = getOrganizationId(req)
     if (!organizationId) {

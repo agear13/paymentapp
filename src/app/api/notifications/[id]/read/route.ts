@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { markNotificationAsRead } from '@/lib/notifications/service';
 
 /**
@@ -12,17 +12,23 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await getCurrentUserForApi(req);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     const notificationId = params.id;
 
-    const notification = await markNotificationAsRead(notificationId);
+    const notification = await markNotificationAsRead(notificationId, user.id, user.email);
 
     return NextResponse.json({ notification });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to mark notification as read';
+    if (message === 'Notification not found') {
+      return NextResponse.json({ error: message }, { status: 404 });
+    }
+    if (message === 'Forbidden') {
+      return NextResponse.json({ error: message }, { status: 403 });
+    }
     console.error('[Mark Read API] Error:', error);
     return NextResponse.json(
       { error: 'Failed to mark notification as read' },

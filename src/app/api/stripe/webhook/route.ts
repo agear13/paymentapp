@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       correlationId: eventScopedCorrelationId,
     });
 
-    if (auditResult.isDuplicate) {
+    if (auditResult.isDuplicate && !auditResult.shouldReprocess) {
       log.info(
         {
           correlationId: eventScopedCorrelationId,
@@ -113,10 +113,25 @@ export async function POST(request: NextRequest) {
           providerEventId: auditResult.row.provider_event_id,
           eventType: auditResult.row.event_type,
           attemptCount: auditResult.row.attempt_count,
+          status: auditResult.row.status,
         },
         'Duplicate webhook delivery; skipping handlers'
       );
       return NextResponse.json({ received: true, processed: false, duplicate: true });
+    }
+
+    if (auditResult.isDuplicate && auditResult.shouldReprocess) {
+      log.info(
+        {
+          correlationId: eventScopedCorrelationId,
+          webhookEventId: auditResult.row.id,
+          providerEventId: auditResult.row.provider_event_id,
+          eventType: auditResult.row.event_type,
+          attemptCount: auditResult.row.attempt_count,
+          status: auditResult.row.status,
+        },
+        'Retrying webhook delivery after non-terminal prior attempt'
+      );
     }
 
     webhookEventId = auditResult.row.id;
@@ -478,6 +493,13 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event, correlationId
       error: result.error,
     }, 'Checkout session payment confirmation failed');
     throw new Error(result.error || 'Payment confirmation failed');
+  }
+
+  if (result.success) {
+    const { clearActiveStripeCheckoutSession } = await import(
+      '@/lib/stripe/checkout-session-coordinator.server'
+    );
+    await clearActiveStripeCheckoutSession(paymentLinkId);
   }
 
   log.info({

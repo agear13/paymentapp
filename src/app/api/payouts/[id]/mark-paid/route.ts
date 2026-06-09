@@ -18,6 +18,8 @@ import {
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import { z } from 'zod';
+import { AuditEventType, createAuditLog, AuditSeverity } from '@/lib/audit/audit-log';
+import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -112,6 +114,27 @@ export async function POST(
       payoutId: id,
       batchId: payout.batch_id,
       externalReference: external_reference,
+    });
+
+    const auditCtx = extractRequestAuditContext(request);
+    void createAuditLog({
+      eventType: AuditEventType.PAYOUT_PAID,
+      severity: AuditSeverity.INFO,
+      userId: user.id,
+      organizationId: payout.organization_id,
+      resource: 'payout',
+      resourceId: id,
+      action: 'mark_paid',
+      oldValue: JSON.stringify({ status: payout.status }),
+      newValue: JSON.stringify({
+        status: 'PAID',
+        externalReference: external_reference,
+        paidAt: paidAtDate.toISOString(),
+      }),
+      ipAddress: auditCtx.ipAddress,
+      userAgent: auditCtx.userAgent,
+      correlationId: auditCtx.correlationId,
+      timestamp: new Date(),
     });
 
     const operationalSync = await orchestrateOperationalMutation({

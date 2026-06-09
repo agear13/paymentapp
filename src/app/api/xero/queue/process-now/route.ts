@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkAdminAuth } from '@/lib/auth/admin.server';
+import { requireAdminForApi } from '@/lib/auth/api-session.server';
 import { processQueue } from '@/lib/xero/queue-processor';
 import { logger } from '@/lib/logger';
 
@@ -25,16 +25,8 @@ export async function POST(request: NextRequest) {
     if (isAuthorizedCron(request)) {
       logger.info({}, 'Manual queue processing triggered via CRON_SECRET');
     } else {
-      const adminAuth = await checkAdminAuth();
-      if (!adminAuth.user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-      if (!adminAuth.isAdmin) {
-        return NextResponse.json(
-          { error: 'Forbidden. Admin or cron token required.' },
-          { status: 403 }
-        );
-      }
+      const adminAuth = await requireAdminForApi(request);
+      if (!adminAuth.user) return adminAuth.response!;
       logger.info({ userId: adminAuth.user.id }, 'Manual queue processing triggered by admin');
     }
 

@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { AuditEventType } from '@/lib/audit/audit-log';
+import { recordAuthAuditEvent } from '@/lib/audit/auth-audit.server';
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -8,7 +10,15 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = await createClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error && data.user) {
+      recordAuthAuditEvent({
+        eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
+        userId: data.user.id,
+        email: data.user.email ?? undefined,
+        request,
+      });
+    }
   }
 
   // Redirect to onboarding (new users need to set up)

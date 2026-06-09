@@ -13,9 +13,9 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const snapshot = await getPilotSnapshotForUser(user.id);
     return NextResponse.json(snapshot);
   } catch (e: unknown) {
@@ -30,7 +30,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const body = (await request.json()) as {
       deals?: RecentDeal[];
       participants?: DemoParticipant[];

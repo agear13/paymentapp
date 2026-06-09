@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
   return runOperationalApiRoute(ctx, async () => {
     try {
-      const user = await requireAuth();
+      const user = await requireAuth(request);
       const org = await getOrganizationForAuthenticatedUser(user.id);
       const { searchParams } = new URL(request.url);
       const includeInitialization = searchParams.get('includeInitialization') === 'true';

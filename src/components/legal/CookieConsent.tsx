@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { ProvvypayPrivacyLink } from "@/components/legal/provvypay-legal-links";
 
 type CookiePreferences = {
   essential: boolean;
@@ -156,12 +157,9 @@ export default function CookieConsent() {
                       Cookie Policy
                     </Link>{" "}
                     and{" "}
-                    <Link
-                      href="/legal/privacy"
-                      className="text-blue-600 hover:underline"
-                    >
+                    <ProvvypayPrivacyLink className="text-blue-600 hover:underline">
                       Privacy Policy
-                    </Link>{" "}
+                    </ProvvypayPrivacyLink>{" "}
                     for more information.
                   </p>
                 </div>

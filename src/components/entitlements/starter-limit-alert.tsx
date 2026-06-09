@@ -2,16 +2,9 @@
 
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { EntitlementFeature } from '@/lib/entitlements/types';
 import { STARTER_MAX_AGREEMENTS, STARTER_MAX_AI_IMPORTS } from '@/lib/entitlements/plans';
+import { starterLimitMessage } from '@/lib/entitlements/plan-onboarding-summaries';
 import { useEntitlements } from '@/hooks/use-entitlements';
-
-const LIMIT_MESSAGES: Partial<Record<EntitlementFeature, string>> = {
-  create_agreement:
-    'Starter includes 3 active agreements. Upgrade to Professional for unlimited agreements.',
-  ai_import:
-    'Starter includes 3 AI imports. Upgrade to Professional for unlimited imports.',
-};
 
 type StarterLimitAlertProps = {
   feature: 'create_agreement' | 'ai_import';
@@ -28,7 +21,7 @@ export function StarterLimitAlert({ feature, className }: StarterLimitAlertProps
   const limit = feature === 'create_agreement' ? STARTER_MAX_AGREEMENTS : STARTER_MAX_AI_IMPORTS;
   const current =
     feature === 'create_agreement' ? usage?.agreementCount : usage?.aiImportCount;
-  const message = LIMIT_MESSAGES[feature];
+  const message = starterLimitMessage(feature);
 
   return (
     <Alert variant="destructive" className={className}>

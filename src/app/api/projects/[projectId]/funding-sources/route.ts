@@ -16,11 +16,11 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const { projectId } = await context.params;
     const owned = await assertProjectOwnedByUser(user.id, projectId);
     if (!owned) {
@@ -48,7 +48,7 @@ export async function POST(
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const { projectId } = await context.params;
     const owned = await assertProjectOwnedByUser(user.id, projectId);
     if (!owned) {

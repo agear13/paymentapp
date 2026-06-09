@@ -6,18 +6,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { checkAdminAuth } from '@/lib/auth/admin.server';
+import { requireAdminForApi } from '@/lib/auth/api-session.server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { isAdmin, user, error: authError } = await checkAdminAuth();
-
-    if (!isAdmin || !user) {
-      return NextResponse.json(
-        { error: authError || 'Forbidden' },
-        { status: authError === 'Authentication required' ? 401 : 403 }
-      );
-    }
+    const adminAuth = await requireAdminForApi(request);
+    if (!adminAuth.user) return adminAuth.response!;
+    const user = adminAuth.user;
 
     const body = await request.json().catch(() => ({}));
     const { programSlug, referralCodeToBind } = body ?? {};

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { prisma } from "@/lib/server/prisma";
 import { z } from "zod";
 
@@ -23,18 +23,9 @@ const exportRequestSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const auth = await getCurrentUserForApi(req);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     const body = await req.json();
     const { format } = exportRequestSchema.parse(body);

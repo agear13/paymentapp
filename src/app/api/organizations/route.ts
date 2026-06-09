@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
+import { AuditEventType, logDataEvent, createAuditLog, AuditSeverity } from '@/lib/audit/audit-log';
+import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
@@ -47,11 +50,9 @@ export async function GET(request: NextRequest) {
 // POST /api/organizations - Create new organization
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    
-    if (!user) {
-      return apiError('Unauthorized', 401);
-    }
+    const auth = await getCurrentUserForApi(request);
+    if (!auth.user) return auth.response!;
+    const user = auth.user;
 
     const { data: body, error } = await validateBody(request, createOrganizationSchema);
     
@@ -106,6 +107,33 @@ export async function POST(request: NextRequest) {
     });
 
     log.info({ organizationId: result.id, userId: user.id }, 'Created organization and linked user');
+
+    const auditCtx = extractRequestAuditContext(request);
+    void logDataEvent({
+      eventType: AuditEventType.ORG_CREATED,
+      userId: user.id,
+      organizationId: result.id,
+      resource: 'organization',
+      resourceId: result.id,
+      action: 'create',
+      newValue: { name: result.name },
+      ipAddress: auditCtx.ipAddress,
+    });
+
+    void createAuditLog({
+      eventType: AuditEventType.ORG_MEMBERSHIP_CHANGED,
+      severity: AuditSeverity.INFO,
+      userId: user.id,
+      organizationId: result.id,
+      resource: 'user_organization',
+      resourceId: result.id,
+      action: 'membership_created',
+      newValue: JSON.stringify({ role: 'OWNER' }),
+      ipAddress: auditCtx.ipAddress,
+      userAgent: auditCtx.userAgent,
+      correlationId: auditCtx.correlationId,
+      timestamp: new Date(),
+    });
 
     return apiResponse(result, 201);
   } catch (error) {

@@ -76,6 +76,7 @@ import { AgreementIntelligenceReport } from '@/components/onboarding/agreement-i
 import { OnboardingPricingPanel } from '@/components/onboarding/onboarding-pricing-panel';
 import { OnboardingTemplateGallery } from '@/components/onboarding/onboarding-template-gallery';
 import { OnboardingVisualHeader } from '@/components/provvypay/onboarding-visual-header';
+import { ProvvypayLogoMark } from '@/components/provvypay/provvypay-logo-mark';
 import { trackOnboardingActivation } from '@/lib/onboarding/onboarding-activation-analytics';
 import { trackOutcomeOnce } from '@/lib/agreements/validation/agreement-intelligence-analytics';
 import {
@@ -100,6 +101,11 @@ import {
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { useEntitlements } from '@/hooks/use-entitlements';
 import { StarterLimitAlert } from '@/components/entitlements/starter-limit-alert';
+import { OnboardingPlanEntitlementSummary } from '@/components/onboarding/onboarding-plan-entitlement-summary';
+import {
+  isOnboardingStarterAwarenessStep,
+  starterLimitMessage,
+} from '@/lib/entitlements/plan-onboarding-summaries';
 import { OnboardingProviderChecklist } from '@/components/onboarding/onboarding-provider-checklist';
 import {
   OnboardingRecoveryPanel,
@@ -353,6 +359,16 @@ export function WorkflowOnboardingForm() {
 
   const selectedUseCaseMeta = ONBOARDING_USE_CASES.find((u) => u.id === useCase);
   const isWelcomeStep = step === 'workspace' || step === 'start_method';
+  const showStarterPlanSummary =
+    selectedPlanId === 'starter' && isOnboardingStarterAwarenessStep(step);
+
+  const starterPlanSummary = showStarterPlanSummary ? (
+    <OnboardingPlanEntitlementSummary
+      planId="starter"
+      compact
+      onSelectProfessional={() => setSelectedPlanId('professional')}
+    />
+  ) : null;
 
   async function bootstrapAgreementProject(
     name: string,
@@ -690,9 +706,9 @@ export function WorkflowOnboardingForm() {
     if (!selectedStartMethod) return;
     if (isStartMethodBlocked(selectedStartMethod)) {
       toast.error(
-        selectedStartMethod === 'import' && aiImportAtLimit
-          ? 'Starter includes 3 AI imports. Upgrade to Professional for unlimited imports.'
-          : 'Starter includes 3 active agreements. Upgrade to Professional for unlimited agreements.'
+        starterLimitMessage(
+          selectedStartMethod === 'import' && aiImportAtLimit ? 'ai_import' : 'create_agreement'
+        )
       );
       return;
     }
@@ -726,11 +742,11 @@ export function WorkflowOnboardingForm() {
       return;
     }
     if (aiImportAtLimit) {
-      toast.error('Starter includes 3 AI imports. Upgrade to Professional for unlimited imports.');
+      toast.error(starterLimitMessage('ai_import'));
       return;
     }
     if (agreementAtLimit) {
-      toast.error('Starter includes 3 active agreements. Upgrade to Professional for unlimited agreements.');
+      toast.error(starterLimitMessage('create_agreement'));
       return;
     }
     trackOnboardingActivation('conversation_import_started', {
@@ -813,7 +829,7 @@ export function WorkflowOnboardingForm() {
   async function handleTemplateContinue() {
     if (!selectedTemplate) return;
     if (agreementAtLimit) {
-      toast.error('Starter includes 3 active agreements. Upgrade to Professional for unlimited agreements.');
+      toast.error(starterLimitMessage('create_agreement'));
       return;
     }
     const template = ONBOARDING_AGREEMENT_TEMPLATES.find((t) => t.id === selectedTemplate);
@@ -960,7 +976,7 @@ export function WorkflowOnboardingForm() {
 
   async function onProjectSubmit(values: ProjectFormValues) {
     if (agreementAtLimit) {
-      toast.error('Starter includes 3 active agreements. Upgrade to Professional for unlimited agreements.');
+      toast.error(starterLimitMessage('create_agreement'));
       return;
     }
     setIsLoading(true);
@@ -1178,15 +1194,11 @@ export function WorkflowOnboardingForm() {
   const stepBody = (
     <>
       {step === 'workspace' && (
-        <div className="space-y-6">
-          <p className="text-muted-foreground text-sm">
-            This workspace coordinates agreements, obligations, approvals, and settlement across
-            your commercial arrangements. You can create additional agreements later.
-          </p>
+        <Card className="surface-elevated border-0 p-6 sm:p-8 shadow-sm">
           <Form {...workspaceForm}>
             <form
               onSubmit={workspaceForm.handleSubmit(onWorkspaceSubmit)}
-              className="space-y-4"
+              className="space-y-5"
             >
               <FormField
                 control={workspaceForm.control}
@@ -1195,7 +1207,7 @@ export function WorkflowOnboardingForm() {
                   <FormItem>
                     <FormLabel>Workspace name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Island Events Co." {...field} />
+                      <Input className="h-11" placeholder="Island Events Co." {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1209,7 +1221,7 @@ export function WorkflowOnboardingForm() {
                     <FormLabel>Default currency</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-11">
                           <SelectValue placeholder="Select currency" />
                         </SelectTrigger>
                       </FormControl>
@@ -1232,7 +1244,7 @@ export function WorkflowOnboardingForm() {
                   <FormItem>
                     <FormLabel>Industry (optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="Events, agencies, marketplaces…" {...field} />
+                      <Input className="h-11" placeholder="Events, agencies, marketplaces…" {...field} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -1244,21 +1256,19 @@ export function WorkflowOnboardingForm() {
                   <FormItem>
                     <FormLabel>Team size (optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="1–5, 6–20, 20+" {...field} />
+                      <Input className="h-11" placeholder="1–5, 6–20, 20+" {...field} />
                     </FormControl>
                   </FormItem>
                 )}
               />
-              <div className="flex justify-end pt-2">
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Continue
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
+              <Button type="submit" className="w-full h-11" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Continue
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </form>
           </Form>
-        </div>
+        </Card>
       )}
 
       {step === 'start_method' && (
@@ -1943,19 +1953,37 @@ export function WorkflowOnboardingForm() {
   );
 
   if (isWelcomeStep) {
+    const isWorkspaceStep = step === 'workspace';
+
     return (
-      <div className="w-full space-y-10">
-        {step === 'workspace' ? (
-          <div className="space-y-3 text-center animate-in fade-in duration-500">
-            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Welcome to Provvypay</h1>
-            <p className="text-muted-foreground max-w-lg mx-auto leading-relaxed">
-              Agreement Intelligence for commercial coordination. Set up your workspace, create your
-              first agreement, and configure settlement in a few guided steps.
+      <div className="flex w-full max-w-xl flex-col items-center space-y-5">
+        {isWorkspaceStep ? (
+          <div className="flex w-full flex-col items-center gap-2 text-center animate-in fade-in duration-500">
+            <ProvvypayLogoMark size="sm" />
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgb(124,92,255)]">
+              Welcome
+            </p>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Welcome to Provvypay</h1>
+            <p className="max-w-sm text-sm text-muted-foreground leading-relaxed">
+              Agreement Intelligence for commercial coordination.
             </p>
           </div>
         ) : null}
-        <OnboardingVisualHeader step={step} centered={step === 'workspace'} />
-        <div key={step} className="animate-in fade-in slide-in-from-bottom-3 duration-500">
+        <OnboardingVisualHeader
+          step={step}
+          centered={isWorkspaceStep}
+          compact
+          showLogo={!isWorkspaceStep}
+          className="w-full"
+        />
+        <div
+          key={step}
+          className={cn(
+            'w-full space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-500',
+            isWorkspaceStep && 'max-w-md'
+          )}
+        >
+          {starterPlanSummary}
           {stepBody}
         </div>
       </div>
@@ -1963,9 +1991,10 @@ export function WorkflowOnboardingForm() {
   }
 
   return (
-    <div className="w-full space-y-10">
-      <OnboardingVisualHeader step={step} />
-      <div key={step} className="animate-in fade-in slide-in-from-bottom-3 duration-500">
+    <div className="w-full space-y-8">
+      <OnboardingVisualHeader step={step} compact />
+      <div key={step} className="space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-500">
+        {starterPlanSummary}
         {stepBody}
       </div>
     </div>

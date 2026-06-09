@@ -72,7 +72,7 @@ export async function PATCH(
   context: { params: Promise<{ participantId: string }> }
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const { participantId } = await context.params;
     const body = patchSchema.parse(await request.json());
 

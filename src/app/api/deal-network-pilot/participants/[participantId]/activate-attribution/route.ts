@@ -23,11 +23,11 @@ import { prisma } from '@/lib/server/prisma';
  * Does not require payout onboarding — only payout release is gated later.
  */
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ participantId: string }> }
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const { participantId } = await context.params;
 
     const row = await prisma.deal_network_pilot_participants.findUnique({

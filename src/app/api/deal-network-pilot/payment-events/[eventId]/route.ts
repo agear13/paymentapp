@@ -18,7 +18,7 @@ export async function PATCH(
   context: { params: Promise<{ eventId: string }> }
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const { eventId } = await context.params;
     const id = eventId?.trim();
     if (!id) {

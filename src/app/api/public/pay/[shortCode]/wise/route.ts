@@ -8,32 +8,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import { hasWiseCredentials } from '@/lib/wise/client';
 import { buildWiseReference, getMerchantWiseConfig, persistWiseContextForPaymentLink } from '@/lib/payments/wise';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
 import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
+import {
+  cachePublicShortCodeMiss,
+  isPublicShortCodeNegativelyCached,
+} from '@/lib/cache/public-negative-cache';
 
-const MISSING_LINK_TTL_MS = 30_000;
-const missingShortCodeUntil = new Map<string, number>();
-
-function isMissingShortCodeCached(shortCode: string): boolean {
-  const expiresAt = missingShortCodeUntil.get(shortCode);
-  if (!expiresAt) return false;
-  if (expiresAt <= Date.now()) {
-    missingShortCodeUntil.delete(shortCode);
-    return false;
-  }
-  return true;
-}
-
-function cacheMissingShortCode(shortCode: string): void {
-  missingShortCodeUntil.set(shortCode, Date.now() + MISSING_LINK_TTL_MS);
-}
-
-function fetchWisePaymentLink(shortCode: string) {
+async function fetchWisePaymentLink(shortCode: string) {
+  const { prisma } = await import('@/lib/server/prisma');
   return prisma.payment_links.findUnique({
     where: { short_code: shortCode },
     select: {
@@ -75,7 +62,8 @@ async function validateWiseConfig(
   }
 }
 
-function getStoredWiseInstructions(paymentLinkId: string, shortCode: string) {
+async function getStoredWiseInstructions(paymentLinkId: string, shortCode: string) {
+  const { prisma } = await import('@/lib/server/prisma');
   return prisma.payment_events.findFirst({
     where: {
       payment_link_id: paymentLinkId,
@@ -109,7 +97,7 @@ export async function GET(
   }
 
   // Hot negative-cache to avoid hammering Redis/DB for repeated invalid lookups.
-  if (isMissingShortCodeCached(shortCode)) {
+  if (isPublicShortCodeNegativelyCached(shortCode)) {
     return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
   }
 
@@ -121,7 +109,7 @@ export async function GET(
   const paymentLink = await fetchWisePaymentLink(shortCode);
 
   if (!paymentLink) {
-    cacheMissingShortCode(shortCode);
+    cachePublicShortCodeMiss(shortCode);
     return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
   }
   if (paymentLink.payment_method && paymentLink.payment_method !== 'WISE') {
@@ -149,6 +137,7 @@ export async function GET(
       organizationId: paymentLink.organization_id,
       fallbackCurrency: invoiceCcy,
     });
+    const { prisma } = await import('@/lib/server/prisma');
     await prisma.payment_links.update({
       where: { id: paymentLink.id },
       data: { wise_status: 'INSTRUCTIONS_READY', updated_at: new Date() },
@@ -176,7 +165,7 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid short code' }, { status: 400 });
   }
 
-  if (isMissingShortCodeCached(shortCode)) {
+  if (isPublicShortCodeNegativelyCached(shortCode)) {
     return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
   }
 
@@ -188,7 +177,7 @@ export async function POST(
   const paymentLink = await fetchWisePaymentLink(shortCode);
 
   if (!paymentLink) {
-    cacheMissingShortCode(shortCode);
+    cachePublicShortCodeMiss(shortCode);
     return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
   }
   if (paymentLink.payment_method && paymentLink.payment_method !== 'WISE') {

@@ -9,6 +9,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { log } from '@/lib/logger';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
+import {
+  cachePublicShortCodeMiss,
+  isPublicShortCodeNegativelyCached,
+} from '@/lib/cache/public-negative-cache';
 
 export async function GET(
   request: NextRequest,
@@ -32,6 +36,13 @@ export async function GET(
       );
     }
 
+    if (isPublicShortCodeNegativelyCached(shortCode)) {
+      return NextResponse.json(
+        { error: 'Payment link not found' },
+        { status: 404 }
+      );
+    }
+
     const rateLimitResult = await applyRateLimit(request, 'public');
     if (!rateLimitResult.success) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
@@ -39,17 +50,29 @@ export async function GET(
 
     const { prisma } = await import('@/lib/server/prisma');
 
-    // Find payment link with merchant settings
     const paymentLink = await prisma.payment_links.findUnique({
       where: { short_code: shortCode },
       select: {
         id: true,
-        status: true,
-        organization_id: true,
+        organizations: {
+          select: {
+            id: true,
+            merchant_settings: {
+              orderBy: { created_at: 'desc' },
+              take: 1,
+              select: {
+                hedera_account_id: true,
+                display_name: true,
+                stripe_account_id: true,
+              },
+            },
+          },
+        },
       },
     });
 
     if (!paymentLink) {
+      cachePublicShortCodeMiss(shortCode);
       log.warn({ shortCode }, '[Merchant API] Payment link not found');
       return NextResponse.json(
         { error: 'Payment link not found' },
@@ -57,20 +80,11 @@ export async function GET(
       );
     }
 
-    // Fetch merchant settings for the organization
-    const merchantSettings = await prisma.merchant_settings.findFirst({
-      where: { organization_id: paymentLink.organization_id },
-      select: {
-        hedera_account_id: true,
-        display_name: true,
-        stripe_account_id: true,
-      },
-      orderBy: { created_at: 'desc' },
-    });
+    const merchantSettings = paymentLink.organizations.merchant_settings[0];
 
     if (!merchantSettings) {
       log.warn(
-        { shortCode, organizationId: paymentLink.organization_id },
+        { shortCode, organizationId: paymentLink.organizations.id },
         '[Merchant API] Merchant settings not found for organization'
       );
       return NextResponse.json(

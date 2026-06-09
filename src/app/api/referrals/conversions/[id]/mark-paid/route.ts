@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createPartnerLedgerEntryForReferralConversion } from '@/lib/referrals/partners-integration';
-import { checkAdminAuth } from '@/lib/auth/admin.server';
+import { requireAdminForApi } from '@/lib/auth/api-session.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 
 export async function POST(
@@ -16,13 +16,9 @@ export async function POST(
   try {
     const conversionId = params.id;
 
-    const { isAdmin, user, error: authError } = await checkAdminAuth();
-    if (!isAdmin || !user) {
-      return NextResponse.json(
-        { error: authError || 'Forbidden' },
-        { status: authError === 'Authentication required' ? 401 : 403 }
-      );
-    }
+    const adminAuth = await requireAdminForApi(request);
+    if (!adminAuth.user) return adminAuth.response!;
+    const user = adminAuth.user;
 
     const org = await getOrganizationForAuthenticatedUser(user.id);
     if (org) {

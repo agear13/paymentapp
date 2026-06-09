@@ -1,6 +1,7 @@
 import {
   assertProductionEnvGuards,
   isCronSecretValid,
+  isCsrfSecretValid,
   isStripeWebhookSecretValid,
 } from '@/lib/config/production-env-guards';
 
@@ -29,7 +30,7 @@ describe('production-env-guards (B5)', () => {
     expect(() =>
       assertProductionEnvGuards(
         { ...validProductionEnv, STRIPE_WEBHOOK_SECRET: 'disabled' },
-        { CRON_SECRET: 'a'.repeat(16) }
+        { CRON_SECRET: 'a'.repeat(16), CSRF_SECRET: 'a'.repeat(32) }
       )
     ).toThrow(/Production environment hardening failed/);
   });
@@ -75,15 +76,33 @@ describe('production-env-guards (B5)', () => {
           STRIPE_SECRET_KEY: 'sk_test_abc',
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_abc',
         },
-        { CRON_SECRET: 'a'.repeat(16), ALLOW_STRIPE_TEST_KEYS: 'true' }
+        {
+          CRON_SECRET: 'a'.repeat(16),
+          CSRF_SECRET: 'a'.repeat(32),
+          ALLOW_STRIPE_TEST_KEYS: 'true',
+        }
       )
     ).not.toThrow();
+  });
+
+  it('rejects missing CSRF_SECRET in production', () => {
+    expect(isCsrfSecretValid(undefined)).toBe(false);
+    expect(isCsrfSecretValid('short')).toBe(false);
+    expect(isCsrfSecretValid('a'.repeat(32))).toBe(true);
+
+    expect(() =>
+      assertProductionEnvGuards(validProductionEnv, {
+        CRON_SECRET: 'a'.repeat(16),
+        CSRF_SECRET: '',
+      })
+    ).toThrow(/CSRF_SECRET/);
   });
 
   it('passes valid production configuration', () => {
     expect(() =>
       assertProductionEnvGuards(validProductionEnv, {
         CRON_SECRET: 'secure-cron-secret-value',
+        CSRF_SECRET: 'secure-csrf-secret-minimum-32-chars',
       })
     ).not.toThrow();
   });

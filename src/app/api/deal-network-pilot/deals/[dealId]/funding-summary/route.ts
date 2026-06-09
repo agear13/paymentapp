@@ -26,7 +26,7 @@ export async function GET(
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
