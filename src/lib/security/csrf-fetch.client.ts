@@ -1,6 +1,17 @@
 'use client';
 
 import { logCsrfDiag } from '@/lib/security/csrf-diag.client';
+import {
+  getActivePatchOwnerId,
+  getCsrfInstanceRegistrySummary,
+  getLastBootstrapWorkspaceProof,
+  registerCsrfModuleInstance,
+  recordCsrfInstall,
+  resetCsrfProofStateForTests,
+  setLastBootstrapWorkspaceProof,
+  sha256Hex,
+  type BootstrapWorkspaceProof,
+} from '@/lib/security/csrf-proof.client';
 
 /** TEMP: identifies duplicate client module instances in lifecycle logs. */
 const CSRF_MODULE_INSTANCE_ID =
@@ -8,11 +19,22 @@ const CSRF_MODULE_INSTANCE_ID =
     ? crypto.randomUUID().slice(0, 8)
     : Math.random().toString(36).slice(2, 10);
 
+const MODULE_REGISTRY = registerCsrfModuleInstance(CSRF_MODULE_INSTANCE_ID);
+
+logCsrfDiag('tokenLifecycle', 'module-loaded', {
+  moduleInstanceId: CSRF_MODULE_INSTANCE_ID,
+  uniqueInstanceCount: MODULE_REGISTRY.uniqueInstanceCount,
+  allInstanceIds: MODULE_REGISTRY.allInstanceIds,
+  loadedAt: Math.round(performance.now()),
+});
+
 let csrfToken: string | null = null;
 let interceptorInstalled = false;
 let csrfReadyPromise: Promise<void> | null = null;
 let nativeFetch: typeof window.fetch | null = null;
 let csrfIssuanceGeneration = 0;
+let installInterceptorAt: number | null = null;
+let patchedWindowFetch = false;
 
 function previewToken(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -23,11 +45,17 @@ function logTokenLifecycle(
   event: string,
   details?: Record<string, unknown>
 ): void {
+  const registry = getCsrfInstanceRegistrySummary();
   logCsrfDiag('tokenLifecycle', event, {
     moduleInstanceId: CSRF_MODULE_INSTANCE_ID,
     issuanceGeneration: csrfIssuanceGeneration,
     moduleTokenPreview: previewToken(csrfToken),
     interceptorInstalled,
+    patchedWindowFetch,
+    installInterceptorAt,
+    activePatchOwnerId: registry.activePatchOwnerId,
+    uniqueInstanceCount: registry.uniqueInstanceCount,
+    allInstanceIds: registry.allInstanceIds,
     hasInFlightPromise: csrfReadyPromise !== null,
     ...details,
   });
@@ -35,15 +63,38 @@ function logTokenLifecycle(
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+async function recordInstallProof(token: string, source: string, willPatchFetch: boolean): Promise<void> {
+  const moduleTokenSha256 = await sha256Hex(token);
+  const installTs = recordCsrfInstall(CSRF_MODULE_INSTANCE_ID, {
+    patchedWindowFetch: willPatchFetch,
+    moduleTokenSha256,
+  });
+  installInterceptorAt = installTs;
+  patchedWindowFetch = willPatchFetch;
+
+  logTokenLifecycle('install-interceptor', {
+    source,
+    installInterceptorAt: installTs,
+    patchedWindowFetch: willPatchFetch,
+    moduleTokenSha256,
+    activePatchOwnerId: getActivePatchOwnerId(),
+  });
+}
+
 export function installCsrfFetchInterceptor(token: string, source?: string): void {
   const previousPreview = previewToken(csrfToken);
+  const willPatchFetch = !interceptorInstalled && typeof window !== 'undefined';
   csrfToken = token;
-  logTokenLifecycle('install-interceptor', {
-    source: source ?? 'unknown',
-    previousTokenPreview: previousPreview,
-    installedTokenPreview: previewToken(token),
-    willPatchFetch: !interceptorInstalled && typeof window !== 'undefined',
+
+  void recordInstallProof(token, source ?? 'unknown', willPatchFetch).catch(() => {
+    logTokenLifecycle('install-interceptor-proof-failed', {
+      source: source ?? 'unknown',
+      previousTokenPreview: previousPreview,
+      installedTokenPreview: previewToken(token),
+      willPatchFetch,
+    });
   });
+
   if (interceptorInstalled || typeof window === 'undefined') return;
   interceptorInstalled = true;
 
@@ -64,16 +115,35 @@ export function installCsrfFetchInterceptor(token: string, source?: string): voi
       if (!hadHeader) {
         headers.set('x-csrf-token', csrfToken);
       }
+
       if (url === '/api/onboarding/bootstrap-workspace' || url.endsWith('/api/onboarding/bootstrap-workspace')) {
         const headerValue = hadHeader ? headers.get('x-csrf-token') : csrfToken;
-        logTokenLifecycle('bootstrap-workspace-mutation', {
+        const requestTs = Math.round(performance.now());
+        const headerTokenSha256 = headerValue ? await sha256Hex(headerValue) : null;
+        const moduleTokenSha256 = csrfToken ? await sha256Hex(csrfToken) : null;
+        const proof: BootstrapWorkspaceProof = {
+          moduleInstanceId: CSRF_MODULE_INSTANCE_ID,
+          requestTs,
+          headerTokenSha256,
+          moduleTokenSha256,
+          patchedWindowFetchByThisInstance: patchedWindowFetch,
+          activePatchOwnerId: getActivePatchOwnerId(),
+          headerWasPresent: hadHeader,
+        };
+        setLastBootstrapWorkspaceProof(proof);
+
+        logTokenLifecycle('bootstrap-workspace-request', {
+          requestTs,
           method,
           headerWasPresent: hadHeader,
-          headerValuePreview: previewToken(headerValue),
-          moduleTokenPreview: previewToken(csrfToken),
-          credentials: init?.credentials ?? 'include',
+          headerTokenSha256,
+          moduleTokenSha256,
+          patchedWindowFetchByThisInstance: patchedWindowFetch,
+          activePatchOwnerId: proof.activePatchOwnerId,
+          headerGeneratorInstanceId: CSRF_MODULE_INSTANCE_ID,
         });
       }
+
       return nativeFetch!(input, { ...init, headers, credentials: init?.credentials ?? 'include' });
     }
 
@@ -81,7 +151,7 @@ export function installCsrfFetchInterceptor(token: string, source?: string): voi
       MUTATING.has(method) &&
       (url === '/api/onboarding/bootstrap-workspace' || url.endsWith('/api/onboarding/bootstrap-workspace'))
     ) {
-      logCsrfDiag('fetchInterceptor', 'bootstrap-workspace-unpatched', {
+      logTokenLifecycle('bootstrap-workspace-unpatched', {
         method,
         hasModuleToken: csrfToken !== null,
         reason: !csrfToken ? 'no_module_token' : 'path_not_intercepted',
@@ -96,12 +166,54 @@ export function getClientCsrfToken(): string | null {
   return csrfToken;
 }
 
+export function getCsrfModuleInstanceId(): string {
+  return CSRF_MODULE_INSTANCE_ID;
+}
+
+type ServerCsrfDiag = {
+  cookieTokenSha256?: string | null;
+  headerTokenSha256?: string | null;
+  failingBranch?: string;
+};
+
+/** TEMP: correlate client proof with server 403 diagnostics. */
+export function logBootstrapWorkspace403Proof(serverCsrfDiag: ServerCsrfDiag | null | undefined): void {
+  const last = getLastBootstrapWorkspaceProof();
+  const registry = getCsrfInstanceRegistrySummary();
+  const headerSha = serverCsrfDiag?.headerTokenSha256 ?? last?.headerTokenSha256 ?? null;
+  const cookieSha = serverCsrfDiag?.cookieTokenSha256 ?? null;
+  const moduleSha = last?.moduleTokenSha256 ?? null;
+
+  const headerMatchesModule = Boolean(headerSha && moduleSha && headerSha === moduleSha);
+  const headerDiffersFromCookie = Boolean(headerSha && cookieSha && headerSha !== cookieSha);
+  const staleInterceptor = headerMatchesModule && headerDiffersFromCookie;
+
+  logCsrfDiag('csrf403Proof', 'bootstrap-workspace', {
+    headerGeneratorInstanceId: last?.moduleInstanceId ?? null,
+    activePatchOwnerId: registry.activePatchOwnerId,
+    SHA256_header: headerSha,
+    SHA256_cookie: cookieSha,
+    SHA256_module: moduleSha,
+    headerMatchesModule,
+    headerDiffersFromCookie,
+    staleInterceptor,
+    failingBranch: serverCsrfDiag?.failingBranch ?? null,
+    uniqueInstanceCount: registry.uniqueInstanceCount,
+    allInstanceIds: registry.allInstanceIds,
+    installInterceptorAt: installInterceptorAt,
+    bootstrapRequestTs: last?.requestTs ?? null,
+    patchedWindowFetchByRequestInstance: last?.patchedWindowFetchByThisInstance ?? null,
+    instances: registry.instances,
+    lastBootstrapProof: last,
+  });
+}
+
 async function fetchAndInstallCsrfToken(source: string): Promise<void> {
   const issuanceGeneration = ++csrfIssuanceGeneration;
   logTokenLifecycle('csrf-token-fetch-start', {
     source,
     issuanceGeneration,
-    moduleTokenBeforeFetch: previewToken(csrfToken),
+    moduleTokenSha256: csrfToken ? await sha256Hex(csrfToken) : null,
   });
 
   const response = await fetch('/api/security/csrf-token', { credentials: 'include' });
@@ -112,7 +224,7 @@ async function fetchAndInstallCsrfToken(source: string): Promise<void> {
     ok: response.ok,
     status: response.status,
     contentType: response.headers?.get?.('content-type') ?? null,
-    moduleTokenAfterHttpResponse: previewToken(csrfToken),
+    moduleTokenSha256: csrfToken ? await sha256Hex(csrfToken) : null,
   });
 
   if (!response.ok) {
@@ -127,8 +239,8 @@ async function fetchAndInstallCsrfToken(source: string): Promise<void> {
     source,
     issuanceGeneration,
     csrfTokenType: typeof data.csrfToken,
-    bodyTokenPreview: previewToken(bodyToken),
-    moduleTokenBeforeInstall: previewToken(csrfToken),
+    bodyTokenSha256: bodyToken ? await sha256Hex(bodyToken) : null,
+    moduleTokenSha256: csrfToken ? await sha256Hex(csrfToken) : null,
   });
 
   if (!bodyToken) {
@@ -139,8 +251,8 @@ async function fetchAndInstallCsrfToken(source: string): Promise<void> {
   logTokenLifecycle('csrf-token-installed', {
     source,
     issuanceGeneration,
-    bodyTokenPreview: previewToken(bodyToken),
-    moduleTokenAfterInstall: previewToken(csrfToken),
+    bodyTokenSha256: await sha256Hex(bodyToken),
+    moduleTokenSha256: await sha256Hex(csrfToken!),
   });
 }
 
@@ -154,7 +266,7 @@ export async function ensureClientCsrfReady(source = 'unspecified'): Promise<voi
   if (csrfToken) {
     logTokenLifecycle('ensure-skip-existing-token', {
       source,
-      moduleTokenPreview: previewToken(csrfToken),
+      moduleTokenSha256: await sha256Hex(csrfToken),
     });
     return;
   }
@@ -175,13 +287,13 @@ export async function ensureClientCsrfReady(source = 'unspecified'): Promise<voi
     await csrfReadyPromise;
     logTokenLifecycle('ensure-resolved', {
       source,
-      moduleTokenPreview: previewToken(csrfToken),
+      moduleTokenSha256: csrfToken ? await sha256Hex(csrfToken) : null,
     });
   } catch (error) {
     logTokenLifecycle('ensure-rejected', {
       source,
       error: error instanceof Error ? error.message : String(error),
-      moduleTokenPreview: previewToken(csrfToken),
+      moduleTokenSha256: csrfToken ? await sha256Hex(csrfToken) : null,
     });
     throw error;
   }
@@ -203,6 +315,8 @@ export function resetClientCsrfStateForTests(): void {
   csrfToken = null;
   csrfReadyPromise = null;
   csrfIssuanceGeneration = 0;
+  installInterceptorAt = null;
+  patchedWindowFetch = false;
 
   if (interceptorInstalled && nativeFetch && typeof window !== 'undefined') {
     window.fetch = nativeFetch;
@@ -210,4 +324,5 @@ export function resetClientCsrfStateForTests(): void {
 
   interceptorInstalled = false;
   nativeFetch = null;
+  resetCsrfProofStateForTests();
 }

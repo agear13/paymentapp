@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest } from 'next/server';
+import { sha256Hex } from '@/lib/security/csrf-hash.server';
 
 const CSRF_COOKIE_NAME = 'csrf_token';
 const CSRF_HEADER_NAME = 'x-csrf-token';
@@ -23,7 +24,14 @@ export type CsrfValidationDiagnostics = {
   failingBranch: CsrfFailingBranch;
   cookieTokenPreview: string | null;
   headerTokenPreview: string | null;
+  cookieTokenSha256: string | null;
+  headerTokenSha256: string | null;
 };
+
+function tokenSha256(value: string | null): string | null {
+  if (!value) return null;
+  return sha256Hex(value);
+}
 
 function previewToken(value: string | null): string | null {
   if (!value) return null;
@@ -64,6 +72,8 @@ export function diagnoseCsrfValidation(
       failingBranch: 'no_cookie',
       cookieTokenPreview: null,
       headerTokenPreview: previewToken(headerToken),
+      cookieTokenSha256: null,
+      headerTokenSha256: tokenSha256(headerToken),
     };
   }
 
@@ -77,6 +87,8 @@ export function diagnoseCsrfValidation(
       failingBranch: 'no_header',
       cookieTokenPreview: previewToken(cookieToken),
       headerTokenPreview: null,
+      cookieTokenSha256: tokenSha256(cookieToken),
+      headerTokenSha256: null,
     };
   }
 
@@ -91,6 +103,8 @@ export function diagnoseCsrfValidation(
       failingBranch: 'cookie_header_mismatch',
       cookieTokenPreview: previewToken(cookieToken),
       headerTokenPreview: previewToken(headerToken),
+      cookieTokenSha256: tokenSha256(cookieToken),
+      headerTokenSha256: tokenSha256(headerToken),
     };
   }
 
@@ -105,6 +119,8 @@ export function diagnoseCsrfValidation(
       failingBranch: 'invalid_token_format',
       cookieTokenPreview: previewToken(cookieToken),
       headerTokenPreview: previewToken(headerToken),
+      cookieTokenSha256: tokenSha256(cookieToken),
+      headerTokenSha256: tokenSha256(headerToken),
     };
   }
 
@@ -125,6 +141,8 @@ export function diagnoseCsrfValidation(
       failingBranch: 'invalid_signature',
       cookieTokenPreview: previewToken(cookieToken),
       headerTokenPreview: previewToken(headerToken),
+      cookieTokenSha256: tokenSha256(cookieToken),
+      headerTokenSha256: tokenSha256(headerToken),
     };
   }
 
@@ -137,5 +155,7 @@ export function diagnoseCsrfValidation(
     failingBranch: 'none',
     cookieTokenPreview: previewToken(cookieToken),
     headerTokenPreview: previewToken(headerToken),
+    cookieTokenSha256: tokenSha256(cookieToken),
+    headerTokenSha256: tokenSha256(headerToken),
   };
 }
