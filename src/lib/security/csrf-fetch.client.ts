@@ -1,5 +1,7 @@
 'use client';
 
+import { logCsrfDiag } from '@/lib/security/csrf-diag.client';
+
 let csrfToken: string | null = null;
 let interceptorInstalled = false;
 let csrfReadyPromise: Promise<void> | null = null;
@@ -40,17 +42,32 @@ export function getClientCsrfToken(): string | null {
 }
 
 async function fetchAndInstallCsrfToken(): Promise<void> {
+  logCsrfDiag('fetchAndInstallCsrfToken', 'fetch-start');
   const response = await fetch('/api/security/csrf-token', { credentials: 'include' });
+  logCsrfDiag('fetchAndInstallCsrfToken', 'fetch-response', {
+    ok: response.ok,
+    status: response.status,
+    contentType: response.headers?.get?.('content-type') ?? null,
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch CSRF token');
   }
 
   const data = (await response.json()) as { csrfToken?: unknown };
+  logCsrfDiag('fetchAndInstallCsrfToken', 'json-parsed', {
+    topLevelKeys: Object.keys(data as object),
+    csrfTokenType: typeof data.csrfToken,
+    hasWrappedData: typeof (data as { data?: unknown }).data !== 'undefined',
+  });
   if (typeof data.csrfToken !== 'string') {
     throw new Error('Invalid CSRF token response');
   }
 
   installCsrfFetchInterceptor(data.csrfToken);
+  logCsrfDiag('fetchAndInstallCsrfToken', 'installed', {
+    hasModuleToken: csrfToken !== null,
+    interceptorInstalled,
+  });
 }
 
 /**
@@ -58,17 +75,42 @@ async function fetchAndInstallCsrfToken(): Promise<void> {
  * Concurrent callers share a single in-flight bootstrap request.
  */
 export async function ensureClientCsrfReady(): Promise<void> {
-  if (csrfToken) return;
+  logCsrfDiag('ensureClientCsrfReady', 'start', {
+    hasModuleToken: csrfToken !== null,
+    hasInFlightPromise: csrfReadyPromise !== null,
+  });
+
+  if (csrfToken) {
+    logCsrfDiag('ensureClientCsrfReady', 'resolved-immediate', {
+      hasModuleToken: true,
+    });
+    return;
+  }
 
   if (!csrfReadyPromise) {
     csrfReadyPromise = fetchAndInstallCsrfToken().finally(() => {
+      logCsrfDiag('ensureClientCsrfReady', 'promise-finally', {
+        hasModuleToken: csrfToken !== null,
+        clearingInFlightPromise: csrfToken === null,
+      });
       if (!csrfToken) {
         csrfReadyPromise = null;
       }
     });
   }
 
-  await csrfReadyPromise;
+  try {
+    await csrfReadyPromise;
+    logCsrfDiag('ensureClientCsrfReady', 'resolved', {
+      hasModuleToken: csrfToken !== null,
+    });
+  } catch (error) {
+    logCsrfDiag('ensureClientCsrfReady', 'rejected', {
+      error: error instanceof Error ? error.message : String(error),
+      hasModuleToken: csrfToken !== null,
+    });
+    throw error;
+  }
 }
 
 /**
