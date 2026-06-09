@@ -99,7 +99,12 @@ import {
   type OnboardingDraftParticipant,
 } from '@/components/onboarding/onboarding-participant-card';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
+import {
+  CSRF_PREPARING_LABEL,
+  useClientCsrfReady,
+} from '@/hooks/use-client-csrf-ready';
 import { useEntitlements } from '@/hooks/use-entitlements';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { StarterLimitAlert } from '@/components/entitlements/starter-limit-alert';
 import { OnboardingPlanEntitlementSummary } from '@/components/onboarding/onboarding-plan-entitlement-summary';
 import {
@@ -182,6 +187,7 @@ const COLLECTION_ICONS = {
 export function WorkflowOnboardingForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isReady: csrfReady, isPreparing: csrfPreparing } = useClientCsrfReady();
   const [step, setStep] = React.useState<OnboardingStep>('workspace');
   const [isLoading, setIsLoading] = React.useState(false);
   const [billingCheckoutLoading, setBillingCheckoutLoading] = React.useState(false);
@@ -379,7 +385,7 @@ export function WorkflowOnboardingForm() {
     projectForm.setValue('projectName', name);
     if (description) projectForm.setValue('description', description);
 
-    const res = await fetch('/api/onboarding/bootstrap-project', {
+    const res = await csrfAwareFetch('/api/onboarding/bootstrap-project', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -421,7 +427,7 @@ export function WorkflowOnboardingForm() {
   ): Promise<boolean> {
     const activeProjectId = targetProjectId ?? projectId;
     if (!activeProjectId || participants.length === 0) return true;
-    const res = await fetch('/api/onboarding/participants', {
+    const res = await csrfAwareFetch('/api/onboarding/participants', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId: activeProjectId, participants }),
@@ -510,7 +516,7 @@ export function WorkflowOnboardingForm() {
       delete nextState.pending_billing_plan;
     }
 
-    await fetch('/api/onboarding', {
+    await csrfAwareFetch('/api/onboarding', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -565,7 +571,7 @@ export function WorkflowOnboardingForm() {
   async function onWorkspaceSubmit(values: z.infer<typeof workspaceSchema>) {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/onboarding/bootstrap-workspace', {
+      const res = await csrfAwareFetch('/api/onboarding/bootstrap-workspace', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -587,7 +593,7 @@ export function WorkflowOnboardingForm() {
       setOrgCookie();
       projectForm.setValue('defaultCurrency', values.defaultCurrency);
       toast.success('Workspace created');
-      await fetch('/api/onboarding', {
+      await csrfAwareFetch('/api/onboarding', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -616,7 +622,7 @@ export function WorkflowOnboardingForm() {
 
   async function persistState(nextStep: OnboardingStep, extra?: Record<string, unknown>) {
     if (!organizationId) return;
-    await fetch('/api/onboarding', {
+    await csrfAwareFetch('/api/onboarding', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -638,7 +644,7 @@ export function WorkflowOnboardingForm() {
   async function completeStarterOnboarding() {
     if (!organizationId) return;
 
-    await fetch(`/api/organizations/${organizationId}/subscription`, {
+    await csrfAwareFetch(`/api/organizations/${organizationId}/subscription`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plan: 'starter', status: 'inactive' }),
@@ -650,7 +656,7 @@ export function WorkflowOnboardingForm() {
       planId: 'starter',
     });
 
-    await fetch('/api/onboarding', {
+    await csrfAwareFetch('/api/onboarding', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -755,7 +761,7 @@ export function WorkflowOnboardingForm() {
     });
     setImportExtracting(true);
     try {
-      const res = await fetch('/api/ai-extractor/extract', {
+      const res = await csrfAwareFetch('/api/ai-extractor/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -1000,7 +1006,7 @@ export function WorkflowOnboardingForm() {
           ? Number.parseFloat(values.estimatedValue!)
           : undefined;
 
-      const res = await fetch('/api/onboarding/bootstrap-project', {
+      const res = await csrfAwareFetch('/api/onboarding/bootstrap-project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1175,7 +1181,7 @@ export function WorkflowOnboardingForm() {
     if (!merchantSettingsId) return;
     const hasAny = values.hederaAccountId?.trim() || values.wiseProfileId?.trim();
     if (!hasAny) return;
-    const res = await fetch(`/api/merchant-settings/${merchantSettingsId}`, {
+    const res = await csrfAwareFetch(`/api/merchant-settings/${merchantSettingsId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1261,10 +1267,10 @@ export function WorkflowOnboardingForm() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full h-11" disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Continue
-                <ArrowRight className="ml-2 h-4 w-4" />
+              <Button type="submit" className="w-full h-11" disabled={isLoading || !csrfReady}>
+                {(csrfPreparing || isLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {csrfPreparing ? CSRF_PREPARING_LABEL : 'Continue'}
+                {!csrfPreparing && <ArrowRight className="ml-2 h-4 w-4" />}
               </Button>
             </form>
           </Form>
@@ -1317,7 +1323,7 @@ export function WorkflowOnboardingForm() {
             <Button
               type="button"
               variant="outline"
-              disabled={isLoading || !organizationId}
+              disabled={isLoading || !organizationId || !csrfReady}
               onClick={handleSkipAndExplore}
             >
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1326,6 +1332,7 @@ export function WorkflowOnboardingForm() {
             <Button
               type="button"
               disabled={
+                !csrfReady ||
                 !selectedStartMethod ||
                 (selectedStartMethod ? isStartMethodBlocked(selectedStartMethod) : false)
               }
@@ -1389,7 +1396,7 @@ export function WorkflowOnboardingForm() {
             </Button>
             <Button
               type="button"
-              disabled={importExtracting || aiImportAtLimit || agreementAtLimit}
+              disabled={!csrfReady || importExtracting || aiImportAtLimit || agreementAtLimit}
               onClick={handleImportExtract}
             >
               {importExtracting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1413,7 +1420,7 @@ export function WorkflowOnboardingForm() {
             </Button>
             <Button
               type="button"
-              disabled={!selectedTemplate || isLoading || agreementAtLimit}
+              disabled={!csrfReady || !selectedTemplate || isLoading || agreementAtLimit}
               onClick={handleTemplateContinue}
             >
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1460,7 +1467,7 @@ export function WorkflowOnboardingForm() {
             <Button type="button" variant="ghost" onClick={() => setStep('agreement_review')}>
               Back
             </Button>
-            <Button type="button" disabled={!selectedUseCase} onClick={handleUseCaseContinue}>
+            <Button type="button" disabled={!csrfReady || !selectedUseCase} onClick={handleUseCaseContinue}>
               Continue
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -1545,7 +1552,7 @@ export function WorkflowOnboardingForm() {
                 <Button type="button" variant="ghost" onClick={() => setStep('start_method')}>
                   Back
                 </Button>
-                <Button type="submit" disabled={isLoading || agreementAtLimit}>
+                <Button type="submit" disabled={!csrfReady || isLoading || agreementAtLimit}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Continue
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -1629,12 +1636,16 @@ export function WorkflowOnboardingForm() {
               <Button
                 type="button"
                 variant="outline"
-                disabled={isLoading}
+                disabled={!csrfReady || isLoading}
                 onClick={() => onParticipantsContinue(true)}
               >
                 Skip for now
               </Button>
-              <Button type="button" disabled={isLoading} onClick={() => onParticipantsContinue(false)}>
+              <Button
+                type="button"
+                disabled={!csrfReady || isLoading}
+                onClick={() => onParticipantsContinue(false)}
+              >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Analyze Agreement
                 <Sparkles className="ml-2 h-4 w-4" />
@@ -1685,7 +1696,7 @@ export function WorkflowOnboardingForm() {
             }
           />
           <div className="flex justify-end">
-            <Button type="button" disabled={isLoading} onClick={handleAgreementReviewContinue}>
+            <Button type="button" disabled={!csrfReady || isLoading} onClick={handleAgreementReviewContinue}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Continue
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -1723,7 +1734,11 @@ export function WorkflowOnboardingForm() {
             <Button type="button" variant="ghost" onClick={() => setStep('use_case')}>
               Back
             </Button>
-            <Button type="button" disabled={!collectionPreference || isLoading} onClick={onFundingContinue}>
+            <Button
+              type="button"
+              disabled={!csrfReady || !collectionPreference || isLoading}
+              onClick={onFundingContinue}
+            >
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Continue
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -1854,12 +1869,16 @@ export function WorkflowOnboardingForm() {
               <Button
                 type="button"
                 variant="outline"
-                disabled={isLoading}
+                disabled={!csrfReady || isLoading}
                 onClick={finishOnboardingWithProviders}
               >
                 Skip for now
               </Button>
-              <Button type="button" disabled={isLoading} onClick={finishOnboardingWithProviders}>
+              <Button
+                type="button"
+                disabled={!csrfReady || isLoading}
+                onClick={finishOnboardingWithProviders}
+              >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Continue
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -1897,7 +1916,7 @@ export function WorkflowOnboardingForm() {
           <OnboardingPricingPanel
             selectedPlanId={selectedPlanId}
             onSelectPlan={handlePlanSelect}
-            checkoutLoading={billingCheckoutLoading}
+            checkoutLoading={billingCheckoutLoading || !csrfReady}
           />
 
           {selectedPlanId === 'professional' || selectedPlanId === 'growth' ? (
@@ -1920,7 +1939,7 @@ export function WorkflowOnboardingForm() {
               <span />
             )}
             {selectedPlanId === 'starter' ? (
-              <Button type="button" disabled={isLoading} onClick={finishOnboarding}>
+              <Button type="button" disabled={!csrfReady || isLoading} onClick={finishOnboarding}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Start Using Provvypay
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -1928,7 +1947,7 @@ export function WorkflowOnboardingForm() {
             ) : selectedPlanId === 'professional' || selectedPlanId === 'growth' ? (
               <Button
                 type="button"
-                disabled={billingCheckoutLoading}
+                disabled={!csrfReady || billingCheckoutLoading}
                 onClick={() => initiateBillingCheckout(selectedPlanId as SaasCheckoutPlan)}
               >
                 {billingCheckoutLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
