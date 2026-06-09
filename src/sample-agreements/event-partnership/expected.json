@@ -1,0 +1,24 @@
+{
+  "commercialRelationshipType": "event-partnership",
+  "category": "partnership",
+  "difficulty": "medium",
+  "parties": [
+    { "name": "Luna Hospitality Group Pty Ltd", "role": "Party A" },
+    { "name": "Rhythm Media Pty Ltd", "role": "Party B" }
+  ],
+  "roles": [
+    { "party": "Luna Hospitality Group Pty Ltd", "role": "venue and bar operator" },
+    { "party": "Rhythm Media Pty Ltd", "role": "media and artist booking partner" }
+  ],
+  "revenueSplits": [
+    { "party": "Luna Hospitality Group Pty Ltd", "percentage": 50, "basis": "Net Profit" },
+    { "party": "Rhythm Media Pty Ltd", "percentage": 50, "basis": "Net Profit" }
+  ],
+  "paymentConditions": [
+    { "description": "Receipts to joint operating account managed by Luna" },
+    { "description": "Profit distributions within 10 business days after each show reconciliation" }
+  ],
+  "obligationCount": 6,
+  "riskCount": 3,
+  "missingClauseCount": 3
+}

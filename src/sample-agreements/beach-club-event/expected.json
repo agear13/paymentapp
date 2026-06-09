@@ -1,0 +1,24 @@
+{
+  "commercialRelationshipType": "beach-club-event",
+  "category": "event",
+  "difficulty": "medium",
+  "parties": [
+    { "name": "Azure Beach Club Pty Ltd", "role": "Beach Club" },
+    { "name": "Sunset Sessions Pty Ltd", "role": "Event Producer" }
+  ],
+  "roles": [
+    { "party": "Sunset Sessions Pty Ltd", "role": "event producer" },
+    { "party": "Azure Beach Club Pty Ltd", "role": "venue host" }
+  ],
+  "revenueSplits": [
+    { "party": "Azure Beach Club Pty Ltd", "percentage": 100, "basis": "F&B sales through Beach Club POS" },
+    { "party": "Sunset Sessions Pty Ltd", "percentage": 100, "basis": "merchandise sales" }
+  ],
+  "paymentConditions": [
+    { "description": "Facility access fee AUD $4,000 per Sunday" },
+    { "description": "Fee invoiced 7 days before each Sunday; payable within 3 business days" }
+  ],
+  "obligationCount": 6,
+  "riskCount": 3,
+  "missingClauseCount": 2
+}

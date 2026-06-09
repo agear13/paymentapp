@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2026-06-09T00:00:00.000Z",
+  "agreementCount": 20,
+  "categoryCounts": {
+    "revenueShare": 5,
+    "event": 5,
+    "service": 5,
+    "partnership": 5
+  },
+  "difficultyCounts": {
+    "simple": 5,
+    "medium": 10,
+    "complex": 5
+  },
+  "expectedAverageObligationCount": 5.85,
+  "expectedAverageRiskCount": 3.35,
+  "agreements": [
+    { "id": "promoter-revenue-share", "category": "revenueShare", "difficulty": "simple", "obligationCount": 5, "riskCount": 2, "missingClauseCount": 2 },
+    { "id": "promoter-dj-revenue-share", "category": "revenueShare", "difficulty": "medium", "obligationCount": 7, "riskCount": 4, "missingClauseCount": 3 },
+    { "id": "venue-sponsorship", "category": "revenueShare", "difficulty": "medium", "obligationCount": 6, "riskCount": 3, "missingClauseCount": 2 },
+    { "id": "dj-performance", "category": "revenueShare", "difficulty": "medium", "obligationCount": 5, "riskCount": 3, "missingClauseCount": 2 },
+    { "id": "ticketing-partnership", "category": "revenueShare", "difficulty": "complex", "obligationCount": 9, "riskCount": 6, "missingClauseCount": 4 },
+    { "id": "venue-hire", "category": "event", "difficulty": "simple", "obligationCount": 4, "riskCount": 2, "missingClauseCount": 3 },
+    { "id": "entertainment-booking", "category": "event", "difficulty": "simple", "obligationCount": 4, "riskCount": 2, "missingClauseCount": 2 },
+    { "id": "beach-club-event", "category": "event", "difficulty": "medium", "obligationCount": 6, "riskCount": 3, "missingClauseCount": 2 },
+    { "id": "event-management", "category": "event", "difficulty": "medium", "obligationCount": 7, "riskCount": 3, "missingClauseCount": 3 },
+    { "id": "festival-partnership", "category": "event", "difficulty": "complex", "obligationCount": 9, "riskCount": 6, "missingClauseCount": 4 },
+    { "id": "contractor", "category": "service", "difficulty": "simple", "obligationCount": 4, "riskCount": 1, "missingClauseCount": 2 },
+    { "id": "security-services", "category": "service", "difficulty": "simple", "obligationCount": 4, "riskCount": 2, "missingClauseCount": 2 },
+    { "id": "food-vendor", "category": "service", "difficulty": "medium", "obligationCount": 5, "riskCount": 3, "missingClauseCount": 2 },
+    { "id": "beverage-supplier", "category": "service", "difficulty": "medium", "obligationCount": 6, "riskCount": 4, "missingClauseCount": 3 },
+    { "id": "photographer", "category": "service", "difficulty": "complex", "obligationCount": 7, "riskCount": 4, "missingClauseCount": 3 },
+    { "id": "sponsorship", "category": "partnership", "difficulty": "medium", "obligationCount": 5, "riskCount": 2, "missingClauseCount": 2 },
+    { "id": "event-partnership", "category": "partnership", "difficulty": "medium", "obligationCount": 6, "riskCount": 3, "missingClauseCount": 3 },
+    { "id": "marketing-agency", "category": "partnership", "difficulty": "medium", "obligationCount": 6, "riskCount": 2, "missingClauseCount": 2 },
+    { "id": "influencer-partnership", "category": "partnership", "difficulty": "complex", "obligationCount": 8, "riskCount": 5, "missingClauseCount": 3 },
+    { "id": "production-services", "category": "partnership", "difficulty": "complex", "obligationCount": 10, "riskCount": 7, "missingClauseCount": 4 }
+  ]
+}

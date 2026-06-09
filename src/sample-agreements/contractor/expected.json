@@ -1,0 +1,21 @@
+{
+  "commercialRelationshipType": "contractor",
+  "category": "service",
+  "difficulty": "simple",
+  "parties": [
+    { "name": "Signal Stage Pty Ltd", "role": "Client" },
+    { "name": "Marcus Reid trading as Reid AV", "role": "Contractor" }
+  ],
+  "roles": [
+    { "party": "Marcus Reid trading as Reid AV", "role": "independent AV contractor" },
+    { "party": "Signal Stage Pty Ltd", "role": "client" }
+  ],
+  "revenueSplits": [],
+  "paymentConditions": [
+    { "description": "Flat fee AUD $1,450 plus GST" },
+    { "description": "Payment within 14 days of valid tax invoice" }
+  ],
+  "obligationCount": 4,
+  "riskCount": 1,
+  "missingClauseCount": 2
+}

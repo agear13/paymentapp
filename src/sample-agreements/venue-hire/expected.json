@@ -1,0 +1,22 @@
+{
+  "commercialRelationshipType": "venue-hire",
+  "category": "event",
+  "difficulty": "simple",
+  "parties": [
+    { "name": "The Grand Hall Pty Ltd", "role": "Venue" },
+    { "name": "Aurora Corporate Pty Ltd", "role": "Hirer" }
+  ],
+  "roles": [
+    { "party": "The Grand Hall Pty Ltd", "role": "venue lessor" },
+    { "party": "Aurora Corporate Pty Ltd", "role": "event hirer" }
+  ],
+  "revenueSplits": [],
+  "paymentConditions": [
+    { "description": "50% deposit on signing" },
+    { "description": "Balance due 14 days before event date" },
+    { "description": "Fixed hire fee AUD $8,500 exclusive of GST" }
+  ],
+  "obligationCount": 4,
+  "riskCount": 2,
+  "missingClauseCount": 3
+}

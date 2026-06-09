@@ -1,0 +1,23 @@
+{
+  "commercialRelationshipType": "entertainment-booking",
+  "category": "event",
+  "difficulty": "simple",
+  "parties": [
+    { "name": "Coastal Festivals Ltd", "role": "Promoter" },
+    { "name": "The Marlowes", "role": "Artist" },
+    { "name": "Red Lane Artists", "role": "Artist Representative" }
+  ],
+  "roles": [
+    { "party": "The Marlowes", "role": "headline performer" },
+    { "party": "Coastal Festivals Ltd", "role": "festival promoter" }
+  ],
+  "revenueSplits": [],
+  "paymentConditions": [
+    { "description": "Artist fee AUD $18,000 GST inclusive" },
+    { "description": "50% deposit on signing" },
+    { "description": "50% balance no later than 7 days before performance" }
+  ],
+  "obligationCount": 4,
+  "riskCount": 2,
+  "missingClauseCount": 2
+}

@@ -1,0 +1,24 @@
+{
+  "commercialRelationshipType": "food-vendor",
+  "category": "service",
+  "difficulty": "medium",
+  "parties": [
+    { "name": "Riverfront Markets Pty Ltd", "role": "Venue Operator" },
+    { "name": "Taco Libre Pty Ltd", "role": "Vendor" }
+  ],
+  "roles": [
+    { "party": "Taco Libre Pty Ltd", "role": "food concession vendor" },
+    { "party": "Riverfront Markets Pty Ltd", "role": "market venue operator" }
+  ],
+  "revenueSplits": [
+    { "party": "Riverfront Markets Pty Ltd", "percentage": 12, "basis": "gross food sales excluding GST" }
+  ],
+  "paymentConditions": [
+    { "description": "Site fee AUD $850 per night plus GST due 48 hours before each market" },
+    { "description": "Sales participation remitted within 5 business days after each night" },
+    { "description": "Nightly sales summary by 10:00 am following day" }
+  ],
+  "obligationCount": 5,
+  "riskCount": 3,
+  "missingClauseCount": 2
+}

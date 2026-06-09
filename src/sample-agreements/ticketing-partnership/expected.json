@@ -1,0 +1,29 @@
+{
+  "commercialRelationshipType": "ticketing-partnership",
+  "category": "revenueShare",
+  "difficulty": "complex",
+  "parties": [
+    { "name": "Arena One Pty Ltd", "role": "Venue" },
+    { "name": "Frontline Live Pty Ltd", "role": "Promoter" },
+    { "name": "TicketRiver Australia Pty Ltd", "role": "Ticketing Platform" }
+  ],
+  "roles": [
+    { "party": "TicketRiver Australia Pty Ltd", "role": "exclusive ticketing agent" },
+    { "party": "Frontline Live Pty Ltd", "role": "tour promoter" },
+    { "party": "Arena One Pty Ltd", "role": "arena venue operator" }
+  ],
+  "revenueSplits": [
+    { "party": "TicketRiver Australia Pty Ltd", "percentage": 3.25, "basis": "GTR service fee plus per-ticket fee" },
+    { "party": "Arena One Pty Ltd", "percentage": 12, "basis": "NCR after ticketing fees" },
+    { "party": "Frontline Live Pty Ltd", "percentage": 62, "basis": "balance after recoups" },
+    { "party": "Arena One Pty Ltd", "percentage": 38, "basis": "balance after recoups" }
+  ],
+  "paymentConditions": [
+    { "description": "Settlement within 5 business days after each show" },
+    { "description": "Promoter marketing recoup up to AUD $180,000 or 18% of remaining pool" },
+    { "description": "Chargebacks above 1.2% of GTR funded by Promoter until reconciled" }
+  ],
+  "obligationCount": 9,
+  "riskCount": 6,
+  "missingClauseCount": 4
+}

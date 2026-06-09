@@ -1236,3 +1236,249 @@ model deal_network_pilot_participants {
 
   @@index([deal_id])
 }
+
+// ============================================================================
+// AI Obligation Report (Agreement Analyzer) — MVP
+// Ticket models: Lead, AgreementUpload, AIExtraction, ObligationReport,
+// LeadScore, EmailEvent
+// ============================================================================
+
+enum ObligationReportLeadLifecycleStage {
+  NEW
+  REPORT_GENERATED
+  REPORT_VIEWED
+  DEMO_BOOKED
+  QUALIFIED
+  CUSTOMER
+}
+
+enum AgreementUploadStatus {
+  UPLOADED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ObligationReportEmailType {
+  REPORT_READY
+  DEMO_INVITE
+  FOLLOW_UP
+}
+
+enum AgreementReportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum AgreementProcessingJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+/// Lead — prospect who submitted an agreement for AI analysis.
+///
+/// Lead deduplication (service layer; `email` is indexed but intentionally NOT unique):
+/// On each new agreement submission:
+/// 1. Find an existing lead by email.
+/// 2. If found → reuse that lead and attach a new `agreement_uploads` row.
+/// 3. If not found → create the lead, then create the upload.
+/// One lead may own many uploads; avoid creating duplicate lead rows for the same email.
+model obligation_report_leads {
+  id              String                             @id @default(uuid()) @db.Uuid
+  first_name      String                             @db.VarChar(255)
+  last_name       String                             @db.VarChar(255)
+  email           String                             @db.VarChar(255)
+  company_name    String?                            @db.VarChar(255)
+  business_type   String?                            @db.VarChar(128)
+  source          String?                            @db.VarChar(128)
+  lifecycle_stage ObligationReportLeadLifecycleStage @default(NEW)
+  /// Optional Clerk/Supabase user id when the lead creates an authenticated account.
+  user_id         String?                            @db.VarChar(255)
+  utm_source      String?                            @db.VarChar(255)
+  utm_medium      String?                            @db.VarChar(255)
+  utm_campaign    String?                            @db.VarChar(255)
+  utm_content     String?                            @db.VarChar(255)
+  utm_term        String?                            @db.VarChar(255)
+  referrer        String?                            @db.Text
+  landing_page    String?                            @db.Text
+  first_touch_at  DateTime?                          @db.Timestamptz(6)
+  created_at      DateTime                           @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime                           @updatedAt @db.Timestamptz(6)
+
+  agreement_uploads                 agreement_uploads[]
+  obligation_report_lead_scores     obligation_report_lead_scores[]
+  obligation_report_email_events    obligation_report_email_events[]
+  agreement_analyzer_demo_bookings    agreement_analyzer_demo_bookings[]
+
+  @@index([email])
+  @@index([created_at(sort: Desc)])
+  @@index([user_id])
+  @@index([lifecycle_stage])
+  @@index([utm_source])
+  @@index([utm_campaign])
+}
+
+/// AgreementUpload — uploaded commercial agreement document (R2).
+/// Created under an existing or newly created `obligation_report_leads` row (see lead deduplication above).
+model agreement_uploads {
+  id                String                @id @default(uuid()) @db.Uuid
+  lead_id           String                @db.Uuid
+  original_filename String                @db.VarChar(512)
+  mime_type         String                @db.VarChar(128)
+  file_size_bytes   Int
+  storage_key       String                @db.VarChar(1024)
+  storage_url       String?               @db.Text
+  upload_status     AgreementUploadStatus @default(UPLOADED)
+  uploaded_at       DateTime?             @db.Timestamptz(6)
+  processed_at      DateTime?             @db.Timestamptz(6)
+  created_at        DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime              @updatedAt @db.Timestamptz(6)
+
+  lead                         obligation_report_leads      @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  agreement_ai_extractions     agreement_ai_extractions[]
+  agreement_obligation_reports agreement_obligation_reports[]
+  agreement_processing_jobs    agreement_processing_jobs[]
+
+  @@index([lead_id])
+  @@index([upload_status])
+}
+
+/// AIExtraction — raw AI extraction output for an upload (supports retries / model changes).
+model agreement_ai_extractions {
+  id                     String   @id @default(uuid()) @db.Uuid
+  upload_id              String   @db.Uuid
+  extracted_text         String?  @db.Text
+  extraction_json        Json?
+  confidence_score       Decimal? @db.Decimal(6, 4)
+  model_name             String?  @db.VarChar(128)
+  processing_duration_ms Int?
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime @updatedAt @db.Timestamptz(6)
+
+  upload agreement_uploads @relation(fields: [upload_id], references: [id], onDelete: Cascade)
+
+  @@index([upload_id])
+}
+
+/// ObligationReport — user-facing AI obligation report (versioned; multiple per upload allowed).
+/// Public access: `/agreement-analyzer/report/{report_access_token}` (not the UUID `id`).
+model agreement_obligation_reports {
+  id                         String                @id @default(uuid()) @db.Uuid
+  upload_id                  String                @db.Uuid
+  /// Opaque public slug, e.g. `rpt_8f3h2k1m9x`. Nullable only for rows created before token backfill.
+  report_access_token        String?               @unique @db.VarChar(32)
+  status                     AgreementReportStatus @default(PENDING)
+  report_json                Json?
+  settlement_readiness_score Int?
+  report_version             String                @default("1") @db.VarChar(32)
+  viewed_at                  DateTime?             @db.Timestamptz(6)
+  created_at                 DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime              @updatedAt @db.Timestamptz(6)
+
+  upload                           agreement_uploads                  @relation(fields: [upload_id], references: [id], onDelete: Cascade)
+  agreement_analyzer_demo_bookings agreement_analyzer_demo_bookings[]
+  agreement_processing_jobs        agreement_processing_jobs[]
+
+  @@index([upload_id])
+  @@index([status])
+  @@index([created_at(sort: Desc)])
+}
+
+/// AgreementProcessingJob — durable queue row for background agreement extraction.
+model agreement_processing_jobs {
+  id            String                       @id @default(uuid()) @db.Uuid
+  upload_id     String                       @db.Uuid
+  report_id     String                       @db.Uuid
+  job_type      String                       @db.VarChar(50)
+  status        AgreementProcessingJobStatus @default(PENDING)
+  attempt_count Int                          @default(0)
+  max_attempts  Int                          @default(3)
+  last_error    String?                      @db.Text
+  locked_at     DateTime?                    @db.Timestamptz(6)
+  locked_by     String?                      @db.VarChar(255)
+  run_after     DateTime                     @default(now()) @db.Timestamptz(6)
+  created_at    DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime                     @updatedAt @db.Timestamptz(6)
+  completed_at  DateTime?                    @db.Timestamptz(6)
+
+  upload agreement_uploads              @relation(fields: [upload_id], references: [id], onDelete: Cascade)
+  report agreement_obligation_reports @relation(fields: [report_id], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([run_after])
+  @@index([created_at(sort: Desc)])
+  @@index([status, run_after])
+}
+
+/// DemoBooking — Calendly demo attributed to an obligation report lead.
+model agreement_analyzer_demo_bookings {
+  id                String   @id @default(uuid()) @db.Uuid
+  lead_id           String   @db.Uuid
+  report_id         String   @db.Uuid
+  calendly_event_id String   @unique @db.VarChar(255)
+  invitee_name      String   @db.VarChar(255)
+  invitee_email     String   @db.VarChar(255)
+  meeting_time      DateTime @db.Timestamptz(6)
+  booking_source    String   @db.VarChar(100)
+  tracking_token    String   @db.VarChar(1000)
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @updatedAt @db.Timestamptz(6)
+
+  lead   obligation_report_leads      @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  report agreement_obligation_reports @relation(fields: [report_id], references: [id], onDelete: Cascade)
+
+  @@index([lead_id])
+  @@index([report_id])
+  @@index([meeting_time])
+  @@index([created_at(sort: Desc)])
+}
+
+/// LeadScore — sales qualification metadata derived from agreement analysis.
+model obligation_report_lead_scores {
+  id                     String   @id @default(uuid()) @db.Uuid
+  lead_id                String   @db.Uuid
+  complexity_score       Int?
+  revenue_share_detected Boolean  @default(false)
+  hospitality_detected   Boolean  @default(false)
+  event_detected         Boolean  @default(false)
+  accountant_detected    Boolean  @default(false)
+  multi_party_detected   Boolean  @default(false)
+  party_count            Int?
+  obligation_count       Int?
+  risk_count             Int?
+  overall_score          Int?
+  recommended_use_case   String?  @db.VarChar(128)
+  priority_band          String?  @db.VarChar(32)
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime @updatedAt @db.Timestamptz(6)
+
+  lead obligation_report_leads @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+
+  @@index([lead_id])
+  @@index([overall_score])
+  @@index([revenue_share_detected])
+  @@index([priority_band])
+}
+
+/// EmailEvent — outbound email delivery / engagement for obligation report funnel.
+model obligation_report_email_events {
+  id                  String                    @id @default(uuid()) @db.Uuid
+  lead_id             String                    @db.Uuid
+  email_type          ObligationReportEmailType
+  provider_message_id String?                   @db.VarChar(255)
+  delivered_at        DateTime?                 @db.Timestamptz(6)
+  opened_at           DateTime?                 @db.Timestamptz(6)
+  clicked_at          DateTime?                 @db.Timestamptz(6)
+  bounced_at          DateTime?                 @db.Timestamptz(6)
+  created_at          DateTime                  @default(now()) @db.Timestamptz(6)
+
+  lead obligation_report_leads @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+
+  @@index([lead_id])
+  @@index([email_type])
+  @@index([provider_message_id])
+}

@@ -1,0 +1,21 @@
+{
+  "commercialRelationshipType": "sponsorship",
+  "category": "partnership",
+  "difficulty": "medium",
+  "parties": [
+    { "name": "Urban Run Series Pty Ltd", "role": "Organiser" },
+    { "name": "Nova Bank Ltd", "role": "Sponsor" }
+  ],
+  "roles": [
+    { "party": "Nova Bank Ltd", "role": "gold sponsor" },
+    { "party": "Urban Run Series Pty Ltd", "role": "event rights holder" }
+  ],
+  "revenueSplits": [],
+  "paymentConditions": [
+    { "description": "Sponsorship fee AUD $120,000 plus GST" },
+    { "description": "40% on signing, 30% at 120 days before first event, 30% at 30 days before first event" }
+  ],
+  "obligationCount": 5,
+  "riskCount": 2,
+  "missingClauseCount": 2
+}

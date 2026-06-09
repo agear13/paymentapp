@@ -1,0 +1,23 @@
+{
+  "commercialRelationshipType": "dj-performance",
+  "category": "revenueShare",
+  "difficulty": "medium",
+  "parties": [
+    { "name": "The Dock Venue Pty Ltd", "role": "Venue" },
+    { "name": "Nina Sol Entertainment", "role": "DJ" }
+  ],
+  "roles": [
+    { "party": "Nina Sol Entertainment", "role": "performing DJ" },
+    { "party": "The Dock Venue Pty Ltd", "role": "venue operator" }
+  ],
+  "revenueSplits": [
+    { "party": "Nina Sol Entertainment", "percentage": 15, "basis": "Net Bar Sales 9:00 pm to 3:00 am" }
+  ],
+  "paymentConditions": [
+    { "description": "Fixed performance fee AUD $3,500 plus GST due 7 days before event" },
+    { "description": "Bar share paid within 10 business days after event" }
+  ],
+  "obligationCount": 5,
+  "riskCount": 3,
+  "missingClauseCount": 2
+}

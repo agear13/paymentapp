@@ -1,0 +1,30 @@
+{
+  "commercialRelationshipType": "promoter-dj-revenue-share",
+  "category": "revenueShare",
+  "difficulty": "medium",
+  "parties": [
+    { "name": "Basement Club Pty Ltd", "role": "Venue" },
+    { "name": "Voltage Promotions Pty Ltd", "role": "Promoter" },
+    { "name": "DJ Cassidy Tran", "role": "Artist" }
+  ],
+  "roles": [
+    { "party": "Voltage Promotions Pty Ltd", "role": "promoter and settlement administrator" },
+    { "party": "DJ Cassidy Tran", "role": "resident DJ artist" },
+    { "party": "Basement Club Pty Ltd", "role": "venue operator" }
+  ],
+  "revenueSplits": [
+    { "party": "Voltage Promotions Pty Ltd", "percentage": 45, "basis": "AGR after production reserve" },
+    { "party": "DJ Cassidy Tran", "percentage": 25, "basis": "AGR after production reserve" },
+    { "party": "Basement Club Pty Ltd", "percentage": 30, "basis": "AGR after production reserve" },
+    { "party": "Voltage Promotions Pty Ltd", "percentage": 60, "basis": "guarantee shortfall top-up" },
+    { "party": "Basement Club Pty Ltd", "percentage": 40, "basis": "guarantee shortfall top-up" }
+  ],
+  "paymentConditions": [
+    { "description": "AUD $1,200 venue production reserve deducted before split" },
+    { "description": "Minimum artist guarantee AUD $2,000 per night" },
+    { "description": "Settlement sheet within 48 hours; payment within 5 business days" }
+  ],
+  "obligationCount": 7,
+  "riskCount": 4,
+  "missingClauseCount": 3
+}

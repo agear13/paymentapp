@@ -1,0 +1,26 @@
+{
+  "commercialRelationshipType": "influencer-partnership",
+  "category": "partnership",
+  "difficulty": "complex",
+  "parties": [
+    { "name": "GlowFest Pty Ltd", "role": "Festival Owner" },
+    { "name": "Chloe Nguyen", "role": "Creator" },
+    { "name": "Social Bridge Management Pty Ltd", "role": "Manager" }
+  ],
+  "roles": [
+    { "party": "Chloe Nguyen", "role": "influencer content creator" },
+    { "party": "Social Bridge Management Pty Ltd", "role": "creator manager" },
+    { "party": "GlowFest Pty Ltd", "role": "festival brand owner" }
+  ],
+  "revenueSplits": [
+    { "party": "Chloe Nguyen", "percentage": 6, "basis": "Net Ticket Revenue via GLOWCHLOE code" },
+    { "party": "Chloe Nguyen", "percentage": 2, "basis": "tier bonus above AUD $250,000 attributed sales" }
+  ],
+  "paymentConditions": [
+    { "description": "Base fee AUD $8,500 inclusive of GST for eight deliverables" },
+    { "description": "Commission paid 30 days after month-end" }
+  ],
+  "obligationCount": 8,
+  "riskCount": 5,
+  "missingClauseCount": 3
+}

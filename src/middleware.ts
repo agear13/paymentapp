@@ -47,6 +47,7 @@ const RESTRICTED_PATH_PREFIXES = [
   '/dashboard/programs',
   '/dashboard/consultant',
   '/dashboard/platform-preview',
+  '/dashboard/agreement-analyzer',
 ];
 
 /**

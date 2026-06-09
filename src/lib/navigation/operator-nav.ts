@@ -154,6 +154,12 @@ export function getOperatorNavSections(
           adminOnly: true,
         },
         {
+          title: 'Agreement Analyzer',
+          href: '/dashboard/agreement-analyzer',
+          icon: FileCheck,
+          adminOnly: true,
+        },
+        {
           title: 'Admin operations',
           href: '/dashboard/admin',
           icon: Activity,
@@ -260,6 +266,8 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
       path.startsWith('/dashboard/settings') ||
       path === '/dashboard/admin' ||
       path.startsWith('/dashboard/admin/') ||
+      path === '/dashboard/agreement-analyzer' ||
+      path.startsWith('/dashboard/agreement-analyzer/') ||
       path === '/dashboard/partners/rules' ||
       path.startsWith('/dashboard/partners/rules/') ||
       path === '/dashboard/partners/referral-links' ||

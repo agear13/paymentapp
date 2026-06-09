@@ -52,10 +52,19 @@ const envSchema = z.object({
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
 
+  // OpenAI — Agreement Analyzer extraction (optional until extraction is enabled)
+  OPENAI_API_KEY: z.string().optional(),
+
   // Email (optional)
   RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().optional(),
   /** Resend webhooks use Svix; set signing secret from Resend dashboard to verify requests */
   RESEND_WEBHOOK_SECRET: z.string().optional(),
+  /** Calendly or other demo booking URL for Agreement Analyzer nurture CTAs */
+  AGREEMENT_ANALYZER_DEMO_URL: z.string().url().optional(),
+  /** Calendly webhook signing key from webhook subscription creation */
+  CALENDLY_WEBHOOK_SIGNING_KEY: z.string().optional(),
 
   // Wise (optional – for payment link Wise rail)
   WISE_API_TOKEN: z.string().optional(),
@@ -91,8 +100,11 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET_NAME: z.string().optional(),
   R2_PUBLIC_URL: z.string().url().optional(),
+  R2_PUBLIC_BASE_URL: z.string().url().optional(),
+  R2_ENDPOINT: z.string().url().optional(),
   ASSET_CDN_URL: z.string().url().optional(),
   STORAGE_ALLOW_LOCAL_FALLBACK: z.string().optional(),
+  STORAGE_PROVIDER: z.enum(['local', 'r2']).optional(),
 });
 
 /** Placeholders merged under process.env for build-time and optional local RELAX mode. */
@@ -121,8 +133,13 @@ function buildTimePlaceholderRecord(): Record<string, string | undefined> {
     SESSION_SECRET: process.env.SESSION_SECRET,
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
+    EMAIL_FROM: process.env.EMAIL_FROM,
+    RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
     RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+    AGREEMENT_ANALYZER_DEMO_URL: process.env.AGREEMENT_ANALYZER_DEMO_URL,
+    CALENDLY_WEBHOOK_SIGNING_KEY: process.env.CALENDLY_WEBHOOK_SIGNING_KEY,
     ENABLE_HEDERA_PAYMENTS: process.env.ENABLE_HEDERA_PAYMENTS || 'true',
     ENABLE_HEDERA_STABLECOINS: process.env.ENABLE_HEDERA_STABLECOINS || 'false',
     ENABLE_XERO_SYNC: process.env.ENABLE_XERO_SYNC || 'true',
@@ -143,8 +160,11 @@ function buildTimePlaceholderRecord(): Record<string, string | undefined> {
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
     R2_BUCKET_NAME: process.env.R2_BUCKET_NAME,
     R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
+    R2_PUBLIC_BASE_URL: process.env.R2_PUBLIC_BASE_URL,
+    R2_ENDPOINT: process.env.R2_ENDPOINT,
     ASSET_CDN_URL: process.env.ASSET_CDN_URL,
     STORAGE_ALLOW_LOCAL_FALLBACK: process.env.STORAGE_ALLOW_LOCAL_FALLBACK,
+    STORAGE_PROVIDER: process.env.STORAGE_PROVIDER,
   };
 }
 
@@ -274,9 +294,19 @@ export const config = {
   // Email
   email: {
     apiKey: env.RESEND_API_KEY,
+    from: env.EMAIL_FROM ?? env.RESEND_FROM_EMAIL,
     webhookSecret: env.RESEND_WEBHOOK_SECRET,
     isConfigured: !!env.RESEND_API_KEY,
     webhooksVerified: !!env.RESEND_WEBHOOK_SECRET,
+  },
+
+  agreementAnalyzer: {
+    demoUrl: env.AGREEMENT_ANALYZER_DEMO_URL,
+    calendlyWebhookSigningKey: env.CALENDLY_WEBHOOK_SIGNING_KEY,
+  },
+
+  agreementUploadStorage: {
+    provider: env.STORAGE_PROVIDER ?? 'local',
   },
   
   // Wise

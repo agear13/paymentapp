@@ -1,0 +1,23 @@
+{
+  "commercialRelationshipType": "photographer",
+  "category": "service",
+  "difficulty": "complex",
+  "parties": [
+    { "name": "Kite Music Pty Ltd", "role": "Promoter" },
+    { "name": "Lena Ortiz Photography Pty Ltd", "role": "Photographer" }
+  ],
+  "roles": [
+    { "party": "Lena Ortiz Photography Pty Ltd", "role": "event photographer" },
+    { "party": "Kite Music Pty Ltd", "role": "festival promoter client" }
+  ],
+  "revenueSplits": [],
+  "paymentConditions": [
+    { "description": "Day rate AUD $2,200 per day for 2 days" },
+    { "description": "Rush delivery fee AUD $900 for 24-hour gallery delivery" },
+    { "description": "Licensing uplift AUD $1,200 for 12-month marketing licence" },
+    { "description": "Invoices payable within 14 days" }
+  ],
+  "obligationCount": 7,
+  "riskCount": 4,
+  "missingClauseCount": 3
+}

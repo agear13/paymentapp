@@ -1,0 +1,26 @@
+{
+  "commercialRelationshipType": "production-services",
+  "category": "partnership",
+  "difficulty": "complex",
+  "parties": [
+    { "name": "Stagecraft Global Pty Ltd", "role": "Production Partner" },
+    { "name": "Harbour Lights Pty Ltd", "role": "Rights Owner" }
+  ],
+  "roles": [
+    { "party": "Stagecraft Global Pty Ltd", "role": "integrated production services partner" },
+    { "party": "Harbour Lights Pty Ltd", "role": "event rights owner" }
+  ],
+  "revenueSplits": [
+    { "party": "Harbour Lights Pty Ltd", "percentage": 55, "basis": "Net Event Profit after recoveries" },
+    { "party": "Stagecraft Global Pty Ltd", "percentage": 45, "basis": "Net Event Profit after recoveries" },
+    { "party": "Stagecraft Global Pty Ltd", "percentage": 8, "basis": "priority return on deferred production credit" }
+  ],
+  "paymentConditions": [
+    { "description": "Production budget cap AUD $4.2 million exclusive of GST" },
+    { "description": "Rights Owner funds 65% upfront per approved cash flow" },
+    { "description": "Fortnightly drawdowns against approved budget" }
+  ],
+  "obligationCount": 10,
+  "riskCount": 7,
+  "missingClauseCount": 4
+}

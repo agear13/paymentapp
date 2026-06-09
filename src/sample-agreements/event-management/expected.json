@@ -1,0 +1,22 @@
+{
+  "commercialRelationshipType": "event-management",
+  "category": "event",
+  "difficulty": "medium",
+  "parties": [
+    { "name": "FinTech Australia Ltd", "role": "Client" },
+    { "name": "Summit Co Pty Ltd", "role": "Event Manager" }
+  ],
+  "roles": [
+    { "party": "Summit Co Pty Ltd", "role": "event management services provider" },
+    { "party": "FinTech Australia Ltd", "role": "event owner client" }
+  ],
+  "revenueSplits": [],
+  "paymentConditions": [
+    { "description": "Management fee AUD $95,000 plus GST" },
+    { "description": "30% on signature, 40% at 90 days before event, 30% at 14 days before event" },
+    { "description": "Post-event reconciliation within 20 business days" }
+  ],
+  "obligationCount": 7,
+  "riskCount": 3,
+  "missingClauseCount": 3
+}

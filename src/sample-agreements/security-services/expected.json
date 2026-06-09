@@ -1,0 +1,21 @@
+{
+  "commercialRelationshipType": "security-services",
+  "category": "service",
+  "difficulty": "simple",
+  "parties": [
+    { "name": "Westside Venues Pty Ltd", "role": "Client" },
+    { "name": "Guardian Event Security Pty Ltd", "role": "Security Provider" }
+  ],
+  "roles": [
+    { "party": "Guardian Event Security Pty Ltd", "role": "security services provider" },
+    { "party": "Westside Venues Pty Ltd", "role": "venue client" }
+  ],
+  "revenueSplits": [],
+  "paymentConditions": [
+    { "description": "Fixed fee AUD $6,720 inclusive of GST" },
+    { "description": "Invoiced after event, payable within 7 days" }
+  ],
+  "obligationCount": 4,
+  "riskCount": 2,
+  "missingClauseCount": 2
+}

@@ -1,0 +1,24 @@
+{
+  "commercialRelationshipType": "promoter-revenue-share",
+  "category": "revenueShare",
+  "difficulty": "simple",
+  "parties": [
+    { "name": "Harbour Events Pty Ltd", "role": "Venue Operator" },
+    { "name": "Pulse Promotions Pty Ltd", "role": "Promoter" }
+  ],
+  "roles": [
+    { "party": "Pulse Promotions Pty Ltd", "role": "exclusive promoter" },
+    { "party": "Harbour Events Pty Ltd", "role": "venue operator" }
+  ],
+  "revenueSplits": [
+    { "party": "Pulse Promotions Pty Ltd", "percentage": 70, "basis": "Net Door Receipts" },
+    { "party": "Harbour Events Pty Ltd", "percentage": 30, "basis": "Net Door Receipts" }
+  ],
+  "paymentConditions": [
+    { "description": "Settlement statement due by 5:00 pm on second business day after each Event Night" },
+    { "description": "Venue Operator share paid within 3 business days after each Event Night" }
+  ],
+  "obligationCount": 5,
+  "riskCount": 2,
+  "missingClauseCount": 2
+}

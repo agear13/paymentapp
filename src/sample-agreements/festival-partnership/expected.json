@@ -1,0 +1,25 @@
+{
+  "commercialRelationshipType": "festival-partnership",
+  "category": "event",
+  "difficulty": "complex",
+  "parties": [
+    { "name": "Wide Sky Festivals Pty Ltd", "role": "Co-Producer A" },
+    { "name": "Southern Trails Pty Ltd", "role": "Co-Producer B" }
+  ],
+  "roles": [
+    { "party": "Wide Sky Festivals Pty Ltd", "role": "festival co-producer and council liaison lead" },
+    { "party": "Southern Trails Pty Ltd", "role": "festival co-producer and liquor licensing lead" }
+  ],
+  "revenueSplits": [
+    { "party": "Wide Sky Festivals Pty Ltd", "percentage": 50, "basis": "Distributable Cash after recoups" },
+    { "party": "Southern Trails Pty Ltd", "percentage": 50, "basis": "Distributable Cash after recoups" }
+  ],
+  "paymentConditions": [
+    { "description": "Initial capital call AUD $600,000 within 10 business days of signing" },
+    { "description": "Each party contributes 50% of approved funding rounds" },
+    { "description": "Distributable Cash paid quarterly after loan and advance recoup" }
+  ],
+  "obligationCount": 9,
+  "riskCount": 6,
+  "missingClauseCount": 4
+}

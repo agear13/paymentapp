@@ -1,0 +1,24 @@
+{
+  "commercialRelationshipType": "venue-sponsorship",
+  "category": "revenueShare",
+  "difficulty": "medium",
+  "parties": [
+    { "name": "Skyline Rooftop Bar Pty Ltd", "role": "Venue" },
+    { "name": "Pacific Spirits Australia Pty Ltd", "role": "Sponsor" }
+  ],
+  "roles": [
+    { "party": "Pacific Spirits Australia Pty Ltd", "role": "exclusive beverage sponsor" },
+    { "party": "Skyline Rooftop Bar Pty Ltd", "role": "venue host" }
+  ],
+  "revenueSplits": [
+    { "party": "Pacific Spirits Australia Pty Ltd", "percentage": 8, "basis": "Net Premium Mixer Sales" }
+  ],
+  "paymentConditions": [
+    { "description": "AUD $15,000 cash sponsorship" },
+    { "description": "Monthly sales reports by 5th business day of following month" },
+    { "description": "Revenue share paid 14 days after each report" }
+  ],
+  "obligationCount": 6,
+  "riskCount": 3,
+  "missingClauseCount": 2
+}

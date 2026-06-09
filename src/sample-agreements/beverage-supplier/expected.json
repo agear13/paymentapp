@@ -1,0 +1,24 @@
+{
+  "commercialRelationshipType": "beverage-supplier",
+  "category": "service",
+  "difficulty": "medium",
+  "parties": [
+    { "name": "Metro Arena Pty Ltd", "role": "Licensee" },
+    { "name": "Southern Draft Co Pty Ltd", "role": "Supplier" }
+  ],
+  "roles": [
+    { "party": "Southern Draft Co Pty Ltd", "role": "exclusive beverage supplier" },
+    { "party": "Metro Arena Pty Ltd", "role": "venue licensee" }
+  ],
+  "revenueSplits": [
+    { "party": "Southern Draft Co Pty Ltd", "amountPerLitre": 2.8, "basis": "rebate above 40,000 litres" }
+  ],
+  "paymentConditions": [
+    { "description": "Wholesale invoices payable 14 days from delivery" },
+    { "description": "Rebates credited quarterly" },
+    { "description": "Minimum annual throughput 32,000 litres or shortfall fee applies" }
+  ],
+  "obligationCount": 6,
+  "riskCount": 4,
+  "missingClauseCount": 3
+}

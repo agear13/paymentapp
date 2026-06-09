@@ -1,0 +1,24 @@
+{
+  "commercialRelationshipType": "marketing-agency",
+  "category": "partnership",
+  "difficulty": "medium",
+  "parties": [
+    { "name": "Electric Gardens Festival Pty Ltd", "role": "Client" },
+    { "name": "North & Co Digital Pty Ltd", "role": "Agency" }
+  ],
+  "roles": [
+    { "party": "North & Co Digital Pty Ltd", "role": "marketing agency" },
+    { "party": "Electric Gardens Festival Pty Ltd", "role": "festival client" }
+  ],
+  "revenueSplits": [
+    { "party": "North & Co Digital Pty Ltd", "percentage": 7.5, "basis": "media spend management fee" }
+  ],
+  "paymentConditions": [
+    { "description": "Monthly retainer AUD $14,500 plus GST" },
+    { "description": "Performance bonus AUD $5,000 if pre-sales exceed 15,000 by 1 December 2026" },
+    { "description": "Media spend deposits due 7 days before flight start" }
+  ],
+  "obligationCount": 6,
+  "riskCount": 2,
+  "missingClauseCount": 2
+}
