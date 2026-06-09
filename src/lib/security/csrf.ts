@@ -14,6 +14,7 @@ import {
   isCsrfExemptPath,
   isMutatingMethod,
 } from '@/lib/security/csrf-policy';
+import { diagnoseCsrfValidation } from '@/lib/security/csrf-diag.server';
 
 function getCsrfSecret(): string {
   return resolveCsrfSecret();
@@ -80,42 +81,12 @@ function getTokenFromHeader(request: NextRequest): string | null {
  * @returns True if CSRF token is valid
  */
 export function validateCSRFToken(request: NextRequest): boolean {
-  // Get token from cookie
-  const cookieToken = getTokenFromCookie(request);
-  if (!cookieToken) {
-    log.warn('CSRF validation failed: No token in cookie');
-    return false;
-  }
+  return diagnoseCsrfValidation(request, verifyToken).failingBranch === 'none';
+}
 
-  // Get token from header
-  const headerToken = getTokenFromHeader(request);
-  if (!headerToken) {
-    log.warn('CSRF validation failed: No token in header');
-    return false;
-  }
-
-  // Tokens must match (double-submit pattern)
-  if (cookieToken !== headerToken) {
-    log.warn('CSRF validation failed: Token mismatch');
-    return false;
-  }
-
-  // Parse signed token
-  const parts = cookieToken.split('.');
-  if (parts.length !== 2) {
-    log.warn('CSRF validation failed: Invalid token format');
-    return false;
-  }
-
-  const [token, signature] = parts;
-
-  // Verify signature
-  if (!verifyToken(token, signature)) {
-    log.warn('CSRF validation failed: Invalid signature');
-    return false;
-  }
-
-  return true;
+/** TEMP: remove after bootstrap-workspace CSRF 403 debugging. */
+export function getCsrfValidationDiagnostics(request: NextRequest) {
+  return diagnoseCsrfValidation(request, verifyToken);
 }
 
 /**
@@ -172,7 +143,8 @@ export function csrfProtection(
   }
 
   // Validate CSRF token
-  if (!validateCSRFToken(request)) {
+  const csrfDiag = getCsrfValidationDiagnostics(request);
+  if (csrfDiag.failingBranch !== 'none') {
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
       request.headers.get('x-real-ip') ??
@@ -183,6 +155,7 @@ export function csrfProtection(
       method: request.method,
       path: pathname,
       ip: ip ?? null,
+      csrfDiag,
     });
 
     void import('@/lib/audit/audit-log').then(({ logSecurityEvent, AuditEventType, AuditSeverity }) =>
@@ -192,12 +165,15 @@ export function csrfProtection(
         ipAddress: ip,
         userAgent,
         resource: pathname,
-        reason: 'CSRF validation failed',
+        reason: `CSRF validation failed: ${csrfDiag.failingBranch}`,
       })
     );
 
     return NextResponse.json(
-      { error: 'CSRF validation failed' },
+      {
+        error: 'CSRF validation failed',
+        csrfDiag,
+      },
       { status: 403 }
     );
   }

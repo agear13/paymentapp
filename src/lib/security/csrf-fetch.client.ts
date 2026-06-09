@@ -27,10 +27,31 @@ export function installCsrfFetchInterceptor(token: string): void {
       !url.startsWith('/api/stripe/create-checkout-session')
     ) {
       const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-      if (!headers.has('x-csrf-token')) {
+      const hadHeader = headers.has('x-csrf-token');
+      if (!hadHeader) {
         headers.set('x-csrf-token', csrfToken);
       }
+      if (url === '/api/onboarding/bootstrap-workspace' || url.endsWith('/api/onboarding/bootstrap-workspace')) {
+        logCsrfDiag('fetchInterceptor', 'bootstrap-workspace-request', {
+          method,
+          hasModuleToken: csrfToken !== null,
+          headerWasPresent: hadHeader,
+          headerValuePreview: `${(hadHeader ? headers.get('x-csrf-token') : csrfToken)?.slice(0, 12)}...`,
+          credentials: init?.credentials ?? 'include',
+        });
+      }
       return nativeFetch!(input, { ...init, headers, credentials: init?.credentials ?? 'include' });
+    }
+
+    if (
+      MUTATING.has(method) &&
+      (url === '/api/onboarding/bootstrap-workspace' || url.endsWith('/api/onboarding/bootstrap-workspace'))
+    ) {
+      logCsrfDiag('fetchInterceptor', 'bootstrap-workspace-unpatched', {
+        method,
+        hasModuleToken: csrfToken !== null,
+        reason: !csrfToken ? 'no_module_token' : 'path_not_intercepted',
+      });
     }
 
     return nativeFetch!(input, init);

@@ -609,6 +609,16 @@ export function WorkflowOnboardingForm() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        if (res.status === 403) {
+          logCsrfDiag('WorkflowOnboardingForm', 'bootstrap-workspace-403', {
+            status: res.status,
+            error: err.error ?? null,
+            csrfDiag: err.csrfDiag ?? null,
+            clientModuleTokenPreview: getClientCsrfToken()
+              ? `${getClientCsrfToken()!.slice(0, 12)}...`
+              : null,
+          });
+        }
         throw new Error(err.error || 'Failed to create workspace');
       }
       const payload = await res.json();
