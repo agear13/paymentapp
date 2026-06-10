@@ -38,6 +38,7 @@ describe('B3 render cron invoke registry', () => {
       'xero-queue',
       'system-integrity',
       'monitoring-alerts',
+      'agreement-analyzer-jobs',
     ];
     for (const target of required) {
       expect(source).toContain(`'${target}'`);
@@ -47,6 +48,12 @@ describe('B3 render cron invoke registry', () => {
   it('requires CRON_SECRET and base URL before fetch', () => {
     expect(source).toContain('CRON_SECRET is not set');
     expect(source).toContain('CRON_BASE_URL or NEXT_PUBLIC_APP_URL');
+    expect(source).toContain('validateCronInvokeEnvironment');
+  });
+
+  it('routes agreement analyzer jobs to the secured queue processor', () => {
+    expect(source).toContain("path: '/api/agreement-analyzer/jobs/process'");
+    expect(source).toContain("auth: 'bearer'");
   });
 });
 
@@ -58,6 +65,8 @@ describe('B3 render.yaml cron services', () => {
     expect(yaml).toContain('render-cron-invoke.mjs expired-links');
     expect(yaml).toContain('render-cron-invoke.mjs xero-queue');
     expect(yaml).toContain('render-cron-invoke.mjs stripe-reconciliation');
+    expect(yaml).toContain('render-cron-invoke.mjs agreement-analyzer-jobs');
+    expect(yaml).toContain('provvypay-cron-agreement-analyzer-jobs');
   });
 
   it('preserves web health check', () => {

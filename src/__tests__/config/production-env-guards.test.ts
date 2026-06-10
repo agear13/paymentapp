@@ -1,9 +1,16 @@
 import {
   assertProductionEnvGuards,
+  isCronBaseUrlValid,
   isCronSecretValid,
   isCsrfSecretValid,
   isStripeWebhookSecretValid,
 } from '@/lib/config/production-env-guards';
+
+const productionCronEnv = {
+  CRON_SECRET: 'a'.repeat(16),
+  CSRF_SECRET: 'a'.repeat(32),
+  NEXT_PUBLIC_APP_URL: 'https://app.provvypay.com',
+};
 
 const validProductionEnv = {
   NODE_ENV: 'production',
@@ -30,7 +37,7 @@ describe('production-env-guards (B5)', () => {
     expect(() =>
       assertProductionEnvGuards(
         { ...validProductionEnv, STRIPE_WEBHOOK_SECRET: 'disabled' },
-        { CRON_SECRET: 'a'.repeat(16), CSRF_SECRET: 'a'.repeat(32) }
+        productionCronEnv
       )
     ).toThrow(/Production environment hardening failed/);
   });
@@ -53,7 +60,7 @@ describe('production-env-guards (B5)', () => {
           STRIPE_SECRET_KEY: 'sk_test_abc',
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_live_abc',
         },
-        { CRON_SECRET: 'a'.repeat(16) }
+        productionCronEnv
       )
     ).toThrow(/sk_live_/);
 
@@ -63,7 +70,7 @@ describe('production-env-guards (B5)', () => {
           ...validProductionEnv,
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_abc',
         },
-        { CRON_SECRET: 'a'.repeat(16) }
+        productionCronEnv
       )
     ).toThrow(/pk_live_/);
   });
@@ -77,12 +84,24 @@ describe('production-env-guards (B5)', () => {
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_abc',
         },
         {
-          CRON_SECRET: 'a'.repeat(16),
-          CSRF_SECRET: 'a'.repeat(32),
+          ...productionCronEnv,
           ALLOW_STRIPE_TEST_KEYS: 'true',
         }
       )
     ).not.toThrow();
+  });
+
+  it('rejects missing cron base URL in production', () => {
+    expect(isCronBaseUrlValid({})).toBe(false);
+    expect(isCronBaseUrlValid({ NEXT_PUBLIC_APP_URL: 'https://app.provvypay.com' })).toBe(true);
+    expect(isCronBaseUrlValid({ CRON_BASE_URL: 'https://app.provvypay.com' })).toBe(true);
+
+    expect(() =>
+      assertProductionEnvGuards(validProductionEnv, {
+        CRON_SECRET: 'a'.repeat(16),
+        CSRF_SECRET: 'a'.repeat(32),
+      })
+    ).toThrow(/CRON_BASE_URL or NEXT_PUBLIC_APP_URL/);
   });
 
   it('rejects missing CSRF_SECRET in production', () => {
@@ -92,7 +111,7 @@ describe('production-env-guards (B5)', () => {
 
     expect(() =>
       assertProductionEnvGuards(validProductionEnv, {
-        CRON_SECRET: 'a'.repeat(16),
+        ...productionCronEnv,
         CSRF_SECRET: '',
       })
     ).toThrow(/CSRF_SECRET/);
@@ -103,6 +122,7 @@ describe('production-env-guards (B5)', () => {
       assertProductionEnvGuards(validProductionEnv, {
         CRON_SECRET: 'secure-cron-secret-value',
         CSRF_SECRET: 'secure-csrf-secret-minimum-32-chars',
+        NEXT_PUBLIC_APP_URL: 'https://app.provvypay.com',
       })
     ).not.toThrow();
   });

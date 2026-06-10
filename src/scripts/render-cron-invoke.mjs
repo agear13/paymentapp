@@ -50,7 +50,32 @@ export const CRON_TARGETS = {
     auth: 'bearer',
     body: '{}',
   },
+  'agreement-analyzer-jobs': {
+    method: 'POST',
+    path: '/api/agreement-analyzer/jobs/process',
+    auth: 'bearer',
+    body: JSON.stringify({ limit: 10 }),
+  },
 };
+
+export function validateCronInvokeEnvironment(env = process.env) {
+  const secret = env.CRON_SECRET?.trim();
+  const base = (env.CRON_BASE_URL || env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
+
+  const errors = [];
+  if (!secret) {
+    errors.push('CRON_SECRET is not set');
+  }
+  if (!base) {
+    errors.push('CRON_BASE_URL or NEXT_PUBLIC_APP_URL is not set');
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    baseUrl: base || null,
+  };
+}
 
 function buildHeaders(target, secret) {
   const headers = { Accept: 'application/json' };
@@ -73,15 +98,13 @@ export async function invokeCronTarget(targetName, env = process.env) {
     );
   }
 
-  const secret = env.CRON_SECRET?.trim();
-  const base = (env.CRON_BASE_URL || env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
+  const validation = validateCronInvokeEnvironment(env);
+  if (!validation.ok) {
+    throw new Error(validation.errors.join('; '));
+  }
 
-  if (!secret) {
-    throw new Error('CRON_SECRET is not set');
-  }
-  if (!base) {
-    throw new Error('CRON_BASE_URL or NEXT_PUBLIC_APP_URL is not set');
-  }
+  const secret = env.CRON_SECRET?.trim();
+  const base = validation.baseUrl;
 
   const url = `${base}${target.path}`;
   const response = await fetch(url, {

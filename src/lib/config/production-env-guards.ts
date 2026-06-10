@@ -25,6 +25,17 @@ export function isCronSecretValid(secret: string | undefined): boolean {
   return trimmed.length >= MIN_CRON_SECRET_LENGTH;
 }
 
+export function isCronBaseUrlValid(processEnv: NodeJS.ProcessEnv = process.env): boolean {
+  const base = (processEnv.CRON_BASE_URL || processEnv.NEXT_PUBLIC_APP_URL || '').trim();
+  if (!base) return false;
+  try {
+    const url = new URL(base);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export function isCsrfSecretValid(secret: string | undefined): boolean {
   const trimmed = secret?.trim() ?? '';
   return trimmed.length >= MIN_CSRF_SECRET_LENGTH;
@@ -50,6 +61,12 @@ export function assertProductionEnvGuards(
   if (!isCronSecretValid(processEnv.CRON_SECRET)) {
     errors.push(
       `CRON_SECRET is required in production (min ${MIN_CRON_SECRET_LENGTH} characters) for B3 scheduled jobs (C3).`
+    );
+  }
+
+  if (!isCronBaseUrlValid(processEnv)) {
+    errors.push(
+      'CRON_BASE_URL or NEXT_PUBLIC_APP_URL is required in production so Render cron services can invoke HTTP job routes.'
     );
   }
 

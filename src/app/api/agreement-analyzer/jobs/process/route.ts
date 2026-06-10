@@ -12,6 +12,7 @@ import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { monitorAgreementQueueBacklog } from '@/lib/agreement-analyzer/jobs/monitor-queue-backlog.server';
 import { processAgreementProcessingJobsBatch } from '@/lib/agreement-analyzer/jobs/process-jobs.server';
 import {
   cronAuthFailureResponse,
@@ -39,8 +40,9 @@ export async function POST(request: NextRequest) {
     const limit = parsed.data.limit ?? 10;
     const workerId = `cron-${randomUUID()}`;
     const batch = await processAgreementProcessingJobsBatch(workerId, limit);
+    const backlog = await monitorAgreementQueueBacklog();
 
-    return NextResponse.json({ success: true, batch });
+    return NextResponse.json({ success: true, batch, backlog });
   } catch (error) {
     loggers.api.error('agreement-analyzer jobs process route failed', error);
     return NextResponse.json({ error: 'Job processing failed.' }, { status: 500 });

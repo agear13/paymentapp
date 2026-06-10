@@ -18,6 +18,7 @@ export const AGREEMENT_ANALYZER_ANALYTICS_EVENTS = [
   'agreement_analyzer_upload_started',
   'agreement_analyzer_upload_completed',
   'agreement_analyzer_customer',
+  'agreement_queue_backlog_detected',
 ] as const;
 
 export type AgreementAnalyzerAnalyticsEvent =
