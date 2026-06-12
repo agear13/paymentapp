@@ -47,6 +47,8 @@ function party(overrides: Partial<ReviewedParty> = {}): ReviewedParty {
     participationModel: 'revenue_share',
     fixedAmount: null,
     revenueSharePct: null,
+    deliverables: [],
+    milestones: [],
     notes: '',
     ...overrides,
   };
@@ -61,6 +63,11 @@ function extractedParty(overrides: Partial<ExtractedParty> = {}): ExtractedParty
     participationModel: field('revenue_share'),
     fixedAmount: field(null),
     revenueSharePct: field(null),
+    deliverables: field([]),
+    milestones: [],
+    serviceCategories: field([]),
+    conditions: [],
+    dependencies: [],
     notes: field(null),
     ...overrides,
   };

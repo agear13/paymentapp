@@ -18,10 +18,26 @@ const EXTRACTION_SCHEMA = `{
         {
           "description": { "value": "string", "confidence": "high|medium|low|absent" },
           "deadline": { "value": "string | null", "confidence": "high|medium|low|absent" },
-          "category": { "value": "financial|performance", "confidence": "high|medium|low|absent" }
+          "category": { "value": "financial|performance", "confidence": "high|medium|low|absent" },
+          "status": "draft|confirmed|pending|conditional|fulfilled|disputed"
         }
       ],
+      "serviceCategories": { "value": ["Photography|Videography|Marketing|Graphic Design|Venue|..."], "confidence": "high|medium|low|absent" },
+      "conditions": [{ "description": { "value": "string" }, "dependsOn": { "value": "string|null" }, "status": "pending" }],
+      "dependencies": [{ "obligation": { "value": "string" }, "dependsOn": { "value": "string" }, "status": "pending" }],
       "notes": { "value": "string | null", "confidence": "high|medium|low|absent" }
+    }
+  ],
+  "settlementEvents": [
+    {
+      "partyId": "string",
+      "partyName": "string",
+      "type": "fixed_fee|revenue_share|bonus|milestone|attribution",
+      "amount": { "value": "number|null" },
+      "percentage": { "value": "number|null" },
+      "trigger": { "value": "string|null" },
+      "condition": { "value": "string|null" },
+      "status": "draft|confirmed|pending|conditional|fulfilled|disputed"
     }
   ],
   "paymentTerms": [
@@ -68,14 +84,12 @@ EXTRACTION RULES:
 
 5. If the same field has contradictory values at different points in the conversation, add an entry to "uncertainties" and use the LATER-mentioned value with confidence "low".
 
-6. Role guidance (map to closest; freeform is fine):
-   - "Partner", "Co-founder" → role: "Partner" or "Co-founder"
-   - "Contractor", "Freelancer", "Developer", "Designer", "DJ", "Performer", "Artist" → role: "Contractor"
-   - "Referrer", "Introducer", "Agent", "Broker" → role: "Referrer"
-   - "Stakeholder", "Investor", "Backer" → role: "Stakeholder"
-   - "Contributor", "Helper", "Assistant" → role: "Contributor"
-   - Venue, promoter, organiser → role: "Contractor" or "Partner" based on context
-   - Unknown → role: "Contributor"
+6. Role and service category guidance:
+   - Prefer specific commercial roles over generic labels: Promoter, Photographer, Videographer, Designer, Venue, DJ, Performer.
+   - Avoid defaulting everyone to "Contractor" when a specific service is evident from deliverables.
+   - Populate serviceCategories[] per party (e.g. Photography, Videography, Marketing, Graphic Design, Venue).
+   - Use dependencies[] when one obligation depends on another (e.g. bonus depends on attendance > 500).
+   - Use settlementEvents[] for each payable obligation with trigger/condition and status "pending" or "conditional".
 
 7. Do NOT invent values. If something is genuinely absent from the text, set value to null and confidence to "absent".
 

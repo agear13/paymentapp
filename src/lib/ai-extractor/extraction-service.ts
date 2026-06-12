@@ -34,10 +34,45 @@ const ExtractionFieldSchema = <T extends z.ZodTypeAny>(valueSchema: T) =>
     rawSnippet: z.string().nullable().optional(),
   });
 
+const ObligationStatusSchema = z.enum([
+  'draft',
+  'confirmed',
+  'pending',
+  'conditional',
+  'fulfilled',
+  'disputed',
+]);
+
 const ExtractedMilestoneSchema = z.object({
   description: ExtractionFieldSchema(z.string()),
   deadline: ExtractionFieldSchema(z.string().nullable()),
   category: ExtractionFieldSchema(z.enum(['financial', 'performance'])),
+  status: ObligationStatusSchema.optional(),
+});
+
+const ExtractedConditionSchema = z.object({
+  description: ExtractionFieldSchema(z.string()),
+  dependsOn: ExtractionFieldSchema(z.string().nullable()),
+  status: ObligationStatusSchema.optional(),
+});
+
+const ExtractedDependencySchema = z.object({
+  obligation: ExtractionFieldSchema(z.string()),
+  dependsOn: ExtractionFieldSchema(z.string()),
+  status: ObligationStatusSchema.optional(),
+});
+
+const ExtractedSettlementEventSchema = z.object({
+  partyId: ExtractionFieldSchema(z.string()),
+  partyName: ExtractionFieldSchema(z.string()),
+  type: ExtractionFieldSchema(
+    z.enum(['fixed_fee', 'revenue_share', 'bonus', 'milestone', 'attribution'])
+  ),
+  amount: ExtractionFieldSchema(z.number().nullable()),
+  percentage: ExtractionFieldSchema(z.number().nullable()),
+  trigger: ExtractionFieldSchema(z.string().nullable()),
+  condition: ExtractionFieldSchema(z.string().nullable()),
+  status: ObligationStatusSchema,
 });
 
 const ExtractedPartySchema = z.object({
@@ -52,6 +87,9 @@ const ExtractedPartySchema = z.object({
   revenueSharePct: ExtractionFieldSchema(z.number().nullable()),
   deliverables: ExtractionFieldSchema(z.array(z.string())).optional(),
   milestones: z.array(ExtractedMilestoneSchema).optional(),
+  serviceCategories: ExtractionFieldSchema(z.array(z.string())).optional(),
+  conditions: z.array(ExtractedConditionSchema).optional(),
+  dependencies: z.array(ExtractedDependencySchema).optional(),
   notes: ExtractionFieldSchema(z.string().nullable()),
 });
 
@@ -76,11 +114,12 @@ const ExtractionResultSchema = z.object({
   counterparty: ExtractionFieldSchema(z.string().nullable()),
   parties: z.array(ExtractedPartySchema),
   paymentTerms: z.array(ExtractedPaymentTermSchema),
+  settlementEvents: z.array(ExtractedSettlementEventSchema).optional(),
   uncertainties: z.array(ExtractionUncertaintySchema),
   overallConfidence: z.enum(['high', 'medium', 'low', 'absent']),
   sourceHint: z.string().nullable(),
   extractedAt: z.string(),
-  schemaVersion: z.enum(['v1', 'v2']).optional(),
+  schemaVersion: z.enum(['v1', 'v2', 'v3']).optional(),
 });
 
 export function validateExtractionResult(raw: unknown): ExtractionResult {

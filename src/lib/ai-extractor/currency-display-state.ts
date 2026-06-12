@@ -1,4 +1,4 @@
-import type { ExtractionConfidence } from './extraction-types';
+import type { CurrencyConfidenceState, ExtractionConfidence } from './extraction-types';
 import {
   isSupportedCurrency,
   type SupportedProjectCurrency,
@@ -9,29 +9,55 @@ export type CurrencyConfidenceLabel = 'confirmed' | 'assumed' | 'unknown';
 
 export type CurrencyDisplayState = {
   code: SupportedProjectCurrency;
+  confidenceState: CurrencyConfidenceState;
   confidenceLabel: CurrencyConfidenceLabel;
   displayLabel: string;
   extractedConfidence: ExtractionConfidence;
 };
 
+function mapStateToLabel(state: CurrencyConfidenceState): CurrencyConfidenceLabel {
+  if (state === 'CONFIRMED') return 'confirmed';
+  if (state === 'ASSUMED') return 'assumed';
+  return 'unknown';
+}
+
+export function resolveCurrencyConfidenceState(context: ReviewCurrencyContext): CurrencyConfidenceState {
+  const extracted = context.extractedCurrency?.trim().toUpperCase() ?? '';
+  const extractedConfidence = context.extractedConfidence ?? 'absent';
+
+  if (isSupportedCurrency(extracted) && extractedConfidence === 'high') {
+    return 'CONFIRMED';
+  }
+
+  if (extractedConfidence === 'absent' || !extracted) {
+    return 'ASSUMED';
+  }
+
+  return 'UNKNOWN';
+}
+
 export function resolveCurrencyDisplayState(context: ReviewCurrencyContext): CurrencyDisplayState {
   const extracted = context.extractedCurrency?.trim().toUpperCase() ?? '';
   const extractedConfidence = context.extractedConfidence ?? 'absent';
   const code = resolveReviewFormCurrency(context);
+  const confidenceState = resolveCurrencyConfidenceState(context);
+  const confidenceLabel = mapStateToLabel(confidenceState);
 
-  if (isSupportedCurrency(extracted) && extractedConfidence !== 'absent') {
+  if (confidenceState === 'CONFIRMED') {
     return {
       code,
-      confidenceLabel: 'confirmed',
+      confidenceState,
+      confidenceLabel,
       displayLabel: extracted,
       extractedConfidence,
     };
   }
 
-  if (extractedConfidence === 'absent' || !extracted) {
+  if (confidenceState === 'ASSUMED') {
     return {
       code,
-      confidenceLabel: 'assumed',
+      confidenceState,
+      confidenceLabel,
       displayLabel: `Assumed ${code} (requires confirmation)`,
       extractedConfidence,
     };
@@ -39,8 +65,9 @@ export function resolveCurrencyDisplayState(context: ReviewCurrencyContext): Cur
 
   return {
     code,
-    confidenceLabel: 'unknown',
-    displayLabel: 'Unconfirmed',
+    confidenceState,
+    confidenceLabel,
+    displayLabel: 'Currency Unconfirmed',
     extractedConfidence,
   };
 }

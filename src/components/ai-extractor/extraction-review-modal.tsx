@@ -42,6 +42,8 @@ import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-dem
 import { toast } from 'sonner';
 import { ConfidenceBadge, CurrencyConfidenceBadge } from './confidence-badge';
 import { resolveCurrencyDisplayState } from '@/lib/ai-extractor/currency-display-state';
+import { buildSettlementSchedule } from '@/lib/ai-extractor/settlement-schedule';
+import { SettlementSchedulePanel } from './settlement-schedule-panel';
 import { ReviewPartyCard } from './review-party-card';
 import { PostExtractionPrompt } from './post-extraction-prompt';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
@@ -155,6 +157,7 @@ export function ExtractionReviewModal({
   ]);
 
   const summary = React.useMemo(() => buildExtractionSummary(result), [result]);
+  const settlementSchedule = React.useMemo(() => buildSettlementSchedule(result), [result]);
   const currencyDisplay = React.useMemo(
     () =>
       resolveCurrencyDisplayState({
@@ -395,7 +398,6 @@ export function ExtractionReviewModal({
   };
 
   const showProjectSection = entryPoint === 'project_create';
-  const showPaymentTerms = entryPoint !== 'onboarding' && result.paymentTerms.length > 0;
 
   const confidenceConfig = {
     high:   { variant: 'default' as const, text: '✓ High confidence extraction. Review and save below.' },
@@ -484,6 +486,14 @@ export function ExtractionReviewModal({
                 <span className="text-muted-foreground">
                   <span className="font-medium text-foreground">{summary.attributionCount}</span>{' '}
                   Attribution {summary.attributionCount === 1 ? 'Arrangement' : 'Arrangements'}
+                </span>
+              )}
+              {summary.serviceCategories.length > 0 && (
+                <span className="text-muted-foreground">
+                  Services:{' '}
+                  <span className="font-medium text-foreground">
+                    {summary.serviceCategories.join(', ')}
+                  </span>
                 </span>
               )}
             </div>
@@ -588,11 +598,10 @@ export function ExtractionReviewModal({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <Label className="text-xs">Currency</Label>
-                    {!isUnsupportedCurrency ? (
-                      <CurrencyConfidenceBadge label={currencyDisplay.confidenceLabel} />
-                    ) : (
-                      <CurrencyConfidenceBadge label="unknown" />
-                    )}
+                    <CurrencyConfidenceBadge
+                      label={isUnsupportedCurrency ? 'unknown' : currencyDisplay.confidenceLabel}
+                      code={currencyDisplay.code}
+                    />
                   </div>
                   <Select
                     value={CURRENCIES.includes(form.currency as typeof CURRENCIES[number]) ? form.currency : 'AUD'}
@@ -608,7 +617,7 @@ export function ExtractionReviewModal({
                     </SelectContent>
                   </Select>
                   {!isUnsupportedCurrency && currencyDisplay.confidenceLabel !== 'confirmed' ? (
-                    <p className="text-xs text-muted-foreground">{currencyDisplay.displayLabel}</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300">{currencyDisplay.displayLabel}</p>
                   ) : null}
                 </div>
               </div>
@@ -685,27 +694,12 @@ export function ExtractionReviewModal({
             </div>
           </div>
 
-          {/* Payment Terms — reference only */}
-          {showPaymentTerms && (
-            <div className="space-y-2">
+          {settlementSchedule.length > 0 ? (
+            <>
               <Separator />
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Payment Terms <span className="font-normal normal-case">(reference only — not saved directly)</span>
-              </p>
-              <div className="rounded-md border bg-background px-3 py-2 space-y-1.5">
-                {result.paymentTerms.map((term, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs">
-                    <ConfidenceBadge confidence={term.description.confidence} className="mt-0.5 flex-shrink-0" />
-                    <span className="text-foreground/80">
-                      {term.description.value}
-                      {term.amount.value != null && ` · ${term.currency.value || 'AUD'} ${term.amount.value.toLocaleString()}`}
-                      {term.dueCondition.value && ` · ${term.dueCondition.value}`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+              <SettlementSchedulePanel groups={settlementSchedule} />
+            </>
+          ) : null}
 
           {/* Save error */}
           {saveError && (

@@ -2,18 +2,19 @@ import type { ExtractionResult, ExtractedParty, ExtractionConfidence } from './e
 import {
   buildProjectSummaryOneLiner,
   countPartyObligationMetrics,
+  hasFixedFeeAmount,
+  hasRevenueSharePct,
 } from './party-obligation-metrics';
+import { inferServiceCategoriesForParties } from './service-category-detection';
 
 export interface ExtractionSummaryStats {
   projectCount: number;
   participantCount: number;
-  /** Participants with at least one fixed-fee obligation (non-exclusive). */
   fixedFeeObligationCount: number;
-  /** Participants with at least one revenue-share obligation (non-exclusive). */
   revenueShareObligationCount: number;
-  /** Participants with both fixed-fee and revenue-share obligations. */
   hybridParticipantCount: number;
   attributionCount: number;
+  serviceCategories: string[];
   oneLiner: string;
 }
 
@@ -31,30 +32,48 @@ function lowestConfidence(confidences: ExtractionConfidence[]): ExtractionConfid
   );
 }
 
-/** Derive per-party confidence from its critical fields. */
+function isUnclearConfidence(confidence: ExtractionConfidence): boolean {
+  return confidence === 'absent' || confidence === 'low';
+}
+
+/**
+ * Participant confidence reflects identity and core compensation clarity only.
+ * Conditional bonuses, milestones, hybrid structures, and deliverables do not reduce confidence.
+ */
 export function derivePartyConfidence(party: ExtractedParty): ExtractionConfidence {
-  const critical: ExtractionConfidence[] = [
-    party.name.confidence,
-    party.participationModel.confidence,
-  ];
-  if (
-    party.participationModel.value === 'fixed_payout' ||
-    party.participationModel.value === 'hybrid' ||
-    party.fixedAmount.value != null
-  ) {
+  const nameConf = party.name.confidence;
+  if (isUnclearConfidence(nameConf)) return nameConf;
+
+  const hasFixed = hasFixedFeeAmount(party);
+  const hasRevenue = hasRevenueSharePct(party);
+  const critical: ExtractionConfidence[] = [nameConf];
+
+  if (hasFixed) {
+    critical.push(party.fixedAmount.confidence);
+  } else if (party.participationModel.value === 'fixed_payout') {
     critical.push(party.fixedAmount.confidence);
   }
-  if (
+
+  if (hasRevenue) {
+    critical.push(party.revenueSharePct.confidence);
+  } else if (
     party.participationModel.value === 'revenue_share' ||
-    party.participationModel.value === 'hybrid' ||
-    party.revenueSharePct.value != null
+    party.participationModel.value === 'hybrid'
   ) {
     critical.push(party.revenueSharePct.confidence);
   }
+
+  if (!hasFixed && !hasRevenue && party.participationModel.value === 'customer_attribution') {
+    critical.push(party.participationModel.confidence);
+  }
+
+  if (critical.length === 1) {
+    return nameConf;
+  }
+
   return lowestConfidence(critical);
 }
 
-/** Build a human-readable summary from an ExtractionResult without an extra AI call. */
 export function buildExtractionSummary(result: ExtractionResult): ExtractionSummaryStats {
   const projectCount = result.projectName.value ? 1 : 0;
   const participantCount = result.parties.length;
@@ -67,6 +86,7 @@ export function buildExtractionSummary(result: ExtractionResult): ExtractionSumm
     revenueShareObligationCount: obligationMetrics.revenueShareObligationCount,
     hybridParticipantCount: obligationMetrics.hybridParticipantCount,
     attributionCount: obligationMetrics.attributionCount,
+    serviceCategories: inferServiceCategoriesForParties(result.parties),
     oneLiner: buildProjectSummaryOneLiner(result),
   };
 }

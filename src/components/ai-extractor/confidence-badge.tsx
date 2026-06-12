@@ -28,29 +28,35 @@ export function ConfidenceBadge({ confidence, className }: ConfidenceBadgeProps)
 /** Participant-level badge shown in ReviewPartyCard header. */
 export function CurrencyConfidenceBadge({
   label,
+  code,
 }: {
   label: 'confirmed' | 'assumed' | 'unknown';
+  code?: string;
 }) {
   const config = {
     confirmed: {
       dot: 'bg-emerald-500',
       text: 'text-emerald-700 dark:text-emerald-400',
-      label: 'Confirmed',
+      prefix: '✓',
+      label: code ? `Confirmed ${code}` : 'Confirmed',
     },
     assumed: {
       dot: 'bg-amber-400',
       text: 'text-amber-700 dark:text-amber-400',
-      label: 'Assumed',
+      prefix: '⚠',
+      label: code ? `Assumed ${code}` : 'Assumed',
     },
     unknown: {
-      dot: 'bg-muted-foreground/40',
-      text: 'text-muted-foreground',
-      label: 'Unknown',
+      dot: 'bg-amber-400',
+      text: 'text-amber-700 dark:text-amber-400',
+      prefix: '⚠',
+      label: 'Currency Unconfirmed',
     },
   }[label];
 
   return (
     <span className={cn('inline-flex items-center gap-1 text-xs', config.text)}>
+      <span aria-hidden>{config.prefix}</span>
       <span className={cn('inline-block h-1.5 w-1.5 rounded-full flex-shrink-0', config.dot)} />
       {config.label}
     </span>

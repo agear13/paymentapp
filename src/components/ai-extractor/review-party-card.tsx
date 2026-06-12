@@ -24,6 +24,7 @@ import type { ExtractedParty, ExtractorEntryPoint } from '@/lib/ai-extractor/ext
 import type { ReviewedParty } from '@/lib/ai-extractor/review-form-types';
 import type { DuplicateMatch } from '@/lib/ai-extractor/duplicate-detection';
 import { derivePartyConfidence } from '@/lib/ai-extractor/extraction-summary';
+import { inferServiceCategoriesForParty } from '@/lib/ai-extractor/service-category-detection';
 import { ConfidenceBadge, ParticipantConfidenceBadge } from './confidence-badge';
 
 const ROLE_OPTIONS = [
@@ -78,6 +79,7 @@ export function ReviewPartyCard({
   validationMessage,
 }: ReviewPartyCardProps) {
   const partyConfidence = originalParty ? derivePartyConfidence(originalParty) : 'absent';
+  const serviceCategories = originalParty ? inferServiceCategoriesForParty(originalParty) : [];
   const roles = entryPoint === 'onboarding' ? ONBOARDING_ROLE_OPTIONS : ROLE_OPTIONS;
   const hybrid = isHybridCompensationParty(party, originalParty);
   const compensationWarnings = getPartyCompensationWarnings(party, originalParty);
@@ -112,7 +114,14 @@ export function ReviewPartyCard({
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-medium leading-none">{party.name || 'New participant'}</p>
-          <ParticipantConfidenceBadge confidence={partyConfidence} />
+          <div className="space-y-1">
+            <ParticipantConfidenceBadge confidence={partyConfidence} />
+            {serviceCategories.length > 0 ? (
+              <p className="text-[11px] text-muted-foreground">
+                {serviceCategories.join(' · ')}
+              </p>
+            ) : null}
+          </div>
         </div>
         <Button
           type="button"
