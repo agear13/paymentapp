@@ -400,12 +400,12 @@ export function ExtractionReviewModal({
 
   return (<>
     <Dialog open={open} onOpenChange={(o) => { if (!saving) onOpenChange(o); }}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex min-h-0 flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle>Review Extracted Agreement</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5 py-1">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto scroll-smooth px-6 py-1">
           {/* Overall confidence banner */}
           <Alert variant={conf.variant === 'destructive' ? 'destructive' : undefined}
                  className={cn(result.overallConfidence === 'high' && 'border-emerald-500/30 bg-emerald-500/5 text-emerald-800 dark:text-emerald-300')}>
@@ -530,7 +530,7 @@ export function ExtractionReviewModal({
                   onChange={(e) => setForm((f) => ({ ...f, projectDescription: e.target.value }))}
                   placeholder="Optional description"
                   rows={2}
-                  className="text-sm resize-none"
+                  className="field-sizing-fixed max-h-32 resize-none overflow-y-auto text-sm"
                 />
               </div>
 
@@ -691,7 +691,7 @@ export function ExtractionReviewModal({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t bg-background px-6 py-4">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>

@@ -103,8 +103,8 @@ export function ConversationInputModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-xl max-h-[90vh] flex min-h-0 flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
             {titleMap[entryPoint]}
@@ -112,7 +112,7 @@ export function ConversationInputModal({
           <DialogDescription>{descMap[entryPoint]}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto scroll-smooth px-6 py-2">
           {/* Source type selector */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground uppercase tracking-wide">Source type</Label>
@@ -145,7 +145,7 @@ export function ConversationInputModal({
               onChange={(e) => setRawText(e.target.value)}
               placeholder={`Paste your ${SOURCE_TYPE_LABELS[sourceType]} conversation here…`}
               rows={8}
-              className="text-sm resize-none"
+              className="field-sizing-fixed min-h-[12rem] max-h-[min(24rem,40vh)] resize-none overflow-y-auto text-sm whitespace-pre-wrap"
               disabled={loading}
               maxLength={MAX_CHARS}
             />
@@ -193,7 +193,7 @@ export function ConversationInputModal({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t bg-background px-6 py-4">
           <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
             Cancel
           </Button>

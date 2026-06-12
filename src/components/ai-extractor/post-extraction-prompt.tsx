@@ -66,12 +66,12 @@ export function PostExtractionPrompt({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md max-h-[90vh] flex min-h-0 flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle>Extraction complete</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3 py-1">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto scroll-smooth px-6 py-1">
           <div className="rounded-lg border bg-emerald-500/5 border-emerald-500/20 p-3 space-y-1.5">
             <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
               <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
@@ -128,7 +128,7 @@ export function PostExtractionPrompt({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t bg-background px-6 py-4">
           <Button type="button" variant="ghost" onClick={handleSkip}>
             Skip
           </Button>

@@ -13,6 +13,17 @@ src/public/uploads/logos/*
 !src/public/uploads/logos/.gitkeep
 src/public/uploads/payment-link-attachments/*
 !src/public/uploads/payment-link-attachments/.gitkeep
+src/storage/agreement-uploads/*
+!src/storage/agreement-uploads/.gitkeep
+src/evaluation-report.json
+src/benchmark-report.json
+src/benchmark-report.md
+src/benchmark-report-*.json
+src/benchmark-report-*.md
+src/benchmark-comparison.md
+src/benchmark-scoring-audit.json
+src/benchmark-scoring-audit.md
+src/sample-agreements/**/actual.json
 
 # Secrets and configuration values
 XERO_CRON_SETUP_VALUES.txt

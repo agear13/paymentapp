@@ -152,6 +152,18 @@ services:
     envVars:
       - fromGroup: provvypay-production
 
+  - type: cron
+    name: provvypay-cron-agreement-analyzer-jobs
+    env: node
+    region: oregon
+    schedule: "*/2 * * * *"
+    branch: main
+    rootDir: src
+    buildCommand: "true"
+    startCommand: node scripts/render-cron-invoke.mjs agreement-analyzer-jobs
+    envVars:
+      - fromGroup: provvypay-production
+
   # Background Worker — not used (B3 uses HTTP jobs on web + cron invoke)
   # - type: worker
   #   name: provvypay-worker
