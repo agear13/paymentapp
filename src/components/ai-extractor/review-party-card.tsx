@@ -83,10 +83,22 @@ export function ReviewPartyCard({
   const compensationWarnings = getPartyCompensationWarnings(party, originalParty);
   const showRevenueField =
     party.participationModel === 'revenue_share' ||
+    party.participationModel === 'hybrid' ||
     (hybrid && revenueComponentActive(party, originalParty));
   const showFixedField =
     party.participationModel === 'fixed_payout' ||
+    party.participationModel === 'hybrid' ||
     (hybrid && fixedComponentActive(party, originalParty));
+
+  const financialMilestones = party.milestones.filter((m) => m.category === 'financial');
+  const performanceMilestones = party.milestones.filter((m) => m.category === 'performance');
+  const hasFinancialObligations =
+    showFixedField ||
+    showRevenueField ||
+    financialMilestones.length > 0;
+  const hasPerformanceObligations =
+    party.deliverables.length > 0 ||
+    performanceMilestones.length > 0;
 
   return (
     <div
@@ -140,15 +152,23 @@ export function ReviewPartyCard({
         </div>
       )}
 
-      {hybrid && compensationWarnings.length === 0 && (
-        <div className="rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2 space-y-1">
+      {(hybrid || party.participationModel === 'hybrid') && compensationWarnings.length === 0 && (
+        <div className="rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2 space-y-1.5">
           <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
-            Hybrid compensation detected
+            Hybrid Compensation
           </p>
-          <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
-            Both fixed and percentage terms will be saved. Confirm each amount in AUD or USD before
-            generating agreements — this is the safest launch path for mixed compensation.
-          </p>
+          <div className="text-xs text-blue-800/90 dark:text-blue-300/90 space-y-0.5">
+            {showFixedField && party.fixedAmount != null ? (
+              <p>Fixed Fee: ${party.fixedAmount.toLocaleString()}</p>
+            ) : showFixedField ? (
+              <p>Fixed Fee: enter amount</p>
+            ) : null}
+            {showRevenueField && party.revenueSharePct != null ? (
+              <p>Revenue Share: {party.revenueSharePct}%</p>
+            ) : showRevenueField ? (
+              <p>Revenue Share: enter percentage</p>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -229,6 +249,7 @@ export function ReviewPartyCard({
           {([
             { value: 'fixed_payout', label: 'Fixed payout' },
             { value: 'revenue_share', label: 'Revenue share' },
+            { value: 'hybrid', label: 'Hybrid' },
             { value: 'customer_attribution', label: 'Attribution' },
           ] as const).map((opt) => (
             <button
@@ -315,6 +336,53 @@ export function ReviewPartyCard({
           Customer attribution earnings — no fixed percentage or amount required.
         </p>
       )}
+
+      {hasFinancialObligations ? (
+        <div className="space-y-2 rounded-md border bg-background/60 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Financial Obligations
+          </p>
+          <ul className="space-y-1 text-xs text-foreground/85">
+            {showFixedField && party.fixedAmount != null ? (
+              <li>${party.fixedAmount.toLocaleString()} fixed fee</li>
+            ) : null}
+            {showRevenueField && party.revenueSharePct != null ? (
+              <li>{party.revenueSharePct}% revenue share</li>
+            ) : null}
+            {financialMilestones.map((milestone, index) => (
+              <li key={`fin-${index}`}>
+                {milestone.description}
+                {milestone.deadline ? ` — ${milestone.deadline}` : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {hasPerformanceObligations ? (
+        <div className="space-y-2 rounded-md border bg-background/60 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Performance Obligations
+          </p>
+          {party.deliverables.length > 0 ? (
+            <ul className="list-disc pl-4 space-y-1 text-xs text-foreground/85">
+              {party.deliverables.map((item, index) => (
+                <li key={`del-${index}`}>{item}</li>
+              ))}
+            </ul>
+          ) : null}
+          {performanceMilestones.length > 0 ? (
+            <ul className="space-y-1 text-xs text-foreground/85">
+              {performanceMilestones.map((milestone, index) => (
+                <li key={`perf-${index}`}>
+                  {milestone.description}
+                  {milestone.deadline ? ` — ${milestone.deadline}` : ''}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Notes */}
       <div className="space-y-1">

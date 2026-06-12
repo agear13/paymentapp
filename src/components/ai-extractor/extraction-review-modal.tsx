@@ -40,7 +40,8 @@ import {
 import { EXTRACTOR_VERSION, SOURCE_TYPE_LABELS } from '@/lib/ai-extractor/extraction-types';
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import { toast } from 'sonner';
-import { ConfidenceBadge } from './confidence-badge';
+import { ConfidenceBadge, CurrencyConfidenceBadge } from './confidence-badge';
+import { resolveCurrencyDisplayState } from '@/lib/ai-extractor/currency-display-state';
 import { ReviewPartyCard } from './review-party-card';
 import { PostExtractionPrompt } from './post-extraction-prompt';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
@@ -67,6 +68,8 @@ function newEmptyParty(): ReviewedParty {
     participationModel: 'fixed_payout',
     fixedAmount: null,
     revenueSharePct: null,
+    deliverables: [],
+    milestones: [],
     notes: '',
   };
 }
@@ -152,6 +155,16 @@ export function ExtractionReviewModal({
   ]);
 
   const summary = React.useMemo(() => buildExtractionSummary(result), [result]);
+  const currencyDisplay = React.useMemo(
+    () =>
+      resolveCurrencyDisplayState({
+        extractedCurrency: result.currency.value,
+        extractedConfidence: result.currency.confidence,
+        project: existingDeal ?? null,
+        workspaceCurrency,
+      }),
+    [result.currency.value, result.currency.confidence, existingDeal, workspaceCurrency]
+  );
 
   // Currency safety: unsupported ISO codes nulled fixed amounts in reviewFormFromExtraction.
   const extractedCurrency =
@@ -449,16 +462,22 @@ export function ExtractionReviewModal({
                   {summary.participantCount === 1 ? 'Participant' : 'Participants'}
                 </span>
               )}
-              {summary.fixedPayoutCount > 0 && (
+              {summary.fixedFeeObligationCount > 0 && (
                 <span className="text-muted-foreground">
-                  <span className="font-medium text-foreground">{summary.fixedPayoutCount}</span>{' '}
-                  Fixed {summary.fixedPayoutCount === 1 ? 'Payout' : 'Payouts'}
+                  <span className="font-medium text-foreground">{summary.fixedFeeObligationCount}</span>{' '}
+                  Fixed Fee {summary.fixedFeeObligationCount === 1 ? 'Obligation' : 'Obligations'}
                 </span>
               )}
-              {summary.revenueShareCount > 0 && (
+              {summary.revenueShareObligationCount > 0 && (
                 <span className="text-muted-foreground">
-                  <span className="font-medium text-foreground">{summary.revenueShareCount}</span>{' '}
-                  Revenue Share {summary.revenueShareCount === 1 ? 'Arrangement' : 'Arrangements'}
+                  <span className="font-medium text-foreground">{summary.revenueShareObligationCount}</span>{' '}
+                  Revenue Share {summary.revenueShareObligationCount === 1 ? 'Obligation' : 'Obligations'}
+                </span>
+              )}
+              {summary.hybridParticipantCount > 0 && (
+                <span className="text-muted-foreground">
+                  <span className="font-medium text-foreground">{summary.hybridParticipantCount}</span>{' '}
+                  Hybrid {summary.hybridParticipantCount === 1 ? 'Participant' : 'Participants'}
                 </span>
               )}
               {summary.attributionCount > 0 && (
@@ -569,8 +588,10 @@ export function ExtractionReviewModal({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <Label className="text-xs">Currency</Label>
-                    {!isUnsupportedCurrency && (
-                      <ConfidenceBadge confidence={result.currency.confidence} />
+                    {!isUnsupportedCurrency ? (
+                      <CurrencyConfidenceBadge label={currencyDisplay.confidenceLabel} />
+                    ) : (
+                      <CurrencyConfidenceBadge label="unknown" />
                     )}
                   </div>
                   <Select
@@ -586,6 +607,9 @@ export function ExtractionReviewModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  {!isUnsupportedCurrency && currencyDisplay.confidenceLabel !== 'confirmed' ? (
+                    <p className="text-xs text-muted-foreground">{currencyDisplay.displayLabel}</p>
+                  ) : null}
                 </div>
               </div>
 

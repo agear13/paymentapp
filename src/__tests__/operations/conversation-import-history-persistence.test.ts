@@ -34,8 +34,9 @@ function importRecord(label: string, index: number): ConversationImportAuditReco
     extractionSummary: {
       oneLiner: `Import ${label}`,
       participantCount: 1,
-      fixedPayoutCount: 0,
-      revenueShareCount: 1,
+      fixedFeeObligationCount: 0,
+      revenueShareObligationCount: 1,
+      hybridParticipantCount: 0,
       attributionCount: 0,
       agreementTypeLabel: '1 revenue share',
       overallConfidence: 'high',

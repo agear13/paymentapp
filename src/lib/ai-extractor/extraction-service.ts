@@ -8,6 +8,7 @@ import {
   getExtractorModel,
 } from './extraction-config';
 import { buildExtractionSystemPrompt, buildExtractionUserPrompt } from './extraction-prompt';
+import { normalizeExtractionResult } from './normalize-extraction-result';
 import {
   estimateTokenCount,
   ExtractionResponseError,
@@ -33,16 +34,24 @@ const ExtractionFieldSchema = <T extends z.ZodTypeAny>(valueSchema: T) =>
     rawSnippet: z.string().nullable().optional(),
   });
 
+const ExtractedMilestoneSchema = z.object({
+  description: ExtractionFieldSchema(z.string()),
+  deadline: ExtractionFieldSchema(z.string().nullable()),
+  category: ExtractionFieldSchema(z.enum(['financial', 'performance'])),
+});
+
 const ExtractedPartySchema = z.object({
   id: z.string(),
   name: ExtractionFieldSchema(z.string()),
   email: ExtractionFieldSchema(z.string().nullable()),
   role: ExtractionFieldSchema(z.string()),
   participationModel: ExtractionFieldSchema(
-    z.enum(['fixed_payout', 'revenue_share', 'customer_attribution'])
+    z.enum(['fixed_payout', 'revenue_share', 'hybrid', 'customer_attribution'])
   ),
   fixedAmount: ExtractionFieldSchema(z.number().nullable()),
   revenueSharePct: ExtractionFieldSchema(z.number().nullable()),
+  deliverables: ExtractionFieldSchema(z.array(z.string())).optional(),
+  milestones: z.array(ExtractedMilestoneSchema).optional(),
   notes: ExtractionFieldSchema(z.string().nullable()),
 });
 
@@ -71,6 +80,7 @@ const ExtractionResultSchema = z.object({
   overallConfidence: z.enum(['high', 'medium', 'low', 'absent']),
   sourceHint: z.string().nullable(),
   extractedAt: z.string(),
+  schemaVersion: z.enum(['v1', 'v2']).optional(),
 });
 
 export function validateExtractionResult(raw: unknown): ExtractionResult {
@@ -221,7 +231,7 @@ export async function extractAgreementFromText(rawText: string): Promise<Extract
   });
 
   try {
-    return validateExtractionResult(parseResult.parsed);
+    return normalizeExtractionResult(validateExtractionResult(parseResult.parsed));
   } catch (validationErr) {
     console.error('[ai-extractor] Zod validation failed.');
     console.error('[ai-extractor] parsed object:', JSON.stringify(parseResult.parsed, null, 2));

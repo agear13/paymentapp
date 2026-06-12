@@ -26,6 +26,37 @@ export function ConfidenceBadge({ confidence, className }: ConfidenceBadgeProps)
 }
 
 /** Participant-level badge shown in ReviewPartyCard header. */
+export function CurrencyConfidenceBadge({
+  label,
+}: {
+  label: 'confirmed' | 'assumed' | 'unknown';
+}) {
+  const config = {
+    confirmed: {
+      dot: 'bg-emerald-500',
+      text: 'text-emerald-700 dark:text-emerald-400',
+      label: 'Confirmed',
+    },
+    assumed: {
+      dot: 'bg-amber-400',
+      text: 'text-amber-700 dark:text-amber-400',
+      label: 'Assumed',
+    },
+    unknown: {
+      dot: 'bg-muted-foreground/40',
+      text: 'text-muted-foreground',
+      label: 'Unknown',
+    },
+  }[label];
+
+  return (
+    <span className={cn('inline-flex items-center gap-1 text-xs', config.text)}>
+      <span className={cn('inline-block h-1.5 w-1.5 rounded-full flex-shrink-0', config.dot)} />
+      {config.label}
+    </span>
+  );
+}
+
 export function ParticipantConfidenceBadge({ confidence }: { confidence: ExtractionConfidence }) {
   if (confidence === 'high') {
     return (

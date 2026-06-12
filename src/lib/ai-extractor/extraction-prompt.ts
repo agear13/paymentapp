@@ -10,9 +10,17 @@ const EXTRACTION_SCHEMA = `{
       "name": { "value": "string", "confidence": "high|medium|low|absent", "rawSnippet": "string?" },
       "email": { "value": "string | null", "confidence": "high|medium|low|absent" },
       "role": { "value": "string", "confidence": "high|medium|low|absent" },
-      "participationModel": { "value": "fixed_payout|revenue_share|customer_attribution", "confidence": "high|medium|low|absent" },
+      "participationModel": { "value": "fixed_payout|revenue_share|hybrid|customer_attribution", "confidence": "high|medium|low|absent" },
       "fixedAmount": { "value": "number | null", "confidence": "high|medium|low|absent", "rawSnippet": "string?" },
       "revenueSharePct": { "value": "number | null", "confidence": "high|medium|low|absent", "rawSnippet": "string?" },
+      "deliverables": { "value": ["string"], "confidence": "high|medium|low|absent" },
+      "milestones": [
+        {
+          "description": { "value": "string", "confidence": "high|medium|low|absent" },
+          "deadline": { "value": "string | null", "confidence": "high|medium|low|absent" },
+          "category": { "value": "financial|performance", "confidence": "high|medium|low|absent" }
+        }
+      ],
       "notes": { "value": "string | null", "confidence": "high|medium|low|absent" }
     }
   ],
@@ -48,11 +56,13 @@ EXTRACTION RULES:
    Do NOT create a party entry merely because someone is named, mentioned, sends a message, or is part of the conversation. Witnesses, schedulers, logistics contacts, and people referenced without a financial role are excluded.
 
 2. For each qualifying party, determine their participation model:
-   - "fixed_payout" — a specific dollar/currency amount is agreed for that person
-   - "revenue_share" — a percentage of the project or deal value is mentioned for that person
+   - "fixed_payout" — only a specific dollar/currency amount is agreed for that person
+   - "revenue_share" — only a percentage of revenue, tickets, bar, sponsorship, or deal value is mentioned
+   - "hybrid" — BOTH a fixed fee/amount AND a revenue share percentage are agreed for the same person
    - "customer_attribution" — they earn from referrals or commissions with no explicit fixed amount or percentage of project value
+   IMPORTANT: project budget or total contract value is NOT a participant payment. Never put the overall project budget in fixedAmount.
 
-3. If a percentage is mentioned without a base (e.g. "15% of sales"), use "revenue_share".
+3. If a percentage is mentioned without a base (e.g. "15% of sales"), use "revenue_share" unless a fixed fee is also present (then use "hybrid").
 
 4. Extract currency only when explicitly stated in the text (ISO codes such as AUD, USD, GBP, EUR, NZD, IDR, SGD). If absent, set currency confidence to "absent" and value to null — do not guess a default.
 
@@ -78,7 +88,14 @@ EXTRACTION RULES:
 
 10. Set extractedAt to the current ISO 8601 timestamp.
 
-11. Keep output compact to avoid truncation:
+11. Obligation extraction (Provvypay obligation intelligence):
+    - Put service outputs, assets, and creative deliverables in deliverables[] — NOT in notes.
+    - Put deadlines and milestone commitments in milestones[] with category:
+      * "financial" — payment timing, bonuses, paid-within-X-days, fee milestones
+      * "performance" — draft delivery, final assets, attendance, service completion
+    - notes: only brief context that does not belong in deliverables or milestones.
+
+12. Keep output compact to avoid truncation:
     - Omit rawSnippet when confidence is "absent" or the value is null.
     - rawSnippet: max 120 characters (short quote from the conversation).
     - notes: max 200 characters.

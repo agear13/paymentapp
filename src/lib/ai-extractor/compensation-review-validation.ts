@@ -27,14 +27,14 @@ export function revenueComponentActive(party: ReviewedParty, original?: Extracte
   // Attribution % lives in revenueSharePct but is not a separate revenue-share leg.
   if (party.participationModel === 'customer_attribution') return false;
   if (original?.participationModel.value === 'customer_attribution') return false;
-  if (party.participationModel === 'revenue_share') return true;
+  if (party.participationModel === 'revenue_share' || party.participationModel === 'hybrid') return true;
   if (party.revenueSharePct != null) return true;
   if (original?.participationModel.value === 'revenue_share') return true;
   return original?.revenueSharePct.value != null;
 }
 
 export function fixedComponentActive(party: ReviewedParty, original?: ExtractedParty): boolean {
-  if (party.participationModel === 'fixed_payout') return true;
+  if (party.participationModel === 'fixed_payout' || party.participationModel === 'hybrid') return true;
   if (party.fixedAmount != null) return true;
   if (original?.participationModel.value === 'fixed_payout') return true;
   return original?.fixedAmount.value != null;
@@ -126,6 +126,12 @@ export function reviewedPartyFromExtracted(original: ExtractedParty): ReviewedPa
     participationModel: original.participationModel.value,
     fixedAmount: original.fixedAmount.value,
     revenueSharePct: original.revenueSharePct.value,
+    deliverables: original.deliverables?.value ?? [],
+    milestones: (original.milestones ?? []).map((m) => ({
+      description: m.description.value,
+      deadline: m.deadline.value ?? '',
+      category: m.category.value,
+    })),
     notes: original.notes.value ?? '',
   };
 }

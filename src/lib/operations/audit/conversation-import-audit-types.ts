@@ -25,8 +25,9 @@ export type ConversationImportPartyRecord = {
 export type ConversationImportExtractionSummary = {
   oneLiner: string;
   participantCount: number;
-  fixedPayoutCount: number;
-  revenueShareCount: number;
+  fixedFeeObligationCount: number;
+  revenueShareObligationCount: number;
+  hybridParticipantCount: number;
   attributionCount: number;
   agreementTypeLabel: string;
   overallConfidence: ExtractionConfidence;

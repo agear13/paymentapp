@@ -1,7 +1,9 @@
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type {
+  ExtractionConfidence,
   ExtractionResult,
   ExtractorEntryPoint,
+  MilestoneCategory,
   ParticipationModelOption,
   SourceType,
 } from './extraction-types';
@@ -12,6 +14,12 @@ import {
   isExtractedCurrencyExplicitlyUnsupported,
 } from '@/lib/ai-extractor/extraction-currency';
 
+export interface ReviewedMilestone {
+  description: string;
+  deadline: string;
+  category: MilestoneCategory;
+}
+
 export interface ReviewedParty {
   id: string;
   name: string;
@@ -20,6 +28,8 @@ export interface ReviewedParty {
   participationModel: ParticipationModelOption;
   fixedAmount: number | null;
   revenueSharePct: number | null;
+  deliverables: string[];
+  milestones: ReviewedMilestone[];
   notes: string;
 }
 
@@ -41,6 +51,8 @@ export interface ReviewFormState {
   extractedCurrencyCode: string | null;
   /** When true, fixed amounts are withheld until operator enters AUD/USD equivalents. */
   extractedCurrencyUnsupported: boolean;
+  /** Extraction confidence for project currency — used for confirmed/assumed UI. */
+  currencyConfidence: ExtractionConfidence;
 }
 
 /** AUD and USD are the only currencies the system can store and calculate with correctly. */
@@ -98,11 +110,18 @@ export function reviewFormFromExtraction(
       participationModel: p.participationModel.value,
       fixedAmount: extractedCurrencyUnsupported ? null : p.fixedAmount.value,
       revenueSharePct: p.revenueSharePct.value,
+      deliverables: p.deliverables?.value ?? [],
+      milestones: (p.milestones ?? []).map((m) => ({
+        description: m.description.value,
+        deadline: m.deadline.value ?? '',
+        category: m.category.value,
+      })),
       notes: p.notes.value ?? '',
     })),
     duplicateResolutions: {},
     rawConversationText: undefined,
     extractedCurrencyCode,
     extractedCurrencyUnsupported,
+    currencyConfidence: result.currency.confidence,
   };
 }

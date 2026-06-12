@@ -176,9 +176,11 @@ export function mapSinglePartyToParticipant(
 ): DemoParticipant {
   const role = mapRoleStringToOperationalRole(party.role);
   const hybrid = isHybridCompensationParty(party, original);
-  const commissionKind = participationModelToCommissionKind(party.participationModel);
+  const mappedParticipationModel =
+    hybrid || party.participationModel === 'hybrid' ? 'revenue_share' : party.participationModel;
+  const commissionKind = participationModelToCommissionKind(mappedParticipationModel);
   const commissionValue =
-    party.participationModel === 'fixed_payout'
+    party.participationModel === 'fixed_payout' && !hybrid
       ? (party.fixedAmount ?? 0)
       : (party.revenueSharePct ?? 0);
 
@@ -192,7 +194,8 @@ export function mapSinglePartyToParticipant(
     role,
     project,
     notes: participantNotes,
-    participationModel: hybrid ? 'revenue_share' : party.participationModel,
+    participationModel:
+      hybrid || party.participationModel === 'hybrid' ? 'revenue_share' : party.participationModel,
     commissionKind,
     commissionValue,
     enableCustomerAttribution:

@@ -1,6 +1,12 @@
 export type ExtractionConfidence = 'high' | 'medium' | 'low' | 'absent';
 export type ExtractorEntryPoint = 'project_create' | 'participant_add' | 'onboarding';
-export type ParticipationModelOption = 'fixed_payout' | 'revenue_share' | 'customer_attribution';
+export type ParticipationModelOption =
+  | 'fixed_payout'
+  | 'revenue_share'
+  | 'hybrid'
+  | 'customer_attribution';
+
+export type MilestoneCategory = 'financial' | 'performance';
 export type SourceType = 'whatsapp' | 'email' | 'slack' | 'sms' | 'meeting_notes' | 'other';
 
 export const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
@@ -24,6 +30,12 @@ export interface ExtractionUncertainty {
   snippet?: string;
 }
 
+export interface ExtractedMilestone {
+  description: ExtractionField<string>;
+  deadline: ExtractionField<string | null>;
+  category: ExtractionField<MilestoneCategory>;
+}
+
 export interface ExtractedParty {
   id: string;
   name: ExtractionField<string>;
@@ -32,6 +44,10 @@ export interface ExtractedParty {
   participationModel: ExtractionField<ParticipationModelOption>;
   fixedAmount: ExtractionField<number | null>;
   revenueSharePct: ExtractionField<number | null>;
+  /** Performance obligations — deliverables, assets, service outputs. */
+  deliverables: ExtractionField<string[]>;
+  /** Financial and performance milestones with deadlines. */
+  milestones: ExtractedMilestone[];
   notes: ExtractionField<string | null>;
 }
 
@@ -54,7 +70,9 @@ export interface ExtractionResult {
   overallConfidence: ExtractionConfidence;
   sourceHint: string | null;
   extractedAt: string;
+  /** Tracks obligation schema generation for lifecycle/settlement features. */
+  schemaVersion?: 'v1' | 'v2';
 }
 
-export const EXTRACTOR_VERSION = 'v1' as const;
+export const EXTRACTOR_VERSION = 'v2' as const;
 export const EXTRACTOR_CREATED_VIA = 'ai_conversation_import' as const;

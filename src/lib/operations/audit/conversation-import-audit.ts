@@ -35,14 +35,19 @@ import type {
 
 export function buildAgreementTypeLabel(stats: ExtractionSummaryStats): string {
   const parts: string[] = [];
-  if (stats.revenueShareCount > 0) {
+  if (stats.fixedFeeObligationCount > 0) {
     parts.push(
-      `${stats.revenueShareCount} revenue share${stats.revenueShareCount !== 1 ? 's' : ''}`
+      `${stats.fixedFeeObligationCount} fixed fee obligation${stats.fixedFeeObligationCount !== 1 ? 's' : ''}`
     );
   }
-  if (stats.fixedPayoutCount > 0) {
+  if (stats.revenueShareObligationCount > 0) {
     parts.push(
-      `${stats.fixedPayoutCount} fixed payout${stats.fixedPayoutCount !== 1 ? 's' : ''}`
+      `${stats.revenueShareObligationCount} revenue share obligation${stats.revenueShareObligationCount !== 1 ? 's' : ''}`
+    );
+  }
+  if (stats.hybridParticipantCount > 0) {
+    parts.push(
+      `${stats.hybridParticipantCount} hybrid participant${stats.hybridParticipantCount !== 1 ? 's' : ''}`
     );
   }
   if (stats.attributionCount > 0) {
@@ -104,8 +109,9 @@ export function buildConversationImportAuditRecord(input: {
     extractionSummary: {
       oneLiner: stats.oneLiner,
       participantCount: parties.length,
-      fixedPayoutCount: stats.fixedPayoutCount,
-      revenueShareCount: stats.revenueShareCount,
+      fixedFeeObligationCount: stats.fixedFeeObligationCount,
+      revenueShareObligationCount: stats.revenueShareObligationCount,
+      hybridParticipantCount: stats.hybridParticipantCount,
       attributionCount: stats.attributionCount,
       agreementTypeLabel: buildAgreementTypeLabel(stats),
       overallConfidence: input.result.overallConfidence,
@@ -132,8 +138,9 @@ export function buildLegacyConversationImportRecord(
     extractionSummary: {
       oneLiner: 'Imported from conversation (legacy record — summary not captured at import).',
       participantCount: 0,
-      fixedPayoutCount: 0,
-      revenueShareCount: 0,
+      fixedFeeObligationCount: 0,
+      revenueShareObligationCount: 0,
+      hybridParticipantCount: 0,
       attributionCount: 0,
       agreementTypeLabel: 'Unknown',
       overallConfidence: 'absent',
@@ -268,13 +275,23 @@ export function mergeConversationImportAuditTimeline(
 }
 
 export function formatPartyCompensationTerms(party: ConversationImportPartyRecord): string {
+  if (party.participationModel === 'hybrid') {
+    const fixed =
+      party.fixedAmount != null ? `$${party.fixedAmount.toLocaleString()} fixed` : 'fixed fee';
+    const share =
+      party.revenueSharePct != null ? `${party.revenueSharePct}% revenue share` : 'revenue share';
+    return `Hybrid — ${fixed} + ${share}`;
+  }
   if (party.participationModel === 'revenue_share') {
     return party.revenueSharePct != null ? `${party.revenueSharePct}% revenue share` : 'Revenue share';
   }
   if (party.participationModel === 'fixed_payout') {
     return party.fixedAmount != null ? `Fixed payout ${party.fixedAmount}` : 'Fixed payout';
   }
-  return participationModelLabel(party.participationModel);
+  if (party.participationModel === 'customer_attribution') {
+    return participationModelLabel('customer_attribution');
+  }
+  return 'Participation terms pending review';
 }
 
 function formatConfidenceLabel(confidence: ExtractionConfidence): string {
@@ -287,15 +304,21 @@ function formatConfidenceLabel(confidence: ExtractionConfidence): string {
 export function formatPartyCompensationModelForAudit(
   party: ConversationImportPartyRecord
 ): string {
+  if (party.participationModel === 'hybrid') return 'Hybrid Compensation';
   if (party.participationModel === 'revenue_share') return 'Revenue Share';
   if (party.participationModel === 'fixed_payout') return 'Fixed Payout';
   if (party.participationModel === 'customer_attribution') return 'Customer Attribution';
-  return participationModelLabel(party.participationModel);
+  return 'Participation terms pending review';
 }
 
 export function formatPartyExtractedValueForAudit(
   party: ConversationImportPartyRecord
 ): string {
+  if (party.participationModel === 'hybrid') {
+    const fixed = party.fixedAmount != null ? String(party.fixedAmount) : '—';
+    const share = party.revenueSharePct != null ? `${party.revenueSharePct}%` : '—';
+    return `${fixed} fixed + ${share} share`;
+  }
   if (party.participationModel === 'revenue_share') {
     return party.revenueSharePct != null ? `${party.revenueSharePct}%` : 'Not Found';
   }
