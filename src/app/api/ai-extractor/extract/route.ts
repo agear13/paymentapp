@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { AuthError } from '@/lib/auth/errors';
 import { extractAgreementFromText } from '@/lib/ai-extractor/extraction-service';
+import { ExtractionResponseError } from '@/lib/ai-extractor/parse-extraction-response';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { requireEntitlement } from '@/lib/entitlements/gate-api.server';
 
@@ -53,6 +54,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Conversation text is too long (max 50,000 characters)' }, { status: 400 });
   }
 
-  const result = await extractAgreementFromText(rawText);
-  return NextResponse.json(result);
+  try {
+    const result = await extractAgreementFromText(rawText);
+    return NextResponse.json(result);
+  } catch (err) {
+    if (err instanceof ExtractionResponseError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 422 });
+    }
+    throw err;
+  }
 }

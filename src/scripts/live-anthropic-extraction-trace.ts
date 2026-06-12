@@ -79,7 +79,7 @@ async function traceOne(label: string, rawText: string) {
   const client = new Anthropic({ apiKey });
   const message = await client.messages.create({
     model: MODEL,
-    max_tokens: 2048,
+    max_tokens: 4096,
     temperature: 0,
     system: buildExtractionSystemPrompt(),
     messages: [{ role: 'user', content: buildExtractionUserPrompt(rawText) }],

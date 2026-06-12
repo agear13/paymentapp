@@ -1,10 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import type { ExtractionResult } from './extraction-types';
+import {
+  EXTRACTOR_MAX_TOKENS_RETRY,
+  EXTRACTION_TRUNCATION_USER_MESSAGE,
+  getExtractorMaxTokens,
+  getExtractorModel,
+} from './extraction-config';
 import { buildExtractionSystemPrompt, buildExtractionUserPrompt } from './extraction-prompt';
-
-const MODEL = process.env.EXTRACTOR_MODEL ?? 'claude-sonnet-4-6';
-const MAX_TOKENS = 2048;
+import {
+  estimateTokenCount,
+  ExtractionResponseError,
+  parseExtractionModelResponse,
+  shouldRejectTruncatedExtraction,
+} from './parse-extraction-response';
 
 let _client: Anthropic | null = null;
 
@@ -90,50 +99,132 @@ function degradedResult(reason: string): ExtractionResult {
   };
 }
 
+type ExtractionCompletion = {
+  responseText: string;
+  model: string;
+  stopReason: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  maxTokens: number;
+};
+
+function logExtractionObservability(
+  event: string,
+  rawText: string,
+  completion: ExtractionCompletion,
+  extra?: Record<string, unknown>
+): void {
+  console.error(
+    '[ai-extractor]',
+    JSON.stringify({
+      event,
+      model: completion.model,
+      stopReason: completion.stopReason,
+      maxTokens: completion.maxTokens,
+      inputTextLength: rawText.length,
+      responseLength: completion.responseText.length,
+      estimatedOutputTokens: estimateTokenCount(completion.responseText),
+      inputTokens: completion.inputTokens,
+      outputTokens: completion.outputTokens,
+      ...extra,
+    })
+  );
+}
+
+async function requestExtractionCompletion(
+  rawText: string,
+  maxTokens: number
+): Promise<ExtractionCompletion> {
+  const client = getClient();
+  const message = await client.messages.create({
+    model: getExtractorModel(),
+    max_tokens: maxTokens,
+    temperature: 0,
+    system: buildExtractionSystemPrompt(),
+    messages: [{ role: 'user', content: buildExtractionUserPrompt(rawText) }],
+  });
+
+  const block = message.content[0];
+  if (!block || block.type !== 'text') {
+    throw new Error('AI returned an unexpected response format.');
+  }
+
+  return {
+    responseText: block.text.trim(),
+    model: message.model,
+    stopReason: message.stop_reason,
+    inputTokens: message.usage?.input_tokens ?? null,
+    outputTokens: message.usage?.output_tokens ?? null,
+    maxTokens,
+  };
+}
+
 export async function extractAgreementFromText(rawText: string): Promise<ExtractionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return degradedResult('Extraction service not configured. Please fill in all fields manually.');
   }
 
-  let responseText: string;
-  try {
-    const client = getClient();
-    const message = await client.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      temperature: 0,
-      system: buildExtractionSystemPrompt(),
-      messages: [{ role: 'user', content: buildExtractionUserPrompt(rawText) }],
-    });
+  const initialMaxTokens = getExtractorMaxTokens();
+  let completion: ExtractionCompletion;
 
-    const block = message.content[0];
-    if (!block || block.type !== 'text') {
-      return degradedResult('AI returned an unexpected response format. Please fill in all fields manually.');
+  try {
+    completion = await requestExtractionCompletion(rawText, initialMaxTokens);
+    logExtractionObservability('extraction_response', rawText, completion);
+
+    if (completion.stopReason === 'max_tokens') {
+      console.error(
+        '[ai-extractor]',
+        JSON.stringify({
+          event: 'extraction_retry',
+          reason: 'max_tokens',
+          initialMaxTokens,
+          retryMaxTokens: EXTRACTOR_MAX_TOKENS_RETRY,
+        })
+      );
+      completion = await requestExtractionCompletion(rawText, EXTRACTOR_MAX_TOKENS_RETRY);
+      logExtractionObservability('extraction_response_retry', rawText, completion, {
+        retried: true,
+      });
     }
-    responseText = block.text.trim();
-    console.error('[ai-extractor] raw response length:', responseText.length);
-    console.error('[ai-extractor] raw response text:', responseText);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return degradedResult(`AI service error: ${message}. Please fill in all fields manually.`);
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(responseText);
-    console.error('[ai-extractor] JSON.parse succeeded. Top-level keys:', Object.keys(parsed as object));
-  } catch (parseErr) {
-    console.error('[ai-extractor] JSON.parse failed:', parseErr);
-    console.error('[ai-extractor] raw text that failed to parse:', responseText);
+  const parseResult = parseExtractionModelResponse(completion.responseText, {
+    stopReason: completion.stopReason,
+  });
+
+  if (shouldRejectTruncatedExtraction(completion.stopReason, parseResult)) {
+    logExtractionObservability('extraction_parse_failed', rawText, completion, {
+      parseReason: parseResult.ok ? 'repaired_after_max_tokens' : parseResult.reason,
+      parseDetail: parseResult.ok ? undefined : parseResult.detail,
+      truncated: true,
+      repaired: parseResult.ok ? parseResult.repaired : false,
+    });
+    throw new ExtractionResponseError('truncated', EXTRACTION_TRUNCATION_USER_MESSAGE);
+  }
+
+  if (!parseResult.ok) {
+    logExtractionObservability('extraction_parse_failed', rawText, completion, {
+      parseReason: parseResult.reason,
+      parseDetail: parseResult.detail,
+      truncated: false,
+    });
     return degradedResult('Could not parse AI response. Please fill in all fields manually.');
   }
 
+  logExtractionObservability('extraction_parse_succeeded', rawText, completion, {
+    repaired: parseResult.repaired,
+    topLevelKeys: Object.keys(parseResult.parsed as object),
+  });
+
   try {
-    return validateExtractionResult(parsed);
+    return validateExtractionResult(parseResult.parsed);
   } catch (validationErr) {
     console.error('[ai-extractor] Zod validation failed.');
-    console.error('[ai-extractor] parsed object:', JSON.stringify(parsed, null, 2));
+    console.error('[ai-extractor] parsed object:', JSON.stringify(parseResult.parsed, null, 2));
     if (
       validationErr &&
       typeof validationErr === 'object' &&

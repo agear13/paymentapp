@@ -78,6 +78,14 @@ EXTRACTION RULES:
 
 10. Set extractedAt to the current ISO 8601 timestamp.
 
+11. Keep output compact to avoid truncation:
+    - Omit rawSnippet when confidence is "absent" or the value is null.
+    - rawSnippet: max 120 characters (short quote from the conversation).
+    - notes: max 200 characters.
+    - uncertainties.snippet: max 120 characters.
+    - uncertainties.issue: max 300 characters; be concise.
+    - Do not repeat the full conversation in any field.
+
 SCHEMA:
 ${EXTRACTION_SCHEMA}`;
 }
