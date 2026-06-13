@@ -61,3 +61,43 @@ test('public pay API returns structured response for invalid short code', async 
   const response = await request.get('/api/public/pay/INVALID01');
   expect(response.status()).toBeLessThan(500);
 });
+
+test('manual-settlement API enforces CSRF for cookie-authenticated mutations', async ({ request }) => {
+  const csrfBootstrap = await request.get('/api/security/csrf-token');
+  expect(csrfBootstrap.ok()).toBeTruthy();
+  const { csrfToken } = (await csrfBootstrap.json()) as { csrfToken: string };
+  expect(typeof csrfToken).toBe('string');
+
+  const csrfCookies = csrfBootstrap
+    .headersArray()
+    .filter((h) => h.name.toLowerCase() === 'set-cookie')
+    .map((h) => h.value.split(';')[0])
+    .join('; ');
+  const cookieHeader = [csrfCookies, 'sb-localhost-auth-token=fake-session']
+    .filter(Boolean)
+    .join('; ');
+
+  const paymentLinkId = '00000000-0000-0000-0000-000000000001';
+  const withoutHeader = await request.post(
+    `/api/payment-links/${paymentLinkId}/manual-settlement`,
+    {
+      headers: { cookie: cookieHeader },
+      data: { action: 'mark_paid' },
+    }
+  );
+  expect(withoutHeader.status()).toBe(403);
+  const withoutHeaderBody = (await withoutHeader.json()) as { error?: string };
+  expect(withoutHeaderBody.error).toMatch(/CSRF validation failed/i);
+
+  const withHeader = await request.post(
+    `/api/payment-links/${paymentLinkId}/manual-settlement`,
+    {
+      headers: {
+        cookie: cookieHeader,
+        'x-csrf-token': csrfToken,
+      },
+      data: { action: 'mark_paid' },
+    }
+  );
+  expect(withHeader.status()).not.toBe(403);
+});

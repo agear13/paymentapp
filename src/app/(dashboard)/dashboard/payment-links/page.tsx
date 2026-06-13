@@ -43,6 +43,7 @@ import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/formatters/format-currency';
 import { getPaymentLinkUrl } from '@/lib/runtime/customer-facing-url';
 import { CustomerFacingDomainWarning, useCustomerFacingOrigin } from '@/components/operational/customer-facing-origin-provider';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 
 export default function PaymentLinksPage() {
   const searchParams = useSearchParams();
@@ -289,7 +290,7 @@ export default function PaymentLinksPage() {
   const markInvoicePaid = React.useCallback(
     async (paymentLink: { id: string }) => {
       try {
-        const res = await fetch(`/api/payment-links/${paymentLink.id}/manual-settlement`, {
+        const res = await csrfAwareFetch(`/api/payment-links/${paymentLink.id}/manual-settlement`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'mark_paid' }),

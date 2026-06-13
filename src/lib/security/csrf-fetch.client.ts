@@ -12,49 +12,70 @@ function bootstrapFetch(): typeof window.fetch {
   return state.nativeFetch ?? window.fetch.bind(window);
 }
 
-export function installCsrfFetchInterceptor(token: string): void {
-  const state = getProvvyPayCsrfGlobal();
-  state.csrfToken = token;
+function resolveFetchUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
 
+function isCsrfProtectedSameOriginMutation(url: string, method: string): boolean {
+  return (
+    MUTATING.has(method) &&
+    url.startsWith('/') &&
+    !url.startsWith('/api/public/') &&
+    !url.startsWith('/api/stripe/create-checkout-session')
+  );
+}
+
+function withCsrfHeaders(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  csrfToken: string
+): RequestInit {
+  const headers = new Headers(
+    init?.headers || (input instanceof Request ? input.headers : undefined)
+  );
+  if (!headers.has('x-csrf-token')) {
+    headers.set('x-csrf-token', csrfToken);
+  }
+
+  return {
+    ...init,
+    headers,
+    credentials: init?.credentials ?? 'include',
+  };
+}
+
+function ensureFetchInterceptorInstalled(): void {
+  const state = getProvvyPayCsrfGlobal();
   if (state.interceptorInstalled || typeof window === 'undefined') return;
+  if (typeof window.fetch !== 'function') return;
   state.interceptorInstalled = true;
 
   state.nativeFetch = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const { csrfToken, nativeFetch } = getProvvyPayCsrfGlobal();
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.href
-          : input.url;
+    const { nativeFetch } = getProvvyPayCsrfGlobal();
+    const url = resolveFetchUrl(input);
     const method = (
       init?.method || (input instanceof Request ? input.method : 'GET')
     ).toUpperCase();
 
-    if (
-      csrfToken &&
-      MUTATING.has(method) &&
-      url.startsWith('/') &&
-      !url.startsWith('/api/public/') &&
-      !url.startsWith('/api/stripe/create-checkout-session')
-    ) {
-      const headers = new Headers(
-        init?.headers || (input instanceof Request ? input.headers : undefined)
-      );
-      if (!headers.has('x-csrf-token')) {
-        headers.set('x-csrf-token', csrfToken);
+    if (isCsrfProtectedSameOriginMutation(url, method)) {
+      await ensureClientCsrfReady().catch(() => undefined);
+      const { csrfToken } = getProvvyPayCsrfGlobal();
+      if (csrfToken) {
+        return nativeFetch!(input, withCsrfHeaders(input, init, csrfToken));
       }
-
-      return nativeFetch!(input, {
-        ...init,
-        headers,
-        credentials: init?.credentials ?? 'include',
-      });
     }
 
     return nativeFetch!(input, init);
   };
+}
+
+export function installCsrfFetchInterceptor(token: string): void {
+  const state = getProvvyPayCsrfGlobal();
+  state.csrfToken = token;
+  ensureFetchInterceptorInstalled();
 }
 
 export function getClientCsrfToken(): string | null {
@@ -86,6 +107,7 @@ async function fetchAndInstallCsrfToken(): Promise<void> {
  * Concurrent callers — including separate bundled module instances — share one bootstrap.
  */
 export async function ensureClientCsrfReady(): Promise<void> {
+  ensureFetchInterceptorInstalled();
   const state = getProvvyPayCsrfGlobal();
 
   if (state.csrfToken) {

@@ -55,6 +55,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { isValidShortCode } from '@/lib/short-code';
 import { getPaymentLinkUrl } from '@/lib/runtime/customer-facing-url';
 import { usePaymentLinkUrl } from '@/components/operational/customer-facing-origin-provider';
@@ -287,7 +288,7 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
     if (!paymentLink) return;
     setSettlementLoading(true);
     try {
-      const res = await fetch(`/api/payment-links/${paymentLink.id}/manual-settlement`, {
+      const res = await csrfAwareFetch(`/api/payment-links/${paymentLink.id}/manual-settlement`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),

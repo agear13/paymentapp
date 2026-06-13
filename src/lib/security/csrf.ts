@@ -123,47 +123,66 @@ function firstCsrfTokenDivergenceIndex(
   return null;
 }
 
-function logCsrfTokenPreComparison(
-  cookieToken: string,
-  headerToken: string
-): void {
-  const firstDivergenceIndex = firstCsrfTokenDivergenceIndex(
-    cookieToken,
-    headerToken
-  );
+export type CsrfValidationFailureReason =
+  | 'missing_cookie'
+  | 'missing_header'
+  | 'token_mismatch'
+  | 'invalid_signature';
 
-  log.warn('CSRF token pre-comparison', {
-    cookieTokenRaw: cookieToken,
-    headerTokenRaw: headerToken,
-    cookieTokenLength: cookieToken.length,
-    headerTokenLength: headerToken.length,
-    cookieDecodeUriChanged: decodeUriComponentChangesValue(cookieToken),
-    headerDecodeUriChanged: decodeUriComponentChangesValue(headerToken),
+function maskCsrfTokenPreview(token: string | null): string | null {
+  if (!token) return null;
+  if (token.length <= 12) return '[redacted]';
+  return `${token.slice(0, 6)}…${token.slice(-4)} (len=${token.length})`;
+}
+
+export function diagnoseCsrfValidation(request: NextRequest): {
+  valid: boolean;
+  reason: CsrfValidationFailureReason | null;
+} {
+  const cookieToken = getTokenFromCookie(request);
+  const headerToken = getTokenFromHeader(request);
+
+  if (!cookieToken) {
+    return { valid: false, reason: 'missing_cookie' };
+  }
+  if (!headerToken) {
+    return { valid: false, reason: 'missing_header' };
+  }
+  if (cookieToken !== headerToken) {
+    return { valid: false, reason: 'token_mismatch' };
+  }
+  if (!isSignedCsrfTokenValid(cookieToken)) {
+    return { valid: false, reason: 'invalid_signature' };
+  }
+  return { valid: true, reason: null };
+}
+
+function logCsrfValidationFailure(request: NextRequest, pathname: string): void {
+  const cookieToken = getTokenFromCookie(request);
+  const headerToken = getTokenFromHeader(request);
+  const { reason } = diagnoseCsrfValidation(request);
+  const firstDivergenceIndex =
+    cookieToken && headerToken
+      ? firstCsrfTokenDivergenceIndex(cookieToken, headerToken)
+      : null;
+
+  log.warn('CSRF validation failed', {
+    endpoint: pathname,
+    origin: request.headers.get('origin'),
+    referer: request.headers.get('referer'),
+    csrfCookiePresent: Boolean(cookieToken),
+    csrfHeaderPresent: Boolean(headerToken),
+    csrfHeaderValue: maskCsrfTokenPreview(headerToken),
+    validationResult: reason ?? 'unknown',
+    cookieTokenLength: cookieToken?.length ?? 0,
+    headerTokenLength: headerToken?.length ?? 0,
+    cookieDecodeUriChanged: cookieToken
+      ? decodeUriComponentChangesValue(cookieToken)
+      : false,
+    headerDecodeUriChanged: headerToken
+      ? decodeUriComponentChangesValue(headerToken)
+      : false,
     firstDivergenceIndex,
-    cookieCharAtDivergence:
-      firstDivergenceIndex === null
-        ? null
-        : firstDivergenceIndex < cookieToken.length
-          ? cookieToken[firstDivergenceIndex]
-          : null,
-    headerCharAtDivergence:
-      firstDivergenceIndex === null
-        ? null
-        : firstDivergenceIndex < headerToken.length
-          ? headerToken[firstDivergenceIndex]
-          : null,
-    cookieCharCodeAtDivergence:
-      firstDivergenceIndex === null
-        ? null
-        : firstDivergenceIndex < cookieToken.length
-          ? cookieToken.charCodeAt(firstDivergenceIndex)
-          : null,
-    headerCharCodeAtDivergence:
-      firstDivergenceIndex === null
-        ? null
-        : firstDivergenceIndex < headerToken.length
-          ? headerToken.charCodeAt(firstDivergenceIndex)
-          : null,
   });
 }
 
@@ -174,30 +193,7 @@ function logCsrfTokenPreComparison(
  * @returns True if CSRF token is valid
  */
 export function validateCSRFToken(request: NextRequest): boolean {
-  const cookieToken = getTokenFromCookie(request);
-  const headerToken = getTokenFromHeader(request);
-
-  if (!cookieToken || !headerToken) {
-    return false;
-  }
-
-  logCsrfTokenPreComparison(cookieToken, headerToken);
-
-  if (cookieToken !== headerToken) {
-    return false;
-  }
-
-  const parts = cookieToken.split('.');
-  if (parts.length !== 2) {
-    return false;
-  }
-
-  const [token, signature] = parts;
-  try {
-    return verifyToken(token, signature);
-  } catch {
-    return false;
-  }
+  return diagnoseCsrfValidation(request).valid;
 }
 
 /**
@@ -274,11 +270,7 @@ export function csrfProtection(
       undefined;
     const userAgent = request.headers.get('user-agent') ?? undefined;
 
-    log.warn('CSRF validation failed', {
-      method: request.method,
-      path: pathname,
-      ip: ip ?? null,
-    });
+    logCsrfValidationFailure(request, pathname);
 
     void import('@/lib/audit/audit-log').then(({ logSecurityEvent, AuditEventType, AuditSeverity }) =>
       logSecurityEvent({

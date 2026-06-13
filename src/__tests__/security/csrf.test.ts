@@ -8,6 +8,7 @@ jest.mock('@/lib/audit/audit-log', () => ({
 
 import {
   createSignedCsrfToken,
+  diagnoseCsrfValidation,
   enforceCsrfForRequest,
   validateCSRFToken,
 } from '@/lib/security/csrf';
@@ -64,6 +65,19 @@ describe('CSRF protection', () => {
     const block = enforceCsrfForRequest(request);
     expect(block).not.toBeNull();
     expect(block!.status).toBe(403);
+    expect(diagnoseCsrfValidation(request).reason).toBe('missing_cookie');
+  });
+
+  it('missing CSRF header fails with missing_header reason', () => {
+    const request = makeRequest({
+      method: 'POST',
+      path: '/api/payment-links',
+      csrfCookie: signedToken,
+      sessionCookie,
+    });
+
+    expect(diagnoseCsrfValidation(request).reason).toBe('missing_header');
+    expect(enforceCsrfForRequest(request)?.status).toBe(403);
   });
 
   it('invalid CSRF token fails', () => {

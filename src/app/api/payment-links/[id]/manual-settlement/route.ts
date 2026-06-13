@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import { requireAuth } from '@/lib/auth/middleware';
+import { AuthError } from '@/lib/auth/errors';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { transitionPaymentLinkState } from '@/lib/payments/state-machine';
@@ -203,6 +204,9 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (e: unknown) {
+    if (e instanceof AuthError) {
+      return NextResponse.json({ error: e.message, code: e.code }, { status: e.statusCode });
+    }
     const message = e instanceof Error ? e.message : 'Internal server error';
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid request', details: e.issues }, { status: 400 });

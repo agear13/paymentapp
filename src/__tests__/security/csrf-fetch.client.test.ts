@@ -6,6 +6,7 @@ import {
   csrfAwareFetch,
   ensureClientCsrfReady,
   getClientCsrfToken,
+  installCsrfFetchInterceptor,
   resetClientCsrfStateForTests,
 } from '@/lib/security/csrf-fetch.client';
 import { getProvvyPayCsrfGlobal } from '@/lib/security/csrf-global.client';
@@ -193,5 +194,78 @@ describe('csrfAwareFetch onboarding mutations', () => {
 
     const mutationCall = fetchMock.mock.calls[1];
     expect(mutationCall[1]?.headers?.get('x-csrf-token')).toBe(updatedToken);
+  });
+});
+
+describe('fetch interceptor auto-bootstrap', () => {
+  const originalFetch = global.fetch;
+  let fetchMock: jest.Mock;
+
+  beforeEach(() => {
+    resetClientCsrfStateForTests();
+    fetchMock = jest.fn();
+    global.fetch = fetchMock;
+    installCsrfFetchInterceptor('');
+  });
+
+  afterEach(() => {
+    resetClientCsrfStateForTests();
+    global.fetch = originalFetch;
+  });
+
+  it('bootstraps CSRF before a plain fetch POST when the interceptor is not warmed yet', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ csrfToken: SIGNED_TOKEN }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+
+    const response = await fetch('/api/payment-links/pl-1/manual-settlement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'mark_paid' }),
+    });
+
+    expect(response.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/security/csrf-token', {
+      credentials: 'include',
+    });
+
+    const mutationCall = fetchMock.mock.calls[1];
+    expect(mutationCall[0]).toBe('/api/payment-links/pl-1/manual-settlement');
+    expect(mutationCall[1]?.headers?.get('x-csrf-token')).toBe(SIGNED_TOKEN);
+    expect(mutationCall[1]?.credentials).toBe('include');
+  });
+
+  it('markInvoicePaid path via csrfAwareFetch sends mark_paid body with CSRF headers', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ csrfToken: SIGNED_TOKEN }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+
+    const response = await csrfAwareFetch('/api/payment-links/pl-1/manual-settlement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'mark_paid' }),
+    });
+
+    expect(response.ok).toBe(true);
+
+    const mutationCall = fetchMock.mock.calls[1];
+    expect(mutationCall[0]).toBe('/api/payment-links/pl-1/manual-settlement');
+    expect(mutationCall[1]?.method).toBe('POST');
+    expect(mutationCall[1]?.credentials).toBe('include');
+    expect(mutationCall[1]?.headers?.get('x-csrf-token')).toBe(SIGNED_TOKEN);
+    expect(JSON.parse(String(mutationCall[1]?.body))).toEqual({ action: 'mark_paid' });
   });
 });
