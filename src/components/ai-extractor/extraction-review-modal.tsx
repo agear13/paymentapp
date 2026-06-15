@@ -28,6 +28,7 @@ import type { ReviewedParty, ReviewFormState } from '@/lib/ai-extractor/review-f
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import { reviewFormFromExtraction, isSupportedCurrency } from '@/lib/ai-extractor/review-form-types';
+import { logExtractorDebugSnapshot } from '@/lib/ai-extractor/extraction-field-schema';
 import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { buildExtractionSummary } from '@/lib/ai-extractor/extraction-summary';
 import { detectDuplicates, defaultResolutions } from '@/lib/ai-extractor/duplicate-detection';
@@ -270,6 +271,7 @@ export function ExtractionReviewModal({
         };
         const ok = await persistPilotSnapshot(persistPayload);
         if (!ok) throw new Error('Could not save project. Please try again.');
+        logExtractorDebugSnapshot({ persistedParticipants: newParticipants.length });
         await fetch('/api/deal-network-pilot/obligations/refresh', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -334,6 +336,9 @@ export function ExtractionReviewModal({
           participants: updatedParticipants,
         });
         if (!ok) throw new Error('Could not save participants. Please try again.');
+        logExtractorDebugSnapshot({
+          persistedParticipants: addedCount + updatedCount,
+        });
         await fetch('/api/deal-network-pilot/obligations/refresh', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -388,6 +393,7 @@ export function ExtractionReviewModal({
         logOnboardingPipelineDemoParticipants('onCompletePayload', newParticipants, {
           entryPoint: 'onboarding',
         });
+        logExtractorDebugSnapshot({ persistedParticipants: newParticipants.length });
         onComplete(undefined, newParticipants);
       }
     } catch (e) {

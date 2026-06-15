@@ -1,5 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { z } from 'zod';
 import type { ExtractionResult } from './extraction-types';
 import {
   EXTRACTOR_MAX_TOKENS_RETRY,
@@ -7,16 +6,17 @@ import {
   getExtractorMaxTokens,
   getExtractorModel,
 } from './extraction-config';
-import { ExtractionFieldSchema, logExtractorParticipantCount } from './extraction-field-schema';
 import { buildExtractionSystemPrompt, buildExtractionUserPrompt } from './extraction-prompt';
 import { normalizeExtractionResult } from './normalize-extraction-result';
-import { parseSettlementEventsNonBlocking } from './parse-settlement-events';
 import {
   estimateTokenCount,
   ExtractionResponseError,
   parseExtractionModelResponse,
   shouldRejectTruncatedExtraction,
 } from './parse-extraction-response';
+import { validateExtractionResult } from './validate-extraction-result';
+
+export { validateExtractionResult } from './validate-extraction-result';
 
 let _client: Anthropic | null = null;
 
@@ -27,125 +27,6 @@ function getClient(): Anthropic {
     _client = new Anthropic({ apiKey });
   }
   return _client;
-}
-
-const ObligationStatusSchema = z.enum([
-  'draft',
-  'confirmed',
-  'pending',
-  'conditional',
-  'fulfilled',
-  'disputed',
-]);
-
-const ExtractedMilestoneSchema = z.object({
-  description: ExtractionFieldSchema(z.string()),
-  deadline: ExtractionFieldSchema(z.string().nullable()),
-  category: ExtractionFieldSchema(z.enum(['financial', 'performance'])),
-  status: ObligationStatusSchema.optional(),
-});
-
-const ExtractedConditionSchema = z.object({
-  description: ExtractionFieldSchema(z.string()),
-  dependsOn: ExtractionFieldSchema(z.string().nullable()),
-  status: ObligationStatusSchema.optional(),
-});
-
-const ExtractedDependencySchema = z.object({
-  obligation: ExtractionFieldSchema(z.string()),
-  dependsOn: ExtractionFieldSchema(z.string()),
-  status: ObligationStatusSchema.optional(),
-});
-
-const ExtractedPartySchema = z.object({
-  id: z.string(),
-  name: ExtractionFieldSchema(z.string()),
-  email: ExtractionFieldSchema(z.string().nullable()),
-  role: ExtractionFieldSchema(z.string()),
-  participationModel: ExtractionFieldSchema(
-    z.enum(['fixed_payout', 'revenue_share', 'hybrid', 'customer_attribution'])
-  ),
-  fixedAmount: ExtractionFieldSchema(z.number().nullable()),
-  revenueSharePct: ExtractionFieldSchema(z.number().nullable()),
-  deliverables: ExtractionFieldSchema(z.array(z.string())).optional(),
-  milestones: z.array(ExtractedMilestoneSchema).optional(),
-  serviceCategories: ExtractionFieldSchema(z.array(z.string())).optional(),
-  conditions: z.array(ExtractedConditionSchema).optional(),
-  dependencies: z.array(ExtractedDependencySchema).optional(),
-  notes: ExtractionFieldSchema(z.string().nullable()),
-});
-
-const ExtractedPaymentTermSchema = z.object({
-  description: ExtractionFieldSchema(z.string()),
-  amount: ExtractionFieldSchema(z.number().nullable()),
-  currency: ExtractionFieldSchema(z.string().nullable()),
-  dueCondition: ExtractionFieldSchema(z.string().nullable()),
-});
-
-const ExtractionUncertaintySchema = z.object({
-  field: z.string(),
-  issue: z.string(),
-  snippet: z.string().nullable().optional(),
-});
-
-const CoreExtractionResultSchema = z.object({
-  projectName: ExtractionFieldSchema(z.string().nullable()),
-  projectDescription: ExtractionFieldSchema(z.string().nullable()),
-  projectValue: ExtractionFieldSchema(z.number().nullable()),
-  currency: ExtractionFieldSchema(z.string().nullable()),
-  counterparty: ExtractionFieldSchema(z.string().nullable()),
-  parties: z.array(ExtractedPartySchema),
-  paymentTerms: z.array(ExtractedPaymentTermSchema),
-  uncertainties: z.array(ExtractionUncertaintySchema),
-  overallConfidence: z.enum(['high', 'medium', 'low', 'absent']),
-  sourceHint: z.string().nullable(),
-  extractedAt: z.string(),
-  schemaVersion: z.enum(['v1', 'v2', 'v3']).optional(),
-});
-
-function countRawParticipants(raw: unknown): number {
-  if (typeof raw !== 'object' || raw === null) return 0;
-  const parties = (raw as { parties?: unknown }).parties;
-  return Array.isArray(parties) ? parties.length : 0;
-}
-
-export function validateExtractionResult(raw: unknown): ExtractionResult {
-  logExtractorParticipantCount('rawParticipants', countRawParticipants(raw));
-
-  const rawObject =
-    typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-  const rawSettlementEvents = rawObject.settlementEvents;
-
-  const validated = CoreExtractionResultSchema.parse({
-    ...rawObject,
-    settlementEvents: undefined,
-  }) as Omit<ExtractionResult, 'settlementEvents'>;
-
-  logExtractorParticipantCount('validatedParticipants', validated.parties.length);
-
-  const { events, droppedCount } = parseSettlementEventsNonBlocking(rawSettlementEvents);
-  if (droppedCount > 0) {
-    console.error(
-      `[ai-extractor] Dropped ${droppedCount} invalid settlementEvents (non-blocking); parties preserved.`
-    );
-  }
-
-  const result: ExtractionResult = {
-    ...validated,
-    ...(events.length > 0 ? { settlementEvents: events } : {}),
-  };
-
-  if (droppedCount > 0) {
-    result.uncertainties = [
-      ...result.uncertainties,
-      {
-        field: 'settlementEvents',
-        issue: `${droppedCount} settlement event(s) could not be validated and were omitted; obligations were derived from parties instead.`,
-      },
-    ];
-  }
-
-  return result;
 }
 
 function degradedResult(reason: string): ExtractionResult {
@@ -291,23 +172,6 @@ export async function extractAgreementFromText(rawText: string): Promise<Extract
     topLevelKeys: Object.keys(parseResult.parsed as object),
   });
 
-  try {
-    return normalizeExtractionResult(validateExtractionResult(parseResult.parsed));
-  } catch (validationErr) {
-    console.error('[ai-extractor] Zod validation failed.');
-    console.error('[ai-extractor] parsed object:', JSON.stringify(parseResult.parsed, null, 2));
-    if (
-      validationErr &&
-      typeof validationErr === 'object' &&
-      'issues' in validationErr
-    ) {
-      console.error(
-        '[ai-extractor] Zod issues:',
-        JSON.stringify((validationErr as { issues: unknown[] }).issues, null, 2)
-      );
-    } else {
-      console.error('[ai-extractor] validation error (non-Zod):', validationErr);
-    }
-    return degradedResult('AI response did not match expected format. Please fill in all fields manually.');
-  }
+  const validated = validateExtractionResult(parseResult.parsed);
+  return normalizeExtractionResult(validated);
 }

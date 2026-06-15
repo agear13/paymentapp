@@ -52,5 +52,12 @@ export const FlexibleExtractionFieldSchema = <T extends z.ZodTypeAny>(valueSchem
   );
 
 export function logExtractorParticipantCount(stage: string, count: number): void {
-  console.error(`[extractor-debug] ${stage}=${count}`);
+  logExtractorDebugSnapshot({ [stage]: count });
+}
+
+export function logExtractorDebugSnapshot(metrics: Record<string, number>): void {
+  const body = Object.entries(metrics)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+  console.error(`[extractor-debug]\n${body}`);
 }
