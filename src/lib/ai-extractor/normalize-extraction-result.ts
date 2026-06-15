@@ -1,5 +1,6 @@
 import type { ExtractedParty, ExtractionResult, ParticipationModelOption } from './extraction-types';
 import { buildSettlementEventsFromResult } from './build-settlement-events';
+import { logExtractorParticipantCount } from './extraction-field-schema';
 import { hasFixedFeeAmount, hasRevenueSharePct } from './party-obligation-metrics';
 import { inferServiceCategoriesForParty } from './service-category-detection';
 
@@ -57,6 +58,8 @@ export function normalizeExtractionResult(result: ExtractionResult): ExtractionR
     parties,
     settlementEvents: buildSettlementEventsFromResult({ ...result, parties }),
   };
+
+  logExtractorParticipantCount('normalizedParticipants', normalized.parties.length);
 
   return normalized;
 }

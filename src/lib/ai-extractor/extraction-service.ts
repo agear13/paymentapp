@@ -7,8 +7,10 @@ import {
   getExtractorMaxTokens,
   getExtractorModel,
 } from './extraction-config';
+import { ExtractionFieldSchema, logExtractorParticipantCount } from './extraction-field-schema';
 import { buildExtractionSystemPrompt, buildExtractionUserPrompt } from './extraction-prompt';
 import { normalizeExtractionResult } from './normalize-extraction-result';
+import { parseSettlementEventsNonBlocking } from './parse-settlement-events';
 import {
   estimateTokenCount,
   ExtractionResponseError,
@@ -26,13 +28,6 @@ function getClient(): Anthropic {
   }
   return _client;
 }
-
-const ExtractionFieldSchema = <T extends z.ZodTypeAny>(valueSchema: T) =>
-  z.object({
-    value: valueSchema,
-    confidence: z.enum(['high', 'medium', 'low', 'absent']),
-    rawSnippet: z.string().nullable().optional(),
-  });
 
 const ObligationStatusSchema = z.enum([
   'draft',
@@ -60,19 +55,6 @@ const ExtractedDependencySchema = z.object({
   obligation: ExtractionFieldSchema(z.string()),
   dependsOn: ExtractionFieldSchema(z.string()),
   status: ObligationStatusSchema.optional(),
-});
-
-const ExtractedSettlementEventSchema = z.object({
-  partyId: ExtractionFieldSchema(z.string()),
-  partyName: ExtractionFieldSchema(z.string()),
-  type: ExtractionFieldSchema(
-    z.enum(['fixed_fee', 'revenue_share', 'bonus', 'milestone', 'attribution'])
-  ),
-  amount: ExtractionFieldSchema(z.number().nullable()),
-  percentage: ExtractionFieldSchema(z.number().nullable()),
-  trigger: ExtractionFieldSchema(z.string().nullable()),
-  condition: ExtractionFieldSchema(z.string().nullable()),
-  status: ObligationStatusSchema,
 });
 
 const ExtractedPartySchema = z.object({
@@ -106,7 +88,7 @@ const ExtractionUncertaintySchema = z.object({
   snippet: z.string().nullable().optional(),
 });
 
-const ExtractionResultSchema = z.object({
+const CoreExtractionResultSchema = z.object({
   projectName: ExtractionFieldSchema(z.string().nullable()),
   projectDescription: ExtractionFieldSchema(z.string().nullable()),
   projectValue: ExtractionFieldSchema(z.number().nullable()),
@@ -114,7 +96,6 @@ const ExtractionResultSchema = z.object({
   counterparty: ExtractionFieldSchema(z.string().nullable()),
   parties: z.array(ExtractedPartySchema),
   paymentTerms: z.array(ExtractedPaymentTermSchema),
-  settlementEvents: z.array(ExtractedSettlementEventSchema).optional(),
   uncertainties: z.array(ExtractionUncertaintySchema),
   overallConfidence: z.enum(['high', 'medium', 'low', 'absent']),
   sourceHint: z.string().nullable(),
@@ -122,8 +103,49 @@ const ExtractionResultSchema = z.object({
   schemaVersion: z.enum(['v1', 'v2', 'v3']).optional(),
 });
 
+function countRawParticipants(raw: unknown): number {
+  if (typeof raw !== 'object' || raw === null) return 0;
+  const parties = (raw as { parties?: unknown }).parties;
+  return Array.isArray(parties) ? parties.length : 0;
+}
+
 export function validateExtractionResult(raw: unknown): ExtractionResult {
-  return ExtractionResultSchema.parse(raw) as ExtractionResult;
+  logExtractorParticipantCount('rawParticipants', countRawParticipants(raw));
+
+  const rawObject =
+    typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const rawSettlementEvents = rawObject.settlementEvents;
+
+  const validated = CoreExtractionResultSchema.parse({
+    ...rawObject,
+    settlementEvents: undefined,
+  }) as Omit<ExtractionResult, 'settlementEvents'>;
+
+  logExtractorParticipantCount('validatedParticipants', validated.parties.length);
+
+  const { events, droppedCount } = parseSettlementEventsNonBlocking(rawSettlementEvents);
+  if (droppedCount > 0) {
+    console.error(
+      `[ai-extractor] Dropped ${droppedCount} invalid settlementEvents (non-blocking); parties preserved.`
+    );
+  }
+
+  const result: ExtractionResult = {
+    ...validated,
+    ...(events.length > 0 ? { settlementEvents: events } : {}),
+  };
+
+  if (droppedCount > 0) {
+    result.uncertainties = [
+      ...result.uncertainties,
+      {
+        field: 'settlementEvents',
+        issue: `${droppedCount} settlement event(s) could not be validated and were omitted; obligations were derived from parties instead.`,
+      },
+    ];
+  }
+
+  return result;
 }
 
 function degradedResult(reason: string): ExtractionResult {
