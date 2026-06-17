@@ -1,4 +1,5 @@
 import type { ExtractedParty } from '@/lib/ai-extractor/extraction-types';
+import { deliverableDescriptions } from '@/lib/ai-extractor/parse-deliverables';
 import type { ReviewedParty } from '@/lib/ai-extractor/review-form-types';
 
 export type CompensationReviewWarningKind =
@@ -126,7 +127,7 @@ export function reviewedPartyFromExtracted(original: ExtractedParty): ReviewedPa
     participationModel: original.participationModel.value,
     fixedAmount: original.fixedAmount.value,
     revenueSharePct: original.revenueSharePct.value,
-    deliverables: original.deliverables?.value ?? [],
+    deliverables: deliverableDescriptions(original),
     milestones: (original.milestones ?? []).map((m) => ({
       description: m.description.value,
       deadline: m.deadline.value ?? '',
