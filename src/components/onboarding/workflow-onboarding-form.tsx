@@ -701,11 +701,10 @@ export function WorkflowOnboardingForm() {
       await completeStarterOnboarding();
       clearOnboardingDraft();
       notifyWorkspaceActivationRefresh();
-      router.push(
-        projectId
-          ? `/dashboard/projects/${encodeURIComponent(projectId)}`
-          : '/dashboard?workspace=ready'
-      );
+      // Always navigate to the workspace Today view — never an agreement workspace.
+      // The operator should open their work from the dashboard, not be dropped
+      // into a specific agreement page without context.
+      router.push('/dashboard');
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to complete onboarding');

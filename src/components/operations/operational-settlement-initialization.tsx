@@ -152,7 +152,7 @@ export function OperationalSettlementInitialization({
       {displayActions.length > 0 ? (
         <div className="space-y-2 border-t border-border/30 pt-3">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Next operational steps
+            Next steps
           </p>
           <ul className="space-y-2">
             {displayActions.map((action) => (
@@ -174,7 +174,7 @@ export function OperationalSettlementInitialization({
           onClick={() => void handleRefresh()}
         >
           <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Reload coordination snapshot
+          Refresh status
         </Button>
         {process.env.NODE_ENV === 'development' && correlationId ? (
           <span className="text-[10px] text-muted-foreground font-mono">

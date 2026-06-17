@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils';
 import type { OperationalAuditEntry, OperationalAuditEventType } from '@/lib/operations/audit/operational-audit';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
 import type { QueueTask } from '@/components/operations/operational-queue';
-import { projectOverviewPath } from '@/lib/projects/project-routes';
+import { resolveContinueWorkflowHref } from '@/components/workflow/workflow-navigation';
+import { deriveWorkflowContext } from '@/components/workflow/workflow-context';
 
 type ContinueWorkflowCardProps = {
   auditEntries: OperationalAuditEntry[];
@@ -125,7 +126,20 @@ export function ContinueWorkflowCard({
   if (!session) return null;
 
   const { snapshot, lastActionLabel, lastActionTimestamp, nextTask } = session;
-  const href = projectOverviewPath(snapshot.projectId);
+
+  // Resolve where "Continue" should go by deriving the current workflow stage.
+  // Never fall back to the project overview — always route to the exact work.
+  const workflowCtx = deriveWorkflowContext({
+    projectId: snapshot.projectId,
+    kpis: null,
+    releaseConfidence: null,
+    workspaceContext: null,
+    activation: null,
+  });
+  const resolvedHref = nextTask?.ctaHref ?? resolveContinueWorkflowHref(
+    snapshot.projectId,
+    workflowCtx.currentStage
+  );
 
   const timeLabel = lastActionTimestamp
     ? relativeTimeLabel(lastActionTimestamp)
@@ -182,7 +196,7 @@ export function ContinueWorkflowCard({
           size="sm"
           className="shrink-0 h-8 text-xs bg-[rgb(124,92,255)] hover:bg-[rgb(108,78,235)] text-white border-0 mt-0.5"
         >
-          <Link href={nextTask?.ctaHref ?? href}>
+          <Link href={resolvedHref}>
             Continue
             <ArrowRight className="ml-1.5 h-3 w-3" />
           </Link>

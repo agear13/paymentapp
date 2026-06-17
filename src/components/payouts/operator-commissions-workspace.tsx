@@ -643,19 +643,27 @@ export function OperatorCommissionsWorkspace({
           ) : null}
 
           <div>
-            <h2 className="text-xl font-semibold tracking-tight mb-1">Project obligations</h2>
+            <h2 className="text-xl font-semibold tracking-tight mb-1">Payment obligations</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Revenue share, fixed fees, and milestones funded from project deal value.
+              What each team member is owed, and whether it&apos;s ready to be paid.
             </p>
             <div className="space-y-2">
-              {sections.map((section) => (
-                <OperationalSectionBlock
-                  key={section.id}
-                  section={section}
-                  orgCurrency={orgCurrency}
-                  canCreateReleaseBatch={releaseInteraction.canCreateReleaseBatch}
-                />
-              ))}
+              {/* Only render sections that have content, or the ready_for_release bucket
+                  (which always shows — it's the primary CTA). Empty sections are noise. */}
+              {sections.filter((s) => s.rows.length > 0 || s.id === 'ready_for_release').length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">Everything is up to date.</p>
+              ) : (
+                sections
+                  .filter((s) => s.rows.length > 0 || s.id === 'ready_for_release')
+                  .map((section) => (
+                    <OperationalSectionBlock
+                      key={section.id}
+                      section={section}
+                      orgCurrency={orgCurrency}
+                      canCreateReleaseBatch={releaseInteraction.canCreateReleaseBatch}
+                    />
+                  ))
+              )}
             </div>
           </div>
         </div>
@@ -669,13 +677,13 @@ export function OperatorCommissionsWorkspace({
           <p className="text-xs text-muted-foreground/60 mt-1">
             {releaseInteraction.canQueryReferralCommissionLedger
               ? 'Archive — recorded referral earnings from customer payments.'
-              : 'Referral earnings history unlocks when beta payout infrastructure permits ledger access.'}
+              : 'Referral earnings history becomes available once payment setup is complete.'}
           </p>
         </div>
         {!releaseInteraction.canQueryReferralCommissionLedger ? (
           <p className="text-sm text-muted-foreground">
             {releaseInteraction.interactionGuidance ??
-              'Release actions are disabled while coordination completes or beta lockdown applies.'}
+              'Release actions will become available once your business setup is complete.'}
           </p>
         ) : loading ? (
           <p className="text-muted-foreground text-sm">Loading…</p>

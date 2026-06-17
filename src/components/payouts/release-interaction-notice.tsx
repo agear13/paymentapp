@@ -45,7 +45,7 @@ export function ReleaseInteractionNotice({
           onClick={() => notifyWorkspaceActivationRefresh()}
         >
           <RefreshCw className="mr-2 h-3.5 w-3.5" />
-          Reload coordination
+          Refresh status
         </Button>
       ) : null}
     </div>

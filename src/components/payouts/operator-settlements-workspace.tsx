@@ -202,7 +202,7 @@ export function OperatorSettlementsWorkspace({
     if (!organizationId || !releaseInteraction.releaseInteractionEnabled) {
       toast.error(
         releaseInteraction.interactionGuidance ??
-          'Release actions are not available until operational coordination is ready.'
+          'Release actions are not available until business setup is complete.'
       );
       return;
     }

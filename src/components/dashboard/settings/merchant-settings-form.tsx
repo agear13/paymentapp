@@ -577,7 +577,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
 
         <div className="space-y-6 border-t pt-8">
           <div>
-            <h3 className="text-lg font-semibold">Payment rails</h3>
+            <h3 className="text-lg font-semibold">Payment provider</h3>
             <p className="text-sm text-muted-foreground mt-1">
               Configure the financial accounts used to collect and settle payments.
             </p>
