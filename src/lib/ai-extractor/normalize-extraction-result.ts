@@ -1,6 +1,7 @@
 import type { ExtractedParty, ExtractionResult, ParticipationModelOption } from './extraction-types';
 import { classifyAgreementType } from './classify-agreement-type';
-import { buildSettlementEventsFromResult } from './build-settlement-events';
+import { buildSettlementEventsFromCompensationTerms, migrateExtractionToV5 } from './migrate-extraction-schema';
+import { enrichExtractionWithCommercialGraph } from './commercial-graph';
 import { buildExtractionReadiness } from './extraction-readiness';
 import { logExtractorDebugSnapshot } from './extraction-field-schema';
 import { hasFixedFeeAmount, hasRevenueSharePct } from './party-obligation-metrics';
@@ -78,27 +79,49 @@ function normalizeExtractedParty(party: ExtractedParty): ExtractedParty {
 }
 
 export function normalizeExtractionResult(result: ExtractionResult): ExtractionResult {
-  const parties = result.parties.map(normalizeExtractedParty);
+  const preNormalizedParties = result.parties.map(normalizeExtractedParty);
   const settlementRules = filterEvidenceBackedSettlementRules(result.settlementRules ?? []);
 
-  const withParties: ExtractionResult = {
+  const migrated = migrateExtractionToV5({
     ...result,
+    parties: preNormalizedParties,
+    settlementRules,
     schemaVersion: result.schemaVersion ?? 'v4',
-    parties,
+  });
+
+  const withParties: ExtractionResult = {
+    ...migrated,
+    schemaVersion: 'v5',
+    parties: migrated.parties,
     settlementRules,
   };
 
   const agreementTypeValue = classifyAgreementType(withParties);
 
-  const normalized: ExtractionResult = {
+  const settlementEvents = withParties.parties.flatMap((party) =>
+    buildSettlementEventsFromCompensationTerms(
+      party,
+      party.compensationTerms ?? [],
+      withParties
+    )
+  );
+
+  const withEvents: ExtractionResult = {
     ...withParties,
-    agreementType: result.agreementType ?? field(agreementTypeValue, 'high'),
-    settlementEvents: buildSettlementEventsFromResult(withParties),
+    agreementType: migrated.agreementType ?? field(agreementTypeValue, 'high'),
+    settlementEvents:
+      settlementEvents.length > 0
+        ? settlementEvents
+        : withParties.settlementEvents ?? [],
+  };
+
+  const normalized: ExtractionResult = enrichExtractionWithCommercialGraph({
+    ...withEvents,
     readinessAssessment: buildExtractionReadiness({
-      ...withParties,
+      ...withEvents,
       settlementRules,
     }),
-  };
+  });
 
   logExtractorDebugSnapshot({
     normalizedParticipants: normalized.parties.length,

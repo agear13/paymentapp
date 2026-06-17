@@ -13,10 +13,10 @@ describe('OnboardingVisualProgress', () => {
   it('renders desktop phase labels without truncation', () => {
     render(<OnboardingVisualProgress step="workspace" />);
 
-    expect(screen.getByText('Workspace')).toBeInTheDocument();
+    expect(screen.getByText('Business')).toBeInTheDocument();
     expect(screen.getByText('Agreement')).toBeInTheDocument();
     expect(screen.getByText('Review')).toBeInTheDocument();
-    expect(screen.getByText('Configure')).toBeInTheDocument();
+    expect(screen.getByText('Payments')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
   });
 
@@ -38,9 +38,26 @@ describe('Create workspace onboarding copy', () => {
     );
     const subtext = onboardingStepSubtext('workspace');
 
-    expect(subtext).toContain('coordinates agreements');
+    expect(subtext).toContain('Tell us your business name');
     expect(formSource).not.toContain(
       'This workspace coordinates agreements, obligations, approvals, and settlement across'
     );
+  });
+});
+
+describe('Start method onboarding copy', () => {
+  it('uses scannable header copy without product explanations in the form body', () => {
+    const formSource = fs.readFileSync(
+      path.join(process.cwd(), 'components/onboarding/workflow-onboarding-form.tsx'),
+      'utf8'
+    );
+
+    expect(onboardingStepSubtext('start_method')).toBe(
+      'Pick the path that fits how you work today.'
+    );
+    expect(formSource).not.toContain('Provvypay transforms conversations');
+    expect(formSource).not.toContain('All three paths are first-class workflows');
+    expect(formSource).not.toContain('Skip Setup And Explore');
+    expect(formSource).toContain('Skip for now');
   });
 });

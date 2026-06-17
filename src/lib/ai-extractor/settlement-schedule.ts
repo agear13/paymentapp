@@ -1,4 +1,5 @@
 import type { ExtractedParty, ExtractedSettlementEvent, ExtractionResult } from './extraction-types';
+import { formatCompensationTermLabel } from './migrate-extraction-schema';
 import { hasFixedFeeAmount, hasRevenueSharePct, isHybridExtractedParty } from './party-obligation-metrics';
 
 export type SettlementScheduleLine = {
@@ -49,7 +50,29 @@ function bonusLinesFromMilestones(party: ExtractedParty): SettlementScheduleLine
     });
 }
 
+function linesFromCompensationTerms(party: ExtractedParty, currency: string): SettlementScheduleLine[] {
+  const terms = party.compensationTerms ?? [];
+  if (terms.length === 0) return [];
+
+  return terms.map((term) => ({
+    label:
+      term.type === 'instalment'
+        ? 'Instalment'
+        : term.type === 'milestone'
+          ? 'Milestone'
+          : term.type === 'conditional_bonus'
+            ? 'Conditional Bonus'
+            : term.type === 'revenue_share'
+              ? 'Revenue Share'
+              : 'Fixed Fee',
+    value: formatCompensationTermLabel(term, currency),
+    status: term.type === 'conditional_bonus' ? 'conditional' : 'pending',
+  }));
+}
+
 function linesFromParty(party: ExtractedParty, currency: string): SettlementScheduleLine[] {
+  const fromTerms = linesFromCompensationTerms(party, currency);
+  if (fromTerms.length > 0) return fromTerms;
   const lines: SettlementScheduleLine[] = [];
 
   if (hasFixedFeeAmount(party)) {

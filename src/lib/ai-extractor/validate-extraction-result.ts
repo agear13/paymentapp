@@ -14,6 +14,12 @@ import { parseConditionalPaymentsNonBlocking } from './parse-conditional-payment
 import { parseDeliverablesNonBlocking } from './parse-deliverables';
 import { parseSettlementEventsNonBlocking } from './parse-settlement-events';
 import { parseSettlementRulesNonBlocking } from './parse-settlement-rules';
+import {
+  parseAgreementOwnerNonBlocking,
+  parseCommercialDependenciesNonBlocking,
+  parseCompensationTermsNonBlocking,
+  parseOperationalObligationsNonBlocking,
+} from './parse-commercial-graph';
 import { normalizeServiceCategories } from './service-category';
 
 const F = FlexibleExtractionFieldSchema;
@@ -163,6 +169,21 @@ function parseParty(raw: unknown): {
     'party.serviceCategories'
   );
 
+  const compensationTerms = parseCompensationTermsNonBlocking(obj.compensationTerms);
+  if (compensationTerms.droppedCount > 0) {
+    droppedOptional.push(`compensationTerms(${compensationTerms.droppedCount})`);
+  }
+
+  const operationalObligations = parseOperationalObligationsNonBlocking(obj.operationalObligations);
+  if (operationalObligations.droppedCount > 0) {
+    droppedOptional.push(`operationalObligations(${operationalObligations.droppedCount})`);
+  }
+
+  const commercialDependencies = parseCommercialDependenciesNonBlocking(obj.commercialDependencies);
+  if (commercialDependencies.droppedCount > 0) {
+    droppedOptional.push(`commercialDependencies(${commercialDependencies.droppedCount})`);
+  }
+
   return {
     party: {
       id: core.data.id,
@@ -183,6 +204,15 @@ function parseParty(raw: unknown): {
         value: normalizeServiceCategories(serviceCategoriesRaw.value),
         confidence: serviceCategoriesRaw.confidence,
       },
+      ...(compensationTerms.items.length > 0
+        ? { compensationTerms: compensationTerms.items }
+        : {}),
+      ...(operationalObligations.items.length > 0
+        ? { operationalObligations: operationalObligations.items }
+        : {}),
+      ...(commercialDependencies.items.length > 0
+        ? { commercialDependencies: commercialDependencies.items }
+        : {}),
     },
     droppedOptional,
   };
@@ -309,11 +339,13 @@ export function validateExtractionResult(raw: unknown): ExtractionResult {
       : null;
 
   const schemaVersion = parseFieldWithFallback(
-    z.enum(['v1', 'v2', 'v3', 'v4']).optional(),
+    z.enum(['v1', 'v2', 'v3', 'v4', 'v5']).optional(),
     rawObject.schemaVersion,
     undefined,
     'schemaVersion'
   );
+
+  const agreementOwner = parseAgreementOwnerNonBlocking(rawObject.agreementOwner);
 
   const result: ExtractionResult = {
     ...projectFields,
@@ -321,6 +353,7 @@ export function validateExtractionResult(raw: unknown): ExtractionResult {
     paymentTerms,
     ...(settlementRules.items.length > 0 ? { settlementRules: settlementRules.items } : {}),
     ...(settlementEvents.length > 0 ? { settlementEvents } : {}),
+    ...(agreementOwner ? { agreementOwner } : {}),
     uncertainties: appendUncertainties(baseUncertainties, validationUncertainties),
     overallConfidence,
     sourceHint,

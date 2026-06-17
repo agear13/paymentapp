@@ -39,20 +39,31 @@ export const ONBOARDING_START_METHODS = [
   {
     id: 'import',
     title: 'Import Existing Agreement',
+    headline: 'Already have an agreement?',
     description:
-      'Import a WhatsApp conversation, email thread, meeting notes, contract text, or other commercial discussion. Provvypay extracts participants, obligations, commercial terms and settlement requirements automatically.',
+      "Import your conversation or contract and we'll extract the participants, obligations and payment terms automatically.",
+    chips: ['WhatsApp', 'Email', 'SMS', 'Slack', 'Contract', 'Notes'] as const,
+    timeEstimate: '~30 seconds',
+    cta: 'Import Agreement',
   },
   {
     id: 'create',
     title: 'Create New Agreement',
+    headline: 'Starting something new?',
     description:
-      'Define participants, obligations and settlement rules from scratch. Use this when you are creating a new commercial arrangement rather than importing an existing one.',
+      'Create your agreement from scratch by adding participants, responsibilities and payment terms.',
+    chips: ['Participants', 'Responsibilities', 'Payments'] as const,
+    timeEstimate: '~3–5 minutes',
+    cta: 'Create Agreement',
   },
   {
     id: 'template',
-    title: 'Start From Template',
-    description:
-      'Launch a pre-configured workflow and customize it to your needs.',
+    title: 'Use a Template',
+    headline: 'Need a head start?',
+    description: 'Start with a proven agreement template and customise it.',
+    chips: ['Hospitality', 'Events', 'Construction'] as const,
+    timeEstimate: '~1 minute',
+    cta: 'Browse Templates',
   },
 ] as const;
 
@@ -221,9 +232,11 @@ export type OnboardingStep =
   | 'import_source'
   | 'import_content'
   | 'template_select'
+  | 'template_customize'
   | 'project'
   | 'participants'
   | 'agreement_review'
+  | 'money_setup_intro'
   | 'use_case'
   | 'funding'
   | 'payment_rails'
@@ -285,12 +298,14 @@ const AGREEMENT_BUILD_STEPS: OnboardingStep[] = [
   'import_source',
   'import_content',
   'template_select',
+  'template_customize',
   'project',
   'participants',
 ];
 
 export function resolveOnboardingProgressStep(step: OnboardingStep): OnboardingStep {
   if (AGREEMENT_BUILD_STEPS.includes(step)) return 'start_method';
+  if (step === 'money_setup_intro') return 'funding';
   return step;
 }
 
@@ -301,9 +316,11 @@ const LEGACY_STEP_MAP: Record<string, OnboardingStep> = {
   import_source: 'import_source',
   import_content: 'import_content',
   template_select: 'template_select',
+  template_customize: 'template_customize',
   project: 'project',
   participants: 'participants',
   agreement_review: 'agreement_review',
+  money_setup_intro: 'funding',
   funding: 'funding',
   payment_rails: 'payment_rails',
   complete: 'complete',
@@ -328,19 +345,18 @@ export function onboardingStepIndex(step: OnboardingStep): number {
 export function onboardingStepLabel(step: OnboardingStep): string {
   switch (resolveOnboardingProgressStep(step)) {
     case 'workspace':
-      return 'Create workspace';
+      return 'Create business';
     case 'start_method':
-      return 'Choose how to start';
+      return 'Create agreement';
     case 'agreement_review':
-      return 'Agreement Intelligence';
+      return 'Review agreement';
+    case 'money_setup_intro':
     case 'use_case':
-      return 'Choose workflow';
     case 'funding':
-      return 'Revenue collection';
     case 'payment_rails':
-      return 'Settlement infrastructure';
+      return 'Payments & payouts';
     case 'complete':
-      return 'Agreement ready';
+      return 'Ready to operate';
     default:
       return 'Choose how to start';
   }
@@ -349,29 +365,33 @@ export function onboardingStepLabel(step: OnboardingStep): string {
 export function onboardingStepTitle(step: OnboardingStep): string {
   switch (step) {
     case 'workspace':
-      return 'Create your workspace';
+      return 'Create your business';
     case 'start_method':
-      return 'How would you like to create your first agreement?';
+      return 'How do you want to create your agreement?';
     case 'import_source':
       return 'Select agreement source';
     case 'import_content':
       return 'Import your commercial discussion';
     case 'template_select':
       return 'Choose a starting template';
+    case 'template_customize':
+      return 'Build your agreement';
     case 'project':
       return 'Define your agreement';
     case 'participants':
       return 'Who is involved in this agreement?';
     case 'agreement_review':
-      return 'Agreement Intelligence Report';
+      return "We've prepared your agreement";
+    case 'money_setup_intro':
+      return "Let's finish getting you ready";
     case 'use_case':
-      return 'Choose your coordination workflow';
+      return 'How will money move?';
     case 'funding':
-      return 'How will revenue be collected?';
+      return 'How do you collect revenue?';
     case 'payment_rails':
-      return 'Configure settlement infrastructure';
+      return "Let's finish getting you ready";
     case 'complete':
-      return 'Agreement Ready';
+      return "You're ready to operate";
     default:
       return '';
   }
@@ -380,19 +400,23 @@ export function onboardingStepTitle(step: OnboardingStep): string {
 export function onboardingStepSubtext(step: OnboardingStep): string | null {
   switch (step) {
     case 'workspace':
-      return 'This workspace coordinates agreements, obligations, approvals, and settlement across your commercial arrangements. You can create additional agreements later.';
+      return 'Tell us your business name to get started.';
     case 'start_method':
-      return 'All three paths lead to Agreement Intelligence — choose the one that matches how your arrangement was formed.';
+      return 'Pick the path that fits how you work today.';
+    case 'template_customize':
+      return 'Adjust participants and terms — your agreement takes shape as you go.';
     case 'agreement_review':
-      return 'Provvypay analyzed your agreement and identified the participants, commercial terms, obligations and settlement requirements.';
+      return null;
+    case 'money_setup_intro':
+      return null;
     case 'use_case':
-      return 'Workflows determine how obligations and settlements are coordinated. You can add more workflows later.';
+      return 'Pick the workflow that best matches this arrangement.';
     case 'funding':
-      return 'Define how revenue enters this agreement. All collection methods feed into the same settlement workspace.';
+      return 'Choose how revenue enters this agreement.';
     case 'payment_rails':
-      return 'Define how settlements will ultimately be coordinated. You can configure these anytime in Settings.';
+      return 'Choose how your business collects revenue and pays participants.';
     case 'complete':
-      return 'Your commercial agreement has been analyzed and configured for coordination.';
+      return null;
     default:
       return null;
   }

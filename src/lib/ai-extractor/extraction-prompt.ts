@@ -72,7 +72,7 @@ const EXTRACTION_SCHEMA = `{
   "overallConfidence": "high|medium|low|absent",
   "sourceHint": "string | null",
   "extractedAt": "ISO 8601 timestamp string",
-  "schemaVersion": "v4"
+  "schemaVersion": "v5"
 }`;
 
 export function buildExtractionSystemPrompt(): string {
@@ -125,7 +125,17 @@ EXTRACTION RULES:
 
 11. Generate a short unique id for each party using the pattern "ep-1", "ep-2", etc.
 
-12. Set extractedAt to the current ISO 8601 timestamp and schemaVersion to "v4".
+12. Set extractedAt to the current ISO 8601 timestamp and schemaVersion to "v5".
+
+13. V5 commercial graph rules:
+    - Separate operational work (deliverables → operationalObligations) from compensation (compensationTerms[]).
+    - NEVER collapse instalments or milestone payments into a single fixedAmount.
+    - Instalments: one compensationTerms entry per instalment with type "instalment", sequenceIndex, amount, and trigger.
+    - Milestones: one compensationTerms entry per milestone with type "milestone", amount, trigger, and deadline.
+    - Conditional bonuses: type "conditional_bonus" with separate trigger and amount.
+    - Hybrid participants: both fixed_fee/revenue_share entries in compensationTerms[].
+    - Dependencies: commercialDependencies[] when settlement depends on attendance, delivery, or funds clearing.
+    - Agreement owner: set counterparty as agreementOwner when they coordinate but are not a paid supplier.
 
 SCHEMA:
 ${EXTRACTION_SCHEMA}`;

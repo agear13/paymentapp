@@ -2,14 +2,24 @@ import type { ExtractionResult, ExtractionConfidence } from '@/lib/ai-extractor/
 import type { OnboardingDraftParticipant } from '@/components/onboarding/onboarding-participant-card';
 import type { OnboardingTemplateId, OnboardingUseCaseId } from '@/lib/onboarding/operator-onboarding-types';
 import { ONBOARDING_AGREEMENT_TEMPLATES } from '@/lib/onboarding/operator-onboarding-types';
+import type {
+  ParticipantCommercialCard,
+  UnifiedSettlementScheduleEntry,
+} from '@/lib/ai-extractor/commercial-graph-types';
 import {
-  formatSettlementRuleLabel,
   mapExtractionToObligationSnapshot,
   primaryServiceCategoryLabel,
   type PersistedDeliverable,
 } from '@/lib/ai-extractor/extraction-obligations';
-import { isHallucinatedSettlementTrigger } from '@/lib/ai-extractor/parse-settlement-rules';
 import { serviceCategoryDisplayLabel } from '@/lib/ai-extractor/service-category';
+import {
+  computeProfileReadinessScore,
+  derivePotentialGapsFromProfiles,
+} from '@/lib/onboarding/participant-profile-readiness';
+import {
+  buildDisplayCommercialTerms,
+  hasCustomisedParticipantNames,
+} from '@/lib/onboarding/template-draft-state';
 
 export type AgreementType =
   | 'Revenue Share Agreement'
@@ -43,6 +53,47 @@ export type AgreementIntelligenceInsight = {
   serviceCategoriesFound?: string[];
   /** v4 extracted deliverables grouped by participant. */
   deliverablesFound?: { participant: string; items: string[] }[];
+  /** v5 — coordinating commercial party. */
+  agreementOwner?: string | null;
+  agreementOwnerResponsibilities?: string[];
+  /** v5 — narrative commercial summary from structured data. */
+  commercialSummary?: string;
+  /** v5 — executive commercial structure bullets. */
+  commercialStructureOverview?: string[];
+  /** v5 — commercial dashboard metrics. */
+  commercialStructure?: {
+    participantCount: number;
+    deliverableCount: number;
+    operationalObligationCount: number;
+    compensationTermCount: number;
+    settlementEventCount: number;
+    revenueShareAgreementCount: number;
+    fixedPaymentAgreementCount: number;
+    hybridCompensationCount: number;
+    milestonePaymentCount: number;
+    instalmentPaymentCount: number;
+    conditionalPaymentCount: number;
+    estimatedFixedCommitment: number;
+    variableRevenueBases: string[];
+  };
+  /** v5 — operational work obligations only (not compensation). */
+  operationalObligations?: { participant: string; items: string[] }[];
+  /** v5 — compensation terms separated from operational obligations. */
+  compensationTermsFound?: { participant: string; items: string[] }[];
+  /** v5 — unified settlement schedule (replaces duplicated settlement sections). */
+  settlementSchedule?: UnifiedSettlementScheduleEntry[];
+  /** v5 — rich participant summary cards. */
+  participantCards?: ParticipantCommercialCard[];
+  /** v5 — settlement blockers for executive summary. */
+  settlementBlockers?: string[];
+  /** Template workflow — values are editable defaults, not extracted data. */
+  isTemplateDraft?: boolean;
+  templateId?: OnboardingTemplateId;
+  templateTitle?: string;
+  /** True when participant names or commercial terms were customised from template defaults. */
+  isCustomisedDraft?: boolean;
+  /** Current commercial term values (without display prefix). */
+  customizedCommercialTerms?: string[];
 };
 
 const CONFIDENCE_TO_SCORE: Record<ExtractionConfidence, number> = {
@@ -60,12 +111,6 @@ const USE_CASE_TO_AGREEMENT_TYPE: Record<OnboardingUseCaseId, AgreementType> = {
   event_settlement: 'Event Settlement Agreement',
   client_invoices: 'Client Invoice Workflow',
 };
-
-const HALLUCINATED_COMMERCIAL_TERMS = [
-  'net sales basis',
-  'monthly settlement',
-  'settlement within 10 days',
-];
 
 function inferAgreementType(
   participants: OnboardingDraftParticipant[],
@@ -132,110 +177,93 @@ function deriveObligations(terms: string[], description?: string): string[] {
   return obligations;
 }
 
-function deriveObligationsFromExtraction(
-  result: ExtractionResult,
+function deriveOperationalObligationsFromExtraction(
   participants: OnboardingDraftParticipant[]
 ): string[] {
   const obligations: string[] = [];
-  const snapshot = mapExtractionToObligationSnapshot(result);
 
   for (const participant of participants) {
     const graph = participant.extractedObligations;
     if (!graph) continue;
 
-    for (const deliverable of graph.deliverables) {
-      if (deliverable.description.trim()) {
-        obligations.push(`${participant.name}: ${deliverable.description}`);
+    const operational =
+      graph.operationalObligations?.length
+        ? graph.operationalObligations
+        : graph.deliverables;
+
+    for (const item of operational) {
+      const description = 'description' in item ? item.description : String(item);
+      if (description.trim()) {
+        obligations.push(`${participant.name}: ${description.trim()}`);
       }
-    }
-
-    for (const fixed of graph.fixedObligations) {
-      if (fixed.amount != null) {
-        obligations.push(`${participant.name}: fixed fee ${fixed.amount}`);
-      }
-    }
-
-    for (const share of graph.revenueShareObligations) {
-      if (share.percentage != null) {
-        obligations.push(`${participant.name}: ${share.percentage}% revenue share`);
-      }
-    }
-
-    for (const conditional of graph.conditionalPayments) {
-      const amountLabel =
-        conditional.amount != null ? `$${conditional.amount}` : 'conditional amount';
-      obligations.push(
-        `${participant.name}: conditional payment ${amountLabel} when ${conditional.trigger}`
-      );
-    }
-  }
-
-  for (const rule of snapshot.settlementRules) {
-    obligations.push(`Settlement rule: ${formatSettlementRuleLabel(rule)}`);
-  }
-
-  for (const term of result.paymentTerms) {
-    const description = term.description.value?.trim();
-    const due = term.dueCondition.value?.trim();
-    if (description) {
-      obligations.push(`Payment term: ${description}`);
-    }
-    if (due && !isHallucinatedSettlementTrigger(due)) {
-      obligations.push(`Settlement trigger: ${due}`);
     }
   }
 
   return [...new Set(obligations)];
 }
 
-function deriveCommercialTermsFromExtraction(
-  result: ExtractionResult,
+function deriveCompensationTermsFromParticipants(
   participants: OnboardingDraftParticipant[]
+): { participant: string; items: string[] }[] {
+  return participants
+    .map((participant) => {
+      const graph = participant.extractedObligations;
+      if (!graph) return { participant: participant.name, items: [] as string[] };
+
+      const items: string[] = [];
+
+      if (graph.compensationTerms?.length) {
+        items.push(...graph.compensationTerms.map((t) => t.label).filter(Boolean));
+      } else {
+        for (const fixed of graph.fixedObligations) {
+          if (fixed.amount != null) items.push(`Fixed fee $${fixed.amount}`);
+        }
+        for (const share of graph.revenueShareObligations) {
+          if (share.percentage != null) items.push(`${share.percentage}% revenue share`);
+        }
+        for (const conditional of graph.conditionalPayments) {
+          const amountLabel =
+            conditional.amount != null ? `$${conditional.amount}` : 'conditional amount';
+          items.push(`Conditional payment ${amountLabel} when ${conditional.trigger}`);
+        }
+      }
+
+      return { participant: participant.name, items: [...new Set(items)] };
+    })
+    .filter((entry) => entry.items.length > 0);
+}
+
+function deriveCommercialTermsOverviewFromExtraction(
+  result: ExtractionResult
 ): string[] {
-  const terms: string[] = [];
-  const snapshot = mapExtractionToObligationSnapshot(result);
-
-  for (const participant of participants) {
-    const graph = participant.extractedObligations;
-    if (!graph) continue;
-
-    for (const share of graph.revenueShareObligations) {
-      if (share.percentage != null) {
-        terms.push(`${share.percentage}% Revenue Share`);
-      }
-    }
-
-    for (const fixed of graph.fixedObligations) {
-      if (fixed.amount != null) {
-        terms.push(`Fixed Payout ${fixed.amount}`);
-      }
-    }
-
-    for (const conditional of graph.conditionalPayments) {
-      const amountLabel =
-        conditional.amount != null ? `$${conditional.amount}` : 'conditional amount';
-      terms.push(`Conditional Payment: ${amountLabel} when ${conditional.trigger}`);
-    }
-
-    if (graph.settlementEvents.some((event) => event.type === 'attribution')) {
-      terms.push('Customer Attribution');
-    }
+  if (result.commercialGraph?.commercialStructureOverview.bulletPoints.length) {
+    return result.commercialGraph.commercialStructureOverview.bulletPoints;
   }
 
-  for (const rule of snapshot.settlementRules) {
-    terms.push(formatSettlementRuleLabel(rule));
-  }
+  const graph = result.commercialGraph?.commercialStructure;
+  if (!graph) return [];
 
-  for (const term of result.paymentTerms) {
-    const description = term.description.value?.trim();
-    if (description) {
-      terms.push(description);
-    }
-  }
-
-  return [...new Set(terms)].filter(
-    (term) => !HALLUCINATED_COMMERCIAL_TERMS.some((blocked) => term.toLowerCase().includes(blocked))
-  );
+  return [
+    `${graph.participantCount} commercial participants`,
+    graph.hybridCompensationCount > 0
+      ? `${graph.hybridCompensationCount} hybrid compensation arrangements`
+      : null,
+    graph.milestonePaymentCount > 0
+      ? `${graph.milestonePaymentCount} milestone payment arrangements`
+      : null,
+    graph.revenueShareAgreementCount > 0
+      ? `${graph.revenueShareAgreementCount} revenue share agreements`
+      : null,
+    graph.conditionalPaymentCount > 0
+      ? `${graph.conditionalPaymentCount} conditional bonus${graph.conditionalPaymentCount === 1 ? '' : 'es'}`
+      : null,
+    graph.estimatedFixedCommitment > 0
+      ? `Estimated committed fixed spend: $${graph.estimatedFixedCommitment.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`
+      : null,
+    graph.variableRevenueBases.length > 0
+      ? `Additional variable obligations tied to ${graph.variableRevenueBases.join(', ')}`
+      : null,
+  ].filter(Boolean) as string[];
 }
 
 function deriveDeliverablesFound(
@@ -263,19 +291,39 @@ function deriveServiceCategoriesFound(participants: OnboardingDraftParticipant[]
 
 function derivePotentialGaps(
   participants: OnboardingDraftParticipant[],
-  readinessBlockers?: string[]
+  readinessBlockers?: string[],
+  options?: { isTemplateDraft?: boolean }
 ): string[] {
-  const gaps: string[] = [];
-  if (participants.some((p) => !p.email?.trim())) {
-    gaps.push('Participant email missing');
-  }
-  gaps.push('Settlement account not configured', 'Tax information missing', 'Payment infrastructure not connected');
+  const gaps = derivePotentialGapsFromProfiles(participants);
   if (readinessBlockers?.length) {
     for (const blocker of readinessBlockers) {
       if (!gaps.includes(blocker)) gaps.push(blocker);
     }
   }
+  if (options?.isTemplateDraft && gaps.length === 0) {
+    gaps.push('Review agreement defaults before continuing');
+  }
   return gaps;
+}
+
+function confirmedTemplateReadinessExplanation(score: number): string {
+  if (score >= 75) {
+    return 'Looking good — confirm payout details before continuing.';
+  }
+  return 'Add participant contact or settlement details to improve readiness.';
+}
+
+function templateReadinessExplanation(score: number, isTemplateDraft: boolean): string {
+  if (isTemplateDraft) {
+    if (score >= 75) {
+      return 'Almost there — add settlement details for each participant.';
+    }
+    if (score >= 60) {
+      return 'Keep going — add participant names, contact details, and how they will be paid.';
+    }
+    return 'This template is a starting point. Customise participants and settlement details as you go.';
+  }
+  return readinessExplanation(score);
 }
 
 function readinessExplanation(score: number, extractedSummary?: string): string {
@@ -303,20 +351,14 @@ function computeReadinessScore(input: {
   usedExtraction: boolean;
   extractedScore?: number;
 }): number {
-  if (input.extractedScore != null) {
-    return Math.max(0, Math.min(100, Math.round(input.extractedScore)));
-  }
-
-  let score = input.typeConfidence;
-  if (!input.agreementName.trim()) score -= 8;
-  if (input.participants.length === 0) score -= 22;
-  else if (input.participants.length >= 2) score += 2;
-  if (input.participants.every((p) => p.email?.trim())) score += 4;
-  else score -= 4;
-  if (input.obligations.length >= 3) score += 3;
-  if (input.terms.length >= 4) score += 2;
-  if (input.usedExtraction) score += 2;
-  return Math.max(45, Math.min(98, Math.round(score)));
+  return computeProfileReadinessScore({
+    participants: input.participants,
+    typeConfidence: input.typeConfidence,
+    termsCount: input.terms.length,
+    obligationsCount: input.obligations.length,
+    usedExtraction: input.usedExtraction,
+    extractedScore: input.extractedScore,
+  });
 }
 
 function finalizeInsight(
@@ -339,15 +381,22 @@ function finalizeInsight(
     extractedScore: extractedReadiness?.score,
   });
 
+  const isTemplateDraft = partial.isTemplateDraft ?? false;
+  const explanation = extractedReadiness?.summary
+    ? extractedReadiness.summary
+    : partial.creationSource === 'template' && !isTemplateDraft
+      ? confirmedTemplateReadinessExplanation(readinessScore)
+      : templateReadinessExplanation(readinessScore, isTemplateDraft);
+
   return {
     ...partial,
     obligationsIdentified: obligations,
     potentialGaps:
       partial.potentialGaps.length > 0
         ? partial.potentialGaps
-        : derivePotentialGaps(participants, extractedReadiness?.blockers),
+        : derivePotentialGaps(participants, extractedReadiness?.blockers, { isTemplateDraft }),
     readinessScore,
-    readinessExplanation: readinessExplanation(readinessScore, extractedReadiness?.summary),
+    readinessExplanation: explanation,
   };
 }
 
@@ -371,8 +420,10 @@ export function buildInsightsFromExtraction(
     'Imported Agreement';
 
   const snapshot = mapExtractionToObligationSnapshot(result);
-  const commercialTermsFound = deriveCommercialTermsFromExtraction(result, participants);
-  const obligationsIdentified = deriveObligationsFromExtraction(result, participants);
+  const commercialTermsFound = deriveCommercialTermsOverviewFromExtraction(result);
+  const obligationsIdentified = deriveOperationalObligationsFromExtraction(participants);
+  const compensationTermsFound = deriveCompensationTermsFromParticipants(participants);
+  const commercialGraph = result.commercialGraph;
   const agreementType =
     (snapshot.agreementTypeLabel as AgreementType) ||
     inferAgreementType(participants, commercialTermsFound);
@@ -395,6 +446,32 @@ export function buildInsightsFromExtraction(
       creationSource: 'import',
       serviceCategoriesFound: deriveServiceCategoriesFound(participants),
       deliverablesFound: deriveDeliverablesFound(participants),
+      agreementOwner: commercialGraph?.agreementOwner ?? snapshot.agreementOwner,
+      agreementOwnerResponsibilities: commercialGraph?.agreementOwnerResponsibilities,
+      commercialSummary: commercialGraph?.commercialSummary,
+      commercialStructureOverview: commercialGraph?.commercialStructureOverview.bulletPoints,
+      commercialStructure: commercialGraph?.commercialStructure
+        ? {
+            participantCount: commercialGraph.commercialStructure.participantCount,
+            deliverableCount: commercialGraph.commercialStructure.deliverableCount,
+            operationalObligationCount: commercialGraph.commercialStructure.operationalObligationCount,
+            compensationTermCount: commercialGraph.commercialStructure.compensationTermCount,
+            settlementEventCount: commercialGraph.commercialStructure.settlementEventCount,
+            revenueShareAgreementCount: commercialGraph.commercialStructure.revenueShareAgreementCount,
+            fixedPaymentAgreementCount: commercialGraph.commercialStructure.fixedPaymentAgreementCount,
+            hybridCompensationCount: commercialGraph.commercialStructure.hybridCompensationCount,
+            milestonePaymentCount: commercialGraph.commercialStructure.milestonePaymentCount,
+            instalmentPaymentCount: commercialGraph.commercialStructure.instalmentPaymentCount,
+            conditionalPaymentCount: commercialGraph.commercialStructure.conditionalPaymentCount,
+            estimatedFixedCommitment: commercialGraph.commercialStructure.estimatedFixedCommitment,
+            variableRevenueBases: commercialGraph.commercialStructure.variableRevenueBases,
+          }
+        : undefined,
+      operationalObligations: commercialGraph?.operationalObligations,
+      compensationTermsFound,
+      settlementSchedule: commercialGraph?.settlementSchedule,
+      participantCards: commercialGraph?.participantCards,
+      settlementBlockers: readiness?.settlementBlockers,
     },
     participants,
     result.projectDescription.value ?? undefined,
@@ -453,28 +530,65 @@ export function buildInsightsFromManual(input: {
   );
 }
 
+function formatTemplateObligation(item: string, isUntouchedDefault: boolean): string {
+  if (isUntouchedDefault) {
+    return item.startsWith('Default:') ? item : `Default: ${item}`;
+  }
+  return item.replace(/^Default:\s*/i, '');
+}
+
 export function buildInsightsFromTemplate(
   templateId: OnboardingTemplateId,
-  participants: OnboardingDraftParticipant[]
+  participants: OnboardingDraftParticipant[],
+  options?: {
+    confirmed?: boolean;
+    commercialTerms?: string[];
+    originalCommercialTerms?: string[];
+  }
 ): AgreementIntelligenceInsight {
+  const confirmed = options?.confirmed ?? false;
   const template = ONBOARDING_AGREEMENT_TEMPLATES.find((t) => t.id === templateId);
-  const commercialTermsFound = [...(template?.commercialTerms ?? [])];
+  const originals = options?.originalCommercialTerms ?? template?.commercialTerms ?? [];
+  const currents = options?.commercialTerms ?? originals;
+  const commercialTermsFound = buildDisplayCommercialTerms(originals, currents);
   const agreementType = inferAgreementType(participants, commercialTermsFound, template?.useCaseId);
+
+  const termsCustomised = originals.some(
+    (original, index) => (currents[index] ?? original).trim() !== original.trim()
+  );
+  const isCustomisedDraft =
+    hasCustomisedParticipantNames(participants) || termsCustomised;
+
+  const obligationInputs = commercialTermsFound.map((term) =>
+    term.replace(/^Default:\s*/i, '')
+  );
+  const defaultObligations = deriveObligations(obligationInputs, template?.description).map(
+    (item) => formatTemplateObligation(item, !isCustomisedDraft && !confirmed)
+  );
+
+  const agreementName = isCustomisedDraft
+    ? template?.agreementName ?? 'Template Agreement'
+    : template?.agreementName ?? 'Template Agreement';
 
   return finalizeInsight(
     {
-      agreementName: template?.agreementName ?? 'Template Agreement',
+      agreementName,
       agreementType,
-      agreementTypeConfidence: 92,
+      agreementTypeConfidence: confirmed ? 82 : 72,
       participantsFound: participants.map((p) => ({
         name: p.name,
         role: participantRoleFromDraft(p),
       })),
       commercialTermsFound,
-      obligationsIdentified: deriveObligations(commercialTermsFound, template?.description),
-      potentialGaps: derivePotentialGaps(participants),
+      obligationsIdentified: defaultObligations,
+      potentialGaps: [],
       usedExtraction: false,
       creationSource: 'template',
+      isTemplateDraft: !confirmed,
+      isCustomisedDraft,
+      customizedCommercialTerms: [...currents],
+      templateId,
+      templateTitle: template?.title ?? 'Agreement Template',
     },
     participants,
     template?.description
@@ -504,14 +618,18 @@ export function rebuildInsightFromParticipants(
         description,
         creationSource: 'import',
       });
-    case 'template':
-      return buildInsightsFromManual({
-        agreementName: current.agreementName,
+    case 'template': {
+      const template = ONBOARDING_AGREEMENT_TEMPLATES.find((t) => t.id === current.templateId);
+      return buildInsightsFromTemplate(
+        current.templateId ?? 'revenue_share',
         participants,
-        description,
-        creationSource: 'template',
-        useCaseId: undefined,
-      });
+        {
+          confirmed: !current.isTemplateDraft,
+          commercialTerms: current.customizedCommercialTerms ?? [...(template?.commercialTerms ?? [])],
+          originalCommercialTerms: [...(template?.commercialTerms ?? [])],
+        }
+      );
+    }
     default:
       return buildInsightsFromManual({
         agreementName: current.agreementName,

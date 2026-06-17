@@ -17,6 +17,9 @@ type OnboardingVisualHeaderProps = {
   showIntelligenceBadge?: boolean;
   showLogo?: boolean;
   className?: string;
+  titleOverride?: string;
+  subtextOverride?: string;
+  hideSubtext?: boolean;
 };
 
 export function OnboardingVisualHeader({
@@ -26,9 +29,16 @@ export function OnboardingVisualHeader({
   showIntelligenceBadge = true,
   showLogo = true,
   className,
+  titleOverride,
+  subtextOverride,
+  hideSubtext = false,
 }: OnboardingVisualHeaderProps) {
-  const title = onboardingStepTitle(step);
-  const subtext = onboardingStepSubtext(step);
+  const title = titleOverride ?? onboardingStepTitle(step);
+  const subtext = hideSubtext
+    ? null
+    : subtextOverride !== undefined
+      ? subtextOverride || null
+      : onboardingStepSubtext(step);
   const isIntelligenceStep = step === 'agreement_review';
 
   return (

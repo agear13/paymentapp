@@ -1,3 +1,4 @@
+import type { CommercialGraphSnapshot } from './commercial-graph-types';
 import type { AgreementType } from './classify-agreement-type';
 import type { ExtractionReadinessAssessment } from './extraction-readiness';
 import type { ServiceCategory } from './service-category';
@@ -26,7 +27,23 @@ export type SettlementEventType =
   | 'revenue_share'
   | 'bonus'
   | 'milestone'
+  | 'instalment'
   | 'attribution';
+
+export type CompensationTermType =
+  | 'fixed_fee'
+  | 'revenue_share'
+  | 'instalment'
+  | 'milestone'
+  | 'conditional_bonus'
+  | 'attribution';
+
+export type CommercialDependencyType =
+  | 'attendance_threshold'
+  | 'delivery_completion'
+  | 'funds_cleared'
+  | 'event_timing'
+  | 'other';
 export type CurrencyConfidenceState = 'CONFIRMED' | 'ASSUMED' | 'UNKNOWN';
 export type SourceType = 'whatsapp' | 'email' | 'slack' | 'sms' | 'meeting_notes' | 'other';
 
@@ -68,6 +85,40 @@ export interface ExtractedDependency {
   obligation: ExtractionField<string>;
   dependsOn: ExtractionField<string>;
   status?: ObligationStatus;
+}
+
+export interface ExtractedCompensationTerm {
+  id: string;
+  type: CompensationTermType;
+  label: ExtractionField<string>;
+  amount: ExtractionField<number | null>;
+  percentage: ExtractionField<number | null>;
+  trigger: ExtractionField<string | null>;
+  deadline: ExtractionField<string | null>;
+  revenueBasis: ExtractionField<string | null>;
+  sequenceIndex: number | null;
+  confidence: ExtractionConfidence;
+  rawSnippet?: string;
+}
+
+export interface ExtractedOperationalObligation {
+  id: string;
+  description: ExtractionField<string>;
+  category: ExtractionField<ServiceCategory | null>;
+}
+
+export interface ExtractedCommercialDependency {
+  id: string;
+  description: ExtractionField<string>;
+  type: ExtractionField<CommercialDependencyType>;
+  blocksSettlement: ExtractionField<boolean>;
+  relatedCompensationId: ExtractionField<string | null>;
+  relatedDeliverableId: ExtractionField<string | null>;
+}
+
+export interface ExtractedAgreementOwner {
+  name: ExtractionField<string>;
+  responsibilities: ExtractionField<string>[];
 }
 
 export interface ExtractedSettlementEvent {
@@ -118,6 +169,12 @@ export interface ExtractedParty {
   serviceCategories: ExtractionField<ServiceCategory[]>;
   conditions: ExtractedCondition[];
   dependencies: ExtractedDependency[];
+  /** v5 — work the participant must perform (distinct from compensation). */
+  operationalObligations?: ExtractedOperationalObligation[];
+  /** v5 — consideration terms (fixed, revenue share, instalments, milestones, bonuses). */
+  compensationTerms?: ExtractedCompensationTerm[];
+  /** v5 — settlement blockers linked to deliverables or compensation. */
+  commercialDependencies?: ExtractedCommercialDependency[];
   notes: ExtractionField<string | null>;
 }
 
@@ -140,13 +197,17 @@ export interface ExtractionResult {
   settlementRules?: ExtractedSettlementRule[];
   settlementEvents?: ExtractedSettlementEvent[];
   readinessAssessment?: ExtractionReadinessAssessment;
+  /** v5 — coordinating commercial party (distinct from service providers). */
+  agreementOwner?: ExtractedAgreementOwner;
+  /** v5 — structured commercial graph snapshot for reporting. */
+  commercialGraph?: CommercialGraphSnapshot;
   uncertainties: ExtractionUncertainty[];
   overallConfidence: ExtractionConfidence;
   sourceHint: string | null;
   extractedAt: string;
   /** Tracks obligation schema generation for lifecycle/settlement features. */
-  schemaVersion?: 'v1' | 'v2' | 'v3' | 'v4';
+  schemaVersion?: 'v1' | 'v2' | 'v3' | 'v4' | 'v5';
 }
 
-export const EXTRACTOR_VERSION = 'v4' as const;
+export const EXTRACTOR_VERSION = 'v5' as const;
 export const EXTRACTOR_CREATED_VIA = 'ai_conversation_import' as const;

@@ -41,11 +41,21 @@ export const onboardingCompensationProfileSchema = z
   })
   .passthrough();
 
+const preferredPaymentMethodSchema = z.enum([
+  'bank_account',
+  'wallet',
+  'stripe_connect',
+  'manual',
+  'revenue_share_only',
+]);
+
 export const onboardingParticipantBodySchema = z.object({
   name: z.string().min(1).max(255),
   email: z.union([z.string().email(), z.literal('')]).optional(),
   role: z.enum(ONBOARDING_PARTICIPANT_ROLE_VALUES),
   notes: z.string().max(2000).optional(),
+  preferredPaymentMethod: preferredPaymentMethodSchema.optional(),
+  taxIdentifier: z.string().max(64).optional(),
   participationModel: participationModelSchema.optional(),
   commissionValue: z.number().optional(),
   compensationProfile: onboardingCompensationProfileSchema.nullable().optional(),
@@ -102,6 +112,8 @@ export function onboardingDraftFromRequestBody(
     email: body.email ?? '',
     role: body.role,
     notes: body.notes,
+    preferredPaymentMethod: body.preferredPaymentMethod,
+    taxIdentifier: body.taxIdentifier,
     participationModel: body.participationModel,
     commissionValue: body.commissionValue,
     compensationProfile: normalizeCompensationProfile(body.compensationProfile),

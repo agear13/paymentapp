@@ -115,11 +115,12 @@ describe('onboarding v4 integration (Sunset Sessions)', () => {
   });
 
   it('persists v4 obligation snapshot on conversation import audit record', () => {
-    expect(audit.extractionSummary.obligationSnapshot?.schemaVersion).toBe('v4');
+    expect(audit.extractionSummary.obligationSnapshot?.schemaVersion).toBe('v5');
     expect(audit.extractionSummary.obligationSnapshot?.agreementType).toBe(
       SUNSET_SESSIONS_EXPECTATIONS.agreementType
     );
-    expect(audit.extractionSummary.obligationSnapshot?.settlementRules).toEqual([]);
+    expect(audit.extractionSummary.obligationSnapshot?.settlementRules.length).toBeGreaterThan(0);
+    expect(audit.extractionSummary.obligationSnapshot?.agreementOwner).toBe('James');
     expect(audit.extractionSummary.agreementTypeLabel).toBe(
       'Multi-Party Event Coordination Agreement'
     );

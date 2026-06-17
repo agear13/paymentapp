@@ -8,23 +8,25 @@ import {
 
 /** Short labels fit the stepper row without clipping; mobile shows the active full label. */
 const VISUAL_PHASES = [
-  { id: 'workspace', label: 'Workspace', mobileLabel: 'Create Workspace' },
-  { id: 'agreement', label: 'Agreement', mobileLabel: 'Create Agreement' },
-  { id: 'review', label: 'Review', mobileLabel: 'Intelligence Review' },
-  { id: 'configure', label: 'Configure', mobileLabel: 'Configure Coordination' },
-  { id: 'ready', label: 'Ready', mobileLabel: 'Ready' },
+  { id: 'workspace', label: 'Business', mobileLabel: 'Where am I?' },
+  { id: 'agreement', label: 'Agreement', mobileLabel: 'Create agreement' },
+  { id: 'review', label: 'Review', mobileLabel: 'Is it correct?' },
+  { id: 'configure', label: 'Payments', mobileLabel: 'How money moves' },
+  { id: 'ready', label: 'Ready', mobileLabel: 'Am I ready?' },
 ] as const;
 
 const AGREEMENT_BUILD_STEPS: OnboardingStep[] = [
   'import_source',
   'import_content',
   'template_select',
+  'template_customize',
   'project',
   'participants',
 ];
 
 function visualPhaseIndex(step: OnboardingStep): number {
   if (AGREEMENT_BUILD_STEPS.includes(step)) return 1;
+  if (step === 'money_setup_intro') return 3;
   const progressStep = resolveOnboardingProgressStep(step);
   switch (progressStep) {
     case 'workspace':

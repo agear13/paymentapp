@@ -4,25 +4,26 @@ import { useOperationalCoordinationState } from '@/hooks/use-operational-coordin
 import { useAgreementHealthPortfolio } from '@/hooks/use-agreement-health-portfolio';
 import { deriveOperationalSeverity } from '@/lib/operations/severity';
 import { deduplicateAttentionItems } from '@/lib/operations/explainability/deduplicate-operational-actions';
-import { OperationalCommandCenterHero } from '@/components/operations/operational-command-center-hero';
-import { OperationalAttentionBoard } from '@/components/operations/operational-attention-board';
-import { RecentOperationalEvents } from '@/components/operations/recent-operational-events';
-import { OperationalAuditTimeline } from '@/components/operations/operational-audit-timeline';
-import { AgreementHealthOverview } from '@/components/agreements/health/agreement-health-overview';
-import { AgreementComparativeIntelligence } from '@/components/agreements/health/agreement-comparative-intelligence';
 import { opPage } from '@/lib/design/operational-spacing';
-import { opCollapsibleTrigger } from '@/lib/design/operational-surfaces';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import { ChevronDown } from 'lucide-react';
+
+import { ProvvyCopilot } from '@/components/operations/provvy-copilot';
+import { BusinessMomentum } from '@/components/operations/business-momentum';
+import { ContinueWorkflowCard } from '@/components/operations/continue-workflow-card';
+import { BusinessSnapshotHero } from '@/components/operations/business-snapshot-hero';
+import { WorkspaceHealthScore } from '@/components/operations/workspace-health-score';
+import { MoneyWaitingPanel } from '@/components/operations/money-waiting-panel';
+import { AgreementWorkflowPanel } from '@/components/operations/agreement-workflow-panel';
+import { AgreementsOperationalGrid } from '@/components/operations/agreements-operational-grid';
+import { WorkspaceActivityFeed } from '@/components/operations/workspace-activity-feed';
+import { AskProvvyPanel } from '@/components/operations/ask-provvy-panel';
+import { deriveQueueTasksFromAttention } from '@/components/operations/operational-queue';
 
 export function OperationalHomeCommandCenter() {
-  const { guidance, loading, workspaceContext, activation, auditTimeline, kpis } =
+  const { guidance, loading, workspaceContext, kpis, auditTimeline } =
     useOperationalCoordinationState({ traceSurface: 'operational-home-command-center' });
   const { portfolio, snapshots, loading: healthLoading } = useAgreementHealthPortfolio();
+
+  const isLoading = loading || healthLoading;
   const primaryAction = guidance.actions[0] ?? null;
 
   const attentionItems = deduplicateAttentionItems(
@@ -35,54 +36,104 @@ export function OperationalHomeCommandCenter() {
     {
       primaryActionLabel: primaryAction?.action ?? null,
       primaryActionHref: primaryAction?.destination ?? null,
-      maxCritical: 3,
-      maxPerSeverity: 3,
+      maxCritical: 8,
+      maxPerSeverity: 8,
     }
   );
 
-  const workspacePhase =
-    activation?.phase === 'ready_for_release'
-      ? 'ACTIVE'
-      : activation?.phase === 'ready_to_coordinate'
-        ? 'COORDINATING'
-        : activation?.phase === 'ready_to_collect'
-          ? 'COLLECTING'
-          : 'CONFIGURING';
+  const queueTasks = deriveQueueTasksFromAttention(attentionItems);
 
   return (
     <div className={opPage()}>
-      <AgreementHealthOverview portfolio={portfolio} loading={healthLoading} />
 
-      <OperationalCommandCenterHero
-        guidance={guidance}
-        attentionItems={attentionItems}
-        workspacePhase={workspacePhase}
-        loading={loading}
-      />
-
-      <OperationalAttentionBoard items={attentionItems} calmMode />
-
-      {snapshots.length > 1 ? (
-        <AgreementComparativeIntelligence snapshots={snapshots} loading={healthLoading} />
+      {/* ── 0. Business Momentum ──────────────────────────────────────────
+          Auto-dismiss success banner for recent milestones (within 90 min).
+          "Payments are now live." — disappears after 5 seconds.           */}
+      {!isLoading ? (
+        <BusinessMomentum auditEntries={auditTimeline} />
       ) : null}
 
-      <Collapsible>
-        <CollapsibleTrigger className={opCollapsibleTrigger}>
-          Recent activity
-          <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200" />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-3 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200">
-          <div className="surface-agreement-card p-4">
-            {auditTimeline.length > 0 ? (
-              <OperationalAuditTimeline entries={auditTimeline} />
-            ) : guidance.timeline.length > 0 ? (
-              <RecentOperationalEvents events={guidance.timeline} compact />
-            ) : (
-              <RecentOperationalEvents events={guidance.timeline} compact />
-            )}
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+      {/* ── 1. Provvy Copilot ─────────────────────────────────────────────
+          First-person narrative hero. "I can have Sunset Sessions ready
+          in 4 minutes." Checklist → outcome → single CTA. Never passive.  */}
+      <ProvvyCopilot
+        attentionItems={attentionItems}
+        kpis={kpis}
+        releaseConfidence={guidance.releaseConfidence}
+        snapshots={snapshots}
+        queueTasks={queueTasks}
+        loading={isLoading}
+      />
+
+      {/* ── 2. Continue Where You Left Off ───────────────────────────────
+          Session memory: "Yesterday you finished configuring earnings."
+          Next step + minutes. Continue → goes directly there.             */}
+      {!isLoading ? (
+        <ContinueWorkflowCard
+          auditEntries={auditTimeline}
+          snapshots={snapshots}
+          queueTasks={queueTasks}
+        />
+      ) : null}
+
+      {/* ── 3. Business Snapshot + Workspace Health ───────────────────────
+          Revenue / Agreements / Participants / Actions flow groups.
+          Health score with human interpretation ("Almost ready...").      */}
+      <div className="grid gap-3 xl:grid-cols-[1fr_260px]">
+        <BusinessSnapshotHero
+          portfolio={portfolio}
+          kpis={kpis}
+          releaseConfidence={guidance.releaseConfidence}
+          attentionItems={attentionItems}
+          loading={isLoading}
+        />
+        {!isLoading ? (
+          <WorkspaceHealthScore
+            portfolio={portfolio}
+            kpis={kpis}
+            workspace={workspaceContext}
+            releaseConfidence={guidance.releaseConfidence}
+          />
+        ) : null}
+      </div>
+
+      {/* ── 4. Money Waiting ──────────────────────────────────────────────
+          Four money states: Collected · For approvals · Ready · Held.
+          Operators care about money, not health scores.                   */}
+      <MoneyWaitingPanel
+        releaseConfidence={guidance.releaseConfidence}
+        loading={isLoading}
+      />
+
+      {/* ── 5. Today's Plan — grouped by agreement ────────────────────────
+          "Finish Sunset Sessions" not "complete 3 unrelated tasks."
+          ✓ Done steps + ○ Pending steps + time + Continue workflow CTA.  */}
+      <AgreementWorkflowPanel tasks={queueTasks} snapshots={snapshots} />
+
+      {/* ── 6. Your Agreements ────────────────────────────────────────────
+          Workflow pipeline primary, score secondary.
+          ✓ Agreement · ✓ Participants · ● Payments · ○ Ready · ○ Live   */}
+      <AgreementsOperationalGrid snapshots={snapshots} loading={healthLoading} />
+
+      {/* ── 7. Business Story ─────────────────────────────────────────────
+          Not system logs — business milestones in plain language.
+          "Payments are now live." + why it matters. Grouped by day.      */}
+      <WorkspaceActivityFeed
+        auditEntries={auditTimeline}
+        timelineEvents={guidance.timeline}
+      />
+
+      {/* ── 8. Ask Provvy ────────────────────────────────────────────────
+          Intelligent query panel backed by the Commercial Graph.
+          Deterministic answers from live data. Feels like querying
+          your business, not chatting with a bot.                         */}
+      <AskProvvyPanel
+        snapshots={snapshots}
+        attentionItems={attentionItems}
+        releaseConfidence={guidance.releaseConfidence}
+        kpis={kpis}
+      />
+
     </div>
   );
 }

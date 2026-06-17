@@ -37,7 +37,7 @@ const DIMENSION_CONFIG: Array<{
 }> = [
   { dimension: 'identity', label: 'Identity', weight: 0.2 },
   { dimension: 'commercialTerms', label: 'Commercial Terms', weight: 0.2 },
-  { dimension: 'deliverables', label: 'Deliverables', weight: 0.15 },
+  { dimension: 'deliverables', label: 'Operational Obligations', weight: 0.15 },
   { dimension: 'settlementLogic', label: 'Settlement Logic', weight: 0.15 },
   { dimension: 'paymentInfrastructure', label: 'Payment Infrastructure', weight: 0.15 },
   { dimension: 'taxInformation', label: 'Tax Information', weight: 0.1 },
@@ -224,7 +224,7 @@ export function buildExtractionReadiness(result: ExtractionResult): ExtractionRe
   });
 
   const weightedScore = dimensions.reduce((sum, d) => sum + d.score * d.weight, 0);
-  const score = Math.round(weightedScore);
+  const score = Math.min(89, Math.round(weightedScore));
   const settlementBlockers = buildSettlementBlockers(dimensions);
 
   const summary =
