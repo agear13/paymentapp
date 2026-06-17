@@ -265,7 +265,12 @@ export function ExtractionReviewModal({
         // Entry Point A: create new project + participants.
         const newDeal = mapReviewToRecentDeal(form, importRecord);
         const originalsById = new Map(result.parties.map((p) => [p.id, p]));
-        const newParticipants = mapReviewToParticipants(form, newDeal, originalsById);
+        const newParticipants = mapReviewToParticipants(
+          form,
+          newDeal,
+          originalsById,
+          result.settlementEvents
+        );
         const snapshot = await fetchPilotSnapshot();
         const existing = snapshot ?? { deals: [], participants: [] };
         const persistPayload = {
@@ -382,7 +387,12 @@ export function ExtractionReviewModal({
           paymentStatus: 'Not Paid',
         };
         const originalsById = new Map(result.parties.map((p) => [p.id, p]));
-        const newParticipants = mapReviewToParticipants(form, projectDeal, originalsById);
+        const newParticipants = mapReviewToParticipants(
+          form,
+          projectDeal,
+          originalsById,
+          result.settlementEvents
+        );
         startOnboardingPipelineSession(`onboarding:${projectDeal.id}`);
         logOnboardingPipelineDemoParticipants('mapReviewToParticipants', newParticipants, {
           entryPoint: 'onboarding',

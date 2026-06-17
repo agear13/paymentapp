@@ -7,6 +7,11 @@ import type {
   SourceType,
 } from '@/lib/ai-extractor/extraction-types';
 import { EXTRACTOR_VERSION, SOURCE_TYPE_LABELS } from '@/lib/ai-extractor/extraction-types';
+import { agreementTypeDisplayLabel } from '@/lib/ai-extractor/classify-agreement-type';
+import {
+  mapExtractionToObligationSnapshot,
+  mapPartyToObligationGraph,
+} from '@/lib/ai-extractor/extraction-obligations';
 import {
   buildExtractionSummary,
   derivePartyConfidence,
@@ -67,6 +72,7 @@ export function buildConversationImportAuditRecord(input: {
 }): ConversationImportAuditRecord {
   const importedAt = new Date().toISOString();
   const stats = buildExtractionSummary(input.result);
+  const obligationSnapshot = mapExtractionToObligationSnapshot(input.result);
   const reviewedById = new Map(input.form.parties.map((p) => [p.id, p]));
 
   const parties: ConversationImportPartyRecord[] = [];
@@ -95,8 +101,16 @@ export function buildConversationImportAuditRecord(input: {
       nameConfidence: extracted.name.confidence,
       participationModelConfidence: extracted.participationModel.confidence,
       amountConfidence,
+      extractedObligations: mapPartyToObligationGraph(
+        extracted,
+        input.result.settlementEvents
+      ),
     });
   }
+
+  const agreementTypeLabel = obligationSnapshot.agreementType
+    ? agreementTypeDisplayLabel(obligationSnapshot.agreementType)
+    : buildAgreementTypeLabel(stats);
 
   return {
     id: `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -113,8 +127,9 @@ export function buildConversationImportAuditRecord(input: {
       revenueShareObligationCount: stats.revenueShareObligationCount,
       hybridParticipantCount: stats.hybridParticipantCount,
       attributionCount: stats.attributionCount,
-      agreementTypeLabel: buildAgreementTypeLabel(stats),
+      agreementTypeLabel,
       overallConfidence: input.result.overallConfidence,
+      obligationSnapshot,
     },
     parties,
     extractedCurrencyCode: input.form.extractedCurrencyCode ?? undefined,

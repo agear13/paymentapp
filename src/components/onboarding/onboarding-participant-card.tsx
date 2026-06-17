@@ -27,6 +27,7 @@ import {
 } from '@/lib/onboarding/operator-onboarding-types';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
 import type { ProjectParticipationModel } from '@/lib/projects/participant-entitlement';
+import type { ParticipantObligationGraph } from '@/lib/ai-extractor/extraction-obligations';
 
 export type OnboardingDraftParticipant = {
   name: string;
@@ -37,6 +38,8 @@ export type OnboardingDraftParticipant = {
   participationModel?: ProjectParticipationModel;
   commissionValue?: number;
   compensationProfile?: ParticipantCompensationProfile;
+  /** v4 obligation graph from extraction (deliverables, conditional payments, settlement events). */
+  extractedObligations?: ParticipantObligationGraph;
 };
 
 type OnboardingParticipantCardProps = {

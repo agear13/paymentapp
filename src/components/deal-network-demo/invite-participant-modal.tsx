@@ -120,6 +120,8 @@ export interface DemoParticipant {
   payoutBlocked?: boolean;
   /** How this participant earns — orchestration metadata, not settlement engine. */
   compensationProfile?: import('@/lib/participants/participant-compensation-types').ParticipantCompensationProfile;
+  /** v4 obligation graph from AI extraction import. */
+  extractedObligations?: import('@/lib/ai-extractor/extraction-obligations').ParticipantObligationGraph;
   operationalStatus?: import('@/lib/operational/operational-lifecycle-types').ParticipantOperationalStatus;
   /** Canonical coordination lifecycle (see operations/lifecycle). */
   participantLifecycle?: import('@/lib/operations/lifecycle/participant-lifecycle').ParticipantLifecycleState;

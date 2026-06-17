@@ -8,6 +8,10 @@ import type { ReviewFormState, ReviewedParty } from './review-form-types';
 import { EXTRACTOR_VERSION, EXTRACTOR_CREATED_VIA, SOURCE_TYPE_LABELS } from './extraction-types';
 import type { ExtractedParty } from './extraction-types';
 import type { ConversationImportAuditRecord } from '@/lib/operations/audit/conversation-import-audit-types';
+import {
+  mapPartyToObligationGraph,
+} from './extraction-obligations';
+import type { ExtractedSettlementEvent } from './extraction-types';
 import { appendConversationImportToDeal } from '@/lib/operations/audit/conversation-import-audit';
 import {
   attributionComponentActive,
@@ -172,7 +176,8 @@ export function mapSinglePartyToParticipant(
   party: ReviewedParty,
   project: RecentDeal,
   provenanceTag: string,
-  original?: ExtractedParty
+  original?: ExtractedParty,
+  settlementEvents?: ExtractedSettlementEvent[]
 ): DemoParticipant {
   const role = mapRoleStringToOperationalRole(party.role);
   const hybrid = isHybridCompensationParty(party, original);
@@ -204,7 +209,15 @@ export function mapSinglePartyToParticipant(
   });
 
   const profile = buildCompensationProfileFromReview(party, original);
-  return profile ? applyCompensationProfileToParticipant(built, profile) : built;
+  const extractedObligations = original
+    ? mapPartyToObligationGraph(original, settlementEvents)
+    : undefined;
+  const withCompensation = profile
+    ? applyCompensationProfileToParticipant(built, profile)
+    : built;
+  return extractedObligations
+    ? { ...withCompensation, extractedObligations }
+    : withCompensation;
 }
 
 /**
@@ -220,13 +233,17 @@ export function mergeExtractedCompensationIntoExistingParticipant(
     participantNotes: built.participantNotes,
   };
   if (built.compensationProfile) {
-    return applyCompensationProfileToParticipant(base, built.compensationProfile);
+    return applyCompensationProfileToParticipant(
+      { ...base, extractedObligations: built.extractedObligations ?? existing.extractedObligations },
+      built.compensationProfile
+    );
   }
   return {
     ...base,
     commissionKind: built.commissionKind,
     commissionValue: built.commissionValue,
     participationModel: built.participationModel,
+    extractedObligations: built.extractedObligations ?? existing.extractedObligations,
   };
 }
 
@@ -238,13 +255,20 @@ export function mergeExtractedCompensationIntoExistingParticipant(
 export function mapReviewToParticipants(
   review: ReviewFormState,
   project: RecentDeal,
-  originalsById?: Map<string, ExtractedParty>
+  originalsById?: Map<string, ExtractedParty>,
+  settlementEvents?: ExtractedSettlementEvent[]
 ): DemoParticipant[] {
   const provenanceTag = `[AI Import: ${SOURCE_TYPE_LABELS[review.sourceType] ?? review.sourceType} · ${EXTRACTOR_VERSION}]`;
 
   return review.parties
     .filter((p) => p.name.trim().length > 0)
     .map((party) =>
-      mapSinglePartyToParticipant(party, project, provenanceTag, originalsById?.get(party.id))
+      mapSinglePartyToParticipant(
+        party,
+        project,
+        provenanceTag,
+        originalsById?.get(party.id),
+        settlementEvents
+      )
     );
 }

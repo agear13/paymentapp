@@ -3,6 +3,10 @@ import type {
   ExtractorEntryPoint,
   ParticipationModelOption,
 } from '@/lib/ai-extractor/extraction-types';
+import type {
+  ExtractionObligationSnapshot,
+  ParticipantObligationGraph,
+} from '@/lib/ai-extractor/extraction-obligations';
 
 export type ConversationImportPartyRecord = {
   name: string;
@@ -20,6 +24,8 @@ export type ConversationImportPartyRecord = {
   nameConfidence: ExtractionConfidence;
   participationModelConfidence: ExtractionConfidence;
   amountConfidence: ExtractionConfidence;
+  /** v4 participant obligation graph. */
+  extractedObligations?: ParticipantObligationGraph;
 };
 
 export type ConversationImportExtractionSummary = {
@@ -31,6 +37,8 @@ export type ConversationImportExtractionSummary = {
   attributionCount: number;
   agreementTypeLabel: string;
   overallConfidence: ExtractionConfidence;
+  /** v4 deal-level obligation snapshot fields. */
+  obligationSnapshot?: ExtractionObligationSnapshot;
 };
 
 /** Persisted on deal_payload — survives snapshot sync and DB reload. */

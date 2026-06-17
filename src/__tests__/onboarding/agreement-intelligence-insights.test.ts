@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from '@jest/globals';
 import { buildDemoAgreementInsight } from '@/lib/onboarding/onboarding-demo-workspace';
 import { buildInsightsFromManual } from '@/lib/onboarding/agreement-intelligence-insights';
 import { ONBOARDING_ACTIVATION_EVENTS } from '@/lib/onboarding/onboarding-activation-analytics';

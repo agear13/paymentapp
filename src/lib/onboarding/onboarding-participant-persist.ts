@@ -88,7 +88,7 @@ export function onboardingDraftsFromExtraction(
     workspaceCurrency,
   });
   const originalsById = new Map(result.parties.map((party) => [party.id, party]));
-  return mapReviewToParticipants(form, deal, originalsById)
+  return mapReviewToParticipants(form, deal, originalsById, result.settlementEvents)
     .filter((participant) => participant.name.trim().length > 0)
     .map((participant) => mapDemoParticipantToOnboardingDraft(participant));
 }
@@ -143,6 +143,7 @@ export function mapDemoParticipantToOnboardingDraft(
     participationModel: participant.participationModel,
     commissionValue: participant.commissionValue,
     compensationProfile: participant.compensationProfile ?? undefined,
+    extractedObligations: participant.extractedObligations,
   };
 }
 
@@ -177,6 +178,7 @@ function buildImportedOnboardingParticipant(
   return {
     ...withProfile,
     ...draftParticipantDefaults(),
+    extractedObligations: draft.extractedObligations,
   };
 }
 

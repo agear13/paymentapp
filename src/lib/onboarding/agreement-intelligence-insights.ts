@@ -2,6 +2,14 @@ import type { ExtractionResult, ExtractionConfidence } from '@/lib/ai-extractor/
 import type { OnboardingDraftParticipant } from '@/components/onboarding/onboarding-participant-card';
 import type { OnboardingTemplateId, OnboardingUseCaseId } from '@/lib/onboarding/operator-onboarding-types';
 import { ONBOARDING_AGREEMENT_TEMPLATES } from '@/lib/onboarding/operator-onboarding-types';
+import {
+  formatSettlementRuleLabel,
+  mapExtractionToObligationSnapshot,
+  primaryServiceCategoryLabel,
+  type PersistedDeliverable,
+} from '@/lib/ai-extractor/extraction-obligations';
+import { isHallucinatedSettlementTrigger } from '@/lib/ai-extractor/parse-settlement-rules';
+import { serviceCategoryDisplayLabel } from '@/lib/ai-extractor/service-category';
 
 export type AgreementType =
   | 'Revenue Share Agreement'
@@ -10,7 +18,12 @@ export type AgreementType =
   | 'Contractor Engagement'
   | 'Event Settlement Agreement'
   | 'Client Invoice Workflow'
-  | 'Commercial Agreement';
+  | 'Commercial Agreement'
+  | 'Multi-Party Event Coordination Agreement'
+  | 'Event Revenue Share Agreement'
+  | 'Fixed Fee Service Agreement'
+  | 'Customer Attribution Agreement'
+  | 'Collaboration Agreement';
 
 export type AgreementCreationSource = 'import' | 'manual' | 'template' | 'explore';
 
@@ -26,6 +39,10 @@ export type AgreementIntelligenceInsight = {
   readinessExplanation: string;
   usedExtraction: boolean;
   creationSource: AgreementCreationSource;
+  /** v4 extracted service categories (deal-level). */
+  serviceCategoriesFound?: string[];
+  /** v4 extracted deliverables grouped by participant. */
+  deliverablesFound?: { participant: string; items: string[] }[];
 };
 
 const CONFIDENCE_TO_SCORE: Record<ExtractionConfidence, number> = {
@@ -43,6 +60,12 @@ const USE_CASE_TO_AGREEMENT_TYPE: Record<OnboardingUseCaseId, AgreementType> = {
   event_settlement: 'Event Settlement Agreement',
   client_invoices: 'Client Invoice Workflow',
 };
+
+const HALLUCINATED_COMMERCIAL_TERMS = [
+  'net sales basis',
+  'monthly settlement',
+  'settlement within 10 days',
+];
 
 function inferAgreementType(
   participants: OnboardingDraftParticipant[],
@@ -86,10 +109,6 @@ function deriveCommercialTermsFromParticipants(
     terms.push('15% Revenue Share');
   }
 
-  if (terms.length > 0) {
-    terms.push('Net Sales Basis', 'Monthly Settlement', 'Settlement Within 10 Days');
-  }
-
   return [...new Set(terms)];
 }
 
@@ -104,14 +123,8 @@ function deriveObligations(terms: string[], description?: string): string[] {
   if (termText.includes('10 day') || desc.includes('10 day')) {
     obligations.push('Settlement due within 10 days');
   }
-  if (termText.includes('net sales') || termText.includes('revenue share')) {
-    obligations.push('Revenue share calculated after processing fees');
-  }
   if (termText.includes('approval') || desc.includes('approval')) {
     obligations.push('Approval required before release');
-  }
-  if (termText.includes('fixed') || termText.includes('contractor')) {
-    obligations.push('Settlement triggered on deliverable completion');
   }
   if (obligations.length === 0 && terms.length > 0) {
     obligations.push('Commercial obligations tracked for settlement coordination');
@@ -119,16 +132,156 @@ function deriveObligations(terms: string[], description?: string): string[] {
   return obligations;
 }
 
-function derivePotentialGaps(participants: OnboardingDraftParticipant[]): string[] {
+function deriveObligationsFromExtraction(
+  result: ExtractionResult,
+  participants: OnboardingDraftParticipant[]
+): string[] {
+  const obligations: string[] = [];
+  const snapshot = mapExtractionToObligationSnapshot(result);
+
+  for (const participant of participants) {
+    const graph = participant.extractedObligations;
+    if (!graph) continue;
+
+    for (const deliverable of graph.deliverables) {
+      if (deliverable.description.trim()) {
+        obligations.push(`${participant.name}: ${deliverable.description}`);
+      }
+    }
+
+    for (const fixed of graph.fixedObligations) {
+      if (fixed.amount != null) {
+        obligations.push(`${participant.name}: fixed fee ${fixed.amount}`);
+      }
+    }
+
+    for (const share of graph.revenueShareObligations) {
+      if (share.percentage != null) {
+        obligations.push(`${participant.name}: ${share.percentage}% revenue share`);
+      }
+    }
+
+    for (const conditional of graph.conditionalPayments) {
+      const amountLabel =
+        conditional.amount != null ? `$${conditional.amount}` : 'conditional amount';
+      obligations.push(
+        `${participant.name}: conditional payment ${amountLabel} when ${conditional.trigger}`
+      );
+    }
+  }
+
+  for (const rule of snapshot.settlementRules) {
+    obligations.push(`Settlement rule: ${formatSettlementRuleLabel(rule)}`);
+  }
+
+  for (const term of result.paymentTerms) {
+    const description = term.description.value?.trim();
+    const due = term.dueCondition.value?.trim();
+    if (description) {
+      obligations.push(`Payment term: ${description}`);
+    }
+    if (due && !isHallucinatedSettlementTrigger(due)) {
+      obligations.push(`Settlement trigger: ${due}`);
+    }
+  }
+
+  return [...new Set(obligations)];
+}
+
+function deriveCommercialTermsFromExtraction(
+  result: ExtractionResult,
+  participants: OnboardingDraftParticipant[]
+): string[] {
+  const terms: string[] = [];
+  const snapshot = mapExtractionToObligationSnapshot(result);
+
+  for (const participant of participants) {
+    const graph = participant.extractedObligations;
+    if (!graph) continue;
+
+    for (const share of graph.revenueShareObligations) {
+      if (share.percentage != null) {
+        terms.push(`${share.percentage}% Revenue Share`);
+      }
+    }
+
+    for (const fixed of graph.fixedObligations) {
+      if (fixed.amount != null) {
+        terms.push(`Fixed Payout ${fixed.amount}`);
+      }
+    }
+
+    for (const conditional of graph.conditionalPayments) {
+      const amountLabel =
+        conditional.amount != null ? `$${conditional.amount}` : 'conditional amount';
+      terms.push(`Conditional Payment: ${amountLabel} when ${conditional.trigger}`);
+    }
+
+    if (graph.settlementEvents.some((event) => event.type === 'attribution')) {
+      terms.push('Customer Attribution');
+    }
+  }
+
+  for (const rule of snapshot.settlementRules) {
+    terms.push(formatSettlementRuleLabel(rule));
+  }
+
+  for (const term of result.paymentTerms) {
+    const description = term.description.value?.trim();
+    if (description) {
+      terms.push(description);
+    }
+  }
+
+  return [...new Set(terms)].filter(
+    (term) => !HALLUCINATED_COMMERCIAL_TERMS.some((blocked) => term.toLowerCase().includes(blocked))
+  );
+}
+
+function deriveDeliverablesFound(
+  participants: OnboardingDraftParticipant[]
+): { participant: string; items: string[] }[] {
+  return participants
+    .map((participant) => ({
+      participant: participant.name,
+      items: (participant.extractedObligations?.deliverables ?? [])
+        .map((d: PersistedDeliverable) => d.description.trim())
+        .filter(Boolean),
+    }))
+    .filter((entry) => entry.items.length > 0);
+}
+
+function deriveServiceCategoriesFound(participants: OnboardingDraftParticipant[]): string[] {
+  const categories = new Set<string>();
+  for (const participant of participants) {
+    for (const category of participant.extractedObligations?.serviceCategories ?? []) {
+      categories.add(serviceCategoryDisplayLabel(category));
+    }
+  }
+  return [...categories];
+}
+
+function derivePotentialGaps(
+  participants: OnboardingDraftParticipant[],
+  readinessBlockers?: string[]
+): string[] {
   const gaps: string[] = [];
   if (participants.some((p) => !p.email?.trim())) {
     gaps.push('Participant email missing');
   }
   gaps.push('Settlement account not configured', 'Tax information missing', 'Payment infrastructure not connected');
+  if (readinessBlockers?.length) {
+    for (const blocker of readinessBlockers) {
+      if (!gaps.includes(blocker)) gaps.push(blocker);
+    }
+  }
   return gaps;
 }
 
-function readinessExplanation(score: number): string {
+function readinessExplanation(score: number, extractedSummary?: string): string {
+  if (extractedSummary?.trim()) {
+    return extractedSummary;
+  }
   if (score >= 90) {
     return 'This agreement is almost ready for coordination and settlement.';
   }
@@ -148,7 +301,12 @@ function computeReadinessScore(input: {
   obligations: string[];
   typeConfidence: number;
   usedExtraction: boolean;
+  extractedScore?: number;
 }): number {
+  if (input.extractedScore != null) {
+    return Math.max(0, Math.min(100, Math.round(input.extractedScore)));
+  }
+
   let score = input.typeConfidence;
   if (!input.agreementName.trim()) score -= 8;
   if (input.participants.length === 0) score -= 22;
@@ -164,7 +322,8 @@ function computeReadinessScore(input: {
 function finalizeInsight(
   partial: Omit<AgreementIntelligenceInsight, 'readinessScore' | 'readinessExplanation'>,
   participants: OnboardingDraftParticipant[],
-  description?: string
+  description?: string,
+  extractedReadiness?: { score?: number; summary?: string; blockers?: string[] }
 ): AgreementIntelligenceInsight {
   const obligations =
     partial.obligationsIdentified.length > 0
@@ -177,16 +336,29 @@ function finalizeInsight(
     obligations,
     typeConfidence: partial.agreementTypeConfidence,
     usedExtraction: partial.usedExtraction,
+    extractedScore: extractedReadiness?.score,
   });
 
   return {
     ...partial,
     obligationsIdentified: obligations,
     potentialGaps:
-      partial.potentialGaps.length > 0 ? partial.potentialGaps : derivePotentialGaps(participants),
+      partial.potentialGaps.length > 0
+        ? partial.potentialGaps
+        : derivePotentialGaps(participants, extractedReadiness?.blockers),
     readinessScore,
-    readinessExplanation: readinessExplanation(readinessScore),
+    readinessExplanation: readinessExplanation(readinessScore, extractedReadiness?.summary),
   };
+}
+
+function participantRoleFromDraft(participant: OnboardingDraftParticipant): string | undefined {
+  const categoryLabel = primaryServiceCategoryLabel(
+    participant.extractedObligations?.serviceCategories ?? []
+  );
+  if (categoryLabel) {
+    return categoryLabel.charAt(0).toUpperCase() + categoryLabel.slice(1);
+  }
+  return participant.role;
 }
 
 export function buildInsightsFromExtraction(
@@ -198,45 +370,41 @@ export function buildInsightsFromExtraction(
     result.counterparty.value?.trim() ||
     'Imported Agreement';
 
-  const terms: string[] = [];
-  for (const party of result.parties) {
-    if (party.participationModel.value === 'revenue_share' && party.revenueSharePct.value != null) {
-      terms.push(`${party.revenueSharePct.value}% Revenue Share`, 'Revenue Share');
-    }
-    if (party.participationModel.value === 'fixed_payout' && party.fixedAmount.value != null) {
-      terms.push('Contractor Fee', 'Fixed Payout');
-    }
-    if (party.participationModel.value === 'customer_attribution') {
-      terms.push('Customer Attribution');
-    }
-  }
-  if (result.paymentTerms.length > 0) {
-    terms.push('Settlement Terms Identified');
-  }
-  if (terms.length === 0) {
-    terms.push(...deriveCommercialTermsFromParticipants(participants));
-  } else {
-    terms.push('Net Sales Basis', 'Monthly Settlement');
-  }
-
-  const commercialTermsFound = [...new Set(terms)];
-  const agreementType = inferAgreementType(participants, commercialTermsFound);
+  const snapshot = mapExtractionToObligationSnapshot(result);
+  const commercialTermsFound = deriveCommercialTermsFromExtraction(result, participants);
+  const obligationsIdentified = deriveObligationsFromExtraction(result, participants);
+  const agreementType =
+    (snapshot.agreementTypeLabel as AgreementType) ||
+    inferAgreementType(participants, commercialTermsFound);
   const typeConfidence = CONFIDENCE_TO_SCORE[result.overallConfidence];
+  const readiness = snapshot.readinessAssessment;
 
   return finalizeInsight(
     {
       agreementName,
       agreementType,
       agreementTypeConfidence: typeConfidence,
-      participantsFound: participants.map((p) => ({ name: p.name, role: p.role })),
+      participantsFound: participants.map((participant) => ({
+        name: participant.name,
+        role: participantRoleFromDraft(participant),
+      })),
       commercialTermsFound,
-      obligationsIdentified: deriveObligations(commercialTermsFound, result.projectDescription.value ?? undefined),
-      potentialGaps: derivePotentialGaps(participants),
+      obligationsIdentified,
+      potentialGaps: derivePotentialGaps(participants, readiness?.settlementBlockers),
       usedExtraction: true,
       creationSource: 'import',
+      serviceCategoriesFound: deriveServiceCategoriesFound(participants),
+      deliverablesFound: deriveDeliverablesFound(participants),
     },
     participants,
-    result.projectDescription.value ?? undefined
+    result.projectDescription.value ?? undefined,
+    readiness
+      ? {
+          score: readiness.score,
+          summary: readiness.summary,
+          blockers: readiness.settlementBlockers,
+        }
+      : undefined
   );
 }
 
@@ -270,7 +438,10 @@ export function buildInsightsFromManual(input: {
       agreementName: input.agreementName.trim() || 'New Agreement',
       agreementType,
       agreementTypeConfidence: 88,
-      participantsFound: input.participants.map((p) => ({ name: p.name, role: p.role })),
+      participantsFound: input.participants.map((p) => ({
+        name: p.name,
+        role: participantRoleFromDraft(p),
+      })),
       commercialTermsFound,
       obligationsIdentified: deriveObligations(commercialTermsFound, input.description),
       potentialGaps: derivePotentialGaps(input.participants),
@@ -295,7 +466,10 @@ export function buildInsightsFromTemplate(
       agreementName: template?.agreementName ?? 'Template Agreement',
       agreementType,
       agreementTypeConfidence: 92,
-      participantsFound: participants.map((p) => ({ name: p.name, role: p.role })),
+      participantsFound: participants.map((p) => ({
+        name: p.name,
+        role: participantRoleFromDraft(p),
+      })),
       commercialTermsFound,
       obligationsIdentified: deriveObligations(commercialTermsFound, template?.description),
       potentialGaps: derivePotentialGaps(participants),
@@ -313,7 +487,13 @@ export function rebuildInsightFromParticipants(
   description?: string
 ): AgreementIntelligenceInsight {
   if (current.creationSource === 'explore') {
-    return { ...current, participantsFound: participants.map((p) => ({ name: p.name, role: p.role })) };
+    return {
+      ...current,
+      participantsFound: participants.map((p) => ({
+        name: p.name,
+        role: participantRoleFromDraft(p),
+      })),
+    };
   }
 
   switch (current.creationSource) {
