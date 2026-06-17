@@ -97,10 +97,6 @@ function buildNarrative(
     return {
       eyebrow: greeting(operatorName),
       headline: 'Everything is progressing well.',
-      body:
-        totalAgreements === 1
-          ? `${primaryAgreement?.agreementName ?? 'Your agreement'} is on track.`
-          : `All ${totalAgreements} agreements are on track.`,
       body: secondAgreement
         ? `${healthyAgreements[0]?.agreementName ?? 'Your agreement'} is now ready for payouts. I'd recommend checking on ${secondAgreement.agreementName} next.`
         : `${primaryAgreement?.agreementName ?? 'Your agreement'} is now ready for payouts.`,
