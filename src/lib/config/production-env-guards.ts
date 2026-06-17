@@ -3,10 +3,8 @@
  * Invoked at runtime startup when NODE_ENV === 'production'.
  */
 
-import {
-  readAgreementR2StorageConfig,
-  readAgreementUploadStorageProvider,
-} from '@/lib/agreement-analyzer/upload-storage/agreement-upload-storage-config';
+import { isAgreementR2StorageConfigured } from '@/lib/agreement-analyzer/upload-storage/agreement-upload-storage-config';
+import { R2_PRODUCTION_ENV_MESSAGE } from '@/lib/storage/storage-config';
 
 export type ProductionGuardEnv = {
   NODE_ENV: string;
@@ -55,23 +53,10 @@ export function isAgreementStorageProductionReady(
     return { ok: true };
   }
 
-  const provider = readAgreementUploadStorageProvider({
-    ...processEnv,
-    NODE_ENV: nodeEnv,
-  });
-  if (provider === 'local') {
+  if (!isAgreementR2StorageConfigured(processEnv)) {
     return {
       ok: false,
-      reason:
-        'Agreement upload storage must not use local filesystem in production. Set STORAGE_PROVIDER=r2 and configure R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME.',
-    };
-  }
-
-  if (!readAgreementR2StorageConfig(processEnv)) {
-    return {
-      ok: false,
-      reason:
-        'Agreement upload storage requires R2 in production. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME.',
+      reason: `Object storage is not configured for production. ${R2_PRODUCTION_ENV_MESSAGE}`,
     };
   }
 

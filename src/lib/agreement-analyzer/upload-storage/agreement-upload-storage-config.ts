@@ -1,3 +1,12 @@
+import {
+  getPublicAssetBaseUrl,
+  isR2CredentialsConfigured,
+  isR2Configured,
+  readStorageConfig,
+  resolveStorageProvider,
+  R2_PRODUCTION_ENV_MESSAGE,
+} from '@/lib/storage/storage-config';
+
 export type AgreementUploadStorageProvider = 'local' | 'r2';
 
 export type AgreementR2StorageConfig = {
@@ -9,75 +18,43 @@ export type AgreementR2StorageConfig = {
   publicBaseUrl: string | null;
 };
 
-function trimOrNull(value: string | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
-}
-
 export function readAgreementUploadStorageProvider(
   processEnv: NodeJS.ProcessEnv = process.env
 ): AgreementUploadStorageProvider {
-  const explicit = processEnv.STORAGE_PROVIDER?.trim().toLowerCase();
-  const isProduction = processEnv.NODE_ENV === 'production';
-  const isTest = processEnv.NODE_ENV === 'test';
-
-  if (explicit === 'r2') {
-    return 'r2';
-  }
-
-  if (explicit === 'local' && !isProduction) {
-    return 'local';
-  }
-
-  const r2Config = readAgreementR2StorageConfig(processEnv);
-  const allowLocal =
-    !isProduction &&
-    !isTest &&
-    processEnv.STORAGE_ALLOW_LOCAL_FALLBACK !== 'false';
-
-  if (r2Config) {
-    return 'r2';
-  }
-
-  if (!allowLocal && isProduction) {
-    return 'r2';
-  }
-
-  return 'local';
+  const config = readStorageConfig(processEnv);
+  const provider = resolveStorageProvider(config, processEnv);
+  return provider === 'r2' ? 'r2' : 'local';
 }
 
 export function readAgreementR2StorageConfig(
   processEnv: NodeJS.ProcessEnv = process.env
 ): AgreementR2StorageConfig | null {
-  const accountId = trimOrNull(processEnv.R2_ACCOUNT_ID);
-  const accessKeyId = trimOrNull(processEnv.R2_ACCESS_KEY_ID);
-  const secretAccessKey = trimOrNull(processEnv.R2_SECRET_ACCESS_KEY);
-  const bucketName = trimOrNull(processEnv.R2_BUCKET_NAME);
-
-  if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
+  const config = readStorageConfig(processEnv);
+  if (!isR2CredentialsConfigured(config)) {
     return null;
   }
 
-  const endpoint =
-    trimOrNull(processEnv.R2_ENDPOINT) ??
-    `https://${accountId}.r2.cloudflarestorage.com`;
-
   return {
-    accountId,
-    accessKeyId,
-    secretAccessKey,
-    bucketName,
-    endpoint,
-    publicBaseUrl: trimOrNull(processEnv.R2_PUBLIC_BASE_URL),
+    accountId: config.r2.accountId!,
+    accessKeyId: config.r2.accessKeyId!,
+    secretAccessKey: config.r2.secretAccessKey!,
+    bucketName: config.r2.bucketName!,
+    endpoint: config.r2.endpoint ?? `https://${config.r2.accountId}.r2.cloudflarestorage.com`,
+    publicBaseUrl: getPublicAssetBaseUrl(config),
   };
 }
 
 export function requireAgreementR2StorageConfig(): AgreementR2StorageConfig {
   const config = readAgreementR2StorageConfig();
   if (!config) {
-    throw new Error(
-      'R2 agreement storage is misconfigured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME.'
-    );
+    throw new Error(`R2 agreement storage is misconfigured. ${R2_PRODUCTION_ENV_MESSAGE}`);
   }
   return config;
+}
+
+/** Whether agreement uploads can use R2 in the current environment. */
+export function isAgreementR2StorageConfigured(
+  processEnv: NodeJS.ProcessEnv = process.env
+): boolean {
+  return isR2Configured(readStorageConfig(processEnv));
 }

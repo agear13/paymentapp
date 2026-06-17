@@ -10,6 +10,7 @@ import { LocalAgreementUploadStorage } from '@/lib/agreement-analyzer/upload-sto
 import { R2AgreementUploadStorage } from '@/lib/agreement-analyzer/upload-storage/r2-agreement-upload-storage';
 import type { UploadStorageService } from '@/lib/agreement-analyzer/upload-storage/types';
 import { UploadStorageError } from '@/lib/agreement-analyzer/upload-storage/types';
+import { R2_PRODUCTION_ENV_MESSAGE } from '@/lib/storage/storage-config';
 
 let cachedService: UploadStorageService | null = null;
 
@@ -23,7 +24,7 @@ function createUploadStorageService(): UploadStorageService {
     if (!r2Config) {
       throw new UploadStorageError(
         'misconfigured',
-        'STORAGE_PROVIDER=r2 requires R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME'
+        `Object storage is not configured. ${R2_PRODUCTION_ENV_MESSAGE}`
       );
     }
 

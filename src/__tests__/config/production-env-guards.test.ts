@@ -132,7 +132,7 @@ describe('production-env-guards (B5)', () => {
         STORAGE_PROVIDER: 'r2',
         NODE_ENV: 'production',
       })
-    ).toThrow(/R2_ACCOUNT_ID/);
+    ).toThrow(/R2_PUBLIC_URL/);
   });
 
   it('passes valid production configuration', () => {

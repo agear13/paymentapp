@@ -71,6 +71,7 @@ describe('agreement upload storage', () => {
     delete process.env.R2_ACCESS_KEY_ID;
     delete process.env.R2_SECRET_ACCESS_KEY;
     delete process.env.R2_BUCKET_NAME;
+    delete process.env.R2_PUBLIC_URL;
     delete process.env.R2_ENDPOINT;
   });
 
@@ -85,6 +86,7 @@ describe('agreement upload storage', () => {
     process.env.R2_ACCESS_KEY_ID = r2Config.accessKeyId;
     process.env.R2_SECRET_ACCESS_KEY = r2Config.secretAccessKey;
     process.env.R2_BUCKET_NAME = r2Config.bucketName;
+    process.env.R2_PUBLIC_URL = 'https://assets.example.com';
 
     expect(readAgreementUploadStorageProvider()).toBe('r2');
 
@@ -98,6 +100,7 @@ describe('agreement upload storage', () => {
     process.env.R2_ACCESS_KEY_ID = r2Config.accessKeyId;
     process.env.R2_SECRET_ACCESS_KEY = r2Config.secretAccessKey;
     process.env.R2_BUCKET_NAME = r2Config.bucketName;
+    process.env.R2_PUBLIC_URL = 'https://assets.example.com';
 
     expect(readAgreementR2StorageConfig()).toMatchObject({
       bucketName: 'agreements-private',

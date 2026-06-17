@@ -1,10 +1,12 @@
 import 'server-only';
 
 import {
+  isAgreementR2StorageConfigured,
   readAgreementR2StorageConfig,
   readAgreementUploadStorageProvider,
   type AgreementUploadStorageProvider,
 } from '@/lib/agreement-analyzer/upload-storage/agreement-upload-storage-config';
+import { R2_PRODUCTION_ENV_MESSAGE } from '@/lib/storage/storage-config';
 import { loggers } from '@/lib/logger';
 
 export type AgreementStorageHealthStatus = {
@@ -23,16 +25,16 @@ export function evaluateAgreementStorageHealth(
   const provider = readAgreementUploadStorageProvider(processEnv);
   const r2Config = readAgreementR2StorageConfig(processEnv);
   const isProduction = environment === 'production';
+  const r2Ready = isAgreementR2StorageConfigured(processEnv);
 
-  if (isProduction && provider === 'local') {
+  if (isProduction && !r2Ready) {
     return {
       provider,
-      bucket: null,
+      bucket: r2Config?.bucketName ?? null,
       environment,
       configured: false,
       misconfigured: true,
-      reason:
-        'Agreement uploads cannot use local filesystem in production. Set STORAGE_PROVIDER=r2 and configure R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME.',
+      reason: `Object storage is not configured for production. ${R2_PRODUCTION_ENV_MESSAGE}`,
     };
   }
 
@@ -43,8 +45,7 @@ export function evaluateAgreementStorageHealth(
       environment,
       configured: false,
       misconfigured: true,
-      reason:
-        'STORAGE_PROVIDER=r2 requires R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME.',
+      reason: `Object storage credentials are incomplete. ${R2_PRODUCTION_ENV_MESSAGE}`,
     };
   }
 

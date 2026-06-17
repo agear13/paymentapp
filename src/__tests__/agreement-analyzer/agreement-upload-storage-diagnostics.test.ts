@@ -13,6 +13,7 @@ describe('agreement upload storage diagnostics', () => {
     R2_ACCESS_KEY_ID: 'access-key',
     R2_SECRET_ACCESS_KEY: 'secret-key',
     R2_BUCKET_NAME: 'provvypay-assets',
+    R2_PUBLIC_URL: 'https://assets.provvypay.com',
   };
 
   beforeEach(() => {
@@ -35,7 +36,7 @@ describe('agreement upload storage diagnostics', () => {
       misconfigured: true,
       configured: false,
     });
-    expect(health.reason).toContain('R2_ACCOUNT_ID');
+    expect(health.reason).toContain('R2_PUBLIC_URL');
   });
 
   it('reports healthy R2 configuration in production', () => {
@@ -67,7 +68,7 @@ describe('agreement upload storage diagnostics', () => {
       isAgreementStorageProductionReady({ NODE_ENV: 'production' }, { nodeEnv: 'production' })
     ).toEqual({
       ok: false,
-      reason: expect.stringContaining('R2_ACCOUNT_ID'),
+      reason: expect.stringContaining('R2_PUBLIC_URL'),
     });
   });
 });

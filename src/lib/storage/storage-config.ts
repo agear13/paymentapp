@@ -1,5 +1,6 @@
 /**
- * Storage provider configuration and startup health checks.
+ * Canonical storage provider configuration and startup health checks.
+ * Used by operational asset storage (logos, attachments) and agreement upload storage.
  */
 
 import type { StorageHealthStatus, StorageProviderName } from '@/lib/storage/types';
@@ -12,63 +13,89 @@ export type StorageConfig = {
     secretAccessKey: string | null;
     bucketName: string | null;
     publicUrl: string | null;
+    endpoint: string | null;
   };
   assetCdnUrl: string | null;
   localUploadDir: string;
 };
+
+export const R2_PRODUCTION_ENV_MESSAGE =
+  'Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, and R2_PUBLIC_URL.';
 
 function trimOrNull(value: string | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
 }
 
-export function readStorageConfig(): StorageConfig {
+export function readStorageConfig(
+  processEnv: NodeJS.ProcessEnv = process.env
+): StorageConfig {
+  const accountId = trimOrNull(processEnv.R2_ACCOUNT_ID);
+  const endpoint =
+    trimOrNull(processEnv.R2_ENDPOINT) ??
+    (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : null);
+
   const r2 = {
-    accountId: trimOrNull(process.env.R2_ACCOUNT_ID),
-    accessKeyId: trimOrNull(process.env.R2_ACCESS_KEY_ID),
-    secretAccessKey: trimOrNull(process.env.R2_SECRET_ACCESS_KEY),
-    bucketName: trimOrNull(process.env.R2_BUCKET_NAME),
-    publicUrl: trimOrNull(process.env.R2_PUBLIC_URL),
+    accountId,
+    accessKeyId: trimOrNull(processEnv.R2_ACCESS_KEY_ID),
+    secretAccessKey: trimOrNull(processEnv.R2_SECRET_ACCESS_KEY),
+    bucketName: trimOrNull(processEnv.R2_BUCKET_NAME),
+    publicUrl:
+      trimOrNull(processEnv.R2_PUBLIC_URL) ?? trimOrNull(processEnv.R2_PUBLIC_BASE_URL),
+    endpoint,
   };
 
-  const r2Configured = Boolean(
-    r2.accountId &&
-      r2.accessKeyId &&
-      r2.secretAccessKey &&
-      r2.bucketName &&
-      r2.publicUrl
-  );
-
-  const isProduction = process.env.NODE_ENV === 'production';
-  const isTest = process.env.NODE_ENV === 'test';
-  const allowLocal =
-    !isProduction &&
-    !isTest &&
-    process.env.STORAGE_ALLOW_LOCAL_FALLBACK !== 'false';
-
-  let provider: StorageProviderName = 'local';
-  if (r2Configured) {
-    provider = 'r2';
-  } else if (!allowLocal && isProduction) {
-    provider = 'r2';
-  }
-
-  return {
-    provider,
+  const config: StorageConfig = {
+    provider: 'local',
     r2,
-    assetCdnUrl: trimOrNull(process.env.ASSET_CDN_URL),
+    assetCdnUrl: trimOrNull(processEnv.ASSET_CDN_URL),
     localUploadDir: 'public/uploads',
   };
+
+  config.provider = resolveStorageProvider(config, processEnv);
+  return config;
 }
 
-export function isR2Configured(config: StorageConfig = readStorageConfig()): boolean {
+export function isR2CredentialsConfigured(
+  config: StorageConfig = readStorageConfig()
+): boolean {
   return Boolean(
     config.r2.accountId &&
       config.r2.accessKeyId &&
       config.r2.secretAccessKey &&
-      config.r2.bucketName &&
-      config.r2.publicUrl
+      config.r2.bucketName
   );
+}
+
+export function isR2Configured(config: StorageConfig = readStorageConfig()): boolean {
+  return isR2CredentialsConfigured(config) && Boolean(config.r2.publicUrl);
+}
+
+export function resolveStorageProvider(
+  config: StorageConfig,
+  processEnv: NodeJS.ProcessEnv = process.env
+): StorageProviderName {
+  const explicit = processEnv.STORAGE_PROVIDER?.trim().toLowerCase();
+  const isProduction = processEnv.NODE_ENV === 'production';
+  const isTest = processEnv.NODE_ENV === 'test';
+  const allowLocal =
+    !isProduction &&
+    !isTest &&
+    processEnv.STORAGE_ALLOW_LOCAL_FALLBACK !== 'false';
+
+  if (explicit === 'local' && !isProduction) {
+    return 'local';
+  }
+
+  if (isR2Configured(config)) {
+    return 'r2';
+  }
+
+  if (explicit === 'r2' || (!allowLocal && isProduction)) {
+    return 'r2';
+  }
+
+  return 'local';
 }
 
 export function getPublicAssetBaseUrl(config: StorageConfig = readStorageConfig()): string | null {
@@ -84,7 +111,7 @@ export function evaluateStorageHealth(
 
   if (isProduction && !r2Ready) {
     warnings.push(
-      'R2 storage is not fully configured in production. Uploads will fail until R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, and R2_PUBLIC_URL are set.'
+      `R2 storage is not fully configured in production. Uploads will fail until ${R2_PRODUCTION_ENV_MESSAGE}`
     );
   }
 
@@ -128,4 +155,9 @@ export function logStorageStartupHealth(): StorageHealthStatus {
   }
 
   return health;
+}
+
+/** Reset startup logging — test helper. */
+export function resetStorageStartupLoggingForTests(): void {
+  startupLogged = false;
 }
