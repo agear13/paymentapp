@@ -13,6 +13,7 @@ import type { QueueTask } from '@/components/operations/operational-queue';
 import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
 import { analyseWorkspace } from '@/components/workflow/commercial-decision-engine';
 import type { FocusItem, WorkspaceMode } from '@/components/workflow/operations-manager';
+import { CommercialInsights, shouldShowInsights } from '@/components/workflow/commercial-insights';
 
 type ProvvyCopilotProps = {
   operatorName?: string;
@@ -281,6 +282,19 @@ export function ProvvyCopilot({
           <div className="h-3 w-2/5 bg-muted/40 rounded" />
         </div>
       </div>
+    );
+  }
+
+  // Adaptive interface: operational/mature businesses get insights instead of guidance
+  // The product becomes quieter as the business matures — mostly outcomes, not instructions.
+  if (workspaceMode && shouldShowInsights(workspaceMode) && (!todaysFocus || todaysFocus.length === 0)) {
+    return (
+      <CommercialInsights
+        mode={workspaceMode}
+        kpis={kpis ?? null}
+        releaseConfidence={releaseConfidence ?? null}
+        auditEntries={auditEntries ?? []}
+      />
     );
   }
 

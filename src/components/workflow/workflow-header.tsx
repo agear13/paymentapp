@@ -5,12 +5,8 @@ import { ArrowRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
-import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
-import {
-  deriveWorkflowContext,
-  type WorkflowStage,
-} from '@/components/workflow/workflow-context';
-import { analyseWorkspace } from '@/components/workflow/commercial-decision-engine';
+import { useCommercialBrain } from '@/components/workflow/commercial-brain-context';
+import type { WorkflowStage } from '@/components/workflow/workflow-context';
 
 /* ─── Progress bar ─── */
 
@@ -36,7 +32,7 @@ function WorkflowProgressBar({ pct }: { pct: number }) {
   );
 }
 
-/* ─── Stage pill ─── */
+/* ─── Stage pill colours ─── */
 
 const stagePillColor: Partial<Record<WorkflowStage, string>> = {
   'setup':                'bg-border/60 text-muted-foreground',
@@ -49,7 +45,7 @@ const stagePillColor: Partial<Record<WorkflowStage, string>> = {
   'operational':          'bg-[rgba(29,111,66,0.12)] text-[rgb(29,111,66)]',
 };
 
-/* ─── Skeleton loader ─── */
+/* ─── Skeleton ─── */
 
 function WorkflowHeaderSkeleton() {
   return (
@@ -70,62 +66,29 @@ function WorkflowHeaderSkeleton() {
 /* ─── WorkflowHeader ─── */
 
 /**
- * Persistent workflow header — appears at the top of every agreement workspace page.
+ * Persistent mission header — every agreement workspace page begins here.
  *
- * Answers three questions without any extra navigation:
- *   1. Where am I?        → Stage title + progress bar
- *   2. What's next?       → Next action description
- *   3. What happens after? → Hint text (brief outcome)
+ * Powered by the CommercialBrain context — no independent data fetching,
+ * no duplicated engine calls. The Decision Engine runs once in
+ * CommercialBrainProvider and this component reads the shared result.
  *
- * The Continue button always routes to the next required workflow step.
- * Routes are derived from WorkflowContext — never hardcoded.
+ * Answers in one glance:
+ *   1. What is the mission?     → Conversational mission statement
+ *   2. Where are we?            → Stage pill + progress bar
+ *   3. What happens next?       → Action title + consequences
+ *   4. What should I press?     → Single "Continue" CTA
  */
 export function WorkflowHeader() {
-  const { deal, summary, projectParticipants, projectId, loading: wsLoading } =
-    useProjectWorkspace();
+  const { deal, summary } = useProjectWorkspace();
+  const { decision, workflowCtx, loading } = useCommercialBrain();
 
-  const {
-    kpis,
-    guidance,
-    workspaceContext,
-    activation,
-    loading: opLoading,
-  } = useOperationalCoordinationState({
-    scope: 'project',
-    project: deal ?? undefined,
-    participants: projectParticipants,
-    treasury: summary?.treasury ?? undefined,
-    enabled: Boolean(deal),
-    traceSurface: 'workflow-header',
-  });
-
-  const isLoading = wsLoading || opLoading;
-
-  if (isLoading && !deal) return <WorkflowHeaderSkeleton />;
-  if (!deal || !summary) return null;
-
-  const ctx = deriveWorkflowContext({
-    projectId,
-    agreementName: summary.name,
-    kpis: kpis ?? null,
-    releaseConfidence: guidance.releaseConfidence ?? null,
-    workspaceContext: workspaceContext ?? null,
-    activation: activation ?? null,
-  });
-
-  // Get consequence-first action detail from Decision Engine
-  const decision = analyseWorkspace({
-    projectId,
-    agreementName: summary.name,
-    kpis: kpis ?? null,
-    releaseConfidence: guidance.releaseConfidence ?? null,
-    workspaceContext: workspaceContext ?? null,
-    activation: activation ?? null,
-  });
+  if (loading && !deal) return <WorkflowHeaderSkeleton />;
+  if (!deal || !summary || !workflowCtx || !decision) return null;
 
   const recommended = decision.recommendedAction;
 
-  if (ctx.isCompleted) {
+  // Operationally complete — show quiet success strip
+  if (workflowCtx.isCompleted) {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-[rgba(29,111,66,0.2)] bg-[rgba(29,111,66,0.04)] px-5 py-3">
         <Check className="h-4 w-4 text-[rgb(29,111,66)] shrink-0" aria-hidden />
@@ -138,7 +101,7 @@ export function WorkflowHeader() {
           </p>
         </div>
         <Button asChild size="sm" variant="outline" className="shrink-0 h-7 text-xs">
-          <Link href={ctx.continueHref}>
+          <Link href={workflowCtx.continueHref}>
             View activity
             <ArrowRight className="ml-1 h-3 w-3" />
           </Link>
@@ -149,7 +112,7 @@ export function WorkflowHeader() {
 
   return (
     <div className="rounded-xl border border-border/60 bg-white/70 px-5 py-4 space-y-3">
-      {/* Mission header: "Continue preparing [Agreement]" */}
+      {/* Mission label + stage pill */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -162,20 +125,20 @@ export function WorkflowHeader() {
         <span
           className={cn(
             'shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium mt-0.5',
-            stagePillColor[ctx.currentStage] ?? 'bg-border/60 text-muted-foreground'
+            stagePillColor[workflowCtx.currentStage] ?? 'bg-border/60 text-muted-foreground'
           )}
         >
-          {ctx.stageTitle}
+          {workflowCtx.stageTitle}
         </span>
       </div>
 
       {/* Progress bar */}
-      <WorkflowProgressBar pct={ctx.completionPercentage} />
+      <WorkflowProgressBar pct={workflowCtx.completionPercentage} />
 
-      {/* Consequence-first action + CTA */}
+      {/* Consequence-first action row */}
       {recommended ? (
         <div className="flex items-start justify-between gap-4 flex-wrap pt-0.5">
-          <div className="min-w-0 space-y-1">
+          <div className="min-w-0 space-y-0.5">
             <p className="text-sm font-medium text-foreground leading-snug">{recommended.title}</p>
             {recommended.consequences.length > 0 ? (
               <p className="text-xs text-muted-foreground">
@@ -184,9 +147,9 @@ export function WorkflowHeader() {
             ) : null}
           </div>
           <div className="flex items-center gap-2.5 shrink-0">
-            {ctx.nextActionMinutes > 0 ? (
+            {workflowCtx.nextActionMinutes > 0 ? (
               <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:block">
-                {ctx.nextActionMinutes} min
+                {workflowCtx.nextActionMinutes} min
               </span>
             ) : null}
             <Button
@@ -194,7 +157,7 @@ export function WorkflowHeader() {
               size="sm"
               className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0"
             >
-              <Link href={ctx.continueHref}>
+              <Link href={workflowCtx.continueHref}>
                 Continue
                 <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Link>
@@ -203,13 +166,15 @@ export function WorkflowHeader() {
         </div>
       ) : (
         <div className="flex items-center justify-between gap-4 flex-wrap pt-0.5">
-          <p className="text-sm text-muted-foreground leading-snug">{ctx.nextActionHint}</p>
+          <p className="text-sm text-muted-foreground leading-snug">
+            {workflowCtx.nextActionHint}
+          </p>
           <Button
             asChild
             size="sm"
             className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0 shrink-0"
           >
-            <Link href={ctx.continueHref}>
+            <Link href={workflowCtx.continueHref}>
               Continue
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>

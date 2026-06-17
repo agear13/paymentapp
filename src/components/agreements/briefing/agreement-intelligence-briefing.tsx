@@ -34,12 +34,28 @@ import {
 import { useAgreementIntelligenceTracking } from '@/hooks/use-agreement-intelligence-tracking';
 import { AgreementIntelligenceFeedbackPrompt } from '@/components/agreements/validation/agreement-intelligence-feedback-prompt';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
-import { CommercialReadiness } from '@/components/workflow/commercial-readiness';
-import { deriveWorkflowContext } from '@/components/workflow/workflow-context';
+import { CommercialJourney } from '@/components/workflow/commercial-journey';
+import { useCommercialBrain } from '@/components/workflow/commercial-brain-context';
 
 type AgreementIntelligenceBriefingProps = {
   projectId: string;
 };
+
+/**
+ * Reads the CommercialBrain context and renders the unified CommercialJourney.
+ * Consumes the shared engine result — no independent stage derivation.
+ */
+function BriefingCommercialJourney() {
+  const { workflowCtx } = useCommercialBrain();
+  if (!workflowCtx) return null;
+  return (
+    <CommercialJourney
+      currentStage={workflowCtx.currentStage}
+      variant="vertical"
+      className="border rounded-lg p-4 bg-white/50"
+    />
+  );
+}
 
 export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligenceBriefingProps) {
   const {
@@ -258,17 +274,7 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
             agreementName={summary.name}
             onRecommendationCtaClick={markRecommendationActed}
           />
-          <CommercialReadiness
-            workflowCtx={deriveWorkflowContext({
-              projectId,
-              agreementName: summary.name,
-              kpis: kpis ?? null,
-              releaseConfidence: guidance.releaseConfidence ?? null,
-              workspaceContext: workspaceContext ?? null,
-              activation: activation ?? null,
-            })}
-            className="border rounded-lg p-4 bg-white/50"
-          />
+          <BriefingCommercialJourney />
         </div>
       </div>
 

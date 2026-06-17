@@ -664,16 +664,8 @@ export function ProjectParticipantsView() {
       }
     >
       <div className="space-y-6">
-        {/* Persistent copilot — keeps Provvy present on every agreement page */}
-        <ProjectPageCopilot
-          page="people"
-          projectId={projectId}
-          agreementName={summary.name}
-          guidance={guidance}
-          kpis={canonicalKpis}
-          workspaceContext={workspaceContext}
-          activation={activation}
-        />
+        {/* Persistent copilot — powered by CommercialBrainContext (no props needed) */}
+        <ProjectPageCopilot page="people" />
 
         {needsEarningsConfiguration && hasParticipants ? (
           <ProgressiveOperationalPanel

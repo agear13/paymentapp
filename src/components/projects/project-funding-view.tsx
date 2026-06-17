@@ -40,15 +40,8 @@ export function ProjectFundingView() {
 
   return (
     <div className="space-y-6">
-      {/* Persistent copilot — keeps Provvy present on every agreement page */}
-      <ProjectPageCopilot
-        page="money"
-        projectId={projectId}
-        agreementName={summary.name}
-        guidance={guidance}
-        workspaceContext={workspaceContext}
-        activation={activation}
-      />
+      {/* Persistent copilot — powered by CommercialBrainContext (no props needed) */}
+      <ProjectPageCopilot page="money" />
 
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>

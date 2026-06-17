@@ -12,6 +12,7 @@ import { ProjectOperationalGuidance } from '@/components/operations/project-oper
 import { safeProjectRouteContext } from '@/lib/operations/routing/draft-safe-routing';
 import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
 import { WorkflowHeader } from '@/components/workflow/workflow-header';
+import { CommercialBrainProvider } from '@/components/workflow/commercial-brain-context';
 import { cn } from '@/lib/utils';
 
 type ProjectWorkspaceShellProps = {
@@ -85,22 +86,27 @@ export function ProjectWorkspaceShell({ projectId, children }: ProjectWorkspaceS
   }
 
   return (
-    <div className="space-y-6">
-      <Button variant="ghost" className="w-fit px-0" asChild>
-        <Link href="/dashboard/projects">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          All agreements
-        </Link>
-      </Button>
+    // CommercialBrainProvider runs the Decision Engine once per agreement workspace.
+    // WorkflowHeader, ProjectPageCopilot, and CommercialReadiness all consume this
+    // shared result via useCommercialBrain() — no duplicated engine calls.
+    <CommercialBrainProvider>
+      <div className="space-y-6">
+        <Button variant="ghost" className="w-fit px-0" asChild>
+          <Link href="/dashboard/projects">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            All agreements
+          </Link>
+        </Button>
 
-      {/* Persistent workflow header — every agreement page begins with context */}
-      <WorkflowHeader />
+        {/* Persistent workflow header — every agreement page begins with mission context */}
+        <WorkflowHeader />
 
-      <ProjectContextNav projectId={projectId} />
+        <ProjectContextNav projectId={projectId} />
 
-      <ProjectOperationalGuidance />
+        <ProjectOperationalGuidance />
 
-      {children}
-    </div>
+        {children}
+      </div>
+    </CommercialBrainProvider>
   );
 }
