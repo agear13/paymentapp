@@ -25,6 +25,7 @@ import type { ReviewedParty } from '@/lib/ai-extractor/review-form-types';
 import type { DuplicateMatch } from '@/lib/ai-extractor/duplicate-detection';
 import { derivePartyConfidence } from '@/lib/ai-extractor/extraction-summary';
 import { inferServiceCategoriesForParty } from '@/lib/ai-extractor/service-category-detection';
+import { serviceCategoryDisplayLabel } from '@/lib/ai-extractor/service-category';
 import { ConfidenceBadge, ParticipantConfidenceBadge } from './confidence-badge';
 
 const ROLE_OPTIONS = [
@@ -118,7 +119,7 @@ export function ReviewPartyCard({
             <ParticipantConfidenceBadge confidence={partyConfidence} />
             {serviceCategories.length > 0 ? (
               <p className="text-[11px] text-muted-foreground">
-                {serviceCategories.join(' · ')}
+                {serviceCategories.map(serviceCategoryDisplayLabel).join(' · ')}
               </p>
             ) : null}
           </div>

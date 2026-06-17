@@ -1,8 +1,9 @@
 import type { ExtractedParty, ExtractionResult } from './extraction-types';
 import {
-  formatServiceCategoryList,
-  inferServiceCategoriesForParties,
-} from './service-category-detection';
+  formatServiceCategoryLabels,
+  type ServiceCategory,
+} from './service-category';
+import { inferServiceCategoriesForParties } from './service-category-detection';
 
 export function hasFixedFeeAmount(party: ExtractedParty): boolean {
   return party.fixedAmount.value != null && party.fixedAmount.value > 0;
@@ -59,7 +60,7 @@ export function buildProjectSummaryOneLiner(result: ExtractionResult): string {
   const project = result.projectName.value?.trim();
   const counterparty = result.counterparty.value?.trim();
   const serviceCategories = inferServiceCategoriesForParties(result.parties);
-  const serviceSummary = formatServiceCategoryList(serviceCategories);
+  const serviceSummary = formatServiceCategoryLabels(serviceCategories);
   const { fixedFeeObligationCount, revenueShareObligationCount } = countPartyObligationMetrics(
     result.parties
   );

@@ -3,6 +3,11 @@
  * Invoked at runtime startup when NODE_ENV === 'production'.
  */
 
+import {
+  readAgreementR2StorageConfig,
+  readAgreementUploadStorageProvider,
+} from '@/lib/agreement-analyzer/upload-storage/agreement-upload-storage-config';
+
 export type ProductionGuardEnv = {
   NODE_ENV: string;
   STRIPE_SECRET_KEY: string;
@@ -41,6 +46,38 @@ export function isCsrfSecretValid(secret: string | undefined): boolean {
   return trimmed.length >= MIN_CSRF_SECRET_LENGTH;
 }
 
+export function isAgreementStorageProductionReady(
+  processEnv: NodeJS.ProcessEnv = process.env,
+  options?: { nodeEnv?: string }
+): { ok: true } | { ok: false; reason: string } {
+  const nodeEnv = options?.nodeEnv ?? processEnv.NODE_ENV ?? process.env.NODE_ENV;
+  if (nodeEnv !== 'production') {
+    return { ok: true };
+  }
+
+  const provider = readAgreementUploadStorageProvider({
+    ...processEnv,
+    NODE_ENV: nodeEnv,
+  });
+  if (provider === 'local') {
+    return {
+      ok: false,
+      reason:
+        'Agreement upload storage must not use local filesystem in production. Set STORAGE_PROVIDER=r2 and configure R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME.',
+    };
+  }
+
+  if (!readAgreementR2StorageConfig(processEnv)) {
+    return {
+      ok: false,
+      reason:
+        'Agreement upload storage requires R2 in production. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME.',
+    };
+  }
+
+  return { ok: true };
+}
+
 export function assertProductionEnvGuards(
   env: ProductionGuardEnv,
   processEnv: NodeJS.ProcessEnv = process.env
@@ -74,6 +111,13 @@ export function assertProductionEnvGuards(
     errors.push(
       `CSRF_SECRET is required in production (min ${MIN_CSRF_SECRET_LENGTH} characters) for dashboard CSRF protection.`
     );
+  }
+
+  const agreementStorage = isAgreementStorageProductionReady(processEnv, {
+    nodeEnv: env.NODE_ENV,
+  });
+  if (!agreementStorage.ok) {
+    errors.push(agreementStorage.reason);
   }
 
   const allowTestKeys = processEnv.ALLOW_STRIPE_TEST_KEYS === 'true';

@@ -7,6 +7,7 @@ import { getAgreementUploadStorage } from '@/lib/agreement-analyzer/upload-stora
 import type { AgreementExtractionFailureJson } from '@/lib/agreement-analyzer/extraction/extraction-types';
 import { scheduleReportReadyEmail } from '@/lib/agreement-analyzer/email/send-report-ready-email.server';
 import { scheduleLeadScoreCalculation } from '@/lib/agreement-analyzer/scoring/calculate-lead-score.server';
+import { logAgreementJobStage } from '@/lib/agreement-analyzer/jobs/agreement-job-log.server';
 import { enrichReportJsonWithProvvypayFit } from '@/lib/agreement-analyzer/extraction/attach-provvypay-fit.server';
 import { enrichReportJsonWithSettlementRiskAssessment } from '@/lib/agreement-analyzer/extraction/attach-settlement-risk-assessment.server';
 import { enrichReportJsonWithSettlementSimulation } from '@/lib/agreement-analyzer/extraction/attach-settlement-simulation.server';
@@ -99,6 +100,14 @@ async function persistFailure(
     }),
   ]);
 
+  logAgreementJobStage('report_saved', {
+    reportId: ctx.reportId,
+    uploadId: ctx.uploadId,
+    extractionId: extraction.id,
+    outcome: 'failed',
+    stage: failure.stage,
+  });
+
   return extraction.id;
 }
 
@@ -148,6 +157,13 @@ async function persistSuccess(
     }),
   ]);
 
+  logAgreementJobStage('report_saved', {
+    reportId: ctx.reportId,
+    uploadId: ctx.uploadId,
+    extractionId: extraction.id,
+    outcome: 'completed',
+  });
+
   return extraction.id;
 }
 
@@ -176,6 +192,11 @@ export async function processAgreementExtraction(input: {
       error: 'Report is already processing or completed.',
     };
   }
+
+  logAgreementJobStage('extraction_started', {
+    reportId: ctx.reportId,
+    uploadId: ctx.uploadId,
+  });
 
   try {
     const storage = getAgreementUploadStorage();
@@ -242,6 +263,15 @@ export async function processAgreementExtraction(input: {
       });
 
       loggers.api.info('Agreement extraction completed', {
+        reportId: ctx.reportId,
+        uploadId: ctx.uploadId,
+        extractionId,
+        durationMs,
+        modelName: extractionResult.modelName,
+        providerId: extractionResult.providerId,
+      });
+
+      logAgreementJobStage('extraction_completed', {
         reportId: ctx.reportId,
         uploadId: ctx.uploadId,
         extractionId,

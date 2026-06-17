@@ -20,9 +20,7 @@ import {
 } from '@/lib/operations/audit/conversation-import-audit';
 import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
 
-function field<T>(value: T, confidence: 'high' | 'medium' | 'low' | 'absent' = 'high') {
-  return { value, confidence };
-}
+import { field, testParty } from '@/lib/ai-extractor/test-helpers/party-fixture';
 
 function baseDeal(): RecentDeal {
   return {
@@ -55,22 +53,13 @@ function party(overrides: Partial<ReviewedParty> = {}): ReviewedParty {
 }
 
 function extractedParty(overrides: Partial<ExtractedParty> = {}): ExtractedParty {
-  return {
-    id: 'ep-1',
+  return testParty({
     name: field('Alex'),
     email: field(''),
     role: field('Partner'),
     participationModel: field('revenue_share'),
-    fixedAmount: field(null),
-    revenueSharePct: field(null),
-    deliverables: field([]),
-    milestones: [],
-    serviceCategories: field([]),
-    conditions: [],
-    dependencies: [],
-    notes: field(null),
     ...overrides,
-  };
+  });
 }
 
 describe('compensation review validation — acceptance scenarios', () => {

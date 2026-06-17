@@ -24,6 +24,16 @@ function milestoneTrigger(milestone: ExtractedParty['milestones'][number]): stri
   return deadline ? `${description} — ${deadline}` : description;
 }
 
+function bonusLinesFromConditionalPayments(party: ExtractedParty): SettlementScheduleLine[] {
+  return (party.conditionalPayments ?? []).map((payment) => ({
+    label: 'Conditional Bonus',
+    value: payment.amount.value != null
+      ? `$${payment.amount.value.toLocaleString()} — ${payment.trigger.value}`
+      : payment.trigger.value,
+    status: payment.amount.confidence === 'high' ? 'conditional' : 'draft',
+  }));
+}
+
 function bonusLinesFromMilestones(party: ExtractedParty): SettlementScheduleLine[] {
   return (party.milestones ?? [])
     .filter((m) => m.category.value === 'financial')
@@ -66,6 +76,7 @@ function linesFromParty(party: ExtractedParty, currency: string): SettlementSche
     });
   }
 
+  lines.push(...bonusLinesFromConditionalPayments(party));
   lines.push(...bonusLinesFromMilestones(party));
 
   for (const dependency of party.dependencies ?? []) {

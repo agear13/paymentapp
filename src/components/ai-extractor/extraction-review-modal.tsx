@@ -31,6 +31,9 @@ import { reviewFormFromExtraction, isSupportedCurrency } from '@/lib/ai-extracto
 import { logExtractorDebugSnapshot } from '@/lib/ai-extractor/extraction-field-schema';
 import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { buildExtractionSummary } from '@/lib/ai-extractor/extraction-summary';
+import { formatReadinessDimensionLabel } from '@/lib/ai-extractor/extraction-readiness';
+import { agreementTypeDisplayLabel } from '@/lib/ai-extractor/classify-agreement-type';
+import { serviceCategoryDisplayLabel } from '@/lib/ai-extractor/service-category';
 import { detectDuplicates, defaultResolutions } from '@/lib/ai-extractor/duplicate-detection';
 import { mapReviewToRecentDeal, mapReviewToParticipants } from '@/lib/ai-extractor/extraction-mapper';
 import { runParticipantAddSaveBranchTrace } from '@/lib/ai-extractor/duplicate-save-path-instrumentation';
@@ -498,11 +501,34 @@ export function ExtractionReviewModal({
                 <span className="text-muted-foreground">
                   Services:{' '}
                   <span className="font-medium text-foreground">
-                    {summary.serviceCategories.join(', ')}
+                    {summary.serviceCategories.map(serviceCategoryDisplayLabel).join(', ')}
                   </span>
                 </span>
               )}
             </div>
+            {result.agreementType?.value && (
+              <p className="text-xs text-muted-foreground">
+                Agreement type:{' '}
+                <span className="font-medium text-foreground">
+                  {agreementTypeDisplayLabel(result.agreementType.value)}
+                </span>
+              </p>
+            )}
+            {result.readinessAssessment && (
+              <div className="space-y-1.5 rounded-md border bg-background/70 p-3">
+                <p className="text-xs font-medium text-foreground">
+                  Settlement readiness: {result.readinessAssessment.score}%
+                </p>
+                <p className="text-xs text-muted-foreground">{result.readinessAssessment.summary}</p>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                  {result.readinessAssessment.dimensions.map((dimension) => (
+                    <span key={dimension.dimension}>
+                      {formatReadinessDimensionLabel(dimension)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             {summary.oneLiner && (
               <p className="text-sm text-foreground/80 italic">"{summary.oneLiner}"</p>
             )}

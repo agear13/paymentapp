@@ -5,7 +5,7 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { ExtractionResult, ExtractedParty } from '@/lib/ai-extractor/extraction-types';
 import { reviewFormFromExtraction } from '@/lib/ai-extractor/review-form-types';
-import { mapSinglePartyToParticipant } from '@/lib/ai-extractor/extraction-mapper';
+import { testParty, field } from '@/lib/ai-extractor/test-helpers/party-fixture';
 import {
   getPartyCompensationWarnings,
   isHybridCompensationParty,
@@ -15,10 +15,7 @@ import { hydrateParticipant } from '@/lib/operations/hydration/hydrate-participa
 import { hasPersistedCompensationTerms } from '@/lib/operations/primitives/participant-earnings-primitives';
 import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 import { deriveCompensationState } from '@/lib/operations/derivations/derive-compensation-state';
-
-function field<T>(value: T, confidence: 'high' | 'medium' | 'low' | 'absent' = 'high') {
-  return { value, confidence };
-}
+import { mapSinglePartyToParticipant } from '@/lib/ai-extractor/extraction-mapper';
 
 function baseDeal(currency: 'AUD' | 'USD' = 'AUD'): RecentDeal {
   return {
@@ -155,7 +152,7 @@ function traceCompensationStructure(input: {
 
 describe('conversation import compensation structures — pipeline investigation', () => {
   describe('A. Fixed payout — "We\'ll pay you $500 for the event."', () => {
-    const party: ExtractedParty = {
+    const party: ExtractedParty = testParty({
       id: 'ep-fixed',
       name: field('Alex'),
       email: field(''),
@@ -164,7 +161,7 @@ describe('conversation import compensation structures — pipeline investigation
       fixedAmount: field(500),
       revenueSharePct: field(null, 'absent'),
       notes: field(null),
-    };
+    });
     const result = buildExtractionResult({ currency: 'AUD', party });
     const trace = traceCompensationStructure({
       label: 'A_fixed_payout_aud',
@@ -189,7 +186,7 @@ describe('conversation import compensation structures — pipeline investigation
   });
 
   describe('A-variant. Fixed payout — IDR conversation (resolver falls back to AUD)', () => {
-    const party: ExtractedParty = {
+    const party: ExtractedParty = testParty({
       id: 'ep-fixed-idr',
       name: field('Alex'),
       email: field(''),
@@ -198,7 +195,7 @@ describe('conversation import compensation structures — pipeline investigation
       fixedAmount: field(15_000_000, 'high'),
       revenueSharePct: field(null, 'absent'),
       notes: field(null),
-    };
+    });
     const result = buildExtractionResult({ currency: 'IDR', party });
     const trace = traceCompensationStructure({
       label: 'A_fixed_payout_idr',
@@ -219,7 +216,7 @@ describe('conversation import compensation structures — pipeline investigation
   });
 
   describe('A-fail. Fixed payout — amount absent after extraction', () => {
-    const party: ExtractedParty = {
+    const party: ExtractedParty = testParty({
       id: 'ep-fixed-missing',
       name: field('Alex'),
       email: field(''),
@@ -228,7 +225,7 @@ describe('conversation import compensation structures — pipeline investigation
       fixedAmount: field(null, 'absent'),
       revenueSharePct: field(null, 'absent'),
       notes: field(null),
-    };
+    });
     const result = buildExtractionResult({ party });
     const trace = traceCompensationStructure({
       label: 'A_fixed_missing_amount',
@@ -246,7 +243,7 @@ describe('conversation import compensation structures — pipeline investigation
   });
 
   describe('B. Revenue share — "We\'ll pay 10% of ticket revenue."', () => {
-    const party: ExtractedParty = {
+    const party: ExtractedParty = testParty({
       id: 'ep-rev',
       name: field('Sarah'),
       email: field(''),
@@ -255,7 +252,7 @@ describe('conversation import compensation structures — pipeline investigation
       fixedAmount: field(null, 'absent'),
       revenueSharePct: field(10, 'high'),
       notes: field(null),
-    };
+    });
     const result = buildExtractionResult({ party });
     const trace = traceCompensationStructure({
       label: 'B_revenue_share',
@@ -276,7 +273,7 @@ describe('conversation import compensation structures — pipeline investigation
   });
 
   describe('B-fail. Revenue share — percentage absent in extraction', () => {
-    const party: ExtractedParty = {
+    const party: ExtractedParty = testParty({
       id: 'ep-rev-missing',
       name: field('DJs'),
       email: field(''),
@@ -285,7 +282,7 @@ describe('conversation import compensation structures — pipeline investigation
       fixedAmount: field(null, 'absent'),
       revenueSharePct: field(null, 'absent'),
       notes: field(null),
-    };
+    });
     const result = buildExtractionResult({ party });
     const trace = traceCompensationStructure({
       label: 'B_revenue_share_missing_pct',
@@ -309,7 +306,7 @@ describe('conversation import compensation structures — pipeline investigation
   });
 
   describe('C. Customer attribution — "15% of bookings you refer."', () => {
-    const party: ExtractedParty = {
+    const party: ExtractedParty = testParty({
       id: 'ep-attr',
       name: field('Promoter'),
       email: field(''),
@@ -318,7 +315,7 @@ describe('conversation import compensation structures — pipeline investigation
       fixedAmount: field(null, 'absent'),
       revenueSharePct: field(15, 'high'),
       notes: field(null),
-    };
+    });
     const result = buildExtractionResult({ party });
     const trace = traceCompensationStructure({
       label: 'C_customer_attribution',
@@ -340,7 +337,7 @@ describe('conversation import compensation structures — pipeline investigation
   });
 
   describe('D. Hybrid — "$300 management fee plus 5% of revenue."', () => {
-    const party: ExtractedParty = {
+    const party: ExtractedParty = testParty({
       id: 'ep-hybrid',
       name: field('Manager'),
       email: field(''),
@@ -349,7 +346,7 @@ describe('conversation import compensation structures — pipeline investigation
       fixedAmount: field(300, 'high'),
       revenueSharePct: field(5, 'high'),
       notes: field(null),
-    };
+    });
     const result = buildExtractionResult({ party });
     const trace = traceCompensationStructure({
       label: 'D_hybrid',
@@ -373,7 +370,7 @@ describe('conversation import compensation structures — pipeline investigation
   });
 
   describe('D-fail. Hybrid incomplete — missing fixed component', () => {
-    const party: ExtractedParty = {
+    const party: ExtractedParty = testParty({
       id: 'ep-hybrid-bad',
       name: field('Manager'),
       email: field(''),
@@ -382,7 +379,7 @@ describe('conversation import compensation structures — pipeline investigation
       fixedAmount: field(300, 'medium'),
       revenueSharePct: field(5, 'high'),
       notes: field(null),
-    };
+    });
     const result = buildExtractionResult({ party });
     const reviewed = reviewFormFromExtraction(result, 'participant_add', 'whatsapp');
     const reviewedParty = { ...reviewed.parties[0]!, fixedAmount: null };

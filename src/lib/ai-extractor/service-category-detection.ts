@@ -1,4 +1,9 @@
 import type { ExtractedParty } from './extraction-types';
+import {
+  normalizeServiceCategories,
+  type ServiceCategory,
+} from './service-category';
+import { deliverableDescriptions } from './parse-deliverables';
 
 export const GENERIC_ROLE_LABELS = new Set([
   'contractor',
@@ -12,19 +17,20 @@ export const GENERIC_ROLE_LABELS = new Set([
   'freelancer',
   'helper',
   'assistant',
+  'promoter',
 ]);
 
-const CATEGORY_PATTERNS: Array<{ category: string; patterns: RegExp[] }> = [
+const CATEGORY_PATTERNS: Array<{ category: ServiceCategory; patterns: RegExp[] }> = [
   {
-    category: 'Photography',
-    patterns: [/photo/i, /image/i, /edited/i, /camera/i, /shoot/i, /portrait/i],
+    category: 'PHOTOGRAPHY',
+    patterns: [/photo/i, /image/i, /edited/i, /camera/i, /shoot/i, /portrait/i, /crowd shot/i],
   },
   {
-    category: 'Videography',
+    category: 'VIDEOGRAPHY',
     patterns: [/video/i, /reel/i, /drone/i, /recap/i, /footage/i, /film/i],
   },
   {
-    category: 'Marketing',
+    category: 'MARKETING',
     patterns: [
       /promot/i,
       /influencer/i,
@@ -38,39 +44,53 @@ const CATEGORY_PATTERNS: Array<{ category: string; patterns: RegExp[] }> = [
     ],
   },
   {
-    category: 'Graphic Design',
-    patterns: [/poster/i, /template/i, /banner/i, /graphic/i, /design/i, /brand/i, /asset/i],
+    category: 'GRAPHIC_DESIGN',
+    patterns: [/poster/i, /template/i, /banner/i, /graphic/i, /design/i, /brand/i, /asset/i, /sponsor asset/i],
   },
   {
-    category: 'Venue',
+    category: 'VENUE',
     patterns: [/venue/i, /hosting/i, /hire/i, /event space/i, /bar revenue/i, /operations/i],
   },
   {
-    category: 'Creative Production',
-    patterns: [/creative/i, /production/i, /content/i, /deliverable/i],
+    category: 'EVENT_MANAGEMENT',
+    patterns: [/event management/i, /coordination/i, /production/i, /logistics/i],
+  },
+  {
+    category: 'TALENT',
+    patterns: [/dj/i, /performer/i, /artist/i, /talent/i, /headline/i],
+  },
+  {
+    category: 'SPONSORSHIP',
+    patterns: [/sponsor/i, /brand partner/i],
+  },
+  {
+    category: 'OPERATIONS',
+    patterns: [/operations/i, /stage manager/i, /security/i],
   },
 ];
 
-const ROLE_CATEGORY_MAP: Record<string, string> = {
-  promoter: 'Marketing',
-  promotion: 'Marketing',
-  photography: 'Photography',
-  photographer: 'Photography',
-  videography: 'Videography',
-  videographer: 'Videography',
-  design: 'Graphic Design',
-  designer: 'Graphic Design',
-  graphic: 'Graphic Design',
-  venue: 'Venue',
-  'co-founder': 'Partnership',
-  partner: 'Partnership',
-  dj: 'Performance',
-  performer: 'Performance',
-  artist: 'Performance',
+const ROLE_CATEGORY_MAP: Record<string, ServiceCategory> = {
+  promoter: 'MARKETING',
+  promotion: 'MARKETING',
+  marketing: 'MARKETING',
+  photography: 'PHOTOGRAPHY',
+  photographer: 'PHOTOGRAPHY',
+  videography: 'VIDEOGRAPHY',
+  videographer: 'VIDEOGRAPHY',
+  design: 'GRAPHIC_DESIGN',
+  designer: 'GRAPHIC_DESIGN',
+  graphic: 'GRAPHIC_DESIGN',
+  venue: 'VENUE',
+  'event management': 'EVENT_MANAGEMENT',
+  'co-founder': 'OTHER',
+  partner: 'OTHER',
+  dj: 'TALENT',
+  performer: 'TALENT',
+  artist: 'TALENT',
 };
 
 function collectSearchText(party: ExtractedParty): string {
-  const deliverables = party.deliverables?.value ?? [];
+  const deliverables = deliverableDescriptions(party);
   const notes = party.notes?.value ?? '';
   const role = party.role?.value ?? '';
   const milestoneText = (party.milestones ?? [])
@@ -79,8 +99,8 @@ function collectSearchText(party: ExtractedParty): string {
   return [role, notes, milestoneText, ...deliverables].join(' ').trim();
 }
 
-function inferCategoriesFromText(text: string): string[] {
-  const found = new Set<string>();
+function inferCategoriesFromText(text: string): ServiceCategory[] {
+  const found = new Set<ServiceCategory>();
   for (const { category, patterns } of CATEGORY_PATTERNS) {
     if (patterns.some((pattern) => pattern.test(text))) {
       found.add(category);
@@ -89,21 +109,17 @@ function inferCategoriesFromText(text: string): string[] {
   return [...found];
 }
 
-function inferCategoryFromRole(role: string): string | null {
+function inferCategoryFromRole(role: string): ServiceCategory | null {
   const normalized = role.trim().toLowerCase();
   if (!normalized || GENERIC_ROLE_LABELS.has(normalized)) return null;
-  return ROLE_CATEGORY_MAP[normalized] ?? formatRoleAsCategory(role);
+  return ROLE_CATEGORY_MAP[normalized] ?? null;
 }
 
-function formatRoleAsCategory(role: string): string | null {
-  const normalized = role.trim().toLowerCase();
-  if (!normalized || GENERIC_ROLE_LABELS.has(normalized)) return null;
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
-}
-
-export function inferServiceCategoriesForParty(party: ExtractedParty): string[] {
-  const extracted = party.serviceCategories?.value ?? [];
-  if (extracted.length > 0) return [...new Set(extracted)];
+export function inferServiceCategoriesForParty(party: ExtractedParty): ServiceCategory[] {
+  const extracted = normalizeServiceCategories(
+    (party.serviceCategories?.value ?? []).map(String)
+  );
+  if (extracted.length > 0) return extracted;
 
   const fromText = inferCategoriesFromText(collectSearchText(party));
   if (fromText.length > 0) return fromText;
@@ -112,8 +128,8 @@ export function inferServiceCategoriesForParty(party: ExtractedParty): string[] 
   return fromRole ? [fromRole] : [];
 }
 
-export function inferServiceCategoriesForParties(parties: ExtractedParty[]): string[] {
-  const categories = new Set<string>();
+export function inferServiceCategoriesForParties(parties: ExtractedParty[]): ServiceCategory[] {
+  const categories = new Set<ServiceCategory>();
   for (const party of parties) {
     for (const category of inferServiceCategoriesForParty(party)) {
       categories.add(category);
@@ -122,10 +138,4 @@ export function inferServiceCategoriesForParties(parties: ExtractedParty[]): str
   return [...categories];
 }
 
-export function formatServiceCategoryList(categories: string[]): string {
-  if (categories.length === 0) return '';
-  const labels = categories.map((c) => c.toLowerCase());
-  if (labels.length === 1) return labels[0]!;
-  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
-}
+export { formatServiceCategoryLabels as formatServiceCategoryList } from './service-category';

@@ -4,6 +4,7 @@ const EXTRACTION_SCHEMA = `{
   "projectValue": { "value": "number | null", "confidence": "high|medium|low|absent", "rawSnippet": "string?" },
   "currency": { "value": "string", "confidence": "high|medium|low|absent" },
   "counterparty": { "value": "string | null", "confidence": "high|medium|low|absent" },
+  "agreementType": { "value": "MULTI_PARTY_EVENT_COORDINATION|EVENT_REVENUE_SHARE|FIXED_FEE_SERVICE|CUSTOMER_ATTRIBUTION|OTHER|null", "confidence": "high|medium|low|absent" },
   "parties": [
     {
       "id": "string",
@@ -13,7 +14,18 @@ const EXTRACTION_SCHEMA = `{
       "participationModel": { "value": "fixed_payout|revenue_share|hybrid|customer_attribution", "confidence": "high|medium|low|absent" },
       "fixedAmount": { "value": "number | null", "confidence": "high|medium|low|absent", "rawSnippet": "string?" },
       "revenueSharePct": { "value": "number | null", "confidence": "high|medium|low|absent", "rawSnippet": "string?" },
-      "deliverables": { "value": ["string"], "confidence": "high|medium|low|absent" },
+      "deliverables": [
+        {
+          "description": { "value": "string", "confidence": "high|medium|low|absent" },
+          "category": { "value": "MARKETING|PHOTOGRAPHY|VIDEOGRAPHY|GRAPHIC_DESIGN|VENUE|EVENT_MANAGEMENT|TALENT|SPONSORSHIP|OPERATIONS|OTHER|null", "confidence": "high|medium|low|absent" }
+        }
+      ],
+      "conditionalPayments": [
+        {
+          "trigger": { "value": "string", "confidence": "high|medium|low|absent", "rawSnippet": "string?" },
+          "amount": { "value": "number|null", "confidence": "high|medium|low|absent", "rawSnippet": "string?" }
+        }
+      ],
       "milestones": [
         {
           "description": { "value": "string", "confidence": "high|medium|low|absent" },
@@ -22,10 +34,16 @@ const EXTRACTION_SCHEMA = `{
           "status": "draft|confirmed|pending|conditional|fulfilled|disputed"
         }
       ],
-      "serviceCategories": { "value": ["Photography|Videography|Marketing|Graphic Design|Venue|..."], "confidence": "high|medium|low|absent" },
+      "serviceCategories": { "value": ["MARKETING|PHOTOGRAPHY|VIDEOGRAPHY|GRAPHIC_DESIGN|VENUE|EVENT_MANAGEMENT|TALENT|SPONSORSHIP|OPERATIONS|OTHER"], "confidence": "high|medium|low|absent" },
       "conditions": [{ "description": { "value": "string" }, "dependsOn": { "value": "string|null" }, "status": "pending" }],
       "dependencies": [{ "obligation": { "value": "string" }, "dependsOn": { "value": "string" }, "status": "pending" }],
       "notes": { "value": "string | null", "confidence": "high|medium|low|absent" }
+    }
+  ],
+  "settlementRules": [
+    {
+      "trigger": { "value": "string", "confidence": "high|medium|low|absent", "rawSnippet": "string?" },
+      "basis": { "value": "string|null", "confidence": "high|medium|low|absent" }
     }
   ],
   "settlementEvents": [
@@ -53,12 +71,13 @@ const EXTRACTION_SCHEMA = `{
   ],
   "overallConfidence": "high|medium|low|absent",
   "sourceHint": "string | null",
-  "extractedAt": "ISO 8601 timestamp string"
+  "extractedAt": "ISO 8601 timestamp string",
+  "schemaVersion": "v4"
 }`;
 
 export function buildExtractionSystemPrompt(): string {
   return `You are an agreement extraction assistant for a payment and project management platform called Provvypay.
-Your task: read a pasted conversation (WhatsApp, Messenger, SMS, email, Slack, or meeting notes) and extract structured information about a business agreement or project collaboration.
+Your task: read a pasted conversation (WhatsApp, Messenger, SMS, email, Slack, or meeting notes) and extract structured obligation intelligence — not a narrative summary.
 
 Return ONLY a valid JSON object conforming exactly to the schema below. Do not add prose, markdown, or code fences. All fields are required; use null for values not found in the text. Confidence values must be exactly one of: "high", "medium", "low", "absent".
 
@@ -69,7 +88,7 @@ EXTRACTION RULES:
    - A revenue share or profit share percentage allocated to them
    - A commission entitlement tied to sales or referrals
    - A customer attribution arrangement (they earn when their referred customers transact)
-   Do NOT create a party entry merely because someone is named, mentioned, sends a message, or is part of the conversation. Witnesses, schedulers, logistics contacts, and people referenced without a financial role are excluded.
+   Do NOT create a party entry merely because someone is named, mentioned, sends a message, or is part of the conversation.
 
 2. For each qualifying party, determine their participation model:
    - "fixed_payout" — only a specific dollar/currency amount is agreed for that person
@@ -78,44 +97,35 @@ EXTRACTION RULES:
    - "customer_attribution" — they earn from referrals or commissions with no explicit fixed amount or percentage of project value
    IMPORTANT: project budget or total contract value is NOT a participant payment. Never put the overall project budget in fixedAmount.
 
-3. If a percentage is mentioned without a base (e.g. "15% of sales"), use "revenue_share" unless a fixed fee is also present (then use "hybrid").
+3. Conditional bonuses (e.g. "+$150 if attendance exceeds 500") belong in conditionalPayments[] — NOT revenueSharePct and NOT notes.
 
 4. Extract currency only when explicitly stated in the text (ISO codes such as AUD, USD, GBP, EUR, NZD, IDR, SGD). If absent, set currency confidence to "absent" and value to null — do not guess a default.
 
-5. If the same field has contradictory values at different points in the conversation, add an entry to "uncertainties" and use the LATER-mentioned value with confidence "low".
+5. Service categories — use normalized enum values in serviceCategories[] and deliverables[].category:
+   MARKETING, PHOTOGRAPHY, VIDEOGRAPHY, GRAPHIC_DESIGN, VENUE, EVENT_MANAGEMENT, TALENT, SPONSORSHIP, OPERATIONS, OTHER
+   Infer categories from deliverables and services performed. Do NOT default everyone to Promoter/Contractor when specific services are evident.
 
-6. Role and service category guidance:
-   - Prefer specific commercial roles over generic labels: Promoter, Photographer, Videographer, Designer, Venue, DJ, Performer.
-   - Avoid defaulting everyone to "Contractor" when a specific service is evident from deliverables.
-   - Populate serviceCategories[] per party (e.g. Photography, Videography, Marketing, Graphic Design, Venue).
-   - Use dependencies[] when one obligation depends on another (e.g. bonus depends on attendance > 500).
-   - Use settlementEvents[] for each payable obligation with trigger/condition and status "pending" or "conditional".
+6. Deliverables — extract every service output as a structured deliverables[] object with description and category. Do NOT bury deliverables in notes.
 
-7. Do NOT invent values. If something is genuinely absent from the text, set value to null and confidence to "absent".
+7. Settlement rules — ONLY populate settlementRules[] when settlement timing is EXPLICITLY stated in source text (e.g. "within 7 days after event", "within 14 days after sponsor funds clear").
+   NEVER invent: monthly settlement, net sales basis, after processing fees, on completion, deliverable completion triggers.
+   Each rule must include rawSnippet quoting the source phrase.
 
-8. Overall confidence:
-   - "high" — projectName, at least one party name, and at least one payment term are all high confidence
-   - "medium" — any of those three are medium, or one is absent
-   - "low" — two or more of the above are absent or low confidence
+8. Agreement type — classify agreementType based on participant count, revenue shares, fixed fees, deliverables, and event context:
+   MULTI_PARTY_EVENT_COORDINATION, EVENT_REVENUE_SHARE, FIXED_FEE_SERVICE, CUSTOMER_ATTRIBUTION, or OTHER.
 
-9. Generate a short unique id for each party using the pattern "ep-1", "ep-2", etc.
+9. Obligation model (required output structure per party):
+   Participant → deliverables[] → fixedAmount/revenueSharePct → conditionalPayments[] → settlementRules (project-level)
 
-10. Set extractedAt to the current ISO 8601 timestamp.
-
-11. Obligation extraction (Provvypay obligation intelligence):
-    - Put service outputs, assets, and creative deliverables in deliverables[] — NOT in notes.
-    - Put deadlines and milestone commitments in milestones[] with category:
-      * "financial" — payment timing, bonuses, paid-within-X-days, fee milestones
-      * "performance" — draft delivery, final assets, attendance, service completion
-    - notes: only brief context that does not belong in deliverables or milestones.
-
-12. Keep output compact to avoid truncation:
+10. Keep output compact to avoid truncation:
     - Omit rawSnippet when confidence is "absent" or the value is null.
     - rawSnippet: max 120 characters (short quote from the conversation).
-    - notes: max 200 characters.
-    - uncertainties.snippet: max 120 characters.
-    - uncertainties.issue: max 300 characters; be concise.
+    - notes: max 200 characters — context only, not deliverables or payment terms.
     - Do not repeat the full conversation in any field.
+
+11. Generate a short unique id for each party using the pattern "ep-1", "ep-2", etc.
+
+12. Set extractedAt to the current ISO 8601 timestamp and schemaVersion to "v4".
 
 SCHEMA:
 ${EXTRACTION_SCHEMA}`;

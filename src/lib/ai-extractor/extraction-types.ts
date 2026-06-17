@@ -1,3 +1,10 @@
+import type { AgreementType } from './classify-agreement-type';
+import type { ExtractionReadinessAssessment } from './extraction-readiness';
+import type { ServiceCategory } from './service-category';
+
+export type { AgreementType, ServiceCategory };
+export type { ExtractionReadinessAssessment, ReadinessDimension, ReadinessDimensionScore } from './extraction-readiness';
+
 export type ExtractionConfidence = 'high' | 'medium' | 'low' | 'absent';
 export type ExtractorEntryPoint = 'project_create' | 'participant_add' | 'onboarding';
 export type ParticipationModelOption =
@@ -74,6 +81,23 @@ export interface ExtractedSettlementEvent {
   status: ObligationStatus;
 }
 
+export interface ExtractedDeliverable {
+  description: ExtractionField<string>;
+  category: ExtractionField<ServiceCategory | null>;
+}
+
+export interface ExtractedConditionalPayment {
+  trigger: ExtractionField<string>;
+  amount: ExtractionField<number | null>;
+  rawSnippet?: string;
+}
+
+export interface ExtractedSettlementRule {
+  trigger: ExtractionField<string>;
+  basis: ExtractionField<string | null>;
+  rawSnippet?: string;
+}
+
 export interface ExtractedParty {
   id: string;
   name: ExtractionField<string>;
@@ -82,12 +106,16 @@ export interface ExtractedParty {
   participationModel: ExtractionField<ParticipationModelOption>;
   fixedAmount: ExtractionField<number | null>;
   revenueSharePct: ExtractionField<number | null>;
-  /** Performance obligations — deliverables, assets, service outputs. */
-  deliverables: ExtractionField<string[]>;
+  /** Structured performance obligations — deliverables, assets, service outputs. */
+  deliverables: ExtractedDeliverable[];
+  /** Legacy string-list deliverables from schema v3 responses. */
+  deliverablesLegacy?: ExtractionField<string[]>;
+  /** Conditional bonuses and performance-tied payouts — not revenue share. */
+  conditionalPayments: ExtractedConditionalPayment[];
   /** Financial and performance milestones with deadlines. */
   milestones: ExtractedMilestone[];
-  /** Inferred or extracted commercial service categories. */
-  serviceCategories: ExtractionField<string[]>;
+  /** Normalized commercial service categories (MARKETING, PHOTOGRAPHY, …). */
+  serviceCategories: ExtractionField<ServiceCategory[]>;
   conditions: ExtractedCondition[];
   dependencies: ExtractedDependency[];
   notes: ExtractionField<string | null>;
@@ -106,16 +134,19 @@ export interface ExtractionResult {
   projectValue: ExtractionField<number | null>;
   currency: ExtractionField<string | null>;
   counterparty: ExtractionField<string | null>;
+  agreementType?: ExtractionField<AgreementType | null>;
   parties: ExtractedParty[];
   paymentTerms: ExtractedPaymentTerm[];
+  settlementRules?: ExtractedSettlementRule[];
   settlementEvents?: ExtractedSettlementEvent[];
+  readinessAssessment?: ExtractionReadinessAssessment;
   uncertainties: ExtractionUncertainty[];
   overallConfidence: ExtractionConfidence;
   sourceHint: string | null;
   extractedAt: string;
   /** Tracks obligation schema generation for lifecycle/settlement features. */
-  schemaVersion?: 'v1' | 'v2' | 'v3';
+  schemaVersion?: 'v1' | 'v2' | 'v3' | 'v4';
 }
 
-export const EXTRACTOR_VERSION = 'v3' as const;
+export const EXTRACTOR_VERSION = 'v4' as const;
 export const EXTRACTOR_CREATED_VIA = 'ai_conversation_import' as const;

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { trackAgreementAnalyzerEvent } from '@/lib/agreement-analyzer/analytics/agreement-analyzer-analytics.server';
+import { logAgreementJobStage } from '@/lib/agreement-analyzer/jobs/agreement-job-log.server';
 import { prisma } from '@/lib/server/prisma';
 
 export async function completeAgreementProcessingJob(jobId: string): Promise<void> {
@@ -34,5 +35,13 @@ export async function completeAgreementProcessingJob(jobId: string): Promise<voi
     reportId: job.report_id,
     attemptCount: job.attempt_count,
     processingTimeMs,
+  });
+
+  logAgreementJobStage('completed', {
+    jobId: job.id,
+    uploadId: job.upload_id,
+    reportId: job.report_id,
+    attemptCount: job.attempt_count,
+    durationMs: processingTimeMs ?? undefined,
   });
 }

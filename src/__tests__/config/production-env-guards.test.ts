@@ -10,6 +10,12 @@ const productionCronEnv = {
   CRON_SECRET: 'a'.repeat(16),
   CSRF_SECRET: 'a'.repeat(32),
   NEXT_PUBLIC_APP_URL: 'https://app.provvypay.com',
+  STORAGE_PROVIDER: 'r2',
+  R2_ACCOUNT_ID: 'account-id',
+  R2_ACCESS_KEY_ID: 'access-key',
+  R2_SECRET_ACCESS_KEY: 'secret-key',
+  R2_BUCKET_NAME: 'provvypay-assets',
+  R2_PUBLIC_URL: 'https://assets.provvypay.com',
 };
 
 const validProductionEnv = {
@@ -117,13 +123,21 @@ describe('production-env-guards (B5)', () => {
     ).toThrow(/CSRF_SECRET/);
   });
 
-  it('passes valid production configuration', () => {
+  it('rejects agreement upload storage when production R2 credentials are missing', () => {
     expect(() =>
       assertProductionEnvGuards(validProductionEnv, {
-        CRON_SECRET: 'secure-cron-secret-value',
-        CSRF_SECRET: 'secure-csrf-secret-minimum-32-chars',
+        CRON_SECRET: 'a'.repeat(16),
+        CSRF_SECRET: 'a'.repeat(32),
         NEXT_PUBLIC_APP_URL: 'https://app.provvypay.com',
+        STORAGE_PROVIDER: 'r2',
+        NODE_ENV: 'production',
       })
+    ).toThrow(/R2_ACCOUNT_ID/);
+  });
+
+  it('passes valid production configuration', () => {
+    expect(() =>
+      assertProductionEnvGuards(validProductionEnv, productionCronEnv)
     ).not.toThrow();
   });
 });

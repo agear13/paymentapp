@@ -14,23 +14,52 @@ function trimOrNull(value: string | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
-export function readAgreementUploadStorageProvider(): AgreementUploadStorageProvider {
-  const raw = process.env.STORAGE_PROVIDER?.trim().toLowerCase();
-  return raw === 'r2' ? 'r2' : 'local';
+export function readAgreementUploadStorageProvider(
+  processEnv: NodeJS.ProcessEnv = process.env
+): AgreementUploadStorageProvider {
+  const explicit = processEnv.STORAGE_PROVIDER?.trim().toLowerCase();
+  const isProduction = processEnv.NODE_ENV === 'production';
+  const isTest = processEnv.NODE_ENV === 'test';
+
+  if (explicit === 'r2') {
+    return 'r2';
+  }
+
+  if (explicit === 'local' && !isProduction) {
+    return 'local';
+  }
+
+  const r2Config = readAgreementR2StorageConfig(processEnv);
+  const allowLocal =
+    !isProduction &&
+    !isTest &&
+    processEnv.STORAGE_ALLOW_LOCAL_FALLBACK !== 'false';
+
+  if (r2Config) {
+    return 'r2';
+  }
+
+  if (!allowLocal && isProduction) {
+    return 'r2';
+  }
+
+  return 'local';
 }
 
-export function readAgreementR2StorageConfig(): AgreementR2StorageConfig | null {
-  const accountId = trimOrNull(process.env.R2_ACCOUNT_ID);
-  const accessKeyId = trimOrNull(process.env.R2_ACCESS_KEY_ID);
-  const secretAccessKey = trimOrNull(process.env.R2_SECRET_ACCESS_KEY);
-  const bucketName = trimOrNull(process.env.R2_BUCKET_NAME);
+export function readAgreementR2StorageConfig(
+  processEnv: NodeJS.ProcessEnv = process.env
+): AgreementR2StorageConfig | null {
+  const accountId = trimOrNull(processEnv.R2_ACCOUNT_ID);
+  const accessKeyId = trimOrNull(processEnv.R2_ACCESS_KEY_ID);
+  const secretAccessKey = trimOrNull(processEnv.R2_SECRET_ACCESS_KEY);
+  const bucketName = trimOrNull(processEnv.R2_BUCKET_NAME);
 
   if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
     return null;
   }
 
   const endpoint =
-    trimOrNull(process.env.R2_ENDPOINT) ??
+    trimOrNull(processEnv.R2_ENDPOINT) ??
     `https://${accountId}.r2.cloudflarestorage.com`;
 
   return {
@@ -39,7 +68,7 @@ export function readAgreementR2StorageConfig(): AgreementR2StorageConfig | null 
     secretAccessKey,
     bucketName,
     endpoint,
-    publicBaseUrl: trimOrNull(process.env.R2_PUBLIC_BASE_URL),
+    publicBaseUrl: trimOrNull(processEnv.R2_PUBLIC_BASE_URL),
   };
 }
 

@@ -6,6 +6,7 @@ import type {
   SettlementEventType,
 } from './extraction-types';
 import { hasFixedFeeAmount, hasRevenueSharePct } from './party-obligation-metrics';
+import { isHallucinatedSettlementTrigger } from './parse-settlement-rules';
 
 const DEFAULT_STATUS: ObligationStatus = 'pending';
 
@@ -36,14 +37,45 @@ function buildEvent(
   };
 }
 
-export function buildSettlementEventsFromParty(party: ExtractedParty): ExtractedSettlementEvent[] {
+function findExplicitSettlementTrigger(result: ExtractionResult, party: ExtractedParty): string | null {
+  const rules = result.settlementRules ?? [];
+  for (const rule of rules) {
+    const trigger = rule.trigger.value?.trim();
+    if (trigger && !isHallucinatedSettlementTrigger(trigger)) {
+      return trigger;
+    }
+  }
+
+  for (const term of result.paymentTerms ?? []) {
+    const due = term.dueCondition.value?.trim();
+    if (due && !isHallucinatedSettlementTrigger(due)) {
+      return due;
+    }
+  }
+
+  for (const milestone of party.milestones ?? []) {
+    if (milestone.category.value !== 'financial') continue;
+    const deadline = milestone.deadline.value?.trim();
+    if (deadline && !isHallucinatedSettlementTrigger(deadline)) {
+      return deadline;
+    }
+  }
+
+  return null;
+}
+
+export function buildSettlementEventsFromParty(
+  party: ExtractedParty,
+  result: ExtractionResult
+): ExtractedSettlementEvent[] {
   const events: ExtractedSettlementEvent[] = [];
+  const explicitTrigger = findExplicitSettlementTrigger(result, party);
 
   if (hasFixedFeeAmount(party)) {
     events.push(
       buildEvent(party, 'fixed_fee', {
         amount: party.fixedAmount.value,
-        trigger: findSettlementTrigger(party),
+        trigger: explicitTrigger,
         status: 'pending',
       })
     );
@@ -53,7 +85,7 @@ export function buildSettlementEventsFromParty(party: ExtractedParty): Extracted
     events.push(
       buildEvent(party, 'revenue_share', {
         percentage: party.revenueSharePct.value,
-        trigger: findSettlementTrigger(party),
+        trigger: explicitTrigger,
         status: 'pending',
       })
     );
@@ -63,23 +95,22 @@ export function buildSettlementEventsFromParty(party: ExtractedParty): Extracted
     events.push(
       buildEvent(party, 'attribution', {
         percentage: party.revenueSharePct.value,
-        trigger: findSettlementTrigger(party),
+        trigger: explicitTrigger,
         status: 'pending',
       })
     );
   }
 
-  for (const milestone of party.milestones ?? []) {
-    if (milestone.category.value !== 'financial') continue;
-    const description = milestone.description.value?.trim() ?? '';
-    const isBonus = /bonus|conditional|if |attendance|exceed/i.test(description);
-    const amountMatch = description.match(/\$?\s*([\d,]+(?:\.\d+)?)/);
+  for (const conditional of party.conditionalPayments ?? []) {
+    const trigger = conditional.trigger.value?.trim();
+    const amount = conditional.amount.value;
+    if (!trigger || amount == null) continue;
     events.push(
-      buildEvent(party, isBonus ? 'bonus' : 'milestone', {
-        amount: amountMatch ? Number(amountMatch[1]!.replace(/,/g, '')) : null,
-        trigger: milestone.deadline.value,
-        condition: isBonus ? description : null,
-        status: isBonus ? 'conditional' : 'pending',
+      buildEvent(party, 'bonus', {
+        amount,
+        trigger: explicitTrigger,
+        condition: trigger,
+        status: 'conditional',
       })
     );
   }
@@ -87,16 +118,16 @@ export function buildSettlementEventsFromParty(party: ExtractedParty): Extracted
   return events;
 }
 
-function findSettlementTrigger(party: ExtractedParty): string | null {
-  const financial = (party.milestones ?? []).find((m) => m.category.value === 'financial');
-  if (financial?.deadline.value) return financial.deadline.value;
-  if (financial?.description.value) return financial.description.value;
-  return null;
-}
-
 export function buildSettlementEventsFromResult(result: ExtractionResult): ExtractedSettlementEvent[] {
   if (result.settlementEvents && result.settlementEvents.length > 0) {
-    return result.settlementEvents;
+    return result.settlementEvents.filter((event) => {
+      const trigger = event.trigger.value;
+      const condition = event.condition.value;
+      return (
+        !isHallucinatedSettlementTrigger(trigger) &&
+        !isHallucinatedSettlementTrigger(condition)
+      );
+    });
   }
-  return result.parties.flatMap(buildSettlementEventsFromParty);
+  return result.parties.flatMap((party) => buildSettlementEventsFromParty(party, result));
 }

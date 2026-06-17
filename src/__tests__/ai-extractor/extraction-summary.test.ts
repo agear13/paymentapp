@@ -1,31 +1,24 @@
 import { buildExtractionSummary, derivePartyConfidence } from '@/lib/ai-extractor/extraction-summary';
+import { normalizeExtractionResult } from '@/lib/ai-extractor/normalize-extraction-result';
 import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
+import { field, legacyDeliverables, testParty } from '@/lib/ai-extractor/test-helpers/party-fixture';
 
-function field<T>(value: T, confidence: 'high' | 'medium' | 'low' | 'absent' = 'high') {
-  return { value, confidence };
-}
-
-function party(overrides: Record<string, unknown> = {}) {
-  return {
+function party(overrides: Partial<ReturnType<typeof testParty>> = {}) {
+  return testParty({
     id: 'ep-1',
     name: field('Sarah'),
-    email: field(null, 'absent'),
     role: field('Promoter'),
-    participationModel: field('hybrid' as const),
+    participationModel: field('hybrid'),
     fixedAmount: field(300),
     revenueSharePct: field(10),
-    deliverables: field(['Influencer outreach', 'Social media promotion']),
-    milestones: [],
-    serviceCategories: field(['Marketing']),
-    conditions: [],
-    dependencies: [],
-    notes: field(null, 'absent'),
+    ...legacyDeliverables(['Influencer outreach', 'Social media promotion']),
+    serviceCategories: field(['MARKETING']),
     ...overrides,
-  };
+  });
 }
 
 function baseResult(overrides: Partial<ExtractionResult> = {}): ExtractionResult {
-  return {
+  return normalizeExtractionResult({
     projectName: field('Sunset Sessions'),
     projectDescription: field('Multi-party event agreement'),
     projectValue: field(8000),
@@ -40,8 +33,8 @@ function baseResult(overrides: Partial<ExtractionResult> = {}): ExtractionResult
         participationModel: field('fixed_payout'),
         fixedAmount: field(1000),
         revenueSharePct: field(null, 'absent'),
-        deliverables: field(['Event photography', 'Artist photos', '50 edited images']),
-        serviceCategories: field(['Photography']),
+        ...legacyDeliverables(['Event photography', 'Artist photos', '50 edited images']),
+        serviceCategories: field(['PHOTOGRAPHY']),
       }),
       party({
         id: 'ep-3',
@@ -50,7 +43,7 @@ function baseResult(overrides: Partial<ExtractionResult> = {}): ExtractionResult
         participationModel: field('hybrid'),
         fixedAmount: field(1200),
         revenueSharePct: field(15),
-        serviceCategories: field(['Venue']),
+        serviceCategories: field(['VENUE']),
       }),
       party({
         id: 'ep-4',
@@ -59,7 +52,12 @@ function baseResult(overrides: Partial<ExtractionResult> = {}): ExtractionResult
         participationModel: field('fixed_payout'),
         fixedAmount: field(600, 'high'),
         revenueSharePct: field(null, 'absent'),
-        deliverables: field(['Event photography', 'Artist photos', 'Crowd shots', '50 edited images']),
+        ...legacyDeliverables([
+          'Event photography',
+          'Artist photos',
+          'Crowd shots',
+          '50 edited images',
+        ]),
         milestones: [
           {
             description: field('$150 bonus if attendance exceeds 500', 'medium'),
@@ -68,7 +66,7 @@ function baseResult(overrides: Partial<ExtractionResult> = {}): ExtractionResult
             status: 'conditional' as const,
           },
         ],
-        serviceCategories: field(['Photography']),
+        serviceCategories: field(['PHOTOGRAPHY']),
       }),
       party({
         id: 'ep-5',
@@ -77,8 +75,8 @@ function baseResult(overrides: Partial<ExtractionResult> = {}): ExtractionResult
         participationModel: field('fixed_payout'),
         fixedAmount: field(900),
         revenueSharePct: field(null, 'absent'),
-        deliverables: field(['Event recap video', 'Instagram reels']),
-        serviceCategories: field(['Videography']),
+        ...legacyDeliverables(['Event recap video', 'Instagram reels']),
+        serviceCategories: field(['VIDEOGRAPHY']),
       }),
     ],
     paymentTerms: [],
@@ -87,7 +85,7 @@ function baseResult(overrides: Partial<ExtractionResult> = {}): ExtractionResult
     sourceHint: 'whatsapp',
     extractedAt: '2026-06-12T00:00:00.000Z',
     ...overrides,
-  } as ExtractionResult;
+  });
 }
 
 describe('buildExtractionSummary', () => {
@@ -103,7 +101,7 @@ describe('buildExtractionSummary', () => {
     const summary = buildExtractionSummary(baseResult());
     expect(summary.oneLiner).not.toMatch(/including contractor/i);
     expect(summary.serviceCategories).toEqual(
-      expect.arrayContaining(['Marketing', 'Photography', 'Venue', 'Videography'])
+      expect.arrayContaining(['MARKETING', 'PHOTOGRAPHY', 'VENUE', 'VIDEOGRAPHY'])
     );
     expect(summary.oneLiner).toMatch(/marketing|photography|videography|venue/i);
   });

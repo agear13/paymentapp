@@ -13,7 +13,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { monitorAgreementQueueBacklog } from '@/lib/agreement-analyzer/jobs/monitor-queue-backlog.server';
+import { logAgreementJobStage } from '@/lib/agreement-analyzer/jobs/agreement-job-log.server';
 import { processAgreementProcessingJobsBatch } from '@/lib/agreement-analyzer/jobs/process-jobs.server';
+import { failStalePendingAgreementReports } from '@/lib/agreement-analyzer/jobs/watchdog-stale-reports.server';
 import {
   cronAuthFailureResponse,
   verifyCronRequest,
@@ -27,6 +29,10 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   const cronFailure = verifyCronRequest(request);
   if (cronFailure) {
+    logAgreementJobStage('cron_invoked', {
+      authFailed: true,
+      reason: cronFailure.kind,
+    });
     return cronAuthFailureResponse(cronFailure);
   }
 
@@ -39,10 +45,21 @@ export async function POST(request: NextRequest) {
 
     const limit = parsed.data.limit ?? 10;
     const workerId = `cron-${randomUUID()}`;
+
+    logAgreementJobStage('cron_invoked', { workerId, limit });
+
+    const watchdog = await failStalePendingAgreementReports();
     const batch = await processAgreementProcessingJobsBatch(workerId, limit);
     const backlog = await monitorAgreementQueueBacklog();
 
-    return NextResponse.json({ success: true, batch, backlog });
+    if (batch.processed === 0) {
+      logAgreementJobStage('cron_idle', {
+        workerId,
+        pendingBacklogCount: backlog?.pendingCount,
+      });
+    }
+
+    return NextResponse.json({ success: true, batch, backlog, watchdog });
   } catch (error) {
     loggers.api.error('agreement-analyzer jobs process route failed', error);
     return NextResponse.json({ error: 'Job processing failed.' }, { status: 500 });

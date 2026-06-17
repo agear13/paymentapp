@@ -47,6 +47,10 @@ services:
         sync: false
       - key: ASSET_CDN_URL
         sync: false
+      - key: STORAGE_PROVIDER
+        value: r2
+      - key: STORAGE_ALLOW_LOCAL_FALLBACK
+        value: "false"
       - key: NPM_CONFIG_LEGACY_PEER_DEPS
         value: "true"
       - key: DATABASE_URL

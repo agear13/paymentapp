@@ -74,10 +74,22 @@ describe('agreement upload storage', () => {
     delete process.env.R2_ENDPOINT;
   });
 
-  it('selects local provider by default', () => {
+  it('selects local provider by default when R2 is not configured', () => {
     expect(readAgreementUploadStorageProvider()).toBe('local');
     const storage = getAgreementUploadStorage();
     expect(storage).toBeInstanceOf(LocalAgreementUploadStorage);
+  });
+
+  it('auto-selects hybrid R2 provider when R2 credentials are configured', () => {
+    process.env.R2_ACCOUNT_ID = r2Config.accountId;
+    process.env.R2_ACCESS_KEY_ID = r2Config.accessKeyId;
+    process.env.R2_SECRET_ACCESS_KEY = r2Config.secretAccessKey;
+    process.env.R2_BUCKET_NAME = r2Config.bucketName;
+
+    expect(readAgreementUploadStorageProvider()).toBe('r2');
+
+    const storage = getAgreementUploadStorage();
+    expect(storage).toBeInstanceOf(HybridAgreementUploadStorage);
   });
 
   it('selects hybrid R2 provider when STORAGE_PROVIDER=r2', () => {

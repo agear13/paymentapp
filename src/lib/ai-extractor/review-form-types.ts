@@ -13,6 +13,7 @@ import {
   extractedCurrencyDisplayCode,
   isExtractedCurrencyExplicitlyUnsupported,
 } from '@/lib/ai-extractor/extraction-currency';
+import { deliverableDescriptions } from '@/lib/ai-extractor/parse-deliverables';
 
 export interface ReviewedMilestone {
   description: string;
@@ -110,7 +111,7 @@ export function reviewFormFromExtraction(
       participationModel: p.participationModel.value,
       fixedAmount: extractedCurrencyUnsupported ? null : p.fixedAmount.value,
       revenueSharePct: p.revenueSharePct.value,
-      deliverables: p.deliverables?.value ?? [],
+      deliverables: deliverableDescriptions(p),
       milestones: (p.milestones ?? []).map((m) => ({
         description: m.description.value,
         deadline: m.deadline.value ?? '',

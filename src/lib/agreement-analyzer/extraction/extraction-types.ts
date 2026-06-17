@@ -115,7 +115,13 @@ export type AgreementSettlementReadiness = {
 export type AgreementExtractionFailureJson = {
   success: false;
   error: string;
-  stage: 'load_file' | 'text_extraction' | 'normalization' | 'openai_extraction' | 'persistence';
+  stage:
+    | 'load_file'
+    | 'text_extraction'
+    | 'normalization'
+    | 'openai_extraction'
+    | 'persistence'
+    | 'watchdog';
 };
 
 export type DocumentTextExtractionResult =

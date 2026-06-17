@@ -10,7 +10,11 @@ import {
   logExtractorDebugSnapshot,
 } from './extraction-field-schema';
 import { parseArrayItemsNonBlocking } from './parse-array-non-blocking';
+import { parseConditionalPaymentsNonBlocking } from './parse-conditional-payments';
+import { parseDeliverablesNonBlocking } from './parse-deliverables';
 import { parseSettlementEventsNonBlocking } from './parse-settlement-events';
+import { parseSettlementRulesNonBlocking } from './parse-settlement-rules';
+import { normalizeServiceCategories } from './service-category';
 
 const F = FlexibleExtractionFieldSchema;
 
@@ -116,12 +120,22 @@ function parseParty(raw: unknown): {
   const obj = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
   const droppedOptional: string[] = [];
 
-  const deliverables = parseFieldWithFallback(
+  const deliverablesParsed = parseDeliverablesNonBlocking(obj.deliverables);
+  if (deliverablesParsed.droppedCount > 0) {
+    droppedOptional.push(`deliverables(${deliverablesParsed.droppedCount})`);
+  }
+
+  const deliverablesLegacy = parseFieldWithFallback(
     F(z.array(z.string())),
     obj.deliverables,
     EMPTY_STRING_LIST,
-    'party.deliverables'
+    'party.deliverablesLegacy'
   );
+
+  const conditionalPayments = parseConditionalPaymentsNonBlocking(obj.conditionalPayments);
+  if (conditionalPayments.droppedCount > 0) {
+    droppedOptional.push(`conditionalPayments(${conditionalPayments.droppedCount})`);
+  }
 
   const milestones = parseArrayItemsNonBlocking(MilestoneSchema, obj.milestones, 'milestone');
   if (milestones.droppedCount > 0) {
@@ -142,7 +156,7 @@ function parseParty(raw: unknown): {
     droppedOptional.push(`dependencies(${dependencies.droppedCount})`);
   }
 
-  const serviceCategories = parseFieldWithFallback(
+  const serviceCategoriesRaw = parseFieldWithFallback(
     F(z.array(z.string())),
     obj.serviceCategories,
     EMPTY_STRING_LIST,
@@ -159,11 +173,16 @@ function parseParty(raw: unknown): {
       fixedAmount: core.data.fixedAmount,
       revenueSharePct: core.data.revenueSharePct,
       notes: core.data.notes ?? ABSENT_STRING,
-      deliverables,
+      deliverables: deliverablesParsed.items,
+      deliverablesLegacy: deliverablesLegacy.value.length > 0 ? deliverablesLegacy : undefined,
+      conditionalPayments: conditionalPayments.items,
       milestones: milestones.items,
       conditions: conditions.items,
       dependencies: dependencies.items,
-      serviceCategories,
+      serviceCategories: {
+        value: normalizeServiceCategories(serviceCategoriesRaw.value),
+        confidence: serviceCategoriesRaw.confidence,
+      },
     },
     droppedOptional,
   };
@@ -264,6 +283,14 @@ export function validateExtractionResult(raw: unknown): ExtractionResult {
     });
   }
 
+  const settlementRules = parseSettlementRulesNonBlocking(rawObject.settlementRules);
+  if (settlementRules.droppedCount > 0) {
+    validationUncertainties.push({
+      field: 'settlementRules',
+      issue: `${settlementRules.droppedCount} settlement rule(s) could not be validated and were omitted.`,
+    });
+  }
+
   const overallConfidence = parseFieldWithFallback(
     ConfidenceSchema,
     rawObject.overallConfidence,
@@ -282,7 +309,7 @@ export function validateExtractionResult(raw: unknown): ExtractionResult {
       : null;
 
   const schemaVersion = parseFieldWithFallback(
-    z.enum(['v1', 'v2', 'v3']).optional(),
+    z.enum(['v1', 'v2', 'v3', 'v4']).optional(),
     rawObject.schemaVersion,
     undefined,
     'schemaVersion'
@@ -292,6 +319,7 @@ export function validateExtractionResult(raw: unknown): ExtractionResult {
     ...projectFields,
     parties,
     paymentTerms,
+    ...(settlementRules.items.length > 0 ? { settlementRules: settlementRules.items } : {}),
     ...(settlementEvents.length > 0 ? { settlementEvents } : {}),
     uncertainties: appendUncertainties(baseUncertainties, validationUncertainties),
     overallConfidence,

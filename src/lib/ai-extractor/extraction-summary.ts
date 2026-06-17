@@ -1,4 +1,4 @@
-import type { ExtractionResult, ExtractedParty, ExtractionConfidence } from './extraction-types';
+import type { ExtractionResult, ExtractedParty, ExtractionConfidence, ServiceCategory } from './extraction-types';
 import {
   buildProjectSummaryOneLiner,
   countPartyObligationMetrics,
@@ -14,7 +14,7 @@ export interface ExtractionSummaryStats {
   revenueShareObligationCount: number;
   hybridParticipantCount: number;
   attributionCount: number;
-  serviceCategories: string[];
+  serviceCategories: ServiceCategory[];
   oneLiner: string;
 }
 

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { logAgreementJobStage } from '@/lib/agreement-analyzer/jobs/agreement-job-log.server';
 import { prisma } from '@/lib/server/prisma';
 
 export type ClaimedAgreementProcessingJob = {
@@ -38,7 +39,7 @@ export async function claimAgreementProcessingJob(
       },
     });
 
-    return {
+    const claimed = {
       id: job.id,
       uploadId: job.upload_id,
       reportId: job.report_id,
@@ -46,5 +47,16 @@ export async function claimAgreementProcessingJob(
       attemptCount: job.attempt_count,
       maxAttempts: job.max_attempts,
     };
+
+    logAgreementJobStage('picked_up', {
+      jobId: claimed.id,
+      uploadId: claimed.uploadId,
+      reportId: claimed.reportId,
+      workerId,
+      attemptCount: claimed.attemptCount,
+      jobType: claimed.jobType,
+    });
+
+    return claimed;
   });
 }

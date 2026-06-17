@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { trackAgreementAnalyzerEvent } from '@/lib/agreement-analyzer/analytics/agreement-analyzer-analytics.server';
+import { logAgreementJobStage } from '@/lib/agreement-analyzer/jobs/agreement-job-log.server';
 import {
   AGREEMENT_PROCESSING_JOB_TYPES,
   type AgreementProcessingJobType,
@@ -49,6 +50,20 @@ export async function createAgreementProcessingJob(
   });
 
   trackAgreementAnalyzerEvent('agreement_job_created', {
+    jobId: job.id,
+    uploadId: input.uploadId,
+    reportId: input.reportId,
+    jobType,
+  });
+
+  logAgreementJobStage('created', {
+    jobId: job.id,
+    uploadId: input.uploadId,
+    reportId: input.reportId,
+    jobType,
+  });
+
+  logAgreementJobStage('queued', {
     jobId: job.id,
     uploadId: input.uploadId,
     reportId: input.reportId,

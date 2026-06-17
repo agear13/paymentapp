@@ -4,6 +4,7 @@ import {
   readAgreementR2StorageConfig,
   readAgreementUploadStorageProvider,
 } from '@/lib/agreement-analyzer/upload-storage/agreement-upload-storage-config';
+import { logAgreementStorageStartup } from '@/lib/agreement-analyzer/upload-storage/agreement-upload-storage-diagnostics.server';
 import { HybridAgreementUploadStorage } from '@/lib/agreement-analyzer/upload-storage/hybrid-agreement-upload-storage';
 import { LocalAgreementUploadStorage } from '@/lib/agreement-analyzer/upload-storage/local-upload-storage';
 import { R2AgreementUploadStorage } from '@/lib/agreement-analyzer/upload-storage/r2-agreement-upload-storage';
@@ -13,6 +14,8 @@ import { UploadStorageError } from '@/lib/agreement-analyzer/upload-storage/type
 let cachedService: UploadStorageService | null = null;
 
 function createUploadStorageService(): UploadStorageService {
+  logAgreementStorageStartup();
+
   const provider = readAgreementUploadStorageProvider();
 
   if (provider === 'r2') {
