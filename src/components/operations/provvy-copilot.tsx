@@ -41,6 +41,43 @@ function greeting(name?: string): string {
   return name ? `${base}, ${name}.` : `${base}.`;
 }
 
+/**
+ * Resolves the correct workflow CTA href for an agreement, based on what is blocking.
+ * Never sends the operator to an already-completed step.
+ *
+ * Priority:
+ *   1. Explicit href if one is provided (most specific)
+ *   2. Payment provider issue → Money tab
+ *   3. Participant / approval issue → People tab
+ *   4. Obligations / settlement issue → Money tab (obligations live under Money)
+ *   5. Default → overview (agreement briefing)
+ */
+function resolveWorkflowCtaHref(
+  projectId: string,
+  opts: {
+    explicitHref?: string;
+    hint?: string;
+  } = {}
+): string {
+  const base = `/dashboard/projects/${encodeURIComponent(projectId)}`;
+
+  if (opts.explicitHref) return opts.explicitHref;
+
+  const hint = (opts.hint ?? '').toLowerCase();
+
+  if (/stripe|payment provider|merchant|connect payment|payment rail/i.test(hint)) {
+    return `${base}/funding`;
+  }
+  if (/participant|approval|invite|agreement share|team member|send agreement/i.test(hint)) {
+    return `${base}/participants`;
+  }
+  if (/obligation|payout|allocation|settlement/i.test(hint)) {
+    return `${base}/funding`;
+  }
+
+  return base;
+}
+
 function buildNarrative(
   operatorName: string | undefined,
   attentionItems: AttentionItem[],
@@ -118,14 +155,20 @@ function buildNarrative(
     );
     const steps = primaryTasks.slice(0, 3).map((t) => t.title);
     const totalMinutes = primaryTasks.slice(0, 3).reduce((s, t) => s + t.estimatedMinutes, 0);
+    const blockerHref = primaryAgreement
+      ? resolveWorkflowCtaHref(primaryAgreement.projectId, {
+          explicitHref: paymentBlocker.ctaHref,
+          hint: paymentBlocker.title + ' ' + paymentBlocker.explanation,
+        })
+      : paymentBlocker.ctaHref;
     return {
       eyebrow: greeting(operatorName),
       headline: `Revenue is waiting. Completing ${actionItems.length === 1 ? 'one action' : `${actionItems.length} actions`} today will unlock ${formatCompactCurrency(collectedRevenue, currency)} in customer payments.`,
       steps,
       estimatedMinutes: totalMinutes,
       outcome: 'Customer payments begin flowing today.',
-      ctaLabel: 'Fix now',
-      ctaHref: paymentBlocker.ctaHref,
+      ctaLabel: 'Connect payment provider',
+      ctaHref: blockerHref,
       tone: 'waiting',
     };
   }
@@ -140,6 +183,18 @@ function buildNarrative(
     const steps = primaryTasks.slice(0, 3).map((t) => t.title);
     const totalMinutes = primaryTasks.slice(0, 3).reduce((s, t) => s + t.estimatedMinutes, 0);
 
+    // Determine the most appropriate next tab based on the top action
+    const topActionItem = actionItems[0];
+    const topTask = primaryTasks[0];
+    const nextHint =
+      (topActionItem ? topActionItem.title + ' ' + (topActionItem.explanation ?? '') : '') +
+      ' ' +
+      (topTask ? topTask.title : '');
+    const smartCtaHref = resolveWorkflowCtaHref(primaryAgreement.projectId, {
+      explicitHref: topTask?.ctaHref,
+      hint: nextHint,
+    });
+
     // Multiple agreements, some need attention
     if (totalAgreements > 1 && healthyAgreements.length > 0) {
       return {
@@ -149,8 +204,8 @@ function buildNarrative(
         steps,
         estimatedMinutes: totalMinutes > 0 ? totalMinutes : undefined,
         outcome: 'Settlement cleared across all agreements.',
-        ctaLabel: `Fix ${primaryAgreement.agreementName}`,
-        ctaHref: `/dashboard/projects/${encodeURIComponent(primaryAgreement.projectId)}`,
+        ctaLabel: `Continue ${primaryAgreement.agreementName}`,
+        ctaHref: smartCtaHref,
         tone: 'action',
       };
     }
@@ -165,7 +220,7 @@ function buildNarrative(
       estimatedMinutes: totalMinutes > 0 ? totalMinutes : undefined,
       outcome: 'Customer payments can begin today.',
       ctaLabel: 'Continue',
-      ctaHref: primaryTasks[0]?.ctaHref ?? `/dashboard/projects/${encodeURIComponent(primaryAgreement.projectId)}`,
+      ctaHref: smartCtaHref,
       tone: 'action',
     };
   }

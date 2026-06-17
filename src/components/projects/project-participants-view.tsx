@@ -85,13 +85,14 @@ import { cn } from '@/lib/utils';
 import { OperationalDiagnosticsPanel } from '@/components/operations/operational-diagnostics-panel';
 import { CreateFromConversationButton } from '@/components/ai-extractor/create-from-conversation-button';
 import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
+import { ProjectPageCopilot } from '@/components/operations/project-page-copilot';
 
 const ONBOARDING_CHECKLIST = [
   'Plan allocations (roles and budgets)',
-  'Invite participants',
-  'Configure compensation structures',
-  'Send agreements',
-  'Confirm payout details externally',
+  'Add team members',
+  'Configure earnings',
+  'Request approvals',
+  'Confirm payout details',
 ] as const;
 
 export function ProjectParticipantsView() {
@@ -661,6 +662,9 @@ export function ProjectParticipantsView() {
       }
     >
       <div className="space-y-6">
+        {/* Persistent copilot — keeps Provvy present on every agreement page */}
+        <ProjectPageCopilot page="people" guidance={guidance} kpis={canonicalKpis} />
+
         {needsEarningsConfiguration && hasParticipants ? (
           <ProgressiveOperationalPanel
             title="Configure how each participant gets paid"
@@ -704,8 +708,8 @@ export function ProjectParticipantsView() {
               />
             ) : (
               <p className="text-muted-foreground mt-1 text-sm">
-                Plan allocations first, then invite participants and configure earnings before payout
-                release.
+                Add team members, configure their earnings, and request approvals before payouts can
+                be released.
               </p>
             )}
           </div>
@@ -729,7 +733,7 @@ export function ProjectParticipantsView() {
             </Button>
             <Button variant="outline" onClick={() => setInviteOpen(true)}>
               <UserPlus className="mr-2 h-4 w-4" />
-              Invite participant
+              Add team member
             </Button>
           </div>
         </div>
@@ -819,9 +823,9 @@ export function ProjectParticipantsView() {
             />
           <Card className="border-border/80 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle>Project participants</CardTitle>
+              <CardTitle>People</CardTitle>
               <CardDescription>
-                Agreement, attribution, payout confirmation, and earnings — one row per participant.
+                Team members, earnings, and approvals — one row per person.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 p-4 sm:p-6 pt-0">

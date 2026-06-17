@@ -117,9 +117,9 @@ export function ConnectedPaymentMethodsStrip({
     <section className="rounded-lg border bg-muted/20 px-4 py-3">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold">Collection & settlement infrastructure</h2>
+          <h2 className="text-sm font-semibold">Payments</h2>
           <p className="text-xs text-muted-foreground">
-            Your active payment and settlement rails.
+            Your active payment providers and settlement methods.
           </p>
         </div>
         {!showAllRails && hiddenCount > 0 ? (
@@ -128,7 +128,7 @@ export function ConnectedPaymentMethodsStrip({
             className="h-auto p-0 text-xs"
             onClick={() => setShowAllRails(true)}
           >
-            Show available settlement rails
+            Show all payment methods
           </Button>
         ) : showAllRails ? (
           <Button
@@ -143,7 +143,7 @@ export function ConnectedPaymentMethodsStrip({
       <div className="mt-3 flex flex-wrap gap-2">
         {visibleRails.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            No collection infrastructure connected yet. Configure collection &amp; settlement in settings.
+            No payment provider connected yet. Connect one in settings to begin accepting payments.
           </p>
         ) : (
           visibleRails.map((rail) => <RailChip key={rail.id} rail={rail} />)

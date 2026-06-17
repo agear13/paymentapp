@@ -7,11 +7,12 @@ import { useOperationalCoordinationState } from '@/hooks/use-operational-coordin
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
 import { toOperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-client';
+import { ProjectPageCopilot } from '@/components/operations/project-page-copilot';
 
 export function ProjectFundingView() {
   const { summary, projectId, deal, projectParticipants, refresh, invalidate } =
     useProjectWorkspace();
-  const { reloadCoordinationSnapshot } = useOperationalCoordinationState({
+  const { guidance, reloadCoordinationSnapshot } = useOperationalCoordinationState({
     scope: 'project',
     project: deal ?? undefined,
     participants: projectParticipants,
@@ -39,11 +40,14 @@ export function ProjectFundingView() {
 
   return (
     <div className="space-y-6">
+      {/* Persistent copilot — keeps Provvy present on every agreement page */}
+      <ProjectPageCopilot page="money" guidance={guidance} />
+
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
         <p className="text-muted-foreground mt-1 text-sm max-w-2xl">
-          Track expected inflows and payout readiness across projects. Coordinate obligations before
-          revenue fully settles.
+          Manage how revenue flows into this agreement and how payouts are distributed to team
+          members.
         </p>
       </div>
 

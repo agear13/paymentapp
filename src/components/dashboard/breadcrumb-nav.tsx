@@ -38,7 +38,7 @@ const pathTitles: Record<string, string> = {
   transactions: 'Funding activity',
   organization: 'Organization',
   billing: 'Billing',
-  merchant: 'Collection & settlement infrastructure',
+  merchant: 'Payments & settlement',
   team: 'Team',
   integrations: 'Integrations',
   services: 'Service catalog',

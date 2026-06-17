@@ -63,7 +63,7 @@ export function OperationalSettlementInitialization({
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Loading settlement infrastructure…
+        Preparing payment setup…
       </div>
     );
   }
@@ -98,12 +98,12 @@ export function OperationalSettlementInitialization({
     <div className="space-y-4 rounded-lg border border-primary/20 bg-primary/[0.03] p-5">
       <div className="space-y-1">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Settlement infrastructure initializing
+          Payment setup in progress
         </p>
         <h3 className="text-lg font-semibold">{settlementInit.headline}</h3>
         <p className="text-sm text-muted-foreground max-w-2xl">
           {settlementInit.recoveryMessage ??
-            'Your payment rails were connected successfully. Operational coordination is being prepared.'}
+            'Your payment provider was connected successfully. Business operations are being prepared.'}
         </p>
         {initialization?.failedPhase ? (
           <p className="text-xs text-amber-800/90 dark:text-amber-300/90">

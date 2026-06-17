@@ -226,6 +226,7 @@ export function WorkflowOnboardingForm() {
     null
   );
   const [advancedProvidersOpen, setAdvancedProvidersOpen] = React.useState(false);
+  const [paymentProviderConnected, setPaymentProviderConnected] = React.useState(false);
   const [bootstrapMutation, setBootstrapMutation] =
     React.useState<OnboardingRecoveryMutation | null>(null);
   const bootstrapOperationIdRef = React.useRef<string>(createOperationId());
@@ -1047,11 +1048,14 @@ export function WorkflowOnboardingForm() {
     }
   }
 
-  async function finishOnboardingWithProviders() {
+  async function finishOnboardingWithProviders(options?: { skipped?: boolean }) {
     setIsLoading(true);
     try {
       await saveOptionalProviders(railsForm.getValues());
       await persistState('complete');
+      if (!options?.skipped) {
+        setPaymentProviderConnected(true);
+      }
       setStep('complete');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to complete setup');
@@ -2019,14 +2023,14 @@ export function WorkflowOnboardingForm() {
                 type="button"
                 variant="outline"
                 disabled={!csrfReady || isLoading}
-                onClick={finishOnboardingWithProviders}
+                onClick={() => finishOnboardingWithProviders({ skipped: true })}
               >
                 Skip for now
               </Button>
               <Button
                 type="button"
                 disabled={!csrfReady || isLoading}
-                onClick={finishOnboardingWithProviders}
+                onClick={() => finishOnboardingWithProviders()}
               >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Continue
@@ -2051,6 +2055,7 @@ export function WorkflowOnboardingForm() {
           csrfReady={csrfReady}
           isLoading={isLoading}
           onCheckout={() => initiateBillingCheckout(selectedPlanId as SaasCheckoutPlan)}
+          paymentProviderConnected={paymentProviderConnected}
         />
       )}
 

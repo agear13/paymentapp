@@ -6,6 +6,7 @@ import { OperationalActivitySection } from '@/components/operations/operational-
 import { OperationalTimeline } from '@/components/operations/operational-timeline';
 import { useOperationalTimelineProjection } from '@/hooks/use-operational-timeline-projection';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ProjectPageCopilot } from '@/components/operations/project-page-copilot';
 
 export function ProjectActivityView() {
   const { deal, summary, projectParticipants, projectId } = useProjectWorkspace();
@@ -25,25 +26,28 @@ export function ProjectActivityView() {
 
   return (
     <div className="space-y-6">
+      {/* Persistent copilot — history is read-only, so Provvy orients the operator */}
+      <ProjectPageCopilot page="history" />
+
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Operational audit timeline for this project — canonical coordination events.
+          Business history — milestones and activity for this agreement.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Operational activity</CardTitle>
+          <CardTitle>Business story</CardTitle>
           <CardDescription>
-            Agreement, funding, obligation, and release events from the coordination graph.
+            What happened in this agreement — approvals, payments, and milestones.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <OperationalTimeline events={timelineProjection.timeline} maxItems={12} />
           <OperationalActivitySection
             projectId={projectId}
-            title="Project timeline"
+            title="Full timeline"
             defaultOpen
             maxItems={20}
           />

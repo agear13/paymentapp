@@ -11,6 +11,7 @@ import { opProjectWidth, opSpace } from '@/lib/design/operational-spacing';
 import { ProjectOperationalGuidance } from '@/components/operations/project-operational-guidance';
 import { safeProjectRouteContext } from '@/lib/operations/routing/draft-safe-routing';
 import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
+import { WorkflowHeader } from '@/components/workflow/workflow-header';
 import { cn } from '@/lib/utils';
 
 type ProjectWorkspaceShellProps = {
@@ -91,6 +92,9 @@ export function ProjectWorkspaceShell({ projectId, children }: ProjectWorkspaceS
           All agreements
         </Link>
       </Button>
+
+      {/* Persistent workflow header — every agreement page begins with context */}
+      <WorkflowHeader />
 
       <ProjectContextNav projectId={projectId} />
 

@@ -34,6 +34,8 @@ import {
 import { useAgreementIntelligenceTracking } from '@/hooks/use-agreement-intelligence-tracking';
 import { AgreementIntelligenceFeedbackPrompt } from '@/components/agreements/validation/agreement-intelligence-feedback-prompt';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
+import { CommercialReadiness } from '@/components/workflow/commercial-readiness';
+import { deriveWorkflowContext } from '@/components/workflow/workflow-context';
 
 type AgreementIntelligenceBriefingProps = {
   projectId: string;
@@ -60,6 +62,7 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
     graph,
     workspaceContext,
     kpis,
+    activation,
     releaseBlockers,
   } = useOperationalCoordinationState({
     scope: 'project',
@@ -248,12 +251,25 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
           <BriefingAuditSection auditEntries={auditEntries} />
         </div>
 
-        <BriefingIntelligencePanel
-          intelligence={intelligence}
-          projectId={projectId}
-          agreementName={summary.name}
-          onRecommendationCtaClick={markRecommendationActed}
-        />
+        <div className="space-y-6">
+          <BriefingIntelligencePanel
+            intelligence={intelligence}
+            projectId={projectId}
+            agreementName={summary.name}
+            onRecommendationCtaClick={markRecommendationActed}
+          />
+          <CommercialReadiness
+            workflowCtx={deriveWorkflowContext({
+              projectId,
+              agreementName: summary.name,
+              kpis: kpis ?? null,
+              releaseConfidence: guidance.releaseConfidence ?? null,
+              workspaceContext: workspaceContext ?? null,
+              activation: activation ?? null,
+            })}
+            className="border rounded-lg p-4 bg-white/50"
+          />
+        </div>
       </div>
 
       {obligationsLoading ? (
