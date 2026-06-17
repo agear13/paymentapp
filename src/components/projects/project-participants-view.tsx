@@ -117,6 +117,8 @@ export function ProjectParticipantsView() {
     graph,
     kpis: canonicalKpis,
     guidance,
+    workspaceContext,
+    activation,
     releaseInteraction,
     reloadCoordinationSnapshot,
   } = useOperationalCoordinationState({
@@ -663,7 +665,15 @@ export function ProjectParticipantsView() {
     >
       <div className="space-y-6">
         {/* Persistent copilot — keeps Provvy present on every agreement page */}
-        <ProjectPageCopilot page="people" guidance={guidance} kpis={canonicalKpis} />
+        <ProjectPageCopilot
+          page="people"
+          projectId={projectId}
+          agreementName={summary.name}
+          guidance={guidance}
+          kpis={canonicalKpis}
+          workspaceContext={workspaceContext}
+          activation={activation}
+        />
 
         {needsEarningsConfiguration && hasParticipants ? (
           <ProgressiveOperationalPanel

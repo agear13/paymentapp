@@ -63,12 +63,12 @@ export function PaymentLinksGuardrailModal({
         return {
           title: 'Hedera wallet not configured',
           description:
-            'You selected crypto (Hedera), but no Hedera account ID is on file. Add a wallet in collection & settlement setup or choose another payment method.',
+            'You selected crypto (Hedera), but no Hedera account ID is on file. Add a wallet in payment setup or choose another payment method.',
         };
       default:
         return {
           title: 'Setup required',
-          description: 'Complete your collection & settlement infrastructure before creating this invoice.',
+          description: 'Connect a payment provider before creating this invoice.',
         };
     }
   }, [kind, setup.wiseIncomplete]);

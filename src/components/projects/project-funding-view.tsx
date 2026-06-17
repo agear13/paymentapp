@@ -12,7 +12,7 @@ import { ProjectPageCopilot } from '@/components/operations/project-page-copilot
 export function ProjectFundingView() {
   const { summary, projectId, deal, projectParticipants, refresh, invalidate } =
     useProjectWorkspace();
-  const { guidance, reloadCoordinationSnapshot } = useOperationalCoordinationState({
+  const { guidance, workspaceContext, activation, reloadCoordinationSnapshot } = useOperationalCoordinationState({
     scope: 'project',
     project: deal ?? undefined,
     participants: projectParticipants,
@@ -41,7 +41,14 @@ export function ProjectFundingView() {
   return (
     <div className="space-y-6">
       {/* Persistent copilot — keeps Provvy present on every agreement page */}
-      <ProjectPageCopilot page="money" guidance={guidance} />
+      <ProjectPageCopilot
+        page="money"
+        projectId={projectId}
+        agreementName={summary.name}
+        guidance={guidance}
+        workspaceContext={workspaceContext}
+        activation={activation}
+      />
 
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>

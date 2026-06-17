@@ -5,6 +5,7 @@ import { useAgreementHealthPortfolio } from '@/hooks/use-agreement-health-portfo
 import { deriveOperationalSeverity } from '@/lib/operations/severity';
 import { deduplicateAttentionItems } from '@/lib/operations/explainability/deduplicate-operational-actions';
 import { opPage } from '@/lib/design/operational-spacing';
+import { buildWorkspaceExperience } from '@/components/workflow/operations-manager';
 
 import { ProvvyCopilot } from '@/components/operations/provvy-copilot';
 import { BusinessMomentum } from '@/components/operations/business-momentum';
@@ -19,7 +20,7 @@ import { AskProvvyPanel } from '@/components/operations/ask-provvy-panel';
 import { deriveQueueTasksFromAttention } from '@/components/operations/operational-queue';
 
 export function OperationalHomeCommandCenter() {
-  const { guidance, loading, workspaceContext, kpis, auditTimeline } =
+  const { guidance, loading, workspaceContext, kpis, activation, auditTimeline } =
     useOperationalCoordinationState({ traceSurface: 'operational-home-command-center' });
   const { portfolio, snapshots, loading: healthLoading } = useAgreementHealthPortfolio();
 
@@ -43,6 +44,21 @@ export function OperationalHomeCommandCenter() {
 
   const queueTasks = deriveQueueTasksFromAttention(attentionItems);
 
+  // ── Operations Manager: builds the workspace experience
+  //    This is the single source of truth for what the operator should do today.
+  //    Replaces all per-component reasoning derivation.
+  const experience = !isLoading
+    ? buildWorkspaceExperience({
+        snapshots,
+        kpis: kpis ?? null,
+        releaseConfidence: guidance.releaseConfidence ?? null,
+        workspaceContext: workspaceContext ?? null,
+        activation: activation ?? null,
+        attentionItems,
+        auditEntries: auditTimeline,
+      })
+    : null;
+
   return (
     <div className={opPage()}>
 
@@ -53,15 +69,21 @@ export function OperationalHomeCommandCenter() {
         <BusinessMomentum auditEntries={auditTimeline} />
       ) : null}
 
-      {/* ── 1. Provvy Copilot ─────────────────────────────────────────────
-          First-person narrative hero. "I can have Sunset Sessions ready
-          in 4 minutes." Checklist → outcome → single CTA. Never passive.  */}
+      {/* ── 1. Provvy Copilot — "Today" ──────────────────────────────────
+          "Good afternoon. I've reviewed your business. Three things are
+          worth your attention today."
+          Powered by the Operations Manager. First-person. Specific.       */}
       <ProvvyCopilot
         attentionItems={attentionItems}
         kpis={kpis}
         releaseConfidence={guidance.releaseConfidence}
         snapshots={snapshots}
         queueTasks={queueTasks}
+        auditEntries={auditTimeline}
+        openingSummary={experience?.openingSummary}
+        greeting={experience?.greeting}
+        todaysFocus={experience?.todaysFocus}
+        workspaceMode={experience?.workspaceMode}
         loading={isLoading}
       />
 

@@ -1,166 +1,233 @@
 'use client';
 
-import { ContextualAIGuide } from '@/components/operations/contextual-ai-guide';
+import Link from 'next/link';
+import { ArrowRight, Check, Lightbulb, ChevronDown } from 'lucide-react';
+import * as React from 'react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import type { OperationalGuidanceBundle } from '@/lib/operations/explainability/types';
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
+import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
+import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
+import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
+import {
+  analyseWorkspace,
+  type CommercialDecisionResult,
+} from '@/components/workflow/commercial-decision-engine';
 
 export type ProjectPageCopilotPage = 'money' | 'people' | 'history';
 
 type ProjectPageCopilotProps = {
   page: ProjectPageCopilotPage;
+  projectId?: string;
+  agreementName?: string;
   guidance?: OperationalGuidanceBundle | null;
   kpis?: OperationalKPIs | null;
+  workspaceContext?: WorkspaceOperationalContext | null;
+  activation?: WorkspaceActivationSnapshot | null;
+  auditEntries?: OperationalAuditEntry[];
 };
 
-/* ─── Per-page guidance derivation ─── */
+/* ─── Why? expandable reasoning ─── */
 
-type Guidance = {
-  message: string;
-  action?: { label: string; href: string };
-  tone?: 'default' | 'positive' | 'muted';
+function ReasoningExpander({ reasoning }: { reasoning: string[] }) {
+  const [open, setOpen] = React.useState(false);
+
+  if (reasoning.length === 0) return null;
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        aria-expanded={open}
+      >
+        Why?
+        <ChevronDown
+          className={cn('h-3 w-3 transition-transform', open && 'rotate-180')}
+          aria-hidden
+        />
+      </button>
+      {open ? (
+        <ul className="mt-2 space-y-1 pl-1">
+          {reasoning.map((r, i) => (
+            <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <span className="mt-0.5 shrink-0 text-border">•</span>
+              <span className="capitalize-first">{r}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/* ─── History page — no action needed ─── */
+
+function HistoryGuidance() {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-border/40 bg-muted/10 px-4 py-3">
+      <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5 text-muted-foreground/50" aria-hidden />
+      <div>
+        <p className="text-sm font-medium text-foreground">Nothing needs your attention here.</p>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          This page records business milestones and operational history.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Outcome-first guidance banner ─── */
+
+type GuidanceBannerProps = {
+  decision: CommercialDecisionResult;
+  page: 'money' | 'people';
 };
 
-function deriveMoney(
-  guidance?: OperationalGuidanceBundle | null
-): Guidance {
-  const actions = guidance?.actions ?? [];
-  const primaryAction = actions[0];
+function GuidanceBanner({ decision, page }: GuidanceBannerProps) {
+  const rec = decision.recommendedAction;
 
-  const isPaymentProviderAction =
-    primaryAction &&
-    /connect stripe|payment provider|stripe|merchant/i.test(
-      primaryAction.action + ' ' + (primaryAction.reason ?? '')
+  // Filter recommendation to this page
+  const isRelevant =
+    page === 'money'
+      ? rec &&
+        (rec.tier === 'money_blocked' ||
+          rec.tier === 'payment_provider' ||
+          rec.tier === 'settlement_blocked')
+      : page === 'people'
+        ? rec &&
+          (rec.tier === 'approvals_pending' ||
+            rec.tier === 'earnings_config' ||
+            rec.tier === 'participants_missing')
+        : false;
+
+  if (!isRelevant || !rec) {
+    // Positive state — all good on this page
+    const positiveMessage =
+      page === 'money'
+        ? "Payment setup is on track. Revenue can flow once the agreement is fully prepared."
+        : "All team members have approved. Payouts are unlocked.";
+
+    return (
+      <div className="flex items-start gap-3 rounded-lg border border-[rgba(29,111,66,0.2)] bg-[rgba(29,111,66,0.04)] px-4 py-3">
+        <Check className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[rgb(29,111,66)]" aria-hidden />
+        <p className="text-sm text-muted-foreground">{positiveMessage}</p>
+      </div>
     );
-
-  if (isPaymentProviderAction) {
-    return {
-      message:
-        'Connecting your payment provider will unlock customer payments and allow revenue to flow.',
-      action: primaryAction.destination
-        ? { label: 'Connect provider', href: primaryAction.destination }
-        : { label: 'Connect provider', href: '/dashboard/settings/merchant#payment-rails' },
-      tone: 'default',
-    };
   }
 
-  const isFundingAction =
-    primaryAction &&
-    /funding|revenue|invoice|payment link/i.test(
-      primaryAction.action + ' ' + (primaryAction.reason ?? '')
-    );
-
-  if (isFundingAction) {
-    return {
-      message: 'Add a funding source or payment link so customers can begin paying.',
-      action: primaryAction.destination
-        ? { label: 'Add funding', href: primaryAction.destination }
-        : undefined,
-      tone: 'default',
-    };
-  }
-
-  const isObligationAction =
-    primaryAction &&
-    /obligation|allocation|payout/i.test(
-      primaryAction.action + ' ' + (primaryAction.reason ?? '')
-    );
-
-  if (isObligationAction) {
-    return {
-      message:
-        'Review payment obligations to confirm how revenue is distributed before settlement.',
-      action: primaryAction.destination
-        ? { label: 'Review obligations', href: primaryAction.destination }
-        : undefined,
-      tone: 'default',
-    };
-  }
-
-  // No blocking action — payment is on track
-  return {
-    message: 'Payment setup is on track. Revenue can flow once the agreement is fully prepared.',
-    tone: 'positive',
+  // Outcome-first action banner
+  const headlineByPage: Record<'money' | 'people', string> = {
+    money: "Let's enable payments.",
+    people: "Let's finish approvals.",
   };
+
+  return (
+    <div className="rounded-lg border border-[rgba(124,92,255,0.2)] bg-[rgba(124,92,255,0.04)] px-4 py-4 space-y-3">
+      {/* Headline */}
+      <div>
+        <p className="text-sm font-semibold text-foreground">
+          {headlineByPage[page]}
+        </p>
+        <p className="text-sm text-muted-foreground mt-0.5 leading-snug">
+          {rec.explanation}
+        </p>
+      </div>
+
+      {/* What this unlocks */}
+      {rec.consequences.length > 0 ? (
+        <ul className="space-y-1">
+          {rec.consequences.map((c, i) => (
+            <li key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Check className="h-3 w-3 text-[rgb(124,92,255)] shrink-0" aria-hidden />
+              {c}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {/* Footer: time + CTA */}
+      <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+        {rec.estimatedMinutes > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Estimated time: <span className="font-medium text-foreground">{rec.estimatedMinutes} minutes</span>
+          </p>
+        ) : (
+          <span />
+        )}
+        <Button
+          asChild
+          size="sm"
+          className="h-7 px-3 text-xs font-semibold bg-foreground hover:bg-foreground/90 text-background border-0"
+        >
+          <Link href={rec.href}>
+            {rec.label}
+            <ArrowRight className="ml-1 h-3 w-3" />
+          </Link>
+        </Button>
+      </div>
+
+      {/* Why? expandable reasoning */}
+      <ReasoningExpander reasoning={decision.reasoning} />
+    </div>
+  );
 }
 
-function derivePeople(
-  guidance?: OperationalGuidanceBundle | null,
-  kpis?: OperationalKPIs | null
-): Guidance {
-  const participantCount = kpis?.participantCount ?? 0;
-  const approvedCount = kpis?.approvedAgreementCount ?? 0;
-  const pendingCount = participantCount - approvedCount;
-
-  if (participantCount === 0) {
-    return {
-      message:
-        'Add your first team member to begin preparing for payouts. Approvals unlock settlement.',
-      tone: 'default',
-    };
-  }
-
-  if (pendingCount > 0) {
-    const actions = guidance?.actions ?? [];
-    const approvalAction = actions.find((a) =>
-      /approval|invite|send|participant/i.test(a.action + ' ' + (a.reason ?? ''))
-    );
-    return {
-      message:
-        pendingCount === 1
-          ? 'One team member still needs to approve before payouts can be released.'
-          : `${pendingCount} team members still need to approve before payouts can be released.`,
-      action: approvalAction?.destination
-        ? { label: 'Request approvals', href: approvalAction.destination }
-        : undefined,
-      tone: 'default',
-    };
-  }
-
-  return {
-    message: 'All team members have approved. Payouts are unlocked.',
-    tone: 'positive',
-  };
-}
-
-function deriveHistory(): Guidance {
-  return {
-    message:
-      'Nothing needs your attention here. This page records business milestones for this agreement.',
-    tone: 'muted',
-  };
-}
-
-/* ─── Component ─── */
+/* ─── Main component ─── */
 
 /**
  * Per-agreement-page copilot guidance banner.
- * Keeps Provvy present after the dashboard — operators never lose context.
  *
- * Usage:
- *   <ProjectPageCopilot page="money" guidance={guidance} />
- *   <ProjectPageCopilot page="people" guidance={guidance} kpis={kpis} />
- *   <ProjectPageCopilot page="history" />
+ * Powered by the Commercial Decision Engine — every message is deterministic,
+ * outcome-first, and contextual to the current page.
+ *
+ * Shows:
+ *   - What to do (action)
+ *   - Why (reasoning, expandable via "Why?")
+ *   - What it unlocks (consequences, ✓ list)
+ *   - Estimated time + Continue CTA
+ *
+ * History page always shows orientation only — no actions.
  */
 export function ProjectPageCopilot({
   page,
+  projectId,
+  agreementName,
   guidance,
   kpis,
+  workspaceContext,
+  activation,
+  auditEntries,
 }: ProjectPageCopilotProps) {
-  let derived: Guidance;
-
-  if (page === 'money') {
-    derived = deriveMoney(guidance);
-  } else if (page === 'people') {
-    derived = derivePeople(guidance, kpis);
-  } else {
-    derived = deriveHistory();
+  if (page === 'history') {
+    return <HistoryGuidance />;
   }
 
-  return (
-    <ContextualAIGuide
-      message={derived.message}
-      action={derived.action}
-      tone={derived.tone ?? 'default'}
-    />
-  );
+  // When projectId is missing, fall back to legacy simple banner
+  if (!projectId) {
+    return (
+      <div className="flex items-start gap-3 rounded-lg border border-[rgba(124,92,255,0.2)] bg-[rgba(124,92,255,0.04)] px-4 py-3">
+        <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[rgb(124,92,255)]" aria-hidden />
+        <p className="text-sm text-muted-foreground">
+          {page === 'money'
+            ? 'Manage how revenue flows into this agreement and configure your payment provider.'
+            : 'Add team members, configure their earnings, and request approvals before payouts can be released.'}
+        </p>
+      </div>
+    );
+  }
+
+  const decision = analyseWorkspace({
+    projectId,
+    agreementName,
+    kpis: kpis ?? null,
+    releaseConfidence: guidance?.releaseConfidence ?? null,
+    workspaceContext: workspaceContext ?? null,
+    activation: activation ?? null,
+    auditEntries,
+  });
+
+  return <GuidanceBanner decision={decision} page={page} />;
 }

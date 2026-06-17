@@ -119,7 +119,7 @@ function PayoutsHubContent({
 
       <OperationalActivitySection
         title="Settlement activity"
-        emptyMessage="Settlement, funding, and coordination events appear here as obligations progress."
+        emptyMessage="Settlement, payments, and business milestones appear here as obligations progress."
         defaultOpen={false}
       />
     </>

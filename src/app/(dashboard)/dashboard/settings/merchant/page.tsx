@@ -8,11 +8,9 @@ export default async function MerchantSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Collection & settlement infrastructure</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Payments & Settlement</h1>
         <p className="text-muted-foreground">
-          {isPilot
-            ? 'Configure how your pilot workspace collects revenue and coordinates settlement.'
-            : 'Configure how your workspace collects revenue, coordinates payouts, and settles obligations.'}
+          Connect your payment provider and configure how customer payments are collected and settled.
         </p>
       </div>
 

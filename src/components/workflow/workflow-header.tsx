@@ -10,6 +10,7 @@ import {
   deriveWorkflowContext,
   type WorkflowStage,
 } from '@/components/workflow/workflow-context';
+import { analyseWorkspace } from '@/components/workflow/commercial-decision-engine';
 
 /* ─── Progress bar ─── */
 
@@ -112,14 +113,25 @@ export function WorkflowHeader() {
     activation: activation ?? null,
   });
 
+  // Get consequence-first action detail from Decision Engine
+  const decision = analyseWorkspace({
+    projectId,
+    agreementName: summary.name,
+    kpis: kpis ?? null,
+    releaseConfidence: guidance.releaseConfidence ?? null,
+    workspaceContext: workspaceContext ?? null,
+    activation: activation ?? null,
+  });
+
+  const recommended = decision.recommendedAction;
+
   if (ctx.isCompleted) {
-    // Operational — show a minimal success strip
     return (
       <div className="flex items-center gap-3 rounded-xl border border-[rgba(29,111,66,0.2)] bg-[rgba(29,111,66,0.04)] px-5 py-3">
         <Check className="h-4 w-4 text-[rgb(29,111,66)] shrink-0" aria-hidden />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-[rgb(29,111,66)]">
-            Commercial relationship operational
+            {summary.name} is commercially operational
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
             Revenue is flowing and all obligations are confirmed.
@@ -137,50 +149,73 @@ export function WorkflowHeader() {
 
   return (
     <div className="rounded-xl border border-border/60 bg-white/70 px-5 py-4 space-y-3">
-      {/* Stage + progress */}
-      <div className="flex items-center gap-2 flex-wrap">
+      {/* Mission header: "Continue preparing [Agreement]" */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Mission
+          </p>
+          <p className="text-sm font-semibold text-foreground mt-0.5 leading-snug">
+            {decision.conversationalSummary.split('.')[0]}.
+          </p>
+        </div>
         <span
           className={cn(
-            'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+            'shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium mt-0.5',
             stagePillColor[ctx.currentStage] ?? 'bg-border/60 text-muted-foreground'
           )}
         >
           {ctx.stageTitle}
         </span>
-        <div className="flex-1 min-w-[120px]">
-          <WorkflowProgressBar pct={ctx.completionPercentage} />
-        </div>
       </div>
 
-      {/* Next action + CTA */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground leading-snug">
-            {ctx.nextAction}
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-            {ctx.nextActionHint}
-          </p>
-        </div>
+      {/* Progress bar */}
+      <WorkflowProgressBar pct={ctx.completionPercentage} />
 
-        <div className="flex items-center gap-3 shrink-0">
-          {ctx.nextActionMinutes > 0 ? (
-            <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:block">
-              {ctx.nextActionMinutes} min
-            </span>
-          ) : null}
+      {/* Consequence-first action + CTA */}
+      {recommended ? (
+        <div className="flex items-start justify-between gap-4 flex-wrap pt-0.5">
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-medium text-foreground leading-snug">{recommended.title}</p>
+            {recommended.consequences.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Unlocks: {recommended.consequences.slice(0, 2).join(' · ')}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            {ctx.nextActionMinutes > 0 ? (
+              <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:block">
+                {ctx.nextActionMinutes} min
+              </span>
+            ) : null}
+            <Button
+              asChild
+              size="sm"
+              className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0"
+            >
+              <Link href={ctx.continueHref}>
+                Continue
+                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-4 flex-wrap pt-0.5">
+          <p className="text-sm text-muted-foreground leading-snug">{ctx.nextActionHint}</p>
           <Button
             asChild
             size="sm"
-            className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0"
+            className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0 shrink-0"
           >
             <Link href={ctx.continueHref}>
-              {ctx.continueLabel}
+              Continue
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>
           </Button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

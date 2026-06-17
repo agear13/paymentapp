@@ -504,14 +504,14 @@ export function BriefingActivitySection({
   return (
     <BriefingSectionShell
       id="briefing-activity"
-      title="Activity Timeline"
-      description="Coordination events as this agreement progresses — approvals, funding, obligations, and settlement."
+      title="Business Story"
+      description="Business milestones as this agreement progresses — approvals, payments, obligations, and settlement."
       variant="activity"
     >
       <OperationalAuditTimeline
         entries={activityEntries}
         maxItems={16}
-        emptyMessage="Coordination activity will appear here as this agreement progresses."
+        emptyMessage="Business activity will appear here as this agreement progresses."
       />
     </BriefingSectionShell>
   );
@@ -528,7 +528,7 @@ export function BriefingAuditSection({ auditEntries }: Pick<BriefingSectionsProp
       <OperationalAuditTimeline
         entries={auditEntries}
         maxItems={20}
-        emptyMessage="Audit history will populate as coordination events are recorded."
+        emptyMessage="Business history will populate as activity is recorded for this agreement."
       />
     </BriefingSectionShell>
   );

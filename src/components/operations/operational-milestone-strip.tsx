@@ -28,8 +28,8 @@ export function OperationalMilestoneStrip({
         <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-2">
           <p className="text-xs font-medium text-foreground">{confidence.explainability.headline}</p>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            {confidence.coveragePercent}% critical coordination events observed
-            {confidence.level !== 'BLOCKED' ? ` · ${confidence.level} confidence` : ''}
+            {confidence.coveragePercent}% business milestones verified
+            {confidence.level !== 'BLOCKED' ? ` · ${confidence.level} business readiness` : ''}
           </p>
         </div>
       ) : null}

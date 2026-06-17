@@ -10,6 +10,9 @@ import type { OperationalKPIs } from '@/lib/operations/reducer/types';
 import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/types';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
 import type { QueueTask } from '@/components/operations/operational-queue';
+import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
+import { analyseWorkspace } from '@/components/workflow/commercial-decision-engine';
+import type { FocusItem, WorkspaceMode } from '@/components/workflow/operations-manager';
 
 type ProvvyCopilotProps = {
   operatorName?: string;
@@ -18,6 +21,15 @@ type ProvvyCopilotProps = {
   releaseConfidence: ReleaseConfidenceSnapshot | null;
   snapshots: AgreementHealthSnapshot[];
   queueTasks: QueueTask[];
+  auditEntries?: OperationalAuditEntry[];
+  /** From Operations Manager — overrides internally-derived headline */
+  openingSummary?: string;
+  /** From Operations Manager — "Good afternoon, Alisha." */
+  greeting?: string;
+  /** From Operations Manager — numbered focus items */
+  todaysFocus?: FocusItem[];
+  /** Workspace maturity mode */
+  workspaceMode?: WorkspaceMode;
   loading?: boolean;
 };
 
@@ -252,6 +264,11 @@ export function ProvvyCopilot({
   releaseConfidence,
   snapshots,
   queueTasks,
+  auditEntries,
+  openingSummary,
+  greeting,
+  todaysFocus,
+  workspaceMode,
   loading,
 }: ProvvyCopilotProps) {
   if (loading) {
@@ -267,6 +284,7 @@ export function ProvvyCopilot({
     );
   }
 
+  // Derive narrative from legacy buildNarrative (workspace-level, multi-agreement)
   const narrative = buildNarrative(
     operatorName,
     attentionItems,
@@ -275,6 +293,29 @@ export function ProvvyCopilot({
     snapshots,
     queueTasks
   );
+
+  // Augment with Decision Engine memory when a primary agreement exists
+  const primaryAgreement = [...snapshots].sort((a, b) => a.score - b.score)[0];
+  const engineDecision =
+    primaryAgreement && auditEntries
+      ? analyseWorkspace({
+          projectId: primaryAgreement.projectId,
+          agreementName: primaryAgreement.agreementName,
+          kpis: kpis ?? null,
+          releaseConfidence: releaseConfidence ?? null,
+          workspaceContext: null,
+          activation: null,
+          attentionItems,
+          auditEntries,
+        })
+      : null;
+
+  // Override headline with conversational summary when memory is available
+  const memoryLine =
+    engineDecision?.memory?.lastActionSentence &&
+    engineDecision.memory.todayIntentSentence
+      ? `${engineDecision.memory.lastActionSentence} ${engineDecision.memory.todayIntentSentence}`
+      : null;
 
   const borderClass = {
     action: 'border-border/70',
@@ -298,79 +339,113 @@ export function ProvvyCopilot({
         bgClass
       )}
     >
-      {/* Eyebrow greeting */}
-      {narrative.eyebrow ? (
-        <p className="text-sm text-muted-foreground">{narrative.eyebrow}</p>
+      {/* Greeting — from Operations Manager or time-based fallback */}
+      {(greeting ?? narrative.eyebrow ?? memoryLine) ? (
+        <p className={cn(
+          'text-sm text-muted-foreground',
+          memoryLine && !greeting ? 'italic' : ''
+        )}>
+          {greeting ?? (memoryLine || narrative.eyebrow)}
+        </p>
       ) : null}
 
-      {/* Headline */}
+      {/* Opening summary — from Operations Manager, or internally-derived headline */}
       <p className="text-base font-semibold text-foreground leading-snug">
-        {narrative.headline}
+        {openingSummary ?? narrative.headline}
       </p>
 
-      {/* Body copy */}
-      {narrative.body ? (
-        <p className="text-sm text-muted-foreground leading-snug">{narrative.body}</p>
-      ) : null}
-
-      {/* Ordered checklist */}
-      {narrative.steps && narrative.steps.length > 0 ? (
-        <ul className="space-y-1.5">
-          {narrative.steps.map((step, i) => (
-            <li key={i} className="flex items-center gap-2.5 text-sm">
-              <Circle className="h-3.5 w-3.5 text-border shrink-0" aria-hidden />
-              <span className="text-foreground/85">{step}</span>
+      {/* Today's Focus — numbered list from Operations Manager */}
+      {todaysFocus && todaysFocus.length > 0 ? (
+        <ol className="space-y-3 pt-1">
+          {todaysFocus.map((item, i) => (
+            <li key={i} className="flex items-start gap-3">
+              <span className="shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-muted/60 text-[10px] font-semibold text-muted-foreground mt-0.5">
+                {i + 1}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground leading-snug">{item.headline}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{item.context}</p>
+                {item.estimatedMinutes > 0 ? (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Estimated work: <span className="font-medium text-foreground">{item.estimatedMinutes} minutes</span>
+                  </p>
+                ) : null}
+              </div>
+              <Link
+                href={item.href}
+                className="shrink-0 flex items-center gap-1 text-xs font-semibold text-[rgb(124,92,255)] hover:text-[rgb(108,78,235)] transition-colors mt-0.5"
+              >
+                {item.label}
+                <ArrowRight className="h-3 w-3" />
+              </Link>
             </li>
           ))}
-        </ul>
-      ) : null}
-
-      {/* Footer: outcome + time + CTA */}
-      <div
-        className={cn(
-          'flex items-end justify-between gap-4 flex-wrap',
-          (narrative.outcome || narrative.estimatedMinutes) && 'pt-3 border-t border-border/30'
-        )}
-      >
-        <div className="space-y-0.5">
-          {narrative.estimatedMinutes ? (
-            <p className="text-xs text-muted-foreground">
-              Estimated time —{' '}
-              <span className="font-medium text-foreground">
-                {narrative.estimatedMinutes} minute{narrative.estimatedMinutes === 1 ? '' : 's'}
-              </span>
-            </p>
+        </ol>
+      ) : (
+        <>
+          {/* Fallback: body copy */}
+          {narrative.body ? (
+            <p className="text-sm text-muted-foreground leading-snug">{narrative.body}</p>
           ) : null}
-          {narrative.outcome ? (
-            <p className="text-xs text-muted-foreground">
-              Expected outcome —{' '}
-              <span className="font-medium text-foreground">{narrative.outcome}</span>
-            </p>
-          ) : null}
-        </div>
 
-        {narrative.ctaHref ? (
-          <Button
-            asChild
-            size="sm"
+          {/* Fallback: ordered checklist */}
+          {narrative.steps && narrative.steps.length > 0 ? (
+            <ul className="space-y-1.5">
+              {narrative.steps.map((step, i) => (
+                <li key={i} className="flex items-center gap-2.5 text-sm">
+                  <Circle className="h-3.5 w-3.5 text-border shrink-0" aria-hidden />
+                  <span className="text-foreground/85">{step}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {/* Fallback: footer CTA */}
+          <div
             className={cn(
-              'shrink-0 h-8 text-sm font-semibold',
-              narrative.tone === 'positive'
-                ? 'bg-[rgb(29,111,66)] hover:bg-[rgb(22,95,55)] text-white border-0'
-                : narrative.tone === 'empty'
-                  ? 'bg-foreground hover:bg-foreground/90 text-background border-0'
-                  : 'bg-foreground hover:bg-foreground/90 text-background border-0'
+              'flex items-end justify-between gap-4 flex-wrap',
+              (narrative.outcome || narrative.estimatedMinutes) && 'pt-3 border-t border-border/30'
             )}
           >
-            <Link href={narrative.ctaHref}>
-              {narrative.ctaLabel}
-              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        ) : (
-          <p className="text-sm font-medium text-muted-foreground">{narrative.ctaLabel}</p>
-        )}
-      </div>
+            <div className="space-y-0.5">
+              {narrative.estimatedMinutes ? (
+                <p className="text-xs text-muted-foreground">
+                  Estimated time —{' '}
+                  <span className="font-medium text-foreground">
+                    {narrative.estimatedMinutes} minute{narrative.estimatedMinutes === 1 ? '' : 's'}
+                  </span>
+                </p>
+              ) : null}
+              {narrative.outcome ? (
+                <p className="text-xs text-muted-foreground">
+                  Expected outcome —{' '}
+                  <span className="font-medium text-foreground">{narrative.outcome}</span>
+                </p>
+              ) : null}
+            </div>
+
+            {narrative.ctaHref ? (
+              <Button
+                asChild
+                size="sm"
+                className={cn(
+                  'shrink-0 h-8 text-sm font-semibold',
+                  narrative.tone === 'positive'
+                    ? 'bg-[rgb(29,111,66)] hover:bg-[rgb(22,95,55)] text-white border-0'
+                    : 'bg-foreground hover:bg-foreground/90 text-background border-0'
+                )}
+              >
+                <Link href={narrative.ctaHref}>
+                  {narrative.ctaLabel}
+                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            ) : (
+              <p className="text-sm font-medium text-muted-foreground">{narrative.ctaLabel}</p>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
