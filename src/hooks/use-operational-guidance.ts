@@ -24,12 +24,12 @@ import {
 import {
   buildPersistedCoordinationSnapshot,
   hasPersistedOperationalEntities,
+  type CommercialTreasuryData,
 } from '@/lib/operations/selectors/build-persisted-coordination-snapshot';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 import { createFallbackActivation } from '@/lib/onboarding/workspace-activation-fallback';
 import { defaultWorkspaceContext } from '@/lib/operations/types/operational-context';
 import type { OperationalOnboardingState } from '@/lib/operations/onboarding/operational-onboarding-phases';
-import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 import { deriveOperationalReleaseBlockers } from '@/lib/operations/explainability/derive-operational-release-blockers';
 import { deriveOperationalNextActions } from '@/lib/operations/explainability/derive-operational-next-actions';
 import { assertOperationalProjectionInvariants } from '@/lib/operations/dev/operational-invariants';
@@ -52,7 +52,7 @@ export type OperationalGuidanceOptions = {
   scopeTitle?: string;
   project?: RecentDeal | null;
   participants?: DemoParticipant[];
-  treasury?: ProjectTreasurySummary | null;
+  treasury?: CommercialTreasuryData | null;
   previousProjectState?: string | null;
 };
 

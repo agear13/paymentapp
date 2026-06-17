@@ -20,8 +20,8 @@ import { mergeAuditTimeline } from '@/lib/operations/audit/operational-audit';
 import {
   fundingInputFromTreasury,
   hasPersistedOperationalEntities,
+  type CommercialTreasuryData,
 } from '@/lib/operations/selectors/build-persisted-coordination-snapshot';
-import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
 export type BuildCanonicalStateInput = ReduceOperationalStateInput & {
   auditTimeline?: OperationalAuditEntry[];
@@ -33,7 +33,7 @@ function seedFromSnapshot(
   options?: {
     graphReady?: boolean;
     graphSnapshotConverged?: boolean;
-    treasury?: ProjectTreasurySummary | null;
+    treasury?: CommercialTreasuryData | null;
   }
 ): ReduceOperationalStateInput['seed'] {
   const participants = snapshot.participants.map((row) => row.participant);
@@ -80,7 +80,7 @@ export function buildCanonicalStateFromSnapshot(
     auditTimeline?: OperationalAuditEntry[];
     graphReady?: boolean;
     graphSnapshotConverged?: boolean;
-    treasury?: ProjectTreasurySummary | null;
+    treasury?: CommercialTreasuryData | null;
   }
 ): CanonicalOperationalState {
   const seed = seedFromSnapshot(snapshot, input.activation, input);

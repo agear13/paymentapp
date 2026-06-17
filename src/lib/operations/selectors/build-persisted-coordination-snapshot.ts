@@ -7,23 +7,44 @@ import {
 import type { FundingCoordinationInput } from '@/lib/operations/truth/funding-coordination-semantics';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 
+/**
+ * The fields the Commercial Brain and its downstream hooks actually consume from treasury.
+ *
+ * `ProjectWorkspaceSummary.treasury` is a Pick that covers the four required fields.
+ * `obligationsTotal` and `currency` are genuinely absent from workspace summaries — both
+ * have safe fallbacks (0 and undefined respectively) when not provided.
+ * Full `ProjectTreasurySummary` objects are also assignable to this type via structural typing.
+ */
+export type CommercialTreasuryData = Pick<
+  ProjectTreasurySummary,
+  | 'hasFundingSources'
+  | 'confirmedFunding'
+  | 'obligationsReady'
+  | 'pendingFunding'
+> & {
+  /** Absent from workspace summaries — falls back to 0 in funding derivation. */
+  obligationsTotal?: number;
+  /** Absent from workspace summaries — omitted from snapshot currency when not provided. */
+  currency?: string;
+};
+
 export type PersistedCoordinationSnapshotInput = {
   participants: DemoParticipant[];
   projectId?: string | null;
-  treasury?: ProjectTreasurySummary | null;
+  treasury?: CommercialTreasuryData | null;
   obligations?: RawObligationInput[];
   fundingAllocated?: boolean;
 };
 
-/** Map treasury summary to funding coordination input — persisted reconciliation is authoritative. */
+/** Map treasury data to funding coordination input — persisted reconciliation is authoritative. */
 export function fundingInputFromTreasury(
-  treasury: ProjectTreasurySummary | null | undefined
+  treasury: CommercialTreasuryData | null | undefined
 ): FundingCoordinationInput | undefined {
   if (!treasury) return undefined;
   return {
     fundingSourceConnected: treasury.hasFundingSources || treasury.confirmedFunding > 0,
     confirmedFunding: treasury.confirmedFunding,
-    obligationsTotal: treasury.obligationsTotal,
+    obligationsTotal: treasury.obligationsTotal ?? 0,
     obligationsFunded: treasury.obligationsReady,
     pendingFunding: treasury.pendingFunding,
   };
