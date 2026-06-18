@@ -1,5 +1,7 @@
 import type { ExtractionField } from './extraction-types';
-import { isSupportedCurrency } from './review-form-types';
+// Import from the currency domain leaf, not from review-form-types, to break
+// the extraction-currency ↔ review-form-types circular dependency.
+import { isSupportedCurrency } from './currency/supported-currencies';
 
 /** True when extraction explicitly named a non-AUD/USD ISO currency (not absent/unknown). */
 export function isExtractedCurrencyExplicitlyUnsupported(

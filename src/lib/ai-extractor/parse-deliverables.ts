@@ -121,14 +121,10 @@ export function parseDeliverablesNonBlocking(raw: unknown): {
   return { items: [], droppedCount: 1 };
 }
 
-export function deliverableDescriptions(party: ExtractedParty): string[] {
-  if ((party.deliverables ?? []).length > 0) {
-    return party.deliverables
-      .map((d) => d.description.value?.trim())
-      .filter((d): d is string => Boolean(d));
-  }
-  return party.deliverablesLegacy?.value ?? [];
-}
+// Canonical definition lives in the deliverable domain leaf to avoid the
+// parse-deliverables ↔ service-category-detection circular dependency.
+// Re-exported here so existing callers don't need to update their imports.
+export { deliverableDescriptions } from './deliverable/deliverable-descriptions';
 
 export function normalizePartyDeliverables(party: ExtractedParty): ExtractedParty {
   if (party.deliverables.length > 0) {

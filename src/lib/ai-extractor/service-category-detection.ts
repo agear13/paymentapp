@@ -3,7 +3,9 @@ import {
   normalizeServiceCategories,
   type ServiceCategory,
 } from './service-category';
-import { deliverableDescriptions } from './parse-deliverables';
+// Import from the domain leaf, not from parse-deliverables, to break the
+// parse-deliverables ↔ service-category-detection circular dependency.
+import { deliverableDescriptions } from './deliverable/deliverable-descriptions';
 
 export const GENERIC_ROLE_LABELS = new Set([
   'contractor',

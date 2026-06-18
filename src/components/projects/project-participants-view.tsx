@@ -87,7 +87,17 @@ import { opSurface } from '@/lib/design/operational-surfaces';
 import { OperatorEmptyState } from '@/components/operations/operator-empty-state';
 import { cn } from '@/lib/utils';
 import { OperationalDiagnosticsPanel } from '@/components/operations/operational-diagnostics-panel';
-import { CreateFromConversationButton } from '@/components/ai-extractor/create-from-conversation-button';
+// Lazy-loaded to prevent the entire AI extraction engine from being bundled
+// into the participants / Approval Centre route chunk. The extraction engine
+// contains internal circular dependencies that cause TDZ errors on first
+// navigation if the bundle is evaluated eagerly. Loading it only when the
+// operator explicitly clicks "Add from conversation" eliminates this.
+const CreateFromConversationButton = React.lazy(
+  () =>
+    import('@/components/ai-extractor/create-from-conversation-button').then((m) => ({
+      default: m.CreateFromConversationButton,
+    }))
+);
 import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
 import { ProjectPageCopilot } from '@/components/operations/project-page-copilot';
 
@@ -782,12 +792,14 @@ export function ProjectParticipantsView() {
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
             {deal && (
-              <CreateFromConversationButton
-                entryPoint="participant_add"
-                existingDeal={deal}
-                existingParticipants={projectParticipants}
-                onComplete={() => void refresh({ scope: 'all', silent: false, force: true })}
-              />
+              <React.Suspense fallback={null}>
+                <CreateFromConversationButton
+                  entryPoint="participant_add"
+                  existingDeal={deal}
+                  existingParticipants={projectParticipants}
+                  onComplete={() => void refresh({ scope: 'all', silent: false, force: true })}
+                />
+              </React.Suspense>
             )}
             {!showApprovalCentre ? (
               /* Standard add buttons when not in Approval Centre mode */
@@ -909,13 +921,15 @@ export function ProjectParticipantsView() {
             />
             <div className="flex flex-wrap justify-center gap-2 -mt-2">
               {deal && (
-                <CreateFromConversationButton
-                  entryPoint="participant_add"
-                  existingDeal={deal}
-                  existingParticipants={projectParticipants}
-                  onComplete={() => void refresh({ scope: 'all', silent: false, force: true })}
-                  size="lg"
-                />
+                <React.Suspense fallback={null}>
+                  <CreateFromConversationButton
+                    entryPoint="participant_add"
+                    existingDeal={deal}
+                    existingParticipants={projectParticipants}
+                    onComplete={() => void refresh({ scope: 'all', silent: false, force: true })}
+                    size="lg"
+                  />
+                </React.Suspense>
               )}
               <Button size="lg" asChild>
                 <Link href={projectCommercialRolesPath(projectId)}>

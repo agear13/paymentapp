@@ -13,6 +13,18 @@ import {
   extractedCurrencyDisplayCode,
   isExtractedCurrencyExplicitlyUnsupported,
 } from '@/lib/ai-extractor/extraction-currency';
+// Import from the currency domain leaf to break the extraction-currency ↔
+// review-form-types circular dependency. Re-exported so existing callers don't
+// need to update their import paths.
+import {
+  SUPPORTED_PROJECT_CURRENCIES,
+  isSupportedCurrency,
+} from '@/lib/ai-extractor/currency/supported-currencies';
+export {
+  SUPPORTED_PROJECT_CURRENCIES,
+  type SupportedProjectCurrency,
+  isSupportedCurrency,
+} from '@/lib/ai-extractor/currency/supported-currencies';
 import { deliverableDescriptions } from '@/lib/ai-extractor/parse-deliverables';
 
 export interface ReviewedMilestone {
@@ -54,14 +66,6 @@ export interface ReviewFormState {
   extractedCurrencyUnsupported: boolean;
   /** Extraction confidence for project currency — used for confirmed/assumed UI. */
   currencyConfidence: ExtractionConfidence;
-}
-
-/** AUD and USD are the only currencies the system can store and calculate with correctly. */
-export const SUPPORTED_PROJECT_CURRENCIES = ['AUD', 'USD'] as const;
-export type SupportedProjectCurrency = (typeof SUPPORTED_PROJECT_CURRENCIES)[number];
-
-export function isSupportedCurrency(code: string | null | undefined): code is SupportedProjectCurrency {
-  return SUPPORTED_PROJECT_CURRENCIES.includes(code as SupportedProjectCurrency);
 }
 
 export function reviewFormFromExtraction(
