@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ClipboardList, RefreshCw, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
+import { ApprovalCentreHeader } from '@/components/projects/approval-centre-header';
+import { ApprovalCentreParticipantCard } from '@/components/projects/approval-centre-participant-card';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -190,6 +192,8 @@ export function ProjectParticipantsView() {
   const [approvalUpgradeOpen, setApprovalUpgradeOpen] = React.useState(false);
   const searchParams = useSearchParams();
   const focusParticipantId = searchParams.get('participant');
+  /** When true, auto-scroll to the first participant needing action. Set via ?focus=approvals. */
+  const focusApprovals = searchParams.get('focus') === 'approvals';
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [editParticipant, setEditParticipant] = React.useState<DemoParticipant | null>(null);
   const [compensationParticipant, setCompensationParticipant] =
@@ -614,6 +618,31 @@ export function ProjectParticipantsView() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [focusParticipantId, displayParticipants.length]);
 
+  // When arriving from Dashboard → "Open Approval Centre" (?focus=approvals),
+  // scroll to the first participant that still requires action and highlight it.
+  const [highlightedApprovalId, setHighlightedApprovalId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!focusApprovals || !showApprovalCentre) return;
+    const firstPending = displayParticipants.find(
+      (p) => p.approvalStatus !== 'Approved' && (p.approvalStatus as string) !== 'Declined'
+    );
+    const targetId = firstPending?.id ?? displayParticipants[0]?.id ?? null;
+    if (!targetId) return;
+    setHighlightedApprovalId(targetId);
+    // Brief delay to allow cards to mount before scrolling
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`approval-card-${targetId}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    // Clear highlight after 2.5 s
+    const clear = window.setTimeout(() => setHighlightedApprovalId(null), 2500);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(clear);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusApprovals, showApprovalCentre]);
+
   const participantEntities = React.useMemo(
     () => hydratedParticipants.map(participantEntity),
     [hydratedParticipants]
@@ -626,20 +655,30 @@ export function ProjectParticipantsView() {
   const needsEarningsConfiguration =
     (commercialCapabilities?.participantsInvited ?? false) &&
     !(commercialCapabilities?.earningsConfigured ?? false);
+
+  // Show Approval Centre layout when collecting approvals OR when approvals are
+  // complete but the operator may still want to view the approval record.
   const isCollectingApprovals = workflowCtx?.currentStage === 'collecting-approvals';
+  const approvalsComplete = commercialCapabilities?.approvalsComplete ?? false;
+  const showApprovalCentre = isCollectingApprovals || approvalsComplete;
 
-  // Participants who still need their approval link shared — only relevant during
-  // the collecting-approvals stage so operators can action directly from this page.
+  // All participants not yet approved — drives the Approval Centre card list ordering.
   const pendingApprovalParticipants = React.useMemo(() => {
-    if (!isCollectingApprovals) return [];
+    if (!showApprovalCentre) return [];
     return displayParticipants.filter(
-      (p) => p.approvalStatus !== 'Approved' && p.approvalStatus !== 'Declined'
+      (p) => p.approvalStatus !== 'Approved' && (p.approvalStatus as string) !== 'Declined'
     );
-  }, [isCollectingApprovals, displayParticipants]);
+  }, [showApprovalCentre, displayParticipants]);
 
-  const requestApprovalsDestination = React.useMemo(
-    () => resolveAgreementDestination('request-approvals', projectId),
-    [projectId]
+  const approvedParticipants = React.useMemo(
+    () => displayParticipants.filter((p) => p.approvalStatus === 'Approved'),
+    [displayParticipants]
+  );
+
+  // Ordered approval list: pending first (requires action), then approved
+  const approvalCentreParticipants = React.useMemo(
+    () => [...pendingApprovalParticipants, ...approvedParticipants],
+    [pendingApprovalParticipants, approvedParticipants]
   );
 
   if (loading && !deal) {
@@ -718,10 +757,12 @@ export function ProjectParticipantsView() {
           </ProgressiveOperationalPanel>
         ) : null}
 
+        {/* ── Page header row ── */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
+            {/* When in approval centre mode the header is the ApprovalCentreHeader below — keep page title compact */}
             <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
-            {hasParticipants ? (
+            {hasParticipants && !showApprovalCentre ? (
               <ProjectReadinessBreakdown
                 participants={participantEntities}
                 projectId={projectId}
@@ -729,12 +770,12 @@ export function ProjectParticipantsView() {
                 graphParticipants={graph.participants}
                 graphSummary={graph.summary}
               />
-            ) : (
+            ) : !hasParticipants ? (
               <p className="text-muted-foreground mt-1 text-sm">
                 Add team members, configure their earnings, and request approvals before payouts can
                 be released.
               </p>
-            )}
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefreshing}>
@@ -748,16 +789,37 @@ export function ProjectParticipantsView() {
                 onComplete={() => void refresh({ scope: 'all', silent: false, force: true })}
               />
             )}
-            <Button asChild>
-              <Link href={projectCommercialRolesPath(projectId)}>
-                <ClipboardList className="mr-2 h-4 w-4" />
-                Add commercial role
-              </Link>
-            </Button>
-            <Button variant="outline" onClick={() => setInviteOpen(true)}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add team member
-            </Button>
+            {!showApprovalCentre ? (
+              /* Standard add buttons when not in Approval Centre mode */
+              <>
+                <Button asChild>
+                  <Link href={projectCommercialRolesPath(projectId)}>
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                    Add commercial role
+                  </Link>
+                </Button>
+                <Button variant="outline" onClick={() => setInviteOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Add team member
+                </Button>
+              </>
+            ) : (
+              /* During Approval Centre mode: roster management stays accessible but
+                 de-emphasised — operators sometimes realise they forgot someone after
+                 beginning approvals. Outline buttons keep them reachable, not primary. */
+              <>
+                <Button variant="outline" size="sm" className="h-8 text-xs text-muted-foreground" asChild>
+                  <Link href={projectCommercialRolesPath(projectId)}>
+                    <ClipboardList className="mr-1.5 h-3.5 w-3.5" />
+                    Add role
+                  </Link>
+                </Button>
+                <Button variant="outline" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setInviteOpen(true)}>
+                  <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                  Add member
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -769,43 +831,48 @@ export function ProjectParticipantsView() {
           </Card>
         ) : null}
 
-        {/* Request approvals action panel — shown only when workflow stage requires it */}
-        {isCollectingApprovals && pendingApprovalParticipants.length > 0 ? (
-          <Card className="border-blue-200/60 bg-blue-50/40">
-            <CardContent className="py-4 space-y-3">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">
-                    {requestApprovalsDestination.label}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {pendingApprovalParticipants.length === 1
-                      ? '1 team member is waiting for their approval link.'
-                      : `${pendingApprovalParticipants.length} team members are waiting for their approval links.`}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {requestApprovalsDestination.reason}
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {pendingApprovalParticipants.map((p) => (
-                  <Button
-                    key={p.id}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void openAgreementShare(p)}
-                    className="h-7 text-xs"
-                  >
-                    Share with {p.name}
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        {/* ═══════════════════════════════════════════════════════════════
+            APPROVAL CENTRE — shown when collecting-approvals stage or after
+            all approvals are complete (so operator can review the record).
+            Replaces the stats grid and table with action-driven cards.
+            ═══════════════════════════════════════════════════════════════ */}
+        {showApprovalCentre && hasParticipants ? (
+          <div className="space-y-4">
+            {/* Progress header */}
+            <ApprovalCentreHeader
+              participants={displayParticipants}
+              agreementName={summary.name}
+              commercialCapabilities={commercialCapabilities}
+              projectId={projectId}
+            />
+
+            {/* Action cards — pending first, approved last */}
+            <div
+              id="approval-centre-cards"
+              className="space-y-2.5"
+              aria-label="Approval queue"
+            >
+              {approvalCentreParticipants.map((p) => (
+                <ApprovalCentreParticipantCard
+                  key={p.id}
+                  id={`approval-card-${p.id}`}
+                  participant={p}
+                  isHighlighted={highlightedApprovalId === p.id}
+                  data-approval-card
+                  data-pending={p.approvalStatus !== 'Approved' ? 'true' : 'false'}
+                  onShareAgreement={(part) => void openAgreementShare(part)}
+                  onConfigureEarnings={openCompensationConfig}
+                />
+              ))}
+            </div>
+          </div>
         ) : null}
 
-        {hasParticipants ? (
+        {/* ═══════════════════════════════════════════════════════════
+            STATS GRID — shown only when NOT in Approval Centre mode.
+            These CRUD-style counts are not relevant during the approval phase.
+            ═══════════════════════════════════════════════════════════ */}
+        {hasParticipants && !showApprovalCentre ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
@@ -880,6 +947,12 @@ export function ProjectParticipantsView() {
               organizationId={organizationId}
               attributionEnabled={attributionEnabled}
             />
+          {/*
+           * PARTICIPANT TABLE — shown only when NOT in Approval Centre mode.
+           * During collecting-approvals stage, the Approval Centre cards above
+           * replace this table. The table remains for earnings-configuration stages.
+           */}
+          {!showApprovalCentre ? (
           <Card className="border-border/80 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle>People</CardTitle>
@@ -963,6 +1036,7 @@ export function ProjectParticipantsView() {
               </div>
             </CardContent>
           </Card>
+          ) : null}
           </>
         )}
       </div>

@@ -194,11 +194,11 @@ function deriveNextAction(
     case 'collecting-approvals':
       return {
         action: pendingApprovals === 1
-          ? 'Request approval from 1 team member'
-          : `Request approvals from ${pendingApprovals} team members`,
+          ? 'Share the agreement with 1 team member'
+          : `Share agreements with ${pendingApprovals} team members`,
         hint: 'All approvals must be collected before payouts can be released.',
         minutes: 3,
-        label: 'Request approvals',
+        label: 'Open Approval Centre',
       };
     case 'preparing-payments':
       return {
@@ -246,8 +246,9 @@ function deriveContinueHref(stage: WorkflowStage, projectId: string): string {
   switch (stage) {
     case 'setup':
     case 'configuring':
-    case 'collecting-approvals':
       return `${base}/participants`;
+    case 'collecting-approvals':
+      return `${base}/participants?focus=approvals`;
     case 'preparing-payments':
       return `${base}/funding`;
     case 'ready-to-collect':

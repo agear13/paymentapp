@@ -77,10 +77,10 @@ export function resolveWorkflowDestination(
       };
     case 'collecting-approvals':
       return {
-        href: `${base}/participants`,
-        label: 'Request approvals',
+        href: `${base}/participants?focus=approvals`,
+        label: 'Open Approval Centre',
         estimatedMinutes: 3,
-        reason: 'All approvals are required before payouts can be released.',
+        reason: 'Share agreements with team members so they can approve before payouts are released.',
       };
     case 'preparing-payments':
       return {
@@ -222,14 +222,18 @@ export function resolveAgreementDestination(
 
   switch (intent) {
     case 'configure-earnings':
-    case 'request-approvals':
       return {
         href: `${base}/participants`,
-        label: intent === 'configure-earnings' ? 'Configure earnings' : 'Request approvals',
-        estimatedMinutes: intent === 'configure-earnings' ? 5 : 3,
-        reason: intent === 'configure-earnings'
-          ? 'Configure how each team member earns from this agreement.'
-          : 'Collect approvals before payouts can be released.',
+        label: 'Configure earnings',
+        estimatedMinutes: 5,
+        reason: 'Configure how each team member earns from this agreement.',
+      };
+    case 'request-approvals':
+      return {
+        href: `${base}/participants?focus=approvals`,
+        label: 'Open Approval Centre',
+        estimatedMinutes: 3,
+        reason: 'Share agreements with team members so they can approve before payouts are released.',
       };
     case 'connect-provider':
       return {

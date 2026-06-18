@@ -123,13 +123,15 @@ describe('OnboardingCompletionScreen capabilities derive from real state', () =>
 
 /* ─── 3 & 4. Workflow navigation resolves through the Navigation Engine ─── */
 
-describe('Workflow Navigation Engine — Continue and Request approvals', () => {
+describe('Workflow Navigation Engine — Continue and Approval Centre', () => {
   const PROJECT_ID = 'proj-abc-123';
 
   it('resolveWorkflowDestination returns a participants href for collecting-approvals', () => {
     const dest = resolveWorkflowDestination('collecting-approvals', PROJECT_ID);
     expect(dest.href).toContain('/participants');
-    expect(dest.label).toBe('Request approvals');
+    // V5: label changed from "Request approvals" to "Open Approval Centre" to prevent
+    // the navigation loop where operators were directed back to the page they were already on.
+    expect(dest.label).toBe('Open Approval Centre');
   });
 
   it('resolveContinueWorkflowHref delegates to resolveWorkflowDestination', () => {
@@ -141,7 +143,8 @@ describe('Workflow Navigation Engine — Continue and Request approvals', () => 
   it('resolveAgreementDestination for request-approvals returns participants href', () => {
     const dest = resolveAgreementDestination('request-approvals', PROJECT_ID);
     expect(dest.href).toContain('/participants');
-    expect(dest.label).toBe('Request approvals');
+    // V5: label changed from "Request approvals" to "Open Approval Centre" (see above).
+    expect(dest.label).toBe('Open Approval Centre');
     expect(dest.reason.length).toBeGreaterThan(10);
   });
 

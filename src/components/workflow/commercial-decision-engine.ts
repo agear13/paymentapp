@@ -319,8 +319,8 @@ function buildPriorityQueue(
       explanation: 'All earnings are configured. Approvals must be collected before payouts can be released.',
       consequences: ['Participant payouts become available', 'Settlement releases unlock', 'Agreement advances to payment-ready'],
       estimatedMinutes: 3,
-      href: `${base_}/participants`,
-      label: 'Request approvals',
+      href: `${base_}/participants?focus=approvals`,
+      label: 'Open Approval Centre',
     });
   }
 

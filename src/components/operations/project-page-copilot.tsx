@@ -17,7 +17,7 @@
  */
 
 import Link from 'next/link';
-import { ArrowRight, Check, Lightbulb } from 'lucide-react';
+import { ArrowDown, ArrowRight, Check, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useCommercialBrain } from '@/components/workflow/commercial-brain-context';
@@ -119,16 +119,41 @@ function GuidanceBanner({ decision, page }: GuidanceBannerProps) {
         ) : (
           <span />
         )}
-        <Button
-          asChild
-          size="sm"
-          className="h-7 px-3 text-xs font-semibold bg-foreground hover:bg-foreground/90 text-background border-0"
-        >
-          <Link href={rec.href}>
-            {rec.label}
-            <ArrowRight className="ml-1 h-3 w-3" />
-          </Link>
-        </Button>
+        {/*
+         * When on the people page with approvals_pending tier, the recommended
+         * action href points to this very page (/participants). Navigating to it
+         * creates a dead loop. Instead, scroll the operator down to the first
+         * card that requires action — the Approval Centre cards are below this banner.
+         */}
+        {page === 'people' && rec.tier === 'approvals_pending' ? (
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 px-3 text-xs font-semibold bg-foreground hover:bg-foreground/90 text-background border-0"
+            onClick={() => {
+              const firstPending = document.querySelector<HTMLElement>(
+                '[data-approval-card][data-pending="true"]'
+              );
+              const approvalCentre = document.getElementById('approval-centre-cards');
+              const target = firstPending ?? approvalCentre;
+              target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          >
+            See approval queue
+            <ArrowDown className="ml-1 h-3 w-3" />
+          </Button>
+        ) : (
+          <Button
+            asChild
+            size="sm"
+            className="h-7 px-3 text-xs font-semibold bg-foreground hover:bg-foreground/90 text-background border-0"
+          >
+            <Link href={rec.href}>
+              {rec.label}
+              <ArrowRight className="ml-1 h-3 w-3" />
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* Universal Why? expander */}
