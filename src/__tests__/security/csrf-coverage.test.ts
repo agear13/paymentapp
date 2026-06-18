@@ -5,7 +5,7 @@ import { CSRF_EXEMPT_PATH_PREFIXES } from '@/lib/security/csrf-policy';
 const API_ROOT = path.join(process.cwd(), 'app', 'api');
 const MUTATING_FN = /export async function (POST|PUT|PATCH|DELETE)\b/;
 const CSRF_GUARD =
-  /getCurrentUserForApi\(|requireAuth\(request|requireAuth\(req|requireUser\(request|requireUser\(req|enforceCsrfForRequest\(|verifyCronRequest\(|isAuthorizedCron\(|isValidInternalAdminRequest\(|requireAdminForApi\(|getAuthedParticipantForProgram\(/;
+  /getCurrentUserForApi\(|requireAuth\(request|requireAuth\(req|requireUser\(request|requireUser\(req|enforceCsrfForRequest\(|verifyCronRequest\(|isAuthorizedCron\(|isValidInternalAdminRequest\(|requireAdminForApi\(|getAuthedParticipantForProgram\(|requireAgreementAnalyzerDashboardForApi\(/;
 const LEGACY_UNGUARDED = /getCurrentUser\(\)|await requireAuth\(\)/;
 
 function mutatingHandlers(content: string): string[] {

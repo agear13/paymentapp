@@ -29,6 +29,16 @@ export const CSRF_EXEMPT_PATH_PREFIXES = [
   '/api/huntpay/',
   '/api/security/csrf-token',
   '/api/auth/',
+  // Agreement Analyzer public funnel and external-webhook routes.
+  // These cannot carry a session CSRF token:
+  //   upload    — unauthenticated lead-generation form (public funnel)
+  //   analytics — unauthenticated funnel instrumentation (public)
+  //   calendly/webhook — signed Calendly webhook (external, no browser session)
+  //   email/webhook    — signed Resend/svix webhook (external, no browser session)
+  '/api/agreement-analyzer/upload',
+  '/api/agreement-analyzer/analytics',
+  '/api/agreement-analyzer/calendly/webhook',
+  '/api/agreement-analyzer/email/webhook',
 ] as const;
 
 export function isMutatingMethod(method: string): boolean {

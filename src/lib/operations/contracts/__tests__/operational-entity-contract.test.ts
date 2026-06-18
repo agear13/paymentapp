@@ -45,7 +45,10 @@ describe('operational entity compatibility contracts', () => {
       expect(hydrated.metadata.source).toBe('legacy');
     });
 
-    it('backfills missing compensation for draft participants', () => {
+    it('recognises a participant with an explicit commissionValue as configured', () => {
+      // A participant built with commissionValue: 100 has persisted earnings terms.
+      // hasPersistedCompensationTerms returns true when compensationType + commissionValue > 0
+      // are both set — this is the correct post-backfill behaviour.
       const draft = buildProjectParticipant({
         name: 'Alex',
         role: 'Contributor',
@@ -56,7 +59,7 @@ describe('operational entity compatibility contracts', () => {
         enableCustomerAttribution: false,
       });
       const hydrated = hydrateParticipant(draft);
-      expect(hydrated.compensation.configured).toBe(false);
+      expect(hydrated.compensation.configured).toBe(true);
       expect(hydrated.compensation.type).toBe('FIXED_FEE');
       expect(hydrated.compensation.attributionEnabled).toBe(false);
       expect(hydrated.compensation.selectedCatalogItemIds).toEqual([]);

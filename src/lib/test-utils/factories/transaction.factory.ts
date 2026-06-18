@@ -26,7 +26,9 @@ export function createMockHederaTransaction(
     transactionId: overrides?.transactionId || `0.0.123@${timestampNanos}.000000000`,
     amount: overrides?.amount || '100.000000',
     tokenType: overrides?.tokenType || 'USDC',
-    tokenId: overrides?.tokenId || '0.0.456858',
+    // Use `in` check: tokenId can be explicitly null for HBAR (no token ID).
+    // `|| fallback` would coerce null back to the USDC default.
+    tokenId: (overrides && 'tokenId' in overrides) ? overrides.tokenId : '0.0.456858',
     timestamp,
     from: overrides?.from || '0.0.999888',
     to: overrides?.to || '0.0.123456',
