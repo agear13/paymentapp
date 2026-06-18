@@ -15,6 +15,11 @@
  *
  * No page derives its own commercial logic.
  * No engine call is duplicated.
+ *
+ * DEV SIMULATOR: In development builds, the provider reads from the
+ * DevSimulatorStore (localStorage) and merges capability overrides into the
+ * engine output. Production builds are unaffected — the simulator hook
+ * returns null when NODE_ENV !== 'development'.
  */
 
 import * as React from 'react';
@@ -29,6 +34,7 @@ import {
 } from '@/components/workflow/workflow-context';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import { useSimulatorState } from '@/components/dev/simulator-store';
 
 /* ─── Context shape ─── */
 
@@ -107,6 +113,9 @@ export function CommercialBrainProvider({ children }: { children: React.ReactNod
     traceSurface: 'commercial-brain',
   });
 
+  // Dev simulator overrides — null in production (isDevToolsEnabled() = false)
+  const simulatorState = useSimulatorState();
+
   const value = React.useMemo<CommercialBrainContextValue>(() => {
     const loading = wsLoading || opLoading;
 
@@ -135,10 +144,24 @@ export function CommercialBrainProvider({ children }: { children: React.ReactNod
       activation: activation ?? null,
     });
 
+    // ── Dev simulator capability overrides (no-op in production) ──────────
+    const simCaps = simulatorState?.capabilities;
+    const commercialCapabilities: CommercialCapabilities =
+      simCaps && Object.keys(simCaps).length > 0
+        ? { ...decision.commercialCapabilities, ...simCaps }
+        : decision.commercialCapabilities;
+
+    // Patch workflowCtx stage if the simulator pins a stage
+    const stagePin = simulatorState?.workflowStagePin;
+    const patchedWorkflowCtx: WorkflowContext | null =
+      stagePin && workflowCtx
+        ? { ...workflowCtx, currentStage: stagePin }
+        : workflowCtx;
+
     return {
-      decision,
-      workflowCtx,
-      commercialCapabilities: decision.commercialCapabilities,
+      decision: { ...decision, commercialCapabilities },
+      workflowCtx: patchedWorkflowCtx,
+      commercialCapabilities,
       projectId,
       agreementName: summary.name,
       loading: false,
@@ -154,6 +177,7 @@ export function CommercialBrainProvider({ children }: { children: React.ReactNod
     workspaceContext,
     activation,
     auditTimeline,
+    simulatorState,
   ]);
 
   return (
