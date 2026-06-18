@@ -2055,7 +2055,7 @@ export function WorkflowOnboardingForm() {
           isLoading={isLoading}
           onCheckout={() => initiateBillingCheckout(selectedPlanId as SaasCheckoutPlan)}
           paymentProviderConnected={paymentProviderConnected}
-          participantsAdded={confirmedParticipants.length > 0}
+          participantsInvited={confirmedParticipants.length > 0}
           collectionConfigured={
             collectionPreference !== null && collectionPreference !== 'decide_later'
           }

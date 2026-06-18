@@ -20,11 +20,20 @@ type OnboardingCompletionScreenProps = {
   csrfReady?: boolean;
   isLoading?: boolean;
   onCheckout?: () => void;
-  /** True only after Stripe/Wise/Hedera provider connection actually succeeds */
+  /**
+   * True only after a payment provider (Stripe/Wise/Hedera) connection
+   * actually succeeds on the server — never set optimistically.
+   */
   paymentProviderConnected?: boolean;
-  /** True only after at least one team member was added during onboarding */
-  participantsAdded?: boolean;
-  /** True only after a non-defer collection method was chosen */
+  /**
+   * True only after at least one participant was confirmed and saved.
+   * Enables revenue sharing and approval link generation.
+   */
+  participantsInvited?: boolean;
+  /**
+   * True only after a non-defer collection method was saved.
+   * Required for settlement automation.
+   */
   collectionConfigured?: boolean;
 };
 
@@ -46,19 +55,21 @@ export function OnboardingCompletionScreen({
   isLoading = false,
   onCheckout,
   paymentProviderConnected = false,
-  participantsAdded = false,
+  participantsInvited = false,
   collectionConfigured = false,
 }: OnboardingCompletionScreenProps) {
   const capabilities: CapabilityItem[] = [
     {
       label: 'Revenue sharing configured',
-      completed: participantsAdded,
+      completed: participantsInvited,
       pendingHint: 'Add at least one team member to enable revenue sharing.',
     },
     {
-      label: 'Team approvals ready',
-      completed: participantsAdded,
-      pendingHint: 'Add team members so approval links can be generated.',
+      // Approvals are collected AFTER onboarding — they are never complete here.
+      // Showing "pending" is correct and accurate.
+      label: 'Team approvals pending',
+      completed: false,
+      pendingHint: 'Send approval links to your team from the agreement page.',
     },
     {
       label: 'Settlement automation enabled',
@@ -72,7 +83,8 @@ export function OnboardingCompletionScreen({
     },
   ];
 
-  const allDone = capabilities.every((c) => c.completed);
+  // allDone excludes "Team approvals pending" — approvals are the next step after onboarding
+  const allDone = paymentProviderConnected && participantsInvited && collectionConfigured;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-700">

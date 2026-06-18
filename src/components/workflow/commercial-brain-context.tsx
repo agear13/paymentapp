@@ -21,6 +21,7 @@ import * as React from 'react';
 import {
   analyseWorkspace,
   type CommercialDecisionResult,
+  type CommercialCapabilities,
 } from '@/components/workflow/commercial-decision-engine';
 import {
   deriveWorkflowContext,
@@ -36,6 +37,12 @@ export type CommercialBrainContextValue = {
   decision: CommercialDecisionResult | null;
   /** Workflow stage derivation — stage, progress %, continueHref, etc. */
   workflowCtx: WorkflowContext | null;
+  /**
+   * Commercial capabilities — the single source of truth for every completion
+   * indicator in the product. Read this; never infer completion locally.
+   * Shortcut for decision.commercialCapabilities.
+   */
+  commercialCapabilities: CommercialCapabilities | null;
   /** The agreement's project ID */
   projectId: string;
   /** The agreement's display name */
@@ -47,6 +54,7 @@ export type CommercialBrainContextValue = {
 const EMPTY: CommercialBrainContextValue = {
   decision: null,
   workflowCtx: null,
+  commercialCapabilities: null,
   projectId: '',
   agreementName: null,
   loading: true,
@@ -130,6 +138,7 @@ export function CommercialBrainProvider({ children }: { children: React.ReactNod
     return {
       decision,
       workflowCtx,
+      commercialCapabilities: decision.commercialCapabilities,
       projectId,
       agreementName: summary.name,
       loading: false,

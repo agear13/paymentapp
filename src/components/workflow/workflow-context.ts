@@ -125,7 +125,11 @@ const STAGE_ORDER: WorkflowStage[] = [
   'operational',
 ];
 
-const STAGE_COMPLETION: Record<WorkflowStage, number> = {
+/**
+ * Canonical progress percentage for each workflow stage.
+ * This is the single formula used everywhere — never recompute it independently.
+ */
+export const STAGE_COMPLETION: Record<WorkflowStage, number> = {
   'setup':                5,
   'configuring':          20,
   'collecting-approvals': 40,
@@ -135,6 +139,22 @@ const STAGE_COMPLETION: Record<WorkflowStage, number> = {
   'ready-to-release':     95,
   'operational':          100,
 };
+
+/**
+ * Map a health/readiness score back to the nearest canonical workflow stage.
+ * Use this instead of independent score-threshold logic in UI components.
+ * All components that need a stage from a score MUST use this function.
+ */
+export function stageFromScore(score: number): WorkflowStage {
+  if (score >= STAGE_COMPLETION['operational'])      return 'operational';
+  if (score >= STAGE_COMPLETION['ready-to-release']) return 'ready-to-release';
+  if (score >= STAGE_COMPLETION['collecting-revenue']) return 'collecting-revenue';
+  if (score >= STAGE_COMPLETION['ready-to-collect']) return 'ready-to-collect';
+  if (score >= STAGE_COMPLETION['preparing-payments']) return 'preparing-payments';
+  if (score >= STAGE_COMPLETION['collecting-approvals']) return 'collecting-approvals';
+  if (score >= STAGE_COMPLETION['configuring'])      return 'configuring';
+  return 'setup';
+}
 
 function nextStage(stage: WorkflowStage): WorkflowStage | null {
   const idx = STAGE_ORDER.indexOf(stage);

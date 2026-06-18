@@ -5,36 +5,48 @@ import { ArrowRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
 import { projectOverviewPath } from '@/lib/projects/project-routes';
+import { stageFromScore } from '@/components/workflow/workflow-context';
 
 type AgreementsOperationalGridProps = {
   snapshots: AgreementHealthSnapshot[];
   loading?: boolean;
 };
 
-/* ─── Agreement workflow stages ─── */
+/* ─── Canonical 8-stage workflow pipeline ─── */
 
-type WorkflowStage = {
+type StageDisplay = {
   id: string;
   label: string;
 };
 
-const WORKFLOW_STAGES: WorkflowStage[] = [
-  { id: 'agreement', label: 'Agreement' },
-  { id: 'participants', label: 'Participants' },
-  { id: 'earnings', label: 'Earnings' },
-  { id: 'payments', label: 'Payments' },
-  { id: 'ready', label: 'Ready' },
-  { id: 'live', label: 'Live' },
+/**
+ * Canonical stages aligned with WorkflowStage from workflow-context.ts.
+ * Labels are human-readable; order matches STAGE_ORDER.
+ */
+const WORKFLOW_STAGES: StageDisplay[] = [
+  { id: 'setup',                label: 'Created' },
+  { id: 'configuring',          label: 'Team' },
+  { id: 'collecting-approvals', label: 'Approvals' },
+  { id: 'preparing-payments',   label: 'Payments' },
+  { id: 'ready-to-collect',     label: 'Ready' },
+  { id: 'collecting-revenue',   label: 'Collecting' },
+  { id: 'ready-to-release',     label: 'Settlement' },
+  { id: 'operational',          label: 'Live' },
 ];
 
+const STAGE_INDEX: Record<string, number> = Object.fromEntries(
+  WORKFLOW_STAGES.map((s, i) => [s.id, i])
+);
+
+/**
+ * Derives the pipeline index from a health score using the canonical
+ * STAGE_COMPLETION thresholds. This guarantees that the pipeline display
+ * always agrees with CommercialBrain's workflowStage.
+ */
 function deriveStageIndex(score: number): number {
-  if (score >= 95) return 5; // live
-  if (score >= 80) return 4; // ready
-  if (score >= 60) return 3; // payments
-  if (score >= 40) return 2; // earnings
-  if (score >= 20) return 1; // participants
-  return 0; // agreement
+  return STAGE_INDEX[stageFromScore(score)] ?? 0;
 }
+
 
 /* ─── Helpers ─── */
 

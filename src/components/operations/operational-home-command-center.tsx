@@ -115,6 +115,7 @@ export function OperationalHomeCommandCenter() {
             kpis={kpis}
             workspace={workspaceContext}
             releaseConfidence={guidance.releaseConfidence}
+            activation={activation}
           />
         ) : null}
       </div>

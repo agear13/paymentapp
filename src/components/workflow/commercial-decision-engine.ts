@@ -62,7 +62,44 @@ export type WorkflowMemory = {
   lastActivityAt: string | null;
 };
 
+/**
+ * The single authority on what a business has accomplished.
+ *
+ * Every UI that shows a completion state (checklist, progress bar, readiness
+ * widget, onboarding screen, dashboard) MUST read from this object.
+ * No component may infer completion independently.
+ *
+ * Rules:
+ *  - A capability is true ONLY when the underlying persisted state confirms it.
+ *  - No optimistic values based on wizard steps visited or forms advanced.
+ *  - This is derived deterministically from the same inputs the rest of the engine uses.
+ */
+export type CommercialCapabilities = {
+  /** At least one participant has been invited to the agreement */
+  participantsInvited: boolean;
+  /** ALL participants have had their earnings (compensation) configured */
+  earningsConfigured: boolean;
+  /** ALL participants have approved the agreement */
+  approvalsComplete: boolean;
+  /** A payment provider (Stripe/Wise/Hedera) is connected */
+  paymentProviderConnected: boolean;
+  /** Revenue collection is enabled — requires payment provider */
+  revenueCollectionEnabled: boolean;
+  /** Customer revenue has been received (collectedRevenue > 0) */
+  revenueFlowing: boolean;
+  /** Funds are currently ready to release to participants */
+  settlementReady: boolean;
+  /** At least one payout batch has been released to participants */
+  payoutComplete: boolean;
+};
+
 export type CommercialDecisionResult = {
+  /**
+   * The complete set of commercial capabilities — the single source of truth
+   * for every completion indicator in the product.
+   * Dashboard, onboarding, agreement pages and settlement pages all read from here.
+   */
+  commercialCapabilities: CommercialCapabilities;
   /** Ordered priority queue — highest value first */
   priorityQueue: PriorityItem[];
   /** The single highest-value action to take right now */
@@ -90,7 +127,7 @@ export type CommercialDecisionResult = {
    * e.g. "I reviewed your agreement. The only thing preventing customer payments is connecting Stripe."
    */
   conversationalSummary: string;
-  /** Memory derived from audit history */
+  /** Memory derived from audit history — null when no real audit events exist */
   memory: WorkflowMemory | null;
 };
 
@@ -435,6 +472,60 @@ function buildReasoning(
 /* ─── Public API ─── */
 
 /**
+ * Derive the set of commercial capabilities from raw operational inputs.
+ *
+ * This is the ONLY place where capability completion is computed.
+ * Call it once (via analyseWorkspace) and distribute the result to every UI.
+ *
+ * Invariants:
+ *  - A capability is true ONLY when persisted server state confirms it.
+ *  - No capability is set true by a wizard advancing, a default value, or an optimistic update.
+ *  - earningsConfigured is true ONLY when ALL participants have earnings set.
+ *  - approvalsComplete is true ONLY when ALL participants have approved.
+ *  - revenueFlowing is true ONLY when collectedRevenue > 0 (real money received).
+ */
+export function deriveCommercialCapabilities(
+  input: Pick<CommercialDecisionInput, 'kpis' | 'releaseConfidence' | 'workspaceContext' | 'activation'>
+): CommercialCapabilities {
+  const { kpis, releaseConfidence, workspaceContext, activation } = input;
+
+  const participantCount =
+    kpis?.participantCount ?? activation?.participantCount ?? 0;
+  const earningsConfiguredCount =
+    kpis?.earningsConfiguredCount ?? activation?.participantsConfiguredCount ?? 0;
+  const approvedCount = kpis?.approvedAgreementCount ?? 0;
+
+  const paymentProviderConnected =
+    workspaceContext?.stripeConfigured === true ||
+    activation?.providerConnected === true;
+
+  const participantsInvited = participantCount > 0;
+  // earningsConfigured: ALL participants must have their earnings set — no partial credit
+  const earningsConfigured =
+    participantsInvited && earningsConfiguredCount >= participantCount;
+  // approvalsComplete: ALL participants must have approved — no partial credit
+  const approvalsComplete =
+    participantsInvited && approvedCount >= participantCount;
+  // revenueFlowing: only true after real revenue received — never true by default
+  const revenueFlowing = (releaseConfidence?.collectedRevenue ?? 0) > 0;
+  // settlementReady: only true when funds are genuinely awaiting release
+  const settlementReady = (releaseConfidence?.readyToRelease ?? 0) > 0;
+  // payoutComplete: only true after the first real release batch runs
+  const payoutComplete = activation?.firstReleaseCompleted === true;
+
+  return {
+    participantsInvited,
+    earningsConfigured,
+    approvalsComplete,
+    paymentProviderConnected,
+    revenueCollectionEnabled: paymentProviderConnected,
+    revenueFlowing,
+    settlementReady,
+    payoutComplete,
+  };
+}
+
+/**
  * Analyse the current workspace state and return a complete commercial guidance package.
  *
  * Call this once per page render — feed it KPIs, release confidence, workspace context,
@@ -483,7 +574,10 @@ export function analyseWorkspace(input: CommercialDecisionInput): CommercialDeci
     workflowCtx.nextAction
   );
 
+  const commercialCapabilities = deriveCommercialCapabilities(input);
+
   return {
+    commercialCapabilities,
     priorityQueue,
     recommendedAction: recommended,
     confidence,

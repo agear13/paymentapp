@@ -6,12 +6,15 @@ import type { AgreementHealthPortfolioSummary } from '@/lib/agreements/health/ag
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/types';
+import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
+import { deriveCommercialCapabilities } from '@/components/workflow/commercial-decision-engine';
 
 type WorkspaceHealthScoreProps = {
   portfolio: AgreementHealthPortfolioSummary | null;
   kpis: OperationalKPIs | null | undefined;
   workspace: WorkspaceOperationalContext | null;
   releaseConfidence: ReleaseConfidenceSnapshot | null;
+  activation: WorkspaceActivationSnapshot | null | undefined;
   loading?: boolean;
 };
 
@@ -19,44 +22,6 @@ type HealthSignal = {
   label: string;
   done: boolean;
 };
-
-function deriveSignals(
-  portfolio: AgreementHealthPortfolioSummary | null,
-  kpis: OperationalKPIs | null | undefined,
-  workspace: WorkspaceOperationalContext | null,
-  releaseConfidence: ReleaseConfidenceSnapshot | null
-): HealthSignal[] {
-  return [
-    {
-      label: 'Business created',
-      done: workspace?.hasOrganization ?? false,
-    },
-    {
-      label: 'Agreement created',
-      done: (portfolio?.totalAgreements ?? 0) > 0,
-    },
-    {
-      label: 'Participants added',
-      done: (kpis?.participantCount ?? 0) > 0,
-    },
-    {
-      label: 'Earnings configured',
-      done: kpis?.participantsConfigured ?? false,
-    },
-    {
-      label: 'Approvals received',
-      done: (kpis?.approvedAgreementCount ?? 0) > 0,
-    },
-    {
-      label: 'Payment provider connected',
-      done: workspace?.stripeConfigured ?? false,
-    },
-    {
-      label: 'Revenue flowing',
-      done: (releaseConfidence?.collectedRevenue ?? 0) > 0,
-    },
-  ];
-}
 
 function humanInterpretation(score: number, blockerCount: number): string {
   if (score >= 95) return 'Ready to operate.';
@@ -73,12 +38,19 @@ function humanInterpretation(score: number, blockerCount: number): string {
   return 'Just getting started. Complete the essentials first.';
 }
 
-/** Single workspace readiness percentage — replaces per-agreement average health. */
+/**
+ * Single workspace readiness percentage.
+ *
+ * Signals are derived using deriveCommercialCapabilities — the same function
+ * the Commercial Decision Engine uses. This guarantees that the health score
+ * never disagrees with any other completion indicator in the product.
+ */
 export function WorkspaceHealthScore({
   portfolio,
   kpis,
   workspace,
   releaseConfidence,
+  activation,
   loading,
 }: WorkspaceHealthScoreProps) {
   if (loading) {
@@ -90,9 +62,33 @@ export function WorkspaceHealthScore({
     );
   }
 
-  if (!workspace?.hasOrganization) return null;
+  if (!workspace?.hasOrganization && !activation?.workspaceCreated) return null;
 
-  const signals = deriveSignals(portfolio, kpis, workspace, releaseConfidence);
+  // Derive capabilities from the same engine used everywhere else.
+  // Zero independent business logic here.
+  const caps = deriveCommercialCapabilities({
+    kpis: kpis ?? null,
+    releaseConfidence: releaseConfidence ?? null,
+    workspaceContext: workspace ?? null,
+    activation: activation ?? null,
+  });
+
+  const signals: HealthSignal[] = [
+    {
+      label: 'Business created',
+      done: workspace?.hasOrganization ?? activation?.workspaceCreated ?? false,
+    },
+    {
+      label: 'Agreement created',
+      done: activation?.projectCreated ?? (portfolio?.totalAgreements ?? 0) > 0,
+    },
+    { label: 'Participants invited',      done: caps.participantsInvited },
+    { label: 'Earnings configured',       done: caps.earningsConfigured },
+    { label: 'Approvals received',        done: caps.approvalsComplete },
+    { label: 'Payment provider connected', done: caps.paymentProviderConnected },
+    { label: 'Revenue flowing',           done: caps.revenueFlowing },
+  ];
+
   const doneCount = signals.filter((s) => s.done).length;
   const blockerCount = signals.length - doneCount;
   const score = Math.round((doneCount / signals.length) * 100);

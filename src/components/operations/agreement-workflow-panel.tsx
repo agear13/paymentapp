@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import type { QueueTask } from '@/components/operations/operational-queue';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
 import { projectOverviewPath } from '@/lib/projects/project-routes';
+import { STAGE_COMPLETION } from '@/components/workflow/workflow-context';
 
 type AgreementWorkflowPanelProps = {
   tasks: QueueTask[];
@@ -23,13 +24,19 @@ type WorkflowGroup = {
   estimatedMinutes: number;
 };
 
-/** Derive human-readable milestone labels from the agreement's health score. */
+/**
+ * Derive human-readable milestone labels from the agreement's health score.
+ * Uses canonical STAGE_COMPLETION thresholds so this always agrees with
+ * the WorkflowStage reported by CommercialBrain.
+ */
 function deriveDoneSteps(score: number): string[] {
   const done: string[] = [];
-  if (score >= 15) done.push('Agreement created');
-  if (score >= 35) done.push('Revenue configured');
-  if (score >= 55) done.push('Participants added');
-  if (score >= 75) done.push('Obligations confirmed');
+  if (score >= STAGE_COMPLETION['setup'])                done.push('Agreement created');
+  if (score >= STAGE_COMPLETION['configuring'])          done.push('Team added');
+  if (score >= STAGE_COMPLETION['collecting-approvals']) done.push('Earnings configured');
+  if (score >= STAGE_COMPLETION['preparing-payments'])   done.push('Approvals complete');
+  if (score >= STAGE_COMPLETION['ready-to-collect'])     done.push('Provider connected');
+  if (score >= STAGE_COMPLETION['collecting-revenue'])   done.push('Revenue collecting');
   return done;
 }
 

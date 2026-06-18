@@ -17,7 +17,9 @@
 
 import {
   analyseWorkspace,
+  deriveCommercialCapabilities,
   type CommercialDecisionResult,
+  type CommercialCapabilities,
   type WorkflowMemory,
   type ConfidenceLevel,
 } from '@/components/workflow/commercial-decision-engine';
@@ -111,6 +113,13 @@ export type Celebration = {
 /* ─── Full workspace experience ─── */
 
 export type WorkspaceExperience = {
+  /**
+   * Aggregated commercial capabilities for the workspace.
+   * Derived from the primary agreement's CommercialBrain result.
+   * Every dashboard widget that shows completion state reads from here.
+   * Always present — never null.
+   */
+  commercialCapabilities: CommercialCapabilities;
   /** Top 3 actionable items for today — the primary "Today" experience */
   todaysFocus: FocusItem[];
   /** Current primary mission (lowest-score agreement needing work) */
@@ -365,7 +374,7 @@ export function buildWorkspaceExperience(
         estimatedMinutes: primaryEntry.decision.estimatedMinutes,
         continueHref: primaryEntry.decision.continueHref,
         completionPct: primaryEntry.decision.workflowStage === 'operational' ? 100
-          : Math.min(95, Math.round(primaryEntry.snapshot.score)),
+          : Math.round(primaryEntry.snapshot.score),
         decision: primaryEntry.decision,
       }
     : null;
@@ -393,7 +402,15 @@ export function buildWorkspaceExperience(
   const greeting = timeOfDayGreeting(operatorName);
   const openingSummary = buildOpeningSummary(mode, todaysFocus, memory, celebration);
 
+  // Derive workspace-level capabilities from the primary agreement's engine result.
+  // If the primary agreement has already computed them, reuse that result directly;
+  // otherwise compute fresh from workspace-level inputs. Always returns a value.
+  const commercialCapabilities =
+    decisions[0]?.decision.commercialCapabilities ??
+    deriveCommercialCapabilities({ kpis, releaseConfidence, workspaceContext, activation });
+
   return {
+    commercialCapabilities,
     todaysFocus,
     currentMission,
     interruptions,

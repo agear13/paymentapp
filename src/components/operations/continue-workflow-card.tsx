@@ -8,7 +8,7 @@ import type { OperationalAuditEntry, OperationalAuditEventType } from '@/lib/ope
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
 import type { QueueTask } from '@/components/operations/operational-queue';
 import { resolveContinueWorkflowHref } from '@/components/workflow/workflow-navigation';
-import { deriveWorkflowContext } from '@/components/workflow/workflow-context';
+import { stageFromScore } from '@/components/workflow/workflow-context';
 
 type ContinueWorkflowCardProps = {
   auditEntries: OperationalAuditEntry[];
@@ -127,18 +127,12 @@ export function ContinueWorkflowCard({
 
   const { snapshot, lastActionLabel, lastActionTimestamp, nextTask } = session;
 
-  // Resolve where "Continue" should go by deriving the current workflow stage.
-  // Never fall back to the project overview — always route to the exact work.
-  const workflowCtx = deriveWorkflowContext({
-    projectId: snapshot.projectId,
-    kpis: null,
-    releaseConfidence: null,
-    workspaceContext: null,
-    activation: null,
-  });
+  // Map the agreement's health score to the canonical workflow stage using the
+  // same STAGE_COMPLETION thresholds CommercialBrain uses. This avoids calling
+  // deriveWorkflowContext with null inputs (which produces an unreliable stage).
   const resolvedHref = nextTask?.ctaHref ?? resolveContinueWorkflowHref(
     snapshot.projectId,
-    workflowCtx.currentStage
+    stageFromScore(snapshot.score)
   );
 
   const timeLabel = lastActionTimestamp
