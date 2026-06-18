@@ -3,7 +3,7 @@
 import { Check, Circle, Dot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
-import { analyseWorkspace } from '@/components/workflow/commercial-decision-engine';
+import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
 
 /* ─── Journey steps ─── */
 
@@ -12,6 +12,10 @@ type JourneyStep = {
   label: string;
 };
 
+/**
+ * Canonical 6-step payment journey, aligned with WorkflowStage semantics.
+ * Labels are operator-facing; stage ordering follows STAGE_ORDER.
+ */
 const PAYMENT_JOURNEY: JourneyStep[] = [
   { id: 'workspace',   label: 'Business created' },
   { id: 'agreement',   label: 'Agreement prepared' },
@@ -23,7 +27,7 @@ const PAYMENT_JOURNEY: JourneyStep[] = [
 
 function stepStatus(
   stepId: string,
-  activation: ReturnType<typeof useWorkspaceActivation>['activation']
+  activation: WorkspaceActivationSnapshot | null
 ): 'done' | 'current' | 'future' {
   if (!activation) return stepId === 'workspace' ? 'current' : 'future';
 
@@ -38,8 +42,7 @@ function stepStatus(
 
   switch (stepId) {
     case 'workspace':
-      return workspaceCreated ? 'done'
-        : 'current';
+      return workspaceCreated ? 'done' : 'current';
     case 'agreement':
       if (!workspaceCreated) return 'future';
       return projectCreated ? 'done' : 'current';
@@ -60,25 +63,48 @@ function stepStatus(
   }
 }
 
+/**
+ * Derive the remaining work items directly from the activation snapshot.
+ * Each item is exactly one missing capability — no engine call, no fabricated inputs.
+ * The activation snapshot fields are persisted server state (from /api/workspace/activation).
+ */
+function deriveRemainingWork(
+  activation: WorkspaceActivationSnapshot
+): Array<{ label: string; minutes: number }> {
+  if (!activation.workspaceCreated) {
+    return [{ label: 'Create your business account', minutes: 5 }];
+  }
+  if (!activation.projectCreated) {
+    return [{ label: 'Create your first agreement', minutes: 5 }];
+  }
+
+  const items: Array<{ label: string; minutes: number }> = [];
+
+  if (!activation.participantsConfigured) {
+    items.push({ label: 'Configure participant earnings', minutes: 10 });
+  }
+  if (!activation.providerConnected) {
+    items.push({ label: 'Connect a payment provider', minutes: 5 });
+  }
+  if (!activation.releaseEligible && activation.providerConnected) {
+    items.push({ label: 'Complete participant payout setup', minutes: 10 });
+  }
+  if (!activation.firstReleaseCompleted && activation.releaseEligible) {
+    items.push({ label: 'Release your first payout', minutes: 3 });
+  }
+
+  return items;
+}
+
 /* ─── PaymentSetupStatus ─── */
 
 /**
- * Clean payment setup status — the operator-facing view on /settings/merchant.
+ * Payment setup status — the operator-facing view on /settings/merchant.
  *
- * Replaces the duplicated WorkspaceActivationBanner + OperationalSettlementInitialization
- * checklists with a single clear view:
+ * All completion state comes from WorkspaceActivationSnapshot (persisted server state).
+ * No engine calls. No fabricated inputs. No optimistic values.
  *
- *   Current status
- *   Customer payments are not yet enabled.
- *
- *   Remaining work
- *   • Connect Stripe
- *   • Request participant approvals
- *
- *   Estimated work: 4 minutes
- *
- *   Commercial journey
- *   ✓ Business created  ✓ Agreement prepared  ● Payments  ○ Ready  ○ Live
+ * allDone = true only when firstReleaseCompleted — real payout exists in DB.
  */
 export function PaymentSetupStatus() {
   const { activation, loading } = useWorkspaceActivation();
@@ -96,36 +122,12 @@ export function PaymentSetupStatus() {
     );
   }
 
-  // Derive remaining work from activation snapshot
-  const remaining: { label: string; minutes: number }[] = [];
-
-  if (activation) {
-    const decision = analyseWorkspace({
-      projectId: activation.primaryProjectId ?? 'workspace',
-      kpis: {
-        participantCount: activation.participantCount,
-        earningsConfiguredCount: activation.participantsConfiguredCount,
-        payoutReadyCount: activation.releaseEligibleCount,
-        approvedAgreementCount: activation.participantCount, // rough proxy
-        fundedObligationCount: activation.obligationCount,
-        releaseEligibleCount: activation.releaseEligibleCount,
-        attributionActiveCount: 0,
-        obligationCount: activation.obligationCount,
-        participantsConfigured: activation.participantsConfigured,
-      },
-      releaseConfidence: null,
-      workspaceContext: null,
-      activation,
-    });
-
-    for (const item of decision.priorityQueue.slice(0, 4)) {
-      remaining.push({ label: item.title, minutes: item.estimatedMinutes });
-    }
-  }
-
+  const remaining = activation ? deriveRemainingWork(activation) : [];
   const totalMinutes = remaining.reduce((s, r) => s + r.minutes, 0);
-  const providerConnected = activation?.providerConnected ?? false;
-  const allDone = remaining.length === 0 || providerConnected;
+
+  // allDone only when a real payout batch exists — the only irreversible commercial milestone.
+  // providerConnected alone is insufficient: connection ≠ payments operational.
+  const allDone = activation?.firstReleaseCompleted === true;
 
   const statusSentence = allDone
     ? 'Your payment setup is complete.'

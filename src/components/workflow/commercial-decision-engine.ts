@@ -81,15 +81,47 @@ export type CommercialCapabilities = {
   earningsConfigured: boolean;
   /** ALL participants have approved the agreement */
   approvalsComplete: boolean;
-  /** A payment provider (Stripe/Wise/Hedera) is connected */
+  /**
+   * A payment provider account (Stripe/Wise/Hedera) has been connected.
+   *
+   * This answers: "Did the operator link an account?"
+   * It does NOT answer: "Can the business accept customer payments right now?"
+   *
+   * Example: Stripe account ID exists in merchant_settings, but the operator has
+   * not completed Stripe's own onboarding form. paymentProviderConnected = true,
+   * but the account is not yet charges-enabled.
+   *
+   * See: revenueCollectionEnabled for the charges-capability check.
+   */
   paymentProviderConnected: boolean;
-  /** Revenue collection is enabled — requires payment provider */
+  /**
+   * The business can genuinely accept customer payments right now.
+   *
+   * Architecturally distinct from paymentProviderConnected:
+   *   paymentProviderConnected = account linked
+   *   revenueCollectionEnabled = account operational (charges_enabled, payouts_enabled)
+   *
+   * Current status: CONSERVATIVE APPROXIMATION ONLY.
+   *
+   * The Stripe account's charges_enabled / payouts_enabled flags are not yet
+   * persisted in the data model. This field currently mirrors paymentProviderConnected
+   * and will remain incorrect for accounts that are connected but not yet charges-enabled
+   * (e.g. Stripe onboarding incomplete, restricted accounts, under review).
+   *
+   * TODO: Persist Stripe account health from the account.updated webhook into
+   * merchant_settings.charges_enabled. Once that field exists, populate this from:
+   *   workspaceContext.chargesEnabled ?? activation.chargesEnabled
+   * rather than the provider connection flag.
+   *
+   * Do not use this capability in contexts where the distinction matters until
+   * the backend data exists.
+   */
   revenueCollectionEnabled: boolean;
-  /** Customer revenue has been received (collectedRevenue > 0) */
+  /** Customer revenue has been received (collectedRevenue > 0 from confirmed treasury) */
   revenueFlowing: boolean;
-  /** Funds are currently ready to release to participants */
+  /** Funds are currently ready to release to participants (readyToRelease > 0) */
   settlementReady: boolean;
-  /** At least one payout batch has been released to participants */
+  /** At least one payout batch has been released to participants (payout_batches row exists) */
   payoutComplete: boolean;
 };
 
@@ -141,6 +173,17 @@ export type CommercialDecisionInput = {
   attentionItems?: AttentionItem[];
   auditEntries?: OperationalAuditEntry[];
   guidance?: OperationalGuidanceBundle | null;
+  /**
+   * Backend Stripe account health signal.
+   *
+   * TODO: Populate this from merchant_settings.charges_enabled once the field
+   * is persisted via the Stripe account.updated webhook. When present, this is
+   * the authoritative source for revenueCollectionEnabled.
+   *
+   * Until populated, revenueCollectionEnabled conservatively approximates
+   * from paymentProviderConnected (see CommercialCapabilities.revenueCollectionEnabled).
+   */
+  chargesEnabled?: boolean;
 };
 
 /* ─── Helpers ─── */
@@ -485,9 +528,9 @@ function buildReasoning(
  *  - revenueFlowing is true ONLY when collectedRevenue > 0 (real money received).
  */
 export function deriveCommercialCapabilities(
-  input: Pick<CommercialDecisionInput, 'kpis' | 'releaseConfidence' | 'workspaceContext' | 'activation'>
+  input: Pick<CommercialDecisionInput, 'kpis' | 'releaseConfidence' | 'workspaceContext' | 'activation' | 'chargesEnabled'>
 ): CommercialCapabilities {
-  const { kpis, releaseConfidence, workspaceContext, activation } = input;
+  const { kpis, releaseConfidence, workspaceContext, activation, chargesEnabled } = input;
 
   const participantCount =
     kpis?.participantCount ?? activation?.participantCount ?? 0;
@@ -495,6 +538,8 @@ export function deriveCommercialCapabilities(
     kpis?.earningsConfiguredCount ?? activation?.participantsConfiguredCount ?? 0;
   const approvedCount = kpis?.approvedAgreementCount ?? 0;
 
+  // paymentProviderConnected: a payment rail account ID is stored in merchant_settings.
+  // This does NOT mean the account is operationally healthy (charges_enabled, payouts_enabled).
   const paymentProviderConnected =
     workspaceContext?.stripeConfigured === true ||
     activation?.providerConnected === true;
@@ -506,19 +551,27 @@ export function deriveCommercialCapabilities(
   // approvalsComplete: ALL participants must have approved — no partial credit
   const approvalsComplete =
     participantsInvited && approvedCount >= participantCount;
-  // revenueFlowing: only true after real revenue received — never true by default
+  // revenueFlowing: only true after real confirmed treasury revenue — never inferred
   const revenueFlowing = (releaseConfidence?.collectedRevenue ?? 0) > 0;
-  // settlementReady: only true when funds are genuinely awaiting release
+  // settlementReady: funds genuinely awaiting release (dollar or count > 0)
   const settlementReady = (releaseConfidence?.readyToRelease ?? 0) > 0;
-  // payoutComplete: only true after the first real release batch runs
+  // payoutComplete: only true after a real payout_batches row exists in DB
   const payoutComplete = activation?.firstReleaseCompleted === true;
+
+  // revenueCollectionEnabled: whether the business can ACTUALLY accept customer payments.
+  // When chargesEnabled is provided (future: from Stripe account.updated webhook persisted
+  // into merchant_settings), use it. Until then, this is a conservative approximation:
+  // we assume a connected provider is also charges-enabled. This will be incorrect for
+  // accounts in Stripe's onboarding flow or under review. See CommercialCapabilities JSDoc.
+  const revenueCollectionEnabled =
+    chargesEnabled !== undefined ? chargesEnabled : paymentProviderConnected;
 
   return {
     participantsInvited,
     earningsConfigured,
     approvalsComplete,
     paymentProviderConnected,
-    revenueCollectionEnabled: paymentProviderConnected,
+    revenueCollectionEnabled,
     revenueFlowing,
     settlementReady,
     payoutComplete,

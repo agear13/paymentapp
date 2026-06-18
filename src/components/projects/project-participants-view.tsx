@@ -619,11 +619,13 @@ export function ProjectParticipantsView() {
     [hydratedParticipants]
   );
 
-  const needsEarningsConfiguration =
-    (canonicalKpis?.participantCount ?? 0) > 0 &&
-    (canonicalKpis?.earningsConfiguredCount ?? 0) < (canonicalKpis?.participantCount ?? 0);
+  const { workflowCtx, commercialCapabilities } = useCommercialBrain();
 
-  const { workflowCtx } = useCommercialBrain();
+  // Derived from CommercialBrain — single source of truth for earnings completion.
+  // earningsConfigured = ALL participants configured; so the inverse means work remains.
+  const needsEarningsConfiguration =
+    (commercialCapabilities?.participantsInvited ?? false) &&
+    !(commercialCapabilities?.earningsConfigured ?? false);
   const isCollectingApprovals = workflowCtx?.currentStage === 'collecting-approvals';
 
   // Participants who still need their approval link shared — only relevant during

@@ -22,6 +22,7 @@ import {
   hasPersistedOperationalEntities,
   type CommercialTreasuryData,
 } from '@/lib/operations/selectors/build-persisted-coordination-snapshot';
+import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/types';
 
 export type BuildCanonicalStateInput = ReduceOperationalStateInput & {
   auditTimeline?: OperationalAuditEntry[];
@@ -231,32 +232,87 @@ export function activationFromCanonicalState(
   };
 }
 
+/**
+ * Build release confidence from canonical state.
+ *
+ * Parts 2 & 3 of the Commercial OS V4 audit:
+ *
+ * - collectedRevenue: Uses treasury.confirmedFunding when available — the only
+ *   authoritative source of real money received. Falls back to 0 (never optimistic).
+ *
+ * - readyToRelease: When treasury data is available, computes a proportional dollar
+ *   estimate (releasableObligations / totalObligations * confirmedFunding). Without
+ *   treasury it falls back to releaseEligibleCount — a participant count proxy that
+ *   is documented here as an approximation, not a currency amount. Components that
+ *   need dollar precision must pass treasury.
+ */
+function buildReleaseConfidenceFromState(
+  state: CanonicalOperationalState,
+  blockers: ReturnType<typeof deriveCanonicalOperationalBlockers>,
+  treasury?: CommercialTreasuryData | null
+): ReleaseConfidenceSnapshot {
+  const currency =
+    treasury?.currency ?? state.coordination.workspace?.defaultCurrency ?? 'USD';
+
+  // Money signals — only non-zero when real treasury data is present
+  const collectedRevenue = treasury?.confirmedFunding ?? 0;
+
+  const releasableCount = state.obligations.filter(
+    (o) => o.obligation.operational.releaseReady
+  ).length;
+  const totalObligationCount = state.kpis.obligationCount;
+
+  // Prefer proportional dollar estimate from treasury when we have both confirmed
+  // funding and releasable obligation counts. Without treasury, fall back to the
+  // participant-count proxy — documented as an approximation.
+  const readyToRelease: number = (() => {
+    if (collectedRevenue > 0 && totalObligationCount > 0) {
+      // Dollar estimate: proportion of collected revenue that is releasable
+      return Math.round((releasableCount / Math.max(1, totalObligationCount)) * collectedRevenue);
+    }
+    if (treasury?.obligationsReady !== undefined && treasury.obligationsReady > 0) {
+      return treasury.obligationsReady; // obligation count (not dollars) — labelled as count
+    }
+    // Final fallback: participant count proxy. Not a dollar amount.
+    // Only reliable for binary "is anything ready?" checks (> 0).
+    return state.kpis.releaseEligibleCount;
+  })();
+
+  const heldBack = Math.max(0, collectedRevenue - readyToRelease);
+
+  return {
+    level: state.confidence.level,
+    score: state.confidence.score,
+    currency,
+    collectedRevenue,
+    reservedObligations: treasury?.obligationsTotal ?? state.kpis.obligationCount,
+    readyToRelease,
+    heldBack,
+    heldBackReasons: blockers.map((b) => b.reason),
+    blockedParticipantCount: state.participants.filter((p) => !p.releaseReadiness.releaseReady)
+      .length,
+    riskWarnings: [],
+    releasableObligationCount: releasableCount,
+    totalObligationCount,
+    explainability: state.confidence.explainability,
+  };
+}
+
 export function guidanceFromCanonicalState(
   state: CanonicalOperationalState,
-  _scopeTitle = 'Workspace'
+  _scopeTitle = 'Workspace',
+  /**
+   * Treasury data from the Commercial Brain's upstream.
+   * When provided, collectedRevenue and readyToRelease reflect real money.
+   * When absent, collectedRevenue = 0 (conservative) and readyToRelease = releaseEligibleCount (count proxy).
+   */
+  treasury?: CommercialTreasuryData | null
 ): Pick<OperationalGuidanceBundle, 'releaseBlockers' | 'timeline' | 'releaseConfidence'> {
   const blockers = deriveCanonicalOperationalBlockers(state);
   return {
     releaseBlockers: blockers,
     timeline: state.timeline,
-    releaseConfidence: {
-      level: state.confidence.level,
-      score: state.confidence.score,
-      currency: state.coordination.workspace?.defaultCurrency ?? 'USD',
-      collectedRevenue: 0,
-      reservedObligations: state.kpis.obligationCount,
-      readyToRelease: state.kpis.releaseEligibleCount,
-      heldBack: Math.max(0, state.kpis.participantCount - state.kpis.releaseEligibleCount),
-      heldBackReasons: blockers.map((b) => b.reason),
-      blockedParticipantCount: state.participants.filter((p) => !p.releaseReadiness.releaseReady)
-        .length,
-      riskWarnings: [],
-      releasableObligationCount: state.obligations.filter(
-        (o) => o.obligation.operational.releaseReady
-      ).length,
-      totalObligationCount: state.kpis.obligationCount,
-      explainability: state.confidence.explainability,
-    },
+    releaseConfidence: buildReleaseConfidenceFromState(state, blockers, treasury),
   };
 }
 

@@ -236,9 +236,14 @@ export function useCanonicalOperationalState(options?: CanonicalOperationalState
     });
   }, [canonicalState, guidance.activation]);
 
+  // Pass treasury through so guidanceFromCanonicalState can compute real collectedRevenue
+  // and a dollar-based readyToRelease (Parts 2 & 3 of Commercial OS V4 audit).
   const canonicalGuidance = React.useMemo(
-    () => (canonicalState ? guidanceFromCanonicalState(canonicalState) : null),
-    [canonicalState]
+    () =>
+      canonicalState
+        ? guidanceFromCanonicalState(canonicalState, undefined, options?.treasury)
+        : null,
+    [canonicalState, options?.treasury]
   );
 
   return {
