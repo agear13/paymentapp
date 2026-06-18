@@ -56,7 +56,7 @@ export function upgradeBody(
     case 'team_members':
       return 'Multi-user collaboration is available on Growth.';
     case 'approval_workflows':
-      return 'Approval Workflows are available on Growth.';
+      return 'Participant agreements and approval links are available on Professional.';
     case 'advanced_reporting':
       return 'Advanced Reporting is available on Growth.';
     case 'automated_settlement_coordination':

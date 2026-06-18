@@ -158,7 +158,7 @@ export function WorkflowHeader() {
               className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0"
             >
               <Link href={workflowCtx.continueHref}>
-                Continue
+                {workflowCtx.continueLabel}
                 <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -175,7 +175,7 @@ export function WorkflowHeader() {
             className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0 shrink-0"
           >
             <Link href={workflowCtx.continueHref}>
-              Continue
+              {workflowCtx.continueLabel}
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>
           </Button>

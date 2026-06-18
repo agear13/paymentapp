@@ -69,6 +69,8 @@ import {
 import { ProgressiveOperationalPanel } from '@/components/operations/progressive-operational-panel';
 import { SafeParticipantBoundary } from '@/components/operations/safe-participant-boundary';
 import { hydrateParticipants, participantEntity } from '@/lib/operations/hydration/hydrate-participant';
+import { useCommercialBrain } from '@/components/workflow/commercial-brain-context';
+import { resolveAgreementDestination } from '@/components/workflow/workflow-navigation';
 import {
   logCompensationConfigDiagnostic,
   prepareParticipantForCompensationEdit,
@@ -621,6 +623,23 @@ export function ProjectParticipantsView() {
     (canonicalKpis?.participantCount ?? 0) > 0 &&
     (canonicalKpis?.earningsConfiguredCount ?? 0) < (canonicalKpis?.participantCount ?? 0);
 
+  const { workflowCtx } = useCommercialBrain();
+  const isCollectingApprovals = workflowCtx?.currentStage === 'collecting-approvals';
+
+  // Participants who still need their approval link shared — only relevant during
+  // the collecting-approvals stage so operators can action directly from this page.
+  const pendingApprovalParticipants = React.useMemo(() => {
+    if (!isCollectingApprovals) return [];
+    return displayParticipants.filter(
+      (p) => p.approvalStatus !== 'Approved' && p.approvalStatus !== 'Declined'
+    );
+  }, [isCollectingApprovals, displayParticipants]);
+
+  const requestApprovalsDestination = React.useMemo(
+    () => resolveAgreementDestination('request-approvals', projectId),
+    [projectId]
+  );
+
   if (loading && !deal) {
     return <ProjectOperationalLoadingState variant="loading" />;
   }
@@ -744,6 +763,42 @@ export function ProjectParticipantsView() {
           <Card className="border-amber-500/30 bg-amber-500/5">
             <CardContent className="py-4 text-sm text-muted-foreground">
               {sectionError}. Use refresh to retry.
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {/* Request approvals action panel — shown only when workflow stage requires it */}
+        {isCollectingApprovals && pendingApprovalParticipants.length > 0 ? (
+          <Card className="border-blue-200/60 bg-blue-50/40">
+            <CardContent className="py-4 space-y-3">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    {requestApprovalsDestination.label}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {pendingApprovalParticipants.length === 1
+                      ? '1 team member is waiting for their approval link.'
+                      : `${pendingApprovalParticipants.length} team members are waiting for their approval links.`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {requestApprovalsDestination.reason}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {pendingApprovalParticipants.map((p) => (
+                  <Button
+                    key={p.id}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void openAgreementShare(p)}
+                    className="h-7 text-xs"
+                  >
+                    Share with {p.name}
+                  </Button>
+                ))}
+              </div>
             </CardContent>
           </Card>
         ) : null}

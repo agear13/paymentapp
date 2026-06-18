@@ -98,7 +98,9 @@ function ProjectParticipantTableRowComponent({
   const verified = hydrated.payout.verifiedExternally;
 
   const viewAgreement = () => {
-    const path = entity.agreementUrl ?? participantAgreementPath(entity.inviteToken);
+    const base = entity.agreementUrl ?? participantAgreementPath(entity.inviteToken);
+    // Append ?mode=preview so the agreement page enforces a genuinely read-only view.
+    const path = base.includes('?') ? `${base}&mode=preview` : `${base}?mode=preview`;
     if (typeof window !== 'undefined') {
       window.open(path, '_blank', 'noopener,noreferrer');
     }

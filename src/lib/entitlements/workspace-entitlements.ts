@@ -95,7 +95,9 @@ export function canInviteTeamMembers(ctx: EntitlementContext): EntitlementDecisi
 }
 
 export function canUseApprovalWorkflows(ctx: EntitlementContext): EntitlementDecision {
-  return checkPlan(ctx, 'growth', 'approval_workflows_growth');
+  // Participant agreements, approvals, and referral links are part of Professional's
+  // Referral Management feature. Growth only adds advanced automation on top.
+  return checkPlan(ctx, 'professional', 'approval_workflows_professional');
 }
 
 export function canUseAdvancedReporting(ctx: EntitlementContext): EntitlementDecision {

@@ -20,8 +20,12 @@ type OnboardingCompletionScreenProps = {
   csrfReady?: boolean;
   isLoading?: boolean;
   onCheckout?: () => void;
-  /** Pass false if the operator skipped payment provider setup during onboarding */
+  /** True only after Stripe/Wise/Hedera provider connection actually succeeds */
   paymentProviderConnected?: boolean;
+  /** True only after at least one team member was added during onboarding */
+  participantsAdded?: boolean;
+  /** True only after a non-defer collection method was chosen */
+  collectionConfigured?: boolean;
 };
 
 type CapabilityItem = {
@@ -41,17 +45,31 @@ export function OnboardingCompletionScreen({
   csrfReady = true,
   isLoading = false,
   onCheckout,
-  paymentProviderConnected = true,
+  paymentProviderConnected = false,
+  participantsAdded = false,
+  collectionConfigured = false,
 }: OnboardingCompletionScreenProps) {
   const capabilities: CapabilityItem[] = [
+    {
+      label: 'Revenue sharing configured',
+      completed: participantsAdded,
+      pendingHint: 'Add at least one team member to enable revenue sharing.',
+    },
+    {
+      label: 'Team approvals ready',
+      completed: participantsAdded,
+      pendingHint: 'Add team members so approval links can be generated.',
+    },
+    {
+      label: 'Settlement automation enabled',
+      completed: collectionConfigured,
+      pendingHint: 'Configure a collection method to enable settlement automation.',
+    },
     {
       label: 'Customer payments enabled',
       completed: paymentProviderConnected,
       pendingHint: 'Connect a payment provider to begin accepting customer payments.',
     },
-    { label: 'Revenue sharing configured', completed: true },
-    { label: 'Team approvals ready', completed: true },
-    { label: 'Settlement automation enabled', completed: true },
   ];
 
   const allDone = capabilities.every((c) => c.completed);

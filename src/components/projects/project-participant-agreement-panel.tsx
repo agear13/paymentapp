@@ -89,6 +89,12 @@ type Props = {
   initialApproved: boolean;
   initialReferralIssuance: CommerceLink | null;
   initialScopedServiceRows?: ScopedServiceCommissionRow[];
+  /**
+   * preview   — read-only operator view; all mutations disabled.
+   * approval  — participant-facing; approve action enabled.
+   * completed — already approved; read-only with confirmation UI.
+   */
+  mode?: 'preview' | 'approval' | 'completed';
 };
 
 export function ProjectParticipantAgreementPanel({
@@ -99,6 +105,7 @@ export function ProjectParticipantAgreementPanel({
   initialApproved,
   initialReferralIssuance,
   initialScopedServiceRows = [],
+  mode = 'approval',
 }: Props) {
   const { currency: workspaceCurrency } = useOrganizationCurrency();
   const [participant, setParticipant] = React.useState(initialParticipant);
@@ -413,7 +420,14 @@ export function ProjectParticipantAgreementPanel({
           </div>
         ) : null}
 
-        {!approved ? (
+        {mode === 'preview' ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-800">
+            This is a read-only preview. To approve this agreement, use the approval link sent to
+            the participant directly.
+          </div>
+        ) : null}
+
+        {!approved && mode === 'approval' ? (
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -436,7 +450,7 @@ export function ProjectParticipantAgreementPanel({
           </form>
         ) : null}
 
-        {showCommerceAfterApproval ? (
+        {showCommerceAfterApproval && mode !== 'preview' ? (
           <div className="rounded-md border p-4 bg-background space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-medium">Trackable customer payment link</p>

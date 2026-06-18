@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,9 +30,29 @@ function roleAmountsFromDeal(deal: RecentDeal) {
   };
 }
 
+/**
+ * Page mode for the participant agreement page.
+ *
+ * preview   — operator-initiated read-only view. All mutations are disabled.
+ * approval  — participant-facing view. Approve/reject actions are enabled.
+ * completed — participant already approved. Read-only with confirmation UI.
+ */
+export type AgreementPageMode = 'preview' | 'approval' | 'completed';
+
+function derivePageMode(
+  urlMode: string | null,
+  participantApproved: boolean
+): AgreementPageMode {
+  if (urlMode === 'preview') return 'preview';
+  if (participantApproved) return 'completed';
+  return 'approval';
+}
+
 export default function DealInviteApprovalPage() {
   const params = useParams<{ token: string }>();
+  const searchParams = useSearchParams();
   const token = String(params?.token ?? '');
+  const urlMode = searchParams.get('mode');
 
   const [deal, setDeal] = React.useState<RecentDeal | null>(null);
   const [participant, setParticipant] = React.useState<DemoParticipant | null>(null);
@@ -225,6 +245,8 @@ export default function DealInviteApprovalPage() {
     COMMISSION_STRUCTURE_OPTIONS.find((o) => o.value === participant.commissionKind)?.label ??
     participant.commissionKind;
 
+  const pageMode = derivePageMode(urlMode, approved);
+
   if (workspaceSource === 'project' && deal) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
@@ -236,6 +258,7 @@ export default function DealInviteApprovalPage() {
           initialApproved={approved}
           initialReferralIssuance={referralIssuance}
           initialScopedServiceRows={scopedServiceRows}
+          mode={pageMode}
         />
       </div>
     );
@@ -341,11 +364,18 @@ export default function DealInviteApprovalPage() {
             )}
           </div>
 
+          {pageMode === 'preview' ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-800">
+              This is a read-only preview. To approve this agreement, use the approval link sent to
+              the participant directly.
+            </div>
+          ) : null}
+
           <form
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!approved) void approve();
+              if (pageMode === 'approval') void approve();
             }}
           >
             <div className="space-y-2">
@@ -357,13 +387,13 @@ export default function DealInviteApprovalPage() {
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Add an optional confirmation note"
-                disabled={approved}
+                disabled={pageMode !== 'approval'}
               />
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="submit" disabled={approved}>
-                {approved ? 'Agreement approved' : 'Approve role and commission'}
+              <Button type="submit" disabled={pageMode !== 'approval'}>
+                {pageMode === 'completed' ? 'Agreement approved' : pageMode === 'preview' ? 'Preview only' : 'Approve role and commission'}
               </Button>
               {approved && participant.approvedAt ? (
                 <span className="text-xs text-muted-foreground">
