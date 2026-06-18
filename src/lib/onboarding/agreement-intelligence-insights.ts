@@ -4,6 +4,7 @@ import type { OnboardingTemplateId, OnboardingUseCaseId } from '@/lib/onboarding
 import { ONBOARDING_AGREEMENT_TEMPLATES } from '@/lib/onboarding/operator-onboarding-types';
 import type {
   ParticipantCommercialCard,
+  RevenueShareSummaryRow,
   UnifiedSettlementScheduleEntry,
 } from '@/lib/ai-extractor/commercial-graph-types';
 import {
@@ -86,6 +87,8 @@ export type AgreementIntelligenceInsight = {
   participantCards?: ParticipantCommercialCard[];
   /** v5 — settlement blockers for executive summary. */
   settlementBlockers?: string[];
+  /** v5 — structured per-participant revenue share details (replaces "revenue sharing detected"). */
+  revenueShareSummary?: RevenueShareSummaryRow[];
   /** Template workflow — values are editable defaults, not extracted data. */
   isTemplateDraft?: boolean;
   templateId?: OnboardingTemplateId;
@@ -472,6 +475,7 @@ export function buildInsightsFromExtraction(
       settlementSchedule: commercialGraph?.settlementSchedule,
       participantCards: commercialGraph?.participantCards,
       settlementBlockers: readiness?.settlementBlockers,
+      revenueShareSummary: commercialGraph?.revenueShareSummary,
     },
     participants,
     result.projectDescription.value ?? undefined,
