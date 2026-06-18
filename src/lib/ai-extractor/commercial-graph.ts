@@ -1,23 +1,33 @@
 /**
- * V5 commercial obligation graph — structured metrics, summary, and participant cards.
+ * V5/V6 commercial obligation graph.
  *
- * Key guarantees:
- *   - Payment events and settlement rules are distinct concepts.
- *   - Per-participant data never inherits clauses from other participants (leakage guard).
- *   - Conditional bonuses attach to their parent payment event.
- *   - Revenue share summary is structured, not a generic count.
- *   - Every participant card has a computed review status.
+ * V6 additions:
+ *   - Payment events use short payment labels (amount/pct only, no timing prose).
+ *   - Fixed payments, revenue share, and conditional bonuses are separated.
+ *   - Revenue share rows include settlement timing and conditions.
+ *   - Each participant card carries explicit reviewReasons.
+ *   - Grouped blockers collapse same-type issues across all participants.
+ *   - Commercial risk summary replaces AI prose as the primary summary surface.
+ *
+ * V5 guarantees preserved:
+ *   - Payment events and settlement rules are distinct.
+ *   - Cross-participant trigger leakage is prevented.
+ *   - Conditional bonuses attach to parent payment events.
  */
 
 import { agreementTypeDisplayLabel } from './classify-agreement-type';
 import type {
   CommercialGraphSnapshot,
+  CommercialRiskItem,
   CommercialStructureMetrics,
+  GroupedBlocker,
   ParticipantCommercialCard,
   ParticipantReviewStatus,
   PaymentEventModel,
   RevenueShareDetail,
   RevenueShareSummaryRow,
+  ReviewReason,
+  ReviewReasonCode,
 } from './commercial-graph-types';
 import type { ExtractedCompensationTerm, ExtractedParty, ExtractionResult } from './extraction-types';
 import {
@@ -50,64 +60,113 @@ function collectVariableRevenueBases(result: ExtractionResult): string[] {
 
 /* ─── Cross-participant leakage guard ──────────────────────────────────────── */
 
-/**
- * Returns the set of trigger strings that appear in ALL (or all but one) parties'
- * compensation terms. These are global settlement clauses that the AI has
- * erroneously applied to every party — they should not appear as per-party
- * payment events.
- *
- * Threshold: if a trigger appears in ≥ (N - 1) parties for N ≥ 3 parties, treat
- * it as a global clause.
- */
 function buildGlobalTriggerSet(result: ExtractionResult): Set<string> {
   const partyCount = result.parties.length;
   if (partyCount < 3) return new Set();
 
-  const triggerFrequency = new Map<string, number>();
-
+  const freq = new Map<string, number>();
   for (const party of result.parties) {
-    const partyTriggers = new Set<string>();
+    const seen = new Set<string>();
     for (const term of party.compensationTerms ?? buildCompensationTermsFromParty(party, result)) {
       const t = term.trigger.value?.trim().toLowerCase();
-      if (t) partyTriggers.add(t);
+      if (t) seen.add(t);
     }
-    for (const t of partyTriggers) {
-      triggerFrequency.set(t, (triggerFrequency.get(t) ?? 0) + 1);
-    }
+    for (const t of seen) freq.set(t, (freq.get(t) ?? 0) + 1);
   }
 
   const threshold = partyCount - 1;
   const global = new Set<string>();
-  for (const [trigger, freq] of triggerFrequency) {
-    if (freq >= threshold) global.add(trigger);
+  for (const [trigger, count] of freq) {
+    if (count >= threshold) global.add(trigger);
   }
   return global;
 }
 
-/* ─── Payment event builder ─────────────────────────────────────────────────── */
+/* ─── Short payment labels (for payment event pays[] — amount/pct only) ─────── */
 
 /**
- * Groups a party's compensation terms into payment events.
- *
- * Rules:
- *   1. Terms are grouped by their timing trigger (Pass 1).
- *   2. `conditional_bonus` terms (Pass 2) attach to an existing event as a
- *      conditional add-on rather than becoming standalone events. They prefer
- *      to join the first event with a non-null timing; if none exists, they
- *      join the null-key group.
- *   3. Triggers that appear in globalTriggers (cross-participant leakage) are
- *      excluded from payment events and surfaced in settlementRules instead.
- *   4. Terms with null triggers form a single "timing not captured" event.
+ * Short label for use inside payment events.
+ * Contains only the amount or percentage — no timing prose.
  */
+function formatPaymentEventLabel(term: ExtractedCompensationTerm, currency: string): string {
+  const amount =
+    term.amount.value != null
+      ? `$${term.amount.value.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`
+      : null;
+  const pct = term.percentage.value != null ? `${term.percentage.value}%` : null;
+
+  switch (term.type) {
+    case 'fixed_fee':
+      return amount ?? 'Fixed payment';
+    case 'revenue_share': {
+      const basis = sanitizeRevenueBasis(term.revenueBasis.value?.trim());
+      return pct
+        ? `${pct}${basis ? ` ${basis}` : ' revenue share'}`
+        : 'Revenue share';
+    }
+    case 'instalment':
+      return amount ?? 'Instalment';
+    case 'milestone':
+      return amount ?? 'Milestone payment';
+    case 'conditional_bonus':
+      return amount ? `+${amount} bonus` : '+conditional bonus';
+    case 'attribution':
+      return 'Customer attribution';
+    default:
+      return amount ?? pct ?? 'Payment';
+  }
+}
+
+/**
+ * Sanitize revenue basis — strip any stray dollar amounts or "fixed" language
+ * that the AI may have erroneously included in the revenue basis field.
+ */
+function sanitizeRevenueBasis(basis: string | null | undefined): string | null {
+  if (!basis) return null;
+  // Remove patterns like "$1,000", "fixed $xxx", "fixed split", standalone dollar amounts
+  const sanitized = basis
+    .replace(/\$[\d,]+(?:\.\d{1,2})?/g, '')
+    .replace(/\bfixed\s+split\b/gi, '')
+    .replace(/\bfixed\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return sanitized || null;
+}
+
+/* ─── Separated compensation categories ─────────────────────────────────────── */
+
+function buildFixedPayments(terms: ExtractedCompensationTerm[], currency: string): string[] {
+  return terms
+    .filter((t) => t.type === 'fixed_fee' || t.type === 'instalment' || t.type === 'milestone')
+    .map((t) => formatCompensationTermLabel(t, currency));
+}
+
+function buildRevenueShareTerms(terms: ExtractedCompensationTerm[], currency: string): string[] {
+  return terms
+    .filter((t) => t.type === 'revenue_share')
+    .map((t) => {
+      const pct = t.percentage.value != null ? `${t.percentage.value}%` : null;
+      const basis = sanitizeRevenueBasis(t.revenueBasis.value?.trim());
+      if (pct && basis) return `${pct} of ${basis}`;
+      if (pct) return `${pct} revenue share`;
+      return formatCompensationTermLabel(t, currency);
+    });
+}
+
+function buildConditionalBonuses(terms: ExtractedCompensationTerm[], currency: string): string[] {
+  return terms
+    .filter((t) => t.type === 'conditional_bonus')
+    .map((t) => formatCompensationTermLabel(t, currency));
+}
+
+/* ─── Payment events (V5 two-pass builder, V6 short labels) ─────────────────── */
+
 function buildPaymentEventsForParty(
   terms: ExtractedCompensationTerm[],
   currency: string,
   globalTriggers: Set<string>
 ): PaymentEventModel[] {
-  const eventMap = new Map<string | null, {
-    pays: string[];
-    conditions: string[];
-  }>();
+  const eventMap = new Map<string | null, { pays: string[]; conditions: string[] }>();
 
   const addToEvent = (key: string | null, payLabel: string) => {
     const existing = eventMap.get(key) ?? { pays: [], conditions: [] };
@@ -115,7 +174,7 @@ function buildPaymentEventsForParty(
     eventMap.set(key, existing);
   };
 
-  // Pass 1: build events from non-conditional terms
+  // Pass 1: build events from non-conditional terms (short labels only)
   for (const term of terms) {
     if (term.type === 'conditional_bonus') continue;
 
@@ -123,62 +182,38 @@ function buildPaymentEventsForParty(
     const isGlobal = rawTrigger !== null && globalTriggers.has(rawTrigger.toLowerCase());
     const effectiveTrigger = isGlobal ? null : rawTrigger;
 
-    addToEvent(effectiveTrigger, formatCompensationTermLabel(term, currency));
+    addToEvent(effectiveTrigger, formatPaymentEventLabel(term, currency));
   }
 
-  // Pass 2: attach conditional bonuses to existing events
-  // Each conditional bonus joins the first event with a real timing (non-null),
-  // or falls back to the null-key group, rather than becoming a standalone event.
+  // Pass 2: attach conditional bonuses to existing events (prefer timed events)
   for (const term of terms) {
     if (term.type !== 'conditional_bonus') continue;
 
     const conditionText = term.trigger.value?.trim() ?? 'condition met';
-    const bonusLabel =
-      term.amount.value != null
-        ? `+$${term.amount.value.toLocaleString('en-AU', { maximumFractionDigits: 0 })} bonus`
-        : '+conditional bonus';
+    const bonusLabel = formatPaymentEventLabel(term, currency);
 
-    // Prefer first event that has a real timing; otherwise use null (or first available)
     const allKeys = [...eventMap.keys()];
-    const parentKey =
-      allKeys.find((k) => k !== null) ??
-      allKeys[0] ??
-      null;
+    const parentKey = allKeys.find((k) => k !== null) ?? allKeys[0] ?? null;
 
     const evt = eventMap.get(parentKey);
     if (evt) {
       evt.pays.push(bonusLabel);
       if (!evt.conditions.includes(conditionText)) evt.conditions.push(conditionText);
     } else {
-      // No existing event — create a standalone conditional event
-      eventMap.set(null, {
-        pays: [formatCompensationTermLabel(term, currency)],
-        conditions: [conditionText],
-      });
+      eventMap.set(null, { pays: [formatPaymentEventLabel(term, currency)], conditions: [conditionText] });
     }
   }
 
   const events: PaymentEventModel[] = [];
   for (const [due, { pays, conditions }] of eventMap) {
     if (pays.length === 0) continue;
-    events.push({
-      due,
-      pays,
-      condition: conditions.length > 0 ? conditions.join('; ') : null,
-    });
+    events.push({ due, pays, condition: conditions.length > 0 ? conditions.join('; ') : null });
   }
-
   return events;
 }
 
 /* ─── Settlement rules ──────────────────────────────────────────────────────── */
 
-/**
- * Returns settlement rules for a party, drawn only from their own
- * `settlementRules` field (party-specific clauses). Never inherits from
- * other parties. Triggers in globalTriggers are surfaced here rather than
- * in payment events.
- */
 function buildSettlementRulesForParty(
   party: ExtractedParty,
   result: ExtractionResult,
@@ -186,13 +221,16 @@ function buildSettlementRulesForParty(
 ): string[] {
   const rules: string[] = [];
 
-  // Party-level settlement rules (from v5 extraction)
-  for (const rule of party.settlementRules ?? []) {
+  // Result-level settlement rules are agreement-wide clauses (not per-party in v5 schema).
+  // Per-party settlement rules are not yet in ExtractedParty — handled via globalTriggers below.
+  for (const rule of result.settlementRules ?? []) {
     const text = rule.trigger.value?.trim();
-    if (text) rules.push(text);
+    if (text && !rules.some((r) => r.toLowerCase() === text.toLowerCase())) {
+      rules.push(text);
+    }
   }
 
-  // Global triggers that were stripped from payment events — show here once
+  // Global triggers stripped from payment events — show once per party as settlement rule
   for (const term of party.compensationTerms ?? buildCompensationTermsFromParty(party, result)) {
     const rawTrigger = term.trigger.value?.trim();
     if (!rawTrigger) continue;
@@ -207,46 +245,272 @@ function buildSettlementRulesForParty(
 
 /* ─── Revenue share detail ───────────────────────────────────────────────────── */
 
-function extractRevenueShareDetail(
-  terms: ExtractedCompensationTerm[]
-): RevenueShareDetail | null {
+function extractRevenueShareDetail(terms: ExtractedCompensationTerm[]): RevenueShareDetail | null {
   const term = terms.find((t) => t.type === 'revenue_share');
   if (!term || term.percentage.value == null) return null;
+  const basis = sanitizeRevenueBasis(term.revenueBasis.value?.trim());
   return {
     percentage: term.percentage.value,
-    revenueBasis: term.revenueBasis.value?.trim() || 'revenue',
+    revenueBasis: basis ?? 'revenue',
   };
+}
+
+/* ─── Review reasons (V6 — specific, never generic) ─────────────────────────── */
+
+function buildReviewReasons(
+  party: ExtractedParty,
+  terms: ExtractedCompensationTerm[]
+): ReviewReason[] {
+  const reasons: ReviewReason[] = [];
+
+  if (!party.email.value?.trim()) {
+    reasons.push({ code: 'missing_email', label: 'Missing email address' });
+  }
+
+  // Payment destination is always flagged — extraction can't capture bank details
+  reasons.push({ code: 'missing_payment_destination', label: 'Missing payout destination' });
+
+  // Tax/ABN details not captured in conversation
+  reasons.push({ code: 'missing_tax_details', label: 'Missing tax details' });
+
+  const lowConfidenceTerms = terms.filter((t) => t.confidence === 'low');
+  if (lowConfidenceTerms.length > 0) {
+    reasons.push({
+      code: 'low_confidence_compensation',
+      label: `AI confidence low on ${lowConfidenceTerms.length === 1 ? 'one compensation term' : `${lowConfidenceTerms.length} compensation terms`}`,
+    });
+  }
+
+  const hasConditional = terms.some((t) => t.type === 'conditional_bonus');
+  if (hasConditional) {
+    reasons.push({ code: 'conditional_payment_unconfirmed', label: 'Conditional payment requires confirmation' });
+  }
+
+  const hasRevShareWithoutBasis = terms.some(
+    (t) => t.type === 'revenue_share' && !sanitizeRevenueBasis(t.revenueBasis.value?.trim())
+  );
+  if (hasRevShareWithoutBasis) {
+    reasons.push({ code: 'missing_revenue_basis', label: 'Revenue share basis not specified' });
+  }
+
+  if (!party.role.value?.trim()) {
+    reasons.push({ code: 'missing_role', label: 'Commercial role not defined' });
+  }
+
+  return reasons;
+}
+
+/* ─── Review status (derived from review reasons) ───────────────────────────── */
+
+function computeReviewStatus(reasons: ReviewReason[], terms: ExtractedCompensationTerm[]): ParticipantReviewStatus {
+  const hasCompensation = terms.length > 0;
+  if (!hasCompensation) return 'missing_info';
+
+  const missingInfoCodes: ReviewReasonCode[] = [
+    'missing_email',
+    'missing_payment_destination',
+    'missing_tax_details',
+    'missing_role',
+  ];
+
+  const hasMissingInfo = reasons.some((r) => missingInfoCodes.includes(r.code));
+  if (hasMissingInfo) return 'missing_info';
+
+  const reviewCodes: ReviewReasonCode[] = [
+    'low_confidence_compensation',
+    'conditional_payment_unconfirmed',
+    'missing_revenue_basis',
+    'unresolved_dependency',
+  ];
+
+  const needsReview = reasons.some((r) => reviewCodes.includes(r.code));
+  if (needsReview) return 'needs_review';
+
+  return 'ready';
 }
 
 /* ─── Low confidence items ───────────────────────────────────────────────────── */
 
-function buildLowConfidenceItems(
-  terms: ExtractedCompensationTerm[],
-  currency: string
-): string[] {
+function buildLowConfidenceItems(terms: ExtractedCompensationTerm[], currency: string): string[] {
   return terms
     .filter((t) => t.confidence === 'low' || t.confidence === 'medium')
     .map((t) => formatCompensationTermLabel(t, currency));
 }
 
-/* ─── Review status ──────────────────────────────────────────────────────────── */
+/* ─── Grouped blockers (V6) ──────────────────────────────────────────────────── */
 
-function computeReviewStatus(
-  party: ExtractedParty,
-  terms: ExtractedCompensationTerm[],
-  operational: ReturnType<typeof buildOperationalObligationsFromParty>
-): ParticipantReviewStatus {
-  const hasEmail = Boolean(party.email.value?.trim());
-  const hasCompensation = terms.length > 0;
-  const hasRole = Boolean(party.role.value?.trim());
+/**
+ * Collapses same-type review reasons across participants into one grouped blocker.
+ * Example: 5 participants all missing email → one "Participant Emails" entry.
+ */
+function buildGroupedBlockers(cards: ParticipantCommercialCard[]): GroupedBlocker[] {
+  const byCode = new Map<ReviewReasonCode | 'other', { reason: ReviewReason; participants: string[] }>();
 
-  if (!hasCompensation || !hasRole) return 'missing_info';
+  for (const card of cards) {
+    for (const reason of card.reviewReasons) {
+      const entry = byCode.get(reason.code) ?? { reason, participants: [] };
+      if (!entry.participants.includes(card.name)) entry.participants.push(card.name);
+      byCode.set(reason.code, entry);
+    }
+  }
 
-  const hasLowConfidence = terms.some((t) => t.confidence === 'low');
-  const hasAmbiguousAmount = terms.some((t) => t.amount.value == null && t.percentage.value == null && t.type !== 'attribution');
-  if (hasLowConfidence || hasAmbiguousAmount || !hasEmail) return 'needs_review';
+  const codeToTitle: Record<ReviewReasonCode, string> = {
+    missing_email: 'Participant Emails',
+    missing_payment_destination: 'Payout Destinations',
+    missing_tax_details: 'Tax Details',
+    low_confidence_compensation: 'AI Confidence',
+    conditional_payment_unconfirmed: 'Conditional Payments',
+    missing_revenue_basis: 'Revenue Basis',
+    missing_role: 'Commercial Roles',
+    unresolved_dependency: 'Unresolved Dependencies',
+  };
 
-  return 'ready';
+  const descriptionTemplate = (code: ReviewReasonCode, count: number): string => {
+    const s = count === 1 ? '' : 's';
+    switch (code) {
+      case 'missing_email': return `${count} participant${s} require${count === 1 ? 's' : ''} an email address`;
+      case 'missing_payment_destination': return `${count} participant${s} missing a payout destination`;
+      case 'missing_tax_details': return `${count} participant${s} missing tax information`;
+      case 'low_confidence_compensation': return `${count} participant${s} have uncertain compensation extractions`;
+      case 'conditional_payment_unconfirmed': return `${count} participant${s} have unconfirmed conditional payments`;
+      case 'missing_revenue_basis': return `${count} participant${s} missing revenue share basis`;
+      case 'missing_role': return `${count} participant${s} missing a commercial role definition`;
+      case 'unresolved_dependency': return `${count} participant${s} have unresolved commercial dependencies`;
+      default: return `${count} participant${s} require attention`;
+    }
+  };
+
+  return [...byCode.entries()]
+    .filter(([, { participants }]) => participants.length > 0)
+    .map(([code, { participants }]) => ({
+      type: code,
+      title: codeToTitle[code as ReviewReasonCode] ?? 'Review Required',
+      description: descriptionTemplate(code as ReviewReasonCode, participants.length),
+      participants,
+    }))
+    .sort((a, b) => b.participants.length - a.participants.length);
+}
+
+/* ─── Commercial risk summary (V6) ──────────────────────────────────────────── */
+
+function buildCommercialRiskSummary(
+  metrics: CommercialStructureMetrics,
+  result: ExtractionResult
+): CommercialRiskItem[] {
+  const items: CommercialRiskItem[] = [];
+
+  items.push({ type: 'fact', text: `${metrics.participantCount} commercial participant${metrics.participantCount === 1 ? '' : 's'}` });
+
+  if (metrics.estimatedFixedCommitment > 0) {
+    items.push({
+      type: 'fact',
+      text: `Estimated fixed commitment $${metrics.estimatedFixedCommitment.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`,
+    });
+  }
+
+  if (metrics.revenueShareAgreementCount > 0) {
+    items.push({ type: 'fact', text: `${metrics.revenueShareAgreementCount} revenue share agreement${metrics.revenueShareAgreementCount === 1 ? '' : 's'}` });
+  }
+
+  if (metrics.instalmentPaymentCount > 0) {
+    items.push({ type: 'fact', text: `${metrics.instalmentPaymentCount} instalment payment${metrics.instalmentPaymentCount === 1 ? '' : 's'} scheduled` });
+  }
+
+  if (metrics.conditionalPaymentCount > 0) {
+    items.push({ type: 'fact', text: `${metrics.conditionalPaymentCount} conditional attendance or performance bonus${metrics.conditionalPaymentCount === 1 ? '' : 'es'}` });
+  }
+
+  if (metrics.milestonePaymentCount > 0) {
+    items.push({ type: 'fact', text: `${metrics.milestonePaymentCount} milestone-based payment${metrics.milestonePaymentCount === 1 ? '' : 's'}` });
+  }
+
+  const totalPaymentEvents = result.parties.reduce((sum, party) => {
+    const terms = party.compensationTerms ?? buildCompensationTermsFromParty(party, result);
+    const uniqueTriggers = new Set(
+      terms.map((t) => t.trigger.value?.trim()).filter(Boolean)
+    );
+    return sum + Math.max(uniqueTriggers.size, terms.length > 0 ? 1 : 0);
+  }, 0);
+
+  if (totalPaymentEvents > 0) {
+    items.push({ type: 'fact', text: `${totalPaymentEvents} scheduled payment event${totalPaymentEvents === 1 ? '' : 's'}` });
+  }
+
+  // Warnings — things requiring operator verification
+  for (const party of result.parties) {
+    const terms = party.compensationTerms ?? buildCompensationTermsFromParty(party, result);
+    const name = party.name.value?.trim() ?? 'Unknown';
+    const notes = party.notes.value?.toLowerCase() ?? '';
+    // Check notes for promo / referral code mentions
+    const hasPromoCode = /promo|referral\s*code|via\s+[A-Z0-9]+/i.test(party.notes.value ?? '');
+
+    for (const term of terms) {
+      if (term.type !== 'revenue_share') continue;
+      const basis = sanitizeRevenueBasis(term.revenueBasis.value?.trim());
+      if (!basis) {
+        items.push({ type: 'warning', text: `${name}'s revenue share basis requires manual verification` });
+      } else if (hasPromoCode || /promo|code|referral|via\s+[A-Z0-9]{4,}/i.test(basis)) {
+        items.push({ type: 'warning', text: `${name}'s ${term.percentage.value ?? ''}% attribution relies on promo code tracking` });
+      } else if (/sponsor/i.test(basis) || /sponsor/i.test(notes)) {
+        items.push({ type: 'warning', text: `${name}'s sponsorship revenue requires external verification` });
+      } else if (/bar|merch|merchandise|door/i.test(basis)) {
+        items.push({ type: 'warning', text: `${name}'s ${basis} revenue is supplied externally` });
+      }
+    }
+  }
+
+  // De-duplicate warnings
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (item.type === 'fact') return true;
+    if (seen.has(item.text)) return false;
+    seen.add(item.text);
+    return true;
+  });
+}
+
+/* ─── Revenue share summary ──────────────────────────────────────────────────── */
+
+function buildRevenueShareSummary(
+  result: ExtractionResult,
+  cards: ParticipantCommercialCard[]
+): RevenueShareSummaryRow[] {
+  const rows: RevenueShareSummaryRow[] = [];
+
+  for (const card of cards) {
+    if (!card.revenueShareDetail) continue;
+
+    const party = result.parties.find((p) => p.id === card.participantId);
+    const terms = party?.compensationTerms ?? [];
+    const rsTerm = terms.find((t) => t.type === 'revenue_share');
+
+    // Settlement timing: from revenue share term's trigger
+    const settlement = rsTerm?.trigger.value?.trim() ?? undefined;
+    // Condition: from commercial dependencies related to revenue share
+    const dep = party?.commercialDependencies?.find(
+      (d) => /sponsor|fund|clear|revenue/i.test(d.description.value ?? '')
+    );
+    const condition = dep?.description.value?.trim() ?? undefined;
+
+    // Referral code from notes
+    let referralCode: string | undefined;
+    if (party?.notes.value) {
+      const match = party.notes.value.match(/promo(?:tion)?\s*(?:code)?[:\s]+([A-Z0-9]+)/i);
+      if (match?.[1]) referralCode = match[1];
+    }
+
+    rows.push({
+      participantId: card.participantId,
+      participantName: card.name,
+      percentage: card.revenueShareDetail.percentage,
+      revenueBasis: card.revenueShareDetail.revenueBasis,
+      referralCode,
+      settlement,
+      condition,
+    });
+  }
+
+  return rows;
 }
 
 /* ─── Commercial structure metrics ──────────────────────────────────────────── */
@@ -314,43 +578,26 @@ export function buildCommercialStructureOverview(
   ];
 
   if (metrics.hybridCompensationCount > 0) {
-    bullets.push(
-      `${metrics.hybridCompensationCount} hybrid compensation arrangement${metrics.hybridCompensationCount === 1 ? '' : 's'}`
-    );
+    bullets.push(`${metrics.hybridCompensationCount} hybrid compensation arrangement${metrics.hybridCompensationCount === 1 ? '' : 's'}`);
   }
   if (metrics.milestonePaymentCount > 0) {
-    bullets.push(
-      `${metrics.milestonePaymentCount} milestone payment arrangement${metrics.milestonePaymentCount === 1 ? '' : 's'}`
-    );
+    bullets.push(`${metrics.milestonePaymentCount} milestone payment arrangement${metrics.milestonePaymentCount === 1 ? '' : 's'}`);
   }
   if (metrics.instalmentPaymentCount > 0) {
-    bullets.push(
-      `${metrics.instalmentPaymentCount} instalment payment${metrics.instalmentPaymentCount === 1 ? '' : 's'}`
-    );
+    bullets.push(`${metrics.instalmentPaymentCount} instalment payment${metrics.instalmentPaymentCount === 1 ? '' : 's'}`);
   }
   if (metrics.revenueShareAgreementCount > 0) {
-    bullets.push(
-      `${metrics.revenueShareAgreementCount} revenue share agreement${metrics.revenueShareAgreementCount === 1 ? '' : 's'}`
-    );
+    bullets.push(`${metrics.revenueShareAgreementCount} revenue share agreement${metrics.revenueShareAgreementCount === 1 ? '' : 's'}`);
   }
   if (metrics.conditionalPaymentCount > 0) {
-    bullets.push(
-      `${metrics.conditionalPaymentCount} conditional bonus${metrics.conditionalPaymentCount === 1 ? '' : 'es'}`
-    );
+    bullets.push(`${metrics.conditionalPaymentCount} conditional bonus${metrics.conditionalPaymentCount === 1 ? '' : 'es'}`);
   }
-
   if (metrics.estimatedFixedCommitment > 0) {
-    bullets.push(
-      `Estimated committed fixed spend: $${metrics.estimatedFixedCommitment.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`
-    );
+    bullets.push(`Estimated committed fixed spend: $${metrics.estimatedFixedCommitment.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`);
   }
-
   if (metrics.variableRevenueBases.length > 0) {
-    bullets.push(
-      `Additional variable obligations tied to ${metrics.variableRevenueBases.join(', ')}`
-    );
+    bullets.push(`Additional variable obligations tied to ${metrics.variableRevenueBases.join(', ')}`);
   }
-
   return { bulletPoints: bullets };
 }
 
@@ -361,51 +608,35 @@ export function buildCommercialSummaryNarrative(
   const agreementName = result.projectName.value?.trim() || 'This agreement';
   const parts: string[] = [];
 
-  parts.push(
-    `${agreementName} engages ${metrics.participantCount} independent supplier${metrics.participantCount === 1 ? '' : 's'}.`
-  );
+  parts.push(`${agreementName} engages ${metrics.participantCount} independent supplier${metrics.participantCount === 1 ? '' : 's'}.`);
 
   if (metrics.hybridCompensationCount > 0) {
-    parts.push(
-      `${metrics.hybridCompensationCount} supplier${metrics.hybridCompensationCount === 1 ? ' receives a hybrid compensation arrangement combining fixed payments and revenue sharing' : 's receive hybrid compensation combining fixed payments and revenue sharing'}.`
-    );
+    parts.push(`${metrics.hybridCompensationCount} supplier${metrics.hybridCompensationCount === 1 ? ' receives a hybrid compensation arrangement combining fixed payments and revenue sharing' : 's receive hybrid compensation combining fixed payments and revenue sharing'}.`);
   }
-
   if (metrics.milestonePaymentCount > 0) {
     parts.push('At least one supplier has milestone-based payments tied to delivery.');
   }
-
   if (metrics.instalmentPaymentCount > 0) {
     parts.push('At least one supplier has instalment payments tied to event timing.');
   }
-
   if (metrics.conditionalPaymentCount > 0) {
-    parts.push(
-      `${metrics.conditionalPaymentCount} supplier${metrics.conditionalPaymentCount === 1 ? ' has a conditional attendance or performance bonus' : 's have conditional attendance or performance bonuses'}.`
-    );
+    parts.push(`${metrics.conditionalPaymentCount} supplier${metrics.conditionalPaymentCount === 1 ? ' has a conditional attendance or performance bonus' : 's have conditional attendance or performance bonuses'}.`);
   }
-
   if (metrics.estimatedFixedCommitment > 0) {
-    parts.push(
-      `The agreement commits approximately $${metrics.estimatedFixedCommitment.toLocaleString('en-AU', { maximumFractionDigits: 0 })} in fixed payments`
-    );
+    parts.push(`The agreement commits approximately $${metrics.estimatedFixedCommitment.toLocaleString('en-AU', { maximumFractionDigits: 0 })} in fixed payments`);
     if (metrics.variableRevenueBases.length > 0) {
-      parts.push(
-        `in addition to revenue share obligations across ${metrics.variableRevenueBases.join(', ')}.`
-      );
+      parts.push(`in addition to revenue share obligations across ${metrics.variableRevenueBases.join(', ')}.`);
     } else {
       parts.push('in addition to any variable revenue share obligations.');
     }
   } else if (metrics.variableRevenueBases.length > 0) {
-    parts.push(
-      `Compensation is primarily variable, tied to ${metrics.variableRevenueBases.join(', ')}.`
-    );
+    parts.push(`Compensation is primarily variable, tied to ${metrics.variableRevenueBases.join(', ')}.`);
   }
 
   return parts.join(' ');
 }
 
-/* ─── Settlement triggers (legacy compat) ─────────────────────────────────── */
+/* ─── Legacy settlement triggers ────────────────────────────────────────────── */
 
 function settlementTriggersForParty(result: ExtractionResult, partyId: string): string[] {
   const fromEvents = (result.settlementEvents ?? [])
@@ -421,45 +652,12 @@ function settlementTriggersForParty(result: ExtractionResult, partyId: string): 
   return uniqueNonEmpty([...fromEvents, ...fromTerms]);
 }
 
-/* ─── Revenue share summary ──────────────────────────────────────────────────── */
-
-function buildRevenueShareSummary(
-  result: ExtractionResult,
-  cards: ParticipantCommercialCard[]
-): RevenueShareSummaryRow[] {
-  const rows: RevenueShareSummaryRow[] = [];
-
-  for (const card of cards) {
-    if (!card.revenueShareDetail) continue;
-    rows.push({
-      participantId: card.participantId,
-      participantName: card.name,
-      percentage: card.revenueShareDetail.percentage,
-      revenueBasis: card.revenueShareDetail.revenueBasis,
-      referralCode: card.revenueShareDetail.referralCode,
-    });
-  }
-
-  // Also pull referral codes from parties if present (not yet in card)
-  for (const row of rows) {
-    const party = result.parties.find((p) => p.id === row.participantId);
-    if (party?.notes.value) {
-      const codeMatch = party.notes.value.match(/promo(?:tion)? code[:\s]+([A-Z0-9]+)/i);
-      if (codeMatch?.[1]) row.referralCode = codeMatch[1];
-    }
-  }
-
-  return rows;
-}
-
 /* ─── Main graph builder ─────────────────────────────────────────────────────── */
 
 export function buildCommercialGraph(result: ExtractionResult): CommercialGraphSnapshot {
   const metrics = buildCommercialStructureMetrics(result);
   const owner = detectAgreementOwner(result);
   const currency = result.currency.value?.trim().toUpperCase() || 'AUD';
-
-  // Compute global trigger set once for all parties (leakage guard)
   const globalTriggers = buildGlobalTriggerSet(result);
 
   const participantCards: ParticipantCommercialCard[] = result.parties.map((party) => {
@@ -472,26 +670,27 @@ export function buildCommercialGraph(result: ExtractionResult): CommercialGraphS
     const settlementRules = buildSettlementRulesForParty(party, result, globalTriggers);
     const revenueShareDetail = extractRevenueShareDetail(compensation);
     const lowConfidenceItems = buildLowConfidenceItems(compensation, currency);
-    const reviewStatus = computeReviewStatus(party, compensation, operational);
+    const reviewReasons = buildReviewReasons(party, compensation);
+    const reviewStatus = computeReviewStatus(reviewReasons, compensation);
 
     return {
       participantId: party.id,
       name: party.name.value?.trim() || 'Unnamed participant',
       role: party.role.value?.trim() || 'Participant',
-      serviceCategory:
-        categories.length > 0 ? serviceCategoryDisplayLabel(categories[0]!) : null,
+      serviceCategory: categories.length > 0 ? serviceCategoryDisplayLabel(categories[0]!) : null,
       deliverables: operational.map((o) => o.description.value?.trim()).filter(Boolean) as string[],
-      operationalObligations: operational
-        .map((o) => o.description.value?.trim())
-        .filter(Boolean) as string[],
+      operationalObligations: operational.map((o) => o.description.value?.trim()).filter(Boolean) as string[],
       compensationTerms: compensation.map((t) => formatCompensationTermLabel(t, currency)),
+      fixedPayments: buildFixedPayments(compensation, currency),
+      revenueShareTerms: buildRevenueShareTerms(compensation, currency),
+      conditionalBonuses: buildConditionalBonuses(compensation, currency),
       paymentEvents,
       settlementRules,
-      // Legacy field — kept for backward compatibility
       settlementSchedule: settlementTriggersForParty(result, party.id),
       dependencies: dependencies.map((d) => d.description.value?.trim()).filter(Boolean) as string[],
       revenueShareDetail,
       lowConfidenceItems,
+      reviewReasons,
       reviewStatus,
     };
   });
@@ -507,6 +706,8 @@ export function buildCommercialGraph(result: ExtractionResult): CommercialGraphS
   }));
 
   const revenueShareSummary = buildRevenueShareSummary(result, participantCards);
+  const groupedBlockers = buildGroupedBlockers(participantCards);
+  const commercialRiskSummary = buildCommercialRiskSummary(metrics, result);
 
   return {
     schemaVersion: 'v5',
@@ -528,6 +729,8 @@ export function buildCommercialGraph(result: ExtractionResult): CommercialGraphS
       items: card.compensationTerms,
     })),
     revenueShareSummary,
+    groupedBlockers,
+    commercialRiskSummary,
     readinessAssessment: result.readinessAssessment,
   };
 }

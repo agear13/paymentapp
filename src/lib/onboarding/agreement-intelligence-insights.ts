@@ -3,6 +3,8 @@ import type { OnboardingDraftParticipant } from '@/components/onboarding/onboard
 import type { OnboardingTemplateId, OnboardingUseCaseId } from '@/lib/onboarding/operator-onboarding-types';
 import { ONBOARDING_AGREEMENT_TEMPLATES } from '@/lib/onboarding/operator-onboarding-types';
 import type {
+  CommercialRiskItem,
+  GroupedBlocker,
   ParticipantCommercialCard,
   RevenueShareSummaryRow,
   UnifiedSettlementScheduleEntry,
@@ -89,6 +91,10 @@ export type AgreementIntelligenceInsight = {
   settlementBlockers?: string[];
   /** v5 — structured per-participant revenue share details (replaces "revenue sharing detected"). */
   revenueShareSummary?: RevenueShareSummaryRow[];
+  /** v6 — grouped blockers collapsed by type (replaces per-participant repeated blocker lists). */
+  groupedBlockers?: GroupedBlocker[];
+  /** v6 — structured commercial risk summary (facts + warnings, replaces AI prose). */
+  commercialRiskSummary?: CommercialRiskItem[];
   /** Template workflow — values are editable defaults, not extracted data. */
   isTemplateDraft?: boolean;
   templateId?: OnboardingTemplateId;
@@ -476,6 +482,8 @@ export function buildInsightsFromExtraction(
       participantCards: commercialGraph?.participantCards,
       settlementBlockers: readiness?.settlementBlockers,
       revenueShareSummary: commercialGraph?.revenueShareSummary,
+      groupedBlockers: commercialGraph?.groupedBlockers,
+      commercialRiskSummary: commercialGraph?.commercialRiskSummary,
     },
     participants,
     result.projectDescription.value ?? undefined,
