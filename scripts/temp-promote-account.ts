@@ -10,11 +10,14 @@ import { config } from 'dotenv';
 import { resolve } from 'path';
 import { randomUUID } from 'crypto';
 
-// Load env before any Prisma imports
+// Load env before Prisma import
 config({ path: resolve(__dirname, '../.env.local') });
 config({ path: resolve(__dirname, '../.env') });
 
-import { prisma } from '../src/lib/server/prisma';
+// Import PrismaClient directly — avoids the Next.js server-only diagnostics layer
+// that is incompatible with plain Node scripts.
+import { PrismaClient } from '../src/node_modules/@prisma/client/index.js';
+const prisma = new PrismaClient();
 
 /* ─── Types ─────────────────────────────────────────────────────────────────── */
 
@@ -77,22 +80,22 @@ type OrgRow = {
 };
 
 async function findOrganisationsForUser(userId: string): Promise<OrgRow[]> {
-  return prisma.$queryRaw<OrgRow[]>`
-    SELECT
-      o.id,
-      o.name,
-      o.clerk_org_id,
-      uo.role,
-      o.subscription_plan,
-      o.subscription_status,
-      o.stripe_customer_id,
-      o.stripe_subscription_id,
-      o.current_period_end
-    FROM organizations o
-    INNER JOIN user_organizations uo ON uo.organization_id = o.id
-    WHERE uo.user_id = ${userId}
-    ORDER BY uo.created_at ASC
-  `;
+  const memberships = await prisma.user_organizations.findMany({
+    where: { user_id: userId },
+    include: { organizations: true },
+    orderBy: { created_at: 'asc' },
+  });
+  return memberships.map((m) => ({
+    id: m.organizations.id,
+    name: m.organizations.name,
+    clerk_org_id: m.organizations.clerk_org_id,
+    role: m.role,
+    subscription_plan: m.organizations.subscription_plan,
+    subscription_status: m.organizations.subscription_status,
+    stripe_customer_id: m.organizations.stripe_customer_id ?? null,
+    stripe_subscription_id: m.organizations.stripe_subscription_id ?? null,
+    current_period_end: m.organizations.current_period_end ?? null,
+  }));
 }
 
 /* ─── Entitlement summary ────────────────────────────────────────────────────── */
@@ -148,21 +151,24 @@ async function promoteAccount(opts: { email: string; plan: SubscriptionPlan; org
   let org: OrgRow;
 
   if (opts.orgId) {
-    const found = await prisma.$queryRaw<OrgRow[]>`
-      SELECT
-        id, name, clerk_org_id,
-        'OWNER' as role,
-        subscription_plan, subscription_status,
-        stripe_customer_id, stripe_subscription_id, current_period_end
-      FROM organizations
-      WHERE id = ${opts.orgId}::uuid
-      LIMIT 1
-    `;
-    if (!found || found.length === 0) {
+    const found = await prisma.organizations.findUnique({
+      where: { id: opts.orgId },
+    });
+    if (!found) {
       console.error(`✗ No organisation found with id "${opts.orgId}".`);
       process.exit(1);
     }
-    org = found[0]!;
+    org = {
+      id: found.id,
+      name: found.name,
+      clerk_org_id: found.clerk_org_id,
+      role: 'OWNER',
+      subscription_plan: found.subscription_plan,
+      subscription_status: found.subscription_status,
+      stripe_customer_id: found.stripe_customer_id ?? null,
+      stripe_subscription_id: found.stripe_subscription_id ?? null,
+      current_period_end: found.current_period_end ?? null,
+    };
   } else {
     const orgs = await findOrganisationsForUser(userId);
     if (orgs.length === 0) {
@@ -228,48 +234,46 @@ async function promoteAccount(opts: { email: string; plan: SubscriptionPlan; org
   console.log(`Promoting to "${plan}" ...`);
 
   try {
-    await prisma.$transaction(async (tx) => {
-      await tx.organizations.update({
-        where: { id: org.id },
-        data: {
-          subscription_plan:   plan,
-          subscription_status: 'active',
-          ...(needsDemoStripeId && {
-            stripe_subscription_id: demoStripeSubId,
-            current_period_end:     oneYearFromNow,
-          }),
-          ...(!needsDemoStripeId && plan === 'enterprise' && {
-            // Clear any stale Stripe subscription for enterprise
-            stripe_subscription_id: null,
-            current_period_end:     null,
-          }),
-        },
-      });
+    await prisma.organizations.update({
+      where: { id: org.id },
+      data: {
+        subscription_plan:   plan,
+        subscription_status: 'active',
+        ...(needsDemoStripeId && {
+          stripe_subscription_id: demoStripeSubId,
+          current_period_end:     oneYearFromNow,
+        }),
+        ...(!needsDemoStripeId && plan === 'enterprise' && {
+          stripe_subscription_id: null,
+          current_period_end:     null,
+        }),
+      },
+    });
 
-      // Write an audit log entry so the promotion is traceable
-      await tx.audit_logs.create({
-        data: {
-          id:              randomUUID(),
-          organization_id: org.id,
-          action:          'DEMO_ACCOUNT_PROMOTED',
-          actor:           `script:temp-promote-account`,
-          details: {
-            previousPlan:   org.subscription_plan,
-            previousStatus: org.subscription_status,
-            newPlan:        plan,
-            newStatus:      'active',
-            promotedEmail:  resolvedEmail,
-            demoStripeSubId: demoStripeSubId ?? null,
-            note:           'Temporary demo promotion. Revert after demo.',
-          },
-          ip_address: '127.0.0.1',
-          user_agent:  'temp-promote-account.ts',
-          created_at:  new Date(),
+    // Write an audit log entry so the promotion is traceable
+    await prisma.audit_logs.create({
+      data: {
+        id:              randomUUID(),
+        organization_id: org.id,
+        entity_type:     'organization',
+        action:          'DEMO_ACCOUNT_PROMOTED',
+        actor:           `script:temp-promote-account`,
+        details: {
+          previousPlan:    org.subscription_plan,
+          previousStatus:  org.subscription_status,
+          newPlan:         plan,
+          newStatus:       'active',
+          promotedEmail:   resolvedEmail,
+          demoStripeSubId: demoStripeSubId ?? null,
+          note:            'Temporary demo promotion. Revert after demo.',
         },
-      });
+        ip_address: '127.0.0.1',
+        user_agent:  'temp-promote-account.ts',
+        created_at:  new Date(),
+      },
     });
   } catch (err) {
-    console.error('\n✗ Transaction failed — no changes were applied.');
+    console.error('\n✗ Update failed — check the error below.');
     console.error(err);
     process.exit(1);
   }
