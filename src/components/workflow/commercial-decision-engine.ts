@@ -28,6 +28,12 @@ import {
   deriveWorkflowContext,
   type WorkflowStage,
 } from '@/components/workflow/workflow-context';
+import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
+import {
+  deriveCommercialForecast,
+  buildForecastProvvyNarrative,
+  formatForecastAmount,
+} from '@/lib/commercial/commercial-forecast';
 
 /* ─── Types ─── */
 
@@ -185,6 +191,12 @@ export type CommercialDecisionInput = {
    * from paymentProviderConnected (see CommercialCapabilities.revenueCollectionEnabled).
    */
   chargesEnabled?: boolean;
+  /**
+   * Treasury aggregate from the funding page.
+   * When provided, Provvy can answer commercial forecast questions
+   * (e.g. "Can we afford to pay everyone?") with specific figures.
+   */
+  treasury?: ProjectTreasurySummary | null;
 };
 
 /* ─── Helpers ─── */
@@ -207,19 +219,37 @@ function relativeTimeDescription(iso: string | null | undefined): string {
 
 /* ─── Audit-based memory ─── */
 
-const MEMORY_SENTENCES: Partial<Record<OperationalAuditEventType, string>> = {
-  stripe_connected:            'connecting your payment provider',
-  payment_rails_connected:     'connecting your payment provider',
-  compensation_updated:        'configuring participant earnings',
-  attribution_configured:      'configuring revenue attribution',
-  obligations_generated:       'generating payment obligations',
-  obligations_funded:          'funding payment obligations',
-  agreement_approved:          'receiving a participant approval',
-  agreement_shared:            'sharing the agreement for approval',
-  funding_linked:              'connecting a revenue source',
-  release_batch_generated:     'releasing payouts to team members',
-  payout_eligible:             'confirming payout eligibility',
-  conversation_imported:       'setting up your agreement from a conversation',
+/**
+ * Maps audit event types to commercial-language memory phrases.
+ *
+ * These phrases are used by Provvy to recall what happened most recently,
+ * producing contextual sentences like:
+ *   "Yesterday we finished receiving a participant approval."
+ *
+ * The actor name from the audit entry is woven in where available
+ * (see deriveMemory below).
+ */
+const MEMORY_SENTENCES: Partial<Record<OperationalAuditEventType, (actor?: string) => string>> = {
+  // Payment infrastructure
+  stripe_connected:            () => 'connecting your payment provider',
+  payment_rails_connected:     () => 'connecting your payment provider',
+
+  // Agreement lifecycle
+  conversation_imported:       () => 'setting up your agreement from a conversation',
+  agreement_shared:            (actor) => actor ? `sending the agreement to ${actor} for approval` : 'sharing the agreement for approval',
+  agreement_viewed:            (actor) => actor ? `${actor} opening the agreement` : 'a participant opening the agreement',
+  agreement_approved:          (actor) => actor ? `${actor} approving the agreement` : 'receiving a participant approval',
+
+  // Earnings & obligations
+  compensation_updated:        (actor) => actor ? `configuring ${actor}'s earnings` : 'configuring participant earnings',
+  attribution_configured:      (actor) => actor ? `configuring revenue attribution for ${actor}` : 'configuring revenue attribution',
+  obligations_generated:       () => 'calculating commercial obligations',
+  obligations_funded:          () => 'funding payment obligations',
+
+  // Revenue & payouts
+  funding_linked:              () => 'connecting a revenue source',
+  payout_eligible:             (actor) => actor ? `confirming ${actor} is ready for payment` : 'confirming payout eligibility',
+  release_batch_generated:     () => 'releasing payouts to team members',
 };
 
 function deriveMemory(
@@ -229,7 +259,7 @@ function deriveMemory(
 ): WorkflowMemory | null {
   if (!auditEntries || auditEntries.length === 0) return null;
 
-  // Find the most recent significant event
+  // Find the most recent significant event that has a memory sentence
   const significant = [...auditEntries]
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .find((e) => MEMORY_SENTENCES[e.type]);
@@ -237,7 +267,8 @@ function deriveMemory(
   if (!significant) return null;
 
   const when = relativeTimeDescription(significant.timestamp);
-  const what = MEMORY_SENTENCES[significant.type]!;
+  const sentenceFn = MEMORY_SENTENCES[significant.type]!;
+  const what = sentenceFn(significant.actor);
   const whenCapitalized = when.charAt(0).toUpperCase() + when.slice(1);
 
   const lastActionSentence =
@@ -408,16 +439,43 @@ function deriveConfidence(
 
 /* ─── Conversational summary ─── */
 
+/**
+ * Builds Provvy's conversational overview of the current commercial state.
+ *
+ * When audit entries are provided, the narrative references participants by name
+ * from recent timeline events — producing answers like:
+ *   "Sarah approved yesterday. Ben is still waiting to approve."
+ * instead of generic:
+ *   "Approvals are pending."
+ */
 function buildConversationalSummary(
   agreementName: string | undefined,
   stage: WorkflowStage,
   recommended: PriorityItem | null,
   queue: PriorityItem[],
-  estimatedMinutes: number
+  estimatedMinutes: number,
+  auditEntries?: OperationalAuditEntry[],
+  treasury?: ProjectTreasurySummary | null
 ): string {
   const name = agreementName ? `${agreementName}` : 'your agreement';
 
   if (stage === 'operational') {
+    // When treasury data is available, include forecast figures in the operational summary
+    if (treasury && treasury.confirmedFunding > 0) {
+      const currency = 'AUD';
+      const forecastResult = deriveCommercialForecast({
+        fundingSources: [],
+        treasury,
+        obligationRows: [],
+        releaseConfidence: null,
+        currency,
+      });
+      const canPay = forecastResult.cashReadiness.canEveryoneBePaid;
+      const balanceLabel = canPay
+        ? formatForecastAmount(forecastResult.forecastPosition.forecastBalance, currency)
+        : `-${formatForecastAmount(Math.abs(forecastResult.forecastPosition.forecastBalance), currency)}`;
+      return `${name} is commercially operational. Revenue is flowing and all obligations are confirmed. Forecast position: ${balanceLabel}. I'll alert you when something needs attention.`;
+    }
     return `${name} is commercially operational. Revenue is flowing and all obligations are confirmed. I'll alert you when something needs attention.`;
   }
 
@@ -428,18 +486,37 @@ function buildConversationalSummary(
   const timeStr = estimatedMinutes > 0 ? ` Estimated work: ${estimatedMinutes} minutes.` : '';
 
   switch (recommended.tier) {
-    case 'money_blocked':
-      return `I reviewed ${name}. Revenue is held back because ${recommended.explanation.toLowerCase()} This is the highest-priority action.${timeStr}`;
+    case 'money_blocked': {
+      // Augment with forecast context when treasury data is available
+      const forecastNote = buildTreasuryForecastNote(treasury);
+      return `I reviewed ${name}. Revenue is held back because ${recommended.explanation.toLowerCase()}${forecastNote} This is the highest-priority action.${timeStr}`;
+    }
 
-    case 'settlement_blocked':
-      return `I reviewed ${name}. Settlement is ready but blocked. Resolving this releases team member payments.${timeStr}`;
+    case 'settlement_blocked': {
+      const forecastNote = buildTreasuryForecastNote(treasury);
+      return `I reviewed ${name}. Settlement is ready but blocked.${forecastNote} Resolving this releases team member payments.${timeStr}`;
+    }
 
     case 'approvals_pending': {
+      // Reference recently approved participants by name using the audit timeline
+      const recentApproval = auditEntries
+        ?.filter((e) => e.type === 'agreement_approved' && e.actor)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+
+      const approvalNarrative = recentApproval?.actor
+        ? `${recentApproval.actor} approved ${relativeTimeDescription(recentApproval.timestamp)}.`
+        : null;
+
       const after =
         queue.length > 1
           ? ` After approvals, I'll guide you through the next step.`
           : ' Once complete, the agreement is ready to collect payments.';
-      return `I reviewed ${name}. ${recommended.title}. Approvals must be collected before payouts can be released.${after}${timeStr}`;
+
+      const prefix = approvalNarrative
+        ? `${approvalNarrative} I reviewed ${name}. ${recommended.title}.`
+        : `I reviewed ${name}. ${recommended.title}.`;
+
+      return `${prefix} Approvals must be collected before payouts can be released.${after}${timeStr}`;
     }
 
     case 'payment_provider':
@@ -459,6 +536,26 @@ function buildConversationalSummary(
     default:
       return `I reviewed ${name}. ${recommended.explanation}${timeStr}`;
   }
+}
+
+/**
+ * Builds a short Provvy-friendly forecast note from treasury aggregates.
+ * Used to enrich money-blocked and settlement-blocked summaries.
+ */
+function buildTreasuryForecastNote(treasury?: ProjectTreasurySummary | null): string {
+  if (!treasury || treasury.confirmedFunding + treasury.pendingFunding === 0) return '';
+  const currency = 'AUD';
+  const total = treasury.confirmedFunding + treasury.pendingFunding + treasury.forecastFunding;
+  const committed = treasury.obligationsTotal;
+  if (total === 0) return '';
+  const balance = total - committed;
+  if (balance > 0) {
+    return ` Forecast position shows a ${formatForecastAmount(balance, currency)} surplus once revenue is received.`;
+  }
+  if (balance < 0) {
+    return ` Forecast shows a ${formatForecastAmount(Math.abs(balance), currency)} shortfall — revenue may not cover all commitments.`;
+  }
+  return '';
 }
 
 /* ─── Reasoning bullets ─── */
@@ -619,7 +716,9 @@ export function analyseWorkspace(input: CommercialDecisionInput): CommercialDeci
     workflowCtx.currentStage,
     recommended,
     priorityQueue,
-    estimatedMinutes
+    estimatedMinutes,
+    input.auditEntries,
+    input.treasury
   );
 
   const memory = deriveMemory(

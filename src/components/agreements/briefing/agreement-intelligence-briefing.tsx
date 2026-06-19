@@ -1,15 +1,21 @@
 'use client';
 
 /**
- * Agreement Intelligence Briefing — Sprint 2 layout
+ * Agreement Intelligence Briefing — Commercial Commitments layout
+ *
+ * This page tells a commercial story, not a technical status report.
+ * Every section answers a question an operator actually cares about.
  *
  * Layout (top → bottom):
  *   1. AgreementExecutiveSummary   — name, stage, 3 facts, one-sentence status
  *   2. CommercialSummaryCards      — 4 fixed cards: Participants / Payments / Revenue / Settlement
  *   3. CommercialBlockers          — deduplicated blockers (hidden when none)
- *   4. BriefingParticipantsSection — hidden when no participants
- *   5. CommercialTimeline          — single activity timeline (hidden when empty)
+ *   4. CommercialTimeline          — canonical history of this commercial relationship
+ *   5. BriefingParticipantsSection — participant commitments (hidden when no participants)
  *   6. <details> Advanced details  — health, obligations, approvals, terms, settlement, funnel, journey
+ *
+ * The Commercial Timeline is a first-class section.
+ * It shows commercial milestones — not system events or audit log entries.
  *
  * Removed from main view (now in Advanced details or deleted):
  *   - BriefingRecommendedActionHero     (WorkflowHeader in shell already answers this)
@@ -19,7 +25,7 @@
  *   - BriefingFundingFunnel             (→ Advanced details)
  *   - BriefingSettlementBlockersPanel   (replaced by CommercialBlockers)
  *   - BriefingSummarySection            (replaced by AgreementExecutiveSummary)
- *   - BriefingAuditSection              (same data as Activity — duplicate removed)
+ *   - BriefingAuditSection              (duplicate of CommercialTimeline — removed)
  *   - BriefingIntelligencePanel sidebar (was duplicating hero + blockers + AI metrics)
  *   - BriefingCommercialJourney sidebar (→ Advanced details)
  */
@@ -41,6 +47,12 @@ import { useOperationalCoordinationState } from '@/hooks/use-operational-coordin
 import { useOperationalAuditStore } from '@/hooks/use-operational-audit-store';
 import { deriveConversationImportAuditTimeline } from '@/lib/operations/audit/conversation-import-audit';
 import { mergeAuditTimeline } from '@/lib/operations/audit/operational-audit';
+import {
+  buildCommercialTimeline,
+} from '@/lib/commercial/commercial-timeline-events';
+import {
+  CommercialTimeline as CanonicalCommercialTimeline,
+} from '@/components/commercial/commercial-timeline';
 import { deriveAgreementIntelligence } from '@/lib/agreements/intelligence/agreement-intelligence-engine';
 import type { BriefingObligationRowInput } from '@/lib/agreements/agreement-briefing.model';
 import {
@@ -60,7 +72,6 @@ import {
   BriefingSettlementSection,
 } from '@/components/agreements/briefing/briefing-sections';
 import { BriefingFundingFunnel } from '@/components/agreements/briefing/briefing-funding-funnel';
-import { OperationalAuditTimeline } from '@/components/operations/operational-audit-timeline';
 import { useAgreementIntelligenceTracking } from '@/hooks/use-agreement-intelligence-tracking';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 import { CommercialJourney } from '@/components/workflow/commercial-journey';
@@ -359,23 +370,36 @@ function CommercialBlockers({ blockers, snapshot }: CommercialBlockersProps) {
   );
 }
 
-/* ─── 5. Commercial timeline ───────────────────────────────────────────────── */
+/* ─── 4. Commercial Timeline ────────────────────────────────────────────────
+ *
+ * First-class section showing the canonical commercial history of this relationship.
+ * Events are commercial milestones — not system log entries.
+ *
+ * Uses buildCommercialTimeline() to convert audit entries to commercial language.
+ */
 
-type CommercialTimelineProps = {
+type BriefingCommercialTimelineProps = {
   auditEntries: ReturnType<typeof mergeAuditTimeline>;
+  projectId: string;
 };
 
-function CommercialTimeline({ auditEntries }: CommercialTimelineProps) {
-  if (auditEntries.length === 0) return null;
+function BriefingCommercialTimeline({ auditEntries, projectId }: BriefingCommercialTimelineProps) {
+  const events = React.useMemo(
+    () => buildCommercialTimeline({ auditEntries, projectId }),
+    [auditEntries, projectId]
+  );
+
+  if (events.length === 0) return null;
+
   return (
     <div className="rounded-xl border border-border/50 bg-muted/10 px-5 py-4 space-y-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Activity
+        Commercial Timeline
       </p>
-      <OperationalAuditTimeline
-        entries={auditEntries}
+      <CanonicalCommercialTimeline
+        events={events}
         maxItems={20}
-        emptyMessage="Activity will appear here as this agreement progresses."
+        showImpact
       />
     </div>
   );
@@ -676,7 +700,10 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
         snapshot={intelligence.snapshot}
       />
 
-      {/* 4. Participants — only shown when participants exist */}
+      {/* 4. Commercial Timeline — canonical history of this commercial relationship */}
+      <BriefingCommercialTimeline auditEntries={auditEntries} projectId={projectId} />
+
+      {/* 5. Participant commitments — only shown when participants exist */}
       {hasParticipants ? (
         <BriefingParticipantsSection
           snapshot={intelligence.snapshot}
@@ -685,9 +712,6 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
           agreementName={summary.name}
         />
       ) : null}
-
-      {/* 5. Single activity timeline — only shown when there is activity */}
-      <CommercialTimeline auditEntries={auditEntries} />
 
       {/* 6. Advanced details (collapsed by default) */}
       <AdvancedDetails

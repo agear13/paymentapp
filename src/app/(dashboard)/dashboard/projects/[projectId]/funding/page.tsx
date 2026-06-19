@@ -1,5 +1,5 @@
-import { ProjectFundingView } from '@/components/projects/project-funding-view';
+import { ProjectCommercialForecast } from '@/components/projects/project-commercial-forecast';
 
 export default function ProjectFundingPage() {
-  return <ProjectFundingView />;
+  return <ProjectCommercialForecast />;
 }

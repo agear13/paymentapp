@@ -18,6 +18,7 @@ import { AgreementsOperationalGrid } from '@/components/operations/agreements-op
 import { WorkspaceActivityFeed } from '@/components/operations/workspace-activity-feed';
 import { AskProvvyPanel } from '@/components/operations/ask-provvy-panel';
 import { deriveQueueTasksFromAttention } from '@/components/operations/operational-queue';
+import { CommercialPositionCards } from '@/components/operations/commercial-position-cards';
 
 export function OperationalHomeCommandCenter() {
   const { guidance, loading, workspaceContext, kpis, activation, auditTimeline } =
@@ -98,7 +99,17 @@ export function OperationalHomeCommandCenter() {
         />
       ) : null}
 
-      {/* ── 3. Business Snapshot + Workspace Health ───────────────────────
+      {/* ── 3. Commercial Position — live forecast cards ──────────────────
+          Six cards: Commercial Position · Revenue · Obligations
+          Net Forecast · Cash Readiness · Confidence.
+          All figures from deriveCommercialForecast(). No independent calc. */}
+      <CommercialPositionCards
+        releaseConfidence={guidance.releaseConfidence}
+        kpis={kpis}
+        loading={isLoading}
+      />
+
+      {/* ── 4. Business Snapshot + Workspace Health ───────────────────────
           Revenue / Agreements / Participants / Actions flow groups.
           Health score with human interpretation ("Almost ready...").      */}
       <div className="grid gap-3 xl:grid-cols-[1fr_260px]">
@@ -120,7 +131,7 @@ export function OperationalHomeCommandCenter() {
         ) : null}
       </div>
 
-      {/* ── 4. Money Waiting ──────────────────────────────────────────────
+      {/* ── 5. Money Waiting ──────────────────────────────────────────────
           Four money states: Collected · For approvals · Ready · Held.
           Operators care about money, not health scores.                   */}
       <MoneyWaitingPanel
@@ -128,17 +139,17 @@ export function OperationalHomeCommandCenter() {
         loading={isLoading}
       />
 
-      {/* ── 5. Today's Plan — grouped by agreement ────────────────────────
+      {/* ── 6. Today's Plan — grouped by agreement ────────────────────────
           "Finish Sunset Sessions" not "complete 3 unrelated tasks."
           ✓ Done steps + ○ Pending steps + time + Continue workflow CTA.  */}
       <AgreementWorkflowPanel tasks={queueTasks} snapshots={snapshots} />
 
-      {/* ── 6. Your Agreements ────────────────────────────────────────────
+      {/* ── 7. Your Agreements ────────────────────────────────────────────
           Workflow pipeline primary, score secondary.
           ✓ Agreement · ✓ Participants · ● Payments · ○ Ready · ○ Live   */}
       <AgreementsOperationalGrid snapshots={snapshots} loading={healthLoading} />
 
-      {/* ── 7. Business Story ─────────────────────────────────────────────
+      {/* ── 8. Business Story ─────────────────────────────────────────────
           Not system logs — business milestones in plain language.
           "Payments are now live." + why it matters. Grouped by day.      */}
       <WorkspaceActivityFeed
@@ -146,7 +157,7 @@ export function OperationalHomeCommandCenter() {
         timelineEvents={guidance.timeline}
       />
 
-      {/* ── 8. Ask Provvy ────────────────────────────────────────────────
+      {/* ── 9. Ask Provvy ────────────────────────────────────────────────
           Intelligent query panel backed by the Commercial Graph.
           Deterministic answers from live data. Feels like querying
           your business, not chatting with a bot.                         */}

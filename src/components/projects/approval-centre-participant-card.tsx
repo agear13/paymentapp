@@ -55,6 +55,9 @@ import {
 import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import { cn } from '@/lib/utils';
+import type { CommercialTimelineEvent } from '@/lib/commercial/commercial-timeline-events';
+import { buildParticipantCommercialJourney } from '@/lib/commercial/commercial-timeline-events';
+import { ParticipantCommercialHistory } from '@/components/commercial/commercial-timeline';
 
 /* ─── Operational status labels & colours ─────────────────────────────────── */
 
@@ -307,6 +310,12 @@ export type ApprovalCentreParticipantCardProps = {
   'data-pending'?: string;
   onShareAgreement: (p: DemoParticipant) => void;
   onConfigureEarnings: (p: DemoParticipant) => void;
+  /**
+   * Commercial timeline events for this agreement.
+   * When provided, shows the participant's commercial relationship history
+   * below the card.
+   */
+  commercialTimeline?: CommercialTimelineEvent[];
 };
 
 /* ─── Main export ───────────────────────────────────────────────────────────── */
@@ -319,6 +328,7 @@ export function ApprovalCentreParticipantCard({
   'data-pending': dataPending,
   onShareAgreement,
   onConfigureEarnings,
+  commercialTimeline,
 }: ApprovalCentreParticipantCardProps) {
   const lifecycle = deriveAgreementLifecycleState(participant);
 
@@ -447,6 +457,14 @@ export function ApprovalCentreParticipantCard({
           </Badge>
         </div>
 
+        {/* ── Participant commercial journey (if timeline provided) ── */}
+        {commercialTimeline && participant.id ? (
+          <ParticipantCommercialHistory
+            journey={buildParticipantCommercialJourney(commercialTimeline, participant.id)}
+            className="sm:hidden"
+          />
+        ) : null}
+
         {/* ── Actions: one primary + optional more menu ── */}
         <div className="flex items-center gap-1.5 shrink-0 justify-end">
           {!earningsConfigured ? (
@@ -508,6 +526,14 @@ export function ApprovalCentreParticipantCard({
           )}
         </div>
       </div>
+
+      {/* Commercial relationship history — shown on md+ as a compact journey bar */}
+      {commercialTimeline && participant.id ? (
+        <ParticipantCommercialHistory
+          journey={buildParticipantCommercialJourney(commercialTimeline, participant.id)}
+          className="hidden sm:flex mt-2 pt-2 border-t border-border/30"
+        />
+      ) : null}
     </div>
   );
 }
