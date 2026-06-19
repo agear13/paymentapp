@@ -158,7 +158,7 @@ type NextBottleneck = {
   href: string;
 };
 
-function deriveNextBottleneck(
+export function deriveNextBottleneck(
   caps: CommercialCapabilities,
   projectId: string
 ): NextBottleneck | null {
