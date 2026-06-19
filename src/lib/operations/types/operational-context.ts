@@ -3,6 +3,8 @@
  * Populated from DB/API — never assume fields exist.
  */
 
+import type { WorkspaceOnboardingStatus } from '@/lib/commercial/supplier-onboarding';
+
 export type WorkspaceOperationalContext = {
   hasOrganization: boolean;
   onboardingCompleted: boolean;
@@ -19,6 +21,12 @@ export type WorkspaceOperationalContext = {
   collectionPreferenceDecideLater: boolean;
   releaseEligibleCount: number;
   releaseBatchCount: number;
+  /**
+   * Aggregated supplier onboarding status for the workspace.
+   * Populated when supplier onboarding data is available.
+   * Used by the dashboard widget — omit when not yet derived.
+   */
+  onboardingWorkspace?: WorkspaceOnboardingStatus;
 };
 
 export type ProjectOperationalContext = {

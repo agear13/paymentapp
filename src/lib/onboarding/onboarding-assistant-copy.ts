@@ -26,13 +26,13 @@ export function gapToActionLabel(gap: string): string {
     const match = trimmed.match(/\(([^)]+)\)/);
     return match ? `Add email for ${match[1]}` : 'Add participant emails';
   }
-  if (lower.includes('awaiting payout') || lower.includes('payout details')) {
-    return 'Choose payout destination';
+  if (lower.includes('supplier onboarding') || lower.includes('awaiting payout') || lower.includes('payout details')) {
+    return 'Complete supplier setup';
   }
-  if (lower.includes('manual payout')) return 'Confirm manual payout details';
+  if (lower.includes('manual payout')) return 'Complete supplier setup';
   if (lower.includes('tax')) return 'Add tax details';
   if (lower.includes('infrastructure') || lower.includes('stripe')) return 'Connect Stripe';
-  if (lower.includes('settlement account')) return 'Add bank account';
+  if (lower.includes('settlement account') || lower.includes('supplier onboarding required')) return 'Complete supplier setup';
   if (lower.includes('template defaults') || lower.includes('agreement defaults')) return 'Review agreement defaults';
   if (lower.includes('payment setup')) return 'Connect Stripe';
 

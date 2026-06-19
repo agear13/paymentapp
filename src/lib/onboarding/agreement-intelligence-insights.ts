@@ -317,7 +317,7 @@ function derivePotentialGaps(
 
 function confirmedTemplateReadinessExplanation(score: number): string {
   if (score >= 75) {
-    return 'Looking good — confirm payout details before continuing.';
+    return 'Agreement approved — complete supplier onboarding before settlement.';
   }
   return 'Add participant contact or settlement details to improve readiness.';
 }

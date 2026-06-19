@@ -24,9 +24,9 @@ export type NotesInterpretation = {
 
 const PAYMENT_METHOD_LABELS: Record<PreferredPaymentMethod, string> = {
   bank_account: 'Bank transfer — invitation pending',
-  wallet: 'Stablecoin — awaiting payout details',
+  wallet: 'Stablecoin — supplier onboarding required',
   stripe_connect: 'Stripe — setup pending',
-  manual: 'Manual payout — awaiting payout details',
+  manual: 'Manual payout — supplier onboarding required',
   revenue_share_only: 'Revenue share — tracked via agreement',
 };
 
@@ -101,7 +101,7 @@ export function deriveParticipantProfileStatus(
           : PAYMENT_METHOD_LABELS.manual
         : PAYMENT_METHOD_LABELS[paymentMethod];
   } else if (notes.onboarded) {
-    paymentLabel = 'Existing supplier — confirm payout route';
+    paymentLabel = 'Existing supplier — complete supplier onboarding';
     paymentWarning = true;
   }
 
@@ -143,7 +143,7 @@ export function derivePotentialGapsFromProfiles(
     (p) => !effectivePaymentMethod(p)
   );
   if (missingPayment.length > 0) {
-    gaps.push('Awaiting payout details');
+    gaps.push('Supplier onboarding required');
   } else if (participants.some((p) => effectivePaymentMethod(p) === 'manual')) {
     gaps.push('Manual payout verification required');
   }

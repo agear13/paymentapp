@@ -100,13 +100,14 @@ const CreateFromConversationButton = React.lazy(
 );
 import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
 import { ProjectPageCopilot } from '@/components/operations/project-page-copilot';
+import { ParticipantOnboardingStatusCard } from '@/components/commercial/supplier-onboarding/participant-onboarding-status-card';
 
 const ONBOARDING_CHECKLIST = [
   'Plan allocations (roles and budgets)',
   'Add team members',
   'Configure earnings',
   'Request approvals',
-  'Confirm payout details',
+  'Complete supplier setup',
 ] as const;
 
 export function ProjectParticipantsView() {
@@ -201,9 +202,13 @@ export function ProjectParticipantsView() {
   const { isAllowed, getDecision, entitlements, plan } = useEntitlements();
   const [approvalUpgradeOpen, setApprovalUpgradeOpen] = React.useState(false);
   const searchParams = useSearchParams();
-  const focusParticipantId = searchParams.get('participant');
+  const focusParticipantId = searchParams?.get('participant') ?? null;
   /** When true, auto-scroll to the first participant needing action. Set via ?focus=approvals. */
-  const focusApprovals = searchParams.get('focus') === 'approvals';
+  const focusApprovals = searchParams?.get('focus') === 'approvals';
+  /** When true, show the Supplier Onboarding panel. Set via ?focus=onboarding. */
+  const focusOnboarding = searchParams?.get('focus') === 'onboarding';
+  /** When set, auto-open the operator review panel for this participant. Set via ?review=<id>. */
+  const reviewParticipantId = searchParams?.get('review') ?? null;
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [editParticipant, setEditParticipant] = React.useState<DemoParticipant | null>(null);
   const [compensationParticipant, setCompensationParticipant] =
@@ -642,6 +647,23 @@ export function ProjectParticipantsView() {
   const approvalsComplete = commercialCapabilities?.approvalsComplete ?? false;
   const showApprovalCentre = isCollectingApprovals || approvalsComplete;
 
+  // Show Supplier Onboarding panel after all approvals complete, when operator
+  // navigates via ?focus=onboarding (e.g. from Dashboard CTA or workflow Continue).
+  const isPreparingPayments = workflowCtx?.currentStage === 'preparing-payments';
+  const showOnboardingPanel = approvalsComplete && (focusOnboarding || isPreparingPayments);
+
+  // Participants with onboarding pending (for the operator review section)
+  const onboardingParticipants = React.useMemo(() => {
+    if (!showOnboardingPanel) return [];
+    return displayParticipants.filter(
+      (p) =>
+        p.approvalStatus === 'Approved' &&
+        p.payoutVerificationConfirmed !== true &&
+        p.payoutOnboardingPhase !== 'COMPLETED' &&
+        p.onboardingStatus !== 'COMPLETE'
+    );
+  }, [showOnboardingPanel, displayParticipants]);
+
   // When arriving from Dashboard → "Open Approval Centre" (?focus=approvals),
   // scroll to the first participant that still requires action and highlight it.
   const [highlightedApprovalId, setHighlightedApprovalId] = React.useState<string | null>(null);
@@ -874,6 +896,37 @@ export function ProjectParticipantsView() {
                 />
               ))}
             </div>
+          </div>
+        ) : null}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            SUPPLIER ONBOARDING PANEL — shown after all approvals are complete,
+            when the operator navigates via ?focus=onboarding or the workflow
+            stage is 'preparing-payments' (= supplier setup required).
+
+            For each approved participant who has not completed onboarding,
+            the SupplierOnboardingOperatorView shows:
+              - Invoice summary and draft details
+              - ABN / GST / bank detail status
+              - Review & approve CTA → triggers Xero export readiness
+
+            Replaces the old "Confirm payout details" checkbox pattern.
+            ═══════════════════════════════════════════════════════════════════ */}
+        {showOnboardingPanel && hasParticipants && onboardingParticipants.length > 0 ? (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-base font-semibold">Supplier Onboarding</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Collect bank details, ABN, and GST status from each supplier before settlement can begin.
+              </p>
+            </div>
+            {onboardingParticipants.map((p) => (
+              <ParticipantOnboardingStatusCard
+                key={p.id}
+                participant={p}
+                projectId={projectId}
+              />
+            ))}
           </div>
         ) : null}
 

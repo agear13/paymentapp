@@ -88,7 +88,7 @@ export function deriveAuditTimelineFromParticipants(
         id: `payout_state-${p.id}-${confirmedAt}`,
         type: 'payout_state_updated',
         title: 'Payout details confirmed',
-        description: `Operator confirmed payout details for ${p.name}.`,
+        description: `Supplier onboarding complete for ${p.name}. Bank details, ABN, and GST confirmed.`,
         timestamp: confirmedAt,
         ...base,
       });

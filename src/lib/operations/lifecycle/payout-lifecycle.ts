@@ -7,19 +7,19 @@ export const PAYOUT_ONBOARDING_PHASES = [
 
 export type PayoutOnboardingPhase = (typeof PAYOUT_ONBOARDING_PHASES)[number];
 
-/** @deprecated Use operator payout confirmation labels */
+/** Labels shown in participant rows and status badges for each onboarding phase. */
 export const PAYOUT_ONBOARDING_LABELS: Record<PayoutOnboardingPhase, string> = {
-  NOT_STARTED: 'Operator payout confirmation pending',
-  INVITED: 'Operator payout confirmation pending',
-  IN_PROGRESS: 'Operator payout confirmation pending',
-  COMPLETED: 'Confirmed by operator',
+  NOT_STARTED: 'Supplier onboarding not started',
+  INVITED: 'Supplier onboarding link sent',
+  IN_PROGRESS: 'Supplier onboarding in progress',
+  COMPLETED: 'Supplier onboarding complete',
 };
 
 export const PAYOUT_ONBOARDING_MEANING: Record<PayoutOnboardingPhase, string> = {
-  NOT_STARTED: 'Operator has not confirmed external payout details yet.',
-  INVITED: 'Operator has not confirmed external payout details yet.',
-  IN_PROGRESS: 'Operator has not confirmed external payout details yet.',
-  COMPLETED: 'Operator confirmed payout details were collected externally.',
+  NOT_STARTED: 'Supplier onboarding has not been started yet.',
+  INVITED: 'Supplier onboarding link has been sent — awaiting supplier submission.',
+  IN_PROGRESS: 'Supplier is completing onboarding.',
+  COMPLETED: 'Supplier onboarding complete — bank details, ABN, and GST confirmed.',
 };
 
 /** Regulated payout/KYC collection UI is not live — operators confirm externally. */
@@ -41,9 +41,13 @@ export function derivePayoutOnboardingPhase(participant: {
 export function payoutOnboardingPlaceholderCopy(phase: PayoutOnboardingPhase): string {
   switch (phase) {
     case 'COMPLETED':
-      return 'Payout details confirmed externally';
+      return 'Supplier onboarding complete';
+    case 'IN_PROGRESS':
+      return 'Supplier onboarding in progress';
+    case 'INVITED':
+      return 'Supplier onboarding link sent — awaiting submission';
     default:
-      return 'Operator payout confirmation pending';
+      return 'Supplier onboarding required';
   }
 }
 
@@ -59,8 +63,8 @@ export type PayoutLifecycleState = (typeof PAYOUT_LIFECYCLE_STATES)[number];
 
 export const PAYOUT_LIFECYCLE_LABELS: Record<PayoutLifecycleState, string> = {
   NOT_APPLICABLE: 'No payout configured',
-  ONBOARDING_PENDING: 'Operator confirmation pending',
-  ONBOARDING_IN_PROGRESS: 'Operator confirmation pending',
+  ONBOARDING_PENDING: 'Supplier onboarding required',
+  ONBOARDING_IN_PROGRESS: 'Supplier onboarding in progress',
   READY: 'Payout ready',
   BLOCKED: 'Payout blocked',
 };

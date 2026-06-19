@@ -38,6 +38,31 @@ export function projectApprovalCentrePath(projectId: string): string {
   return `/dashboard/projects/${encodeURIComponent(projectId)}/participants?focus=approvals`;
 }
 
+/**
+ * Deep-links to the Supplier Onboarding section within the Participants tab.
+ * Optionally scopes to a specific participant for direct review.
+ */
+export function projectSupplierOnboardingPath(projectId: string, participantId?: string): string {
+  const base = `/dashboard/projects/${encodeURIComponent(projectId)}/participants?focus=onboarding`;
+  return participantId ? `${base}&participant=${encodeURIComponent(participantId)}` : base;
+}
+
+/**
+ * Deep-links to the Operator Review section for a specific participant's supplier onboarding.
+ * Scoped to the participant so the review panel auto-opens.
+ */
+export function projectOperatorReviewPath(projectId: string, participantId: string): string {
+  return `/dashboard/projects/${encodeURIComponent(projectId)}/participants?focus=onboarding&review=${encodeURIComponent(participantId)}`;
+}
+
+/**
+ * Deep-links to the Accounting Approval section within the Funding tab.
+ * Used for the "Approve & Push to Xero" CTA.
+ */
+export function projectXeroExportPath(projectId: string): string {
+  return `/dashboard/projects/${encodeURIComponent(projectId)}/funding?section=accounting`;
+}
+
 export function projectSettlementPath(projectId: string): string {
   return `/dashboard/projects/${encodeURIComponent(projectId)}/payouts`;
 }

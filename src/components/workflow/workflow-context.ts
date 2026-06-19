@@ -22,8 +22,8 @@ export type WorkflowStage =
   | 'setup'                 // Agreement created, no team members yet
   | 'configuring'           // Team members added, earnings not configured
   | 'collecting-approvals'  // Earnings configured, awaiting team approvals
-  | 'preparing-payments'    // All approved, payment provider not yet connected
-  | 'ready-to-collect'      // Provider connected, ready to accept revenue
+  | 'preparing-payments'    // All approved — supplier onboarding required
+  | 'ready-to-collect'      // Supplier onboarding complete, ready to accept revenue
   | 'collecting-revenue'    // Revenue flowing in
   | 'ready-to-release'      // Revenue ready to distribute
   | 'operational';          // Fully operational — first payout released
@@ -108,7 +108,7 @@ const STAGE_TITLES: Record<WorkflowStage, string> = {
   'setup':                'Preparing agreement',
   'configuring':          'Configuring earnings',
   'collecting-approvals': 'Collecting approvals',
-  'preparing-payments':   'Preparing payments',
+  'preparing-payments':   'Supplier setup required',
   'ready-to-collect':     'Ready for payments',
   'collecting-revenue':   'Collecting revenue',
   'ready-to-release':     'Ready for settlement',
@@ -203,10 +203,10 @@ function deriveNextAction(
       };
     case 'preparing-payments':
       return {
-        action: 'Connect your payment provider',
-        hint: 'Connecting a payment provider enables customer payments and payout automation.',
-        minutes: 2,
-        label: 'Connect provider',
+        action: 'Complete supplier onboarding',
+        hint: 'All agreements are approved. Collect bank details, ABN, and GST status from each supplier before settlement can begin.',
+        minutes: 5,
+        label: 'Complete supplier setup',
       };
     case 'ready-to-collect':
       return {
@@ -251,7 +251,7 @@ function deriveContinueHref(stage: WorkflowStage, projectId: string): string {
     case 'collecting-approvals':
       return `${base}/participants?focus=approvals`;
     case 'preparing-payments':
-      return MERCHANT_STRIPE_HREF;
+      return `${base}/participants?focus=onboarding`;
     case 'ready-to-collect':
     case 'collecting-revenue':
     case 'ready-to-release':
@@ -316,6 +316,14 @@ export function resolveNextWorkflowStep(opts: {
   }
 
   // Derive from hint string when no explicit href
+  if (/supplier|onboarding|abn|bank detail|gst/i.test(topBlockerHint)) {
+    return {
+      href: `${base}/participants?focus=onboarding`,
+      label: 'Complete supplier setup',
+      minutes: 5,
+      reason: 'Supplier onboarding is required before settlement can begin.',
+    };
+  }
   if (/stripe|payment provider|merchant|payment rail/i.test(topBlockerHint)) {
     return {
       href: MERCHANT_STRIPE_HREF,

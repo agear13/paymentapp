@@ -87,10 +87,17 @@ export function deriveParticipantCapabilityFlags(
   const hasCompensation = compState === 'CONFIGURED';
   const hasIdentity = Boolean(p.name?.trim());
   const hasAgreement = p.approvalStatus === 'Approved';
+  // A participant is payout-destination-ready when:
+  //   1. They are exempt from payout (internal/unpaid roles), OR
+  //   2. The operator confirmed payout details via the legacy checkbox, OR
+  //   3. Supplier onboarding is COMPLETED (new canonical mechanism) — driven by
+  //      payoutOnboardingPhase or onboardingStatus from the supplier onboarding engine.
+  const supplierOnboardingComplete =
+    p.payoutOnboardingPhase === 'COMPLETED' || p.onboardingStatus === 'COMPLETE';
   const hasPayoutDestination =
     compState === 'CONFIGURED' && p.compensationProfile?.exemptFromPayout
       ? true
-      : p.payoutVerificationConfirmed === true;
+      : p.payoutVerificationConfirmed === true || supplierOnboardingComplete;
   const payoutReady =
     hasCompensation &&
     hasPayoutDestination &&

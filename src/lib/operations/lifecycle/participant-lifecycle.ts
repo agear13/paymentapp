@@ -57,8 +57,8 @@ export const PARTICIPANT_LIFECYCLE_MEANING: Record<ParticipantLifecycleState, st
   INVITE_VIEWED: 'Participant opened the agreement.',
   PENDING_APPROVAL: 'Participant action received; operator approval pending.',
   APPROVED: 'Operator approved this participant for coordination.',
-  ONBOARDING_REQUIRED: 'Operator has not confirmed external payout details.',
-  PAYOUT_READY: 'Operator confirmed payout details; ready for release coordination.',
+  ONBOARDING_REQUIRED: 'Supplier onboarding is required before settlement can proceed.',
+  PAYOUT_READY: 'Supplier onboarding complete — ready for settlement.',
   ACTIVE: 'Participant is operationally active on this project.',
 };
 

@@ -59,8 +59,8 @@ export const PARTICIPANT_EARNINGS_BUCKET_META: Record<
   },
   awaiting_payout_details: {
     id: 'awaiting_payout_details',
-    title: 'Awaiting payout confirmation',
-    description: 'Operator must verify external payout details for this participant.',
+    title: 'Supplier onboarding required',
+    description: 'Supplier must complete onboarding (bank details, ABN, GST) before settlement can proceed.',
   },
   awaiting_orchestration_refresh: {
     id: 'awaiting_orchestration_refresh',

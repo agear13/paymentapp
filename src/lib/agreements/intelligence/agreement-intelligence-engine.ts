@@ -29,7 +29,7 @@ import { projectParticipantsPath } from '@/lib/projects/project-routes';
 const BLOCKER_CATEGORY_LABELS: Record<OperationalReleaseBlockerDetail['category'], string> = {
   funding_missing: 'Funding incomplete',
   participant_approval_missing: 'Approval pending',
-  payout_details_missing: 'Settlement account missing',
+  payout_details_missing: 'Supplier onboarding required',
   compensation_configuration_missing: 'Commercial terms incomplete',
   operational_graph_initializing: 'Coordination syncing',
   obligation_sync_pending: 'Obligation sync pending',

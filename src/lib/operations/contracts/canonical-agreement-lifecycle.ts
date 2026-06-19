@@ -19,7 +19,7 @@ export const CANONICAL_AGREEMENT_LABELS: Record<CanonicalAgreementState, string>
   SHARED_FOR_APPROVAL: 'Shared for participant approval',
   VIEWED_BY_PARTICIPANT: 'Viewed by participant',
   APPROVED_BY_PARTICIPANT: 'Approved by participant',
-  OPERATOR_CONFIRMED: 'Operator payout details confirmed',
+  OPERATOR_CONFIRMED: 'Supplier onboarding complete',
   READY_FOR_PAYOUT: 'Ready for payout',
 };
 

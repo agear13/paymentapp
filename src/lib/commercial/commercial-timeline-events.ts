@@ -48,7 +48,17 @@ export type CommercialEventType =
   | 'payment_released'          // Payout released to participant
   | 'settlement_complete'       // All obligations settled
   | 'conditional_bonus_unlocked'// Conditional payment unlocked by revenue trigger
-  | 'referral_commission_confirmed' // Referral commission confirmed;
+  | 'referral_commission_confirmed' // Referral commission confirmed
+  | 'supplier_onboarding_requested'       // Operator has triggered supplier onboarding
+  | 'supplier_invoice_generated'          // Draft invoice auto-generated from approved agreement
+  | 'supplier_onboarding_started'         // Supplier has opened the onboarding form
+  | 'supplier_onboarding_completed'       // Supplier has submitted all required details
+  | 'supplier_abn_verified'               // Supplier ABN passed checksum validation
+  | 'supplier_abn_manual_review'          // ABN not applicable — operator review required
+  | 'supplier_gst_confirmed'              // Supplier GST registration status confirmed
+  | 'supplier_alternative_payment_supplied' // Supplier has requested non-bank payment
+  | 'supplier_invoice_approved'           // Operator approved invoice for Xero export
+  | 'supplier_invoice_exported_to_xero';  // Invoice exported to Xero
 
 /* ─── Event model ───────────────────────────────────────────────────────────── */
 

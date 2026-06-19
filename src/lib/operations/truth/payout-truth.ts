@@ -10,8 +10,12 @@ export function isParticipantPayoutReady(participant: DemoParticipant): boolean 
 }
 
 export function payoutDestinationTruthMessage(participant: DemoParticipant): string {
-  if (participant.payoutVerificationConfirmed === true) {
-    return 'Payout details confirmed externally';
+  if (
+    participant.payoutVerificationConfirmed === true ||
+    participant.payoutOnboardingPhase === 'COMPLETED' ||
+    participant.onboardingStatus === 'COMPLETE'
+  ) {
+    return 'Supplier onboarding complete';
   }
   return payoutOnboardingPlaceholderCopy(derivePayoutOnboardingPhase(participant));
 }

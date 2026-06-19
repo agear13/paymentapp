@@ -106,7 +106,7 @@ export function getObligationNextAction(row: NextActionInput): string {
         ? `Waiting for ${participant.name} to approve agreement`
         : 'Waiting for participant agreement approval';
     }
-    return 'Confirm payout details';
+    return 'Complete supplier setup';
   }
   if (row.status === 'AVAILABLE_FOR_PAYOUT') {
     return 'Ready to release';

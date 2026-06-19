@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { useAgreementHealthPortfolio } from '@/hooks/use-agreement-health-portfolio';
 import { deriveOperationalSeverity } from '@/lib/operations/severity';
@@ -19,8 +20,11 @@ import { WorkspaceActivityFeed } from '@/components/operations/workspace-activit
 import { AskProvvyPanel } from '@/components/operations/ask-provvy-panel';
 import { deriveQueueTasksFromAttention } from '@/components/operations/operational-queue';
 import { CommercialPositionCards } from '@/components/operations/commercial-position-cards';
+import { SupplierOnboardingDashboardWidget } from '@/components/commercial/supplier-onboarding/supplier-onboarding-operator-view';
+import { projectSupplierOnboardingPath } from '@/lib/projects/project-routes';
 
 export function OperationalHomeCommandCenter() {
+  const router = useRouter();
   const { guidance, loading, workspaceContext, kpis, activation, auditTimeline } =
     useOperationalCoordinationState({ traceSurface: 'operational-home-command-center' });
   const { portfolio, snapshots, loading: healthLoading } = useAgreementHealthPortfolio();
@@ -138,6 +142,22 @@ export function OperationalHomeCommandCenter() {
         releaseConfidence={guidance.releaseConfidence}
         loading={isLoading}
       />
+
+      {/* ── 5b. Supplier Onboarding Progress ──────────────────────────────
+          Shows when any supplier has not yet completed onboarding.
+          Hides automatically when all suppliers are complete.
+          Feeds from deriveWorkspaceOnboardingStatus() — no independent calc. */}
+      {!isLoading && workspaceContext?.onboardingWorkspace && (
+        <SupplierOnboardingDashboardWidget
+          workspace={workspaceContext.onboardingWorkspace}
+          onContinue={() => {
+            const projectId = workspaceContext.primaryProjectId;
+            if (projectId) {
+              router.push(projectSupplierOnboardingPath(projectId));
+            }
+          }}
+        />
+      )}
 
       {/* ── 6. Today's Plan — grouped by agreement ────────────────────────
           "Finish Sunset Sessions" not "complete 3 unrelated tasks."

@@ -4,11 +4,11 @@ export const OPERATOR_PAYOUT_DISCLAIMER =
   'Provvypay does not currently facilitate regulated payout onboarding or KYC collection. Operators are responsible for collecting required payout and tax information according to local regulations before making payouts.';
 
 export const PAYOUT_CONFIRMATION_LABELS = {
-  notConfirmed: 'Not confirmed',
-  confirmed: 'Confirmed',
-  toggleLabel: 'Verified externally',
+  notConfirmed: 'Supplier onboarding required',
+  confirmed: 'Supplier onboarding complete',
+  toggleLabel: 'Supplier onboarding complete',
   helperLine:
-    'Operator confirms payout details were collected outside Provvypay.',
+    'Supplier has submitted bank details, ABN, and GST status. Operator has reviewed and approved.',
 } as const;
 
 export const AGREEMENT_SHARE_HELPER =
