@@ -6,12 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 /** Development-only operational graph diagnostics — equivalent to Redux DevTools for ops. */
 export function OperationalGraphDiagnostics() {
-  if (process.env.NODE_ENV !== 'development') return null;
-
   const { graph, auditTimeline, loading, kpis } = useOperationalCoordinationState({
     traceSurface: 'operational-graph-diagnostics',
   });
   const [open, setOpen] = React.useState(false);
+
+  if (process.env.NODE_ENV !== 'development') return null;
 
   if (!open) {
     return (

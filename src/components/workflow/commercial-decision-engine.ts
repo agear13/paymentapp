@@ -15,6 +15,7 @@
  */
 
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
+import { MERCHANT_STRIPE_HREF } from '@/lib/navigation/operator-nav';
 import type {
   OperationalGuidanceBundle,
   ReleaseConfidenceSnapshot,
@@ -332,7 +333,7 @@ function buildPriorityQueue(
       explanation: 'All approvals are collected. Connecting a payment provider enables customer payments.',
       consequences: ['Customer payments begin', 'Revenue tracking activates', 'Settlement readiness unlocks'],
       estimatedMinutes: 2,
-      href: `${base_}/funding`,
+      href: MERCHANT_STRIPE_HREF,
       label: 'Connect provider',
     });
   }

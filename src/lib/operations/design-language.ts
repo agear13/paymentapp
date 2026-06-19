@@ -105,9 +105,9 @@ export const EMPTY_STATE_COPY = {
     cta: 'Review settlement readiness',
   },
   participantEarnings: {
-    title: 'No participants yet',
-    body: 'Add participants, then define how each earns. This unlocks obligations and settlement.',
-    cta: 'Add participant',
+    title: 'No team members added yet',
+    body: 'Add the people who will earn from this agreement and set up how each gets paid. Everyone must approve before payments can flow.',
+    cta: 'Add team member',
   },
   funding: {
     title: 'No funding activity yet',
@@ -134,5 +134,10 @@ export function humanizeOperatorText(text: string): string {
     .replace(/Payout onboarding/gi, 'Settlement confirmation')
     .replace(/payout verification required/gi, 'Settlement confirmation pending')
     .replace(/compliance incomplete/gi, 'Settlement confirmation pending')
-    .replace(/Configure participant earnings before obligations/gi, 'Set up participant earnings first');
+    .replace(/Configure participant earnings before obligations/gi, 'Set up participant earnings first')
+    .replace(/Agreement generated/gi, 'Ready to send')
+    .replace(/Agreement viewed/gi, 'Opened by participant')
+    .replace(/Settlement pending/gi, 'Waiting until payment is due')
+    .replace(/\bInfrastructure\b/g, 'Payment provider')
+    .replace(/payment infrastructure/gi, 'payment provider');
 }

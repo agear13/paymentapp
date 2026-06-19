@@ -38,6 +38,9 @@ export type OperatorNavSection = {
   items?: OperatorNavItem[];
 };
 
+/** Canonical destination for connecting / managing the Stripe payment provider. */
+export const MERCHANT_STRIPE_HREF = '/dashboard/settings/merchant#payment-provider';
+
 export const PAYOUTS_HUB_HREF = '/dashboard/payouts';
 export const PAYOUTS_OBLIGATIONS_HREF = '/dashboard/payouts/obligations';
 export const PAYOUTS_COMMISSIONS_HREF = '/dashboard/payouts/commissions';

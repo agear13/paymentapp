@@ -33,6 +33,15 @@ export function projectActivityPath(projectId: string): string {
   return `/dashboard/projects/${encodeURIComponent(projectId)}/activity`;
 }
 
+/** Deep-links to the Approval Centre within the Participants tab. */
+export function projectApprovalCentrePath(projectId: string): string {
+  return `/dashboard/projects/${encodeURIComponent(projectId)}/participants?focus=approvals`;
+}
+
+export function projectSettlementPath(projectId: string): string {
+  return `/dashboard/projects/${encodeURIComponent(projectId)}/payouts`;
+}
+
 export type ProjectWorkspaceTab =
   | 'overview'
   | 'commercialRoles'

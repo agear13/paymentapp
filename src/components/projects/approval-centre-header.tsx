@@ -3,34 +3,30 @@
 /**
  * Approval Centre Header
  *
- * Answers the first two operational questions within five seconds:
- *   1. Where am I?
- *   2. What is preventing this agreement from becoming payment-ready?
- *
- * Two distinct states:
+ * Two states:
  *
  *   State A — Approvals outstanding
- *     Progress bar + counts + "X approvals outstanding" primary message
- *     Expandable "Why approvals matter" section
+ *     Progress bar · counts · Provvy guidance line (who to chase next)
  *
- *   State B — All approvals complete
- *     ✓ success strip + automatically surfaces the next Commercial OS bottleneck
- *     (e.g. "Connect Stripe" when paymentProviderConnected is false)
- *     The Approval Centre never goes silent — it always points forward.
+ *   State B — Everyone approved
+ *     ✓ strip · one next-step CTA (first unresolved bottleneck only)
  *
- * All state derives from CommercialCapabilities (persisted backend truth).
- * No estimated time: no real telemetry exists to base it on.
- * No independent completion inference.
+ * Design rules:
+ *   - Explain something once. No expandable "why approvals matter?" — the count
+ *     and progress bar are self-explanatory.
+ *   - State B surfaces exactly ONE recommendation. The operator sees one button.
+ *   - No "estimated time" — there is no real telemetry to base it on.
  */
 
 import * as React from 'react';
 import Link from 'next/link';
-import { ArrowRight, CheckCircle2, ChevronDown, ChevronRight, Shield, Zap } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { CommercialCapabilities } from '@/components/workflow/commercial-decision-engine';
 import { deriveAgreementLifecycleState } from '@/lib/operations/lifecycle/agreement-lifecycle';
+import { projectOverviewPath } from '@/lib/projects/project-routes';
 import { cn } from '@/lib/utils';
 
 /* ─── Approval stat derivation ─────────────────────────────────────────────── */
@@ -103,56 +99,63 @@ function ApprovalProgressBar({ percentage }: { percentage: number }) {
   );
 }
 
-/* ─── Why approvals matter ──────────────────────────────────────────────────── */
+/* ─── Provvy guidance line (State A) ────────────────────────────────────────
+ *
+ * Surfaces the single most actionable nudge without requiring the operator to
+ * read a paragraph. Examples:
+ *   "Send the agreement to Sam — they are the only one waiting."
+ *   "2 participants still need the agreement sent."
+ *   "1 participant has opened the agreement but not yet approved."
+ */
 
-function WhyApprovalsSection() {
-  const [open, setOpen] = React.useState(false);
-  return (
-    <div className="border-t border-border/20 pt-3">
-      <button
-        type="button"
-        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        {open ? (
-          <ChevronDown className="h-3 w-3 shrink-0" />
-        ) : (
-          <ChevronRight className="h-3 w-3 shrink-0" />
-        )}
-        Why do approvals matter?
-      </button>
+function deriveGuidanceLine(
+  participants: DemoParticipant[],
+  stats: ApprovalStats
+): string | null {
+  if (stats.pending === 0) return null;
 
-      {open ? (
-        <div className="mt-2.5 space-y-1.5">
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Commercial agreements must be approved before any of the following can occur:
-          </p>
-          {[
-            'Revenue attribution begins for each participant',
-            'Referral commissions accrue against sales',
-            'Settlement becomes available for release',
-            'Participant payouts can be released',
-          ].map((reason) => (
-            <div key={reason} className="flex items-start gap-2">
-              <CheckCircle2 className="h-3 w-3 text-primary/60 shrink-0 mt-0.5" />
-              <span className="text-xs text-muted-foreground">{reason}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
+  // Single participant not yet sent → name them directly
+  if (stats.notSent === 1 && stats.waiting === 0) {
+    const p = participants.find((x) => {
+      const lc = deriveAgreementLifecycleState(x);
+      return x.approvalStatus !== 'Approved' && lc !== 'SHARED' && lc !== 'VIEWED' && lc !== 'SIGNED';
+    });
+    if (p?.name) return `Send the agreement to ${p.name} — they haven't received it yet.`;
+  }
+
+  // Single participant waiting (sent but not approved)
+  if (stats.waiting === 1 && stats.notSent === 0) {
+    const p = participants.find((x) => {
+      const lc = deriveAgreementLifecycleState(x);
+      return lc === 'SHARED' || lc === 'VIEWED' || lc === 'SIGNED';
+    });
+    if (p?.name) return `${p.name} has received the agreement but hasn't approved yet.`;
+  }
+
+  // Multiple unsent
+  if (stats.notSent > 0) {
+    return `${stats.notSent} ${stats.notSent === 1 ? 'participant' : 'participants'} still need the agreement sent.`;
+  }
+
+  // All sent, some waiting
+  if (stats.waiting > 0) {
+    return `${stats.waiting} ${stats.waiting === 1 ? 'participant has' : 'participants have'} received the agreement but haven't approved yet.`;
+  }
+
+  return null;
 }
 
-/* ─── Next bottleneck CTA (State B) ────────────────────────────────────────── */
+/* ─── Next bottleneck (State B) — exactly one recommendation ───────────────
+ *
+ * Returns the first unresolved bottleneck only.
+ * The operator sees one button and one action.
+ */
 
 type NextBottleneck = {
   title: string;
   description: string;
   ctaLabel: string;
   href: string;
-  estimatedMinutes: number;
 };
 
 function deriveNextBottleneck(
@@ -163,32 +166,37 @@ function deriveNextBottleneck(
 
   if (!caps.paymentProviderConnected) {
     return {
-      title: 'Connect a payment provider',
-      description:
-        'Connecting a payment provider enables customer payments, revenue tracking, and settlement.',
-      ctaLabel: 'Connect Stripe',
+      title: 'Set up payments',
+      description: 'Connect a payment provider so customers can pay and revenue can flow.',
+      ctaLabel: 'Connect payment provider',
       href: '/dashboard/settings/merchant#payment-provider',
-      estimatedMinutes: 2,
     };
   }
 
   if (!caps.revenueFlowing) {
     return {
-      title: 'Agreement is payment-ready',
-      description: 'Revenue can now flow. Share your payment links to begin collecting.',
+      title: 'Start collecting revenue',
+      description: 'Share your payment links to begin collecting customer payments.',
       ctaLabel: 'View agreement',
-      href: `${base}/overview`,
-      estimatedMinutes: 1,
+      href: projectOverviewPath(projectId),
+    };
+  }
+
+  if (caps.revenueFlowing && !caps.settlementReady) {
+    return {
+      title: 'Review obligations',
+      description: 'Revenue is flowing. Confirm what each participant is owed before releasing payments.',
+      ctaLabel: 'Review obligations',
+      href: `${base}/payouts`,
     };
   }
 
   if (caps.settlementReady) {
     return {
-      title: 'Payouts are ready to release',
-      description: 'Revenue has been collected. Review obligations and release participant payouts.',
-      ctaLabel: 'Release payouts',
+      title: 'Release payments',
+      description: 'Revenue has been collected. Review what each participant is owed.',
+      ctaLabel: 'Review obligations',
       href: `${base}/payouts`,
-      estimatedMinutes: 2,
     };
   }
 
@@ -214,60 +222,51 @@ export function ApprovalCentreHeader({
   projectId,
 }: ApprovalCentreHeaderProps) {
   const stats = React.useMemo(() => deriveApprovalStats(participants), [participants]);
+  const guidanceLine = React.useMemo(
+    () => deriveGuidanceLine(participants, stats),
+    [participants, stats]
+  );
 
   const caps = commercialCapabilities;
   const approvalsComplete = caps?.approvalsComplete ?? false;
   const nextBottleneck =
     approvalsComplete && caps ? deriveNextBottleneck(caps, projectId) : null;
 
-  /* ─── STATE B: All approvals complete ─── */
+  /* ─── STATE B: Everyone approved ─── */
 
   if (approvalsComplete) {
     return (
       <div className="rounded-xl border border-[rgba(29,111,66,0.3)] bg-[rgba(29,111,66,0.04)] px-5 py-4 space-y-4">
         {/* Success header */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-full bg-[rgba(29,111,66,0.15)] flex items-center justify-center shrink-0">
-              <CheckCircle2 className="h-4.5 w-4.5 text-[rgb(29,111,66)]" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-[rgb(29,111,66)] leading-tight">
-                All approvals collected
-              </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Agreement is now payment-ready.
-              </p>
-            </div>
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-full bg-[rgba(29,111,66,0.15)] flex items-center justify-center shrink-0">
+            <CheckCircle2 className="h-4.5 w-4.5 text-[rgb(29,111,66)]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-sm font-semibold text-[rgb(29,111,66)] leading-tight">
+              Everyone has approved.
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {agreementName} is payment-ready.
+            </p>
           </div>
           <Badge className="shrink-0 bg-[rgb(29,111,66)] hover:bg-[rgb(29,111,66)] text-white text-xs">
             {stats.total}/{stats.total}
           </Badge>
         </div>
 
-        {/* Progress bar (full) */}
+        {/* Full progress bar */}
         <ApprovalProgressBar percentage={100} />
 
-        {/* Next bottleneck — always surface forward progress */}
+        {/* Single next step — one button, one action */}
         {nextBottleneck ? (
-          <div className="border-t border-[rgba(29,111,66,0.15)] pt-3.5 space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-              Next step
-            </p>
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
+          <div className="border-t border-[rgba(29,111,66,0.15)] pt-3.5">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">{nextBottleneck.title}</p>
                 <p className="text-xs text-muted-foreground mt-0.5 max-w-xs">
                   {nextBottleneck.description}
                 </p>
-                {nextBottleneck.estimatedMinutes > 0 ? (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Estimated setup:{' '}
-                    <span className="font-medium text-foreground">
-                      {nextBottleneck.estimatedMinutes} min
-                    </span>
-                  </p>
-                ) : null}
               </div>
               <Button asChild size="sm" className="shrink-0 h-8 px-4 text-xs font-semibold gap-1.5">
                 <Link href={nextBottleneck.href}>
@@ -286,11 +285,11 @@ export function ApprovalCentreHeader({
 
   const outstandingLabel =
     stats.pending === 1
-      ? 'Waiting on 1 participant'
+      ? 'Waiting on 1 person'
       : `${stats.pending} approvals outstanding`;
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card px-5 py-4 space-y-4">
+    <div className="rounded-xl border border-border/60 bg-card px-5 py-4 space-y-3">
       {/* Heading row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
@@ -299,7 +298,7 @@ export function ApprovalCentreHeader({
           </div>
           <div>
             <h2 className="text-sm font-semibold text-foreground leading-tight">
-              Approval Centre
+              Approvals
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[30ch]">
               {agreementName}
@@ -319,13 +318,12 @@ export function ApprovalCentreHeader({
       {/* Progress bar */}
       <ApprovalProgressBar percentage={stats.percentage} />
 
-      {/* Counts + primary message */}
-      <div className="space-y-2.5">
-        {/* Outstanding message */}
+      {/* Status summary */}
+      <div className="space-y-1.5">
         <p className="text-sm font-medium text-foreground">{outstandingLabel}</p>
 
         {/* Count pills */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
           {stats.approved > 0 ? (
             <div className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-[rgb(29,111,66)] shrink-0" />
@@ -338,8 +336,7 @@ export function ApprovalCentreHeader({
             <div className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
               <span className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{stats.waiting}</span>{' '}
-                Waiting for approval
+                <span className="font-semibold text-foreground">{stats.waiting}</span> Waiting to approve
               </span>
             </div>
           ) : null}
@@ -347,22 +344,19 @@ export function ApprovalCentreHeader({
             <div className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-blue-400 shrink-0" />
               <span className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{stats.notSent}</span> Ready to
-                send
+                <span className="font-semibold text-foreground">{stats.notSent}</span> Not yet sent
               </span>
             </div>
           ) : null}
         </div>
 
-        {/* Subtext */}
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Commercial agreements must be approved before commissions accrue, payouts can be released
-          and settlement can begin.
-        </p>
+        {/* Provvy guidance line — one specific nudge, not a paragraph of rationale */}
+        {guidanceLine ? (
+          <p className="text-xs text-muted-foreground/80 leading-relaxed pt-0.5">
+            {guidanceLine}
+          </p>
+        ) : null}
       </div>
-
-      {/* Why section */}
-      <WhyApprovalsSection />
     </div>
   );
 }

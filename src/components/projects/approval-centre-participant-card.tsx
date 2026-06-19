@@ -3,36 +3,16 @@
 /**
  * Approval Centre Participant Card
  *
- * Action-driven per-participant card. Designed to answer within 2 seconds:
- *   3. Who is blocking it?
- *   4. What should I do next?
- *   5. Can I complete that action from this page?
+ * Exactly ONE primary action per state:
  *
- * Each card surfaces:
- *   - Participant identity (name, email, role)
- *   - Earnings model (so the operator can confirm correct terms without navigating away)
- *   - Last activity timestamp (derived from persisted timestamps only)
- *   - Operational status badge with clear colour semantics:
- *       Green  → Approved
- *       Amber  → Waiting for approval (sent, not yet approved)
- *       Blue   → Ready to send (link exists, not yet sent)
- *       Grey   → Needs earnings configured
- *   - Exactly ONE primary action based on the agreement lifecycle state
+ *   Earnings not configured → "Set up earnings"      (primary)
+ *   Not yet sent            → "Send approval"         (primary, opens send sheet)
+ *   Sent, not approved      → "Resend approval"       (primary, opens send sheet)
+ *   Signed                  → "View agreement"        (primary)
+ *   Approved                → "View agreement"        (subdued — already done)
  *
- * Primary action state machine (persisted data only — no optimistic state):
- *
- *   Earnings not configured → "Configure earnings"
- *   NOT_CREATED / DRAFTED   → "Send approval"  (action sheet)
- *   GENERATED               → "Send approval"  (action sheet)
- *   SHARED / VIEWED         → "Send approval"  (action sheet — resend context)
- *   SIGNED                  → "View agreement"
- *   APPROVED                → "View agreement"
- *
- * "Send approval" opens an action sheet (Popover) with:
- *   Copy approval link · Email participant · WhatsApp · QR code
- *
- * No completion logic lives here.
- * All state derives from deriveAgreementLifecycleState() (persisted backend fields).
+ * Secondary actions (copy referral link, etc.) live in a More (⋯) dropdown.
+ * No two equal-weight buttons appear side by side.
  */
 
 import * as React from 'react';
@@ -43,12 +23,20 @@ import {
   ExternalLink,
   Mail,
   MessageCircle,
+  MoreHorizontal,
   QrCode,
   Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Popover,
   PopoverContent,
@@ -70,20 +58,16 @@ import { cn } from '@/lib/utils';
 
 /* ─── Operational status labels & colours ─────────────────────────────────── */
 
-/**
- * Maps lifecycle state → human-readable operational label.
- * Avoids internal state names — operators speak in operational terms.
- */
 function operationalStatusLabel(
   lifecycle: AgreementLifecycleState,
   earningsConfigured: boolean
 ): string {
-  if (!earningsConfigured) return 'Needs earnings configured';
+  if (!earningsConfigured) return 'Set up earnings';
   switch (lifecycle) {
     case 'APPROVED': return 'Approved';
-    case 'SIGNED':   return 'Signed — awaiting review';
-    case 'VIEWED':   return 'Viewed — awaiting approval';
-    case 'SHARED':   return 'Waiting for approval';
+    case 'SIGNED':
+    case 'VIEWED':   return 'Opened — waiting to approve';
+    case 'SHARED':   return 'Waiting to approve';
     case 'GENERATED':
     case 'DRAFTED':
     case 'NOT_CREATED':
@@ -91,7 +75,6 @@ function operationalStatusLabel(
   }
 }
 
-/** Colour class set for the status badge */
 function statusBadgeClass(
   lifecycle: AgreementLifecycleState,
   earningsConfigured: boolean
@@ -116,10 +99,6 @@ function statusBadgeClass(
 
 /* ─── Last activity ────────────────────────────────────────────────────────── */
 
-/**
- * Derives a human-readable last activity string from persisted timestamps.
- * Returns null when no activity has been recorded.
- */
 function deriveLastActivity(p: DemoParticipant): string | null {
   const now = Date.now();
 
@@ -140,17 +119,20 @@ function deriveLastActivity(p: DemoParticipant): string | null {
   }
 
   if (p.approvedAt) return `Approved ${ago(p.approvedAt) ?? ''}`;
-  if (p.agreementViewedAt) return `Viewed ${ago(p.agreementViewedAt) ?? ''}`;
+  if (p.agreementViewedAt) return `Opened ${ago(p.agreementViewedAt) ?? ''}`;
   if (p.agreementSharedAt) return `Sent ${ago(p.agreementSharedAt) ?? ''}`;
   if (p.inviteSentAt) return `Invited ${ago(p.inviteSentAt) ?? ''}`;
   return null;
 }
 
-/* ─── Send approval action sheet ──────────────────────────────────────────── */
+/* ─── Send approval sheet ──────────────────────────────────────────────────
+ *
+ * The primary CTA for "not yet approved" states.
+ * Opens a popover with delivery options.
+ */
 
 type SendApprovalSheetProps = {
   participant: DemoParticipant;
-  agreementUrl: string;
   fullAgreementUrl: string;
   onResend: () => void;
   isResend: boolean;
@@ -158,13 +140,11 @@ type SendApprovalSheetProps = {
 
 function SendApprovalSheet({
   participant,
-  agreementUrl,
   fullAgreementUrl,
   onResend,
   isResend,
 }: SendApprovalSheetProps) {
   const [open, setOpen] = React.useState(false);
-  const qrHref = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(fullAgreementUrl)}`;
 
   const handleCopy = async () => {
     try {
@@ -198,12 +178,8 @@ function SendApprovalSheet({
   };
 
   const handleQr = () => {
+    const qrHref = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(fullAgreementUrl)}`;
     window.open(qrHref, '_blank', 'noopener,noreferrer');
-    setOpen(false);
-  };
-
-  const handleResend = () => {
-    onResend();
     setOpen(false);
   };
 
@@ -220,15 +196,7 @@ function SendApprovalSheet({
           <ChevronDown className="h-3 w-3 ml-0.5 opacity-70" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="w-52 p-1.5 shadow-md"
-        sideOffset={4}
-      >
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-2 py-1.5">
-          {isResend ? 'Resend via' : 'Send via'}
-        </p>
-
+      <PopoverContent align="end" className="w-48 p-1.5 shadow-md" sideOffset={4}>
         <button
           type="button"
           className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors"
@@ -237,7 +205,6 @@ function SendApprovalSheet({
           <Copy className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           Copy approval link
         </button>
-
         <button
           type="button"
           className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors"
@@ -246,7 +213,6 @@ function SendApprovalSheet({
           <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           Email participant
         </button>
-
         <button
           type="button"
           className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors"
@@ -255,7 +221,6 @@ function SendApprovalSheet({
           <MessageCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           WhatsApp
         </button>
-
         <button
           type="button"
           className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors"
@@ -264,14 +229,16 @@ function SendApprovalSheet({
           <QrCode className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           Generate QR code
         </button>
-
         {isResend ? (
           <>
             <div className="my-1 h-px bg-border/50" />
             <button
               type="button"
               className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors"
-              onClick={handleResend}
+              onClick={() => {
+                onResend();
+                setOpen(false);
+              }}
             >
               <Send className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               Open share dialog
@@ -283,6 +250,53 @@ function SendApprovalSheet({
   );
 }
 
+/* ─── More menu (secondary actions) ────────────────────────────────────────── */
+
+type MoreMenuProps = {
+  onViewAgreement: () => void;
+  onCopyReferralLink: (() => void) | null;
+  onResend?: () => void;
+};
+
+function MoreMenu({ onViewAgreement, onCopyReferralLink, onResend }: MoreMenuProps) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+          aria-label="More actions"
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem onClick={onViewAgreement} className="gap-2 text-xs">
+          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+          View agreement
+        </DropdownMenuItem>
+        {onResend ? (
+          <DropdownMenuItem onClick={onResend} className="gap-2 text-xs">
+            <Send className="h-3.5 w-3.5 text-muted-foreground" />
+            Resend approval
+          </DropdownMenuItem>
+        ) : null}
+        {onCopyReferralLink ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onCopyReferralLink} className="gap-2 text-xs">
+              <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+              Copy referral link
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /* ─── Props ─────────────────────────────────────────────────────────────────── */
 
 export type ApprovalCentreParticipantCardProps = {
@@ -291,10 +305,6 @@ export type ApprovalCentreParticipantCardProps = {
   isHighlighted?: boolean;
   'data-approval-card'?: boolean;
   'data-pending'?: string;
-  /**
-   * Opens the full share dialog (generates link if needed + shows share modal).
-   * Entitlement check lives in the parent.
-   */
   onShareAgreement: (p: DemoParticipant) => void;
   onConfigureEarnings: (p: DemoParticipant) => void;
 };
@@ -346,14 +356,12 @@ export function ApprovalCentreParticipantCard({
     window.open(preview, '_blank', 'noopener,noreferrer');
   }, [agreementPath]);
 
-  const handleCopyReferralLink = React.useCallback(async () => {
+  const handleCopyReferralLink = React.useCallback(() => {
     if (!referralUrl) return;
-    try {
-      await navigator.clipboard.writeText(referralUrl);
-      toast.success('Referral link copied');
-    } catch {
-      toast.error('Could not copy link');
-    }
+    navigator.clipboard.writeText(referralUrl).then(
+      () => toast.success('Referral link copied'),
+      () => toast.error('Could not copy link')
+    );
   }, [referralUrl]);
 
   /* ─── Derived display values ─── */
@@ -361,6 +369,7 @@ export function ApprovalCentreParticipantCard({
   const statusLabel = operationalStatusLabel(lifecycle, earningsConfigured);
   const badgeClass = statusBadgeClass(lifecycle, earningsConfigured);
   const isApproved = lifecycle === 'APPROVED';
+
   const needsSend =
     earningsConfigured &&
     (lifecycle === 'NOT_CREATED' ||
@@ -369,6 +378,7 @@ export function ApprovalCentreParticipantCard({
       lifecycle === 'SHARED' ||
       lifecycle === 'VIEWED');
   const isResend = lifecycle === 'SHARED' || lifecycle === 'VIEWED';
+  const isSigned = lifecycle === 'SIGNED';
 
   return (
     <div
@@ -405,16 +415,13 @@ export function ApprovalCentreParticipantCard({
             )}
           </div>
 
-          {/* Name + email + role + earnings + activity */}
+          {/* Name · role · earnings · activity */}
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-foreground truncate leading-snug">
               {participant.name}
             </p>
-            {participant.email ? (
-              <p className="text-xs text-muted-foreground truncate">{participant.email}</p>
-            ) : null}
 
-            {/* Role · Earnings — inline metadata row */}
+            {/* Role · Earnings — compact metadata */}
             {(roleLabel || earningsModel) ? (
               <p className="text-xs text-muted-foreground/70 mt-0.5 truncate">
                 {[roleLabel, earningsModel].filter(Boolean).join(' · ')}
@@ -430,7 +437,7 @@ export function ApprovalCentreParticipantCard({
           </div>
         </div>
 
-        {/* ── Middle: status badge ── */}
+        {/* ── Status badge ── */}
         <div className="sm:w-44 shrink-0">
           <Badge
             variant="outline"
@@ -440,73 +447,63 @@ export function ApprovalCentreParticipantCard({
           </Badge>
         </div>
 
-        {/* ── Right: actions ── */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:justify-end shrink-0">
+        {/* ── Actions: one primary + optional more menu ── */}
+        <div className="flex items-center gap-1.5 shrink-0 justify-end">
           {!earningsConfigured ? (
+            /* Primary: set up earnings */
             <Button
               type="button"
               size="sm"
               className="h-7 px-3 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background"
               onClick={() => onConfigureEarnings(participant)}
             >
-              Configure earnings
+              Set up earnings
             </Button>
           ) : needsSend ? (
+            /* Primary: send / resend approval */
             <SendApprovalSheet
               participant={participant}
-              agreementUrl={agreementPath}
               fullAgreementUrl={fullAgreementUrl}
               onResend={() => onShareAgreement(participant)}
               isResend={isResend}
             />
-          ) : lifecycle === 'SIGNED' ? (
+          ) : isSigned ? (
+            /* Primary: view agreement. Secondary: resend → in More menu */
             <>
               <Button
                 type="button"
-                variant="outline"
                 size="sm"
-                className="h-7 px-2.5 text-xs gap-1"
-                onClick={() => onShareAgreement(participant)}
-              >
-                <Send className="h-3 w-3" />
-                Resend
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2.5 text-xs gap-1"
+                className="h-7 px-3 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background gap-1"
                 onClick={handleViewAgreement}
               >
                 <ExternalLink className="h-3 w-3" />
                 View agreement
               </Button>
+              <MoreMenu
+                onViewAgreement={handleViewAgreement}
+                onCopyReferralLink={referralUrl ? handleCopyReferralLink : null}
+                onResend={() => onShareAgreement(participant)}
+              />
             </>
           ) : (
-            // APPROVED
+            /* APPROVED — primary action is subdued; no further approval work needed */
             <>
-              {referralUrl ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2.5 text-xs gap-1"
-                  onClick={() => void handleCopyReferralLink()}
-                >
-                  <Copy className="h-3 w-3" />
-                  Referral link
-                </Button>
-              ) : null}
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-7 px-2.5 text-xs gap-1"
+                className="h-7 px-3 text-xs gap-1 text-muted-foreground hover:text-foreground"
                 onClick={handleViewAgreement}
               >
                 <ExternalLink className="h-3 w-3" />
                 View agreement
               </Button>
+              {referralUrl ? (
+                <MoreMenu
+                  onViewAgreement={handleViewAgreement}
+                  onCopyReferralLink={handleCopyReferralLink}
+                />
+              ) : null}
             </>
           )}
         </div>

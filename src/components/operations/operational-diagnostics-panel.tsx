@@ -41,8 +41,6 @@ export function OperationalDiagnosticsPanel({
   refreshSilent,
   reloadCoordinationSnapshot,
 }: OperationalDiagnosticsPanelProps) {
-  if (!isOperationalDiagnosticsEnabled()) return null;
-
   const coordination = useOperationalCoordinationState({
     scope: 'project',
     participants,
@@ -81,6 +79,8 @@ export function OperationalDiagnosticsPanel({
       }),
     [invalidate, refreshSilent, reloadCoordinationSnapshot]
   );
+
+  if (!isOperationalDiagnosticsEnabled()) return null;
 
   const runRecovery = async (action: OperationalRecoveryAction, confirmed: boolean) => {
     setBusy(true);

@@ -108,6 +108,7 @@ import { OnboardingPaymentSetupPanel } from '@/components/onboarding/onboarding-
 import { OnboardingSuccessMoment } from '@/components/onboarding/onboarding-success-moment';
 import { OnboardingMoneySetupIntro } from '@/components/onboarding/onboarding-money-setup-intro';
 import { OnboardingCompletionScreen } from '@/components/onboarding/onboarding-completion-screen';
+import { projectOverviewPath } from '@/lib/projects/project-routes';
 import {
   deriveReadinessWinMessage,
   deriveTemplateSetupProgress,
@@ -226,7 +227,8 @@ export function WorkflowOnboardingForm() {
     null
   );
   const [advancedProvidersOpen, setAdvancedProvidersOpen] = React.useState(false);
-  const [paymentProviderConnected, setPaymentProviderConnected] = React.useState(false);
+  // paymentProviderConnected is always false during onboarding — the real value
+  // is only available from persisted server state after the wizard closes.
   const [bootstrapMutation, setBootstrapMutation] =
     React.useState<OnboardingRecoveryMutation | null>(null);
   const bootstrapOperationIdRef = React.useRef<string>(createOperationId());
@@ -701,10 +703,9 @@ export function WorkflowOnboardingForm() {
       await completeStarterOnboarding();
       clearOnboardingDraft();
       notifyWorkspaceActivationRefresh();
-      // Always navigate to the workspace Today view — never an agreement workspace.
-      // The operator should open their work from the dashboard, not be dropped
-      // into a specific agreement page without context.
-      router.push('/dashboard');
+      // Navigate to the created agreement workspace so the operator can begin
+      // the Golden Path immediately. Fall back to dashboard if no project exists.
+      router.push(projectId ? projectOverviewPath(projectId) : '/dashboard');
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to complete onboarding');
@@ -1052,9 +1053,7 @@ export function WorkflowOnboardingForm() {
     try {
       await saveOptionalProviders(railsForm.getValues());
       await persistState('complete');
-      if (!options?.skipped) {
-        setPaymentProviderConnected(true);
-      }
+      void options; // skipped flag reserved for future use
       setStep('complete');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to complete setup');
@@ -2054,7 +2053,7 @@ export function WorkflowOnboardingForm() {
           csrfReady={csrfReady}
           isLoading={isLoading}
           onCheckout={() => initiateBillingCheckout(selectedPlanId as SaasCheckoutPlan)}
-          paymentProviderConnected={paymentProviderConnected}
+          paymentProviderConnected={false}
           participantsInvited={confirmedParticipants.length > 0}
           collectionConfigured={
             collectionPreference !== null && collectionPreference !== 'decide_later'

@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Check } from 'lucide-react';
+import { ArrowDown, ArrowRight, Check } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
@@ -81,11 +82,26 @@ function WorkflowHeaderSkeleton() {
 export function WorkflowHeader() {
   const { deal, summary } = useProjectWorkspace();
   const { decision, workflowCtx, loading } = useCommercialBrain();
+  const pathname = usePathname();
 
   if (loading && !deal) return <WorkflowHeaderSkeleton />;
   if (!deal || !summary || !workflowCtx || !decision) return null;
 
   const recommended = decision.recommendedAction;
+
+  // Detect navigation loop: collecting-approvals CTA points back to /participants.
+  // When already on that page, scroll to the approval queue instead of re-navigating.
+  const onParticipantsPage = pathname?.includes('/participants') ?? false;
+  const wouldLoopToParticipants =
+    workflowCtx.currentStage === 'collecting-approvals' && onParticipantsPage;
+
+  function scrollToApprovalQueue() {
+    const firstPending = document.querySelector<HTMLElement>(
+      '[data-approval-card][data-pending="true"]'
+    );
+    const approvalCentre = document.getElementById('approval-centre-cards');
+    (firstPending ?? approvalCentre)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   // Operationally complete — show quiet success strip
   if (workflowCtx.isCompleted) {
@@ -152,16 +168,28 @@ export function WorkflowHeader() {
                 {workflowCtx.nextActionMinutes} min
               </span>
             ) : null}
-            <Button
-              asChild
-              size="sm"
-              className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0"
-            >
-              <Link href={workflowCtx.continueHref}>
-                {workflowCtx.continueLabel}
-                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-              </Link>
-            </Button>
+            {wouldLoopToParticipants ? (
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0"
+                onClick={scrollToApprovalQueue}
+              >
+                See approval queue
+                <ArrowDown className="ml-1.5 h-3.5 w-3.5" />
+              </Button>
+            ) : (
+              <Button
+                asChild
+                size="sm"
+                className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0"
+              >
+                <Link href={workflowCtx.continueHref}>
+                  {workflowCtx.continueLabel}
+                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       ) : (
@@ -169,16 +197,28 @@ export function WorkflowHeader() {
           <p className="text-sm text-muted-foreground leading-snug">
             {workflowCtx.nextActionHint}
           </p>
-          <Button
-            asChild
-            size="sm"
-            className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0 shrink-0"
-          >
-            <Link href={workflowCtx.continueHref}>
-              {workflowCtx.continueLabel}
-              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-            </Link>
-          </Button>
+          {wouldLoopToParticipants ? (
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0 shrink-0"
+              onClick={scrollToApprovalQueue}
+            >
+              See approval queue
+              <ArrowDown className="ml-1.5 h-3.5 w-3.5" />
+            </Button>
+          ) : (
+            <Button
+              asChild
+              size="sm"
+              className="h-8 px-4 text-sm font-semibold bg-foreground hover:bg-foreground/90 text-background border-0 shrink-0"
+            >
+              <Link href={workflowCtx.continueHref}>
+                {workflowCtx.continueLabel}
+                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          )}
         </div>
       )}
     </div>

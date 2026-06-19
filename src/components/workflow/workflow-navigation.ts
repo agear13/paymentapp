@@ -15,12 +15,12 @@ import {
   type WorkflowStage,
   type WorkflowInputData,
 } from '@/components/workflow/workflow-context';
+import { MERCHANT_STRIPE_HREF } from '@/lib/navigation/operator-nav';
 
 /* ─── Route constants ─── */
 
 const DASHBOARD_HREF = '/dashboard';
 const MERCHANT_SETTINGS_HREF = '/dashboard/settings/merchant';
-const MERCHANT_STRIPE_HREF = '/dashboard/settings/merchant#payment-provider';
 
 function agreementBase(projectId: string): string {
   return `/dashboard/projects/${encodeURIComponent(projectId)}`;

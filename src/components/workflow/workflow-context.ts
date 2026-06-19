@@ -14,6 +14,7 @@ import type { OperationalKPIs } from '@/lib/operations/reducer/types';
 import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/types';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
+import { MERCHANT_STRIPE_HREF } from '@/lib/navigation/operator-nav';
 
 /* ─── Stage enum ─── */
 
@@ -250,7 +251,7 @@ function deriveContinueHref(stage: WorkflowStage, projectId: string): string {
     case 'collecting-approvals':
       return `${base}/participants?focus=approvals`;
     case 'preparing-payments':
-      return `${base}/funding`;
+      return MERCHANT_STRIPE_HREF;
     case 'ready-to-collect':
     case 'collecting-revenue':
     case 'ready-to-release':
@@ -317,7 +318,7 @@ export function resolveNextWorkflowStep(opts: {
   // Derive from hint string when no explicit href
   if (/stripe|payment provider|merchant|payment rail/i.test(topBlockerHint)) {
     return {
-      href: `${base}/funding`,
+      href: MERCHANT_STRIPE_HREF,
       label: 'Connect provider',
       minutes: 2,
       reason: 'Connecting a payment provider unlocks customer payments.',

@@ -628,6 +628,20 @@ export function ProjectParticipantsView() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [focusParticipantId, displayParticipants.length]);
 
+  const { workflowCtx, commercialCapabilities } = useCommercialBrain();
+
+  // Derived from CommercialBrain — single source of truth for earnings completion.
+  // earningsConfigured = ALL participants configured; so the inverse means work remains.
+  const needsEarningsConfiguration =
+    (commercialCapabilities?.participantsInvited ?? false) &&
+    !(commercialCapabilities?.earningsConfigured ?? false);
+
+  // Show Approval Centre layout when collecting approvals OR when approvals are
+  // complete but the operator may still want to view the approval record.
+  const isCollectingApprovals = workflowCtx?.currentStage === 'collecting-approvals';
+  const approvalsComplete = commercialCapabilities?.approvalsComplete ?? false;
+  const showApprovalCentre = isCollectingApprovals || approvalsComplete;
+
   // When arriving from Dashboard → "Open Approval Centre" (?focus=approvals),
   // scroll to the first participant that still requires action and highlight it.
   const [highlightedApprovalId, setHighlightedApprovalId] = React.useState<string | null>(null);
@@ -657,20 +671,6 @@ export function ProjectParticipantsView() {
     () => hydratedParticipants.map(participantEntity),
     [hydratedParticipants]
   );
-
-  const { workflowCtx, commercialCapabilities } = useCommercialBrain();
-
-  // Derived from CommercialBrain — single source of truth for earnings completion.
-  // earningsConfigured = ALL participants configured; so the inverse means work remains.
-  const needsEarningsConfiguration =
-    (commercialCapabilities?.participantsInvited ?? false) &&
-    !(commercialCapabilities?.earningsConfigured ?? false);
-
-  // Show Approval Centre layout when collecting approvals OR when approvals are
-  // complete but the operator may still want to view the approval record.
-  const isCollectingApprovals = workflowCtx?.currentStage === 'collecting-approvals';
-  const approvalsComplete = commercialCapabilities?.approvalsComplete ?? false;
-  const showApprovalCentre = isCollectingApprovals || approvalsComplete;
 
   // All participants not yet approved — drives the Approval Centre card list ordering.
   const pendingApprovalParticipants = React.useMemo(() => {
@@ -737,7 +737,7 @@ export function ProjectParticipantsView() {
         {/* Persistent copilot — powered by CommercialBrainContext (no props needed) */}
         <ProjectPageCopilot page="people" />
 
-        {needsEarningsConfiguration && hasParticipants ? (
+        {needsEarningsConfiguration && hasParticipants && !showApprovalCentre ? (
           <ProgressiveOperationalPanel
             title="Configure how each participant gets paid"
             summary={guidance.explanation.explainability.headline}
@@ -791,7 +791,7 @@ export function ProjectParticipantsView() {
             <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefreshing}>
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
-            {deal && (
+            {!showApprovalCentre && deal && (
               <React.Suspense fallback={null}>
                 <CreateFromConversationButton
                   entryPoint="participant_add"
@@ -816,21 +816,18 @@ export function ProjectParticipantsView() {
                 </Button>
               </>
             ) : (
-              /* During Approval Centre mode: roster management stays accessible but
-                 de-emphasised — operators sometimes realise they forgot someone after
-                 beginning approvals. Outline buttons keep them reachable, not primary. */
-              <>
-                <Button variant="outline" size="sm" className="h-8 text-xs text-muted-foreground" asChild>
-                  <Link href={projectCommercialRolesPath(projectId)}>
-                    <ClipboardList className="mr-1.5 h-3.5 w-3.5" />
-                    Add role
-                  </Link>
-                </Button>
-                <Button variant="outline" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setInviteOpen(true)}>
-                  <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                  Add member
-                </Button>
-              </>
+              /* During Approval Centre mode: roster management is collapsed into a single
+                 muted utility button. The operator's eye should land on participant cards,
+                 not on roster management actions. */
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs text-muted-foreground/60 hover:text-muted-foreground"
+                onClick={() => setInviteOpen(true)}
+              >
+                <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                Add member
+              </Button>
             )}
           </div>
         </div>
