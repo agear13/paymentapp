@@ -84,11 +84,10 @@ export function resolveWorkflowDestination(
       };
     case 'preparing-payments':
       return {
-        href: MERCHANT_STRIPE_HREF,
-        label: 'Connect payment provider',
-        estimatedMinutes: 2,
-        reason: 'Connecting a payment provider enables customer payments and settlement.',
-        anchor: '#payment-provider',
+        href: `${base}/participants?focus=onboarding`,
+        label: 'Complete supplier onboarding',
+        estimatedMinutes: 5,
+        reason: 'Collect bank details, ABN, and GST status from suppliers before settlement can proceed.',
       };
     case 'ready-to-collect':
     case 'collecting-revenue':

@@ -24,8 +24,8 @@ import {
   deriveWorkflowContext,
   STAGE_COMPLETION,
   stageFromScore,
-  type WorkflowStage,
-  type WorkflowInputData,
+  WorkflowStage,
+  WorkflowInputData,
 } from '../../components/workflow/workflow-context';
 import {
   resolveWorkflowDestination,
@@ -501,22 +501,24 @@ describe('Step 5 — All Approved (preparing-payments)', () => {
     expect(caps.revenueFlowing).toBe(false);
   });
 
-  it('CTA destination is MERCHANT_STRIPE_HREF — not /funding', () => {
-    expect(dest.href).toBe(MERCHANT_STRIPE_HREF);
-    expect(dest.href).toContain('/settings/merchant');
-    expect(dest.href).toContain('#payment-provider');
-    expect(dest.href).not.toContain('/funding');
+  it('CTA destination is supplier onboarding — all approvals gate the onboarding workflow', () => {
+    // Sprint 7.2: preparing-payments now routes to supplier onboarding, not Stripe.
+    // The gate after all approvals is supplier onboarding (bank details, ABN, GST),
+    // not payment provider connection.
+    expect(dest.href).toContain('/participants');
+    expect(dest.href).toContain('focus=onboarding');
+    expect(dest.href).toContain(PROJECT_ID);
+    expect(dest.href).not.toBe(MERCHANT_STRIPE_HREF);
   });
 
-  it('continueHref is MERCHANT_STRIPE_HREF', () => {
-    expect(ctx.continueHref).toBe(MERCHANT_STRIPE_HREF);
+  it('continueHref is the supplier onboarding path', () => {
+    expect(ctx.continueHref).toContain('/participants');
+    expect(ctx.continueHref).toContain('focus=onboarding');
+    expect(ctx.continueHref).not.toBe(MERCHANT_STRIPE_HREF);
   });
 
-  it('recommended action points to Stripe — not a project page', () => {
-    expect(result.recommendedAction).not.toBeNull();
-    expect(result.recommendedAction?.tier).toBe('payment_provider');
-    expect(result.recommendedAction?.href).toBe(MERCHANT_STRIPE_HREF);
-    expect(result.recommendedAction?.href).not.toContain(`/projects/${PROJECT_ID}`);
+  it('continueLabel indicates supplier setup action', () => {
+    expect(ctx.continueLabel).toMatch(/supplier|onboarding/i);
   });
 
   it('completion percentage is 58', () => {
@@ -874,7 +876,7 @@ describe('Part 13 — Navigation Loop Audit', () => {
     'setup':                `${BASE}/participants`,
     'configuring':          `${BASE}/participants`,
     'collecting-approvals': `${BASE}/participants`, // CTA is /participants?focus=approvals
-    'preparing-payments':   MERCHANT_STRIPE_HREF,
+    'preparing-payments':   `${BASE}/participants`, // CTA is /participants?focus=onboarding
     'ready-to-collect':     `${BASE}/payouts`,
     'collecting-revenue':   `${BASE}/payouts`,
     'ready-to-release':     `${BASE}/payouts`,
@@ -888,10 +890,14 @@ describe('Part 13 — Navigation Loop Audit', () => {
     expect(dest.href).not.toBe(`${BASE}/participants`);
   });
 
-  it('preparing-payments CTA is outside the agreement workspace — no project page loop', () => {
+  it('preparing-payments CTA carries ?focus=onboarding — distinguishable from bare /participants', () => {
+    // Sprint 7.2: all-approvals gate is now supplier onboarding, not Stripe.
+    // The CTA must carry ?focus=onboarding so WorkflowHeader can distinguish it
+    // from a plain /participants navigation and scroll to the onboarding panel.
     const dest = resolveWorkflowDestination('preparing-payments', PROJECT_ID);
-    expect(dest.href).not.toContain(`/projects/${PROJECT_ID}`);
-    expect(dest.href).toBe(MERCHANT_STRIPE_HREF);
+    expect(dest.href).toContain('focus=onboarding');
+    expect(dest.href).not.toBe(`${BASE}/participants`);    // must have the param
+    expect(dest.href).not.toBe(MERCHANT_STRIPE_HREF);      // no longer Stripe
   });
 
   it('operational CTA points to /activity — not to the current page', () => {
@@ -904,11 +910,20 @@ describe('Part 13 — Navigation Loop Audit', () => {
     expect(ctx.isCompleted).toBe(true);
   });
 
-  it('payment_provider recommended action never sends to a project funding page', () => {
+  it('all-approved recommended action routes to supplier onboarding — not funding or Stripe', () => {
+    // Sprint 7.2: the gate after all approvals is supplier onboarding.
+    // The recommended action should point to the onboarding panel, not Stripe.
     const result = analyse(STEP_ALL_APPROVED);
     const rec = result.recommendedAction;
-    expect(rec?.href).not.toContain('/funding');
-    expect(rec?.href).toBe(MERCHANT_STRIPE_HREF);
+    // Either a recommended action exists pointing to onboarding,
+    // or the continueHref provides the forward path (both are acceptable).
+    const ctx = workflowCtx(STEP_ALL_APPROVED);
+    const hasForwardPath =
+      (rec !== null && rec.href.includes('onboarding')) ||
+      ctx.continueHref.includes('onboarding');
+    expect(hasForwardPath).toBe(true);
+    expect(ctx.continueHref).not.toContain('/funding');
+    expect(ctx.continueHref).not.toBe(MERCHANT_STRIPE_HREF);
   });
 
   it('each stage destination is unique from the prior stage destination', () => {

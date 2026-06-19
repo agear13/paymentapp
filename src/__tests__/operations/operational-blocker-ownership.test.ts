@@ -1,8 +1,7 @@
 import { buildProjectParticipant } from '@/lib/projects/participant-entitlement';
-import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import { deriveOperationalBlocker } from '@/lib/operations/derivations/derive-approval-state';
 
-function baseDeal(): RecentDeal {
+function baseDeal() {
   return {
     id: 'deal-1',
     dealName: 'Test',
@@ -14,7 +13,7 @@ function baseDeal(): RecentDeal {
     lastUpdated: new Date().toISOString(),
     paymentStatus: 'Not Paid',
     setupStatus: 'configuring',
-  } as RecentDeal;
+  };
 }
 
 describe('operational blocker ownership', () => {
@@ -28,7 +27,7 @@ describe('operational blocker ownership', () => {
       commissionValue: 500,
       enableCustomerAttribution: false,
     });
-    p.compensationProfile = { ...p.compensationProfile!, configured: true };
+    p.compensationProfile = { ...(p.compensationProfile || {}), configured: true };
     p.agreementSharedAt = new Date().toISOString();
     p.agreementLifecycle = 'SHARED';
 
@@ -41,7 +40,9 @@ describe('operational blocker ownership', () => {
     expect(agreementBlocker?.unlocks).toContain('payout-ready');
   });
 
-  it('names operator as owner for payout confirmation blockers', () => {
+  it('names operator as owner for supplier onboarding blockers', () => {
+    // Sprint 7.2: the post-approval gate is supplier onboarding (not payout confirmation).
+    // The blocker owner is still 'operator', but requiredAction is now 'Complete supplier onboarding'.
     const p = buildProjectParticipant({
       name: 'Coastal Media',
       role: 'Partner',
@@ -51,13 +52,17 @@ describe('operational blocker ownership', () => {
       commissionValue: 500,
       enableCustomerAttribution: false,
     });
-    p.compensationProfile = { ...p.compensationProfile!, configured: true };
+    p.compensationProfile = { ...(p.compensationProfile || {}), configured: true };
     p.approvalStatus = 'Approved';
     p.payoutVerificationConfirmed = false;
 
     const blockers = deriveOperationalBlocker(p, 'deal-1');
-    expect(blockers.some((b) => b.owner === 'operator' && b.requiredAction.includes('payout'))).toBe(
-      true
+    // Owner is operator — the operator is responsible for collecting onboarding details.
+    // requiredAction reflects the canonical supplier onboarding workflow.
+    const onboardingBlocker = blockers.find(
+      (b) => b.owner === 'operator' && b.requiredAction.toLowerCase().includes('onboarding')
     );
+    expect(onboardingBlocker).toBeDefined();
+    expect(onboardingBlocker?.owner).toBe('operator');
   });
 });

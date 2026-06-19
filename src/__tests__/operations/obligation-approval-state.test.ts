@@ -1,5 +1,4 @@
 import { buildProjectParticipant } from '@/lib/projects/participant-entitlement';
-import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import {
   deriveObligationApprovalState,
   obligationApprovalLabel,
@@ -9,7 +8,7 @@ import {
   operatorStatusLabel,
 } from '@/lib/payouts/obligation-status-labels';
 
-function baseDeal(): RecentDeal {
+function baseDeal() {
   return {
     id: 'deal-1',
     dealName: 'Test',
@@ -21,7 +20,7 @@ function baseDeal(): RecentDeal {
     lastUpdated: new Date().toISOString(),
     paymentStatus: 'Not Paid',
     setupStatus: 'configuring',
-  } as RecentDeal;
+  };
 }
 
 describe('obligation approval state', () => {
@@ -44,7 +43,7 @@ describe('obligation approval state', () => {
     expect(obligationApprovalLabel(state, participant)).toContain('Coastal Media');
   });
 
-  it('pending operator when participant approved but payout unconfirmed', () => {
+  it('pending_operator when participant approved but supplier onboarding not yet complete', () => {
     const participant = buildProjectParticipant({
       name: 'Coastal Media',
       role: 'Partner',
@@ -76,7 +75,7 @@ describe('obligation approval state', () => {
     });
     participant.approvalStatus = 'Approved';
     participant.payoutVerificationConfirmed = true;
-    participant.compensationProfile = { ...participant.compensationProfile!, configured: true };
+    participant.compensationProfile = { ...(participant.compensationProfile || {}), configured: true };
 
     const state = deriveObligationApprovalState({
       obligationStatus: 'PENDING_APPROVAL',

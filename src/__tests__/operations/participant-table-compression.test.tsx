@@ -5,7 +5,7 @@ import { render, screen } from '@testing-library/react';
 import { OperatorPayoutVerificationInfo } from '@/components/projects/operator-payout-verification-info';
 import { ProjectParticipantTableRow } from '@/components/projects/project-participant-table-row';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { OPERATOR_PAYOUT_DISCLAIMER } from '@/lib/operations/merchant-operational-copy';
+import { OPERATOR_PAYOUT_DISCLAIMER, PAYOUT_CONFIRMATION_LABELS } from '@/lib/operations/merchant-operational-copy';
 
 const baseParticipant: DemoParticipant = {
   id: 'p-1',
@@ -53,10 +53,12 @@ describe('compressed participant table UX', () => {
   });
 
   it('participant row does not repeat full compliance disclaimer', () => {
+    // The row shows the canonical supplier onboarding label (a short confirmation badge/checkbox),
+    // not the full disclaimer paragraph. Use the semantic constant to stay resilient to copy changes.
     const { container } = renderRow();
     const text = container.textContent ?? '';
     expect(text).toContain('Alex Rivera');
-    expect(text).toContain('Verified externally');
+    expect(text).toContain(PAYOUT_CONFIRMATION_LABELS.toggleLabel);
     expect(text).not.toContain(OPERATOR_PAYOUT_DISCLAIMER);
   });
 
