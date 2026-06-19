@@ -270,7 +270,7 @@ function deriveWorkflowDimension(decision: CommercialDecisionResult | null): Com
   return {
     name: 'Workflow',
     score,
-    status: decision.stageTitle ?? stage.replace(/_/g, ' '),
+    status: decision.nextStep ?? stage.replace(/_/g, ' '),
     requiresAction: score < 100 && Boolean(decision.recommendedAction),
     recommendedAction: decision.recommendedAction
       ? decision.recommendedAction.explanation
@@ -414,8 +414,8 @@ function buildSummary(
         : 'Agreement is in excellent shape. Continue to the next commercial milestone.';
 
     case 'good':
-      return decision?.stageTitle
-        ? `Agreement is progressing well. Current stage: ${decision.stageTitle}.`
+      return decision?.nextStep
+        ? `Agreement is progressing well. Current stage: ${decision.nextStep}.`
         : 'Agreement is progressing well. Continue to the next step.';
 
     case 'attention': {

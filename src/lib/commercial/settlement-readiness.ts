@@ -342,7 +342,7 @@ function buildChecklist(input: ChecklistInput): SettlementChecklistItem[] {
       id: 'participant_approval',
       label: 'Participant Approval',
       complete: agreement.approved,
-      inProgress: agreement.agreementGenerated && !agreement.approved,
+      inProgress: Boolean(agreement.agreementGenerated) && !agreement.approved,
       explanation: agreement.approved
         ? null
         : agreement.agreementGenerated
