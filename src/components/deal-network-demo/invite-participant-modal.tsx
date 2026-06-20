@@ -134,6 +134,49 @@ export interface DemoParticipant {
   inviteSentAt?: string;
   agreementSharedAt?: string;
   agreementViewedAt?: string;
+  /**
+   * Supplier onboarding form data — persisted when the participant submits
+   * their invoice review, payment details, ABN, and GST status.
+   * Operator approval is recorded in operator.approvedAt.
+   *
+   * v2 additions (all optional for backwards compatibility):
+   *   events[]    — immutable commercial event log
+   *   verification — extensible verification state (replaces payoutVerificationConfirmed)
+   *   approval    — full approval metadata (approvedBy, approvalNotes, approvalVersion)
+   *   rejection   — rejection metadata if operator rejected
+   *   lifecycle   — cached lifecycle status (derived from events, or legacy fields)
+   */
+  supplierOnboarding?: {
+    payment?: import('@/lib/commercial/supplier-onboarding').SupplierPaymentDetails;
+    abn?: import('@/lib/commercial/supplier-onboarding').SupplierOnboardingABNInput;
+    gst?: import('@/lib/commercial/supplier-onboarding').SupplierOnboardingGSTInput;
+    submission?: import('@/lib/commercial/supplier-onboarding').SupplierOnboardingSubmissionInput;
+    operator?: import('@/lib/commercial/supplier-onboarding').SupplierOnboardingOperatorInput;
+    /** Immutable event log — append only, never overwrite. */
+    events?: import('@/lib/commercial/supplier-onboarding-domain').CommercialOnboardingEvent[];
+    /** Extensible verification state — replaces payoutVerificationConfirmed boolean. */
+    verification?: import('@/lib/commercial/supplier-onboarding-domain').SupplierVerification;
+    /** Full approval metadata persisted when operator approves. */
+    approval?: import('@/lib/commercial/supplier-onboarding-domain').ApprovalMetadata;
+    /** Rejection metadata persisted when operator rejects. */
+    rejection?: import('@/lib/commercial/supplier-onboarding-domain').RejectionMetadata;
+    /** Cached lifecycle status — derived from events + legacy fields. */
+    lifecycle?: import('@/lib/commercial/supplier-onboarding-domain').SupplierOnboardingLifecycle;
+  };
+
+  /**
+   * Payment Setup state — introduced in the Final Supplier Onboarding Sprint.
+   *
+   * Persists the public portal token, draft invoice, file attachments, and
+   * Xero export results. This is the v2 payment setup flow (public portal,
+   * no operator login required for suppliers).
+   *
+   * token: UUID that authenticates the supplier on the public /payment-setup/[token] portal.
+   * draftInvoice: generated once at agreement approval, never re-derived from page render.
+   * attachments: uploaded by the supplier (Revolut QR, wallet screenshots, etc.)
+   * xero*: set after successful export to Xero.
+   */
+  paymentSetup?: import('@/lib/commercial/payment-setup-types').PaymentSetupState;
 }
 
 export interface InviteParticipantModalProps {

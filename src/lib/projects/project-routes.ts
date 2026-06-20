@@ -39,20 +39,23 @@ export function projectApprovalCentrePath(projectId: string): string {
 }
 
 /**
- * Deep-links to the Supplier Onboarding section within the Participants tab.
- * Optionally scopes to a specific participant for direct review.
+ * Routes to the supplier onboarding overview (participants tab with onboarding panel).
+ * When a specific participantId is provided, routes directly to that participant's
+ * onboarding form page.
  */
 export function projectSupplierOnboardingPath(projectId: string, participantId?: string): string {
-  const base = `/dashboard/projects/${encodeURIComponent(projectId)}/participants?focus=onboarding`;
-  return participantId ? `${base}&participant=${encodeURIComponent(participantId)}` : base;
+  if (participantId) {
+    return `/dashboard/projects/${encodeURIComponent(projectId)}/participants/${encodeURIComponent(participantId)}/onboard`;
+  }
+  return `/dashboard/projects/${encodeURIComponent(projectId)}/participants?focus=onboarding`;
 }
 
 /**
- * Deep-links to the Operator Review section for a specific participant's supplier onboarding.
- * Scoped to the participant so the review panel auto-opens.
+ * Routes to the operator review page for a specific participant's supplier onboarding.
+ * The operator sees invoice, ABN, GST, payment details, and an approve CTA.
  */
 export function projectOperatorReviewPath(projectId: string, participantId: string): string {
-  return `/dashboard/projects/${encodeURIComponent(projectId)}/participants?focus=onboarding&review=${encodeURIComponent(participantId)}`;
+  return `/dashboard/projects/${encodeURIComponent(projectId)}/participants/${encodeURIComponent(participantId)}/review`;
 }
 
 /**

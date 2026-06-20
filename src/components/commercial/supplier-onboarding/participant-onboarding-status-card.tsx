@@ -4,11 +4,8 @@
  * ParticipantOnboardingStatusCard
  *
  * Inline onboarding status card for the Participants page.
- * Uses available participant fields (payoutOnboardingPhase, onboardingStatus)
- * to render a clear, actionable status without requiring the full engine output.
- *
- * For the detailed operator review (ABN, invoice, bank details), the CTA
- * routes to the dedicated review URL via resolveCommercialWorkflowDestination().
+ * Routes to the dedicated supplier onboarding form or operator review page
+ * depending on the participant's current stage.
  */
 
 import * as React from 'react';
@@ -17,6 +14,7 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  XCircle,
   ArrowRight,
   UserCircle,
 } from 'lucide-react';
@@ -24,57 +22,66 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { projectOperatorReviewPath, projectSupplierOnboardingPath } from '@/lib/projects/project-routes';
+import { deriveLifecycleStatus } from '@/lib/commercial/build-supplier-onboarding-input';
+import type { SupplierOnboardingLifecycle } from '@/lib/commercial/supplier-onboarding-domain';
 
-type OnboardingPhase = 'NOT_STARTED' | 'INVITED' | 'IN_PROGRESS' | 'COMPLETED';
+type DisplayPhase = 'NOT_STARTED' | 'IN_PROGRESS' | 'AWAITING_REVIEW' | 'APPROVED' | 'REJECTED';
 
-function derivePhase(participant: DemoParticipant): OnboardingPhase {
-  if (
-    participant.payoutVerificationConfirmed === true ||
-    participant.payoutOnboardingPhase === 'COMPLETED' ||
-    participant.onboardingStatus === 'COMPLETE'
-  ) {
-    return 'COMPLETED';
+function toDisplayPhase(lifecycle: SupplierOnboardingLifecycle): DisplayPhase {
+  switch (lifecycle) {
+    case 'APPROVED': return 'APPROVED';
+    case 'REJECTED': return 'REJECTED';
+    case 'SUBMITTED':
+    case 'UNDER_REVIEW': return 'AWAITING_REVIEW';
+    case 'IN_PROGRESS': return 'IN_PROGRESS';
+    case 'INVITED': return 'IN_PROGRESS';
+    default: return 'NOT_STARTED';
   }
-  if (participant.payoutOnboardingPhase === 'IN_PROGRESS' || participant.onboardingStatus === 'INCOMPLETE') {
-    return 'IN_PROGRESS';
-  }
-  if (participant.payoutOnboardingPhase === 'INVITED') {
-    return 'INVITED';
-  }
-  return 'NOT_STARTED';
 }
 
 const PHASE_CONFIG: Record<
-  OnboardingPhase,
-  { label: string; detail: string; icon: React.ReactNode; ctaLabel: string; ctaVariant: 'default' | 'outline' | 'ghost' }
+  DisplayPhase,
+  { label: string; detail: string; icon: React.ReactNode; ctaLabel: string; ctaVariant: 'default' | 'outline' | 'ghost'; useReviewPath: boolean }
 > = {
   NOT_STARTED: {
-    label: 'Not started',
+    label: 'Payment details requested',
     detail: 'Bank details, ABN, and GST status are required before settlement.',
     icon: <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/40" />,
-    ctaLabel: 'Initiate onboarding',
+    ctaLabel: 'Prepare for payment',
     ctaVariant: 'default',
-  },
-  INVITED: {
-    label: 'Link sent',
-    detail: 'Onboarding link has been sent — awaiting supplier submission.',
-    icon: <Clock className="h-4 w-4 text-amber-500" />,
-    ctaLabel: 'Send reminder',
-    ctaVariant: 'outline',
+    useReviewPath: false,
   },
   IN_PROGRESS: {
-    label: 'In progress',
-    detail: 'The supplier is currently completing onboarding.',
+    label: 'Waiting for payment information',
+    detail: 'Supplier is completing their payment information.',
     icon: <Clock className="h-4 w-4 text-amber-500" />,
-    ctaLabel: 'View progress',
+    ctaLabel: 'Continue payment setup',
     ctaVariant: 'outline',
+    useReviewPath: false,
   },
-  COMPLETED: {
-    label: 'Complete',
-    detail: 'Supplier details confirmed. Ready for settlement.',
+  AWAITING_REVIEW: {
+    label: 'Ready for review',
+    detail: 'Payment information submitted — review and approve before Xero export.',
+    icon: <AlertCircle className="h-4 w-4 text-amber-600" />,
+    ctaLabel: 'Review payment information',
+    ctaVariant: 'default',
+    useReviewPath: true,
+  },
+  APPROVED: {
+    label: 'Ready for accounting',
+    detail: 'Payment information confirmed. Ready for Xero export.',
     icon: <CheckCircle2 className="h-4 w-4 text-green-600" />,
     ctaLabel: 'View record',
     ctaVariant: 'ghost',
+    useReviewPath: true,
+  },
+  REJECTED: {
+    label: 'Changes requested',
+    detail: 'Operator has requested changes. Supplier can resubmit after corrections.',
+    icon: <XCircle className="h-4 w-4 text-red-500" />,
+    ctaLabel: 'View changes requested',
+    ctaVariant: 'outline',
+    useReviewPath: true,
   },
 };
 
@@ -85,28 +92,32 @@ type ParticipantOnboardingStatusCardProps = {
 
 /**
  * Inline status card showing one participant's supplier onboarding state.
- * Appears in the Participants page when the workflow is in 'preparing-payments' stage.
+ * Appears in the Participants page supplier onboarding panel.
  */
 export function ParticipantOnboardingStatusCard({
   participant,
   projectId,
 }: ParticipantOnboardingStatusCardProps) {
-  const phase = derivePhase(participant);
+  const lifecycle = deriveLifecycleStatus(participant);
+  const phase = toDisplayPhase(lifecycle);
   const config = PHASE_CONFIG[phase];
-  const isComplete = phase === 'COMPLETED';
+  const isApproved = phase === 'APPROVED';
+  const isRejected = phase === 'REJECTED';
 
-  // Route submitted participants to the operator review, others to the onboarding overview
-  const ctaHref =
-    phase === 'IN_PROGRESS' || phase === 'COMPLETED'
-      ? projectOperatorReviewPath(projectId, participant.id)
-      : projectSupplierOnboardingPath(projectId, participant.id);
+  const ctaHref = config.useReviewPath
+    ? projectOperatorReviewPath(projectId, participant.id)
+    : projectSupplierOnboardingPath(projectId, participant.id);
 
   return (
     <div
       className={cn(
         'flex items-start justify-between gap-4 rounded-lg border px-4 py-3',
-        isComplete
+        isApproved
           ? 'border-green-200 bg-green-50/40 dark:border-green-900/40 dark:bg-green-950/20'
+          : isRejected
+          ? 'border-red-200 bg-red-50/30 dark:border-red-900/40 dark:bg-red-950/10'
+          : phase === 'AWAITING_REVIEW'
+          ? 'border-amber-200 bg-amber-50/30 dark:border-amber-900/40 dark:bg-amber-950/10'
           : 'bg-card'
       )}
     >
@@ -125,9 +136,6 @@ export function ParticipantOnboardingStatusCard({
       </div>
 
       <div className="shrink-0 flex items-center gap-2">
-        {!isComplete && (
-          <AlertCircle className="h-4 w-4 text-amber-500 hidden sm:block" aria-hidden />
-        )}
         <Button asChild size="sm" variant={config.ctaVariant} className="whitespace-nowrap">
           <Link href={ctaHref}>
             {config.ctaLabel}
@@ -138,3 +146,4 @@ export function ParticipantOnboardingStatusCard({
     </div>
   );
 }
+

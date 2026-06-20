@@ -13,6 +13,17 @@ import { referralTrace } from '@/lib/referrals/referral-trace';
 import { hydrateAgreementEligibleServices } from '@/lib/operations/hydration/hydrate-agreement-eligible-services.server';
 import { dispatchCommercialNotification } from '@/lib/commercial/dispatch-commercial-notification.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
+import {
+  createPaymentSetupToken,
+  persistDraftInvoice,
+  persistPaymentSetupToken,
+} from '@/lib/commercial/payment-setup.server';
+import { buildSupplierOnboardingInput } from '@/lib/commercial/build-supplier-onboarding-input';
+import { generateDraftInvoice } from '@/lib/commercial/supplier-onboarding';
+import { sendEmail } from '@/lib/email/client';
+import { buildPaymentSetupInviteEmail } from '@/lib/email/templates/payment-setup-invite';
+import { v4 as uuidv4 } from 'uuid';
+import type { PersistedDraftInvoice } from '@/lib/commercial/payment-setup-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,6 +100,109 @@ export async function POST(
           participantName: result.participant.name,
         });
       }
+
+      // Generate and persist draft invoice + payment setup token, then email supplier
+      void (async () => {
+        try {
+          const deal = result.deal;
+          const dealPayload = deal.deal_payload as { dealName?: string };
+          const dealName = dealPayload.dealName ?? 'Your project';
+
+          // 1. Generate draft invoice from commercial terms
+          const input = buildSupplierOnboardingInput(result.participant, {
+            id: deal.id,
+            name: dealName,
+          });
+          const derived = generateDraftInvoice(input);
+          const persistedInvoice: PersistedDraftInvoice = {
+            id: uuidv4(),
+            createdAt: new Date().toISOString(),
+            status: 'DRAFT',
+            supplier: result.participant.name,
+            participantId: result.participant.id,
+            agreementReference: null,
+            projectName: dealName,
+            description: derived.description,
+            currency: derived.currency,
+            subtotal: derived.subtotal,
+            gstAmount: derived.gstAmount,
+            total: derived.total,
+            gstIncluded: derived.gstIncluded,
+            gstStatus: derived.gstStatus,
+            dueDate: derived.dueDate ?? null,
+            lineItems: [
+              {
+                description: derived.description,
+                quantity: 1,
+                unitAmount: derived.subtotal,
+                taxType: derived.gstIncluded ? 'INPUT' : 'NONE',
+              },
+            ],
+          };
+          await persistDraftInvoice(result.participant.id, persistedInvoice);
+
+          // 2. Generate payment setup token
+          const tokenData = createPaymentSetupToken();
+          await persistPaymentSetupToken(result.participant.id, tokenData);
+
+          // 3. Dispatch supplier_invoice_generated notification
+          if (org) {
+            void dispatchCommercialNotification({
+              organizationId: org.id,
+              eventKind: 'supplier_invoice_generated',
+              projectId: deal.id,
+              participantId: result.participant.id,
+              participantName: result.participant.name,
+            });
+          }
+
+          // 4. Email supplier if they have an email address
+          const supplierEmail = result.participant.email;
+          if (supplierEmail) {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.VERCEL_URL
+              ? `https://${process.env.VERCEL_URL}`
+              : 'https://app.provvypay.com';
+            const portalUrl = `${appUrl}/payment-setup/${tokenData.token}`;
+            const invoiceTotal = new Intl.NumberFormat('en-AU', {
+              style: 'currency',
+              currency: derived.currency,
+            }).format(derived.total);
+
+            // Get operator display name
+            const ownerRow = await prisma.users.findUnique({
+              where: { id: owner.user_id },
+              select: { email: true },
+            }).catch(() => null);
+            const operatorName = ownerRow?.email?.split('@')[0] ?? 'Your organiser';
+
+            const emailContent = buildPaymentSetupInviteEmail({
+              supplierName: result.participant.name,
+              operatorName,
+              projectName: dealName,
+              invoiceTotal,
+              portalUrl,
+              expiresAt: tokenData.tokenExpiresAt,
+            });
+
+            await sendEmail({
+              to: supplierEmail,
+              subject: emailContent.subject,
+              html: emailContent.html,
+              text: emailContent.text,
+              tags: [
+                { name: 'category', value: 'payment-setup' },
+                { name: 'participant_id', value: result.participant.id },
+              ],
+            });
+          }
+        } catch (err) {
+          // Non-blocking — don't fail the approval if post-approval setup fails
+          log.error('post-approval payment setup failed', undefined, {
+            participantId: result.participant.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
     }
     referralTrace('api.approveInvite.response', {
       inviteToken: token,

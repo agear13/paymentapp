@@ -101,7 +101,7 @@ function detailFromOperationalBlocker(
   } else if (/payout details|external payout|confirm.*payout/i.test(explanation)) {
     category = 'payout_details_missing';
     ctaIntent = 'configure_earnings';
-    ctaLabel = 'Complete supplier setup';
+    ctaLabel = 'Prepare for payment';
   } else if (/agreement|approval|participation/i.test(explanation)) {
     category = 'participant_approval_missing';
     ctaIntent = 'configure_earnings';
@@ -286,10 +286,10 @@ export function deriveOperationalReleaseBlockers(
       details.push({
         id: `payout-details-${participant.id}`,
         category: 'payout_details_missing',
-        reason: `Supplier onboarding is required for ${participant.name} before settlement can proceed.`,
-        remediation: 'Send supplier onboarding to the participant so they can submit their bank details, ABN, and GST status.',
-        unlockCondition: 'Supplier completes onboarding and operator approves.',
-        ctaLabel: 'Complete supplier setup',
+        reason: `Payment setup is required for ${participant.name} before settlement can proceed.`,
+        remediation: 'Send the supplier their payment setup link so they can submit bank details, ABN, and GST status.',
+        unlockCondition: 'Supplier completes payment setup and operator approves.',
+        ctaLabel: 'Prepare for payment',
         ctaHref: safeOperationalNavigation('configure_earnings', projectId),
         ctaIntent: 'configure_earnings',
         operatorActionRequired: true,

@@ -5,20 +5,20 @@
  *
  * The operator-facing review interface for supplier onboarding.
  *
- * Answers one question: "Can I safely push this to Xero?"
+ * Architecture:
+ *   Approval  = commercial decision (operator reviewed and accepted the submission)
+ *   Rejection = commercial decision (operator reviewed and rejected — supplier can resubmit)
+ *   Xero      = accounting integration (separate downstream concern — shown after approval)
  *
  * Surfaces:
+ *   - CommercialReviewSummary (deterministic checks with pass/warn/fail status)
  *   - Invoice summary
- *   - ABN status
- *   - GST status
- *   - Payment method
- *   - Checklist
- *   - Primary CTA: "Approve & Push to Xero"
+ *   - ABN / GST / payment details
+ *   - Onboarding checklist
+ *   - Approve | Reject CTAs (approval ≠ accounting export)
  *
- * Also exports:
- *   SupplierOnboardingDashboardWidget — compact progress card for the dashboard
- *
- * Derives entirely from deriveSupplierOnboardingStatus() — no independent calculations.
+ * Derives from deriveSupplierOnboardingStatus() — no independent calculations.
+ * Designed so AI-assisted review checks can be layered in later (review check IDs are stable).
  */
 
 import * as React from 'react';
@@ -26,12 +26,15 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  XCircle,
   Building2,
   CreditCard,
   FileText,
   ShieldCheck,
   ArrowRight,
   Users,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 import type {
@@ -39,6 +42,7 @@ import type {
   WorkspaceOnboardingStatus,
   OnboardingChecklistStatus,
 } from '@/lib/commercial/supplier-onboarding';
+import type { CommercialReviewSummary, ReviewCheck, ReviewCheckStatus } from '@/lib/commercial/supplier-onboarding-domain';
 
 /* ─── Utilities ─────────────────────────────────────────────────────────── */
 function fmt(amount: number, currency = 'AUD'): string {
@@ -67,14 +71,147 @@ function statusLabel(status: OnboardingChecklistStatus): string {
   }
 }
 
+/* ─── Review check row ──────────────────────────────────────────────────── */
+function reviewCheckIcon(status: ReviewCheckStatus) {
+  switch (status) {
+    case 'pass': return <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />;
+    case 'warn': return <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />;
+    case 'fail': return <XCircle className="h-4 w-4 text-red-500 shrink-0" />;
+    case 'info': return <Clock className="h-4 w-4 text-blue-500 shrink-0" />;
+  }
+}
+
+function ReviewCheckRow({ check }: { check: ReviewCheck }) {
+  return (
+    <div className="flex items-start gap-2.5 py-1.5">
+      <div className="mt-0.5">{reviewCheckIcon(check.status)}</div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm ${
+          check.status === 'fail' ? 'text-red-700 font-medium' :
+          check.status === 'warn' ? 'text-amber-700' :
+          'text-foreground'
+        }`}>{check.label}</p>
+        {check.detail && (
+          <p className="text-xs text-muted-foreground mt-0.5">{check.detail}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Commercial Review Summary panel ──────────────────────────────────── */
+function CommercialReviewSummaryPanel({ summary }: { summary: CommercialReviewSummary }) {
+  const [expanded, setExpanded] = React.useState(true);
+
+  const headerColor = summary.hasBlockers
+    ? 'border-red-200 bg-red-50'
+    : summary.hasWarnings
+    ? 'border-amber-100 bg-amber-50/40'
+    : 'border-green-200 bg-green-50/40';
+
+  const headerLabel = summary.hasBlockers
+    ? 'Review has blockers — cannot approve'
+    : summary.hasWarnings
+    ? 'Review passed with warnings'
+    : 'All checks passed';
+
+  const headerIcon = summary.hasBlockers
+    ? <XCircle className="h-4 w-4 text-red-600" />
+    : summary.hasWarnings
+    ? <AlertCircle className="h-4 w-4 text-amber-600" />
+    : <CheckCircle2 className="h-4 w-4 text-green-600" />;
+
+  return (
+    <div className={`rounded-lg border overflow-hidden ${headerColor}`}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between p-3 text-left"
+      >
+        <div className="flex items-center gap-2">
+          {headerIcon}
+          <span className="text-sm font-medium">{headerLabel}</span>
+        </div>
+        {expanded
+          ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          : <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        }
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 divide-y divide-border/50">
+          {summary.checks.map((check) => (
+            <ReviewCheckRow key={check.id} check={check} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Reject modal ──────────────────────────────────────────────────────── */
+function RejectModal({
+  participantName,
+  onConfirm,
+  onCancel,
+  isLoading,
+}: {
+  participantName: string;
+  onConfirm: (reason: string) => void;
+  onCancel: () => void;
+  isLoading: boolean;
+}) {
+  const [reason, setReason] = React.useState('');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="relative w-full max-w-sm bg-background border rounded-xl shadow-xl p-5 mx-4">
+        <h3 className="text-base font-semibold mb-1">Request changes</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Provide a reason for {participantName}. They will be able to resubmit after making corrections.
+        </p>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g. ABN could not be verified. Please resubmit with a valid ABN."
+          className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+          rows={4}
+          autoFocus
+        />
+        <div className="flex gap-2 mt-4 justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isLoading}
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted transition-colors disabled:opacity-40"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => reason.trim() && onConfirm(reason.trim())}
+            disabled={!reason.trim() || isLoading}
+            className="rounded-md bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-700 disabled:opacity-40 transition-colors"
+          >
+            {isLoading ? 'Rejecting…' : 'Reject submission'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Operator review card for one supplier ─────────────────────────────── */
 
 export type SupplierOnboardingOperatorViewProps = {
   status: SupplierOnboardingStatus;
-  /** Called when operator clicks "Approve & Push to Xero". */
-  onApproveAndExport?: () => void;
-  /** Called when operator clicks "Approve invoice" (before export). */
+  /** Commercial review summary (deterministic checks). */
+  reviewSummary?: CommercialReviewSummary;
+  /** Called when operator clicks Approve (commercial decision). */
   onApprove?: () => void;
+  /** Called when operator clicks Approve & Push to Xero (legacy combined action). */
+  onApproveAndExport?: () => void;
+  /** Called when operator rejects with a reason. */
+  onReject?: (reason: string) => void;
   isLoading?: boolean;
 };
 
@@ -82,15 +219,32 @@ export type SupplierOnboardingOperatorViewProps = {
  * SupplierOnboardingOperatorView
  *
  * Shows the operator a complete picture of one supplier's onboarding status.
- * Surfaces all the information needed to make an informed decision before Xero export.
+ * Surfaces the commercial review summary, all submitted details, and approve/reject CTAs.
+ *
+ * Approval is a commercial decision — it does NOT export to Xero.
+ * After approval, the operator is directed to the accounting export step separately.
  */
 export function SupplierOnboardingOperatorView({
   status,
-  onApproveAndExport,
+  reviewSummary,
   onApprove,
+  onApproveAndExport,
+  onReject,
   isLoading = false,
 }: SupplierOnboardingOperatorViewProps) {
   const { draftInvoice, abnValidation, checklist, xeroReadiness, requiresManualReview } = status;
+  const [showRejectModal, setShowRejectModal] = React.useState(false);
+  const [isRejecting, setIsRejecting] = React.useState(false);
+
+  const handleReject = async (reason: string) => {
+    setIsRejecting(true);
+    try {
+      await onReject?.(reason);
+    } finally {
+      setIsRejecting(false);
+      setShowRejectModal(false);
+    }
+  };
 
   const SECTION_ICONS: Record<string, React.ReactNode> = {
     invoice_reviewed: <FileText className="h-4 w-4" />,
@@ -103,149 +257,198 @@ export function SupplierOnboardingOperatorView({
 
   const paymentMethod = status.draftInvoice.participantName
     ? (status.checklist.find((c) => c.id === 'payment_details')?.status === 'requires_review'
-        ? 'Alternative method'
+        ? 'Alternative method — manual processing'
         : 'Bank transfer')
     : 'Not provided';
 
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
-      {/* Header */}
-      <div className="p-4 border-b flex items-start justify-between">
-        <div>
-          <p className="font-semibold">{status.participantName}</p>
-          <p className="text-sm text-muted-foreground">{status.participantRole}</p>
-        </div>
-        <div>
-          <span
-            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-              status.stage === 'xero_exported'
-                ? 'bg-green-50 text-green-700 border-green-200'
-                : status.stage === 'operator_approved'
-                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                : status.stage === 'submitted'
-                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                : 'bg-muted text-muted-foreground border-border'
-            }`}
-          >
-            {status.stageLabel}
-          </span>
-        </div>
-      </div>
+    <>
+      {showRejectModal && (
+        <RejectModal
+          participantName={status.participantName}
+          onConfirm={handleReject}
+          onCancel={() => setShowRejectModal(false)}
+          isLoading={isRejecting}
+        />
+      )}
 
-      {/* Invoice summary */}
-      <div className="p-4 border-b grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-xs text-muted-foreground">Invoice total</p>
-          <p className="font-semibold">{fmt(draftInvoice.total, draftInvoice.currency)}</p>
-          {draftInvoice.gstAmount !== null && (
-            <p className="text-xs text-muted-foreground">Includes {fmt(draftInvoice.gstAmount, draftInvoice.currency)} GST</p>
-          )}
+      <div className="rounded-lg border bg-card overflow-hidden">
+        {/* Header */}
+        <div className="p-4 border-b flex items-start justify-between">
+          <div>
+            <p className="font-semibold">{status.participantName}</p>
+            <p className="text-sm text-muted-foreground">{status.participantRole}</p>
+          </div>
+          <div>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                status.stage === 'xero_exported'
+                  ? 'bg-green-50 text-green-700 border-green-200'
+                  : status.stage === 'operator_approved'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : status.stage === 'submitted'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-muted text-muted-foreground border-border'
+              }`}
+            >
+              {status.stageLabel}
+            </span>
+          </div>
         </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Payment method</p>
-          <p className="text-sm font-medium">{paymentMethod}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">ABN</p>
-          {abnValidation.isNotApplicable ? (
-            <p className="text-sm text-amber-700">Not applicable — review required</p>
-          ) : abnValidation.isValid ? (
-            <p className="text-sm text-green-700 font-medium">{abnValidation.formattedABN}</p>
-          ) : (
-            <p className="text-sm text-muted-foreground">Not provided</p>
-          )}
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">GST</p>
-          <p className="text-sm font-medium">
-            {draftInvoice.gstStatus === 'yes'
-              ? 'GST registered'
-              : draftInvoice.gstStatus === 'no'
-              ? 'Not registered'
-              : draftInvoice.gstStatus === 'not_applicable'
-              ? 'Not applicable'
-              : 'Pending'}
-          </p>
-        </div>
-      </div>
 
-      {/* Checklist */}
-      <div className="p-4 border-b">
-        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Onboarding checklist</p>
-        <div className="space-y-2.5">
-          {checklist.map((item) => (
-            <div key={item.id} className="flex items-start gap-3">
-              <div className="mt-0.5 shrink-0">{SECTION_ICONS[item.id] ?? statusIcon(item.status)}</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium">{item.label}</p>
-                  <span
-                    className={`text-xs ${
-                      item.status === 'complete'
-                        ? 'text-green-700'
-                        : item.status === 'requires_review'
-                        ? 'text-amber-700'
-                        : item.status === 'in_progress'
-                        ? 'text-amber-600'
-                        : 'text-muted-foreground'
-                    }`}
-                  >
-                    {statusLabel(item.status)}
-                  </span>
-                </div>
-                {item.explanation && item.status !== 'complete' && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.explanation}</p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+        {/* Commercial Review Summary */}
+        {reviewSummary && status.stage === 'submitted' && (
+          <div className="p-4 border-b">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Review checklist</p>
+            <CommercialReviewSummaryPanel summary={reviewSummary} />
+          </div>
+        )}
 
-      {/* Manual review notice */}
-      {requiresManualReview && (
-        <div className="px-4 py-3 border-b bg-amber-50">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-700">
-              Manual review required before Xero export. Verify ABN exemption and/or payment method.
+        {/* Invoice summary */}
+        <div className="p-4 border-b grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Invoice total</p>
+            <p className="font-semibold">{fmt(draftInvoice.total, draftInvoice.currency)}</p>
+            {draftInvoice.gstAmount !== null && (
+              <p className="text-xs text-muted-foreground">Includes {fmt(draftInvoice.gstAmount, draftInvoice.currency)} GST</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Payment method</p>
+            <p className="text-sm font-medium">{paymentMethod}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">ABN</p>
+            {abnValidation.isNotApplicable ? (
+              <p className="text-sm text-amber-700">Not applicable — review required</p>
+            ) : abnValidation.isValid ? (
+              <p className="text-sm text-green-700 font-medium">{abnValidation.formattedABN}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Not provided</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">GST</p>
+            <p className="text-sm font-medium">
+              {draftInvoice.gstStatus === 'yes'
+                ? 'GST registered'
+                : draftInvoice.gstStatus === 'no'
+                ? 'Not registered'
+                : draftInvoice.gstStatus === 'not_applicable'
+                ? 'Not applicable'
+                : 'Pending'}
             </p>
           </div>
         </div>
-      )}
 
-      {/* Primary CTA */}
-      <div className="p-4">
-        {status.stage === 'xero_exported' ? (
-          <div className="flex items-center gap-2 text-green-700">
-            <CheckCircle2 className="h-4 w-4" />
-            <span className="text-sm font-medium">Invoice exported to Xero</span>
+        {/* Checklist */}
+        <div className="p-4 border-b">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Payment information checklist</p>
+          <div className="space-y-2.5">
+            {checklist.map((item) => (
+              <div key={item.id} className="flex items-start gap-3">
+                <div className="mt-0.5 shrink-0">{SECTION_ICONS[item.id] ?? statusIcon(item.status)}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{item.label}</p>
+                    <span
+                      className={`text-xs ${
+                        item.status === 'complete'
+                          ? 'text-green-700'
+                          : item.status === 'requires_review'
+                          ? 'text-amber-700'
+                          : item.status === 'in_progress'
+                          ? 'text-amber-600'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      {statusLabel(item.status)}
+                    </span>
+                  </div>
+                  {item.explanation && item.status !== 'complete' && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{item.explanation}</p>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
-        ) : status.stage === 'operator_approved' ? (
-          <button
-            type="button"
-            onClick={onApproveAndExport}
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
-            {isLoading ? 'Exporting…' : 'Push to Xero'}
-            {!isLoading && <ArrowRight className="h-4 w-4" />}
-          </button>
-        ) : status.stage === 'submitted' && xeroReadiness.readyForExport === false ? (
-          <button
-            type="button"
-            onClick={onApprove}
-            disabled={isLoading || checklist.some((i) => i.isBlocker && i.status !== 'complete' && i.id !== 'operator_approval')}
-            className="w-full flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
-            {isLoading ? 'Approving…' : 'Approve & Push to Xero'}
-            {!isLoading && <ArrowRight className="h-4 w-4" />}
-          </button>
-        ) : status.nextAction ? (
-          <p className="text-sm text-muted-foreground">{status.nextAction}</p>
-        ) : null}
+        </div>
+
+        {/* Manual review notice */}
+        {requiresManualReview && (
+          <div className="px-4 py-3 border-b bg-amber-50">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-700">
+                Manual review required before accounting export. Verify ABN exemption and/or payment method.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Primary CTAs */}
+        <div className="p-4">
+          {status.stage === 'xero_exported' ? (
+            <div className="flex items-center gap-2 text-green-700">
+              <CheckCircle2 className="h-4 w-4" />
+              <span className="text-sm font-medium">Invoice exported to Xero</span>
+            </div>
+          ) : status.stage === 'operator_approved' ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-blue-700 mb-2">
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="text-sm font-medium">Supplier approved — accounting export available</span>
+              </div>
+              {onApproveAndExport && (
+                <button
+                  type="button"
+                  onClick={onApproveAndExport}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {isLoading ? 'Exporting…' : 'Push to Xero'}
+                  {!isLoading && <ArrowRight className="h-4 w-4" />}
+                </button>
+              )}
+            </div>
+          ) : status.stage === 'submitted' ? (
+            <div className="space-y-2">
+              {/* Approve — commercial decision, NOT accounting export */}
+              {onApprove && (
+                <button
+                  type="button"
+                  onClick={onApprove}
+                  disabled={isLoading || reviewSummary?.hasBlockers === true}
+                  className="w-full flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {isLoading ? 'Approving…' : 'Approve supplier'}
+                  {!isLoading && <CheckCircle2 className="h-4 w-4" />}
+                </button>
+              )}
+              {/* Reject */}
+              {onReject && (
+                <button
+                  type="button"
+                  onClick={() => setShowRejectModal(true)}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-2 rounded-md border border-red-200 text-red-700 bg-red-50 py-2.5 text-sm font-medium hover:bg-red-100 disabled:opacity-50 transition-colors"
+                >
+                  <XCircle className="h-4 w-4" />
+                  Request changes or reject
+                </button>
+              )}
+              {reviewSummary?.hasBlockers && (
+                <p className="text-xs text-red-600 text-center">
+                  Resolve checklist blockers before approving.
+                </p>
+              )}
+            </div>
+          ) : status.nextAction ? (
+            <p className="text-sm text-muted-foreground">{status.nextAction}</p>
+          ) : null}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -260,7 +463,6 @@ export type SupplierOnboardingDashboardWidgetProps = {
  * SupplierOnboardingDashboardWidget
  *
  * Compact dashboard card showing supplier onboarding progress.
- * Shows count, individual pending supplier needs, and one primary CTA.
  */
 export function SupplierOnboardingDashboardWidget({
   workspace,
@@ -272,11 +474,10 @@ export function SupplierOnboardingDashboardWidget({
 
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
-      {/* Header */}
       <div className="p-4 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold">Supplier Onboarding</span>
+          <span className="text-sm font-semibold">Payment Preparation</span>
         </div>
         {allComplete ? (
           <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -287,7 +488,6 @@ export function SupplierOnboardingDashboardWidget({
         )}
       </div>
 
-      {/* Progress bar */}
       {!allComplete && (
         <div className="px-4 pt-3">
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -301,7 +501,6 @@ export function SupplierOnboardingDashboardWidget({
         </div>
       )}
 
-      {/* Pending suppliers */}
       {!allComplete && workspace.pendingSuppliers.length > 0 && (
         <div className="p-4 space-y-2">
           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Remaining</p>
@@ -327,11 +526,10 @@ export function SupplierOnboardingDashboardWidget({
       {allComplete && (
         <div className="p-4 flex items-center gap-2 text-green-700">
           <CheckCircle2 className="h-4 w-4" />
-          <p className="text-sm font-medium">All suppliers have completed onboarding.</p>
+          <p className="text-sm font-medium">All suppliers are ready for payment.</p>
         </div>
       )}
 
-      {/* CTA */}
       {workspace.primaryCta && (
         <div className="px-4 pb-4">
           <button

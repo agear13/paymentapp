@@ -199,7 +199,7 @@ export function AccountingApprovalReview({
       <div className="rounded-lg border bg-muted/30 p-6 text-center">
         <AlertCircle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
         <p className="text-sm text-muted-foreground">
-          Invoice preview is not yet available. Complete supplier onboarding first.
+          Invoice preview is not yet available. Payment information must be submitted first.
         </p>
       </div>
     );
@@ -287,7 +287,7 @@ export function AccountingApprovalReview({
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowRight className="h-3 w-3 rotate-180" />
-          Edit supplier details
+          Edit payment information
         </button>
       )}
 

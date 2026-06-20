@@ -672,6 +672,14 @@ export type SupplierOnboardingFormProps = {
   onSubmit: (input: SupplierOnboardingInput) => void;
   /** Loading state from parent. */
   isSubmitting?: boolean;
+  /**
+   * Optional file upload handler for alternative payment attachments.
+   * When provided, the attachment upload area is functional.
+   * When absent, a "contact your organiser" message is shown instead.
+   */
+  onUploadAttachment?: (file: File) => Promise<import('@/lib/commercial/payment-setup-types').PaymentAttachment>;
+  /** Existing attachments already uploaded (shown in the payment section). */
+  existingAttachments?: import('@/lib/commercial/payment-setup-types').PaymentAttachment[];
 };
 
 /**
@@ -684,6 +692,8 @@ export function SupplierOnboardingForm({
   baseInput,
   onSubmit,
   isSubmitting = false,
+  onUploadAttachment,
+  existingAttachments = [],
 }: SupplierOnboardingFormProps) {
   const [step, setStep] = React.useState(0);
   const TOTAL_STEPS = 5;
@@ -695,6 +705,25 @@ export function SupplierOnboardingForm({
     accountNumber: '',
     alternativeMethod: '',
   });
+
+  const [uploadedAttachments, setUploadedAttachments] = React.useState(existingAttachments);
+  const [uploadError, setUploadError] = React.useState<string | null>(null);
+  const [isUploading, setIsUploading] = React.useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onUploadAttachment) return;
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const attachment = await onUploadAttachment(file);
+      setUploadedAttachments((prev) => [...prev, attachment]);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const [abnState, setABNState] = React.useState<ABNSectionState>({
     abn: '',
@@ -787,7 +816,44 @@ export function SupplierOnboardingForm({
       {/* Section content */}
       <div className="min-h-[360px]">
         {step === 0 && <InvoiceReviewSection invoice={draftInvoice} />}
-        {step === 1 && <PaymentDetailsSection state={paymentState} onChange={setPaymentState} />}
+        {step === 1 && (
+          <>
+            <PaymentDetailsSection state={paymentState} onChange={setPaymentState} />
+            {/* Attachment upload for alternative payment methods */}
+            {paymentState.preference === 'alternative' && (
+              <div className="mt-4 space-y-3">
+                <p className="text-sm font-medium">Supporting attachments</p>
+                <p className="text-xs text-muted-foreground">
+                  Upload a QR code, wallet screenshot, or payment instructions (JPG, PNG, PDF — max 10 MB each).
+                </p>
+                {uploadedAttachments.length > 0 && (
+                  <div className="space-y-1.5">
+                    {uploadedAttachments.map((att) => (
+                      <div key={att.id} className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                        <span className="text-xs truncate">{att.filename}</span>
+                        <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                          {(att.sizeBytes / 1024).toFixed(0)} KB
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {onUploadAttachment ? (
+                  <label className="flex items-center gap-2 cursor-pointer rounded-md border border-dashed px-4 py-3 text-sm text-muted-foreground hover:bg-muted/20 transition-colors">
+                    <input type="file" className="sr-only" accept="image/*,.pdf" onChange={handleFileUpload} disabled={isUploading} />
+                    {isUploading ? 'Uploading…' : '+ Add attachment'}
+                  </label>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">
+                    File upload is available when accessing this form via your secure link.
+                  </p>
+                )}
+                {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
+              </div>
+            )}
+          </>
+        )}
         {step === 2 && <ABNSection state={abnState} onChange={setABNState} />}
         {step === 3 && <GSTSection state={gstState} onChange={setGSTState} />}
         {step === 4 && <DeclarationSection state={declarationState} onChange={setDeclarationState} invoice={draftInvoice} />}
@@ -825,7 +891,7 @@ export function SupplierOnboardingForm({
             onClick={handleSubmit}
             className="flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-5 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {isSubmitting ? 'Submitting…' : 'Submit supplier setup'}
+            {isSubmitting ? 'Submitting…' : 'Submit payment information'}
             {!isSubmitting && <CheckCircle2 className="h-4 w-4" />}
           </button>
         )}

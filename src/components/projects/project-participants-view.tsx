@@ -107,7 +107,7 @@ const ONBOARDING_CHECKLIST = [
   'Add team members',
   'Configure earnings',
   'Request approvals',
-  'Complete supplier setup',
+  'Complete payment setup',
 ] as const;
 
 export function ProjectParticipantsView() {
@@ -652,16 +652,11 @@ export function ProjectParticipantsView() {
   const isPreparingPayments = workflowCtx?.currentStage === 'preparing-payments';
   const showOnboardingPanel = approvalsComplete && (focusOnboarding || isPreparingPayments);
 
-  // Participants with onboarding pending (for the operator review section)
+  // All approved participants are shown in the onboarding panel — including those
+  // already complete — so the operator can see the full status at a glance.
   const onboardingParticipants = React.useMemo(() => {
     if (!showOnboardingPanel) return [];
-    return displayParticipants.filter(
-      (p) =>
-        p.approvalStatus === 'Approved' &&
-        p.payoutVerificationConfirmed !== true &&
-        p.payoutOnboardingPhase !== 'COMPLETED' &&
-        p.onboardingStatus !== 'COMPLETE'
-    );
+    return displayParticipants.filter((p) => p.approvalStatus === 'Approved');
   }, [showOnboardingPanel, displayParticipants]);
 
   // When arriving from Dashboard → "Open Approval Centre" (?focus=approvals),
@@ -915,9 +910,10 @@ export function ProjectParticipantsView() {
         {showOnboardingPanel && hasParticipants && onboardingParticipants.length > 0 ? (
           <div className="space-y-4">
             <div>
-              <h3 className="text-base font-semibold">Supplier Onboarding</h3>
+              <h3 className="text-base font-semibold">Payment Preparation</h3>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Collect bank details, ABN, and GST status from each supplier before settlement can begin.
+                Each supplier reviews their draft invoice, provides payment details, ABN, and GST status.
+                Approve each submission before exporting to Xero.
               </p>
             </div>
             {onboardingParticipants.map((p) => (

@@ -53,37 +53,43 @@ const TEMPLATES: Partial<Record<CommercialEventKind, CommercialNotificationTempl
   agreement_approved: {
     title: (ctx) => `${ctx.participantName} approved the agreement`,
     message: (ctx) =>
-      `${ctx.participantName} has accepted the commercial terms. Their supplier onboarding can now begin.`,
-    consequence: () => 'Approval unlocks supplier onboarding and invoice generation.',
-    action: 'Send supplier onboarding',
+      `${ctx.participantName} has accepted the commercial terms. A payment setup link has been sent to them automatically.`,
+    consequence: () => 'Payment setup unlocks invoice generation and settlement.',
+    action: 'Prepare for payment',
     actionPath: (ctx) =>
-      `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants?focus=onboarding`,
+      ctx.participantId
+        ? `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants/${encodeURIComponent(ctx.participantId)}/onboard`
+        : `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants?focus=onboarding`,
   },
 
   supplier_onboarding_started: {
-    title: (ctx) => `Supplier onboarding started for ${ctx.participantName}`,
+    title: (ctx) => `${ctx.participantName} opened payment setup`,
     message: (ctx) =>
-      `${ctx.participantName} has been invited to complete their bank details, ABN, and GST status.`,
-    consequence: () => 'Await supplier submission before proceeding to accounting.',
-    action: 'View onboarding progress',
+      `${ctx.participantName} has started completing their payment information.`,
+    consequence: () => 'Await submission before proceeding to accounting.',
+    action: 'View payment setup',
     actionPath: (ctx) =>
-      `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants?focus=onboarding`,
+      ctx.participantId
+        ? `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants/${encodeURIComponent(ctx.participantId)}/onboard`
+        : `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants?focus=onboarding`,
   },
 
   supplier_details_submitted: {
-    title: (ctx) => `${ctx.participantName} submitted supplier onboarding`,
+    title: (ctx) => `${ctx.participantName} submitted payment information`,
     message: (ctx) =>
       `${ctx.participantName} has submitted their bank details, ABN, and GST status. Review and approve to proceed with Xero export.`,
     consequence: () => 'Review is required before the invoice can be exported to Xero.',
-    action: 'Review supplier details',
+    action: 'Review payment information',
     actionPath: (ctx) =>
-      `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants?focus=onboarding`,
+      ctx.participantId
+        ? `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants/${encodeURIComponent(ctx.participantId)}/review`
+        : `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants?focus=onboarding`,
   },
 
   supplier_onboarding_approved: {
-    title: (ctx) => `${ctx.participantName}'s supplier details approved`,
+    title: (ctx) => `${ctx.participantName}'s payment information approved`,
     message: (ctx) =>
-      `Supplier details for ${ctx.participantName} have been verified. The invoice is ready to export to Xero.`,
+      `Payment details for ${ctx.participantName} have been verified. The invoice is ready to export to Xero.`,
     consequence: () => 'Export the invoice to Xero to complete accounting before settlement.',
     action: 'Export to Xero',
     actionPath: (ctx) =>
@@ -93,11 +99,13 @@ const TEMPLATES: Partial<Record<CommercialEventKind, CommercialNotificationTempl
   supplier_invoice_generated: {
     title: (ctx) => `Draft invoice generated for ${ctx.participantName}`,
     message: (ctx) =>
-      `A draft invoice was automatically generated for ${ctx.participantName} from the approved commercial terms.`,
-    consequence: () => 'Supplier onboarding will confirm the invoice amount and payment details.',
-    action: 'View invoice',
+      `A draft invoice was automatically generated for ${ctx.participantName} from the approved commercial terms. A payment setup link has been emailed to them.`,
+    consequence: () => 'The supplier will confirm the invoice and provide payment details.',
+    action: 'View payment setup',
     actionPath: (ctx) =>
-      `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants?focus=onboarding`,
+      ctx.participantId
+        ? `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants/${encodeURIComponent(ctx.participantId)}/onboard`
+        : `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants?focus=onboarding`,
   },
 
   supplier_invoice_exported: {

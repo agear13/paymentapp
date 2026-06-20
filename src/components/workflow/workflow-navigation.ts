@@ -85,7 +85,7 @@ export function resolveWorkflowDestination(
     case 'preparing-payments':
       return {
         href: `${base}/participants?focus=onboarding`,
-        label: 'Complete supplier onboarding',
+        label: 'Complete payment setup',
         estimatedMinutes: 5,
         reason: 'Collect bank details, ABN, and GST status from suppliers before settlement can proceed.',
       };

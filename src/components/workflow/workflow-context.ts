@@ -109,7 +109,7 @@ const STAGE_TITLES: Record<WorkflowStage, string> = {
   'setup':                'Preparing agreement',
   'configuring':          'Configuring earnings',
   'collecting-approvals': 'Collecting approvals',
-  'preparing-payments':   'Supplier setup required',
+  'preparing-payments':   'Payment setup required',
   'ready-to-collect':     'Ready for payments',
   'collecting-revenue':   'Collecting revenue',
   'ready-to-release':     'Ready for settlement',
@@ -204,10 +204,10 @@ function deriveNextAction(
       };
     case 'preparing-payments':
       return {
-        action: 'Complete supplier onboarding',
+        action: 'Prepare suppliers for payment',
         hint: 'All agreements are approved. Collect bank details, ABN, and GST status from each supplier before settlement can begin.',
         minutes: 5,
-        label: 'Complete supplier setup',
+        label: 'Complete payment setup',
       };
     case 'ready-to-collect':
       return {
@@ -321,9 +321,9 @@ export function resolveNextWorkflowStep(opts: {
   if (/supplier|onboarding|abn|bank detail|gst/i.test(topBlockerHint)) {
     return {
       href: `${base}/participants?focus=onboarding`,
-      label: 'Complete supplier setup',
+      label: 'Complete payment setup',
       minutes: 5,
-      reason: 'Supplier onboarding is required before settlement can begin.',
+      reason: 'Payment setup is required before settlement can begin.',
     };
   }
   if (/stripe|payment provider|merchant|payment rail/i.test(topBlockerHint)) {

@@ -68,7 +68,7 @@ export function deriveOperationalSeverity(input: SeverityDerivationInput): Atten
       ctaHref: earningsHref,
       confidenceImpact: 'Blocks safe release',
       whyBlocked: `${missing} participant${missing === 1 ? ' has' : 's have'} not completed payout setup.`,
-      whatUnlocks: 'Save earnings for each participant, then send supplier onboarding.',
+      whatUnlocks: 'Save earnings for each participant, then send their payment setup link.',
       recommendedStep: 'Configure participant earnings',
     });
   }

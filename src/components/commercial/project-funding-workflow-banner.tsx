@@ -83,7 +83,7 @@ export function ProjectFundingWorkflowBanner() {
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-semibold">Supplier Onboarding</span>
+            <span className="text-sm font-semibold">Payment Preparation</span>
           </div>
           {allComplete ? (
             <div className="flex items-center gap-1.5 text-green-600">
@@ -111,8 +111,8 @@ export function ProjectFundingWorkflowBanner() {
 
           <p className="text-sm text-muted-foreground">
             {allComplete
-              ? `All ${counts.total} supplier${counts.total !== 1 ? 's have' : ' has'} completed onboarding. Invoice details, ABN, and bank details are confirmed.`
-              : `${counts.pending} supplier${counts.pending !== 1 ? 's' : ''} still need${counts.pending === 1 ? 's' : ''} to complete bank details, ABN, and GST status before settlement can begin.`
+              ? `All ${counts.total} supplier${counts.total !== 1 ? 's have' : ' has'} confirmed payment information. Invoice details, ABN, and bank details are ready.`
+              : `${counts.pending} supplier${counts.pending !== 1 ? 's' : ''} still need${counts.pending === 1 ? 's' : ''} to provide bank details, ABN, and GST status before settlement can begin.`
             }
           </p>
 
@@ -120,7 +120,7 @@ export function ProjectFundingWorkflowBanner() {
             <div className="flex items-center gap-2 pt-1">
               <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
               <span className="text-xs text-muted-foreground">
-                Settlement is blocked until all onboarding is complete
+                Settlement is blocked until all payment information is confirmed
               </span>
             </div>
           )}
@@ -128,7 +128,7 @@ export function ProjectFundingWorkflowBanner() {
           <div className="flex items-center gap-2 pt-1">
             <Button asChild size="sm" variant={allComplete ? 'outline' : 'default'}>
               <Link href={projectSupplierOnboardingPath(projectId)}>
-                {allComplete ? 'View onboarding record' : 'Manage supplier onboarding'}
+                {allComplete ? 'View payment records' : 'Manage payment setup'}
                 <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -142,9 +142,10 @@ export function ProjectFundingWorkflowBanner() {
           participants={accountingModels}
           projectId={projectId}
           onPushToXero={async (participantId) => {
-            // Xero export is handled via the Participants page operator review flow.
-            // This placeholder routes the operator to the correct screen.
-            window.location.href = projectSupplierOnboardingPath(projectId) + `?focus=${participantId}`;
+            await fetch(
+              `/api/deal-network-pilot/participants/${participantId}/xero-export`,
+              { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }
+            );
           }}
         />
       )}

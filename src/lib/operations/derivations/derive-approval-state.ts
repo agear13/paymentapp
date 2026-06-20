@@ -98,7 +98,7 @@ export function deriveApprovalOwnership(input: {
         actor: 'operator',
         actorLabel: operatorLabel,
         waitingOn: operatorLabel,
-        nextAction: 'Complete supplier onboarding',
+        nextAction: 'Complete payment setup',
       };
     case 'operator_confirmed':
       return {
@@ -137,7 +137,7 @@ export function deriveApprovalBlockingReason(input: {
     case 'shared':
       return `Waiting for ${ownership.actorLabel} to approve participation agreement`;
     case 'participant_approved':
-      return `Waiting for ${ownership.actorLabel} to complete supplier onboarding`;
+      return `Waiting for ${ownership.actorLabel} to complete payment setup`;
     case 'operator_confirmed':
       return `Waiting for ${ownership.actorLabel} to approve participation agreement`;
     case 'fully_approved':
@@ -237,13 +237,13 @@ export function deriveOperationalBlocker(
         severity: 'blocking',
         owner: 'operator',
         ownerLabel: 'Project operator',
-        requiredAction: 'Complete supplier onboarding',
+        requiredAction: 'Complete payment setup',
         resolutionRoute: href,
-        unlocks: 'Settlement can proceed once supplier onboarding is complete and approved.',
-        explanation: `Supplier onboarding required for ${p.name}. The agreement is approved — payment details, ABN, and GST must be collected before settlement.`,
+        unlocks: 'Settlement can proceed once payment information is confirmed and approved.',
+        explanation: `Payment setup required for ${p.name}. The agreement is approved — payment details, ABN, and GST must be collected before settlement.`,
         participantId: p.id,
         participantName: p.name,
-        ctaLabel: 'Complete supplier setup',
+        ctaLabel: 'Prepare for payment',
       })
     );
   }
@@ -275,7 +275,7 @@ export function obligationApprovalLabel(state: ObligationApprovalState, particip
         ? `Waiting for ${participant.name} to approve participation agreement`
         : 'Waiting for participant agreement approval';
     case 'pending_operator':
-      return 'Supplier onboarding required';
+      return 'Payment setup required';
     case 'ready':
       return 'Ready for release';
     case 'blocked':
@@ -302,7 +302,7 @@ export function agreementApprovalLabel(state: AgreementApprovalState, participan
     case 'participant_approved':
       return 'Participant agreement approved';
     case 'operator_confirmed':
-      return 'Supplier onboarding complete';
+      return 'Payment setup complete';
     case 'fully_approved':
       return 'Fully approved — payout ready';
     default:
