@@ -5,8 +5,8 @@ import {
   queryAuditLogs,
 } from '@/lib/audit/audit-log';
 
-const auditCreate = jest.fn().mockResolvedValue({ id: 'audit-1' });
-const auditFindMany = jest.fn().mockResolvedValue([
+const mockAuditCreate = jest.fn().mockResolvedValue({ id: 'audit-1' });
+const mockAuditFindMany = jest.fn().mockResolvedValue([
   {
     id: 'audit-1',
     event_type: AuditEventType.PAYOUT_PAID,
@@ -29,8 +29,8 @@ const auditFindMany = jest.fn().mockResolvedValue([
 jest.mock('@/lib/server/prisma', () => ({
   prisma: {
     audit_logs: {
-      create: (...args: unknown[]) => auditCreate(...args),
-      findMany: (...args: unknown[]) => auditFindMany(...args),
+      create: (...args: unknown[]) => mockAuditCreate(...args),
+      findMany: (...args: unknown[]) => mockAuditFindMany(...args),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
   },
@@ -38,8 +38,8 @@ jest.mock('@/lib/server/prisma', () => ({
 
 describe('audit log persistence', () => {
   beforeEach(() => {
-    auditCreate.mockClear();
-    auditFindMany.mockClear();
+    mockAuditCreate.mockClear();
+    mockAuditFindMany.mockClear();
   });
 
   it('persists audit records without throwing', async () => {
@@ -61,8 +61,8 @@ describe('audit log persistence', () => {
       })
     ).resolves.toBeUndefined();
 
-    expect(auditCreate).toHaveBeenCalledTimes(1);
-    expect(auditCreate.mock.calls[0][0].data.event_type).toBe(AuditEventType.PAYOUT_PAID);
+    expect(mockAuditCreate).toHaveBeenCalledTimes(1);
+    expect(mockAuditCreate.mock.calls[0][0].data.event_type).toBe(AuditEventType.PAYOUT_PAID);
   });
 
   it('queryAuditLogs returns persisted rows', async () => {
@@ -72,14 +72,14 @@ describe('audit log persistence', () => {
       limit: 10,
     });
 
-    expect(auditFindMany).toHaveBeenCalled();
+    expect(mockAuditFindMany).toHaveBeenCalled();
     expect(rows).toHaveLength(1);
     expect(rows[0].eventType).toBe(AuditEventType.PAYOUT_PAID);
     expect(rows[0].organizationId).toBe('org-1');
   });
 
   it('audit failures never break callers', async () => {
-    auditCreate.mockRejectedValueOnce(new Error('database unavailable'));
+    mockAuditCreate.mockRejectedValueOnce(new Error('database unavailable'));
 
     await expect(
       createAuditLog({

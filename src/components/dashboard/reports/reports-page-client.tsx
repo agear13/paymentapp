@@ -25,6 +25,7 @@ import {
   type ReportsViewMode,
 } from '@/lib/reports/reports-view-mode';
 import { REPORTS_EXPORTS_HREF, REPORTS_LEDGER_HREF } from '@/lib/navigation/operator-nav';
+import { ReportingCommercialInsightsPanel } from './reporting-commercial-insights-panel';
 
 interface ReportsPageClientProps {
   organizationId: string;
@@ -178,6 +179,9 @@ export function ReportsPageClient({ organizationId }: ReportsPageClientProps) {
         key={`hero-${refreshKey}`}
         organizationId={organizationId}
       />
+
+      {/* Commercial Position — explainability panel with View Sources on every figure */}
+      <ReportingCommercialInsightsPanel />
 
       {viewMode === 'overview' ? (
         <>

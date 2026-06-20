@@ -401,7 +401,10 @@ describe('deriveRevenueConfidence', () => {
     expect(result.confirmedRevenue).toBe(30000); // Ticket Sales (score 90)
   });
 
-  test('forecastRevenue sums sources with score < 40', () => {
+  test('forecastRevenue reflects canonical forecast bucket from forecast engine', () => {
+    // deriveRevenueConfidence reads forecast.forecastRevenue directly from the
+    // pre-computed forecast result — it does NOT re-bucket by confidence score.
+    // This ensures commercial-performance agrees with the forecast engine.
     const input = makeInput({
       forecast: makeForecast({
         incomingRevenue: [
@@ -409,6 +412,8 @@ describe('deriveRevenueConfidence', () => {
         ],
         totalExpectedRevenue: 5000,
         confirmedRevenue: 0,
+        pendingRevenue: 0,
+        forecastRevenue: 5000, // explicitly set by the forecast engine for speculative sources
       }),
     });
     const result = deriveRevenueConfidence(input);

@@ -26,16 +26,16 @@ type PaymentLinkState = {
   };
 };
 
-let paymentLinkState: PaymentLinkState;
-let transactionChain: Promise<unknown> = Promise.resolve();
+let mockPaymentLinkState: PaymentLinkState;
+let mockTransactionChain: Promise<unknown> = Promise.resolve();
 
-const tx = {
+const mockTx = {
   $queryRaw: jest.fn(async () => [{ id: PAYMENT_LINK_ID }]),
   payment_links: {
-    findUnique: jest.fn(async () => paymentLinkState),
+    findUnique: jest.fn(async () => mockPaymentLinkState),
     update: jest.fn(async ({ data }: { data: Partial<PaymentLinkState> }) => {
-      paymentLinkState = { ...paymentLinkState, ...data };
-      return paymentLinkState;
+      mockPaymentLinkState = { ...mockPaymentLinkState, ...data };
+      return mockPaymentLinkState;
     }),
   },
   payment_events: {
@@ -45,16 +45,16 @@ const tx = {
 
 jest.mock('@/lib/server/prisma', () => ({
   prisma: {
-    $transaction: jest.fn((fn: (client: typeof tx) => Promise<unknown>) => {
-      const run = transactionChain.then(() => fn(tx));
-      transactionChain = run;
+    $transaction: jest.fn((fn: (client: typeof mockTx) => Promise<unknown>) => {
+      const run = mockTransactionChain.then(() => fn(mockTx));
+      mockTransactionChain = run;
       return run;
     }),
     payment_links: {
-      findUnique: jest.fn(async () => paymentLinkState),
+      findUnique: jest.fn(async () => mockPaymentLinkState),
       update: jest.fn(async ({ data }: { data: Partial<PaymentLinkState> }) => {
-        paymentLinkState = { ...paymentLinkState, ...data };
-        return paymentLinkState;
+        mockPaymentLinkState = { ...mockPaymentLinkState, ...data };
+        return mockPaymentLinkState;
       }),
     },
   },
@@ -140,21 +140,21 @@ describe('resolveOrCreateStripeCheckoutSession', () => {
   };
 
   beforeEach(() => {
-    paymentLinkState = buildPaymentLink();
+    mockPaymentLinkState = buildPaymentLink();
     createCalls = 0;
     retrieveCalls = 0;
-    transactionChain = Promise.resolve();
+    mockTransactionChain = Promise.resolve();
     jest.clearAllMocks();
-    (prisma.$transaction as jest.Mock).mockImplementation((fn: (client: typeof tx) => Promise<unknown>) => {
-      const run = transactionChain.then(() => fn(tx));
-      transactionChain = run;
+    (prisma.$transaction as jest.Mock).mockImplementation((fn: (client: typeof mockTx) => Promise<unknown>) => {
+      const run = mockTransactionChain.then(() => fn(mockTx));
+      mockTransactionChain = run;
       return run;
     });
-    (prisma.payment_links.findUnique as jest.Mock).mockImplementation(async () => paymentLinkState);
+    (prisma.payment_links.findUnique as jest.Mock).mockImplementation(async () => mockPaymentLinkState);
     (prisma.payment_links.update as jest.Mock).mockImplementation(
       async ({ data }: { data: Partial<PaymentLinkState> }) => {
-        paymentLinkState = { ...paymentLinkState, ...data };
-        return paymentLinkState;
+        mockPaymentLinkState = { ...mockPaymentLinkState, ...data };
+        return mockPaymentLinkState;
       }
     );
   });
@@ -176,8 +176,8 @@ describe('resolveOrCreateStripeCheckoutSession', () => {
     expect(first.sessionId).toBe(second.sessionId);
     expect(createCalls).toBe(1);
     expect(retrieveCalls).toBeGreaterThanOrEqual(1);
-    expect(tx.payment_events.create).toHaveBeenCalledTimes(1);
-    expect(paymentLinkState.active_stripe_checkout_session_id).toBe(first.sessionId);
+    expect(mockTx.payment_events.create).toHaveBeenCalledTimes(1);
+    expect(mockPaymentLinkState.active_stripe_checkout_session_id).toBe(first.sessionId);
   });
 
   it('reuses the active session on refresh (sequential POST)', async () => {
@@ -196,7 +196,7 @@ describe('resolveOrCreateStripeCheckoutSession', () => {
     expect(second.reused).toBe(true);
     expect(second.sessionId).toBe(first.sessionId);
     expect(createCalls).toBe(1);
-    expect(tx.payment_events.create).toHaveBeenCalledTimes(1);
+    expect(mockTx.payment_events.create).toHaveBeenCalledTimes(1);
   });
 
   it('exposes the active session for page refresh via GET helper', async () => {
@@ -211,7 +211,7 @@ describe('resolveOrCreateStripeCheckoutSession', () => {
       gateway,
     });
 
-    expect(active?.sessionId).toBe(paymentLinkState.active_stripe_checkout_session_id);
+    expect(active?.sessionId).toBe(mockPaymentLinkState.active_stripe_checkout_session_id);
     expect(active?.reused).toBe(true);
     expect(createCalls).toBe(1);
   });
@@ -224,9 +224,9 @@ describe('resolveOrCreateStripeCheckoutSession', () => {
     });
 
     await clearActiveStripeCheckoutSession(PAYMENT_LINK_ID);
-    paymentLinkState.status = 'PAID';
-    paymentLinkState.active_stripe_checkout_session_id = null;
-    paymentLinkState.active_stripe_checkout_expires_at = null;
+    mockPaymentLinkState.status = 'PAID';
+    mockPaymentLinkState.active_stripe_checkout_session_id = null;
+    mockPaymentLinkState.active_stripe_checkout_expires_at = null;
 
     await expect(
       resolveOrCreateStripeCheckoutSession({

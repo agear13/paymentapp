@@ -11,6 +11,8 @@ import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { referralTrace } from '@/lib/referrals/referral-trace';
 import { hydrateAgreementEligibleServices } from '@/lib/operations/hydration/hydrate-agreement-eligible-services.server';
+import { dispatchCommercialNotification } from '@/lib/commercial/dispatch-commercial-notification.server';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,6 +77,18 @@ export async function POST(
         projectId: result.deal.id,
         focusParticipant: result.participant,
       });
+
+      // Dispatch commercial notification for agreement approval
+      const org = await getOrganizationForAuthenticatedUser(owner.user_id);
+      if (org) {
+        void dispatchCommercialNotification({
+          organizationId: org.id,
+          eventKind: 'agreement_approved',
+          projectId: result.deal.id,
+          participantId: result.participant.id,
+          participantName: result.participant.name,
+        });
+      }
     }
     referralTrace('api.approveInvite.response', {
       inviteToken: token,

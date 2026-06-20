@@ -15,6 +15,7 @@ import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
 import { MERCHANT_STRIPE_HREF } from '@/lib/navigation/operator-nav';
+import type { CommercialWorkflowStage } from '@/lib/commercial/workflow-integration';
 
 /* ─── Stage enum ─── */
 
@@ -115,7 +116,7 @@ const STAGE_TITLES: Record<WorkflowStage, string> = {
   'operational':          'Commercially operational',
 };
 
-const STAGE_ORDER: WorkflowStage[] = [
+export const STAGE_ORDER: WorkflowStage[] = [
   'setup',
   'configuring',
   'collecting-approvals',
@@ -254,6 +255,7 @@ function deriveContinueHref(stage: WorkflowStage, projectId: string): string {
       return `${base}/participants?focus=onboarding`;
     case 'ready-to-collect':
     case 'collecting-revenue':
+      return `${base}/payouts`;
     case 'ready-to-release':
       return `${base}/payouts`;
     case 'operational':
@@ -355,4 +357,68 @@ export function resolveNextWorkflowStep(opts: {
     minutes: action.minutes,
     reason: action.hint,
   };
+}
+
+/* ─── Workflow system bridge ─── */
+
+/**
+ * Maps from the per-participant `CommercialWorkflowStage` (workflow-integration.ts)
+ * to the workspace-level `WorkflowStage` used by the WorkflowHeader and dashboard.
+ *
+ * This is the canonical bridge between the two workflow representations.
+ * The participant-level stage is finer-grained; the workspace stage is aggregated.
+ *
+ * Usage: derive the dominant stage across all participants and call this to produce
+ * the workspace-level progress indicator.
+ *
+ * @example
+ * ```typescript
+ * // Aggregate participant stages and derive the workspace stage:
+ * const dominantStage = participantStatuses.reduce((acc, p) => {
+ *   const pStage = resolveWorkflowStageFromCommercial(p.stage);
+ *   return STAGE_ORDER.indexOf(pStage) > STAGE_ORDER.indexOf(acc) ? pStage : acc;
+ * }, 'setup' as WorkflowStage);
+ * ```
+ */
+export function resolveWorkflowStageFromCommercial(
+  commercialStage: CommercialWorkflowStage | null | undefined
+): WorkflowStage {
+  switch (commercialStage) {
+    case 'awaiting_approval':
+      return 'collecting-approvals';
+    case 'generating_invoice':
+    case 'supplier_onboarding':
+    case 'awaiting_operator_review':
+      return 'preparing-payments';
+    case 'awaiting_xero_export':
+    case 'awaiting_funding':
+      return 'ready-to-collect';
+    case 'awaiting_settlement':
+    case 'ready_to_release':
+      return 'ready-to-release';
+    case 'complete':
+      return 'operational';
+    default:
+      return 'setup';
+  }
+}
+
+/**
+ * Given an array of participant commercial stages, resolves the overall
+ * workspace workflow stage by selecting the most-advanced stage.
+ *
+ * When all participants are at different stages, the workspace stage follows
+ * the participant furthest along (so the operator always sees the next action
+ * to complete, not the first).
+ */
+export function resolveWorkspaceStageFromParticipants(
+  stages: Array<CommercialWorkflowStage | null | undefined>
+): WorkflowStage {
+  if (stages.length === 0) return 'setup';
+  const mapped = stages.map((s) => resolveWorkflowStageFromCommercial(s));
+  const best = mapped.reduce<WorkflowStage>(
+    (acc, s) => (STAGE_ORDER.indexOf(s) > STAGE_ORDER.indexOf(acc) ? s : acc),
+    'setup'
+  );
+  return best;
 }

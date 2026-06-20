@@ -467,12 +467,15 @@ describe('deriveAccountingExportPreview', () => {
     expect(preview?.amount).toBe(3000);
   });
 
-  it('falls back to obligation amount when invoice amount not specified', () => {
+  it('falls back to GST-inclusive obligation amount when invoice amount not specified', () => {
+    // When invoiceAmount is null, the engine converts the raw obligation amount
+    // (GST-exclusive) to a GST-inclusive total. obligation.amount = 2750, GST = 10%,
+    // so the expected export amount = 2750 × 1.1 = 3025.
     const preview = deriveAccountingExportPreview(
       makeReadyInput({ invoice: makeInvoice({ invoiceAmount: null }) }),
       makeContext()
     );
-    expect(preview?.amount).toBe(2750);
+    expect(preview?.amount).toBe(3025);
   });
 });
 

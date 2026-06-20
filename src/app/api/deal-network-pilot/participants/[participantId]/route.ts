@@ -20,6 +20,7 @@ import { normalizeCompensationAttributionSemantics } from '@/lib/operations/deri
 import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { prisma } from '@/lib/server/prisma';
+import { dispatchCommercialNotification } from '@/lib/commercial/dispatch-commercial-notification.server';
 import { isAttributionAllActiveWithoutCatalog } from '@/lib/operations/truth/attribution-eligibility';
 import { ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES } from '@/lib/operations/merchant-operational-copy';
 import { assertOperationalInvariants } from '@/lib/operations/dev/operational-invariants';
@@ -172,6 +173,20 @@ export async function PATCH(
       projectId: persisted.dealId ?? snapshot.deals[0]?.id,
       focusParticipant: persisted,
     });
+
+    // Dispatch commercial notification for significant lifecycle transitions
+    if (body.payoutVerificationConfirmed === true) {
+      const org = await getOrganizationForAuthenticatedUser(user.id);
+      if (org) {
+        void dispatchCommercialNotification({
+          organizationId: org.id,
+          eventKind: 'supplier_onboarding_approved',
+          projectId: persisted.dealId ?? snapshot.deals[0]?.id ?? '',
+          participantId: persisted.id,
+          participantName: persisted.name,
+        });
+      }
+    }
 
     return NextResponse.json({
       participant: persisted,

@@ -3,12 +3,12 @@ import { POST as authAuditPost } from '@/app/api/auth/audit/route';
 import { recordAuthAuditEvent } from '@/lib/audit/auth-audit.server';
 import { AuditEventType } from '@/lib/audit/audit-log';
 
-const auditCreate = jest.fn().mockResolvedValue({ id: 'audit-auth-1' });
+const mockAuditCreate = jest.fn().mockResolvedValue({ id: 'audit-auth-1' });
 
 jest.mock('@/lib/server/prisma', () => ({
   prisma: {
     audit_logs: {
-      create: (...args: unknown[]) => auditCreate(...args),
+      create: (...args: unknown[]) => mockAuditCreate(...args),
       findMany: jest.fn().mockResolvedValue([]),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
@@ -21,7 +21,7 @@ jest.mock('@/lib/rate-limit', () => ({
 
 describe('authentication audit logging', () => {
   beforeEach(() => {
-    auditCreate.mockClear();
+    mockAuditCreate.mockClear();
   });
 
   it('records login failure via /api/auth/audit', async () => {
@@ -38,12 +38,12 @@ describe('authentication audit logging', () => {
 
     const response = await authAuditPost(request);
     expect(response.status).toBe(200);
-    expect(auditCreate).toHaveBeenCalled();
-    expect(auditCreate.mock.calls[0][0].data.event_type).toBe(AuditEventType.AUTH_LOGIN_FAILED);
+    expect(mockAuditCreate).toHaveBeenCalled();
+    expect(mockAuditCreate.mock.calls[0][0].data.event_type).toBe(AuditEventType.AUTH_LOGIN_FAILED);
   });
 
   it('recordAuthAuditEvent never throws on persistence failure', async () => {
-    auditCreate.mockRejectedValueOnce(new Error('db down'));
+    mockAuditCreate.mockRejectedValueOnce(new Error('db down'));
 
     expect(() =>
       recordAuthAuditEvent({
@@ -64,8 +64,8 @@ describe('authentication audit logging', () => {
       metadata: { role: 'OWNER' },
     });
 
-    expect(auditCreate).toHaveBeenCalled();
-    const payloads = auditCreate.mock.calls.map((call) => call[0].data);
+    expect(mockAuditCreate).toHaveBeenCalled();
+    const payloads = mockAuditCreate.mock.calls.map((call) => call[0].data);
     expect(
       payloads.some((row) => row.event_type === AuditEventType.ORG_MEMBERSHIP_CHANGED)
     ).toBe(true);

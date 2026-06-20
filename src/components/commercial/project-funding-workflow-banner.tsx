@@ -20,13 +20,12 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle2, Clock, ArrowRight, Users, FileText, Info } from 'lucide-react';
+import { CheckCircle2, Clock, ArrowRight, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
-import {
-  projectSupplierOnboardingPath,
-  projectXeroExportPath,
-} from '@/lib/projects/project-routes';
+import { projectSupplierOnboardingPath } from '@/lib/projects/project-routes';
+import { XeroExportStatusPanel } from '@/components/commercial/accounting/xero-export-status-panel';
+import { buildMinimalAccountingExportModels } from '@/lib/commercial/participant-workflow-adapter';
 
 type OnboardingCounts = {
   total: number;
@@ -66,6 +65,11 @@ export function ProjectFundingWorkflowBanner() {
   const counts = React.useMemo(
     () => deriveOnboardingCounts(projectParticipants),
     [projectParticipants]
+  );
+
+  const accountingModels = React.useMemo(
+    () => buildMinimalAccountingExportModels(projectParticipants, projectId),
+    [projectParticipants, projectId]
   );
 
   if (loading || counts.total === 0) return null;
@@ -132,29 +136,17 @@ export function ProjectFundingWorkflowBanner() {
         </div>
       </div>
 
-      {/* ── Accounting Review (shown when ?section=accounting) ────────────── */}
-      {showAccountingSection && (
-        <div className="rounded-lg border bg-amber-50/40 dark:bg-amber-950/10 border-amber-200 dark:border-amber-900/40 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-amber-200 dark:border-amber-900/40">
-            <FileText className="h-4 w-4 text-amber-600" />
-            <span className="text-sm font-semibold">Accounting Review Required</span>
-          </div>
-          <div className="px-4 py-3 space-y-3">
-            <div className="flex items-start gap-2">
-              <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-              <p className="text-sm text-muted-foreground">
-                Supplier onboarding has been approved. Review each invoice before pushing to Xero.
-                Open the Participants page to review individual supplier invoices and approve them for export.
-              </p>
-            </div>
-            <Button asChild size="sm" variant="default">
-              <Link href={projectSupplierOnboardingPath(projectId)}>
-                Review invoices for export
-                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          </div>
-        </div>
+      {/* ── Accounting / Xero Export Status (shown when ?section=accounting) ── */}
+      {showAccountingSection && accountingModels.length > 0 && (
+        <XeroExportStatusPanel
+          participants={accountingModels}
+          projectId={projectId}
+          onPushToXero={async (participantId) => {
+            // Xero export is handled via the Participants page operator review flow.
+            // This placeholder routes the operator to the correct screen.
+            window.location.href = projectSupplierOnboardingPath(projectId) + `?focus=${participantId}`;
+          }}
+        />
       )}
     </div>
   );

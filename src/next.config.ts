@@ -47,6 +47,16 @@ const nextConfig: NextConfig = {
 
   // 🔧 Webpack configuration (simplified - client island handles isolation)
   webpack: (config, { isServer }) => {
+    if (isServer) {
+      // pdf-parse bundles pdfjs-dist ESM which has export incompatibilities.
+      // It is only used in server-side extraction routes, so exclude from the bundle.
+      config.externals = Array.isArray(config.externals)
+        ? [...config.externals, 'pdf-parse']
+        : typeof config.externals === 'object'
+          ? { ...config.externals, 'pdf-parse': 'commonjs pdf-parse' }
+          : ['pdf-parse'];
+    }
+
     if (!isServer) {
       // Client-side fallbacks for Node.js modules
       config.resolve.fallback = {

@@ -17,6 +17,10 @@
 import type { OperationalAuditEntry, OperationalAuditEventType } from '@/lib/operations/audit/operational-audit';
 import { mergeAuditTimeline } from '@/lib/operations/audit/operational-audit';
 import type { CommercialCommitmentStage } from '@/lib/commercial/commitment-lifecycle';
+import type {
+  SupplierOnboardingEventType,
+  SupplierOnboardingTimelineEvent,
+} from '@/lib/commercial/supplier-onboarding';
 
 /* ─── Event type ────────────────────────────────────────────────────────────── */
 
@@ -290,6 +294,33 @@ const AUDIT_TO_COMMERCIAL: Partial<Record<OperationalAuditEventType, AuditMappin
     commercialImpact:
       'Participants and earnings can now be configured.',
   },
+
+  payout_state_updated: {
+    type: 'payment_released',
+    stage: 'payment_released',
+    title: 'Payout status updated',
+    description: (e) =>
+      e.actor
+        ? `Payout status was updated by ${e.actor}.`
+        : 'A payout status change was recorded.',
+    commercialImpact:
+      'Settlement lifecycle has progressed. Review the payouts screen for the current state.',
+  },
+
+  // settlement_infrastructure_ready is a system/infrastructure event, not a commercial milestone.
+  // Intentionally excluded from AUDIT_TO_COMMERCIAL so it does not appear in the operator timeline.
+
+  compensation_extraction_incomplete: {
+    type: 'commercial_risk_resolved',
+    stage: 'obligations_created',
+    title: 'Earnings extraction incomplete',
+    description: (e) =>
+      e.actor
+        ? `Earnings data for ${e.actor} could not be fully extracted.`
+        : 'AI earnings extraction returned incomplete results.',
+    commercialImpact:
+      'Settlement readiness is blocked until earnings are manually completed.',
+  },
 };
 
 /* ─── Participant timeline helper ───────────────────────────────────────────── */
@@ -308,11 +339,34 @@ export type ParticipantCommercialJourneyStep = {
 
 /* ─── Canonical builder ─────────────────────────────────────────────────────── */
 
+/**
+ * Maps each supplier onboarding event type to its corresponding
+ * CommercialCommitmentStage so the events integrate with the lifecycle model.
+ */
+const SUPPLIER_EVENT_TO_STAGE: Record<SupplierOnboardingEventType, CommercialCommitmentStage> = {
+  supplier_onboarding_requested:         'invoice_requested',
+  supplier_invoice_generated:            'invoice_requested',
+  supplier_onboarding_started:           'invoice_requested',
+  supplier_onboarding_completed:         'invoice_received',
+  supplier_abn_verified:                 'invoice_received',
+  supplier_abn_manual_review:            'invoice_received',
+  supplier_gst_confirmed:                'invoice_received',
+  supplier_alternative_payment_supplied: 'invoice_received',
+  supplier_invoice_approved:             'invoice_received',
+  supplier_invoice_exported_to_xero:     'exported_to_xero',
+};
+
 export type BuildCommercialTimelineInput = {
   /** Audit entries from the operational audit store / coordination-snapshot. */
   auditEntries: OperationalAuditEntry[];
   /** Optional additional audit entries to merge (e.g. from conversation import). */
   additionalEntries?: OperationalAuditEntry[];
+  /**
+   * Supplier onboarding events from `SupplierOnboardingStatus.timelineEvents`.
+   * These are merged into the canonical timeline automatically.
+   * Pass the flattened events from all participants in scope.
+   */
+  supplierOnboardingEvents?: SupplierOnboardingTimelineEvent[];
   /** When set, only events for this project are included. */
   projectId?: string;
   /** When set, returns only events relevant to this participant. */
@@ -384,6 +438,33 @@ export function buildCommercialTimeline(
     }
   }
 
+  // 3b. Merge supplier onboarding events — bridge from SupplierOnboardingTimelineEvent
+  if (input.supplierOnboardingEvents?.length) {
+    for (const soEvent of input.supplierOnboardingEvents) {
+      // Scope filter for supplier events
+      if (projectId && soEvent.projectId && soEvent.projectId !== projectId) continue;
+      if (participantId && soEvent.participantId && soEvent.participantId !== participantId) continue;
+
+      if (seenIds.has(soEvent.id)) continue; // dedup
+
+      const stage = SUPPLIER_EVENT_TO_STAGE[soEvent.type] ?? 'invoice_requested';
+      const commercialEvent: CommercialTimelineEvent = {
+        id: soEvent.id,
+        projectId: soEvent.projectId,
+        participantId: soEvent.participantId,
+        stage,
+        type: soEvent.type as CommercialEventType,
+        title: soEvent.title,
+        description: soEvent.description,
+        commercialImpact: soEvent.commercialImpact,
+        occurredAt: soEvent.occurredAt,
+      };
+
+      seenIds.add(soEvent.id);
+      mapped.push(commercialEvent);
+    }
+  }
+
   // 5. Sort
   mapped.sort((a, b) => {
     const diff = new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime();
@@ -400,6 +481,26 @@ function buildEventMetadata(
     return { conversationImport: entry.conversationImport };
   }
   return undefined;
+}
+
+/**
+ * Extracts `SupplierOnboardingTimelineEvent[]` from an array of
+ * `SupplierOnboardingStatus` objects and flattens them for use with
+ * `buildCommercialTimeline({ supplierOnboardingEvents })`.
+ *
+ * @example
+ * ```typescript
+ * const events = buildCommercialTimeline({
+ *   auditEntries,
+ *   supplierOnboardingEvents: extractSupplierTimelineEvents(onboardingStatuses),
+ *   projectId,
+ * });
+ * ```
+ */
+export function extractSupplierTimelineEvents(
+  statuses: Array<{ timelineEvents: SupplierOnboardingTimelineEvent[] }>
+): SupplierOnboardingTimelineEvent[] {
+  return statuses.flatMap((s) => s.timelineEvents);
 }
 
 /* ─── Participant journey builder ────────────────────────────────────────────── */

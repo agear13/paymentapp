@@ -905,8 +905,12 @@ describe('deriveCommercialForecast — edge cases', () => {
   });
 
   test('handles zero amount obligations', () => {
+    // When obligation rows all have amount_owed = 0, rowsTotalCommitments = 0.
+    // The engine falls back to treasury.obligationsTotal. To test zero-commitment
+    // behaviour in isolation, clear the treasury total too.
     const input = makeInput({
       obligationRows: [makeObligationRow({ amount_owed: 0 })],
+      treasury: makeTreasury({ obligationsTotal: 0, obligationsReady: 0 }),
     });
     const result = deriveCommercialForecast(input);
     expect(result.totalCommitments).toBe(0);

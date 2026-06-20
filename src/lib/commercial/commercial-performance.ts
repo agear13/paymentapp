@@ -465,17 +465,14 @@ export function deriveRevenueConfidence(
     (item) => mapIncomingToConfidence(item, currency)
   );
 
-  const confirmedRevenue = sources
-    .filter((s) => s.confidenceScore > 80)
-    .reduce((sum, s) => sum + s.expectedAmount, 0);
-
-  const expectedRevenue = sources
-    .filter((s) => s.confidenceScore >= 40 && s.confidenceScore <= 80)
-    .reduce((sum, s) => sum + s.expectedAmount, 0);
-
-  const forecastRevenue = sources
-    .filter((s) => s.confidenceScore < 40)
-    .reduce((sum, s) => sum + s.expectedAmount, 0);
+  /**
+   * Use canonical revenue buckets from the forecast engine (already derived by
+   * deriveCommercialForecast) rather than re-bucketing by confidence score thresholds.
+   * This ensures commercial-performance always agrees with the dashboard and explainability.
+   */
+  const confirmedRevenue = forecast.confirmedRevenue;
+  const expectedRevenue = forecast.pendingRevenue;
+  const forecastRevenue = forecast.forecastRevenue;
 
   const totalAmount = sources.reduce((sum, s) => sum + s.expectedAmount, 0);
   const overallConfidence =

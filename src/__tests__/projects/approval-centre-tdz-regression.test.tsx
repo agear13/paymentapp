@@ -139,8 +139,10 @@ jest.mock('@/lib/operations/audit/conversation-import-audit', () => ({
 // Silence next/image and Link in jsdom
 jest.mock('next/link', () => ({
   __esModule: true,
-  default: ({ children, href }: { children: React.ReactNode; href: string }) =>
-    React.createElement('a', { href }, children),
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  default: ({ children, href }: { children: unknown; href: string }) =>
+    // require inside the factory is allowed by Jest's hoisting rules
+    require('react').createElement('a', { href }, children),
 }));
 
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));

@@ -85,6 +85,8 @@ export type CommercialEvent = {
   amount?: number;
   /** Currency of the amount. */
   currency?: string;
+  /** Name of the agreement (used in notification copy). */
+  agreementName?: string;
   /** Name of the revenue source or organisation. */
   sourceName?: string;
   /** Additional context for the notification. */
@@ -568,7 +570,7 @@ function deriveForecastMutation(event: CommercialEvent): ForecastMutation | null
             id: event.fundingSourcePatch.id,
             status: 'CONFIRMED',
             confidenceLevel: 'HIGH',
-          } as ProjectFundingSourceDto & { id: string },
+          } as unknown as ProjectFundingSourceDto & { id: string },
         };
       }
       return null;
@@ -581,7 +583,7 @@ function deriveForecastMutation(event: CommercialEvent): ForecastMutation | null
             id: event.fundingSourcePatch.id,
             confidenceLevel: 'HIGH',
             linkedInvoiceId: event.fundingSourcePatch.linkedInvoiceId ?? 'evidence-linked',
-          } as ProjectFundingSourceDto & { id: string },
+          } as unknown as ProjectFundingSourceDto & { id: string },
         };
       }
       return null;
@@ -594,7 +596,7 @@ function deriveForecastMutation(event: CommercialEvent): ForecastMutation | null
             id: event.fundingSourcePatch.id,
             status: 'CLEARED',
             confidenceLevel: 'HIGH',
-          } as ProjectFundingSourceDto & { id: string },
+          } as unknown as ProjectFundingSourceDto & { id: string },
         };
       }
       return null;

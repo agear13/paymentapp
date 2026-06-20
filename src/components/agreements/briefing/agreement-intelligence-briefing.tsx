@@ -89,6 +89,11 @@ import {
   projectParticipantsPath,
 } from '@/lib/projects/project-routes';
 import { cn } from '@/lib/utils';
+import { OperatorInbox } from '@/components/commercial/operator-inbox/operator-inbox';
+import {
+  deriveWorkspaceStatusFromParticipants,
+  synthesizeSupplierTimelineEvents,
+} from '@/lib/commercial/participant-workflow-adapter';
 
 /* ─── Stage pill labels (commercial language) ──────────────────────────────── */
 
@@ -381,12 +386,17 @@ function CommercialBlockers({ blockers, snapshot }: CommercialBlockersProps) {
 type BriefingCommercialTimelineProps = {
   auditEntries: ReturnType<typeof mergeAuditTimeline>;
   projectId: string;
+  supplierOnboardingEvents?: import('@/lib/commercial/supplier-onboarding').SupplierOnboardingTimelineEvent[];
 };
 
-function BriefingCommercialTimeline({ auditEntries, projectId }: BriefingCommercialTimelineProps) {
+function BriefingCommercialTimeline({
+  auditEntries,
+  projectId,
+  supplierOnboardingEvents,
+}: BriefingCommercialTimelineProps) {
   const events = React.useMemo(
-    () => buildCommercialTimeline({ auditEntries, projectId }),
-    [auditEntries, projectId]
+    () => buildCommercialTimeline({ auditEntries, projectId, supplierOnboardingEvents }),
+    [auditEntries, projectId, supplierOnboardingEvents]
   );
 
   if (events.length === 0) return null;
@@ -671,6 +681,25 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
 
   const hasParticipants = intelligence.snapshot.participantCount > 0;
 
+  // Derive workspace workflow status from participant phase data.
+  // This powers the OperatorInbox without a separate API call.
+  const workspaceStatus = React.useMemo(
+    () => deriveWorkspaceStatusFromParticipants(projectParticipants, projectId),
+    [projectParticipants, projectId]
+  );
+
+  // Synthesise supplier onboarding timeline events from participant phase data.
+  // These are merged into the Commercial Timeline for a complete history.
+  const supplierTimelineEvents = React.useMemo(
+    () => synthesizeSupplierTimelineEvents(projectParticipants, projectId),
+    [projectParticipants, projectId]
+  );
+
+  // Only show the inbox when there are participants with active workflow tasks.
+  const showOperatorInbox =
+    hasParticipants &&
+    (workspaceStatus.actionRequired.length > 0 || workspaceStatus.informational.length > 0);
+
   return (
     <div className="space-y-4">
       {sectionErrors.participants ? (
@@ -700,8 +729,18 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
         snapshot={intelligence.snapshot}
       />
 
+      {/* 3b. Operator Inbox — surfaces every pending commercial action in one place.
+               Only shown when there are active participant workflow tasks.               */}
+      {showOperatorInbox ? (
+        <OperatorInbox workspaceStatus={workspaceStatus} projectId={projectId} />
+      ) : null}
+
       {/* 4. Commercial Timeline — canonical history of this commercial relationship */}
-      <BriefingCommercialTimeline auditEntries={auditEntries} projectId={projectId} />
+      <BriefingCommercialTimeline
+        auditEntries={auditEntries}
+        projectId={projectId}
+        supplierOnboardingEvents={supplierTimelineEvents}
+      />
 
       {/* 5. Participant commitments — only shown when participants exist */}
       {hasParticipants ? (

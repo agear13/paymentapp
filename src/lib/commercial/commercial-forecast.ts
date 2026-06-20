@@ -252,7 +252,17 @@ export function deriveCommercialForecast(
 
   const totalFixedCommitments = fixedCommitments.reduce((s, c) => s + (c.amount ?? 0), 0);
   const totalRevenueShareEstimate = revenueShareCommitments.reduce((s, c) => s + (c.amount ?? 0), 0);
-  const totalCommitments = totalFixedCommitments + totalRevenueShareEstimate;
+  const rowsTotalCommitments = totalFixedCommitments + totalRevenueShareEstimate;
+
+  /**
+   * Fallback: when no individual obligation rows are provided (e.g. workspace-level dashboard
+   * view that only has treasury aggregates), use `treasury.obligationsTotal`.
+   * This prevents Expected Obligations from showing as zero when obligations exist.
+   */
+  const totalCommitments =
+    rowsTotalCommitments > 0
+      ? rowsTotalCommitments
+      : (treasury?.obligationsTotal ?? 0);
 
   /* ── 3. Forecast Position ── */
   const forecastBalance = totalExpectedRevenue - totalCommitments;

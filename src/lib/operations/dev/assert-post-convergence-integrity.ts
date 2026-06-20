@@ -161,12 +161,12 @@ export function collectPostConvergenceIntegrityViolations(
   }
 
   if (input.obligationsTableRowCount != null) {
-    const expectedObligations = graph.obligationCount ?? kpis?.obligationCount ?? 0;
+    const expectedObligationCount = graph.obligationCount ?? kpis?.obligationCount ?? 0;
     checkEq(
       violations,
       'POST_CONVERGENCE_OBLIGATIONS_TABLE_MISMATCH',
       'obligations table row count vs canonical obligationCount',
-      expectedObligations,
+      expectedObligationCount,
       input.obligationsTableRowCount,
       input.mutation
     );

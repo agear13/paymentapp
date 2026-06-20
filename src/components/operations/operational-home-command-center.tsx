@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { useAgreementHealthPortfolio } from '@/hooks/use-agreement-health-portfolio';
@@ -63,6 +64,36 @@ export function OperationalHomeCommandCenter() {
         auditEntries: auditTimeline,
       })
     : null;
+
+  // Derive a minimal workspace onboarding status from workspace-level counts.
+  // This is a lightweight fallback when the full per-participant engine data is
+  // not available in workspace scope. Exact participant details are visible on
+  // the Agreement Briefing page via the OperatorInbox.
+  const derivedOnboardingWorkspace = React.useMemo(() => {
+    if (!workspaceContext || workspaceContext.participantCount === 0) return null;
+    // When onboardingWorkspace is already populated by the engine, use it.
+    if (workspaceContext.onboardingWorkspace) return workspaceContext.onboardingWorkspace;
+
+    const total = workspaceContext.participantCount;
+    const completed = workspaceContext.participantsConfiguredCount;
+    const pending = total - completed;
+
+    // Only show the widget when there are unconfigured participants.
+    if (pending === 0) return null;
+
+    return {
+      participants: [],
+      totalCount: total,
+      completedCount: completed,
+      inProgressCount: 0,
+      notStartedCount: pending,
+      requiresReviewCount: 0,
+      readyForExportCount: 0,
+      summary: `${completed} of ${total} supplier${total !== 1 ? 's have' : ' has'} completed onboarding.`,
+      primaryCta: `Complete supplier setup for ${pending} supplier${pending !== 1 ? 's' : ''}`,
+      pendingSuppliers: [],
+    };
+  }, [workspaceContext]);
 
   return (
     <div className={opPage()}>
@@ -146,12 +177,12 @@ export function OperationalHomeCommandCenter() {
       {/* ── 5b. Supplier Onboarding Progress ──────────────────────────────
           Shows when any supplier has not yet completed onboarding.
           Hides automatically when all suppliers are complete.
-          Feeds from deriveWorkspaceOnboardingStatus() — no independent calc. */}
-      {!isLoading && workspaceContext?.onboardingWorkspace && (
+          Falls back to workspace counts when detailed engine data is unavailable. */}
+      {!isLoading && derivedOnboardingWorkspace && (
         <SupplierOnboardingDashboardWidget
-          workspace={workspaceContext.onboardingWorkspace}
+          workspace={derivedOnboardingWorkspace}
           onContinue={() => {
-            const projectId = workspaceContext.primaryProjectId;
+            const projectId = workspaceContext?.primaryProjectId;
             if (projectId) {
               router.push(projectSupplierOnboardingPath(projectId));
             }

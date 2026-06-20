@@ -34,6 +34,8 @@
  *   buildSupplierOnboardingNarrative()  — Provvy integration
  */
 
+import { calculateGstFromExclusiveSubtotal } from '@/lib/commercial/gst-utils';
+
 /* ─── Onboarding stage ──────────────────────────────────────────────────── */
 
 /**
@@ -502,8 +504,8 @@ function buildInvoiceDescription(obligation: SupplierOnboardingObligationInput):
 }
 
 function calculateGSTAmount(subtotal: number, gstStatus: GSTStatus): number | null {
-  if (gstStatus === 'yes') return Math.round(subtotal * 0.1 * 100) / 100;
-  return null;
+  // Delegates to the canonical GST utility — GST-exclusive convention (subtotal known).
+  return calculateGstFromExclusiveSubtotal(subtotal, gstStatus === 'yes');
 }
 
 /* ─── ABN Validation ────────────────────────────────────────────────────── */
