@@ -53,6 +53,12 @@ export type ParticipantPhaseData = {
   commissionValue?: number | null;
   commissionKind?: string | null;
   payoutSettlementStatus?: string | null;
+  /** C-4: paymentSetup persisted by the new Payment Setup workflow */
+  paymentSetup?: {
+    xeroExportedAt?: string | null;
+    xeroSyncStatus?: string | null;
+    draftInvoice?: { status?: string } | null;
+  } | null;
 };
 
 /* ─── Stage derivation ───────────────────────────────────────────────────── */
@@ -78,6 +84,8 @@ const SUPPLIER_STAGE_LABELS: Record<SupplierOnboardingStage, string> = {
  *   else → not_started
  */
 function deriveOnboardingStageFromPhase(p: ParticipantPhaseData): SupplierOnboardingStage {
+  // C-4: Check for successful Xero export first (most advanced state)
+  if (p.paymentSetup?.xeroExportedAt && p.paymentSetup?.xeroSyncStatus === 'synced') return 'xero_exported';
   if (p.payoutVerificationConfirmed === true) return 'operator_approved';
   if (p.payoutOnboardingPhase === 'COMPLETED' || p.onboardingStatus === 'COMPLETE') return 'submitted';
   if (p.payoutOnboardingPhase === 'IN_PROGRESS' || p.onboardingStatus === 'INCOMPLETE') return 'in_progress';
@@ -410,7 +418,7 @@ export function buildMinimalAccountingExportModels(
           }
         : null,
       exportApprovedAt: null,
-      exportedAt: isExported ? new Date().toISOString() : null,
+      exportedAt: isExported ? (p.paymentSetup?.xeroExportedAt ?? new Date().toISOString()) : null,
       providerReference: null,
       failureReason: null,
       failureAction: null,

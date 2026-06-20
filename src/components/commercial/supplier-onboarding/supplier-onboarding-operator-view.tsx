@@ -22,6 +22,7 @@
  */
 
 import * as React from 'react';
+import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
   CheckCircle2,
   Clock,
@@ -35,6 +36,9 @@ import {
   Users,
   ChevronDown,
   ChevronUp,
+  Paperclip,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 import type {
@@ -43,6 +47,7 @@ import type {
   OnboardingChecklistStatus,
 } from '@/lib/commercial/supplier-onboarding';
 import type { CommercialReviewSummary, ReviewCheck, ReviewCheckStatus } from '@/lib/commercial/supplier-onboarding-domain';
+import type { PaymentAttachment } from '@/lib/commercial/payment-setup-types';
 
 /* ─── Utilities ─────────────────────────────────────────────────────────── */
 function fmt(amount: number, currency = 'AUD'): string {
@@ -204,6 +209,8 @@ function RejectModal({
 
 export type SupplierOnboardingOperatorViewProps = {
   status: SupplierOnboardingStatus;
+  /** H-8: Raw participant for masked bank details and attachments. */
+  participant?: DemoParticipant;
   /** Commercial review summary (deterministic checks). */
   reviewSummary?: CommercialReviewSummary;
   /** Called when operator clicks Approve (commercial decision). */
@@ -226,6 +233,7 @@ export type SupplierOnboardingOperatorViewProps = {
  */
 export function SupplierOnboardingOperatorView({
   status,
+  participant,
   reviewSummary,
   onApprove,
   onApproveAndExport,
@@ -235,6 +243,16 @@ export function SupplierOnboardingOperatorView({
   const { draftInvoice, abnValidation, checklist, xeroReadiness, requiresManualReview } = status;
   const [showRejectModal, setShowRejectModal] = React.useState(false);
   const [isRejecting, setIsRejecting] = React.useState(false);
+  const [showFullBank, setShowFullBank] = React.useState(false);
+
+  // H-8: Extract bank details and attachments from participant.supplierOnboarding.submission
+  const submission = (participant?.supplierOnboarding as { submission?: Record<string, unknown> } | undefined)?.submission;
+  const bankAccountName = submission?.bankAccountName as string | undefined;
+  const bsb = submission?.bsb as string | undefined;
+  const accountNumber = submission?.accountNumber as string | undefined;
+  const altPaymentNotes = submission?.alternativePaymentNotes as string | undefined;
+  const paymentMethodType = submission?.paymentMethodType as string | undefined;
+  const attachments: PaymentAttachment[] = participant?.paymentSetup?.attachments ?? [];
 
   const handleReject = async (reason: string) => {
     setIsRejecting(true);
@@ -246,6 +264,15 @@ export function SupplierOnboardingOperatorView({
     }
   };
 
+  // H-8: Mask BSB/account number for display (show last 3 digits)
+  function maskNumber(n: string | undefined): string {
+    if (!n) return '—';
+    return n.length > 3 ? '••••' + n.slice(-3) : n;
+  }
+  function unmaskNumber(n: string | undefined): string {
+    return n ?? '—';
+  }
+
   const SECTION_ICONS: Record<string, React.ReactNode> = {
     invoice_reviewed: <FileText className="h-4 w-4" />,
     payment_details: <CreditCard className="h-4 w-4" />,
@@ -255,11 +282,15 @@ export function SupplierOnboardingOperatorView({
     operator_approval: <CheckCircle2 className="h-4 w-4" />,
   };
 
-  const paymentMethod = status.draftInvoice.participantName
-    ? (status.checklist.find((c) => c.id === 'payment_details')?.status === 'requires_review'
-        ? 'Alternative method — manual processing'
-        : 'Bank transfer')
-    : 'Not provided';
+  const paymentMethod = paymentMethodType === 'bank'
+    ? 'Bank transfer'
+    : paymentMethodType
+    ? 'Alternative payment method'
+    : (status.draftInvoice.participantName
+        ? (status.checklist.find((c) => c.id === 'payment_details')?.status === 'requires_review'
+            ? 'Alternative method — manual processing'
+            : 'Bank transfer')
+        : 'Not provided');
 
   return (
     <>
@@ -340,6 +371,65 @@ export function SupplierOnboardingOperatorView({
             </p>
           </div>
         </div>
+
+        {/* H-8: Bank details (masked, with reveal toggle) */}
+        {paymentMethodType === 'bank' && bankAccountName && (
+          <div className="p-4 border-b">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Bank details</p>
+              <button
+                type="button"
+                onClick={() => setShowFullBank((v) => !v)}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                {showFullBank ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                {showFullBank ? 'Hide' : 'Reveal'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Account name</p>
+                <p className="text-sm font-medium">{bankAccountName}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">BSB</p>
+                <p className="text-sm font-mono">{showFullBank ? unmaskNumber(bsb) : maskNumber(bsb)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Account number</p>
+                <p className="text-sm font-mono">{showFullBank ? unmaskNumber(accountNumber) : maskNumber(accountNumber)}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* H-8: Alternative payment notes */}
+        {paymentMethodType !== 'bank' && altPaymentNotes && (
+          <div className="p-4 border-b">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Alternative payment instructions</p>
+            <p className="text-sm whitespace-pre-wrap text-foreground/80">{altPaymentNotes}</p>
+          </div>
+        )}
+
+        {/* H-8: Attachments */}
+        {attachments.length > 0 && (
+          <div className="p-4 border-b">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Supporting attachments</p>
+            <ul className="space-y-1.5">
+              {attachments.map((att) => (
+                <li key={att.id} className="flex items-center gap-2">
+                  <Paperclip className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-sm text-foreground truncate">
+                    {att.filename}
+                  </span>
+                  <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                    {att.mimeType?.split('/')[1]?.toUpperCase() ?? 'FILE'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Checklist */}
         <div className="p-4 border-b">

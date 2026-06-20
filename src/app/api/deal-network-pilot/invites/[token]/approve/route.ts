@@ -105,8 +105,8 @@ export async function POST(
       void (async () => {
         try {
           const deal = result.deal;
-          const dealPayload = deal.deal_payload as { dealName?: string };
-          const dealName = dealPayload.dealName ?? 'Your project';
+          // result.deal is a RecentDeal domain object — use dealName directly, not deal_payload
+          const dealName = deal.dealName ?? 'Your project';
 
           // 1. Generate draft invoice from commercial terms
           const input = buildSupplierOnboardingInput(result.participant, {
@@ -127,7 +127,7 @@ export async function POST(
             subtotal: derived.subtotal,
             gstAmount: derived.gstAmount,
             total: derived.total,
-            gstIncluded: derived.gstIncluded,
+            gstIncluded: derived.gstStatus === 'yes',
             gstStatus: derived.gstStatus,
             dueDate: derived.dueDate ?? null,
             lineItems: [
@@ -135,7 +135,7 @@ export async function POST(
                 description: derived.description,
                 quantity: 1,
                 unitAmount: derived.subtotal,
-                taxType: derived.gstIncluded ? 'INPUT' : 'NONE',
+                taxType: derived.gstStatus === 'yes' ? 'INPUT' : 'NONE',
               },
             ],
           };
@@ -145,35 +145,23 @@ export async function POST(
           const tokenData = createPaymentSetupToken();
           await persistPaymentSetupToken(result.participant.id, tokenData);
 
-          // 3. Dispatch supplier_invoice_generated notification
-          if (org) {
-            void dispatchCommercialNotification({
-              organizationId: org.id,
-              eventKind: 'supplier_invoice_generated',
-              projectId: deal.id,
-              participantId: result.participant.id,
-              participantName: result.participant.name,
-            });
-          }
+          // 3. Email supplier (tracked for H-4 notification accuracy) — see step 4 below
 
           // 4. Email supplier if they have an email address
           const supplierEmail = result.participant.email;
+          let emailDispatched = false;
           if (supplierEmail) {
-            const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.VERCEL_URL
-              ? `https://${process.env.VERCEL_URL}`
-              : 'https://app.provvypay.com';
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL
+              ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://app.provvypay.com');
             const portalUrl = `${appUrl}/payment-setup/${tokenData.token}`;
             const invoiceTotal = new Intl.NumberFormat('en-AU', {
               style: 'currency',
               currency: derived.currency,
             }).format(derived.total);
 
-            // Get operator display name
-            const ownerRow = await prisma.users.findUnique({
-              where: { id: owner.user_id },
-              select: { email: true },
-            }).catch(() => null);
-            const operatorName = ownerRow?.email?.split('@')[0] ?? 'Your organiser';
+            // Operator display name: use the organisation name since users are Supabase-managed
+            // (no Prisma `users` model — auth is in Supabase, not the application database).
+            const operatorName = org?.name ?? 'Your organiser';
 
             const emailContent = buildPaymentSetupInviteEmail({
               supplierName: result.participant.name,
@@ -184,15 +172,35 @@ export async function POST(
               expiresAt: tokenData.tokenExpiresAt,
             });
 
-            await sendEmail({
-              to: supplierEmail,
-              subject: emailContent.subject,
-              html: emailContent.html,
-              text: emailContent.text,
-              tags: [
-                { name: 'category', value: 'payment-setup' },
-                { name: 'participant_id', value: result.participant.id },
-              ],
+            try {
+              await sendEmail({
+                to: supplierEmail,
+                subject: emailContent.subject,
+                html: emailContent.html,
+                text: emailContent.text,
+                tags: [
+                  { name: 'category', value: 'payment-setup' },
+                  { name: 'participant_id', value: result.participant.id },
+                ],
+              });
+              emailDispatched = true;
+            } catch (emailErr) {
+              log.error('post-approval: email dispatch failed', undefined, {
+                participantId: result.participant.id,
+                error: emailErr instanceof Error ? emailErr.message : String(emailErr),
+              });
+            }
+          }
+
+          // H-4: Re-dispatch notification now we know whether email was actually sent
+          if (org) {
+            void dispatchCommercialNotification({
+              organizationId: org.id,
+              eventKind: 'supplier_invoice_generated',
+              projectId: deal.id,
+              participantId: result.participant.id,
+              participantName: result.participant.name,
+              emailDispatched,
             });
           }
         } catch (err) {

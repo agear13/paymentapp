@@ -106,7 +106,7 @@ export function ParticipantOnboardingStatusCard({
 
   const ctaHref = config.useReviewPath
     ? projectOperatorReviewPath(projectId, participant.id)
-    : projectSupplierOnboardingPath(projectId, participant.id);
+    : projectOperatorReviewPath(projectId, participant.id); // H-1: always route operator to the review/prep screen
 
   return (
     <div

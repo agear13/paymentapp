@@ -47,18 +47,22 @@ type NotificationContext = {
   participantId?: string;
   amount?: number;
   currency?: string;
+  /** H-4: whether a supplier portal email was actually sent */
+  emailDispatched?: boolean;
 };
 
 const TEMPLATES: Partial<Record<CommercialEventKind, CommercialNotificationTemplate>> = {
   agreement_approved: {
     title: (ctx) => `${ctx.participantName} approved the agreement`,
     message: (ctx) =>
-      `${ctx.participantName} has accepted the commercial terms. A payment setup link has been sent to them automatically.`,
+      ctx.emailDispatched
+        ? `${ctx.participantName} has accepted the commercial terms. A payment setup link has been sent to them automatically.`
+        : `${ctx.participantName} has accepted the commercial terms. They do not have an email on record — send the payment setup link manually.`,
     consequence: () => 'Payment setup unlocks invoice generation and settlement.',
     action: 'Prepare for payment',
     actionPath: (ctx) =>
       ctx.participantId
-        ? `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants/${encodeURIComponent(ctx.participantId)}/onboard`
+        ? `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants/${encodeURIComponent(ctx.participantId)}/review`
         : `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants?focus=onboarding`,
   },
 
@@ -99,12 +103,14 @@ const TEMPLATES: Partial<Record<CommercialEventKind, CommercialNotificationTempl
   supplier_invoice_generated: {
     title: (ctx) => `Draft invoice generated for ${ctx.participantName}`,
     message: (ctx) =>
-      `A draft invoice was automatically generated for ${ctx.participantName} from the approved commercial terms. A payment setup link has been emailed to them.`,
+      ctx.emailDispatched
+        ? `A draft invoice was automatically generated for ${ctx.participantName} from the approved commercial terms. A payment setup link has been emailed to them.`
+        : `A draft invoice was automatically generated for ${ctx.participantName}. They do not have an email on record — send the payment setup link manually.`,
     consequence: () => 'The supplier will confirm the invoice and provide payment details.',
     action: 'View payment setup',
     actionPath: (ctx) =>
       ctx.participantId
-        ? `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants/${encodeURIComponent(ctx.participantId)}/onboard`
+        ? `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants/${encodeURIComponent(ctx.participantId)}/review`
         : `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/participants?focus=onboarding`,
   },
 
@@ -198,6 +204,8 @@ export type DispatchCommercialNotificationInput = {
   amount?: number;
   /** Optional currency. */
   currency?: string;
+  /** H-4: Whether a supplier email was actually dispatched for this event. */
+  emailDispatched?: boolean;
 };
 
 /* ─── Idempotency key ────────────────────────────────────────────────────── */
@@ -234,6 +242,7 @@ export async function dispatchCommercialNotification(
     participantId: input.participantId,
     amount: input.amount,
     currency: input.currency,
+    emailDispatched: input.emailDispatched,
   };
 
   try {

@@ -43,7 +43,10 @@ export function resolveCommercialWorkflowDestination(
       return projectApprovalCentrePath(projectId);
 
     case 'supplier_onboarding':
-      return projectSupplierOnboardingPath(projectId, participantId);
+      // H-1: operator-initiated flows go to review/prep page, not the supplier's own form
+      return participantId
+        ? projectOperatorReviewPath(projectId, participantId)
+        : projectSupplierOnboardingPath(projectId);
 
     case 'operator_review':
       return participantId

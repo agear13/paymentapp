@@ -97,6 +97,8 @@ export type PaymentSetupState = {
   xeroInvoiceNumber?: string;
   xeroExportedAt?: string;
   xeroExportedBy?: string;
+  /** Timestamp of the most recent export attempt (set on both success and failure). */
+  xeroLastAttemptAt?: string;
   xeroSyncStatus?: 'pending' | 'synced' | 'failed';
   xeroFailureReason?: string | null;
 };

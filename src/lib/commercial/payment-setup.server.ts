@@ -184,21 +184,23 @@ export async function persistXeroExport(
 
   const cur = row.participant_payload as unknown as DemoParticipant;
   const now = new Date().toISOString();
+  const succeeded = xeroData.xeroSyncStatus === 'synced';
 
   const next: DemoParticipant = {
     ...cur,
     paymentSetup: {
       ...cur.paymentSetup,
-      xeroContactId: xeroData.xeroContactId,
-      xeroInvoiceId: xeroData.xeroInvoiceId,
-      xeroInvoiceNumber: xeroData.xeroInvoiceNumber,
-      xeroExportedAt: now,
-      xeroExportedBy: userId,
+      xeroContactId: xeroData.xeroContactId !== 'error' ? xeroData.xeroContactId : cur.paymentSetup?.xeroContactId,
+      xeroInvoiceId: xeroData.xeroInvoiceId !== 'error' ? xeroData.xeroInvoiceId : cur.paymentSetup?.xeroInvoiceId,
+      xeroInvoiceNumber: xeroData.xeroInvoiceNumber !== 'error' ? xeroData.xeroInvoiceNumber : cur.paymentSetup?.xeroInvoiceNumber,
+      // Only stamp xeroExportedAt on success — failure must not block retry
+      ...(succeeded ? { xeroExportedAt: now, xeroExportedBy: userId } : {}),
+      xeroLastAttemptAt: now,
       xeroSyncStatus: xeroData.xeroSyncStatus,
-      xeroFailureReason: xeroData.failureReason ?? null,
-      // Update the draft invoice status
+      xeroFailureReason: succeeded ? null : (xeroData.failureReason ?? 'Unknown error'),
+      // Update the draft invoice status only on success
       draftInvoice: cur.paymentSetup?.draftInvoice
-        ? { ...cur.paymentSetup.draftInvoice, status: 'EXPORTED_TO_XERO' as const }
+        ? { ...cur.paymentSetup.draftInvoice, ...(succeeded ? { status: 'EXPORTED_TO_XERO' as const } : {}) }
         : cur.paymentSetup?.draftInvoice,
     },
     // Legacy: operator field

@@ -109,6 +109,7 @@ export async function createSupplierBillInXero(
     xeroContactId: contact.contactID,
     xeroInvoiceId: xeroInvoice.invoiceID,
     xeroInvoiceNumber: xeroInvoice.invoiceNumber ?? xeroInvoice.invoiceID,
-    status: xeroInvoice.status ?? 'DRAFT',
+    // xeroInvoice.status is Invoice.StatusEnum (xero-node enum) — normalise to string
+    status: xeroInvoice.status?.toString() ?? 'DRAFT',
   };
 }

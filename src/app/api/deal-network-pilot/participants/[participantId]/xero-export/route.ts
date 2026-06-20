@@ -63,8 +63,8 @@ export async function POST(
       );
     }
 
-    // Prevent double-export unless forced
-    if (existing.paymentSetup?.xeroExportedAt) {
+    // Prevent double-export of successful exports; always allow retry after failure
+    if (existing.paymentSetup?.xeroExportedAt && existing.paymentSetup?.xeroSyncStatus === 'synced') {
       return NextResponse.json(
         {
           error: 'Already exported to Xero.',

@@ -11,6 +11,14 @@ import {
   buildSupplierVerification,
 } from '@/lib/commercial/supplier-onboarding-domain';
 import type { StoredOnboardingState, RejectionMetadata } from '@/lib/commercial/supplier-onboarding-domain';
+import {
+  createPaymentSetupToken,
+  persistPaymentSetupToken,
+} from '@/lib/commercial/payment-setup.server';
+import { sendEmail } from '@/lib/email/client';
+import { buildPaymentSetupInviteEmail } from '@/lib/email/templates/payment-setup-invite';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
+import { log } from '@/lib/logger';
 import { v4 as uuidv4 } from 'uuid';
 
 const rejectBodySchema = z.object({
@@ -105,10 +113,58 @@ export async function POST(
     );
     await syncPilotSnapshotForUser(user.id, snapshot.deals, nextParticipants);
 
+    // Regenerate payment setup token so the supplier can resubmit via a new secure link
+    let newPortalUrl: string | null = null;
+    void (async () => {
+      try {
+        const tokenData = createPaymentSetupToken();
+        await persistPaymentSetupToken(participantId, tokenData);
+
+        const supplierEmail = existing.email;
+        if (supplierEmail) {
+          const org = await getOrganizationForAuthenticatedUser(user.id);
+          const dealName = snapshot.deals[0]?.dealName ?? 'Your project';
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL
+            ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://app.provvypay.com');
+          const portalUrl = `${appUrl}/payment-setup/${tokenData.token}`;
+          newPortalUrl = portalUrl;
+          const invoiceTotal = existing.paymentSetup?.draftInvoice
+            ? new Intl.NumberFormat('en-AU', { style: 'currency', currency: existing.paymentSetup.draftInvoice.currency }).format(existing.paymentSetup.draftInvoice.total)
+            : '';
+
+          const emailContent = buildPaymentSetupInviteEmail({
+            supplierName: existing.name,
+            operatorName: org?.name ?? 'Your organiser',
+            projectName: dealName,
+            invoiceTotal,
+            portalUrl,
+            expiresAt: tokenData.tokenExpiresAt,
+          });
+
+          await sendEmail({
+            to: supplierEmail,
+            subject: `Action required: Changes requested to your payment information for ${dealName}`,
+            html: emailContent.html.replace(
+              'Complete your payment information',
+              'Changes have been requested — please update your payment information'
+            ),
+            text: emailContent.text,
+            tags: [{ name: 'category', value: 'payment-setup-revision' }],
+          });
+        }
+      } catch (err) {
+        log.error('reject: failed to regenerate payment setup token', undefined, {
+          participantId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
+
     return NextResponse.json({
       participant: persisted,
       lifecycle: 'REJECTED',
       reason: body.reason,
+      portalUrl: newPortalUrl,
     });
   } catch (e: unknown) {
     if (e instanceof z.ZodError) {
