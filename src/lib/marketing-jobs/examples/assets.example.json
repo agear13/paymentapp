@@ -1,0 +1,34 @@
+{
+  "assets": [
+    {
+      "type": "instagram-carousel",
+      "preview": "https://example.com/previews/instagram-carousel.png",
+      "canvaUrl": "https://www.canva.com/design/example-carousel",
+      "downloadUrl": "https://example.com/downloads/instagram-carousel.zip"
+    },
+    {
+      "type": "facebook-post",
+      "preview": "https://example.com/previews/facebook-post.png",
+      "canvaUrl": "https://www.canva.com/design/example-facebook",
+      "downloadUrl": "https://example.com/downloads/facebook-post.png"
+    },
+    {
+      "type": "pinterest-pin",
+      "preview": "https://example.com/previews/pinterest-pin.png",
+      "canvaUrl": "https://www.canva.com/design/example-pinterest",
+      "downloadUrl": "https://example.com/downloads/pinterest-pin.png"
+    },
+    {
+      "type": "instagram-story",
+      "preview": "https://example.com/previews/instagram-story.png",
+      "canvaUrl": "https://www.canva.com/design/example-story",
+      "downloadUrl": "https://example.com/downloads/instagram-story.mp4"
+    },
+    {
+      "type": "newsletter-header",
+      "preview": "https://example.com/previews/newsletter-header.png",
+      "canvaUrl": "https://www.canva.com/design/example-newsletter",
+      "downloadUrl": "https://example.com/downloads/newsletter-header.png"
+    }
+  ]
+}

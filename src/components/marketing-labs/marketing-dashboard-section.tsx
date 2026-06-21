@@ -9,11 +9,16 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import type { MarketingWorkspaceState } from '@/lib/marketing-jobs/types';
 import {
-  MARKETING_DASHBOARD_PLACEHOLDER,
-  MARKETING_RECENT_ACTIVITY,
-} from '@/lib/marketing-labs/placeholder-data';
+  buildDashboardActivity,
+  selectReadyAssetCount,
+  selectVisualGenerationJob,
+} from '@/lib/marketing-jobs';
+import { MARKETING_DEMO_BRAND } from '@/lib/marketing-jobs/demo-brand';
 import { MarketingEmptyState } from '@/components/marketing-labs/marketing-empty-state';
+import { MARKETING_EMPTY_STATES } from '@/lib/marketing-labs/empty-states';
+import { MARKETING_DASHBOARD_PLACEHOLDER } from '@/lib/marketing-labs/placeholder-data';
 
 function SummaryMetricCard({
   label,
@@ -46,36 +51,47 @@ function SummaryMetricCard({
   );
 }
 
-export function MarketingDashboardSection() {
+type MarketingDashboardSectionProps = {
+  state: MarketingWorkspaceState;
+};
+
+export function MarketingDashboardSection({ state }: MarketingDashboardSectionProps) {
+  const visualJob = selectVisualGenerationJob(state.jobs);
+  const readyAssets = selectReadyAssetCount(state.assets);
+  const activity = buildDashboardActivity(state);
   const metrics = MARKETING_DASHBOARD_PLACEHOLDER;
-  const activity = MARKETING_RECENT_ACTIVITY;
+
+  const companyBrainStatus =
+    metrics.companyBrainStatus === 'Built' ? 'Built' : 'Pending Build';
 
   return (
     <section id="marketing-dashboard" className="scroll-mt-6 space-y-6">
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Marketing Dashboard</h2>
         <p className="text-sm text-muted-foreground">
-          Overview of your AI Marketing Team activity and campaign credits.
+          {MARKETING_DEMO_BRAND} marketing overview — credits, Creative Assets, and time saved.
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <SummaryMetricCard
           label="Company Brain"
-          value={metrics.companyBrainStatus}
-          accent={metrics.companyBrainStatus === 'Built' ? 'success' : 'default'}
+          value={companyBrainStatus}
+          accent={companyBrainStatus === 'Built' ? 'success' : 'default'}
         />
         <SummaryMetricCard
           label="Campaign Credits"
           value={`${metrics.campaignCreditsRemaining} Remaining`}
         />
         <SummaryMetricCard
-          label="Campaigns Generated"
-          value={String(metrics.campaignsGenerated)}
+          label="Visual Job"
+          value={visualJob ? visualJob.status : 'Not started'}
+          accent={visualJob?.status === 'completed' ? 'success' : 'default'}
         />
         <SummaryMetricCard
-          label="Assets Generated"
-          value={String(metrics.assetsGenerated)}
+          label="Creative Assets Ready"
+          value={String(readyAssets)}
+          accent={readyAssets > 0 ? 'success' : 'default'}
         />
         <SummaryMetricCard
           label="Hours Saved"
@@ -86,11 +102,11 @@ export function MarketingDashboardSection() {
       <Card>
         <CardHeader>
           <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>Latest updates from your AI Marketing Team.</CardDescription>
+          <CardDescription>Live orchestration updates from your marketing workspace.</CardDescription>
         </CardHeader>
         <CardContent>
           {activity.length === 0 ? (
-            <MarketingEmptyState message="Activity will appear here as your AI Marketing Team completes work." />
+            <MarketingEmptyState content={MARKETING_EMPTY_STATES.dashboardActivity} ctaHref="#marketing-command-centre" />
           ) : (
             <ul className="space-y-3">
               {activity.map((item) => (

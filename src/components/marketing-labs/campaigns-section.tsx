@@ -3,7 +3,6 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Paperclip, Sparkles } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -23,54 +22,125 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import type { MarketingJobEngine } from '@/lib/marketing-jobs/job-engine';
+import { MARKETING_DEMO_BRAND } from '@/lib/marketing-jobs/demo-brand';
+import { marketingToasts } from '@/lib/marketing-jobs/notifications';
 import {
   CAMPAIGN_MEMBERSHIP_PLANS,
   CAMPAIGN_TYPE_OPTIONS,
+  THIRSTY_TURTL_CAMPAIGN_HISTORY,
 } from '@/lib/marketing-labs/placeholder-data';
+import { MarketingActionButton } from '@/components/marketing-labs/marketing-action-button';
+import { MarketingEmptyState } from '@/components/marketing-labs/marketing-empty-state';
+import { MARKETING_EMPTY_STATES } from '@/lib/marketing-labs/empty-states';
 
-export function CampaignsSection() {
+type CampaignsSectionProps = {
+  engine: MarketingJobEngine;
+};
+
+export function CampaignsSection({ engine }: CampaignsSectionProps) {
   const [campaignType, setCampaignType] = React.useState('');
   const [businessGoal, setBusinessGoal] = React.useState('');
   const [targetAudience, setTargetAudience] = React.useState('');
   const [relatedProducts, setRelatedProducts] = React.useState('');
   const [preferredDeadline, setPreferredDeadline] = React.useState('');
   const [additionalNotes, setAdditionalNotes] = React.useState('');
-  const [submitting, setSubmitting] = React.useState(false);
+
+  const handleGenerate = async () => {
+    engine.createVisualGenerationJob();
+    marketingToasts.teamStarted(() => {
+      document.querySelector('#marketing-command-centre')?.scrollIntoView({ behavior: 'smooth' });
+    });
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitting(true);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      toast.success('Campaign request submitted. Our AI Marketing Team will review it shortly.');
-      setCampaignType('');
-      setBusinessGoal('');
-      setTargetAudience('');
-      setRelatedProducts('');
-      setPreferredDeadline('');
-      setAdditionalNotes('');
-    } finally {
-      setSubmitting(false);
-    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    marketingToasts.campaignGenerated();
+    setCampaignType('');
+    setBusinessGoal('');
+    setTargetAudience('');
+    setRelatedProducts('');
+    setPreferredDeadline('');
+    setAdditionalNotes('');
   };
 
   return (
     <section id="campaigns" className="scroll-mt-6 space-y-10">
       <div className="space-y-6">
         <div>
+          <h2 className="text-xl font-semibold tracking-tight">Campaign History</h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Past and active campaigns for {MARKETING_DEMO_BRAND} — planned by the AI Marketing Team.
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent campaigns</CardTitle>
+            <CardDescription>Education-led campaigns across blog, social, and email.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {THIRSTY_TURTL_CAMPAIGN_HISTORY.length === 0 ? (
+              <MarketingEmptyState content={MARKETING_EMPTY_STATES.campaigns} onCta={handleGenerate} />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Campaign</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Creative Assets</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {THIRSTY_TURTL_CAMPAIGN_HISTORY.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-medium">{row.title}</TableCell>
+                      <TableCell>{new Date(row.date).toLocaleDateString()}</TableCell>
+                      <TableCell>{row.assets}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{row.status}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+          <CardFooter>
+            <MarketingActionButton
+              idleLabel="Generate Campaign"
+              loadingLabel="Generating…"
+              successLabel="Campaign created ✓"
+              onAction={handleGenerate}
+            />
+          </CardFooter>
+        </Card>
+      </div>
+
+      <div className="space-y-6">
+        <div>
           <h2 className="text-xl font-semibold tracking-tight">Campaign Requests</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Request a complete AI-generated marketing campaign powered by your Company Brain.
+            Request a complete campaign powered by your Company Brain and the AI Marketing Team.
           </p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>New campaign request</CardTitle>
-            <CardDescription>
-              Share your goals and we&apos;ll produce a full campaign package.
-            </CardDescription>
+            <CardDescription>Share your goals — the AI Marketing Team produces the full Campaign Package.</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-5">
@@ -97,7 +167,7 @@ export function CampaignsSection() {
                     id="business-goal"
                     value={businessGoal}
                     onChange={(event) => setBusinessGoal(event.target.value)}
-                    placeholder="e.g. Increase sign-ups for summer events"
+                    placeholder="e.g. Increase educational traffic for Gentle Cleanser"
                   />
                 </div>
 
@@ -107,7 +177,7 @@ export function CampaignsSection() {
                     id="target-audience"
                     value={targetAudience}
                     onChange={(event) => setTargetAudience(event.target.value)}
-                    placeholder="e.g. Event promoters aged 25–45"
+                    placeholder="e.g. Adults with sensitive skin"
                   />
                 </div>
 
@@ -117,7 +187,7 @@ export function CampaignsSection() {
                     id="related-products"
                     value={relatedProducts}
                     onChange={(event) => setRelatedProducts(event.target.value)}
-                    placeholder="e.g. VIP packages, early-bird tickets"
+                    placeholder="e.g. Gentle Cleanser, Daily SPF"
                   />
                 </div>
 
@@ -137,7 +207,7 @@ export function CampaignsSection() {
                     id="additional-notes"
                     value={additionalNotes}
                     onChange={(event) => setAdditionalNotes(event.target.value)}
-                    placeholder="Share context, references, or constraints for the campaign."
+                    placeholder="Brand constraints, seasonal angles, or competitor context."
                     rows={4}
                   />
                 </div>
@@ -148,7 +218,7 @@ export function CampaignsSection() {
                     <div className="flex items-start gap-3">
                       <Paperclip className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                       <p className="text-sm text-muted-foreground">
-                        Upload briefs, brand assets, or reference materials.
+                        Upload briefs, brand assets, or reference materials for {MARKETING_DEMO_BRAND}.
                       </p>
                     </div>
                     <Button type="button" variant="outline" size="sm" disabled>
@@ -159,9 +229,14 @@ export function CampaignsSection() {
               </div>
             </CardContent>
             <CardFooter className="border-t pt-6">
-              <Button type="submit" disabled={submitting}>
-                {submitting ? 'Submitting…' : 'Submit Campaign Request'}
-              </Button>
+              <MarketingActionButton
+                idleLabel="Submit Campaign Request"
+                loadingLabel="Submitting…"
+                successLabel="Request submitted ✓"
+                onAction={async () => {
+                  await handleSubmit({ preventDefault: () => {} } as React.FormEvent<HTMLFormElement>);
+                }}
+              />
             </CardFooter>
           </form>
         </Card>
@@ -171,7 +246,7 @@ export function CampaignsSection() {
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Campaign Membership</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Choose how many AI-generated marketing campaigns you&apos;d like each month.
+            Monthly campaign credits for continuous {MARKETING_DEMO_BRAND} marketing.
           </p>
         </div>
 
@@ -180,7 +255,7 @@ export function CampaignsSection() {
             <Card
               key={plan.id}
               className={cn(
-                'relative gap-4 py-6',
+                'relative gap-4 py-6 transition-shadow duration-300',
                 plan.featured && 'border-primary shadow-md ring-1 ring-primary/20'
               )}
             >
@@ -200,7 +275,6 @@ export function CampaignsSection() {
                 {plan.description ? (
                   <p className="text-sm text-muted-foreground">{plan.description}</p>
                 ) : null}
-                <p className="pt-2 text-sm font-medium text-muted-foreground">Coming Soon</p>
               </CardHeader>
               <CardContent className="px-6">
                 <ul className="space-y-2 text-sm text-muted-foreground">

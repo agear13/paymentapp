@@ -11,28 +11,23 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { MARKETING_DEMO_BRAND } from '@/lib/marketing-jobs/demo-brand';
 import { COMPANY_BRAIN_CATEGORIES } from '@/lib/marketing-labs/placeholder-data';
-import { MarketingEmptyState } from '@/components/marketing-labs/marketing-empty-state';
 
 export function CompanyBrainSection() {
   const categories = COMPANY_BRAIN_CATEGORIES;
-  const hasCompanyBrain = categories.some((category) => category.status === 'Complete');
 
   return (
     <section id="company-brain" className="scroll-mt-6 space-y-6">
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Company Brain</h2>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Teach AI everything about your business. Once submitted, our team builds your Company Brain
-          and you&apos;ll be notified when it&apos;s ready.
+          Everything the AI Marketing Team knows about {MARKETING_DEMO_BRAND} — brand, products, customers, and positioning.
         </p>
       </div>
 
-      {!hasCompanyBrain && categories.length === 0 ? (
-        <MarketingEmptyState message="Build your Company Brain to unlock campaign generation." />
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {categories.map((category) => {
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-in fade-in duration-500">
+        {categories.map((category) => {
             const Icon = category.icon;
             const isComplete = category.status === 'Complete';
 
@@ -69,10 +64,9 @@ export function CompanyBrainSection() {
               </Card>
             );
           })}
-        </div>
-      )}
+      </div>
 
-      <Card className="border-primary/15 bg-gradient-to-br from-primary/[0.04] to-transparent">
+      <Card className="border-primary/15 bg-gradient-to-br from-primary/[0.04] to-transparent animate-in fade-in duration-500">
         <CardHeader>
           <CardTitle>What happens once you submit</CardTitle>
           <CardDescription>

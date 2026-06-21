@@ -21,5 +21,5 @@ export default async function MarketingPage() {
     redirect('/onboarding');
   }
 
-  return <MarketingPageClient />;
+  return <MarketingPageClient companyId={organization.id} companyName={organization.name} />;
 }

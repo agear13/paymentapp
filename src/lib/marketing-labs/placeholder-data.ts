@@ -7,6 +7,7 @@ import {
   Megaphone,
   Sparkles,
 } from 'lucide-react';
+import { MARKETING_DEMO_BRAND } from '@/lib/marketing-jobs/demo-brand';
 
 export type CompanyBrainStatus = 'Built' | 'Pending Build';
 export type SectionCompletionStatus = 'Pending' | 'Complete';
@@ -48,7 +49,15 @@ export type AiTeamReportRow = {
   status: 'Completed' | 'In progress' | 'Pending';
 };
 
-/** Placeholder dashboard metrics — replace with API data later. */
+export type CampaignHistoryRow = {
+  id: string;
+  title: string;
+  date: string;
+  status: 'Complete' | 'In progress' | 'Ready for Publishing';
+  assets: number;
+};
+
+/** Thirsty Turtl demo dashboard metrics. */
 export const MARKETING_DASHBOARD_PLACEHOLDER = {
   companyBrainStatus: 'Built' as CompanyBrainStatus,
   campaignCreditsRemaining: 2,
@@ -58,54 +67,78 @@ export const MARKETING_DASHBOARD_PLACEHOLDER = {
 };
 
 export const MARKETING_RECENT_ACTIVITY: MarketingActivityItem[] = [
-  { id: '1', label: 'Company Brain completed', completed: true },
-  { id: '2', label: 'Summer campaign delivered', completed: true },
-  { id: '3', label: 'AI Team Report generated', completed: true },
-  { id: '4', label: 'Autumn campaign submitted', completed: false },
-  { id: '5', label: 'Awaiting review', completed: false },
+  { id: '1', label: `${MARKETING_DEMO_BRAND} Company Brain completed`, completed: true },
+  { id: '2', label: 'Gentle Cleanser Education Campaign delivered', completed: true },
+  { id: '3', label: 'AI Team Performance Report generated', completed: true },
+  { id: '4', label: 'Sensitive Skin Mistakes campaign in progress', completed: false },
+  { id: '5', label: 'Publishing approval pending', completed: false },
+];
+
+export const THIRSTY_TURTL_CAMPAIGN_HISTORY: CampaignHistoryRow[] = [
+  {
+    id: '1',
+    title: 'Gentle Cleanser Education Campaign',
+    date: '2026-06-18',
+    status: 'In progress',
+    assets: 12,
+  },
+  {
+    id: '2',
+    title: 'Daily SPF Awareness Campaign',
+    date: '2026-05-04',
+    status: 'Complete',
+    assets: 11,
+  },
+  {
+    id: '3',
+    title: 'Barrier Repair Serum Launch',
+    date: '2026-03-22',
+    status: 'Complete',
+    assets: 14,
+  },
 ];
 
 export const COMPANY_BRAIN_CATEGORIES: CompanyBrainCategory[] = [
   {
     id: 'business',
     title: 'Business',
-    description: 'Company overview, mission, values, and positioning.',
+    description: `${MARKETING_DEMO_BRAND} — barrier-respecting skincare rooted in science and simplicity.`,
     status: 'Complete',
     icon: Building2,
   },
   {
     id: 'customers',
     title: 'Customers',
-    description: 'Ideal customer profiles, segments, and pain points.',
+    description: 'Sensitive-skin beginners and ingredient-aware customers seeking gentle routines.',
     status: 'Complete',
     icon: Users,
   },
   {
     id: 'products',
     title: 'Products',
-    description: 'Product catalog, features, pricing, and differentiators.',
-    status: 'Pending',
+    description: 'Gentle Cleanser, Hydrating Serum, Daily SPF — education-led hero SKUs.',
+    status: 'Complete',
     icon: Package,
   },
   {
     id: 'brand',
     title: 'Brand',
-    description: 'Voice, tone, messaging pillars, and key narratives.',
-    status: 'Pending',
+    description: 'Calm confidence. Science-backed, approachable, never clinical.',
+    status: 'Complete',
     icon: Palette,
   },
   {
     id: 'marketing',
     title: 'Marketing',
-    description: 'Channels, past campaigns, and performance insights.',
-    status: 'Pending',
+    description: 'Educational-first content across Instagram, Pinterest, email, and LinkedIn.',
+    status: 'Complete',
     icon: Megaphone,
   },
   {
     id: 'visual-identity',
     title: 'Visual Identity',
-    description: 'Logos, colours, typography, and brand assets.',
-    status: 'Pending',
+    description: 'Soft natural light, muted earth tones, turtle-inspired brand accents.',
+    status: 'Complete',
     icon: Sparkles,
   },
 ];
@@ -129,9 +162,9 @@ export const CAMPAIGN_MEMBERSHIP_PLANS: MembershipPlan[] = [
     creditsLabel: '2 Campaign Credits / Month',
     features: [
       'AI Marketing Team',
-      'Campaign Reports',
-      'Support',
-      'Content Deliverables',
+      'Client Report',
+      'AI Team Performance Report',
+      'Creative Assets',
     ],
     ctaLabel: 'Subscribe',
     stripeCheckoutUrl: STRIPE_CHECKOUT_PLACEHOLDER_URL,
@@ -142,9 +175,9 @@ export const CAMPAIGN_MEMBERSHIP_PLANS: MembershipPlan[] = [
     creditsLabel: '4 Campaign Credits / Month',
     features: [
       'AI Marketing Team',
-      'Campaign Reports',
-      'Support',
-      'Content Deliverables',
+      'Client Report',
+      'AI Team Performance Report',
+      'Creative Assets',
     ],
     ctaLabel: 'Subscribe',
     stripeCheckoutUrl: STRIPE_CHECKOUT_PLACEHOLDER_URL,
@@ -154,12 +187,12 @@ export const CAMPAIGN_MEMBERSHIP_PLANS: MembershipPlan[] = [
     id: 'one-off',
     name: 'One-Off Campaign',
     creditsLabel: '1 Campaign Credit',
-    description: 'Perfect for occasional campaigns.',
+    description: `Perfect for a single ${MARKETING_DEMO_BRAND} campaign push.`,
     features: [
       'AI Marketing Team',
-      'Campaign Reports',
-      'Support',
-      'Content Deliverables',
+      'Client Report',
+      'AI Team Performance Report',
+      'Creative Assets',
     ],
     ctaLabel: 'Purchase Campaign',
     stripeCheckoutUrl: STRIPE_CHECKOUT_PLACEHOLDER_URL,
@@ -167,7 +200,22 @@ export const CAMPAIGN_MEMBERSHIP_PLANS: MembershipPlan[] = [
 ];
 
 export const AI_TEAM_REPORTS_PLACEHOLDER: AiTeamReportRow[] = [
-  { id: '1', campaign: 'Summer Campaign', date: '2026-05-12', status: 'Completed' },
-  { id: '2', campaign: 'Product Launch', date: '2026-04-03', status: 'Completed' },
-  { id: '3', campaign: 'Winter Promotion', date: '2026-02-18', status: 'Completed' },
+  {
+    id: '1',
+    campaign: `${MARKETING_DEMO_BRAND} — Daily SPF Awareness`,
+    date: '2026-05-04',
+    status: 'Completed',
+  },
+  {
+    id: '2',
+    campaign: `${MARKETING_DEMO_BRAND} — Barrier Repair Launch`,
+    date: '2026-03-22',
+    status: 'Completed',
+  },
+  {
+    id: '3',
+    campaign: `${MARKETING_DEMO_BRAND} — Gentle Cleanser Education`,
+    date: '2026-06-18',
+    status: 'In progress',
+  },
 ];
