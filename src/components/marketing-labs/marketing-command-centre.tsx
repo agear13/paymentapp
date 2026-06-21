@@ -245,9 +245,7 @@ export function MarketingCommandCentre({
         <CreativeProductionCompletePanel
           importedCount={
             importReveal?.importedCount ??
-            selectReadyAssetCount(state.assets) ||
-            completion?.creativeAssetsProduced ??
-            0
+            (selectReadyAssetCount(state.assets) || (completion?.creativeAssetsProduced ?? 0))
           }
         />
       ) : null}
