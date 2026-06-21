@@ -230,7 +230,10 @@ export async function middleware(request: NextRequest) {
 
   // Route protection logic
   const isAuthRoute = pathname.startsWith('/auth');
-  const isDashboardRoute = pathname.startsWith('/dashboard');
+  const isDashboardRoute =
+    pathname.startsWith('/dashboard') ||
+    pathname === '/marketing' ||
+    pathname.startsWith('/marketing/');
   const restricted = isRestrictedPath(pathname);
 
   if (DEBUG_MIDDLEWARE) {
@@ -315,6 +318,8 @@ export const config = {
      * Public routes like /r/*, /review/*, /huntpay/*, /pay/*, etc. are not matched.
      */
     '/dashboard/:path*',
+    '/marketing',
+    '/marketing/:path*',
     '/auth/:path*',
   ],
 };

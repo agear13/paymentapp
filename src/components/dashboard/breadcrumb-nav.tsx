@@ -51,6 +51,7 @@ const pathTitles: Record<string, string> = {
   funding: 'Funding',
   activity: 'Activity',
   referrals: 'Referrals',
+  marketing: 'Marketing',
 };
 
 const SETTINGS_HOME = '/dashboard/settings/organization';

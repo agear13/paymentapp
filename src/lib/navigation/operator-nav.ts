@@ -19,6 +19,7 @@ import {
   Share2,
   Activity,
   Download,
+  Megaphone,
 } from 'lucide-react';
 import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
 
@@ -48,6 +49,7 @@ export const PAYOUTS_SETTLEMENTS_HREF = '/dashboard/payouts/settlements';
 export const REPORTS_LEDGER_HREF = '/dashboard/reports/ledger';
 export const REPORTS_EXPORTS_HREF = '/dashboard/reports/exports';
 export const REPORTS_AGREEMENT_INTELLIGENCE_HREF = '/dashboard/reports/agreement-intelligence';
+export const MARKETING_HREF = '/marketing';
 
 const DEAL_NETWORK_BASE = '/dashboard/partners/deal-network';
 
@@ -117,6 +119,12 @@ export function getOperatorNavSections(
         { title: 'Ledger', href: REPORTS_LEDGER_HREF, icon: BookOpen },
         { title: 'Export Center', href: REPORTS_EXPORTS_HREF, icon: Download },
       ],
+    },
+    {
+      id: 'marketing',
+      title: 'Marketing',
+      href: MARKETING_HREF,
+      icon: Megaphone,
     },
     {
       id: 'settings',
@@ -262,6 +270,10 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
 
   if (sectionId === 'reports') {
     return path === '/dashboard/reports' || path.startsWith('/dashboard/reports/');
+  }
+
+  if (href === MARKETING_HREF || sectionId === 'marketing') {
+    return path === MARKETING_HREF || path.startsWith(`${MARKETING_HREF}/`);
   }
 
   if (href.startsWith('/dashboard/settings') || sectionId === 'settings') {
