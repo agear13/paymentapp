@@ -39,6 +39,8 @@ export const CSRF_EXEMPT_PATH_PREFIXES = [
   '/api/agreement-analyzer/analytics',
   '/api/agreement-analyzer/calendly/webhook',
   '/api/agreement-analyzer/email/webhook',
+  // Payment setup supplier portal — authenticated by single-use URL token, not session CSRF.
+  '/api/payment-setup/',
 ] as const;
 
 export function isMutatingMethod(method: string): boolean {

@@ -517,8 +517,8 @@ describe('Step 5 — All Approved (preparing-payments)', () => {
     expect(ctx.continueHref).not.toBe(MERCHANT_STRIPE_HREF);
   });
 
-  it('continueLabel indicates supplier setup action', () => {
-    expect(ctx.continueLabel).toMatch(/supplier|onboarding/i);
+  it('continueLabel indicates payment setup action', () => {
+    expect(ctx.continueLabel).toBe('Complete payment setup');
   });
 
   it('completion percentage is 58', () => {

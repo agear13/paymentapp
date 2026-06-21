@@ -40,9 +40,8 @@ describe('operational blocker ownership', () => {
     expect(agreementBlocker?.unlocks).toContain('payout-ready');
   });
 
-  it('names operator as owner for supplier onboarding blockers', () => {
-    // Sprint 7.2: the post-approval gate is supplier onboarding (not payout confirmation).
-    // The blocker owner is still 'operator', but requiredAction is now 'Complete supplier onboarding'.
+  it('names operator as owner for payment setup blockers', () => {
+    // Post-approval gate is payment setup (bank details, ABN, GST) — operator-owned.
     const p = buildProjectParticipant({
       name: 'Coastal Media',
       role: 'Partner',
@@ -57,12 +56,12 @@ describe('operational blocker ownership', () => {
     p.payoutVerificationConfirmed = false;
 
     const blockers = deriveOperationalBlocker(p, 'deal-1');
-    // Owner is operator — the operator is responsible for collecting onboarding details.
-    // requiredAction reflects the canonical supplier onboarding workflow.
-    const onboardingBlocker = blockers.find(
-      (b) => b.owner === 'operator' && b.requiredAction.toLowerCase().includes('onboarding')
+    const paymentSetupBlocker = blockers.find(
+      (b) => b.owner === 'operator' && b.requiredAction.toLowerCase().includes('payment setup')
     );
-    expect(onboardingBlocker).toBeDefined();
-    expect(onboardingBlocker?.owner).toBe('operator');
+    expect(paymentSetupBlocker).toBeDefined();
+    expect(paymentSetupBlocker?.owner).toBe('operator');
+    expect(paymentSetupBlocker?.requiredAction).toBe('Complete payment setup');
+    expect(paymentSetupBlocker?.ctaLabel).toBe('Prepare for payment');
   });
 });
