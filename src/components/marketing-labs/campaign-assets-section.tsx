@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, ExternalLink, Eye } from 'lucide-react';
+import { CheckCircle2, Download, ExternalLink, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -24,9 +24,11 @@ import { campaignAssetStatusLabel, selectVisualGenerationJob } from '@/lib/marke
 import { MarketingEmptyState } from '@/components/marketing-labs/marketing-empty-state';
 import { MARKETING_EMPTY_STATES } from '@/lib/marketing-labs/empty-states';
 import { MarketingContextualLoader } from '@/components/marketing-labs/marketing-contextual-loader';
+import type { MarketingImportReveal } from '@/components/marketing-labs/marketing-import-reveal';
 
 type CampaignAssetsSectionProps = {
   state: MarketingWorkspaceState;
+  importReveal?: MarketingImportReveal | null;
 };
 
 function AssetActionButton({
@@ -88,13 +90,15 @@ function AssetRow({ asset }: { asset: CampaignAsset }) {
   );
 }
 
-export function CampaignAssetsSection({ state }: CampaignAssetsSectionProps) {
+export function CampaignAssetsSection({ state, importReveal }: CampaignAssetsSectionProps) {
   const assets = state.assets;
   const visualJob = selectVisualGenerationJob(state.jobs);
   const productionRunning =
     state.creativeDispatch.status === 'dispatched' &&
     state.creativeDispatch.creativeProductionStatus !== 'complete';
   const allReady = assets.length > 0 && assets.every((a) => a.status === 'ready');
+  const awaitingTableReveal = Boolean(importReveal && !importReveal.tableRevealed);
+  const assetLabel = importReveal?.importedCount === 1 ? 'asset' : 'assets';
 
   return (
     <section id="campaign-assets" className="scroll-mt-6 space-y-6 animate-in fade-in duration-500">
@@ -121,8 +125,19 @@ export function CampaignAssetsSection({ state }: CampaignAssetsSectionProps) {
               <MarketingContextualLoader context="creative-production" />
               <MarketingEmptyState content={MARKETING_EMPTY_STATES.creativeAssetsQueued} />
             </div>
+          ) : awaitingTableReveal ? (
+            <div
+              className="flex flex-col items-center justify-center gap-3 py-14 text-center animate-in fade-in duration-500"
+              aria-live="polite"
+            >
+              <CheckCircle2 className="size-10 text-[rgb(29,111,66)] animate-in zoom-in-95 duration-700" />
+              <p className="text-sm font-medium">Creative production complete</p>
+              <p className="text-sm text-muted-foreground">
+                {importReveal!.importedCount} {assetLabel} imported — loading your library…
+              </p>
+            </div>
           ) : (
-            <Table>
+            <Table className={importReveal?.tableRevealed ? 'animate-in fade-in duration-500' : undefined}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Asset</TableHead>

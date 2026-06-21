@@ -35,7 +35,7 @@ export const VISUAL_ASSET_CATALOG: CampaignAssetDefinition[] = [
   {
     type: 'pinterest-pin',
     label: 'Pinterest Pin',
-    importAliases: ['pinterest-pin', 'pinterest pin', 'pinterest'],
+    importAliases: ['pinterest-pin', 'pinterest pin', 'pinterest', 'pinterest pins'],
     creativeRequirements: [
       'Product Image',
       'Educational Headline',
@@ -45,7 +45,7 @@ export const VISUAL_ASSET_CATALOG: CampaignAssetDefinition[] = [
   {
     type: 'instagram-story',
     label: 'Instagram Story',
-    importAliases: ['instagram-story', 'instagram story', 'story'],
+    importAliases: ['instagram-story', 'instagram story', 'instagram stories', 'story'],
     creativeRequirements: [
       'Vertical Photography',
       'Swipe CTA',
@@ -78,8 +78,12 @@ export function createInitialCampaignAssets(campaignId: string, jobId?: string):
   }));
 }
 
-export function resolveAssetTypeFromImport(type: string): CampaignAssetType | null {
+/** Resolve legacy `type` or canonical `assetType` strings to a CampaignAssetType. */
+export function resolveAssetTypeFromImport(type: string | undefined | null): CampaignAssetType | null {
+  if (type == null) return null;
   const normalized = type.trim().toLowerCase();
+  if (!normalized) return null;
+
   const match = VISUAL_ASSET_CATALOG.find(
     (asset) =>
       asset.type === normalized ||

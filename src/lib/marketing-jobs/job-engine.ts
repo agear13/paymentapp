@@ -340,7 +340,7 @@ export class MarketingJobEngine {
   importGeneratedAssets(raw: unknown): { importedCount: number } {
     const parsed = parseImportedAssetsFile(raw);
     if (!parsed) {
-      throw new Error('Invalid assets.json format. Expected { "assets": [...] }.');
+      throw new Error('Invalid assets.json format. Expected an object with an assets array.');
     }
 
     const state = this.store.getState();

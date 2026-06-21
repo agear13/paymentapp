@@ -58,10 +58,15 @@ import {
 import { getDispatchManifestItems } from '@/lib/marketing-jobs/creative-team';
 import { isVisualJobInFlight, isVisualJobReadyForDispatch } from '@/lib/marketing-jobs/simulation';
 import { getSpecialistIcon } from '@/components/marketing-labs/specialist-icon';
+import { CreativeProductionCompletePanel } from '@/components/marketing-labs/creative-production-complete-panel';
+import type { MarketingImportReveal } from '@/components/marketing-labs/marketing-import-reveal';
+import { selectReadyAssetCount } from '@/lib/marketing-jobs/job-engine';
 
 type MarketingCommandCentreProps = {
   state: MarketingWorkspaceState;
   engine: MarketingJobEngine;
+  importReveal?: MarketingImportReveal | null;
+  onAssetsImported?: (importedCount: number) => void;
 };
 
 function statusBadgeClass(status: SpecialistPipelineEntry['status']): string {
@@ -80,9 +85,13 @@ function formatTime(iso?: string): string | null {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-export function MarketingCommandCentre({ state, engine }: MarketingCommandCentreProps) {
+export function MarketingCommandCentre({
+  state,
+  engine,
+  importReveal,
+  onAssetsImported,
+}: MarketingCommandCentreProps) {
   const [busy, setBusy] = React.useState(false);
-  const [importSuccess, setImportSuccess] = React.useState(false);
   const [approvalOpen, setApprovalOpen] = React.useState(false);
   const [selectedSpecialistId, setSelectedSpecialistId] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -140,13 +149,11 @@ export function MarketingCommandCentre({ state, engine }: MarketingCommandCentre
     event.target.value = '';
     if (!file) return;
     setBusy(true);
-    setImportSuccess(false);
     try {
       const raw = await readAssetsJsonFile(file);
-      engine.importGeneratedAssets(raw);
-      setImportSuccess(true);
+      const result = engine.importGeneratedAssets(raw);
+      onAssetsImported?.(result.importedCount);
       marketingToasts.assetsImported(scrollTo('#marketing-operations'));
-      window.setTimeout(() => setImportSuccess(false), 2000);
     } catch (error) {
       marketingToasts.error(error instanceof Error ? error.message : 'Could not import Creative Assets.');
     } finally {
@@ -185,14 +192,9 @@ export function MarketingCommandCentre({ state, engine }: MarketingCommandCentre
           state.creativeDispatch.creativeProductionStatus !== 'complete' ? (
             <>
               {busy ? <MarketingContextualLoader context="creative-production" className="max-w-xs" /> : null}
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={busy}
-                className={importSuccess ? 'border-[rgba(29,111,66,0.35)] text-[rgb(29,111,66)]' : undefined}
-              >
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={busy}>
                 <Upload className="mr-2 size-4" />
-                {busy ? 'Importing…' : importSuccess ? 'Creative Assets ready ✓' : 'Import Creative Assets'}
+                {busy ? 'Importing…' : 'Import Creative Assets'}
               </Button>
             </>
           ) : null}
@@ -237,6 +239,17 @@ export function MarketingCommandCentre({ state, engine }: MarketingCommandCentre
       {state.creativeDispatch.status === 'dispatched' &&
       state.creativeDispatch.creativeProductionStatus !== 'complete' ? (
         <CreativeProductionPanel state={state} />
+      ) : null}
+
+      {state.creativeDispatch.creativeProductionStatus === 'complete' ? (
+        <CreativeProductionCompletePanel
+          importedCount={
+            importReveal?.importedCount ??
+            selectReadyAssetCount(state.assets) ||
+            completion?.creativeAssetsProduced ??
+            0
+          }
+        />
       ) : null}
 
       {completion ? (

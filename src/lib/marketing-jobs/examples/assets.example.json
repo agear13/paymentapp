@@ -1,34 +1,65 @@
 {
+  "campaignId": "demo:gentle-cleanser-education",
+  "campaignName": "Thirsty Turtl — Gentle Cleanser Education Campaign",
+  "status": "complete",
+  "generatedAt": "2026-06-21T10:30:00.000Z",
   "assets": [
     {
-      "type": "instagram-carousel",
-      "preview": "https://example.com/previews/instagram-carousel.png",
-      "canvaUrl": "https://www.canva.com/design/example-carousel",
-      "downloadUrl": "https://example.com/downloads/instagram-carousel.zip"
+      "assetId": "tt-carousel-001",
+      "assetType": "Instagram Carousel",
+      "title": "10 Simple Cleansing Tips",
+      "status": "generated",
+      "previewImage": "https://placehold.co/1080x1350/e8f4ea/1d6f42?text=Instagram+Carousel",
+      "downloadFile": "https://placehold.co/1080x1350/e8f4ea/1d6f42?text=carousel.zip",
+      "dimensions": "1080x1350",
+      "version": "1.0",
+      "createdAt": "2026-06-21T10:28:00.000Z",
+      "purpose": "Educational carousel for Instagram feed",
+      "layout": "5-slide step sequence"
     },
     {
-      "type": "facebook-post",
-      "preview": "https://example.com/previews/facebook-post.png",
-      "canvaUrl": "https://www.canva.com/design/example-facebook",
-      "downloadUrl": "https://example.com/downloads/facebook-post.png"
+      "assetId": "tt-facebook-001",
+      "assetType": "Facebook Post",
+      "title": "Gentle Cleanser Hero",
+      "status": "generated",
+      "previewImage": "https://placehold.co/1200x630/e8f4ea/1d6f42?text=Facebook+Post",
+      "downloadFile": "https://placehold.co/1200x630/e8f4ea/1d6f42?text=facebook.png",
+      "dimensions": "1200x630",
+      "version": "1.0",
+      "createdAt": "2026-06-21T10:28:30.000Z"
     },
     {
-      "type": "pinterest-pin",
-      "preview": "https://example.com/previews/pinterest-pin.png",
-      "canvaUrl": "https://www.canva.com/design/example-pinterest",
-      "downloadUrl": "https://example.com/downloads/pinterest-pin.png"
+      "assetId": "tt-pinterest-001",
+      "assetType": "Pinterest Pins",
+      "title": "Cleansing Tips Infographic",
+      "status": "generated",
+      "previewImage": "https://placehold.co/1000x1500/e8f4ea/1d6f42?text=Pinterest+Pin",
+      "downloadFile": "https://placehold.co/1000x1500/e8f4ea/1d6f42?text=pinterest.png",
+      "dimensions": "1000x1500",
+      "version": "1.0",
+      "createdAt": "2026-06-21T10:29:00.000Z"
     },
     {
-      "type": "instagram-story",
-      "preview": "https://example.com/previews/instagram-story.png",
-      "canvaUrl": "https://www.canva.com/design/example-story",
-      "downloadUrl": "https://example.com/downloads/instagram-story.mp4"
+      "assetId": "tt-story-001",
+      "assetType": "Instagram Stories",
+      "title": "Morning Routine Story",
+      "status": "generated",
+      "previewImage": "https://placehold.co/1080x1920/e8f4ea/1d6f42?text=Instagram+Story",
+      "downloadFile": "https://placehold.co/1080x1920/e8f4ea/1d6f42?text=story.mp4",
+      "dimensions": "1080x1920",
+      "version": "1.0",
+      "createdAt": "2026-06-21T10:29:30.000Z"
     },
     {
-      "type": "newsletter-header",
-      "preview": "https://example.com/previews/newsletter-header.png",
-      "canvaUrl": "https://www.canva.com/design/example-newsletter",
-      "downloadUrl": "https://example.com/downloads/newsletter-header.png"
+      "assetId": "tt-newsletter-001",
+      "assetType": "Newsletter Header",
+      "title": "June Education Campaign",
+      "status": "generated",
+      "previewImage": "https://placehold.co/600x200/e8f4ea/1d6f42?text=Newsletter+Header",
+      "downloadFile": "https://placehold.co/600x200/e8f4ea/1d6f42?text=newsletter.png",
+      "dimensions": "600x200",
+      "version": "1.0",
+      "createdAt": "2026-06-21T10:30:00.000Z"
     }
   ]
 }

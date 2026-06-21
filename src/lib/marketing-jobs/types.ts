@@ -337,14 +337,38 @@ export type MarketingWorkspaceState = {
   campaignLifecycle: MarketingCampaignLifecycle;
 };
 
-export type ImportedAssetRecord = {
-  type: string;
+/** Legacy assets.json asset entry. */
+export type LegacyImportedAssetRecord = {
+  type?: string;
   preview?: string;
   canvaUrl?: string;
   downloadUrl?: string;
+  status?: string;
 };
 
+/** AI Creative Team canonical assets.json asset entry. */
+export type CanonicalImportedAssetRecord = {
+  assetId?: string;
+  assetType?: string;
+  title?: string;
+  status?: string;
+  previewImage?: string;
+  downloadFile?: string;
+  dimensions?: string;
+  version?: string;
+  createdAt?: string;
+  purpose?: string;
+  layout?: string;
+};
+
+export type ImportedAssetRecord = LegacyImportedAssetRecord & CanonicalImportedAssetRecord;
+
+/** @deprecated Prefer ParsedImportedAssetsFile from asset-import.ts */
 export type ImportedAssetsFile = {
+  campaignId?: string;
+  campaignName?: string;
+  status?: string;
+  generatedAt?: string;
   assets: ImportedAssetRecord[];
 };
 

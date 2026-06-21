@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import { Megaphone } from 'lucide-react';
 import { useMarketingJobs } from '@/hooks/use-marketing-jobs';
 import { MARKETING_DEMO_BRAND } from '@/lib/marketing-jobs/demo-brand';
@@ -15,6 +16,12 @@ import { CampaignsSection } from '@/components/marketing-labs/campaigns-section'
 import { MarketingDashboardSection } from '@/components/marketing-labs/marketing-dashboard-section';
 import { MarketingWalkthrough, MarketingWalkthroughReplayButton } from '@/components/marketing-labs/marketing-walkthrough';
 import { MarketingDemoPanel } from '@/components/marketing-labs/marketing-demo-panel';
+import type { MarketingImportReveal } from '@/components/marketing-labs/marketing-import-reveal';
+
+/** Delay before Creative Assets table fades in after import celebration. */
+const ASSETS_TABLE_REVEAL_MS = 1_800;
+
+export type { MarketingImportReveal };
 
 type MarketingPageClientProps = {
   companyId: string;
@@ -23,6 +30,22 @@ type MarketingPageClientProps = {
 
 export function MarketingPageClient({ companyId, companyName }: MarketingPageClientProps) {
   const { state, engine } = useMarketingJobs({ companyId, companyName });
+  const [importReveal, setImportReveal] = React.useState<MarketingImportReveal | null>(null);
+  const revealTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+    };
+  }, []);
+
+  const handleAssetsImported = React.useCallback((importedCount: number) => {
+    if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+    setImportReveal({ importedCount, tableRevealed: false });
+    revealTimerRef.current = setTimeout(() => {
+      setImportReveal((prev) => (prev ? { ...prev, tableRevealed: true } : null));
+    }, ASSETS_TABLE_REVEAL_MS);
+  }, []);
 
   return (
     <div className="space-y-14 pb-10">
@@ -44,9 +67,14 @@ export function MarketingPageClient({ companyId, companyName }: MarketingPageCli
         <MarketingWalkthrough />
       </div>
 
-      <MarketingCommandCentre state={state} engine={engine} />
+      <MarketingCommandCentre
+        state={state}
+        engine={engine}
+        importReveal={importReveal}
+        onAssetsImported={handleAssetsImported}
+      />
       <MarketingOperationsSection state={state} engine={engine} />
-      <CampaignAssetsSection state={state} />
+      <CampaignAssetsSection state={state} importReveal={importReveal} />
       <CompanyBrainSection />
       <CampaignsSection engine={engine} />
       <CampaignInsightsSection state={state} />

@@ -47,8 +47,11 @@ export {
 
 export {
   mergeImportedAssets,
+  normalizeImportedAssetRecord,
   parseImportedAssetsFile,
   readAssetsJsonFile,
+  type NormalizedImportedAsset,
+  type ParsedImportedAssetsFile,
 } from '@/lib/marketing-jobs/asset-import';
 
 export {

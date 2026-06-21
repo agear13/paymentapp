@@ -12,7 +12,7 @@ import {
   CREATIVE_PRODUCTION_ESTIMATE_MINUTES,
   VISUAL_JOB_TOTAL_DURATION_MS,
 } from '@/lib/marketing-jobs/creative-team';
-import { mergeImportedAssets } from '@/lib/marketing-jobs/asset-import';
+import { mergeImportedAssets, parseImportedAssetsFile } from '@/lib/marketing-jobs/asset-import';
 import { REQUESTED_VISUAL_ASSET_LABELS } from '@/lib/marketing-jobs/asset-catalog';
 import { reconcileVisualJobStages } from '@/lib/marketing-jobs/simulation';
 import type { MarketingJob, MarketingWorkspaceState } from '@/lib/marketing-jobs/types';
@@ -138,7 +138,10 @@ function baseResetState(input: { companyId: string; companyName: string }): Mark
 function withImportedAssets(state: MarketingWorkspaceState): MarketingWorkspaceState {
   const importedAt = new Date().toISOString();
   const assets = createInitialCampaignAssets(state.campaignContext.campaign.id);
-  const result = mergeImportedAssets(assets, DEMO_ASSETS_PAYLOAD, importedAt);
+  const parsed = parseImportedAssetsFile(DEMO_ASSETS_PAYLOAD);
+  if (!parsed) return state;
+
+  const result = mergeImportedAssets(assets, parsed, importedAt);
   if (!result.ok) return state;
 
   return {
