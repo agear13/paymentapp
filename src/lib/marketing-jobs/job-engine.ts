@@ -31,6 +31,9 @@ import {
   buildAiTeamReport,
   downloadReportJson,
 } from '@/lib/marketing-jobs/command-centre';
+import { DEMO_MODE } from '@/lib/demo/demo-mode';
+import { tryDownloadDemoDeliverable } from '@/lib/demo/demo-deliverable-download';
+import { getDemoCampaignDeliverables } from '@/lib/demo/demo-reports';
 import {
   advanceDispatchSteps,
   buildInitialDispatchSteps,
@@ -272,10 +275,32 @@ export class MarketingJobEngine {
   }
 
   downloadClientReport(): void {
+    if (DEMO_MODE) {
+      const state = this.store.getState();
+      const deliverables = getDemoCampaignDeliverables({
+        campaignId: state.campaignContext.campaign.id,
+        companyName: state.campaignContext.company.name,
+        campaignTitle: state.campaignContext.campaign.title,
+      });
+      void tryDownloadDemoDeliverable(deliverables, 'client');
+      return;
+    }
+
     downloadReportJson('client-report.json', buildClientReport(this.store.getState()));
   }
 
   downloadAiTeamReport(): void {
+    if (DEMO_MODE) {
+      const state = this.store.getState();
+      const deliverables = getDemoCampaignDeliverables({
+        campaignId: state.campaignContext.campaign.id,
+        companyName: state.campaignContext.company.name,
+        campaignTitle: state.campaignContext.campaign.title,
+      });
+      void tryDownloadDemoDeliverable(deliverables, 'aiTeam');
+      return;
+    }
+
     downloadReportJson('ai-team-report.json', buildAiTeamReport(this.store.getState()));
   }
 
@@ -301,6 +326,17 @@ export class MarketingJobEngine {
   }
 
   downloadCampaignPackage(): void {
+    if (DEMO_MODE) {
+      const state = this.store.getState();
+      const deliverables = getDemoCampaignDeliverables({
+        campaignId: state.campaignContext.campaign.id,
+        companyName: state.campaignContext.company.name,
+        campaignTitle: state.campaignContext.campaign.title,
+      });
+      void tryDownloadDemoDeliverable(deliverables, 'package');
+      return;
+    }
+
     const state = this.store.getState();
     const job = state.jobs.find((item) => item.jobType === 'generate_visuals');
     if (!job) throw new Error('No campaign package available.');

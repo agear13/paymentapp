@@ -4,6 +4,7 @@ import {
   normalizeImportedAssetRecord,
   parseImportedAssetsFile,
 } from '@/lib/marketing-jobs/asset-import';
+import { rewriteDemoAssetPath } from '@/lib/marketing-jobs/demo-asset-library';
 
 describe('marketing asset import', () => {
   const campaignId = 'test-campaign';
@@ -106,5 +107,36 @@ describe('marketing asset import', () => {
 
     expect(parsed?.assets).toHaveLength(1);
     expect(parsed?.assets[0]?.typeHint).toBe('Facebook Post');
+  });
+
+  it('rewrites AI Creative Team relative paths to demo library URLs', () => {
+    expect(rewriteDemoAssetPath('Preview Images/Instagram Carousel.png')).toBe(
+      '/demo-assets/thirsty-turtl/gentle-cleanser/Preview Images/Instagram Carousel.png'
+    );
+    expect(rewriteDemoAssetPath('Assets\\Facebook Post.png')).toBe(
+      '/demo-assets/thirsty-turtl/gentle-cleanser/Assets/Facebook Post.png'
+    );
+    expect(rewriteDemoAssetPath('https://example.com/x.png')).toBe('https://example.com/x.png');
+    expect(rewriteDemoAssetPath('/already/absolute.png')).toBe('/already/absolute.png');
+  });
+
+  it('normalizes canonical assets with demo path rewriting on import', () => {
+    const parsed = parseImportedAssetsFile({
+      assets: [
+        {
+          assetType: 'Instagram Carousel',
+          status: 'generated',
+          previewImage: 'Preview Images/Instagram Carousel.png',
+          downloadFile: 'Assets/Instagram Carousel.png',
+        },
+      ],
+    });
+
+    expect(parsed?.assets[0]?.previewUrl).toBe(
+      '/demo-assets/thirsty-turtl/gentle-cleanser/Preview Images/Instagram Carousel.png'
+    );
+    expect(parsed?.assets[0]?.downloadUrl).toBe(
+      '/demo-assets/thirsty-turtl/gentle-cleanser/Assets/Instagram Carousel.png'
+    );
   });
 });

@@ -1,5 +1,6 @@
 import type { CampaignAsset } from '@/lib/marketing-jobs/types';
 import { resolveAssetTypeFromImport } from '@/lib/marketing-jobs/asset-catalog';
+import { rewriteDemoAssetPath } from '@/lib/marketing-jobs/demo-asset-library';
 
 /** Normalized asset record — supports legacy and AI Creative Team canonical schemas. */
 export type NormalizedImportedAsset = {
@@ -57,8 +58,8 @@ export function normalizeImportedAssetRecord(raw: unknown): NormalizedImportedAs
 
   return {
     typeHint,
-    previewUrl: safeString(record.preview) ?? safeString(record.previewImage),
-    downloadUrl: safeString(record.downloadUrl) ?? safeString(record.downloadFile),
+    previewUrl: rewriteDemoAssetPath(safeString(record.preview) ?? safeString(record.previewImage)),
+    downloadUrl: rewriteDemoAssetPath(safeString(record.downloadUrl) ?? safeString(record.downloadFile)),
     canvaUrl: safeString(record.canvaUrl),
   };
 }

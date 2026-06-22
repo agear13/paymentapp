@@ -13,6 +13,7 @@ import {
   VISUAL_JOB_TOTAL_DURATION_MS,
 } from '@/lib/marketing-jobs/creative-team';
 import { mergeImportedAssets, parseImportedAssetsFile } from '@/lib/marketing-jobs/asset-import';
+import { MARKETING_DEMO_ASSET_FILES } from '@/lib/marketing-jobs/demo-asset-library';
 import { REQUESTED_VISUAL_ASSET_LABELS } from '@/lib/marketing-jobs/asset-catalog';
 import { reconcileVisualJobStages } from '@/lib/marketing-jobs/simulation';
 import type { MarketingJob, MarketingWorkspaceState } from '@/lib/marketing-jobs/types';
@@ -38,38 +39,46 @@ export const MARKETING_DEMO_STAGE_LABELS: Record<MarketingDemoStage, string> = {
   operations_complete: 'Operations complete',
 };
 
-/** Embedded demo assets — no file upload required. */
+/** Embedded demo assets — mirrors AI Creative Team relative paths. */
 export const DEMO_ASSETS_PAYLOAD = {
+  campaignId: 'demo:gentle-cleanser-education',
+  campaignName: 'Thirsty Turtl — Gentle Cleanser Education Campaign',
+  status: 'complete',
   assets: [
     {
-      type: 'instagram-carousel',
-      preview: 'https://placehold.co/1080x1350/e8f4ea/1d6f42?text=Thirsty+Turtl+Carousel',
+      assetType: 'Instagram Carousel',
+      status: 'generated',
+      previewImage: MARKETING_DEMO_ASSET_FILES.preview.instagramCarousel,
+      downloadFile: MARKETING_DEMO_ASSET_FILES.download.instagramCarousel,
       canvaUrl: 'https://www.canva.com/design/thirsty-turtl-carousel',
-      downloadUrl: 'https://placehold.co/1080x1350/e8f4ea/1d6f42?text=Carousel.zip',
     },
     {
-      type: 'facebook-post',
-      preview: 'https://placehold.co/1200x630/e8f4ea/1d6f42?text=Thirsty+Turtl+Facebook',
+      assetType: 'Facebook Post',
+      status: 'generated',
+      previewImage: MARKETING_DEMO_ASSET_FILES.preview.facebookPost,
+      downloadFile: MARKETING_DEMO_ASSET_FILES.download.facebookPost,
       canvaUrl: 'https://www.canva.com/design/thirsty-turtl-facebook',
-      downloadUrl: 'https://placehold.co/1200x630/e8f4ea/1d6f42?text=Facebook.png',
     },
     {
-      type: 'pinterest-pin',
-      preview: 'https://placehold.co/1000x1500/e8f4ea/1d6f42?text=Thirsty+Turtl+Pinterest',
+      assetType: 'Pinterest Pins',
+      status: 'generated',
+      previewImage: MARKETING_DEMO_ASSET_FILES.preview.pinterestPins,
+      downloadFile: MARKETING_DEMO_ASSET_FILES.download.pinterestPins,
       canvaUrl: 'https://www.canva.com/design/thirsty-turtl-pinterest',
-      downloadUrl: 'https://placehold.co/1000x1500/e8f4ea/1d6f42?text=Pinterest.png',
     },
     {
-      type: 'instagram-story',
-      preview: 'https://placehold.co/1080x1920/e8f4ea/1d6f42?text=Thirsty+Turtl+Story',
+      assetType: 'Instagram Stories',
+      status: 'generated',
+      previewImage: MARKETING_DEMO_ASSET_FILES.preview.instagramStories,
+      downloadFile: MARKETING_DEMO_ASSET_FILES.download.instagramStories,
       canvaUrl: 'https://www.canva.com/design/thirsty-turtl-story',
-      downloadUrl: 'https://placehold.co/1080x1920/e8f4ea/1d6f42?text=Story.mp4',
     },
     {
-      type: 'newsletter-header',
-      preview: 'https://placehold.co/600x200/e8f4ea/1d6f42?text=Thirsty+Turtl+Newsletter',
+      assetType: 'Newsletter Header',
+      status: 'generated',
+      previewImage: MARKETING_DEMO_ASSET_FILES.preview.newsletterHeader,
+      downloadFile: MARKETING_DEMO_ASSET_FILES.download.newsletterHeader,
       canvaUrl: 'https://www.canva.com/design/thirsty-turtl-newsletter',
-      downloadUrl: 'https://placehold.co/600x200/e8f4ea/1d6f42?text=Newsletter.png',
     },
   ],
 };

@@ -122,6 +122,48 @@ export const marketingToasts = {
     });
   },
 
+  clientReportDownloaded() {
+    showMarketingToast('success', {
+      title: 'Client Report downloaded successfully.',
+      description: 'Ready to send for client approval.',
+    });
+  },
+
+  aiTeamReportDownloaded() {
+    showMarketingToast('success', {
+      title: 'AI Team Performance Report downloaded.',
+      description: 'Internal execution report exported successfully.',
+    });
+  },
+
+  campaignPackageDownloaded() {
+    showMarketingToast('success', {
+      title: 'Campaign Package downloaded successfully.',
+      description: 'Ready for publishing and Marketing Operations.',
+    });
+  },
+
+  demoClientReportMissing(publicPathHint: string) {
+    showMarketingToast('error', {
+      title: 'Client Report not found.',
+      description: `Place ${publicPathHint} before running the demo.`,
+    });
+  },
+
+  demoAiTeamReportMissing(publicPathHint: string) {
+    showMarketingToast('error', {
+      title: 'AI Team Performance Report not found.',
+      description: `Place ${publicPathHint} before running the demo.`,
+    });
+  },
+
+  demoCampaignPackageMissing(publicPathHint: string) {
+    showMarketingToast('error', {
+      title: 'Campaign Package ZIP not found.',
+      description: `Place ${publicPathHint} before running the demo.`,
+    });
+  },
+
   error(message: string) {
     showMarketingToast('error', {
       title: 'Something went wrong',

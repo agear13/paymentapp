@@ -8,13 +8,13 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Button } from '@/components/ui/button';
 import type { MarketingWorkspaceState } from '@/lib/marketing-jobs/types';
 import type { MarketingJobEngine } from '@/lib/marketing-jobs/job-engine';
 import { buildAiTeamPerformance } from '@/lib/marketing-jobs/command-centre';
 import { MarketingEmptyState } from '@/components/marketing-labs/marketing-empty-state';
 import { MARKETING_EMPTY_STATES } from '@/lib/marketing-labs/empty-states';
 import { MarketingContextualLoader } from '@/components/marketing-labs/marketing-contextual-loader';
+import { CampaignDeliverableDownloads } from '@/components/marketing-labs/campaign-deliverable-downloads';
 
 type AiTeamPerformanceSectionProps = {
   state: MarketingWorkspaceState;
@@ -110,14 +110,12 @@ export function AiTeamPerformanceSection({ state, engine }: AiTeamPerformanceSec
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 border-t pt-4">
-                <Button variant="outline" size="sm" onClick={() => engine.downloadClientReport()}>
-                  Download Client Report
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => engine.downloadAiTeamReport()}>
-                  Download AI Team Performance Report
-                </Button>
-              </div>
+              <CampaignDeliverableDownloads
+                state={state}
+                engine={engine}
+                className="pt-2"
+                showPackagePreview={false}
+              />
             </>
           )}
         </CardContent>

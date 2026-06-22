@@ -55,6 +55,12 @@ export {
 } from '@/lib/marketing-jobs/asset-import';
 
 export {
+  MARKETING_DEMO_ASSET_FILES,
+  MARKETING_DEMO_ASSET_LIBRARY_BASE,
+  rewriteDemoAssetPath,
+} from '@/lib/marketing-jobs/demo-asset-library';
+
+export {
   campaignAssetStatusLabel,
   marketingJobStatusLabel,
   marketingJobTypeLabel,

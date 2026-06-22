@@ -59,6 +59,7 @@ import { getDispatchManifestItems } from '@/lib/marketing-jobs/creative-team';
 import { isVisualJobInFlight, isVisualJobReadyForDispatch } from '@/lib/marketing-jobs/simulation';
 import { getSpecialistIcon } from '@/components/marketing-labs/specialist-icon';
 import { CreativeProductionCompletePanel } from '@/components/marketing-labs/creative-production-complete-panel';
+import { CampaignDeliverableDownloads } from '@/components/marketing-labs/campaign-deliverable-downloads';
 import type { MarketingImportReveal } from '@/components/marketing-labs/marketing-import-reveal';
 import { selectReadyAssetCount } from '@/lib/marketing-jobs/job-engine';
 
@@ -251,7 +252,7 @@ export function MarketingCommandCentre({
       ) : null}
 
       {completion ? (
-        <CampaignCompletionPanel completion={completion} engine={engine} />
+        <CampaignCompletionPanel completion={completion} engine={engine} state={state} />
       ) : null}
 
       <ApprovalDialog
@@ -539,44 +540,54 @@ function CreativeProductionPanel({ state }: { state: MarketingWorkspaceState }) 
 function CampaignCompletionPanel({
   completion,
   engine,
+  state,
 }: {
   completion: NonNullable<ReturnType<typeof buildCampaignCompletion>>;
   engine: MarketingJobEngine;
+  state: MarketingWorkspaceState;
 }) {
+  const deliverableLines = [
+    `${completion.creativeAssetsProduced} Creative Assets`,
+    `${completion.campaignDocuments} Campaign Documents`,
+    completion.clientReportReady ? 'Client Report Ready' : 'Client Report Pending',
+    completion.aiTeamReportReady ? 'AI Team Performance Report Ready' : 'AI Team Report Pending',
+    completion.qualityAssurance === 'Passed' ? 'Quality Assurance Passed' : 'Quality Assurance Pending',
+    `Brand Compliance ${completion.brandCompliance}%`,
+    `Knowledge Coverage ${completion.knowledgeCoverage}%`,
+  ];
+
   return (
-    <Card className="border-[rgba(29,111,66,0.25)] bg-[rgba(29,111,66,0.03)] animate-in fade-in duration-300">
-      <CardHeader>
-        <CardTitle className="text-base">Campaign Complete</CardTitle>
-        <CardDescription>Production finished — ready for Marketing Operations</CardDescription>
+    <Card className="border-primary/25 bg-gradient-to-br from-primary/[0.04] via-background to-[rgba(29,111,66,0.03)] animate-in fade-in duration-500">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="size-5 text-primary" />
+          <CardTitle className="text-lg">Campaign Complete</CardTitle>
+        </div>
+        <CardDescription>
+          Final agency handover — polished deliverables ready for client review and approval.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Metric label="Creative Assets" value={String(completion.creativeAssetsProduced)} />
-          <Metric label="Campaign Documents" value={String(completion.campaignDocuments)} />
-          <Metric label="Estimated Time Saved" value={`${completion.estimatedTimeSavedHours} Hours`} />
-          <Metric label="AI Specialists" value={String(completion.aiSpecialists)} />
-          <Metric label="Quality Assurance" value={completion.qualityAssurance} />
-          <Metric label="Brand Compliance" value={`${completion.brandCompliance}%`} />
-          <Metric label="Knowledge Coverage" value={`${completion.knowledgeCoverage}%`} />
-          <Metric label="Client Report" value={completion.clientReportReady ? 'Ready' : 'Pending'} />
-          <Metric label="AI Team Report" value={completion.aiTeamReportReady ? 'Ready' : 'Pending'} />
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {deliverableLines.map((line) => (
+            <li key={line} className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="size-4 shrink-0 text-[rgb(29,111,66)]" />
+              <span className="font-medium">{line}</span>
+            </li>
+          ))}
+        </ul>
+
+        <div className="rounded-lg border border-primary/15 bg-primary/[0.03] px-4 py-3">
+          <p className="text-xs text-muted-foreground">Estimated Time Saved</p>
+          <p className="text-2xl font-semibold tabular-nums tracking-tight">
+            {completion.estimatedTimeSavedHours} Hours
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{completion.campaignStatus}</p>
         </div>
 
-        <div className="rounded-lg border bg-background px-4 py-3">
-          <p className="text-xs text-muted-foreground">Campaign Status</p>
-          <p className="text-sm font-semibold text-primary">{completion.campaignStatus}</p>
-        </div>
+        <CampaignDeliverableDownloads state={state} engine={engine} />
 
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => engine.downloadClientReport()}>
-            Download Client Report
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => engine.downloadAiTeamReport()}>
-            Download AI Team Performance Report
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => engine.downloadCampaignPackage()}>
-            View Campaign Package
-          </Button>
+        <div className="flex flex-wrap gap-2 border-t pt-2">
           <Button variant="outline" size="sm" asChild>
             <a href="#campaign-assets">View Creative Assets</a>
           </Button>
@@ -586,15 +597,6 @@ function CampaignCompletionPanel({
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-semibold tabular-nums">{value}</p>
-    </div>
   );
 }
 
