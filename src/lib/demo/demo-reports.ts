@@ -1,23 +1,22 @@
 /**
  * Demo deliverables library — static PDF reports and campaign ZIP packages.
  *
- * ## Replacing reports for the current demo campaign
- * Drop new files into `public/demo-reports/{campaign-key}/`:
- *   - client-report.pdf
- *   - ai-team-performance-report.pdf
+ * ## Single source of truth
+ * Each deliverable defines:
+ * - `file` — URL path served from `/public` (must match on-disk filename exactly)
+ * - `downloadName` — filename saved to the user's device
+ * - `publicPathHint` — shown in missing-file toasts
  *
- * ## Replacing the campaign package ZIP
- * Drop a new archive into `public/demo-packages/` using the filename configured
- * below (e.g. `thirsty-turtl-campaign-package.zip`).
+ * ## Thirsty Turtl files (public/demo-reports/thirsty-turtl/)
+ * - Thirsty-Turtl-Campaign-Strategy-Report.pdf  → strategy (before approval)
+ * - client-report-1.pdf                           → final client report (after delivery)
+ * - ai_team_performance_report.pdf                → AI team performance report
  *
- * ## Adding a new demo campaign
- * 1. Add PDFs under `public/demo-reports/{new-campaign-key}/`
- * 2. Add a ZIP under `public/demo-packages/` (optional)
- * 3. Append a `DemoCampaignDeliverables` entry to `DEMO_CAMPAIGN_DELIVERABLES`
- *    with unique `matchers`, `presentation` metrics, and `packageContents`.
+ * ## Campaign package (public/demo-packages/)
+ * - thirsty-turtl-campaign-package.zip            → final ZIP only
  *
  * ## Switching demo mode on/off
- * Toggle `DEMO_MODE` in `./demo-mode.ts` — production report generation is unchanged.
+ * Toggle `DEMO_MODE` in `./demo-mode.ts`.
  */
 import type { DemoCampaignDeliverables, DemoCampaignKey } from '@/lib/demo/demo-reports.types';
 
@@ -74,49 +73,63 @@ const STRATEGY_REPORT_INCLUDES = [
   'Creative Direction Brief',
 ] as const;
 
+type DemoFileSpec = {
+  fileName: string;
+  downloadName: string;
+};
+
+function demoReportPath(campaignKey: string, fileName: string): string {
+  return `/demo-reports/${campaignKey}/${fileName}`;
+}
+
+function demoPublicHint(campaignKey: string, fileName: string): string {
+  return `public/demo-reports/${campaignKey}/${fileName}`;
+}
+
+function demoPackagePath(fileName: string): string {
+  return `/demo-packages/${fileName}`;
+}
+
 function buildCampaignEntry(input: {
   key: DemoCampaignKey;
   matchers: readonly string[];
-  reportPrefix: string;
-  packageFileName: string;
   presentation: DemoCampaignDeliverables['presentation'];
-  clientReportFile?: string;
-  aiTeamReportFile?: string;
-  strategyReportFile?: string;
+  strategy: DemoFileSpec;
+  client: DemoFileSpec;
+  aiTeam: DemoFileSpec;
+  campaignPackage: DemoFileSpec;
 }): DemoCampaignDeliverables {
-  const clientFile = input.clientReportFile ?? 'client-report.pdf';
-  const aiTeamFile = input.aiTeamReportFile ?? 'ai-team-performance-report.pdf';
-  const strategyFile = input.strategyReportFile ?? 'campaign-strategy-report.pdf';
-
   return {
     key: input.key,
     matchers: input.matchers,
     presentation: input.presentation,
     reports: {
       strategy: {
-        file: `/demo-reports/${input.key}/${strategyFile}`,
-        publicPathHint: `public/demo-reports/${input.key}/${strategyFile}`,
-        downloadName: `${input.reportPrefix}-Campaign-Strategy-Report.pdf`,
+        file: demoReportPath(input.key, input.strategy.fileName),
+        publicPathHint: demoPublicHint(input.key, input.strategy.fileName),
+        downloadName: input.strategy.downloadName,
         title: 'Campaign Strategy Report',
-        description: 'Planning deliverable — research, SEO, channel strategy and creative direction. No creative assets.',
+        description:
+          'Planning deliverable — research, SEO, channel strategy and creative direction. No creative assets.',
         statusLabel: 'Ready for Approval',
         statusDetail: 'Planning phase only',
         includes: STRATEGY_REPORT_INCLUDES,
       },
       client: {
-        file: `/demo-reports/${input.key}/${clientFile}`,
-        publicPathHint: `public/demo-reports/${input.key}/${clientFile}`,
-        downloadName: `${input.reportPrefix}-Client-Report.pdf`,
+        file: demoReportPath(input.key, input.client.fileName),
+        publicPathHint: demoPublicHint(input.key, input.client.fileName),
+        downloadName: input.client.downloadName,
         title: 'Final Client Report',
-        description: 'Complete campaign handover — strategy, content previews, creative assets and recommendations.',
+        description:
+          'Complete campaign handover — strategy, content previews, creative assets and recommendations.',
         statusLabel: 'Ready for Client Approval',
         statusDetail: `${input.presentation.clientReportPages} Pages`,
         includes: CLIENT_REPORT_INCLUDES,
       },
       aiTeam: {
-        file: `/demo-reports/${input.key}/${aiTeamFile}`,
-        publicPathHint: `public/demo-reports/${input.key}/${aiTeamFile}`,
-        downloadName: `${input.reportPrefix}-AI-Team-Performance-Report.pdf`,
+        file: demoReportPath(input.key, input.aiTeam.fileName),
+        publicPathHint: demoPublicHint(input.key, input.aiTeam.fileName),
+        downloadName: input.aiTeam.downloadName,
         title: 'AI Team Performance Report',
         description:
           'Knowledge coverage, specialist execution, workflow analysis and performance metrics.',
@@ -126,9 +139,9 @@ function buildCampaignEntry(input: {
       },
     },
     campaignPackage: {
-      file: `/demo-packages/${input.packageFileName}`,
-      publicPathHint: `public/demo-packages/${input.packageFileName}`,
-      downloadName: `${input.reportPrefix}-Campaign-Package.zip`,
+      file: demoPackagePath(input.campaignPackage.fileName),
+      publicPathHint: `public/demo-packages/${input.campaignPackage.fileName}`,
+      downloadName: input.campaignPackage.downloadName,
       title: 'Campaign Package',
       subtitle: 'Everything required to review, approve and publish this campaign.',
       description:
@@ -137,30 +150,42 @@ function buildCampaignEntry(input: {
   };
 }
 
+const THIRSTY_TURTL_PRESENTATION = {
+  creativeAssets: 12,
+  clientReportPages: 22,
+  aiReportPages: 16,
+  documents: 8,
+  estimatedTimeSavedHours: 11.2,
+  marketingOperationsStatus: 'Ready',
+  campaignStatusLabel: 'Ready for Marketing Operations',
+  packageContents: STANDARD_PACKAGE_CONTENTS,
+} as const;
+
 export const DEMO_CAMPAIGN_DELIVERABLES = [
   buildCampaignEntry({
     key: 'thirsty-turtl',
     matchers: ['thirsty turtl', 'gentle-cleanser', 'gentle cleanser'],
-    reportPrefix: 'Thirsty-Turtl',
-    packageFileName: 'thirsty-turtl-campaign-package.zip',
-    clientReportFile: 'Client-Report.pdf',
-    aiTeamReportFile: 'ai_team_performance_report.pdf',
-    presentation: {
-      creativeAssets: 12,
-      clientReportPages: 22,
-      aiReportPages: 16,
-      documents: 8,
-      estimatedTimeSavedHours: 11.2,
-      marketingOperationsStatus: 'Ready',
-      campaignStatusLabel: 'Ready for Marketing Operations',
-      packageContents: STANDARD_PACKAGE_CONTENTS,
+    presentation: THIRSTY_TURTL_PRESENTATION,
+    strategy: {
+      fileName: 'Thirsty-Turtl-Campaign-Strategy-Report.pdf',
+      downloadName: 'Thirsty-Turtl-Campaign-Strategy-Report.pdf',
+    },
+    client: {
+      fileName: 'client-report-1.pdf',
+      downloadName: 'client-report-1.pdf',
+    },
+    aiTeam: {
+      fileName: 'ai_team_performance_report.pdf',
+      downloadName: 'Thirsty-Turtl-AI-Team-Performance-Report.pdf',
+    },
+    campaignPackage: {
+      fileName: 'thirsty-turtl-campaign-package.zip',
+      downloadName: 'thirsty-turtl-campaign-package.zip',
     },
   }),
   buildCampaignEntry({
     key: 'rabbit-hole',
     matchers: ['rabbit hole', 'rabbit-hole'],
-    reportPrefix: 'Rabbit-Hole',
-    packageFileName: 'rabbit-hole-campaign-package.zip',
     presentation: {
       creativeAssets: 10,
       clientReportPages: 20,
@@ -171,12 +196,26 @@ export const DEMO_CAMPAIGN_DELIVERABLES = [
       campaignStatusLabel: 'Ready for Marketing Operations',
       packageContents: STANDARD_PACKAGE_CONTENTS,
     },
+    strategy: {
+      fileName: 'Rabbit-Hole-Campaign-Strategy-Report.pdf',
+      downloadName: 'Rabbit-Hole-Campaign-Strategy-Report.pdf',
+    },
+    client: {
+      fileName: 'client-report-1.pdf',
+      downloadName: 'client-report-1.pdf',
+    },
+    aiTeam: {
+      fileName: 'ai-team-performance-report.pdf',
+      downloadName: 'Rabbit-Hole-AI-Team-Performance-Report.pdf',
+    },
+    campaignPackage: {
+      fileName: 'rabbit-hole-campaign-package.zip',
+      downloadName: 'rabbit-hole-campaign-package.zip',
+    },
   }),
   buildCampaignEntry({
     key: 'tourism-demo',
     matchers: ['tourism demo', 'tourism-demo'],
-    reportPrefix: 'Tourism-Demo',
-    packageFileName: 'tourism-demo-campaign-package.zip',
     presentation: {
       creativeAssets: 11,
       clientReportPages: 18,
@@ -186,6 +225,22 @@ export const DEMO_CAMPAIGN_DELIVERABLES = [
       marketingOperationsStatus: 'Ready',
       campaignStatusLabel: 'Ready for Marketing Operations',
       packageContents: STANDARD_PACKAGE_CONTENTS,
+    },
+    strategy: {
+      fileName: 'Tourism-Demo-Campaign-Strategy-Report.pdf',
+      downloadName: 'Tourism-Demo-Campaign-Strategy-Report.pdf',
+    },
+    client: {
+      fileName: 'client-report-1.pdf',
+      downloadName: 'client-report-1.pdf',
+    },
+    aiTeam: {
+      fileName: 'ai-team-performance-report.pdf',
+      downloadName: 'Tourism-Demo-AI-Team-Performance-Report.pdf',
+    },
+    campaignPackage: {
+      fileName: 'tourism-demo-campaign-package.zip',
+      downloadName: 'tourism-demo-campaign-package.zip',
     },
   }),
 ] as const satisfies readonly DemoCampaignDeliverables[];

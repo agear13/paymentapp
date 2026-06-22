@@ -87,6 +87,14 @@ export function CampaignStrategyReadyPanel({
                 <Download className="mr-2 size-4" />
                 Download Campaign Strategy Report
               </Button>
+              <Button
+                variant="secondary"
+                onClick={() => void download('strategy')}
+                disabled={downloading}
+              >
+                <FileSearch className="mr-2 size-4" />
+                Review Campaign Package
+              </Button>
               <Button onClick={onApprove} disabled={downloading}>
                 <Send className="mr-2 size-4" />
                 Approve Campaign Package

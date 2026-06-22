@@ -107,12 +107,24 @@ export function CampaignDeliverableDownloads({
 
       <div className={cn('space-y-6', className)}>
         <div className="grid gap-3 lg:grid-cols-2">
-          <ReportReadyCard
-            icon={FileText}
-            title={reports.client.title}
-            statusLabel={reports.client.statusLabel}
-            includes={reports.client.includes}
-          />
+          <div className="space-y-3">
+            <ReportReadyCard
+              icon={FileText}
+              title={reports.client.title}
+              statusLabel={reports.client.statusLabel}
+              includes={reports.client.includes}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={() => void download('client')}
+              disabled={downloading}
+            >
+              <Download className="mr-2 size-4" />
+              Download Client Report
+            </Button>
+          </div>
           <ReportReadyCard
             icon={Settings2}
             title={reports.aiTeam.title}

@@ -5,13 +5,16 @@ import { runDemoDownloadPreparation } from '@/lib/demo/demo-download';
 import { isDemoModeEnabled } from '@/lib/demo/demo-mode';
 import type { MarketingDeliverableTarget } from '@/lib/demo/marketing-download-service';
 import {
+  canDownloadMarketingDeliverable,
   downloadMarketingDeliverableAfterPrep,
   executeMarketingDeliverableDownload,
+  marketingDeliverableBlockedMessage,
   notifyMarketingDeliverableMissing,
   validateMarketingDeliverableExists,
 } from '@/lib/demo/marketing-download-service';
 import type { MarketingJobEngine } from '@/lib/marketing-jobs/job-engine';
 import type { MarketingWorkspaceState } from '@/lib/marketing-jobs/types';
+import { marketingToasts } from '@/lib/marketing-jobs/notifications';
 
 export function useMarketingDeliverableDownload(
   engine: MarketingJobEngine,
@@ -25,6 +28,11 @@ export function useMarketingDeliverableDownload(
   const download = React.useCallback(
     async (target: MarketingDeliverableTarget) => {
       if (downloading) return;
+
+      if (isDemoModeEnabled() && !canDownloadMarketingDeliverable(target, state)) {
+        marketingToasts.error(marketingDeliverableBlockedMessage(target));
+        return;
+      }
 
       if (isDemoModeEnabled()) {
         const exists = await validateMarketingDeliverableExists(target, state);

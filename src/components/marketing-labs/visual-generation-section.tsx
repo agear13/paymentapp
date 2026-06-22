@@ -53,7 +53,7 @@ export function VisualGenerationSection({ state, engine }: VisualGenerationSecti
     try {
       engine.dispatchToCreativeTeam(visualJob?.id);
       setDispatchOpen(false);
-      toast.success('Campaign package dispatched — campaign-package.zip downloaded.');
+      toast.success('Campaign package dispatched to the AI Creative Team.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not dispatch campaign package.');
     }

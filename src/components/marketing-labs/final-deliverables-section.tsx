@@ -43,7 +43,7 @@ export function FinalDeliverablesSection({ state, engine }: FinalDeliverablesSec
               {[
                 `${completion.creativeAssetsProduced} Creative Assets`,
                 `${completion.campaignDocuments} Campaign Documents`,
-                'Client Report Ready',
+                'Final Client Report Ready',
                 'AI Team Performance Report Ready',
                 completion.qualityAssurance === 'Passed'
                   ? 'Quality Assurance Passed'

@@ -62,7 +62,7 @@ export function isStrategyReviewPhase(state: MarketingWorkspaceState): boolean {
 export function isFinalDeliveryUnlocked(state: MarketingWorkspaceState): boolean {
   if (state.creativeDispatch.creativeProductionStatus !== 'complete') return false;
   if (!isCreativeAssetsReady(state)) return false;
-  return OPERATIONS_PHASES.has(state.campaignLifecycle.phase);
+  return state.campaignLifecycle.phase === 'operations_complete';
 }
 
 export function isCreativePhaseVisible(state: MarketingWorkspaceState): boolean {

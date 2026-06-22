@@ -563,7 +563,9 @@ export class MarketingJobEngine {
       exportedAt: dispatchedAt,
     });
 
-    downloadCampaignPackageZip(files);
+    if (!isDemoModeEnabled()) {
+      downloadCampaignPackageZip(files);
+    }
 
     const jobs = state.jobs.map((item) =>
       item.id === job.id

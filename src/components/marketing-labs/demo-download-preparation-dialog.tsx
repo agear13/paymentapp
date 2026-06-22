@@ -15,7 +15,7 @@ import type { DemoDeliverableDownloadTarget } from '@/lib/demo/demo-reports.type
 const PREP_LABELS: Record<DemoDeliverableDownloadTarget, string> = {
   client: 'Final Client Report',
   aiTeam: 'AI Team Performance Report',
-  package: 'Campaign Package',
+  package: 'Complete Campaign Package',
   strategy: 'Campaign Strategy Report',
 };
 

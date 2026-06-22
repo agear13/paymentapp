@@ -19,9 +19,13 @@ describe('marketing agency phase', () => {
     expect(isStrategyReviewPhase(state)).toBe(true);
   });
 
-  it('unlocks final deliverables after assets are imported into operations', () => {
-    const state = buildDemoStateForStage(input, 'assets_ready');
-    expect(isFinalDeliveryUnlocked(state)).toBe(true);
-    expect(resolveMarketingAgencyPhase(state)).toBe('operations');
+  it('does not unlock final deliverables until operations complete', () => {
+    const assetsReady = buildDemoStateForStage(input, 'assets_ready');
+    const delivery = buildDemoStateForStage(input, 'operations_complete');
+
+    expect(isFinalDeliveryUnlocked(assetsReady)).toBe(false);
+    expect(resolveMarketingAgencyPhase(assetsReady)).toBe('operations');
+    expect(isFinalDeliveryUnlocked(delivery)).toBe(true);
+    expect(resolveMarketingAgencyPhase(delivery)).toBe('delivery');
   });
 });
