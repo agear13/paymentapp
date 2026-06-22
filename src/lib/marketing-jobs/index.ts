@@ -90,6 +90,7 @@ export {
   buildAiTeamReport,
   buildApprovalSummary,
   buildCampaignCompletion,
+  buildCampaignStrategyReport,
   buildCampaignStatus,
   buildClientReport,
   buildPackageHealthView,
@@ -114,6 +115,16 @@ export {
   isCreativeAssetsReady,
   resolveOperationsPhase,
 } from '@/lib/marketing-jobs/campaign-lifecycle';
+
+export {
+  isCreativePhaseVisible,
+  isFinalDeliveryUnlocked,
+  isOperationsSectionVisible,
+  isStrategyReviewPhase,
+  resolveMarketingAgencyPhase,
+  MARKETING_AGENCY_PHASE_LABELS,
+  type MarketingAgencyPhase,
+} from '@/lib/marketing-jobs/marketing-agency-phase';
 
 export {
   NEXT_CAMPAIGN_RECOMMENDATION,

@@ -8,13 +8,12 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import type { MarketingWorkspaceState } from '@/lib/marketing-jobs/types';
-import type { MarketingJobEngine } from '@/lib/marketing-jobs/job-engine';
 import { buildAiTeamPerformance } from '@/lib/marketing-jobs/command-centre';
 import { MarketingEmptyState } from '@/components/marketing-labs/marketing-empty-state';
 import { MARKETING_EMPTY_STATES } from '@/lib/marketing-labs/empty-states';
 import { MarketingContextualLoader } from '@/components/marketing-labs/marketing-contextual-loader';
-import { CampaignDeliverableDownloads } from '@/components/marketing-labs/campaign-deliverable-downloads';
+import type { MarketingWorkspaceState } from '@/lib/marketing-jobs/types';
+import type { MarketingJobEngine } from '@/lib/marketing-jobs/job-engine';
 
 type AiTeamPerformanceSectionProps = {
   state: MarketingWorkspaceState;
@@ -63,7 +62,7 @@ export function AiTeamPerformanceSection({ state, engine }: AiTeamPerformanceSec
           <CardTitle>Performance summary</CardTitle>
           <CardDescription>
             {showFullReport
-              ? 'Final metrics match your downloadable AI Team Performance Report.'
+              ? 'Final metrics are included in your downloadable AI Team Performance Report.'
               : 'Scores update as the AI Marketing Team completes campaign planning.'}
           </CardDescription>
         </CardHeader>
@@ -110,12 +109,13 @@ export function AiTeamPerformanceSection({ state, engine }: AiTeamPerformanceSec
                 </div>
               </div>
 
-              <CampaignDeliverableDownloads
-                state={state}
-                engine={engine}
-                className="pt-2"
-                showPackagePreview={false}
-              />
+              <p className="border-t pt-4 text-sm text-muted-foreground">
+                Download the full report from{' '}
+                <a href="#final-deliverables" className="font-medium text-primary underline-offset-4 hover:underline">
+                  Final Deliverables
+                </a>
+                .
+              </p>
             </>
           )}
         </CardContent>

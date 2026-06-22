@@ -39,9 +39,12 @@ describe('demo reports config', () => {
       companyName: 'Thirsty Turtl',
     });
 
-    expect(deliverables.reports.client.file).toBe('/demo-reports/thirsty-turtl/client-report.pdf');
+    expect(deliverables.reports.client.file).toBe('/demo-reports/thirsty-turtl/Client-Report.pdf');
     expect(deliverables.reports.client.publicPathHint).toBe(
-      'public/demo-reports/thirsty-turtl/client-report.pdf'
+      'public/demo-reports/thirsty-turtl/Client-Report.pdf'
+    );
+    expect(deliverables.reports.aiTeam.file).toBe(
+      '/demo-reports/thirsty-turtl/ai_team_performance_report.pdf'
     );
     expect(deliverables.reports.client.downloadName).toBe('Thirsty-Turtl-Client-Report.pdf');
     expect(deliverables.campaignPackage.file).toBe('/demo-packages/thirsty-turtl-campaign-package.zip');

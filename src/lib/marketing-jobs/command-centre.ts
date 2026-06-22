@@ -313,3 +313,22 @@ export function buildAiTeamReport(state: MarketingWorkspaceState) {
     documents: buildPackageHealthView(job).documents,
   };
 }
+
+/** Planning-phase report — strategy only, no creative assets. */
+export function buildCampaignStrategyReport(state: MarketingWorkspaceState) {
+  const job = state.jobs.find((j) => j.jobType === 'generate_visuals') ?? null;
+  const packageHealth = buildPackageHealthView(job);
+  return {
+    company: state.campaignContext.company.name,
+    campaignTitle: state.campaignContext.campaign.title,
+    generatedAt: new Date().toISOString(),
+    phase: 'strategy',
+    companyBrain: state.campaignContext.companyBrain,
+    campaign: state.campaignContext.campaign,
+    article: state.campaignContext.article,
+    copy: state.campaignContext.copy,
+    visualRecommendations: state.campaignContext.visualRecommendations,
+    documents: packageHealth.documents,
+    specialists: buildSpecialistPipeline(job),
+  };
+}

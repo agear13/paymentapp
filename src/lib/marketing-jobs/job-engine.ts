@@ -29,9 +29,10 @@ import {
 import {
   buildClientReport,
   buildAiTeamReport,
+  buildCampaignStrategyReport,
   downloadReportJson,
 } from '@/lib/marketing-jobs/command-centre';
-import { DEMO_MODE } from '@/lib/demo/demo-mode';
+import { isDemoModeEnabled } from '@/lib/demo/demo-mode';
 import { tryDownloadDemoDeliverable } from '@/lib/demo/demo-deliverable-download';
 import { getDemoCampaignDeliverables } from '@/lib/demo/demo-reports';
 import {
@@ -274,15 +275,17 @@ export class MarketingJobEngine {
     this.approveAndDispatch(jobId);
   }
 
+  private demoDeliverablesForState(state = this.store.getState()) {
+    return getDemoCampaignDeliverables({
+      campaignId: state.campaignContext.campaign.id,
+      companyName: state.campaignContext.company.name,
+      campaignTitle: state.campaignContext.campaign.title,
+    });
+  }
+
   downloadClientReport(): void {
-    if (DEMO_MODE) {
-      const state = this.store.getState();
-      const deliverables = getDemoCampaignDeliverables({
-        campaignId: state.campaignContext.campaign.id,
-        companyName: state.campaignContext.company.name,
-        campaignTitle: state.campaignContext.campaign.title,
-      });
-      void tryDownloadDemoDeliverable(deliverables, 'client');
+    if (isDemoModeEnabled()) {
+      void tryDownloadDemoDeliverable(this.demoDeliverablesForState(), 'client');
       return;
     }
 
@@ -290,18 +293,24 @@ export class MarketingJobEngine {
   }
 
   downloadAiTeamReport(): void {
-    if (DEMO_MODE) {
-      const state = this.store.getState();
-      const deliverables = getDemoCampaignDeliverables({
-        campaignId: state.campaignContext.campaign.id,
-        companyName: state.campaignContext.company.name,
-        campaignTitle: state.campaignContext.campaign.title,
-      });
-      void tryDownloadDemoDeliverable(deliverables, 'aiTeam');
+    if (isDemoModeEnabled()) {
+      void tryDownloadDemoDeliverable(this.demoDeliverablesForState(), 'aiTeam');
       return;
     }
 
     downloadReportJson('ai-team-report.json', buildAiTeamReport(this.store.getState()));
+  }
+
+  downloadCampaignStrategyReport(): void {
+    if (isDemoModeEnabled()) {
+      void tryDownloadDemoDeliverable(this.demoDeliverablesForState(), 'strategy');
+      return;
+    }
+
+    downloadReportJson(
+      'campaign-strategy-report.json',
+      buildCampaignStrategyReport(this.store.getState())
+    );
   }
 
   approveForPublishing(): void {
@@ -326,14 +335,8 @@ export class MarketingJobEngine {
   }
 
   downloadCampaignPackage(): void {
-    if (DEMO_MODE) {
-      const state = this.store.getState();
-      const deliverables = getDemoCampaignDeliverables({
-        campaignId: state.campaignContext.campaign.id,
-        companyName: state.campaignContext.company.name,
-        campaignTitle: state.campaignContext.campaign.title,
-      });
-      void tryDownloadDemoDeliverable(deliverables, 'package');
+    if (isDemoModeEnabled()) {
+      void tryDownloadDemoDeliverable(this.demoDeliverablesForState(), 'package');
       return;
     }
 

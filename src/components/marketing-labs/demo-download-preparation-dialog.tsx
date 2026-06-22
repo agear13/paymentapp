@@ -13,9 +13,10 @@ import { DEMO_DOWNLOAD_PREP_STEPS } from '@/lib/demo/demo-download';
 import type { DemoDeliverableDownloadTarget } from '@/lib/demo/demo-reports.types';
 
 const PREP_LABELS: Record<DemoDeliverableDownloadTarget, string> = {
-  client: 'Client Report',
+  client: 'Final Client Report',
   aiTeam: 'AI Team Performance Report',
   package: 'Campaign Package',
+  strategy: 'Campaign Strategy Report',
 };
 
 type DemoDownloadPreparationDialogProps = {

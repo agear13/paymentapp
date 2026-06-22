@@ -164,6 +164,20 @@ export const marketingToasts = {
     });
   },
 
+  demoStrategyReportMissing(publicPathHint: string) {
+    showMarketingToast('error', {
+      title: 'Campaign Strategy Report not found.',
+      description: `Place ${publicPathHint} before running the demo.`,
+    });
+  },
+
+  strategyReportDownloaded() {
+    showMarketingToast('success', {
+      title: 'Campaign Strategy Report downloaded successfully.',
+      description: 'Review the planning deliverable before approving the campaign package.',
+    });
+  },
+
   error(message: string) {
     showMarketingToast('error', {
       title: 'Something went wrong',

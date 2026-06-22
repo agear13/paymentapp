@@ -1,6 +1,6 @@
 export type DemoCampaignKey = 'thirsty-turtl' | 'rabbit-hole' | 'tourism-demo';
 
-export type DemoDeliverableDownloadTarget = 'client' | 'aiTeam' | 'package';
+export type DemoDeliverableDownloadTarget = 'client' | 'aiTeam' | 'package' | 'strategy';
 
 export type DemoReportDefinition = {
   file: string;
@@ -42,6 +42,7 @@ export type DemoCampaignDeliverables = {
   reports: {
     client: DemoReportDefinition;
     aiTeam: DemoReportDefinition;
+    strategy: DemoReportDefinition;
   };
   campaignPackage: DemoCampaignPackageDefinition;
 };

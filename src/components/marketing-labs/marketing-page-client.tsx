@@ -16,6 +16,15 @@ import { CampaignsSection } from '@/components/marketing-labs/campaigns-section'
 import { MarketingDashboardSection } from '@/components/marketing-labs/marketing-dashboard-section';
 import { MarketingWalkthrough, MarketingWalkthroughReplayButton } from '@/components/marketing-labs/marketing-walkthrough';
 import { MarketingDemoPanel } from '@/components/marketing-labs/marketing-demo-panel';
+import { MarketingAgencyPhaseBanner } from '@/components/marketing-labs/marketing-agency-phase-banner';
+import { CampaignStrategyReadyPanel } from '@/components/marketing-labs/campaign-strategy-ready-panel';
+import { FinalDeliverablesSection } from '@/components/marketing-labs/final-deliverables-section';
+import {
+  isCreativePhaseVisible,
+  isFinalDeliveryUnlocked,
+  isOperationsSectionVisible,
+  isStrategyReviewPhase,
+} from '@/lib/marketing-jobs/marketing-agency-phase';
 import type { MarketingImportReveal } from '@/components/marketing-labs/marketing-import-reveal';
 
 /** Delay before Creative Assets table fades in after import celebration. */
@@ -32,6 +41,7 @@ export function MarketingPageClient({ companyId, companyName }: MarketingPageCli
   const { state, engine } = useMarketingJobs({ companyId, companyName });
   const [importReveal, setImportReveal] = React.useState<MarketingImportReveal | null>(null);
   const revealTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openApprovePackageRef = React.useRef<(() => void) | null>(null);
 
   React.useEffect(() => {
     return () => {
@@ -47,6 +57,19 @@ export function MarketingPageClient({ companyId, companyName }: MarketingPageCli
     }, ASSETS_TABLE_REVEAL_MS);
   }, []);
 
+  const handleApproveStrategy = React.useCallback(() => {
+    openApprovePackageRef.current?.();
+  }, []);
+
+  const registerApprovePackage = React.useCallback((openApproval: () => void) => {
+    openApprovePackageRef.current = openApproval;
+  }, []);
+
+  const showStrategyReady = isStrategyReviewPhase(state);
+  const showCreativeAssets = isCreativePhaseVisible(state);
+  const showOperations = isOperationsSectionVisible(state);
+  const showFinalDeliverables = isFinalDeliveryUnlocked(state);
+
   return (
     <div className="space-y-14 pb-10">
       <div className="space-y-4">
@@ -58,30 +81,53 @@ export function MarketingPageClient({ companyId, companyName }: MarketingPageCli
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">{MARKETING_DEMO_BRAND} Marketing</h1>
               <p className="text-sm text-muted-foreground">
-                Your AI marketing operating system — Company Brain to publishing, in one place.
+                Your AI marketing agency — from strategy and approval through creative production to delivery.
               </p>
             </div>
           </div>
           <MarketingWalkthroughReplayButton />
         </div>
+        <MarketingAgencyPhaseBanner state={state} />
         <MarketingWalkthrough />
       </div>
+
+      <CompanyBrainSection />
 
       <MarketingCommandCentre
         state={state}
         engine={engine}
         importReveal={importReveal}
         onAssetsImported={handleAssetsImported}
+        onRegisterApprovePackage={registerApprovePackage}
       />
-      <MarketingOperationsSection state={state} engine={engine} />
-      <CampaignAssetsSection state={state} importReveal={importReveal} />
-      <CompanyBrainSection />
+
+      {showStrategyReady ? (
+        <CampaignStrategyReadyPanel
+          state={state}
+          engine={engine}
+          onApprove={handleApproveStrategy}
+        />
+      ) : null}
+
+      {showCreativeAssets ? (
+        <CampaignAssetsSection state={state} importReveal={importReveal} />
+      ) : null}
+
+      {showOperations ? <MarketingOperationsSection state={state} engine={engine} /> : null}
+
+      {showFinalDeliverables ? <FinalDeliverablesSection state={state} engine={engine} /> : null}
+
+      {showFinalDeliverables ? (
+        <>
+          <CampaignInsightsSection state={state} />
+          <AiTeamPerformanceSection state={state} engine={engine} />
+          <NextRecommendedCampaignSection state={state} engine={engine} />
+          <MarketingRoadmapSection state={state} />
+          <MarketingDashboardSection state={state} />
+        </>
+      ) : null}
+
       <CampaignsSection engine={engine} />
-      <CampaignInsightsSection state={state} />
-      <AiTeamPerformanceSection state={state} engine={engine} />
-      <NextRecommendedCampaignSection state={state} engine={engine} />
-      <MarketingRoadmapSection state={state} />
-      <MarketingDashboardSection state={state} />
       <MarketingDemoPanel engine={engine} />
     </div>
   );

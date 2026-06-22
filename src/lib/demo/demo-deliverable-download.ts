@@ -21,6 +21,15 @@ export function getDemoDownloadAsset(
   deliverables: DemoCampaignDeliverables | ResolvedDemoCampaignDeliverables,
   target: DemoDeliverableDownloadTarget
 ): DemoDownloadAsset {
+  if (target === 'strategy') {
+    const report: DemoReportDefinition = deliverables.reports.strategy;
+    return {
+      file: report.file,
+      downloadName: report.downloadName,
+      publicPathHint: report.publicPathHint,
+    };
+  }
+
   if (target === 'client') {
     const report: DemoReportDefinition = deliverables.reports.client;
     return {
@@ -59,10 +68,18 @@ export function showDemoAssetMissingToast(
     marketingToasts.demoAiTeamReportMissing(publicPathHint);
     return;
   }
+  if (target === 'strategy') {
+    marketingToasts.demoStrategyReportMissing(publicPathHint);
+    return;
+  }
   marketingToasts.demoCampaignPackageMissing(publicPathHint);
 }
 
 export function showDemoDownloadSuccessToast(target: DemoDeliverableDownloadTarget): void {
+  if (target === 'strategy') {
+    marketingToasts.strategyReportDownloaded();
+    return;
+  }
   if (target === 'client') {
     marketingToasts.clientReportDownloaded();
     return;

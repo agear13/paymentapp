@@ -59,8 +59,8 @@ import { getDispatchManifestItems } from '@/lib/marketing-jobs/creative-team';
 import { isVisualJobInFlight, isVisualJobReadyForDispatch } from '@/lib/marketing-jobs/simulation';
 import { getSpecialistIcon } from '@/components/marketing-labs/specialist-icon';
 import { CreativeProductionCompletePanel } from '@/components/marketing-labs/creative-production-complete-panel';
-import { CampaignDeliverableDownloads } from '@/components/marketing-labs/campaign-deliverable-downloads';
 import type { MarketingImportReveal } from '@/components/marketing-labs/marketing-import-reveal';
+import { isStrategyReviewPhase } from '@/lib/marketing-jobs/marketing-agency-phase';
 import { selectReadyAssetCount } from '@/lib/marketing-jobs/job-engine';
 
 type MarketingCommandCentreProps = {
@@ -68,6 +68,7 @@ type MarketingCommandCentreProps = {
   engine: MarketingJobEngine;
   importReveal?: MarketingImportReveal | null;
   onAssetsImported?: (importedCount: number) => void;
+  onRegisterApprovePackage?: (openApproval: () => void) => void;
 };
 
 function statusBadgeClass(status: SpecialistPipelineEntry['status']): string {
@@ -91,11 +92,16 @@ export function MarketingCommandCentre({
   engine,
   importReveal,
   onAssetsImported,
+  onRegisterApprovePackage,
 }: MarketingCommandCentreProps) {
   const [busy, setBusy] = React.useState(false);
   const [approvalOpen, setApprovalOpen] = React.useState(false);
   const [selectedSpecialistId, setSelectedSpecialistId] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    onRegisterApprovePackage?.(() => setApprovalOpen(true));
+  }, [onRegisterApprovePackage]);
 
   const visualJob = selectVisualGenerationJob(state.jobs);
   const campaignStatus = buildCampaignStatus(state, visualJob);
@@ -107,6 +113,7 @@ export function MarketingCommandCentre({
   const completion = buildCampaignCompletion(state);
   const inFlight = state.jobs.some(isVisualJobInFlight);
   const readyForApproval = Boolean(visualJob && isVisualJobReadyForDispatch(visualJob));
+  const strategyReview = isStrategyReviewPhase(state);
   const specialistDetail = selectedSpecialistId ? getSpecialistDetail(selectedSpecialistId) : null;
 
   const scrollTo = (hash: string) => () => {
@@ -177,17 +184,19 @@ export function MarketingCommandCentre({
               idleLabel={
                 <>
                   <Play className="mr-2 size-4" />
-                  Start AI Marketing Team
+                  Generate Campaign
                 </>
               }
-              loadingLabel="Assigning specialists…"
-              successLabel="AI Marketing Team started ✓"
+              loadingLabel="AI specialists researching…"
+              successLabel="Campaign generation started ✓"
               onAction={handleStartTeam}
               disabled={inFlight}
             />
           ) : null}
-          {readyForApproval && state.packageApproval.status === 'pending' ? (
-            <Button onClick={() => setApprovalOpen(true)}>Approve Campaign Package</Button>
+          {readyForApproval && state.packageApproval.status === 'pending' && !strategyReview ? (
+            <Button onClick={() => setApprovalOpen(true)} data-marketing-approve-package>
+              Approve Campaign Package
+            </Button>
           ) : null}
           {state.creativeDispatch.status === 'dispatched' &&
           state.creativeDispatch.creativeProductionStatus !== 'complete' ? (
@@ -249,10 +258,6 @@ export function MarketingCommandCentre({
             (selectReadyAssetCount(state.assets) || (completion?.creativeAssetsProduced ?? 0))
           }
         />
-      ) : null}
-
-      {completion ? (
-        <CampaignCompletionPanel completion={completion} engine={engine} state={state} />
       ) : null}
 
       <ApprovalDialog
@@ -531,69 +536,6 @@ function CreativeProductionPanel({ state }: { state: MarketingWorkspaceState }) 
         <div>
           <p className="text-xs text-muted-foreground">Progress</p>
           <p className="font-semibold">{state.creativeDispatch.productionPhase}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CampaignCompletionPanel({
-  completion,
-  engine,
-  state,
-}: {
-  completion: NonNullable<ReturnType<typeof buildCampaignCompletion>>;
-  engine: MarketingJobEngine;
-  state: MarketingWorkspaceState;
-}) {
-  const deliverableLines = [
-    `${completion.creativeAssetsProduced} Creative Assets`,
-    `${completion.campaignDocuments} Campaign Documents`,
-    completion.clientReportReady ? 'Client Report Ready' : 'Client Report Pending',
-    completion.aiTeamReportReady ? 'AI Team Performance Report Ready' : 'AI Team Report Pending',
-    completion.qualityAssurance === 'Passed' ? 'Quality Assurance Passed' : 'Quality Assurance Pending',
-    `Brand Compliance ${completion.brandCompliance}%`,
-    `Knowledge Coverage ${completion.knowledgeCoverage}%`,
-  ];
-
-  return (
-    <Card className="border-primary/25 bg-gradient-to-br from-primary/[0.04] via-background to-[rgba(29,111,66,0.03)] animate-in fade-in duration-500">
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="size-5 text-primary" />
-          <CardTitle className="text-lg">Campaign Complete</CardTitle>
-        </div>
-        <CardDescription>
-          Final agency handover — polished deliverables ready for client review and approval.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {deliverableLines.map((line) => (
-            <li key={line} className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="size-4 shrink-0 text-[rgb(29,111,66)]" />
-              <span className="font-medium">{line}</span>
-            </li>
-          ))}
-        </ul>
-
-        <div className="rounded-lg border border-primary/15 bg-primary/[0.03] px-4 py-3">
-          <p className="text-xs text-muted-foreground">Estimated Time Saved</p>
-          <p className="text-2xl font-semibold tabular-nums tracking-tight">
-            {completion.estimatedTimeSavedHours} Hours
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">{completion.campaignStatus}</p>
-        </div>
-
-        <CampaignDeliverableDownloads state={state} engine={engine} />
-
-        <div className="flex flex-wrap gap-2 border-t pt-2">
-          <Button variant="outline" size="sm" asChild>
-            <a href="#campaign-assets">View Creative Assets</a>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <a href="#marketing-operations">Marketing Operations</a>
-          </Button>
         </div>
       </CardContent>
     </Card>

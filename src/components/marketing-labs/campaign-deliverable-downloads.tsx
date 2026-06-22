@@ -1,28 +1,21 @@
 'use client';
 
-import * as React from 'react';
 import type { ComponentType } from 'react';
 import {
   BarChart3,
   CheckCircle2,
   Clock3,
   Download,
+  ExternalLink,
   FileText,
   ImageIcon,
-  Package,
   Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { DEMO_MODE } from '@/lib/demo/demo-mode';
-import { runDemoDownloadPreparation } from '@/lib/demo/demo-download';
-import {
-  checkDemoDeliverableExists,
-  downloadDemoDeliverableFile,
-  showDemoAssetMissingToast,
-} from '@/lib/demo/demo-deliverable-download';
+import { isDemoModeEnabled } from '@/lib/demo/demo-mode';
 import { getDemoCampaignDeliverables } from '@/lib/demo/demo-reports';
-import type { DemoDeliverableDownloadTarget } from '@/lib/demo/demo-reports.types';
+import { useMarketingDeliverableDownload } from '@/hooks/use-marketing-deliverable-download';
 import { DemoDownloadPreparationDialog } from '@/components/marketing-labs/demo-download-preparation-dialog';
 import type { MarketingJobEngine } from '@/lib/marketing-jobs/job-engine';
 import type { MarketingWorkspaceState } from '@/lib/marketing-jobs/types';
@@ -31,8 +24,7 @@ type CampaignDeliverableDownloadsProps = {
   state: MarketingWorkspaceState;
   engine: MarketingJobEngine;
   className?: string;
-  showReportCards?: boolean;
-  showPackagePreview?: boolean;
+  variant?: 'final' | 'reports-only';
 };
 
 function PackageStatCard({
@@ -58,22 +50,14 @@ function ReportReadyCard({
   title,
   statusLabel,
   includes,
-  className,
 }: {
   icon: ComponentType<{ className?: string }>;
   title: string;
   statusLabel: string;
   includes: readonly string[];
-  className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        'rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] to-background p-4 shadow-sm',
-        'animate-in fade-in slide-in-from-bottom-1 duration-500',
-        className
-      )}
-    >
+    <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] to-background p-4 shadow-sm animate-in fade-in slide-in-from-bottom-1 duration-500">
       <div className="flex items-start gap-3">
         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-sm">
           <Icon className="size-4" />
@@ -101,8 +85,7 @@ export function CampaignDeliverableDownloads({
   state,
   engine,
   className,
-  showReportCards = true,
-  showPackagePreview = true,
+  variant = 'final',
 }: CampaignDeliverableDownloadsProps) {
   const deliverables = getDemoCampaignDeliverables({
     campaignId: state.campaignContext.campaign.id,
@@ -111,83 +94,34 @@ export function CampaignDeliverableDownloads({
   });
 
   const { presentation, reports, campaignPackage } = deliverables;
-  const [prepOpen, setPrepOpen] = React.useState(false);
-  const [prepStep, setPrepStep] = React.useState(0);
-  const [prepTarget, setPrepTarget] = React.useState<DemoDeliverableDownloadTarget | null>(null);
-  const [downloading, setDownloading] = React.useState(false);
-
-  const runDemoDownload = React.useCallback(
-    async (target: DemoDeliverableDownloadTarget) => {
-      if (downloading) return;
-
-      const exists = await checkDemoDeliverableExists(deliverables, target);
-      if (!exists) {
-        const asset =
-          target === 'client'
-            ? deliverables.reports.client
-            : target === 'aiTeam'
-              ? deliverables.reports.aiTeam
-              : deliverables.campaignPackage;
-        showDemoAssetMissingToast(target, asset.publicPathHint);
-        return;
-      }
-
-      setDownloading(true);
-      setPrepTarget(target);
-      setPrepStep(0);
-      setPrepOpen(true);
-
-      try {
-        await runDemoDownloadPreparation(setPrepStep);
-        await downloadDemoDeliverableFile(deliverables, target);
-      } finally {
-        setPrepOpen(false);
-        setPrepTarget(null);
-        setPrepStep(0);
-        setDownloading(false);
-      }
-    },
-    [deliverables, downloading]
+  const { download, downloading, prepOpen, prepStep, prepTarget } = useMarketingDeliverableDownload(
+    engine,
+    state
   );
 
-  const handleClientReport = () => {
-    if (DEMO_MODE) void runDemoDownload('client');
-    else engine.downloadClientReport();
-  };
-
-  const handleAiTeamReport = () => {
-    if (DEMO_MODE) void runDemoDownload('aiTeam');
-    else engine.downloadAiTeamReport();
-  };
-
-  const handleCampaignPackage = () => {
-    if (DEMO_MODE) void runDemoDownload('package');
-    else engine.downloadCampaignPackage();
-  };
+  const showFullPackage = variant === 'final';
 
   return (
     <>
       <DemoDownloadPreparationDialog open={prepOpen} step={prepStep} target={prepTarget} />
 
       <div className={cn('space-y-6', className)}>
-        {showReportCards ? (
-          <div className="grid gap-3 lg:grid-cols-2">
-            <ReportReadyCard
-              icon={FileText}
-              title={reports.client.title}
-              statusLabel={reports.client.statusLabel}
-              includes={reports.client.includes}
-            />
-            <ReportReadyCard
-              icon={Settings2}
-              title={reports.aiTeam.title}
-              statusLabel={reports.aiTeam.statusLabel}
-              includes={reports.aiTeam.includes}
-            />
-          </div>
-        ) : null}
+        <div className="grid gap-3 lg:grid-cols-2">
+          <ReportReadyCard
+            icon={FileText}
+            title={reports.client.title}
+            statusLabel={reports.client.statusLabel}
+            includes={reports.client.includes}
+          />
+          <ReportReadyCard
+            icon={Settings2}
+            title={reports.aiTeam.title}
+            statusLabel={reports.aiTeam.statusLabel}
+            includes={reports.aiTeam.includes}
+          />
+        </div>
 
-        {showPackagePreview ? (
+        {showFullPackage ? (
           <div className="space-y-4 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.04] via-background to-background p-5 shadow-sm">
             <div>
               <p className="text-base font-semibold">{campaignPackage.title}</p>
@@ -240,37 +174,44 @@ export function CampaignDeliverableDownloads({
 
             <Button
               className="h-11 w-full text-base"
-              onClick={handleCampaignPackage}
+              onClick={() => void download('package')}
               disabled={downloading}
             >
               <Download className="mr-2 size-4" />
               Download Complete Campaign Package
             </Button>
           </div>
-        ) : (
-          <Button
-            className="h-11 w-full text-base"
-            onClick={handleCampaignPackage}
-            disabled={downloading}
-          >
-            <Package className="mr-2 size-4" />
-            Download Complete Campaign Package
-          </Button>
-        )}
+        ) : null}
 
         <div className="space-y-3 border-t pt-4">
           <p className="text-sm font-semibold">Individual Reports</p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={handleClientReport} disabled={downloading}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void download('client')}
+              disabled={downloading}
+            >
               <Download className="mr-2 size-4" />
-              Download Client Report
+              Download Final Client Report
             </Button>
-            <Button variant="outline" size="sm" onClick={handleAiTeamReport} disabled={downloading}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void download('aiTeam')}
+              disabled={downloading}
+            >
               <Download className="mr-2 size-4" />
               Download AI Team Performance Report
             </Button>
+            <Button variant="outline" size="sm" asChild>
+              <a href="#campaign-assets">
+                <ExternalLink className="mr-2 size-4" />
+                View Creative Assets
+              </a>
+            </Button>
           </div>
-          {DEMO_MODE ? null : (
+          {isDemoModeEnabled() ? null : (
             <p className="text-xs text-muted-foreground">
               Reports are generated dynamically from campaign data when demo mode is off.
             </p>

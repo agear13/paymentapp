@@ -65,31 +65,57 @@ const AI_TEAM_REPORT_INCLUDES = [
   'Time Saved',
 ] as const;
 
+const STRATEGY_REPORT_INCLUDES = [
+  'Campaign Objectives',
+  'Audience Research',
+  'SEO Strategy',
+  'Channel Plan',
+  'Content Outline',
+  'Creative Direction Brief',
+] as const;
+
 function buildCampaignEntry(input: {
   key: DemoCampaignKey;
   matchers: readonly string[];
   reportPrefix: string;
   packageFileName: string;
   presentation: DemoCampaignDeliverables['presentation'];
+  clientReportFile?: string;
+  aiTeamReportFile?: string;
+  strategyReportFile?: string;
 }): DemoCampaignDeliverables {
+  const clientFile = input.clientReportFile ?? 'client-report.pdf';
+  const aiTeamFile = input.aiTeamReportFile ?? 'ai-team-performance-report.pdf';
+  const strategyFile = input.strategyReportFile ?? 'campaign-strategy-report.pdf';
+
   return {
     key: input.key,
     matchers: input.matchers,
     presentation: input.presentation,
     reports: {
+      strategy: {
+        file: `/demo-reports/${input.key}/${strategyFile}`,
+        publicPathHint: `public/demo-reports/${input.key}/${strategyFile}`,
+        downloadName: `${input.reportPrefix}-Campaign-Strategy-Report.pdf`,
+        title: 'Campaign Strategy Report',
+        description: 'Planning deliverable — research, SEO, channel strategy and creative direction. No creative assets.',
+        statusLabel: 'Ready for Approval',
+        statusDetail: 'Planning phase only',
+        includes: STRATEGY_REPORT_INCLUDES,
+      },
       client: {
-        file: `/demo-reports/${input.key}/client-report.pdf`,
-        publicPathHint: `public/demo-reports/${input.key}/client-report.pdf`,
+        file: `/demo-reports/${input.key}/${clientFile}`,
+        publicPathHint: `public/demo-reports/${input.key}/${clientFile}`,
         downloadName: `${input.reportPrefix}-Client-Report.pdf`,
-        title: 'Client Report',
-        description: 'Campaign strategy, content previews, approval pack and recommendations.',
+        title: 'Final Client Report',
+        description: 'Complete campaign handover — strategy, content previews, creative assets and recommendations.',
         statusLabel: 'Ready for Client Approval',
         statusDetail: `${input.presentation.clientReportPages} Pages`,
         includes: CLIENT_REPORT_INCLUDES,
       },
       aiTeam: {
-        file: `/demo-reports/${input.key}/ai-team-performance-report.pdf`,
-        publicPathHint: `public/demo-reports/${input.key}/ai-team-performance-report.pdf`,
+        file: `/demo-reports/${input.key}/${aiTeamFile}`,
+        publicPathHint: `public/demo-reports/${input.key}/${aiTeamFile}`,
         downloadName: `${input.reportPrefix}-AI-Team-Performance-Report.pdf`,
         title: 'AI Team Performance Report',
         description:
@@ -117,6 +143,8 @@ export const DEMO_CAMPAIGN_DELIVERABLES = [
     matchers: ['thirsty turtl', 'gentle-cleanser', 'gentle cleanser'],
     reportPrefix: 'Thirsty-Turtl',
     packageFileName: 'thirsty-turtl-campaign-package.zip',
+    clientReportFile: 'Client-Report.pdf',
+    aiTeamReportFile: 'ai_team_performance_report.pdf',
     presentation: {
       creativeAssets: 12,
       clientReportPages: 22,
