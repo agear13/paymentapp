@@ -79,13 +79,30 @@ describe('participant-commercial-lifecycle', () => {
     expect(shouldRequestPayoutDetails(p)).toBe(false);
   });
 
-  it('approved agreement without onboarding is AGREEMENT_ACCEPTED', () => {
+  it('approved agreement without payment request stays AGREEMENT_ACCEPTED', () => {
     const p = baseParticipant({
       approvalStatus: 'Approved',
       approvedAt: '2024-01-03T00:00:00Z',
     });
     expect(deriveParticipantCommercialLifecycle(p)).toBe('AGREEMENT_ACCEPTED');
     expect(shouldRequestPayoutDetails(p)).toBe(true);
+  });
+
+  it('payment request sent moves to PAYMENT_INFO_PENDING', () => {
+    const p = baseParticipant({
+      approvalStatus: 'Approved',
+      approvedAt: '2024-01-03T00:00:00Z',
+      paymentSetup: {
+        paymentRequestGeneratedAt: '2024-01-04T00:00:00Z',
+        token: 'tok',
+        tokenExpiresAt: '2099-01-01T00:00:00Z',
+      },
+      supplierOnboarding: { lifecycle: 'INVITED' },
+      payoutOnboardingPhase: 'INVITED',
+    });
+    expect(deriveParticipantCommercialLifecycle(p)).toBe('PAYMENT_INFO_PENDING');
+    const action = deriveParticipantLifecycleAction(p);
+    expect(action.destination).toBe('share_payment_request');
   });
 
   it('submitted onboarding requires operator review', () => {

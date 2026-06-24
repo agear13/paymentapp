@@ -89,11 +89,15 @@ const STAGE_CONFIG: Record<
 type ParticipantOnboardingStatusCardProps = {
   participant: DemoParticipant;
   projectId: string;
+  onSendPaymentRequest?: (participant: DemoParticipant) => void;
+  onSharePaymentRequest?: (participant: DemoParticipant) => void;
 };
 
 export function ParticipantOnboardingStatusCard({
   participant,
   projectId,
+  onSendPaymentRequest,
+  onSharePaymentRequest,
 }: ParticipantOnboardingStatusCardProps) {
   const stage = deriveParticipantCommercialLifecycle(participant);
   const action = deriveParticipantLifecycleAction(participant);
@@ -140,14 +144,41 @@ export function ParticipantOnboardingStatusCard({
       </div>
 
       <div className="shrink-0 flex items-center gap-2">
-        {action.destination !== 'none' && action.urgency !== 'none' && (
+        {action.destination === 'send_payment_request' && onSendPaymentRequest ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={config.ctaVariant}
+            className="whitespace-nowrap"
+            onClick={() => onSendPaymentRequest(participant)}
+          >
+            {action.label}
+            <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+          </Button>
+        ) : null}
+        {action.destination === 'share_payment_request' && onSharePaymentRequest ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={config.ctaVariant}
+            className="whitespace-nowrap"
+            onClick={() => onSharePaymentRequest(participant)}
+          >
+            {action.label}
+            <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+          </Button>
+        ) : null}
+        {action.destination !== 'none' &&
+        action.urgency !== 'none' &&
+        action.destination !== 'send_payment_request' &&
+        action.destination !== 'share_payment_request' ? (
           <Button asChild size="sm" variant={config.ctaVariant} className="whitespace-nowrap">
             <Link href={ctaHref}>
               {action.label}
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>
           </Button>
-        )}
+        ) : null}
       </div>
     </div>
   );

@@ -28,6 +28,12 @@ import { ProjectSectionErrorBoundary } from '@/components/projects/project-secti
 import { ProjectParticipantTableRow } from '@/components/projects/project-participant-table-row';
 import { EditProjectParticipantDialog } from '@/components/projects/edit-project-participant-dialog';
 import { ParticipantAgreementShareDialog } from '@/components/projects/participant-agreement-share-dialog';
+import { ParticipantPaymentRequestShareDialog } from '@/components/commercial/payment-tax/participant-payment-request-share-dialog';
+import { projectPaymentRequestsPath } from '@/lib/projects/project-routes';
+import {
+  buildParticipantPaymentPortalUrl,
+  deriveParticipantCommercialLifecycle,
+} from '@/lib/commercial/participant-commercial-lifecycle';
 import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-guidance';
 import { OperatorPayoutVerificationInfo } from '@/components/projects/operator-payout-verification-info';
 import type { DemoParticipantRole } from '@/components/deal-network-demo/invite-participant-modal';
@@ -208,6 +214,7 @@ export function ProjectParticipantsView() {
   const focusApprovals = searchParams?.get('focus') === 'approvals';
   /** When true, show the Supplier Onboarding panel. Set via ?focus=onboarding. */
   const focusOnboarding = searchParams?.get('focus') === 'onboarding';
+  const focusPaymentRequests = searchParams?.get('focus') === 'payment-requests';
   /** When set, auto-open the operator review panel for this participant. Set via ?review=<id>. */
   const reviewParticipantId = searchParams?.get('review') ?? null;
   const [inviteOpen, setInviteOpen] = React.useState(false);
@@ -216,6 +223,11 @@ export function ProjectParticipantsView() {
     React.useState<DemoParticipant | null>(null);
   const [agreementShareParticipant, setAgreementShareParticipant] =
     React.useState<DemoParticipant | null>(null);
+  const [paymentRequestShareParticipant, setPaymentRequestShareParticipant] =
+    React.useState<DemoParticipant | null>(null);
+  const [paymentRequestPortalUrl, setPaymentRequestPortalUrl] = React.useState<string | null>(null);
+  const [paymentRequestEmailSending, setPaymentRequestEmailSending] = React.useState(false);
+  const [paymentRequestGenerating, setPaymentRequestGenerating] = React.useState(false);
   const [recentlySavedParticipantId, setRecentlySavedParticipantId] = React.useState<
     string | null
   >(null);
@@ -339,6 +351,104 @@ export function ProjectParticipantsView() {
     },
     [allDeals, allParticipants, isAllowed, saveSnapshot]
   );
+
+  const openPaymentRequestShare = React.useCallback(
+    (p: DemoParticipant, portalUrl: string) => {
+      setPaymentRequestShareParticipant(p);
+      setPaymentRequestPortalUrl(portalUrl);
+    },
+    []
+  );
+
+  const generatePaymentRequest = React.useCallback(
+    async (p: DemoParticipant, options?: { sendEmail?: boolean }) => {
+      if (!isAllowed('approval_workflows')) {
+        setApprovalUpgradeOpen(true);
+        return;
+      }
+      setPaymentRequestGenerating(true);
+      try {
+        const res = await fetch(
+          `/api/deal-network-pilot/participants/${p.id}/payment-request/generate`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sendEmail: options?.sendEmail ?? false }),
+          }
+        );
+        const json = (await res.json()) as {
+          error?: string;
+          participant?: DemoParticipant;
+          portalUrl?: string;
+          emailSent?: boolean;
+          message?: string;
+        };
+        if (!res.ok) {
+          throw new Error(json.error ?? 'Failed to generate payment request');
+        }
+        if (json.participant) {
+          patchParticipants((list) =>
+            list.map((x) => (x.id === p.id ? json.participant! : x))
+          );
+        }
+        await applyOperationalSyncRefresh(syncHandlers, parseOperationalSync(json), {
+          mutation: 'supplier_onboarding',
+          projectId,
+          participantId: p.id,
+          surface: 'project-participants-view',
+        });
+        const portalUrl =
+          json.portalUrl ??
+          (json.participant
+            ? buildParticipantPaymentPortalUrl(json.participant)
+            : null);
+        if (portalUrl && json.participant) {
+          openPaymentRequestShare(json.participant, portalUrl);
+        }
+        if (json.emailSent) {
+          toast.success(json.message ?? 'Payment request emailed');
+        } else if (!options?.sendEmail) {
+          toast.success(json.message ?? 'Payment request ready to share');
+        }
+        return json;
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : 'Failed to generate payment request');
+        return null;
+      } finally {
+        setPaymentRequestGenerating(false);
+      }
+    },
+    [isAllowed, patchParticipants, projectId, syncHandlers, openPaymentRequestShare]
+  );
+
+  const handleSendPaymentRequest = React.useCallback(
+    (p: DemoParticipant) => {
+      void generatePaymentRequest(p);
+    },
+    [generatePaymentRequest]
+  );
+
+  const handleSharePaymentRequest = React.useCallback(
+    (p: DemoParticipant) => {
+      const existingUrl = buildParticipantPaymentPortalUrl(p);
+      if (existingUrl) {
+        openPaymentRequestShare(p, existingUrl);
+      } else {
+        void generatePaymentRequest(p);
+      }
+    },
+    [generatePaymentRequest, openPaymentRequestShare]
+  );
+
+  const handleSendPaymentRequestEmail = React.useCallback(async () => {
+    if (!paymentRequestShareParticipant) return;
+    setPaymentRequestEmailSending(true);
+    try {
+      await generatePaymentRequest(paymentRequestShareParticipant, { sendEmail: true });
+    } finally {
+      setPaymentRequestEmailSending(false);
+    }
+  }, [paymentRequestShareParticipant, generatePaymentRequest]);
 
   const updateParticipantDetails = React.useCallback(
     async (
@@ -631,6 +741,29 @@ export function ProjectParticipantsView() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusApprovals, showApprovalCentre]);
 
+  React.useEffect(() => {
+    if (!focusPaymentRequests || showApprovalCentre) return;
+    const target =
+      displayParticipants.find(
+        (p) => deriveParticipantCommercialLifecycle(p) === 'AGREEMENT_ACCEPTED'
+      ) ??
+      displayParticipants.find(
+        (p) => deriveParticipantCommercialLifecycle(p) === 'PAYMENT_INFO_PENDING'
+      );
+    if (!target) return;
+    setRecentlySavedParticipantId(target.id);
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`participant-${target.id}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    const clear = window.setTimeout(() => setRecentlySavedParticipantId(null), 2500);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(clear);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPaymentRequests, showApprovalCentre]);
+
   const participantEntities = React.useMemo(
     () => hydratedParticipants.map(participantEntity),
     [hydratedParticipants]
@@ -807,7 +940,9 @@ export function ProjectParticipantsView() {
         {stats.primaryLifecycleMessage ? (
           <Card
             className={
-              stats.paymentProfilesAwaitingReview > 0 || stats.earningsConfigurationNeeded > 0
+              stats.paymentProfilesAwaitingReview > 0 ||
+              stats.earningsConfigurationNeeded > 0 ||
+              stats.paymentRequestsReadyToSend > 0
                 ? 'border-amber-200 bg-amber-50/50'
                 : 'border-border'
             }
@@ -815,16 +950,26 @@ export function ProjectParticipantsView() {
             <CardContent className="py-4 flex items-start gap-3">
               <AlertCircle
                 className={
-                  stats.paymentProfilesAwaitingReview > 0 || stats.earningsConfigurationNeeded > 0
+                  stats.paymentProfilesAwaitingReview > 0 ||
+                  stats.earningsConfigurationNeeded > 0 ||
+                  stats.paymentRequestsReadyToSend > 0
                     ? 'h-5 w-5 text-amber-600 shrink-0 mt-0.5'
                     : 'h-5 w-5 text-muted-foreground shrink-0 mt-0.5'
                 }
               />
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">{stats.primaryLifecycleMessage}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   The dashboard shows the next required action in the participant commercial lifecycle.
                 </p>
+                {(stats.paymentRequestsReadyToSend > 0 ||
+                  stats.paymentRequestsAwaitingResponse > 0) && (
+                  <Button asChild variant="link" size="sm" className="h-auto p-0 mt-2 text-xs">
+                    <Link href={projectPaymentRequestsPath(projectId)}>
+                      Review participants
+                    </Link>
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -894,6 +1039,8 @@ export function ProjectParticipantsView() {
                 key={p.id}
                 participant={p}
                 projectId={projectId}
+                onSendPaymentRequest={handleSendPaymentRequest}
+                onSharePaymentRequest={handleSharePaymentRequest}
               />
             ))}
           </div>
@@ -925,8 +1072,14 @@ export function ProjectParticipantsView() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Payment profiles awaiting review</CardDescription>
-                <CardTitle className="text-2xl">{stats.paymentProfilesAwaitingReview}</CardTitle>
+                <CardDescription>Payment requests ready to send</CardDescription>
+                <CardTitle className="text-2xl">{stats.paymentRequestsReadyToSend}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Awaiting participant response</CardDescription>
+                <CardTitle className="text-2xl">{stats.paymentRequestsAwaitingResponse}</CardTitle>
               </CardHeader>
             </Card>
           </div>
@@ -1050,8 +1203,11 @@ export function ProjectParticipantsView() {
                           participant={p}
                           catalogContext={catalogContext}
                           highlighted={recentlySavedParticipantId === p.id}
+                          projectId={projectId}
                           onCopyAgreement={openAgreementShare}
                           onShareAgreement={openAgreementShare}
+                          onSendPaymentRequest={handleSendPaymentRequest}
+                          onSharePaymentRequest={handleSharePaymentRequest}
                           onEdit={setEditParticipant}
                           onConfigureCompensation={openCompensationConfig}
                           organizationId={organizationId}
@@ -1103,6 +1259,21 @@ export function ProjectParticipantsView() {
           onOpenChange={(open) => {
             if (!open) setAgreementShareParticipant(null);
           }}
+        />
+
+        <ParticipantPaymentRequestShareDialog
+          participant={paymentRequestShareParticipant}
+          portalUrl={paymentRequestPortalUrl}
+          projectName={deal?.dealName ?? summary.name}
+          open={Boolean(paymentRequestShareParticipant)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPaymentRequestShareParticipant(null);
+              setPaymentRequestPortalUrl(null);
+            }
+          }}
+          onSendEmail={handleSendPaymentRequestEmail}
+          sendingEmail={paymentRequestEmailSending || paymentRequestGenerating}
         />
 
         <PlanUpgradeDialog

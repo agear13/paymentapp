@@ -13,15 +13,9 @@ import { referralTrace } from '@/lib/referrals/referral-trace';
 import { hydrateAgreementEligibleServices } from '@/lib/operations/hydration/hydrate-agreement-eligible-services.server';
 import { dispatchCommercialNotification } from '@/lib/commercial/dispatch-commercial-notification.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
-import {
-  createPaymentSetupToken,
-  persistDraftInvoice,
-  persistPaymentSetupToken,
-} from '@/lib/commercial/payment-setup.server';
+import { persistDraftInvoice } from '@/lib/commercial/payment-setup.server';
 import { buildSupplierOnboardingInput } from '@/lib/commercial/build-supplier-onboarding-input';
 import { generateDraftInvoice } from '@/lib/commercial/supplier-onboarding';
-import { sendEmail } from '@/lib/email/client';
-import { buildPaymentSetupInviteEmail } from '@/lib/email/templates/payment-setup-invite';
 import { v4 as uuidv4 } from 'uuid';
 import type { PersistedDraftInvoice } from '@/lib/commercial/payment-setup-types';
 
@@ -101,14 +95,12 @@ export async function POST(
         });
       }
 
-      // Generate and persist draft invoice + payment setup token, then email supplier
+      // Persist draft invoice only — operator sends payment request explicitly.
       void (async () => {
         try {
           const deal = result.deal;
-          // result.deal is a RecentDeal domain object — use dealName directly, not deal_payload
           const dealName = deal.dealName ?? 'Your project';
 
-          // 1. Generate draft invoice from commercial terms
           const input = buildSupplierOnboardingInput(result.participant, {
             id: deal.id,
             name: dealName,
@@ -141,58 +133,7 @@ export async function POST(
           };
           await persistDraftInvoice(result.participant.id, persistedInvoice);
 
-          // 2. Generate payment setup token
-          const tokenData = createPaymentSetupToken();
-          await persistPaymentSetupToken(result.participant.id, tokenData);
-
-          // 3. Email supplier (tracked for H-4 notification accuracy) — see step 4 below
-
-          // 4. Email supplier if they have an email address
-          const supplierEmail = result.participant.email;
-          let emailDispatched = false;
-          if (supplierEmail) {
-            const appUrl = process.env.NEXT_PUBLIC_APP_URL
-              ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://app.provvypay.com');
-            const portalUrl = `${appUrl}/payment-setup/${tokenData.token}`;
-            const invoiceTotal = new Intl.NumberFormat('en-AU', {
-              style: 'currency',
-              currency: derived.currency,
-            }).format(derived.total);
-
-            // Operator display name: use the organisation name since users are Supabase-managed
-            // (no Prisma `users` model — auth is in Supabase, not the application database).
-            const operatorName = org?.name ?? 'Your organiser';
-
-            const emailContent = buildPaymentSetupInviteEmail({
-              supplierName: result.participant.name,
-              operatorName,
-              projectName: dealName,
-              invoiceTotal,
-              portalUrl,
-              expiresAt: tokenData.tokenExpiresAt,
-            });
-
-            try {
-              await sendEmail({
-                to: supplierEmail,
-                subject: emailContent.subject,
-                html: emailContent.html,
-                text: emailContent.text,
-                tags: [
-                  { name: 'category', value: 'payment-setup' },
-                  { name: 'participant_id', value: result.participant.id },
-                ],
-              });
-              emailDispatched = true;
-            } catch (emailErr) {
-              log.error('post-approval: email dispatch failed', undefined, {
-                participantId: result.participant.id,
-                error: emailErr instanceof Error ? emailErr.message : String(emailErr),
-              });
-            }
-          }
-
-          // H-4: Re-dispatch notification now we know whether email was actually sent
+          const org = await getOrganizationForAuthenticatedUser(owner.user_id);
           if (org) {
             void dispatchCommercialNotification({
               organizationId: org.id,
@@ -200,12 +141,11 @@ export async function POST(
               projectId: deal.id,
               participantId: result.participant.id,
               participantName: result.participant.name,
-              emailDispatched,
+              emailDispatched: false,
             });
           }
         } catch (err) {
-          // Non-blocking — don't fail the approval if post-approval setup fails
-          log.error('post-approval payment setup failed', undefined, {
+          log.error('post-approval draft invoice failed', undefined, {
             participantId: result.participant.id,
             error: err instanceof Error ? err.message : String(err),
           });

@@ -14,6 +14,9 @@ export const PAYOUT_CONFIRMATION_LABELS = {
 export const AGREEMENT_SHARE_HELPER =
   'You may also share this agreement link through SMS, WhatsApp, or other messaging platforms.';
 
+export const PAYMENT_REQUEST_SHARE_HELPER =
+  'Share this secure link via email, SMS, WhatsApp, QR code, or any channel you already use with this participant. They always arrive at the same payment & tax information page.';
+
 export const AGREEMENT_ACTION_COPY = {
   copyLink: {
     label: 'Copy agreement link',

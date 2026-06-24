@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findParticipantByPaymentSetupToken } from '@/lib/commercial/payment-setup.server';
+import { recordPaymentPortalOpened } from '@/lib/commercial/payment-request.server';
 import { buildSupplierOnboardingInput } from '@/lib/commercial/build-supplier-onboarding-input';
 import { generateDraftInvoice } from '@/lib/commercial/supplier-onboarding';
 
@@ -31,6 +32,8 @@ export async function GET(
 
   const { participant } = result;
   const deal = result.deal.deal_payload as { dealName?: string; id?: string };
+
+  void recordPaymentPortalOpened(participant.id);
 
   // Build the onboarding input to derive the current draft invoice
   const input = buildSupplierOnboardingInput(participant, {

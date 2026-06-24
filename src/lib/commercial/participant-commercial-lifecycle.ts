@@ -168,6 +168,44 @@ function mapSupplierToCommercialStage(
   return 'AGREEMENT_ACCEPTED';
 }
 
+/** Operator generated and shared the payment & tax portal with the participant. */
+export function isPaymentRequestSent(participant: DemoParticipant): boolean {
+  if (participant.paymentSetup?.paymentRequestGeneratedAt) return true;
+  if (!hasApprovedAgreement(participant)) return false;
+  const sl = supplierLifecycle(participant);
+  return sl !== 'NOT_STARTED';
+}
+
+export type PaymentRequestPortalStatus =
+  | 'not_yet_opened'
+  | 'opened'
+  | 'payment_information_submitted';
+
+export function derivePaymentRequestPortalStatus(
+  participant: DemoParticipant
+): PaymentRequestPortalStatus {
+  const submitted =
+    participant.supplierOnboarding?.submission?.submittedAt ||
+    participant.supplierOnboarding?.lifecycle === 'SUBMITTED' ||
+    participant.supplierOnboarding?.lifecycle === 'UNDER_REVIEW' ||
+    participant.supplierOnboarding?.lifecycle === 'APPROVED';
+  if (submitted) return 'payment_information_submitted';
+  if (participant.paymentSetup?.portalFirstOpenedAt) return 'opened';
+  return 'not_yet_opened';
+}
+
+export function buildParticipantPaymentPortalUrl(
+  participant: DemoParticipant,
+  origin?: string
+): string | null {
+  const token = participant.paymentSetup?.token;
+  if (!token) return null;
+  const base =
+    origin ??
+    (typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL ?? '');
+  return `${base}/payment-setup/${token}`;
+}
+
 /**
  * Derive the canonical commercial lifecycle stage for a participant.
  * Pure function — no side effects.
@@ -194,6 +232,9 @@ export function deriveParticipantCommercialLifecycle(
   }
 
   if (hasApprovedAgreement(participant)) {
+    if (!isPaymentRequestSent(participant)) {
+      return 'AGREEMENT_ACCEPTED';
+    }
     return mapSupplierToCommercialStage(
       supplierLifecycle(participant),
       isXeroExported(participant)
@@ -229,7 +270,16 @@ export type ParticipantLifecycleAction = {
   label: string;
   description: string;
   urgency: 'none' | 'attention' | 'action_required';
-  destination: 'configure_earnings' | 'send_agreement' | 'await_participant' | 'review_payment' | 'xero_export' | 'settlement' | 'none';
+  destination:
+    | 'configure_earnings'
+    | 'send_agreement'
+    | 'await_participant'
+    | 'send_payment_request'
+    | 'share_payment_request'
+    | 'review_payment'
+    | 'xero_export'
+    | 'settlement'
+    | 'none';
 };
 
 export function deriveParticipantLifecycleAction(
@@ -262,17 +312,17 @@ export function deriveParticipantLifecycleAction(
       };
     case 'AGREEMENT_ACCEPTED':
       return {
-        label: 'Payment form sent',
-        description: `${name} accepted the agreement. Payment & tax form has been sent.`,
-        urgency: 'attention',
-        destination: 'await_participant',
+        label: 'Send payment request',
+        description: `${name} accepted the agreement. Generate and share the payment & tax information form.`,
+        urgency: 'action_required',
+        destination: 'send_payment_request',
       };
     case 'PAYMENT_INFO_PENDING':
       return {
-        label: 'Awaiting payment information',
-        description: `${name} is completing their payment & tax information form.`,
+        label: 'Share payment request',
+        description: `${name} has a payment request — share the secure link or send via your usual channel.`,
         urgency: 'attention',
-        destination: 'await_participant',
+        destination: 'share_payment_request',
       };
     case 'PAYMENT_INFO_SUBMITTED':
       return {
@@ -322,6 +372,19 @@ export function shouldRequestPayoutDetails(participant: DemoParticipant): boolea
 
 /* ─── Operator table presentation (single source for row columns) ─────────── */
 
+export type ParticipantCommercialTablePrimaryActionKind =
+  | 'send_payment_request'
+  | 'share_payment_request'
+  | 'review_payment'
+  | 'configure_earnings'
+  | 'send_agreement'
+  | 'none';
+
+export type ParticipantCommercialTablePrimaryAction = {
+  kind: ParticipantCommercialTablePrimaryActionKind;
+  label: string;
+};
+
 export type ParticipantCommercialTablePresentation = {
   stage: ParticipantCommercialLifecycleStage;
   agreementChip: string;
@@ -330,7 +393,31 @@ export type ParticipantCommercialTablePresentation = {
   commercialSecondary: string;
   /** Payout/commercial column is actionable only after agreement acceptance. */
   payoutColumnActive: boolean;
+  primaryAction: ParticipantCommercialTablePrimaryAction;
 };
+
+export function deriveParticipantCommercialTablePrimaryAction(
+  participant: DemoParticipant
+): ParticipantCommercialTablePrimaryAction {
+  const stage = deriveParticipantCommercialLifecycle(participant);
+  switch (stage) {
+    case 'EARNINGS_CONFIGURED':
+      return { kind: 'send_agreement', label: 'Send Agreement' };
+    case 'AGREEMENT_ACCEPTED':
+      return { kind: 'send_payment_request', label: 'Send Payment Request' };
+    case 'PAYMENT_INFO_PENDING':
+      return { kind: 'share_payment_request', label: 'Share Payment Request' };
+    case 'PAYMENT_INFO_SUBMITTED':
+    case 'OPERATOR_REVIEW':
+      return { kind: 'review_payment', label: 'Review Payment Info' };
+    case 'XERO_INVOICE':
+      return { kind: 'review_payment', label: 'Review & Export' };
+    case 'DRAFT':
+      return { kind: 'configure_earnings', label: 'Configure Earnings' };
+    default:
+      return { kind: 'none', label: '' };
+  }
+}
 
 function draftSecondaryReason(participant: DemoParticipant): string {
   if (!participant.email?.trim()) return 'Email required before agreement can be sent';
@@ -351,6 +438,7 @@ export function deriveParticipantCommercialTablePresentation(
   const stage = deriveParticipantCommercialLifecycle(participant);
   const payoutColumnActive = isLifecycleStageAtOrPast(stage, 'AGREEMENT_ACCEPTED');
   const name = participant.name?.trim() || 'Participant';
+  const primaryAction = deriveParticipantCommercialTablePrimaryAction(participant);
 
   switch (stage) {
     case 'DRAFT':
@@ -361,6 +449,7 @@ export function deriveParticipantCommercialTablePresentation(
         commercialChip: 'Not started',
         commercialSecondary: 'Payment setup begins after agreement acceptance',
         payoutColumnActive: false,
+        primaryAction,
       };
     case 'EARNINGS_CONFIGURED':
       return {
@@ -372,6 +461,7 @@ export function deriveParticipantCommercialTablePresentation(
         commercialChip: 'Awaiting agreement',
         commercialSecondary: 'Payment setup begins after agreement acceptance',
         payoutColumnActive: false,
+        primaryAction,
       };
     case 'AGREEMENT_SENT':
       return {
@@ -381,6 +471,7 @@ export function deriveParticipantCommercialTablePresentation(
         commercialChip: 'Awaiting acceptance',
         commercialSecondary: 'Participant must accept before payment information is collected',
         payoutColumnActive: false,
+        primaryAction,
       };
     case 'AGREEMENT_ACCEPTED':
       return {
@@ -392,6 +483,7 @@ export function deriveParticipantCommercialTablePresentation(
         commercialChip: formatParticipantStatusLabel(stage),
         commercialSecondary: 'Send payment & tax information request',
         payoutColumnActive: true,
+        primaryAction,
       };
     case 'PAYMENT_INFO_PENDING':
       return {
@@ -401,6 +493,7 @@ export function deriveParticipantCommercialTablePresentation(
         commercialChip: formatParticipantStatusLabel(stage),
         commercialSecondary: 'Awaiting payment information',
         payoutColumnActive: true,
+        primaryAction,
       };
     case 'PAYMENT_INFO_SUBMITTED':
       return {
@@ -410,6 +503,7 @@ export function deriveParticipantCommercialTablePresentation(
         commercialChip: formatParticipantStatusLabel(stage),
         commercialSecondary: 'Awaiting operator review',
         payoutColumnActive: true,
+        primaryAction,
       };
     case 'OPERATOR_REVIEW':
       return {
@@ -419,6 +513,7 @@ export function deriveParticipantCommercialTablePresentation(
         commercialChip: formatParticipantStatusLabel(stage),
         commercialSecondary: 'Awaiting operator review',
         payoutColumnActive: true,
+        primaryAction,
       };
     case 'XERO_INVOICE':
       return {
@@ -428,6 +523,7 @@ export function deriveParticipantCommercialTablePresentation(
         commercialChip: formatParticipantStatusLabel(stage),
         commercialSecondary: 'Ready to push to Xero',
         payoutColumnActive: true,
+        primaryAction,
       };
     case 'SETTLEMENT_READY':
       return {
@@ -437,6 +533,7 @@ export function deriveParticipantCommercialTablePresentation(
         commercialChip: formatParticipantStatusLabel(stage),
         commercialSecondary: 'Settlement ready',
         payoutColumnActive: true,
+        primaryAction,
       };
     default:
       return {
@@ -446,6 +543,7 @@ export function deriveParticipantCommercialTablePresentation(
         commercialChip: 'Not started',
         commercialSecondary: 'Payment setup begins after agreement acceptance',
         payoutColumnActive: false,
+        primaryAction: deriveParticipantCommercialTablePrimaryAction(participant),
       };
   }
 }
@@ -476,11 +574,11 @@ const NOTIFICATION_PRIORITY: ParticipantCommercialLifecycleStage[] = [
   'DRAFT',
   'EARNINGS_CONFIGURED',
   'AGREEMENT_SENT',
-  'PAYMENT_INFO_PENDING',
   'OPERATOR_REVIEW',
   'PAYMENT_INFO_SUBMITTED',
-  'XERO_INVOICE',
   'AGREEMENT_ACCEPTED',
+  'PAYMENT_INFO_PENDING',
+  'XERO_INVOICE',
   'SETTLEMENT_READY',
 ];
 
@@ -495,9 +593,9 @@ function notificationMessage(stage: ParticipantCommercialLifecycleStage, count: 
     case 'AGREEMENT_SENT':
       return `${n} agreement${plural ? 's' : ''} awaiting acceptance`;
     case 'AGREEMENT_ACCEPTED':
-      return `${n} payment profile${plural ? 's' : ''} awaiting completion`;
+      return `Payment requests ready to send (${n})`;
     case 'PAYMENT_INFO_PENDING':
-      return `${n} payment profile${plural ? 's' : ''} awaiting completion`;
+      return `Payment requests awaiting participant response (${n})`;
     case 'PAYMENT_INFO_SUBMITTED':
     case 'OPERATOR_REVIEW':
       return `${n} payment profile${plural ? 's' : ''} awaiting operator review`;
@@ -512,8 +610,11 @@ function notificationMessage(stage: ParticipantCommercialLifecycleStage, count: 
 
 function notificationUrgency(stage: ParticipantCommercialLifecycleStage): WorkspaceLifecycleNotification['urgency'] {
   if (stage === 'SETTLEMENT_READY') return 'none';
-  if (stage === 'AGREEMENT_ACCEPTED' || stage === 'AGREEMENT_SENT' || stage === 'PAYMENT_INFO_PENDING') {
+  if (stage === 'AGREEMENT_SENT' || stage === 'PAYMENT_INFO_PENDING') {
     return 'attention';
+  }
+  if (stage === 'AGREEMENT_ACCEPTED') {
+    return 'action_required';
   }
   return 'action_required';
 }

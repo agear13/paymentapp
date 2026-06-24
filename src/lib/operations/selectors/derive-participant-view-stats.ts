@@ -20,6 +20,8 @@ export function deriveParticipantViewStats(input: {
   agreementsReadyToSend: number;
   awaitingAcceptance: number;
   paymentFormsPending: number;
+  paymentRequestsReadyToSend: number;
+  paymentRequestsAwaitingResponse: number;
   paymentProfilesAwaitingReview: number;
   readyForXero: number;
   settlementsReady: number;
@@ -36,6 +38,8 @@ export function deriveParticipantViewStats(input: {
       agreementsReadyToSend: 0,
       awaitingAcceptance: 0,
       paymentFormsPending: 0,
+      paymentRequestsReadyToSend: 0,
+      paymentRequestsAwaitingResponse: 0,
       paymentProfilesAwaitingReview: 0,
       readyForXero: 0,
       settlementsReady: 0,
@@ -63,6 +67,8 @@ export function deriveParticipantViewStats(input: {
     awaitingAcceptance: lifecycle.byStage.AGREEMENT_SENT,
     paymentFormsPending:
       lifecycle.byStage.PAYMENT_INFO_PENDING + lifecycle.byStage.AGREEMENT_ACCEPTED,
+    paymentRequestsReadyToSend: lifecycle.byStage.AGREEMENT_ACCEPTED,
+    paymentRequestsAwaitingResponse: lifecycle.byStage.PAYMENT_INFO_PENDING,
     paymentProfilesAwaitingReview,
     readyForXero: lifecycle.byStage.XERO_INVOICE,
     settlementsReady: lifecycle.byStage.SETTLEMENT_READY,

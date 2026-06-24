@@ -50,6 +50,11 @@ export function projectSupplierOnboardingPath(projectId: string, participantId?:
   return `/dashboard/projects/${encodeURIComponent(projectId)}/participants?focus=onboarding`;
 }
 
+/** Deep-links to participants needing payment request generation or sharing. */
+export function projectPaymentRequestsPath(projectId: string): string {
+  return `/dashboard/projects/${encodeURIComponent(projectId)}/participants?focus=payment-requests`;
+}
+
 /**
  * Routes to the operator review page for a specific participant's supplier onboarding.
  * The operator sees invoice, ABN, GST, payment details, and an approve CTA.

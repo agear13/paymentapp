@@ -85,6 +85,11 @@ export type PaymentSetupState = {
   /** Set when supplier completes submission — invalidates the token. */
   tokenUsedAt?: string;
 
+  /** ISO timestamp when operator generated and sent the payment request portal. */
+  paymentRequestGeneratedAt?: string;
+  /** ISO timestamp when participant first opened the secure portal. */
+  portalFirstOpenedAt?: string;
+
   // ── Draft invoice ─────────────────────────────────────
   draftInvoice?: PersistedDraftInvoice;
 

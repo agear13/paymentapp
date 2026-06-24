@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { Copy, ExternalLink, MoreHorizontal, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ import { participantAgreementPath } from '@/lib/projects/participant-entitlement
 import {
   deriveParticipantCommercialTablePresentation,
 } from '@/lib/commercial/participant-commercial-lifecycle';
+import { projectOperatorReviewPath } from '@/lib/projects/project-routes';
 import { AGREEMENT_ACTION_COPY } from '@/lib/operations/merchant-operational-copy';
 import { cn } from '@/lib/utils';
 import { hydrateParticipant, participantEntity, type HydrateParticipantContext } from '@/lib/operations/hydration/hydrate-participant';
@@ -60,6 +62,9 @@ export type ProjectParticipantTableRowProps = {
   highlighted?: boolean;
   onCopyAgreement: (p: DemoParticipant) => void;
   onShareAgreement?: (p: DemoParticipant) => void;
+  onSendPaymentRequest?: (p: DemoParticipant) => void;
+  onSharePaymentRequest?: (p: DemoParticipant) => void;
+  projectId?: string;
   onEdit: (p: DemoParticipant) => void;
   onConfigureCompensation: (p: DemoParticipant) => void;
   organizationId?: string | null;
@@ -76,6 +81,9 @@ function ProjectParticipantTableRowComponent({
   highlighted = false,
   onCopyAgreement,
   onShareAgreement,
+  onSendPaymentRequest,
+  onSharePaymentRequest,
+  projectId,
   onEdit,
   onConfigureCompensation,
   organizationId,
@@ -107,6 +115,33 @@ function ProjectParticipantTableRowComponent({
   const openEdit = () => onEdit(participantEntity(hydrated));
   const openShare = () => share(participantEntity(hydrated));
   const openCopy = () => onCopyAgreement(participantEntity(hydrated));
+
+  const handlePrimaryAction = () => {
+    const kind = tablePresentation.primaryAction.kind;
+    const p = participantEntity(hydrated);
+    switch (kind) {
+      case 'send_payment_request':
+        onSendPaymentRequest?.(p);
+        break;
+      case 'share_payment_request':
+        onSharePaymentRequest?.(p);
+        break;
+      case 'configure_earnings':
+        openCompensation();
+        break;
+      case 'send_agreement':
+        openShare();
+        break;
+      default:
+        break;
+    }
+  };
+
+  const primaryActionKind = tablePresentation.primaryAction.kind;
+  const showPrimaryButton =
+    primaryActionKind !== 'none' &&
+    primaryActionKind !== 'review_payment' &&
+    tablePresentation.primaryAction.label;
 
   return (
     <TableRow
@@ -204,6 +239,23 @@ function ProjectParticipantTableRowComponent({
 
       <TableCell className={participantTableCellClass('actions')}>
         <div className="flex justify-end items-center gap-1.5 w-full">
+          {showPrimaryButton ? (
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 shrink-0"
+              onClick={handlePrimaryAction}
+            >
+              {tablePresentation.primaryAction.label}
+            </Button>
+          ) : null}
+          {primaryActionKind === 'review_payment' && projectId ? (
+            <Button asChild size="sm" className="h-8 shrink-0">
+              <Link href={projectOperatorReviewPath(projectId, hydrated.id)}>
+                {tablePresentation.primaryAction.label}
+              </Link>
+            </Button>
+          ) : null}
           {releaseSyncHandlers ? (
             <ParticipantReleaseButton
               participantId={hydrated.id}
