@@ -10,11 +10,19 @@ import {
   suspiciousLoginResponse,
 } from '@/lib/auth/verified-session.server';
 
+export type ApiSessionOptions = {
+  /** Auth lifecycle routes (verify email, change email) may run before confirmation. */
+  allowUnverifiedEmail?: boolean;
+  /** confirm-login must run while suspicious-login flag is set. */
+  allowSuspiciousLogin?: boolean;
+};
+
 /**
  * Authenticated dashboard API access with CSRF enforcement for mutating requests.
  */
 export async function getCurrentUserForApi(
-  request: NextRequest
+  request: NextRequest,
+  options?: ApiSessionOptions
 ): Promise<
   | { user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>; response: null }
   | { user: null; response: NextResponse }
@@ -30,14 +38,16 @@ export async function getCurrentUserForApi(
     };
   }
 
-  if (!isEmailVerified(user)) {
+  if (!options?.allowUnverifiedEmail && !isEmailVerified(user)) {
     return { user: null, response: emailNotVerifiedResponse() };
   }
 
-  try {
-    await assertNoPendingSuspiciousLogin(user.id);
-  } catch {
-    return { user: null, response: suspiciousLoginResponse() };
+  if (!options?.allowSuspiciousLogin) {
+    try {
+      await assertNoPendingSuspiciousLogin(user.id);
+    } catch {
+      return { user: null, response: suspiciousLoginResponse() };
+    }
   }
 
   return { user, response: null };

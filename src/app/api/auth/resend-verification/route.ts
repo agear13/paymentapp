@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { AuditEventType } from '@/lib/audit/audit-log';
 import { recordAuthAuditEvent } from '@/lib/audit/auth-audit.server';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { GENERIC_RATE_LIMIT } from '@/lib/auth/auth-errors';
 import {
   checkResendVerificationRateLimit,
@@ -22,13 +23,18 @@ const bodySchema = z
   })
   .optional();
 
+const AUTH_LIFECYCLE_OPTIONS = {
+  allowUnverifiedEmail: true,
+  allowSuspiciousLogin: true,
+} as const;
+
 /**
  * POST /api/auth/resend-verification — resend signup confirmation email (60s cooldown).
  */
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user?.email) {
-    return authJsonError('Authentication required', 401);
+  const auth = await getCurrentUserForApi(request, AUTH_LIFECYCLE_OPTIONS);
+  if (!auth.user?.email) {
+    return auth.response ?? authJsonError('Authentication required', 401);
   }
 
   let body: z.infer<typeof bodySchema> = {};
@@ -41,12 +47,12 @@ export async function POST(request: NextRequest) {
     return authJsonError('Invalid request body', 400);
   }
 
-  const email = body?.email ?? user.email;
-  if (email.toLowerCase() !== user.email.toLowerCase()) {
+  const email = body?.email ?? auth.user.email;
+  if (email.toLowerCase() !== auth.user.email.toLowerCase()) {
     return authJsonError('Email does not match the signed-in account', 400);
   }
 
-  const cooldown = await getVerificationResendCooldownRemaining(user.id);
+  const cooldown = await getVerificationResendCooldownRemaining(auth.user.id);
   if (cooldown > 0) {
     return authJsonError(
       `You can request another verification email in ${cooldown} seconds.`,
@@ -55,7 +61,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const hourlyLimit = await checkResendVerificationRateLimit(request, user.id);
+  const hourlyLimit = await checkResendVerificationRateLimit(request, auth.user.id);
   if (!hourlyLimit.allowed) {
     return rateLimit429Response(GENERIC_RATE_LIMIT, hourlyLimit.retryAfterSeconds);
   }
@@ -75,11 +81,11 @@ export async function POST(request: NextRequest) {
     return authJsonError('Could not send verification email. Please try again later.', 500);
   }
 
-  await setVerificationResendCooldown(user.id);
+  await setVerificationResendCooldown(auth.user.id);
 
   recordAuthAuditEvent({
     eventType: AuditEventType.AUTH_VERIFICATION_EMAIL_SENT,
-    userId: user.id,
+    userId: auth.user.id,
     email,
     request,
   });
