@@ -340,60 +340,6 @@ export function ProjectParticipantsView() {
     [allDeals, allParticipants, isAllowed, saveSnapshot]
   );
 
-  const updatePayoutVerification = React.useCallback(
-    async (participantId: string, confirmed: boolean) => {
-      logOperationalSyncConvergence('mutation-start', {
-        mutation: 'payout_verification',
-        projectId,
-        participantId,
-        surface: 'project-participants-view',
-      });
-      try {
-        const res = await fetch(`/api/deal-network-pilot/participants/${participantId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ payoutVerificationConfirmed: confirmed }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error((err as { error?: string }).error || 'Update failed');
-        }
-        const json = (await res.json()) as { participant?: DemoParticipant };
-        if (json.participant) {
-          patchParticipants((list) =>
-            list.map((p) => (p.id === participantId ? json.participant! : p))
-          );
-        }
-        const sync = parseOperationalSync(json);
-        const nextParticipants = json.participant
-          ? allParticipants.map((p) => (p.id === participantId ? json.participant! : p))
-          : allParticipants;
-        await applyOperationalSyncRefresh(
-          syncHandlers,
-          sync,
-          {
-            mutation: 'payout_verification',
-            projectId,
-            participantId,
-            surface: 'project-participants-view',
-          },
-          buildConvergenceVerify(
-            'payout_verification',
-            'project-participants-view',
-            nextParticipants,
-            sync
-          )
-        );
-        toast.success(
-          confirmed ? 'Payout details confirmed externally' : 'Payout confirmation cleared'
-        );
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : 'Update failed');
-      }
-    },
-    [allParticipants, buildConvergenceVerify, patchParticipants, projectId, syncHandlers]
-  );
-
   const updateParticipantDetails = React.useCallback(
     async (
       participantId: string,
@@ -1084,7 +1030,7 @@ export function ProjectParticipantsView() {
                                 : col.key === 'attribution'
                                   ? 'Attribution'
                                   : col.key === 'payout'
-                                    ? 'Payout'
+                                    ? 'Commercial'
                                     : col.key === 'earnings'
                                       ? 'Earnings'
                                       : 'Actions'}
@@ -1106,7 +1052,6 @@ export function ProjectParticipantsView() {
                           highlighted={recentlySavedParticipantId === p.id}
                           onCopyAgreement={openAgreementShare}
                           onShareAgreement={openAgreementShare}
-                          onPayoutVerificationChange={updatePayoutVerification}
                           onEdit={setEditParticipant}
                           onConfigureCompensation={openCompensationConfig}
                           organizationId={organizationId}

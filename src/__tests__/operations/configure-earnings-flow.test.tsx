@@ -95,7 +95,6 @@ function renderRow(
         <ProjectParticipantTableRow
           participant={participant}
           onCopyAgreement={() => {}}
-          onPayoutVerificationChange={() => {}}
           onEdit={() => {}}
           onConfigureCompensation={onConfigureCompensation}
         />

@@ -6,7 +6,6 @@ import { OperatorPayoutVerificationInfo } from '@/components/projects/operator-p
 import { ProjectParticipantTableRow } from '@/components/projects/project-participant-table-row';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { OPERATOR_PAYOUT_DISCLAIMER } from '@/lib/operations/merchant-operational-copy';
-import { formatParticipantStatusLabel } from '@/lib/commercial/participant-commercial-lifecycle';
 
 const baseParticipant: DemoParticipant = {
   id: 'p-1',
@@ -36,7 +35,6 @@ function renderRow(participant: DemoParticipant = baseParticipant) {
         <ProjectParticipantTableRow
           participant={participant}
           onCopyAgreement={() => {}}
-          onPayoutVerificationChange={() => {}}
           onEdit={() => {}}
           onConfigureCompensation={() => {}}
         />
@@ -57,7 +55,7 @@ describe('compressed participant table UX', () => {
     const { container } = renderRow();
     const text = container.textContent ?? '';
     expect(text).toContain('Alex Rivera');
-    expect(text).toContain(formatParticipantStatusLabel('EARNINGS_CONFIGURED'));
+    expect(text).toContain('Awaiting agreement');
     expect(text).not.toContain(OPERATOR_PAYOUT_DISCLAIMER);
   });
 
@@ -72,8 +70,8 @@ describe('compressed participant table UX', () => {
       ...baseParticipant,
       payoutVerificationConfirmed: false,
     });
-    expect(container.textContent).toContain('Earnings Configured');
-    expect(container.textContent).toContain('Ready to send to participant');
+    expect(container.textContent).toContain('Awaiting agreement');
+    expect(container.textContent).toContain('Payment setup begins after agreement acceptance');
   });
 
   it('uses dropdown actions instead of stacked buttons', () => {

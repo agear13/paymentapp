@@ -5,6 +5,7 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
   deriveParticipantCommercialLifecycle,
+  deriveParticipantCommercialTablePresentation,
   deriveParticipantLifecycleAction,
   deriveWorkspaceLifecycleSummary,
   shouldRequestPayoutDetails,
@@ -47,6 +48,26 @@ describe('participant-commercial-lifecycle', () => {
     expect(shouldRequestPayoutDetails(p)).toBe(false);
     const action = deriveParticipantLifecycleAction(p);
     expect(action.label).toBe('Generate agreement');
+  });
+
+  it('inviteStatus alone does not imply agreement sent', () => {
+    const p = baseParticipant({
+      inviteStatus: 'Invited',
+      email: '',
+    });
+    expect(deriveParticipantCommercialLifecycle(p)).toBe('DRAFT');
+    const table = deriveParticipantCommercialTablePresentation(p);
+    expect(table.commercialChip).toBe('Not started');
+    expect(table.commercialChip).not.toMatch(/Agreement Sent/i);
+  });
+
+  it('missing email keeps participant in DRAFT with awaiting agreement commercial column', () => {
+    const p = baseParticipant({ email: '' });
+    expect(deriveParticipantCommercialLifecycle(p)).toBe('DRAFT');
+    const table = deriveParticipantCommercialTablePresentation(p);
+    expect(table.agreementChip).toBe('Awaiting agreement');
+    expect(table.commercialSecondary).toContain('after agreement acceptance');
+    expect(table.payoutColumnActive).toBe(false);
   });
 
   it('sent agreement awaiting acceptance is AGREEMENT_SENT', () => {
@@ -125,6 +146,6 @@ describe('participant-commercial-lifecycle', () => {
     ]);
     const messages = summary.notifications.map((n) => n.message).join(' ');
     expect(messages).not.toMatch(/payout details/i);
-    expect(messages).toMatch(/earnings configuration|ready to send|awaiting participant acceptance/i);
+    expect(messages).toMatch(/earnings configuration|ready to send|awaiting acceptance/i);
   });
 });

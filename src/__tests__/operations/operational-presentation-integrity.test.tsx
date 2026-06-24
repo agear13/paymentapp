@@ -65,7 +65,6 @@ function renderRow(participant: DemoParticipant, catalogItems?: Array<{ id: stri
           participant={participant}
           catalogContext={{ catalogItems, workspaceCurrency: 'AUD' }}
           onCopyAgreement={() => {}}
-          onPayoutVerificationChange={() => {}}
           onEdit={() => {}}
           onConfigureCompensation={() => {}}
         />

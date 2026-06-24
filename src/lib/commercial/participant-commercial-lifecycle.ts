@@ -16,7 +16,6 @@ import { deriveAgreementLifecycleState } from '@/lib/operations/lifecycle/agreem
 import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 import {
   hasApprovedAgreement,
-  hasPersistedCompensationTerms,
   isParticipantCompensationExempt,
 } from '@/lib/operations/primitives/participant-earnings-primitives';
 import {
@@ -128,21 +127,32 @@ function isXeroExported(participant: DemoParticipant): boolean {
   return Boolean(ps?.xeroExportedAt && ps?.xeroSyncStatus === 'synced');
 }
 
-function hasBasicIdentity(participant: DemoParticipant): boolean {
-  return Boolean(participant.name?.trim() && participant.email?.trim() && participant.role?.trim());
+/** Name, email, and role — required before agreements or payment requests. */
+export function hasParticipantIdentityReady(participant: DemoParticipant): boolean {
+  return Boolean(
+    participant.name?.trim() && participant.email?.trim() && participant.role?.trim()
+  );
 }
 
+function isAgreementGenerated(participant: DemoParticipant): boolean {
+  const agreement = deriveAgreementLifecycleState(participant);
+  if (agreement === 'GENERATED' || agreement === 'SHARED' || agreement === 'VIEWED' || agreement === 'SIGNED' || agreement === 'APPROVED') {
+    return true;
+  }
+  return Boolean(participant.agreementUrl?.trim());
+}
+
+/**
+ * Agreement was intentionally shared with the participant — not merely added to the roster.
+ * `inviteStatus === 'Invited'` on create does NOT count as sent.
+ */
 function isAgreementSent(participant: DemoParticipant): boolean {
+  if (hasApprovedAgreement(participant)) return false;
   const agreement = deriveAgreementLifecycleState(participant);
   if (agreement === 'SHARED' || agreement === 'VIEWED' || agreement === 'SIGNED') return true;
   if (participant.inviteSentAt || participant.agreementSharedAt) return true;
-  if (participant.inviteStatus === 'Invited' || participant.inviteStatus === 'Opened') return true;
+  if (participant.agreementViewedAt) return true;
   return false;
-}
-
-function isAgreementAwaitingAcceptance(participant: DemoParticipant): boolean {
-  if (hasApprovedAgreement(participant)) return false;
-  return isAgreementSent(participant);
 }
 
 function mapSupplierToCommercialStage(
@@ -165,39 +175,34 @@ function mapSupplierToCommercialStage(
 export function deriveParticipantCommercialLifecycle(
   participant: DemoParticipant
 ): ParticipantCommercialLifecycleStage {
+  const identityReady = hasParticipantIdentityReady(participant);
+  const earningsReady =
+    isParticipantCompensationExempt(participant) || isParticipantEarningsConfigured(participant);
+
+  if (!identityReady || !earningsReady) {
+    return 'DRAFT';
+  }
+
   if (isParticipantCompensationExempt(participant)) {
     if (hasApprovedAgreement(participant)) {
       if (isXeroExported(participant)) return 'SETTLEMENT_READY';
       if (supplierLifecycle(participant) === 'APPROVED') return 'XERO_INVOICE';
       return 'AGREEMENT_ACCEPTED';
     }
-    if (isAgreementAwaitingAcceptance(participant)) return 'AGREEMENT_SENT';
-    if (isParticipantEarningsConfigured(participant)) return 'EARNINGS_CONFIGURED';
-    return 'DRAFT';
-  }
-
-  if (hasApprovedAgreement(participant)) {
-  return mapSupplierToCommercialStage(
-    supplierLifecycle(participant),
-    isXeroExported(participant)
-  );
-  }
-
-  if (isAgreementAwaitingAcceptance(participant)) return 'AGREEMENT_SENT';
-
-  if (isParticipantEarningsConfigured(participant)) {
-    const agreement = deriveAgreementLifecycleState(participant);
-    if (agreement === 'GENERATED' || participant.agreementUrl) {
-      return 'EARNINGS_CONFIGURED';
-    }
+    if (isAgreementSent(participant)) return 'AGREEMENT_SENT';
     return 'EARNINGS_CONFIGURED';
   }
 
-  if (hasPersistedCompensationTerms(participant) || hasBasicIdentity(participant)) {
-    return 'DRAFT';
+  if (hasApprovedAgreement(participant)) {
+    return mapSupplierToCommercialStage(
+      supplierLifecycle(participant),
+      isXeroExported(participant)
+    );
   }
 
-  return 'DRAFT';
+  if (isAgreementSent(participant)) return 'AGREEMENT_SENT';
+
+  return 'EARNINGS_CONFIGURED';
 }
 
 export function lifecycleStageIndex(stage: ParticipantCommercialLifecycleStage): number {
@@ -313,6 +318,136 @@ export function shouldRequestPayoutDetails(participant: DemoParticipant): boolea
     deriveParticipantCommercialLifecycle(participant),
     'AGREEMENT_ACCEPTED'
   );
+}
+
+/* ─── Operator table presentation (single source for row columns) ─────────── */
+
+export type ParticipantCommercialTablePresentation = {
+  stage: ParticipantCommercialLifecycleStage;
+  agreementChip: string;
+  agreementSecondary: string;
+  commercialChip: string;
+  commercialSecondary: string;
+  /** Payout/commercial column is actionable only after agreement acceptance. */
+  payoutColumnActive: boolean;
+};
+
+function draftSecondaryReason(participant: DemoParticipant): string {
+  if (!participant.email?.trim()) return 'Email required before agreement can be sent';
+  if (!participant.name?.trim() || !participant.role?.trim()) return 'Complete participant details';
+  if (!isParticipantEarningsConfigured(participant) && !isParticipantCompensationExempt(participant)) {
+    return 'Configure earnings before generating an agreement';
+  }
+  return 'Complete participant setup';
+}
+
+/**
+ * Canonical labels for the participant table — agreement and commercial columns
+ * derive from the same lifecycle stage. No independent agreement or payout flags.
+ */
+export function deriveParticipantCommercialTablePresentation(
+  participant: DemoParticipant
+): ParticipantCommercialTablePresentation {
+  const stage = deriveParticipantCommercialLifecycle(participant);
+  const payoutColumnActive = isLifecycleStageAtOrPast(stage, 'AGREEMENT_ACCEPTED');
+  const name = participant.name?.trim() || 'Participant';
+
+  switch (stage) {
+    case 'DRAFT':
+      return {
+        stage,
+        agreementChip: 'Awaiting agreement',
+        agreementSecondary: draftSecondaryReason(participant),
+        commercialChip: 'Not started',
+        commercialSecondary: 'Payment setup begins after agreement acceptance',
+        payoutColumnActive: false,
+      };
+    case 'EARNINGS_CONFIGURED':
+      return {
+        stage,
+        agreementChip: isAgreementGenerated(participant) ? 'Agreement ready' : 'Awaiting agreement',
+        agreementSecondary: isAgreementGenerated(participant)
+          ? 'Generate and send the commercial agreement'
+          : 'Configure agreement before payment setup',
+        commercialChip: 'Awaiting agreement',
+        commercialSecondary: 'Payment setup begins after agreement acceptance',
+        payoutColumnActive: false,
+      };
+    case 'AGREEMENT_SENT':
+      return {
+        stage,
+        agreementChip: 'Awaiting acceptance',
+        agreementSecondary: `${name} must accept the commercial agreement`,
+        commercialChip: 'Awaiting acceptance',
+        commercialSecondary: 'Participant must accept before payment information is collected',
+        payoutColumnActive: false,
+      };
+    case 'AGREEMENT_ACCEPTED':
+      return {
+        stage,
+        agreementChip: 'Agreement accepted',
+        agreementSecondary: participant.approvedAt
+          ? `Accepted ${new Date(participant.approvedAt).toLocaleDateString('en-AU')}`
+          : 'Commercial terms accepted',
+        commercialChip: formatParticipantStatusLabel(stage),
+        commercialSecondary: 'Send payment & tax information request',
+        payoutColumnActive: true,
+      };
+    case 'PAYMENT_INFO_PENDING':
+      return {
+        stage,
+        agreementChip: 'Agreement accepted',
+        agreementSecondary: 'Commercial terms accepted',
+        commercialChip: formatParticipantStatusLabel(stage),
+        commercialSecondary: 'Awaiting payment information',
+        payoutColumnActive: true,
+      };
+    case 'PAYMENT_INFO_SUBMITTED':
+      return {
+        stage,
+        agreementChip: 'Agreement accepted',
+        agreementSecondary: 'Commercial terms accepted',
+        commercialChip: formatParticipantStatusLabel(stage),
+        commercialSecondary: 'Awaiting operator review',
+        payoutColumnActive: true,
+      };
+    case 'OPERATOR_REVIEW':
+      return {
+        stage,
+        agreementChip: 'Agreement accepted',
+        agreementSecondary: 'Commercial terms accepted',
+        commercialChip: formatParticipantStatusLabel(stage),
+        commercialSecondary: 'Awaiting operator review',
+        payoutColumnActive: true,
+      };
+    case 'XERO_INVOICE':
+      return {
+        stage,
+        agreementChip: 'Agreement accepted',
+        agreementSecondary: 'Payment profile approved',
+        commercialChip: formatParticipantStatusLabel(stage),
+        commercialSecondary: 'Ready to push to Xero',
+        payoutColumnActive: true,
+      };
+    case 'SETTLEMENT_READY':
+      return {
+        stage,
+        agreementChip: 'Agreement accepted',
+        agreementSecondary: 'Invoice created in Xero',
+        commercialChip: formatParticipantStatusLabel(stage),
+        commercialSecondary: 'Settlement ready',
+        payoutColumnActive: true,
+      };
+    default:
+      return {
+        stage: 'DRAFT',
+        agreementChip: 'Awaiting agreement',
+        agreementSecondary: draftSecondaryReason(participant),
+        commercialChip: 'Not started',
+        commercialSecondary: 'Payment setup begins after agreement acceptance',
+        payoutColumnActive: false,
+      };
+  }
 }
 
 /* ─── Workspace notifications ────────────────────────────────────────────── */

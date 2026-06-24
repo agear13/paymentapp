@@ -16,16 +16,12 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import {
-  deriveParticipantCommercialLifecycle,
-  deriveParticipantLifecycleAction,
-  formatParticipantStatusLabel,
+  deriveParticipantCommercialTablePresentation,
 } from '@/lib/commercial/participant-commercial-lifecycle';
 import { AGREEMENT_ACTION_COPY } from '@/lib/operations/merchant-operational-copy';
 import { cn } from '@/lib/utils';
 import { hydrateParticipant, participantEntity, type HydrateParticipantContext } from '@/lib/operations/hydration/hydrate-participant';
 import {
-  agreementLabelFromContract,
-  agreementSecondaryWithNote,
   attributionChipLabelFromContract,
   attributionSecondaryFromContract,
   participantDisplayName,
@@ -64,7 +60,6 @@ export type ProjectParticipantTableRowProps = {
   highlighted?: boolean;
   onCopyAgreement: (p: DemoParticipant) => void;
   onShareAgreement?: (p: DemoParticipant) => void;
-  onPayoutVerificationChange: (id: string, confirmed: boolean) => void;
   onEdit: (p: DemoParticipant) => void;
   onConfigureCompensation: (p: DemoParticipant) => void;
   organizationId?: string | null;
@@ -81,7 +76,6 @@ function ProjectParticipantTableRowComponent({
   highlighted = false,
   onCopyAgreement,
   onShareAgreement,
-  onPayoutVerificationChange,
   onEdit,
   onConfigureCompensation,
   organizationId,
@@ -98,8 +92,7 @@ function ProjectParticipantTableRowComponent({
   const entity = hydrated._entity;
   const share = onShareAgreement ?? onCopyAgreement;
   const exempt = hydrated.compensation.exemptFromPayout;
-  const lifecycleStage = deriveParticipantCommercialLifecycle(entity);
-  const lifecycleAction = deriveParticipantLifecycleAction(entity);
+  const tablePresentation = deriveParticipantCommercialTablePresentation(entity);
 
   const viewAgreement = () => {
     const base = entity.agreementUrl ?? participantAgreementPath(entity.inviteToken);
@@ -146,8 +139,8 @@ function ProjectParticipantTableRowComponent({
 
       <TableCell className={participantTableCellClass('agreement')}>
         <StackedOperationalCell
-          chip={agreementLabelFromContract(hydrated.lifecycle.agreement)}
-          secondary={agreementSecondaryWithNote(hydrated)}
+          chip={tablePresentation.agreementChip}
+          secondary={tablePresentation.agreementSecondary}
         />
       </TableCell>
 
@@ -184,11 +177,11 @@ function ProjectParticipantTableRowComponent({
           </div>
         ) : (
           <StackedOperationalCell
-            chip={formatParticipantStatusLabel(lifecycleStage)}
+            chip={tablePresentation.commercialChip}
             chipVariant={
-              lifecycleStage === 'SETTLEMENT_READY' ? 'default' : 'outline'
+              tablePresentation.stage === 'SETTLEMENT_READY' ? 'default' : 'outline'
             }
-            secondary={lifecycleAction.description}
+            secondary={tablePresentation.commercialSecondary}
           />
         )}
       </TableCell>
