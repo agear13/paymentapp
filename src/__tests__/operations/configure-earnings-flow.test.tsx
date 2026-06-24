@@ -133,13 +133,12 @@ describe('configure earnings flow', () => {
     });
   });
 
-  describe('participant table earnings action', () => {
-    it('opens compensation locally for incomplete draft participant via earnings cell', () => {
+  describe('participant table next action', () => {
+    it('opens compensation locally for incomplete draft participant via next action', () => {
       const onConfigure = jest.fn();
       renderRow(incompleteDraftParticipant(), onConfigure);
       expect(screen.getByText('Needs review')).toBeTruthy();
-      expect(screen.getByText('Compensation amount missing')).toBeTruthy();
-      fireEvent.click(screen.getByRole('button', { name: /Needs review/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Configure Earnings/i }));
       expect(onConfigure).toHaveBeenCalledTimes(1);
       expect(onConfigure.mock.calls[0][0].name).toBe('Draft Alex');
     });
@@ -149,7 +148,7 @@ describe('configure earnings flow', () => {
       const p = prepareParticipantForCompensationEdit(incompleteDraftParticipant());
       expect(p.agreementLifecycle).toBe('NOT_CREATED');
       renderRow(p, onConfigure);
-      fireEvent.click(screen.getByRole('button', { name: /Needs review/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Configure Earnings/i }));
       expect(onConfigure).toHaveBeenCalledTimes(1);
     });
 
@@ -166,7 +165,7 @@ describe('configure earnings flow', () => {
         },
       };
       renderRow(p, onConfigure);
-      fireEvent.click(screen.getByRole('button', { name: /Needs review/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Configure Earnings/i }));
       expect(onConfigure).toHaveBeenCalledTimes(1);
       expect(onConfigure.mock.calls[0][0].compensationProfile?.customerAttributionEnabled).toBe(
         false
@@ -177,7 +176,7 @@ describe('configure earnings flow', () => {
       const onConfigure = jest.fn();
       renderRow(noCompensationStructureParticipant(), onConfigure);
       expect(screen.getByText('Not configured')).toBeTruthy();
-      fireEvent.click(screen.getByRole('button', { name: /Not configured/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Configure Earnings/i }));
       expect(onConfigure).toHaveBeenCalledTimes(1);
       expect(onConfigure.mock.calls[0][0].name).toBe('Volunteer Pat');
     });

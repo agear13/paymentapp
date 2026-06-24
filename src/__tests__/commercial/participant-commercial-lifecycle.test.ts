@@ -57,7 +57,7 @@ describe('participant-commercial-lifecycle', () => {
     });
     expect(deriveParticipantCommercialLifecycle(p)).toBe('DRAFT');
     const table = deriveParticipantCommercialTablePresentation(p);
-    expect(table.commercialChip).toBe('Not started');
+    expect(table.commercialChip).toBe('Not Started');
     expect(table.commercialChip).not.toMatch(/Agreement Sent/i);
   });
 
@@ -65,8 +65,8 @@ describe('participant-commercial-lifecycle', () => {
     const p = baseParticipant({ email: '' });
     expect(deriveParticipantCommercialLifecycle(p)).toBe('DRAFT');
     const table = deriveParticipantCommercialTablePresentation(p);
-    expect(table.agreementChip).toBe('Awaiting agreement');
-    expect(table.commercialSecondary).toContain('after agreement acceptance');
+    expect(table.agreementChip).toBe('Draft');
+    expect(table.commercialChip).toBe('Not Started');
     expect(table.payoutColumnActive).toBe(false);
   });
 

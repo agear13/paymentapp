@@ -1186,7 +1186,9 @@ export function ProjectParticipantsView() {
                                     ? 'Commercial'
                                     : col.key === 'earnings'
                                       ? 'Earnings'
-                                      : 'Actions'}
+                                      : col.key === 'nextAction'
+                                        ? 'Next Action'
+                                        : 'Actions'}
                         </TableHead>
                       ))}
                     </TableRow>

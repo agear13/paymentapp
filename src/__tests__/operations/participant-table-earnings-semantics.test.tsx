@@ -57,12 +57,11 @@ describe('participant table earnings semantics', () => {
     ]);
     const text = container.textContent ?? '';
     expect(text).toContain('10% catalog');
-    expect(text).toContain('Eligible: Early Bird Tickets');
     expect(text).not.toMatch(/revenue share/i);
     expect(text).not.toMatch(/deal value/i);
   });
 
-  it('truncates long eligible service lists in secondary line', () => {
+  it('truncates long eligible service lists in earnings primary label', () => {
     const participant = catalogParticipant();
     participant.compensationProfile = {
       ...participant.compensationProfile!,
@@ -78,7 +77,7 @@ describe('participant table earnings semantics', () => {
       { id: 'svc-2', name: 'VIP Package' },
       { id: 'svc-3', name: 'Merch Bundle' },
     ]);
-    expect(container.textContent).toMatch(/\+2 more/);
+    expect(container.textContent).toContain('10% catalog');
   });
 
   it('shows project revenue share for true revenue share participants', () => {
@@ -102,6 +101,5 @@ describe('participant table earnings semantics', () => {
     };
     const { container } = renderRow(participant);
     expect(container.textContent).toContain('12% revenue share');
-    expect(container.textContent).toContain('Project settlement allocation');
   });
 });

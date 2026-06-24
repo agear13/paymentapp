@@ -18,8 +18,12 @@ import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import {
   deriveParticipantCommercialTablePresentation,
+  type ParticipantTableNextAction,
 } from '@/lib/commercial/participant-commercial-lifecycle';
-import { projectOperatorReviewPath } from '@/lib/projects/project-routes';
+import {
+  projectOperatorReviewPath,
+  projectXeroExportPath,
+} from '@/lib/projects/project-routes';
 import { AGREEMENT_ACTION_COPY } from '@/lib/operations/merchant-operational-copy';
 import { cn } from '@/lib/utils';
 import { hydrateParticipant, participantEntity, type HydrateParticipantContext } from '@/lib/operations/hydration/hydrate-participant';
@@ -33,27 +37,152 @@ import { participantTableCellClass } from '@/components/projects/participant-tab
 import { ParticipantReleaseButton } from '@/components/projects/participant-release-button';
 import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-client';
 
-function StackedOperationalCell({
-  chip,
-  chipVariant = 'outline',
-  secondary,
+const ROW_ACTION_BUTTON_CLASS =
+  'h-9 px-3 text-xs font-medium gap-1 shrink-0';
+
+function StackedAttributionCell({
+  lifecycle,
+  enabled,
+  active,
 }: {
-  chip: React.ReactNode;
-  chipVariant?: 'default' | 'secondary' | 'outline';
-  secondary: string;
+  lifecycle: string;
+  enabled: boolean;
+  active: boolean;
 }) {
   return (
     <div className="flex flex-col items-start gap-1.5 leading-tight">
-      {typeof chip === 'string' ? (
-        <Badge variant={chipVariant} className="whitespace-nowrap text-xs shrink-0">
-          {chip}
-        </Badge>
-      ) : (
-        chip
-      )}
-      <p className="text-xs text-muted-foreground leading-snug whitespace-normal">{secondary}</p>
+      <Badge
+        variant={enabled && active ? 'default' : enabled ? 'secondary' : 'outline'}
+        className="whitespace-nowrap text-xs shrink-0"
+      >
+        {attributionChipLabelFromContract(lifecycle, enabled)}
+      </Badge>
+      <p className="text-xs text-muted-foreground leading-snug whitespace-normal">
+        {attributionSecondaryFromContract(lifecycle, enabled)}
+      </p>
     </div>
   );
+}
+
+function TableStatusLabel({
+  label,
+  hint,
+}: {
+  label: string;
+  hint?: string | null;
+}) {
+  return (
+    <div className="leading-tight">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      {hint ? (
+        <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function ParticipantTableNextActionCell({
+  nextAction,
+  projectId,
+  participantId,
+  onConfigureCompensation,
+  onGenerateAgreement,
+  onSharePaymentRequest,
+}: {
+  nextAction: ParticipantTableNextAction;
+  projectId?: string;
+  participantId: string;
+  onConfigureCompensation: () => void;
+  onGenerateAgreement: () => void;
+  onSharePaymentRequest?: () => void;
+}) {
+  const labelWithArrow = `${nextAction.label} →`;
+
+  if (nextAction.kind === 'waiting_participant') {
+    return (
+      <Badge
+        variant="outline"
+        className="text-xs font-medium border-amber-300/80 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
+      >
+        {nextAction.label}
+      </Badge>
+    );
+  }
+
+  if (nextAction.kind === 'completed') {
+    return (
+      <Badge
+        variant="outline"
+        className="text-xs font-medium border-green-300/80 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-950/30 dark:text-green-300"
+      >
+        {nextAction.label}
+      </Badge>
+    );
+  }
+
+  if (nextAction.kind === 'configure_earnings') {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className={ROW_ACTION_BUTTON_CLASS}
+        onClick={onConfigureCompensation}
+      >
+        {labelWithArrow}
+      </Button>
+    );
+  }
+
+  if (nextAction.kind === 'generate_agreement') {
+    return (
+      <Button
+        type="button"
+        variant="default"
+        size="sm"
+        className={ROW_ACTION_BUTTON_CLASS}
+        onClick={onGenerateAgreement}
+      >
+        {labelWithArrow}
+      </Button>
+    );
+  }
+
+  if (nextAction.kind === 'share_payment_request') {
+    return (
+      <Button
+        type="button"
+        variant="default"
+        size="sm"
+        className={ROW_ACTION_BUTTON_CLASS}
+        onClick={onSharePaymentRequest}
+      >
+        {labelWithArrow}
+      </Button>
+    );
+  }
+
+  if (nextAction.kind === 'review_submission' && projectId) {
+    return (
+      <Button asChild variant="default" size="sm" className={ROW_ACTION_BUTTON_CLASS}>
+        <Link href={projectOperatorReviewPath(projectId, participantId)}>
+          {labelWithArrow}
+        </Link>
+      </Button>
+    );
+  }
+
+  if (nextAction.kind === 'push_to_xero' && projectId) {
+    return (
+      <Button asChild variant="default" size="sm" className={ROW_ACTION_BUTTON_CLASS}>
+        <Link href={projectXeroExportPath(projectId)}>
+          {labelWithArrow}
+        </Link>
+      </Button>
+    );
+  }
+
+  return null;
 }
 
 export type ProjectParticipantTableRowProps = {
@@ -81,7 +210,6 @@ function ProjectParticipantTableRowComponent({
   highlighted = false,
   onCopyAgreement,
   onShareAgreement,
-  onSendPaymentRequest,
   onSharePaymentRequest,
   projectId,
   onEdit,
@@ -104,7 +232,6 @@ function ProjectParticipantTableRowComponent({
 
   const viewAgreement = () => {
     const base = entity.agreementUrl ?? participantAgreementPath(entity.inviteToken);
-    // Append ?mode=preview so the agreement page enforces a genuinely read-only view.
     const path = base.includes('?') ? `${base}&mode=preview` : `${base}?mode=preview`;
     if (typeof window !== 'undefined') {
       window.open(path, '_blank', 'noopener,noreferrer');
@@ -115,33 +242,10 @@ function ProjectParticipantTableRowComponent({
   const openEdit = () => onEdit(participantEntity(hydrated));
   const openShare = () => share(participantEntity(hydrated));
   const openCopy = () => onCopyAgreement(participantEntity(hydrated));
-
-  const handlePrimaryAction = () => {
-    const kind = tablePresentation.primaryAction.kind;
+  const openSharePaymentRequest = () => {
     const p = participantEntity(hydrated);
-    switch (kind) {
-      case 'send_payment_request':
-        onSendPaymentRequest?.(p);
-        break;
-      case 'share_payment_request':
-        onSharePaymentRequest?.(p);
-        break;
-      case 'configure_earnings':
-        openCompensation();
-        break;
-      case 'send_agreement':
-        openShare();
-        break;
-      default:
-        break;
-    }
+    onSharePaymentRequest?.(p);
   };
-
-  const primaryActionKind = tablePresentation.primaryAction.kind;
-  const showPrimaryButton =
-    primaryActionKind !== 'none' &&
-    primaryActionKind !== 'review_payment' &&
-    tablePresentation.primaryAction.label;
 
   return (
     <TableRow
@@ -173,89 +277,66 @@ function ProjectParticipantTableRowComponent({
       </TableCell>
 
       <TableCell className={participantTableCellClass('agreement')}>
-        <StackedOperationalCell
-          chip={tablePresentation.agreementChip}
-          secondary={tablePresentation.agreementSecondary}
+        <TableStatusLabel
+          label={tablePresentation.agreementChip}
+          hint={tablePresentation.agreementSecondary || null}
         />
       </TableCell>
 
       <TableCell className={participantTableCellClass('attribution')}>
-        <StackedOperationalCell
-          chip={attributionChipLabelFromContract(
-            hydrated.attribution.lifecycle,
-            hydrated.attribution.enabled
-          )}
-          chipVariant={
-            hydrated.attribution.enabled && hydrated.attribution.active
-              ? 'default'
-              : hydrated.attribution.enabled
-                ? 'secondary'
-                : 'outline'
-          }
-          secondary={attributionSecondaryFromContract(
-            hydrated.attribution.lifecycle,
-            hydrated.attribution.enabled
-          )}
+        <StackedAttributionCell
+          lifecycle={hydrated.attribution.lifecycle}
+          enabled={hydrated.attribution.enabled}
+          active={hydrated.attribution.active}
         />
       </TableCell>
 
-      <TableCell
-        className={participantTableCellClass('payout')}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <TableCell className={participantTableCellClass('payout')}>
         {exempt ? (
-          <div className="flex flex-col gap-1.5 leading-tight">
-            <Badge variant="outline" className="whitespace-nowrap text-xs w-fit">
-              No payout
-            </Badge>
-            <p className="text-xs text-muted-foreground leading-snug">Internal or unpaid role</p>
+          <div className="leading-tight">
+            <span className="text-sm font-medium text-foreground">No payout</span>
+            <p className="text-xs text-muted-foreground mt-0.5">Internal or unpaid role</p>
           </div>
         ) : (
-          <StackedOperationalCell
-            chip={tablePresentation.commercialChip}
-            chipVariant={
-              tablePresentation.stage === 'SETTLEMENT_READY' ? 'default' : 'outline'
-            }
-            secondary={tablePresentation.commercialSecondary}
-          />
+          <span className="text-sm font-medium text-foreground">
+            {tablePresentation.commercialChip}
+          </span>
         )}
       </TableCell>
 
       <TableCell className={participantTableCellClass('earnings')}>
-        <button
-          type="button"
-          className="flex flex-col items-start gap-1 leading-tight text-left w-full underline-offset-2 hover:underline"
-          title={hydrated.compensation.earningsTitle}
-          onClick={openCompensation}
-        >
-          <span className="text-sm font-medium text-foreground/90 break-words max-w-full leading-snug">
+        {exempt ? (
+          <span className="text-sm text-muted-foreground">No payout</span>
+        ) : (
+          <span
+            className="text-sm font-medium text-foreground/90 break-words max-w-full leading-snug"
+            title={hydrated.compensation.earningsTitle}
+          >
             {hydrated.compensation.earningsPrimaryCompact}
           </span>
-          <span className="text-xs text-muted-foreground leading-snug whitespace-normal">
-            {hydrated.compensation.earningsSecondary}
-          </span>
-        </button>
+        )}
+      </TableCell>
+
+      <TableCell
+        className={participantTableCellClass('nextAction')}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {exempt ? (
+          <span className="text-xs text-muted-foreground">No action required</span>
+        ) : (
+          <ParticipantTableNextActionCell
+            nextAction={tablePresentation.nextAction}
+            projectId={projectId}
+            participantId={hydrated.id}
+            onConfigureCompensation={openCompensation}
+            onGenerateAgreement={openShare}
+            onSharePaymentRequest={openSharePaymentRequest}
+          />
+        )}
       </TableCell>
 
       <TableCell className={participantTableCellClass('actions')}>
-        <div className="flex justify-end items-center gap-1.5 w-full">
-          {showPrimaryButton ? (
-            <Button
-              type="button"
-              size="sm"
-              className="h-8 shrink-0"
-              onClick={handlePrimaryAction}
-            >
-              {tablePresentation.primaryAction.label}
-            </Button>
-          ) : null}
-          {primaryActionKind === 'review_payment' && projectId ? (
-            <Button asChild size="sm" className="h-8 shrink-0">
-              <Link href={projectOperatorReviewPath(projectId, hydrated.id)}>
-                {tablePresentation.primaryAction.label}
-              </Link>
-            </Button>
-          ) : null}
+        <div className="flex justify-end items-center gap-1 w-full">
           {releaseSyncHandlers ? (
             <ParticipantReleaseButton
               participantId={hydrated.id}

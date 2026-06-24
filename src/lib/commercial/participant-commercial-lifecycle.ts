@@ -380,10 +380,145 @@ export type ParticipantCommercialTablePrimaryActionKind =
   | 'send_agreement'
   | 'none';
 
+export type ParticipantTableNextActionKind =
+  | 'configure_earnings'
+  | 'generate_agreement'
+  | 'share_payment_request'
+  | 'review_submission'
+  | 'push_to_xero'
+  | 'waiting_participant'
+  | 'ready_for_settlement'
+  | 'completed'
+  | 'none';
+
+export type ParticipantTableNextAction = {
+  kind: ParticipantTableNextActionKind;
+  label: string;
+  buttonVariant: 'default' | 'outline';
+};
+
 export type ParticipantCommercialTablePrimaryAction = {
   kind: ParticipantCommercialTablePrimaryActionKind;
   label: string;
 };
+
+const COMMERCIAL_TABLE_STAGE_LABELS: Record<ParticipantCommercialLifecycleStage, string> = {
+  DRAFT: 'Not Started',
+  EARNINGS_CONFIGURED: 'Not Started',
+  AGREEMENT_SENT: 'Not Started',
+  AGREEMENT_ACCEPTED: 'Not Started',
+  PAYMENT_INFO_PENDING: 'Payment Information Pending',
+  PAYMENT_INFO_SUBMITTED: 'Awaiting Review',
+  OPERATOR_REVIEW: 'Awaiting Review',
+  XERO_INVOICE: 'Ready for Xero',
+  SETTLEMENT_READY: 'Completed',
+};
+
+function deriveAgreementTableLabel(participant: DemoParticipant): {
+  label: string;
+  hint: string | null;
+} {
+  const stage = deriveParticipantCommercialLifecycle(participant);
+  if (hasApprovedAgreement(participant)) {
+    return { label: 'Accepted', hint: null };
+  }
+  if (stage === 'AGREEMENT_SENT') {
+    return { label: 'Sent', hint: null };
+  }
+  if (stage === 'EARNINGS_CONFIGURED') {
+    return { label: 'Ready to send', hint: null };
+  }
+  if (stage === 'DRAFT') {
+    const hint = !participant.email?.trim()
+      ? 'Email required'
+      : !isParticipantEarningsConfigured(participant) && !isParticipantCompensationExempt(participant)
+        ? 'Configure earnings first'
+        : !participant.name?.trim() || !participant.role?.trim()
+          ? 'Complete participant details'
+          : null;
+    return { label: 'Draft', hint };
+  }
+  return { label: 'Draft', hint: null };
+}
+
+export function deriveParticipantCommercialTableNextAction(
+  participant: DemoParticipant
+): ParticipantTableNextAction {
+  const stage = deriveParticipantCommercialLifecycle(participant);
+  switch (stage) {
+    case 'DRAFT':
+      return {
+        kind: 'configure_earnings',
+        label: 'Configure Earnings',
+        buttonVariant: 'outline',
+      };
+    case 'EARNINGS_CONFIGURED':
+      return {
+        kind: 'generate_agreement',
+        label: 'Generate Agreement',
+        buttonVariant: 'default',
+      };
+    case 'AGREEMENT_SENT':
+      return {
+        kind: 'waiting_participant',
+        label: 'Waiting for participant',
+        buttonVariant: 'outline',
+      };
+    case 'AGREEMENT_ACCEPTED':
+      return {
+        kind: 'share_payment_request',
+        label: 'Share Payment Request',
+        buttonVariant: 'default',
+      };
+    case 'PAYMENT_INFO_PENDING':
+      return {
+        kind: 'waiting_participant',
+        label: 'Waiting for participant',
+        buttonVariant: 'outline',
+      };
+    case 'PAYMENT_INFO_SUBMITTED':
+    case 'OPERATOR_REVIEW':
+      return {
+        kind: 'review_submission',
+        label: 'Review Submission',
+        buttonVariant: 'default',
+      };
+    case 'XERO_INVOICE':
+      return {
+        kind: 'push_to_xero',
+        label: 'Push to Xero',
+        buttonVariant: 'default',
+      };
+    case 'SETTLEMENT_READY':
+      return {
+        kind: 'completed',
+        label: 'Completed',
+        buttonVariant: 'outline',
+      };
+    default:
+      return { kind: 'none', label: '', buttonVariant: 'outline' };
+  }
+}
+
+export function deriveParticipantCommercialTablePrimaryAction(
+  participant: DemoParticipant
+): ParticipantCommercialTablePrimaryAction {
+  const next = deriveParticipantCommercialTableNextAction(participant);
+  switch (next.kind) {
+    case 'configure_earnings':
+      return { kind: 'configure_earnings', label: next.label };
+    case 'generate_agreement':
+      return { kind: 'send_agreement', label: next.label };
+    case 'share_payment_request':
+      return { kind: 'share_payment_request', label: next.label };
+    case 'review_submission':
+      return { kind: 'review_payment', label: next.label };
+    case 'push_to_xero':
+      return { kind: 'review_payment', label: next.label };
+    default:
+      return { kind: 'none', label: '' };
+  }
+}
 
 export type ParticipantCommercialTablePresentation = {
   stage: ParticipantCommercialLifecycleStage;
@@ -391,161 +526,31 @@ export type ParticipantCommercialTablePresentation = {
   agreementSecondary: string;
   commercialChip: string;
   commercialSecondary: string;
-  /** Payout/commercial column is actionable only after agreement acceptance. */
   payoutColumnActive: boolean;
   primaryAction: ParticipantCommercialTablePrimaryAction;
+  nextAction: ParticipantTableNextAction;
 };
 
-export function deriveParticipantCommercialTablePrimaryAction(
-  participant: DemoParticipant
-): ParticipantCommercialTablePrimaryAction {
-  const stage = deriveParticipantCommercialLifecycle(participant);
-  switch (stage) {
-    case 'EARNINGS_CONFIGURED':
-      return { kind: 'send_agreement', label: 'Send Agreement' };
-    case 'AGREEMENT_ACCEPTED':
-      return { kind: 'send_payment_request', label: 'Send Payment Request' };
-    case 'PAYMENT_INFO_PENDING':
-      return { kind: 'share_payment_request', label: 'Share Payment Request' };
-    case 'PAYMENT_INFO_SUBMITTED':
-    case 'OPERATOR_REVIEW':
-      return { kind: 'review_payment', label: 'Review Payment Info' };
-    case 'XERO_INVOICE':
-      return { kind: 'review_payment', label: 'Review & Export' };
-    case 'DRAFT':
-      return { kind: 'configure_earnings', label: 'Configure Earnings' };
-    default:
-      return { kind: 'none', label: '' };
-  }
-}
-
-function draftSecondaryReason(participant: DemoParticipant): string {
-  if (!participant.email?.trim()) return 'Email required before agreement can be sent';
-  if (!participant.name?.trim() || !participant.role?.trim()) return 'Complete participant details';
-  if (!isParticipantEarningsConfigured(participant) && !isParticipantCompensationExempt(participant)) {
-    return 'Configure earnings before generating an agreement';
-  }
-  return 'Complete participant setup';
-}
-
-/**
- * Canonical labels for the participant table — agreement and commercial columns
- * derive from the same lifecycle stage. No independent agreement or payout flags.
- */
 export function deriveParticipantCommercialTablePresentation(
   participant: DemoParticipant
 ): ParticipantCommercialTablePresentation {
   const stage = deriveParticipantCommercialLifecycle(participant);
   const payoutColumnActive = isLifecycleStageAtOrPast(stage, 'AGREEMENT_ACCEPTED');
-  const name = participant.name?.trim() || 'Participant';
+  const agreement = deriveAgreementTableLabel(participant);
+  const commercialLabel = COMMERCIAL_TABLE_STAGE_LABELS[stage];
+  const nextAction = deriveParticipantCommercialTableNextAction(participant);
   const primaryAction = deriveParticipantCommercialTablePrimaryAction(participant);
 
-  switch (stage) {
-    case 'DRAFT':
-      return {
-        stage,
-        agreementChip: 'Awaiting agreement',
-        agreementSecondary: draftSecondaryReason(participant),
-        commercialChip: 'Not started',
-        commercialSecondary: 'Payment setup begins after agreement acceptance',
-        payoutColumnActive: false,
-        primaryAction,
-      };
-    case 'EARNINGS_CONFIGURED':
-      return {
-        stage,
-        agreementChip: isAgreementGenerated(participant) ? 'Agreement ready' : 'Awaiting agreement',
-        agreementSecondary: isAgreementGenerated(participant)
-          ? 'Generate and send the commercial agreement'
-          : 'Configure agreement before payment setup',
-        commercialChip: 'Awaiting agreement',
-        commercialSecondary: 'Payment setup begins after agreement acceptance',
-        payoutColumnActive: false,
-        primaryAction,
-      };
-    case 'AGREEMENT_SENT':
-      return {
-        stage,
-        agreementChip: 'Awaiting acceptance',
-        agreementSecondary: `${name} must accept the commercial agreement`,
-        commercialChip: 'Awaiting acceptance',
-        commercialSecondary: 'Participant must accept before payment information is collected',
-        payoutColumnActive: false,
-        primaryAction,
-      };
-    case 'AGREEMENT_ACCEPTED':
-      return {
-        stage,
-        agreementChip: 'Agreement accepted',
-        agreementSecondary: participant.approvedAt
-          ? `Accepted ${new Date(participant.approvedAt).toLocaleDateString('en-AU')}`
-          : 'Commercial terms accepted',
-        commercialChip: formatParticipantStatusLabel(stage),
-        commercialSecondary: 'Send payment & tax information request',
-        payoutColumnActive: true,
-        primaryAction,
-      };
-    case 'PAYMENT_INFO_PENDING':
-      return {
-        stage,
-        agreementChip: 'Agreement accepted',
-        agreementSecondary: 'Commercial terms accepted',
-        commercialChip: formatParticipantStatusLabel(stage),
-        commercialSecondary: 'Awaiting payment information',
-        payoutColumnActive: true,
-        primaryAction,
-      };
-    case 'PAYMENT_INFO_SUBMITTED':
-      return {
-        stage,
-        agreementChip: 'Agreement accepted',
-        agreementSecondary: 'Commercial terms accepted',
-        commercialChip: formatParticipantStatusLabel(stage),
-        commercialSecondary: 'Awaiting operator review',
-        payoutColumnActive: true,
-        primaryAction,
-      };
-    case 'OPERATOR_REVIEW':
-      return {
-        stage,
-        agreementChip: 'Agreement accepted',
-        agreementSecondary: 'Commercial terms accepted',
-        commercialChip: formatParticipantStatusLabel(stage),
-        commercialSecondary: 'Awaiting operator review',
-        payoutColumnActive: true,
-        primaryAction,
-      };
-    case 'XERO_INVOICE':
-      return {
-        stage,
-        agreementChip: 'Agreement accepted',
-        agreementSecondary: 'Payment profile approved',
-        commercialChip: formatParticipantStatusLabel(stage),
-        commercialSecondary: 'Ready to push to Xero',
-        payoutColumnActive: true,
-        primaryAction,
-      };
-    case 'SETTLEMENT_READY':
-      return {
-        stage,
-        agreementChip: 'Agreement accepted',
-        agreementSecondary: 'Invoice created in Xero',
-        commercialChip: formatParticipantStatusLabel(stage),
-        commercialSecondary: 'Settlement ready',
-        payoutColumnActive: true,
-        primaryAction,
-      };
-    default:
-      return {
-        stage: 'DRAFT',
-        agreementChip: 'Awaiting agreement',
-        agreementSecondary: draftSecondaryReason(participant),
-        commercialChip: 'Not started',
-        commercialSecondary: 'Payment setup begins after agreement acceptance',
-        payoutColumnActive: false,
-        primaryAction: deriveParticipantCommercialTablePrimaryAction(participant),
-      };
-  }
+  return {
+    stage,
+    agreementChip: agreement.label,
+    agreementSecondary: agreement.hint ?? '',
+    commercialChip: commercialLabel,
+    commercialSecondary: '',
+    payoutColumnActive,
+    primaryAction,
+    nextAction,
+  };
 }
 
 /* ─── Workspace notifications ────────────────────────────────────────────── */

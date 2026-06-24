@@ -1,14 +1,15 @@
 /** Shared participant table column sizing — keep colgroup and cells aligned. */
-export const PARTICIPANT_TABLE_MIN_WIDTH = 1200;
+export const PARTICIPANT_TABLE_MIN_WIDTH = 1320;
 
 export const PARTICIPANT_TABLE_COLUMNS = [
-  { key: 'participant', width: '22%', minWidth: 200 },
-  { key: 'role', width: '10%', minWidth: 96 },
-  { key: 'agreement', width: '18%', minWidth: 180 },
-  { key: 'attribution', width: '16%', minWidth: 160 },
-  { key: 'payout', width: '16%', minWidth: 160 },
-  { key: 'earnings', width: '14%', minWidth: 140 },
-  { key: 'actions', width: '10%', minWidth: 120 },
+  { key: 'participant', width: '20%', minWidth: 180 },
+  { key: 'role', width: '9%', minWidth: 88 },
+  { key: 'agreement', width: '11%', minWidth: 100 },
+  { key: 'attribution', width: '14%', minWidth: 140 },
+  { key: 'payout', width: '14%', minWidth: 140 },
+  { key: 'earnings', width: '12%', minWidth: 120 },
+  { key: 'nextAction', width: '16%', minWidth: 160 },
+  { key: 'actions', width: '8%', minWidth: 88 },
 ] as const;
 
 export function participantTableHeadClass(index: number): string {
@@ -21,20 +22,23 @@ export function participantTableHeadClass(index: number): string {
 export function participantTableCellClass(
   key: (typeof PARTICIPANT_TABLE_COLUMNS)[number]['key']
 ): string {
-  const base = 'align-top py-5 first:pl-4 last:pr-4';
+  const base = 'align-top py-4 first:pl-4 last:pr-4';
   switch (key) {
     case 'participant':
-      return `${base} whitespace-normal min-w-[200px]`;
+      return `${base} whitespace-normal min-w-[180px]`;
     case 'role':
       return `${base} whitespace-nowrap text-sm`;
     case 'agreement':
-    case 'attribution':
     case 'payout':
+      return `${base} whitespace-normal text-sm`;
+    case 'attribution':
       return `${base} whitespace-normal`;
     case 'earnings':
-      return `${base} whitespace-normal min-w-[140px]`;
+      return `${base} whitespace-normal min-w-[120px]`;
+    case 'nextAction':
+      return `${base} whitespace-normal min-w-[160px]`;
     case 'actions':
-      return `${base} min-w-[120px] p-2 align-middle whitespace-nowrap`;
+      return `${base} min-w-[88px] p-2 align-middle whitespace-nowrap text-right`;
     default:
       return base;
   }

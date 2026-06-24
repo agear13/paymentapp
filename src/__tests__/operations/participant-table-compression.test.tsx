@@ -55,7 +55,7 @@ describe('compressed participant table UX', () => {
     const { container } = renderRow();
     const text = container.textContent ?? '';
     expect(text).toContain('Alex Rivera');
-    expect(text).toContain('Awaiting agreement');
+    expect(text).toContain('Ready to send');
     expect(text).not.toContain(OPERATOR_PAYOUT_DISCLAIMER);
   });
 
@@ -70,13 +70,13 @@ describe('compressed participant table UX', () => {
       ...baseParticipant,
       payoutVerificationConfirmed: false,
     });
-    expect(container.textContent).toContain('Awaiting agreement');
-    expect(container.textContent).toContain('Payment setup begins after agreement acceptance');
+    expect(container.textContent).toContain('Ready to send');
+    expect(container.textContent).toContain('Not Started');
   });
 
   it('uses dropdown actions instead of stacked buttons', () => {
     renderRow();
     expect(screen.getByLabelText('Participant actions')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /^Earnings$/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /Generate Agreement/i })).toBeTruthy();
   });
 });
