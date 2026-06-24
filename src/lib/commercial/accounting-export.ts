@@ -190,6 +190,8 @@ export type AccountingExportModel = {
   exportId: string;
   participantId: string;
   participantName: string;
+  /** Participant role label for operator review surfaces. */
+  participantRole: string;
   projectId: string;
 
   /** Current synchronisation status. */
@@ -299,6 +301,7 @@ export function deriveAccountingExport(
     exportId,
     participantId: participant.id,
     participantName: participant.name,
+    participantRole: participant.role,
     projectId: context.projectId,
     status,
     statusLabel,
@@ -671,13 +674,14 @@ export function buildAccountingNarrative(
 
 function makeNotApplicableModel(
   exportId: string,
-  participant: { id: string; name: string },
+  participant: { id: string; name: string; role?: string },
   projectId: string
 ): AccountingExportModel {
   return {
     exportId,
     participantId: participant.id,
     participantName: participant.name,
+    participantRole: participant.role ?? 'Participant',
     projectId,
     status: 'exported', // treat as "done" — no action needed
     statusLabel: 'Not required',

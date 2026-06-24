@@ -63,8 +63,8 @@ export default function PayoutBatchDetailPage() {
   const params = useParams();
   const pathname = usePathname();
   const router = useRouter();
-  const id = params.id as string;
-  const settlementsListHref = pathname.includes('/dashboard/payouts/settlements')
+  const id = params?.id ?? '';
+  const settlementsListHref = pathname?.includes('/dashboard/payouts/settlements')
     ? PAYOUTS_SETTLEMENTS_HREF
     : '/dashboard/partners/payouts';
   const { organizationId } = useOrganization();

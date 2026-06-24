@@ -31,6 +31,16 @@ describe('operational mutation synchronization', () => {
     expect(workspaceScopesFromOperationalSync(sync.invalidatedScopes)).toContain('all');
   });
 
+  it('supplier onboarding mutation invalidates all coordination scopes', () => {
+    const sync = synchronizeOperationalState({
+      mutation: 'supplier_onboarding',
+      projectId: 'deal-1',
+      participants: [],
+    });
+    expect(sync.invalidatedScopes).toContain('participant');
+    expect(workspaceScopesFromOperationalSync(sync.invalidatedScopes)).toContain('all');
+  });
+
   it('earnings save mutation recomputes snapshot with participants', () => {
     const p = buildProjectParticipant({
       name: 'Alex',

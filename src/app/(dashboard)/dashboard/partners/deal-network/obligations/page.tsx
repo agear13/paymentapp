@@ -485,15 +485,15 @@ function DealNetworkObligationsPageContent({
     if (stored !== null && isPayoutsRoute) {
       setNeedsActionOnly(stored);
     }
-    if (searchParams.get('needsAction') === '1') {
+    if (searchParams?.get('needsAction') === '1') {
       setNeedsActionOnly(true);
     }
-    const status = searchParams.get('status');
+    const status = searchParams?.get('status');
     if (status && STATUS_OPTIONS.includes(status as DealNetworkPilotObligationStatus)) {
       setStatusFilter(status);
       if (status !== '__all__') setNeedsActionOnly(false);
     }
-    if (searchParams.get('focus') === 'unfunded') {
+    if (searchParams?.get('focus') === 'unfunded') {
       setNeedsActionOnly(true);
       setStatusFilter('UNFUNDED');
     }

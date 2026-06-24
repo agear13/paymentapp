@@ -42,6 +42,10 @@ const MILESTONE_META: Record<
     label: 'Participation agreement approved',
     releaseImpact: 'Required before payout obligations can release.',
   },
+  SUPPLIER_ONBOARDING_STARTED: {
+    label: 'Payment request sent',
+    releaseImpact: 'Participant can complete payment and tax information.',
+  },
   FUNDING_ALLOCATION_RESERVED: {
     label: 'Funding reserved against obligations',
     releaseImpact: 'Obligations must be funded before release.',
@@ -56,6 +60,7 @@ const MILESTONE_ORDER: OperationalEventType[] = [
   ...OPERATIONAL_INITIALIZATION_EVENT_TYPES,
   'PARTICIPANT_COMPENSATION_UPDATED',
   'AGREEMENT_APPROVED',
+  'SUPPLIER_ONBOARDING_STARTED',
   'FUNDING_ALLOCATION_RESERVED',
   'OBLIGATION_STATE_UPDATED',
   'RELEASE_BATCH_GENERATED',

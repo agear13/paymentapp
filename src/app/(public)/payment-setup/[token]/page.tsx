@@ -17,6 +17,7 @@ import { useParams } from 'next/navigation';
 import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { PaymentTaxInformationForm } from '@/components/commercial/payment-tax/payment-tax-information-form';
 import { buildAgreementSummaryData } from '@/lib/commercial/participant-commercial-lifecycle';
+import { normalizeDemoParticipantRole } from '@/lib/projects/normalize-participant-role';
 import type { SupplierOnboardingInput } from '@/lib/commercial/supplier-onboarding';
 import type { PaymentAttachment } from '@/lib/commercial/payment-setup-types';
 
@@ -108,6 +109,19 @@ export default function PaymentSetupPortalPage() {
   }
 
   /* ── Error (expired/invalid token) ── */
+  const portalParticipant = portalData
+    ? {
+        id: portalData.participantId,
+        name: portalData.participantName,
+        email: '',
+        role: normalizeDemoParticipantRole(portalData.participantRole),
+        approvalStatus: 'Approved' as const,
+        commissionKind: 'fixed_amount' as const,
+        commissionValue:
+          (portalData.draftInvoice as { subtotal?: number })?.subtotal ?? 0,
+      }
+    : null;
+
   if (loadError || !portalData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
@@ -159,7 +173,7 @@ export default function PaymentSetupPortalPage() {
     participant: {
       id: portalData.participantId,
       name: portalData.participantName,
-      role: portalData.participantRole,
+      role: portalParticipant!.role,
       email: null,
     },
     agreement: {
@@ -233,14 +247,7 @@ export default function PaymentSetupPortalPage() {
 
         <PaymentTaxInformationForm
           agreementSummary={buildAgreementSummaryData(
-            {
-              id: portalData.participantId,
-              name: portalData.participantName,
-              role: portalData.participantRole,
-              approvalStatus: 'Approved',
-              commissionKind: 'fixed_amount',
-              commissionValue: (portalData.draftInvoice as { subtotal?: number })?.subtotal ?? 0,
-            },
+            portalParticipant!,
             { id: '', name: portalData.projectName }
           )}
           baseInput={baseInput}

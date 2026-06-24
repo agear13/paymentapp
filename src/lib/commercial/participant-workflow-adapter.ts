@@ -11,20 +11,13 @@
  *
  * Design rules:
  *   - PURE function — no network calls, no side effects.
- *   - Conservative: when in doubt about a participant's state, use the
- *     least-advanced stage. Never report a participant as further along
- *     than their persisted data confirms.
- *   - Only uses fields available on DemoParticipant. No inference from
- *     other sources.
- *
- * Usage:
- * ```tsx
- * const inputs = buildWorkflowInputsFromParticipants(projectParticipants, projectId);
- * const status = deriveWorkspaceWorkflowStatus(inputs);
- * <OperatorInbox workspaceStatus={status} projectId={projectId} />
- * ```
+ *   - `deriveParticipantCommercialLifecycle()` is the single source of truth
+ *     for participant stage; adapters translate from lifecycle, not duplicate
+ *     payout phase heuristics.
+ *   - Conservative: when in doubt, use the least-advanced stage.
  */
 
+import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { WorkflowIntegrationInput } from '@/lib/commercial/workflow-integration';
 import { deriveWorkspaceWorkflowStatus } from '@/lib/commercial/workflow-integration';
 import type {
@@ -34,6 +27,12 @@ import type {
   WorkspaceOnboardingStatus,
 } from '@/lib/commercial/supplier-onboarding';
 import type { AccountingExportModel } from '@/lib/commercial/accounting-export';
+import type { AccountingSyncStatus } from '@/lib/commercial/accounting-connector';
+import {
+  deriveParticipantCommercialLifecycle,
+  type ParticipantCommercialLifecycleStage,
+} from '@/lib/commercial/participant-commercial-lifecycle';
+import { normalizeDemoParticipantRole } from '@/lib/projects/normalize-participant-role';
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -44,6 +43,7 @@ import type { AccountingExportModel } from '@/lib/commercial/accounting-export';
 export type ParticipantPhaseData = {
   id: string;
   name: string;
+  email?: string;
   role: string;
   approvalStatus: string;
   approvedAt?: string | null;
@@ -53,8 +53,13 @@ export type ParticipantPhaseData = {
   commissionValue?: number | null;
   commissionKind?: string | null;
   payoutSettlementStatus?: string | null;
+  supplierOnboarding?: DemoParticipant['supplierOnboarding'];
+  compensationProfile?: DemoParticipant['compensationProfile'];
   /** C-4: paymentSetup persisted by the new Payment Setup workflow */
   paymentSetup?: {
+    token?: string | null;
+    paymentRequestGeneratedAt?: string | null;
+    portalFirstOpenedAt?: string | null;
     xeroExportedAt?: string | null;
     xeroSyncStatus?: string | null;
     draftInvoice?: { status?: string } | null;
@@ -65,41 +70,131 @@ export type ParticipantPhaseData = {
 
 const SUPPLIER_STAGE_LABELS: Record<SupplierOnboardingStage, string> = {
   not_started:       'Awaiting agreement approval',
-  invoice_generated: 'Supplier setup required',
-  in_progress:       'Supplier setup in progress',
+  invoice_generated: 'Payment request ready to send',
+  in_progress:       'Payment information in progress',
   submitted:         'Awaiting operator review',
   operator_approved: 'Approved — ready for Xero',
   xero_exported:     'Complete',
 };
 
-/**
- * Derives the `SupplierOnboardingStage` from a participant's persisted
- * onboarding phase fields.
- *
- * Maps:
- *   payoutVerificationConfirmed = true → operator_approved
- *   payoutOnboardingPhase COMPLETED | onboardingStatus COMPLETE → submitted
- *   payoutOnboardingPhase IN_PROGRESS | onboardingStatus INCOMPLETE → in_progress
- *   payoutOnboardingPhase INVITED → invoice_generated
- *   else → not_started
- */
-function deriveOnboardingStageFromPhase(p: ParticipantPhaseData): SupplierOnboardingStage {
-  // C-4: Check for successful Xero export first (most advanced state)
-  if (p.paymentSetup?.xeroExportedAt && p.paymentSetup?.xeroSyncStatus === 'synced') return 'xero_exported';
-  if (p.payoutVerificationConfirmed === true) return 'operator_approved';
-  if (p.payoutOnboardingPhase === 'COMPLETED' || p.onboardingStatus === 'COMPLETE') return 'submitted';
-  if (p.payoutOnboardingPhase === 'IN_PROGRESS' || p.onboardingStatus === 'INCOMPLETE') return 'in_progress';
-  if (p.payoutOnboardingPhase === 'INVITED') return 'invoice_generated';
-  return 'not_started';
+function toLifecycleParticipant(p: ParticipantPhaseData): DemoParticipant {
+  return {
+    id: p.id,
+    name: p.name,
+    email: p.email ?? '',
+    role: normalizeDemoParticipantRole(p.role),
+    approvalStatus: p.approvalStatus as DemoParticipant['approvalStatus'],
+    approvedAt: p.approvedAt,
+    payoutOnboardingPhase: p.payoutOnboardingPhase as DemoParticipant['payoutOnboardingPhase'],
+    onboardingStatus: p.onboardingStatus as DemoParticipant['onboardingStatus'],
+    payoutVerificationConfirmed: p.payoutVerificationConfirmed,
+    commissionValue: p.commissionValue,
+    commissionKind: p.commissionKind as DemoParticipant['commissionKind'],
+    payoutSettlementStatus: p.payoutSettlementStatus as DemoParticipant['payoutSettlementStatus'],
+    paymentSetup: p.paymentSetup as DemoParticipant['paymentSetup'],
+    supplierOnboarding: p.supplierOnboarding,
+    compensationProfile: p.compensationProfile,
+  } as DemoParticipant;
+}
+
+function lifecycleToSupplierStage(
+  stage: ParticipantCommercialLifecycleStage,
+  p: ParticipantPhaseData
+): SupplierOnboardingStage {
+  switch (stage) {
+    case 'SETTLEMENT_READY':
+      return 'xero_exported';
+    case 'XERO_INVOICE':
+      return p.paymentSetup?.xeroExportedAt ? 'xero_exported' : 'operator_approved';
+    case 'OPERATOR_REVIEW':
+    case 'PAYMENT_INFO_SUBMITTED':
+      return 'submitted';
+    case 'PAYMENT_INFO_PENDING':
+      return 'in_progress';
+    case 'AGREEMENT_ACCEPTED':
+      return 'invoice_generated';
+    default:
+      return 'not_started';
+  }
+}
+
+type MinimalAccountingView = {
+  status: AccountingSyncStatus;
+  statusLabel: string;
+  ready: boolean;
+  nextAction: string | null;
+  blockerReason: 'invoice_not_received' | 'invoice_not_verified' | 'settlement_readiness_incomplete' | null;
+};
+
+function deriveMinimalAccountingView(
+  lifecycleStage: ParticipantCommercialLifecycleStage,
+  p: ParticipantPhaseData
+): MinimalAccountingView {
+  const synced =
+    p.paymentSetup?.xeroSyncStatus === 'synced' ||
+    lifecycleStage === 'SETTLEMENT_READY';
+
+  if (p.paymentSetup?.xeroExportedAt) {
+    return {
+      status: 'exported',
+      statusLabel: synced ? 'Synced' : 'Exported',
+      ready: false,
+      nextAction: null,
+      blockerReason: null,
+    };
+  }
+
+  if (lifecycleStage === 'XERO_INVOICE') {
+    return {
+      status: 'ready',
+      statusLabel: 'Ready for Xero',
+      ready: true,
+      nextAction: null,
+      blockerReason: null,
+    };
+  }
+
+  if (lifecycleStage === 'OPERATOR_REVIEW' || lifecycleStage === 'PAYMENT_INFO_SUBMITTED') {
+    return {
+      status: 'needs_review',
+      statusLabel: 'Awaiting Review',
+      ready: false,
+      nextAction: 'Review payment & tax information',
+      blockerReason: 'invoice_not_verified',
+    };
+  }
+
+  if (lifecycleStage === 'PAYMENT_INFO_PENDING') {
+    return {
+      status: 'ready',
+      statusLabel: 'Awaiting supplier onboarding',
+      ready: false,
+      nextAction: 'Share payment request with participant',
+      blockerReason: 'invoice_not_received',
+    };
+  }
+
+  if (lifecycleStage === 'AGREEMENT_ACCEPTED') {
+    return {
+      status: 'ready',
+      statusLabel: 'Draft',
+      ready: false,
+      nextAction: 'Send payment request',
+      blockerReason: 'invoice_not_received',
+    };
+  }
+
+  return {
+    status: 'ready',
+    statusLabel: 'Not ready',
+    ready: false,
+    nextAction: null,
+    blockerReason: 'settlement_readiness_incomplete',
+  };
 }
 
 /**
- * Builds a minimal `SupplierOnboardingStatus` from a participant's phase data.
- *
- * Only the fields required by `deriveWorkflowStage()` and `deriveParticipantWorkflowStatus()`
- * are populated with real values. The rest use safe defaults.
- *
- * Returns null when the participant has not yet approved their agreement.
+ * Builds a minimal `SupplierOnboardingStatus` from lifecycle-derived stage data.
  */
 function buildMinimalOnboardingStatus(
   p: ParticipantPhaseData,
@@ -107,10 +202,12 @@ function buildMinimalOnboardingStatus(
 ): SupplierOnboardingStatus | null {
   if (p.approvalStatus !== 'Approved') return null;
 
-  const stage = deriveOnboardingStageFromPhase(p);
+  const lifecycleStage = deriveParticipantCommercialLifecycle(toLifecycleParticipant(p));
+  const stage = lifecycleToSupplierStage(lifecycleStage, p);
   const amount = p.commissionValue ?? 0;
   const now = new Date().toISOString();
   const invoiceId = `${projectId}:${p.id}:supplier_invoice`;
+  const role = normalizeDemoParticipantRole(p.role);
 
   const onboardingComplete =
     stage === 'submitted' || stage === 'operator_approved' || stage === 'xero_exported';
@@ -119,7 +216,7 @@ function buildMinimalOnboardingStatus(
   return {
     participantId: p.id,
     participantName: p.name,
-    participantRole: p.role,
+    participantRole: role,
     stage,
     stageLabel: SUPPLIER_STAGE_LABELS[stage],
     draftInvoice: {
@@ -129,12 +226,12 @@ function buildMinimalOnboardingStatus(
       agreementReference: null,
       projectName: '',
       participantName: p.name,
-      participantRole: p.role,
-      description: `${p.role} services`,
+      participantRole: role,
+      description: `${role} services`,
       lineItems: [
         {
           id: `${invoiceId}:1`,
-          description: `${p.role} services`,
+          description: `${role} services`,
           quantity: 1,
           unitAmount: amount,
           taxType: 'PENDING',
@@ -189,19 +286,6 @@ function buildMinimalOnboardingStatus(
 
 /* ─── Public API ─────────────────────────────────────────────────────────── */
 
-/**
- * Converts an array of `DemoParticipant`-compatible objects into
- * `WorkflowIntegrationInput[]` for consumption by `deriveWorkspaceWorkflowStatus()`.
- *
- * @param participants  Array of project participants (DemoParticipant or subset).
- * @param projectId     The project/agreement ID.
- *
- * @example
- * ```tsx
- * const inputs = buildWorkflowInputsFromParticipants(projectParticipants, projectId);
- * const status = deriveWorkspaceWorkflowStatus(inputs);
- * ```
- */
 export function buildWorkflowInputsFromParticipants(
   participants: ParticipantPhaseData[],
   projectId: string
@@ -229,14 +313,8 @@ export function buildWorkflowInputsFromParticipants(
 }
 
 /**
- * Synthesises `SupplierOnboardingTimelineEvent[]` from participant phase data.
- *
- * Since participants don't carry a detailed event log, this function infers
- * the most likely milestone events from their persisted phase fields.
- * Events are conservative — only emitted when the evidence is unambiguous.
- *
- * These events are consumed by `buildCommercialTimeline` via
- * `BuildCommercialTimelineInput.supplierOnboardingEvents`.
+ * Synthesises timeline events from participant lifecycle fields for
+ * `buildCommercialTimeline({ supplierOnboardingEvents })`.
  */
 export function synthesizeSupplierTimelineEvents(
   participants: ParticipantPhaseData[],
@@ -247,68 +325,123 @@ export function synthesizeSupplierTimelineEvents(
   for (const p of participants) {
     if (p.approvalStatus !== 'Approved') continue;
 
+    const participant = toLifecycleParticipant(p);
+    const lifecycleStage = deriveParticipantCommercialLifecycle(participant);
     const participantId = p.id;
     const approvedAt = p.approvedAt ?? new Date().toISOString();
+    const role = normalizeDemoParticipantRole(p.role);
 
-    // Agreement approved → invoice auto-generated
-    events.push({
-      id: `${projectId}:${participantId}:invoice_generated`,
-      projectId,
-      participantId,
-      type: 'supplier_invoice_generated',
-      title: `Draft invoice generated for ${p.name}`,
-      description: `${p.name} approved the agreement. A draft invoice was automatically generated from the commercial terms.`,
-      commercialImpact: `Invoice auto-generated for ${p.role}`,
-      occurredAt: approvedAt,
-    });
-
-    // Supplier started onboarding
-    if (
-      p.payoutOnboardingPhase === 'IN_PROGRESS' ||
-      p.payoutOnboardingPhase === 'COMPLETED' ||
-      p.onboardingStatus === 'INCOMPLETE' ||
-      p.onboardingStatus === 'COMPLETE'
-    ) {
+    if (p.paymentSetup?.paymentRequestGeneratedAt) {
       events.push({
-        id: `${projectId}:${participantId}:onboarding_started`,
+        id: `${projectId}:${participantId}:payment_request_generated`,
         projectId,
         participantId,
-        type: 'supplier_onboarding_started',
-        title: `${p.name} started supplier onboarding`,
-        description: `${p.name} began providing their bank details, ABN, and GST status.`,
-        commercialImpact: 'Supplier onboarding in progress',
-        occurredAt: approvedAt,
+        type: 'supplier_invoice_generated',
+        title: 'Payment request generated',
+        description: `A secure payment portal was prepared for ${p.name}.`,
+        commercialImpact: 'Share the payment request so the participant can submit payment & tax details.',
+        occurredAt: p.paymentSetup.paymentRequestGeneratedAt,
       });
     }
 
-    // Supplier completed onboarding
-    if (
+    if (p.paymentSetup?.portalFirstOpenedAt) {
+      events.push({
+        id: `${projectId}:${participantId}:payment_request_opened`,
+        projectId,
+        participantId,
+        type: 'supplier_onboarding_started',
+        title: 'Payment request opened',
+        description: `${p.name} opened the payment & tax portal.`,
+        commercialImpact: 'Participant is reviewing what is required before submitting.',
+        occurredAt: p.paymentSetup.portalFirstOpenedAt,
+      });
+    }
+
+  if (
+      lifecycleStage === 'PAYMENT_INFO_SUBMITTED' ||
+      lifecycleStage === 'OPERATOR_REVIEW' ||
+      lifecycleStage === 'XERO_INVOICE' ||
+      lifecycleStage === 'SETTLEMENT_READY' ||
       p.payoutOnboardingPhase === 'COMPLETED' ||
       p.onboardingStatus === 'COMPLETE' ||
       p.payoutVerificationConfirmed === true
     ) {
+      const submittedAt =
+        p.supplierOnboarding?.submission?.submittedAt ?? approvedAt;
       events.push({
-        id: `${projectId}:${participantId}:onboarding_completed`,
+        id: `${projectId}:${participantId}:payment_information_submitted`,
         projectId,
         participantId,
         type: 'supplier_onboarding_completed',
-        title: `${p.name} completed supplier onboarding`,
-        description: `${p.name} submitted their bank details, ABN, and GST status. Ready for operator review.`,
-        commercialImpact: 'Awaiting operator review before Xero export',
+        title: 'Payment information submitted',
+        description: `${p.name} submitted payment & tax information.`,
+        commercialImpact: 'Ready for operator review before Xero export.',
+        occurredAt: submittedAt,
+      });
+    }
+
+    if (lifecycleStage === 'OPERATOR_REVIEW') {
+      events.push({
+        id: `${projectId}:${participantId}:operator_review_started`,
+        projectId,
+        participantId,
+        type: 'supplier_onboarding_completed',
+        title: 'Operator review started',
+        description: `${p.name}'s payment & tax details are awaiting operator review.`,
+        commercialImpact: 'Review and approve before pushing to Xero.',
         occurredAt: approvedAt,
       });
     }
 
-    // Operator approved (payoutVerificationConfirmed)
-    if (p.payoutVerificationConfirmed === true) {
+    if (p.payoutVerificationConfirmed === true || lifecycleStage === 'XERO_INVOICE') {
       events.push({
-        id: `${projectId}:${participantId}:invoice_approved`,
+        id: `${projectId}:${participantId}:operator_approved`,
         projectId,
         participantId,
         type: 'supplier_invoice_approved',
-        title: `${p.name}'s invoice approved`,
-        description: `Supplier details verified and invoice approved. Ready for Xero export.`,
-        commercialImpact: 'Invoice approved — settlement process can begin',
+        title: 'Operator approved',
+        description: `${p.name}'s payment & tax information was approved.`,
+        commercialImpact: 'Invoice is ready to push to Xero.',
+        occurredAt: approvedAt,
+      });
+    }
+
+    if (p.paymentSetup?.xeroExportedAt) {
+      events.push({
+        id: `${projectId}:${participantId}:xero_invoice_created`,
+        projectId,
+        participantId,
+        type: 'supplier_invoice_exported_to_xero',
+        title: 'Xero invoice created',
+        description: `Invoice exported to Xero for ${p.name}.`,
+        commercialImpact: 'Accounting record is in sync — settlement can proceed.',
+        occurredAt: p.paymentSetup.xeroExportedAt,
+      });
+    }
+
+    if (lifecycleStage === 'SETTLEMENT_READY') {
+      events.push({
+        id: `${projectId}:${participantId}:settlement_ready`,
+        projectId,
+        participantId,
+        type: 'supplier_invoice_exported_to_xero',
+        title: 'Settlement ready',
+        description: `${p.name} is cleared for settlement.`,
+        commercialImpact: 'All commercial and accounting steps are complete.',
+        occurredAt: p.paymentSetup?.xeroExportedAt ?? approvedAt,
+      });
+    }
+
+    // Legacy fallback when paymentSetup timestamps are absent
+    if (!p.paymentSetup?.paymentRequestGeneratedAt && lifecycleStage !== 'AGREEMENT_ACCEPTED') {
+      events.push({
+        id: `${projectId}:${participantId}:invoice_generated`,
+        projectId,
+        participantId,
+        type: 'supplier_invoice_generated',
+        title: `Draft invoice generated for ${p.name}`,
+        description: `${p.name} approved the agreement. A draft invoice was generated from the commercial terms.`,
+        commercialImpact: `Invoice auto-generated for ${role}`,
         occurredAt: approvedAt,
       });
     }
@@ -317,17 +450,6 @@ export function synthesizeSupplierTimelineEvents(
   return events;
 }
 
-/**
- * Derives `WorkspaceWorkflowIntegrationStatus` from an array of participants.
- * Convenience wrapper combining `buildWorkflowInputsFromParticipants` +
- * `deriveWorkspaceWorkflowStatus`.
- *
- * @example
- * ```tsx
- * const status = deriveWorkspaceStatusFromParticipants(projectParticipants, projectId);
- * <OperatorInbox workspaceStatus={status} projectId={projectId} />
- * ```
- */
 export function deriveWorkspaceStatusFromParticipants(
   participants: ParticipantPhaseData[],
   projectId: string
@@ -336,19 +458,6 @@ export function deriveWorkspaceStatusFromParticipants(
   return deriveWorkspaceWorkflowStatus(inputs);
 }
 
-/**
- * Builds minimal `AccountingExportModel[]` from participant phase data.
- *
- * The models provide enough information for the `XeroExportStatusPanel` to
- * show the operator which participants are ready for Xero export. Full
- * accounting verification data (ABN, bank details) is not available here —
- * the operator will see a preview prompt that routes to the Participants page
- * for completion.
- *
- * Export readiness is derived conservatively from `payoutVerificationConfirmed`:
- *   true  → operator_approved → readyForExport
- *   false → awaiting review or not started → blockedByOnboarding
- */
 export function buildMinimalAccountingExportModels(
   participants: ParticipantPhaseData[],
   projectId: string
@@ -356,54 +465,46 @@ export function buildMinimalAccountingExportModels(
   const approved = participants.filter((p) => p.approvalStatus === 'Approved');
 
   return approved.map((p) => {
-    const stage = deriveOnboardingStageFromPhase(p);
+    const lifecycleStage = deriveParticipantCommercialLifecycle(toLifecycleParticipant(p));
+    const accountingView = deriveMinimalAccountingView(lifecycleStage, p);
     const amount = p.commissionValue ?? 0;
     const exportId = `${projectId}:${p.id}:accounting_export`;
+    const role = normalizeDemoParticipantRole(p.role);
 
-    const isReadyForExport =
-      stage === 'operator_approved' || stage === 'xero_exported';
-    const isExported = stage === 'xero_exported';
+    const blockers =
+      accountingView.ready || !accountingView.blockerReason
+        ? []
+        : [
+            {
+              reason: accountingView.blockerReason,
+              explanation:
+                accountingView.blockerReason === 'invoice_not_received'
+                  ? 'Payment & tax information has not been received from the participant.'
+                  : accountingView.blockerReason === 'invoice_not_verified'
+                  ? 'Operator review is required before export.'
+                  : 'Settlement readiness is incomplete.',
+              consequence: 'Invoice cannot be exported to Xero until this is resolved.',
+              action: accountingView.nextAction ?? 'Complete the required step',
+            },
+          ];
 
     return {
       exportId,
       participantId: p.id,
       participantName: p.name,
+      participantRole: role,
       projectId,
-      status: isExported
-        ? 'exported'
-        : isReadyForExport
-        ? 'ready_to_export'
-        : 'pending',
-      statusLabel: isExported
-        ? 'Exported to Xero'
-        : isReadyForExport
-        ? 'Ready for Xero export'
-        : stage === 'submitted'
-        ? 'Awaiting operator review'
-        : 'Awaiting supplier onboarding',
-      exportReadiness: isReadyForExport
-        ? { readyForExport: true, blockers: [], primaryBlocker: null }
-        : {
-            readyForExport: false,
-            blockers: [
-              {
-                id: `${exportId}:blocker`,
-                label: SUPPLIER_STAGE_LABELS[stage] ?? 'Onboarding incomplete',
-                explanation: isReadyForExport
-                  ? null
-                  : 'Complete supplier onboarding before exporting to Xero.',
-                action: 'Complete supplier onboarding',
-                isBlocker: true,
-              },
-            ],
-            primaryBlocker: isReadyForExport
-              ? null
-              : SUPPLIER_STAGE_LABELS[stage] ?? 'Awaiting supplier onboarding',
-          },
-      preview: isReadyForExport
+      status: accountingView.status,
+      statusLabel: accountingView.statusLabel,
+      exportReadiness: {
+        ready: accountingView.ready,
+        blockers,
+        nextAction: accountingView.nextAction,
+      },
+      preview: accountingView.ready
         ? {
             supplier: p.name,
-            description: `${p.role} services`,
+            description: `${role} services`,
             reference: `${projectId}:${p.id}`,
             invoiceNumber: null,
             amount,
@@ -418,23 +519,16 @@ export function buildMinimalAccountingExportModels(
           }
         : null,
       exportApprovedAt: null,
-      exportedAt: isExported ? (p.paymentSetup?.xeroExportedAt ?? new Date().toISOString()) : null,
+      exportedAt: p.paymentSetup?.xeroExportedAt ?? null,
       providerReference: null,
-      failureReason: null,
-      failureAction: null,
+      failureReason: accountingView.status === 'failed' ? 'Export failed' : null,
+      failureAction: accountingView.status === 'failed' ? 'Review the error and retry export.' : null,
       reExportRequired: false,
       notApplicable: false,
     };
   });
 }
 
-/**
- * Derives a `WorkspaceOnboardingStatus` summary from participant phase data.
- * Used to populate `workspaceContext.onboardingWorkspace` on the dashboard.
- *
- * Provides the `SupplierOnboardingDashboardWidget` with the data it needs
- * without requiring a separate API call.
- */
 export function deriveWorkspaceOnboardingFromParticipants(
   participants: ParticipantPhaseData[],
   projectId: string

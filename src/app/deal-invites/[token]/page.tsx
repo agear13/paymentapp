@@ -52,7 +52,7 @@ export default function DealInviteApprovalPage() {
   const params = useParams<{ token: string }>();
   const searchParams = useSearchParams();
   const token = String(params?.token ?? '');
-  const urlMode = searchParams.get('mode');
+  const urlMode = searchParams?.get('mode');
 
   const [deal, setDeal] = React.useState<RecentDeal | null>(null);
   const [participant, setParticipant] = React.useState<DemoParticipant | null>(null);

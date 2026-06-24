@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { AccountingExportModel, AccountingExportPreview } from '@/lib/commercial/accounting-export';
+import type { AccountingSyncStatus } from '@/lib/commercial/accounting-connector';
 import { formatForecastAmount } from '@/lib/commercial/commercial-forecast';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -98,19 +99,19 @@ function ParticipantExportCard({
   const statusConfig = {
     exported: {
       icon: <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />,
-      label: 'Exported',
+      label: model.statusLabel,
       badgeVariant: 'outline' as const,
       badgeClass: 'border-green-300 text-green-700 dark:border-green-700 dark:text-green-400',
     },
     failed: {
       icon: <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />,
-      label: 'Export failed',
+      label: 'Failed',
       badgeVariant: 'outline' as const,
       badgeClass: 'border-red-300 text-red-700 dark:border-red-700 dark:text-red-400',
     },
     needs_review: {
       icon: <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />,
-      label: 'Needs review',
+      label: model.statusLabel === 'Awaiting Review' ? 'Awaiting Review' : 'Needs review',
       badgeVariant: 'outline' as const,
       badgeClass: 'border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-400',
     },
@@ -120,13 +121,22 @@ function ParticipantExportCard({
       badgeVariant: 'outline' as const,
       badgeClass: 'border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-400',
     },
-    ready: {
-      icon: <FileText className="h-4 w-4 text-muted-foreground" />,
-      label: model.exportReadiness.ready ? 'Ready to export' : 'Not ready',
+    exporting: {
+      icon: <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />,
+      label: 'Exporting…',
       badgeVariant: 'secondary' as const,
       badgeClass: '',
     },
-  } satisfies Record<string, { icon: React.ReactNode; label: string; badgeVariant: 'default' | 'secondary' | 'outline'; badgeClass: string }>;
+    ready: {
+      icon: <FileText className="h-4 w-4 text-muted-foreground" />,
+      label: model.exportReadiness.ready ? 'Ready for Xero' : model.statusLabel,
+      badgeVariant: 'secondary' as const,
+      badgeClass: '',
+    },
+  } satisfies Record<
+    AccountingSyncStatus,
+    { icon: React.ReactNode; label: string; badgeVariant: 'default' | 'secondary' | 'outline'; badgeClass: string }
+  >;
 
   const config = statusConfig[model.status] ?? statusConfig.ready;
 

@@ -191,6 +191,17 @@ describe('operational events and audit', () => {
     expect(audit?.type).toBe('agreement_approved');
   });
 
+  it('maps supplier onboarding mutation to SUPPLIER_ONBOARDING_STARTED', () => {
+    const event = operationalEventFromMutation('supplier_onboarding', {
+      projectId: 'deal-1',
+      participantId: 'p1',
+    });
+    expect(event.type).toBe('SUPPLIER_ONBOARDING_STARTED');
+    const audit = auditEntryFromOperationalEvent(event);
+    expect(audit?.type).toBe('supplier_onboarding_started');
+    expect(audit?.title).toBe('Payment request sent');
+  });
+
   it('processes events through orchestration pipeline', () => {
     const p = sharedParticipant();
     p.compensationProfile = { ...p.compensationProfile!, configured: true };

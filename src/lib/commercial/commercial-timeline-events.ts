@@ -62,7 +62,14 @@ export type CommercialEventType =
   | 'supplier_gst_confirmed'              // Supplier GST registration status confirmed
   | 'supplier_alternative_payment_supplied' // Supplier has requested non-bank payment
   | 'supplier_invoice_approved'           // Operator approved invoice for Xero export
-  | 'supplier_invoice_exported_to_xero';  // Invoice exported to Xero
+  | 'supplier_invoice_exported_to_xero'   // Invoice exported to Xero
+  | 'payment_request_generated'         // Operator generated payment & tax portal link
+  | 'payment_request_opened'            // Participant opened the payment portal
+  | 'payment_information_submitted'       // Participant submitted payment & tax details
+  | 'operator_review_started'           // Operator began reviewing submitted details
+  | 'operator_approved'                 // Operator approved payment & tax information
+  | 'xero_invoice_created'                // Invoice pushed to Xero
+  | 'settlement_ready';                   // Participant cleared for settlement
 
 /* ─── Event model ───────────────────────────────────────────────────────────── */
 
@@ -356,6 +363,19 @@ const SUPPLIER_EVENT_TO_STAGE: Record<SupplierOnboardingEventType, CommercialCom
   supplier_invoice_exported_to_xero:     'exported_to_xero',
 };
 
+const PAYMENT_WORKFLOW_EVENT_TO_STAGE: Record<
+  'payment_request_generated' | 'payment_request_opened' | 'payment_information_submitted' | 'operator_review_started' | 'operator_approved' | 'xero_invoice_created' | 'settlement_ready',
+  CommercialCommitmentStage
+> = {
+  payment_request_generated:       'invoice_requested',
+  payment_request_opened:          'invoice_requested',
+  payment_information_submitted:   'invoice_received',
+  operator_review_started:         'invoice_received',
+  operator_approved:               'invoice_received',
+  xero_invoice_created:            'exported_to_xero',
+  settlement_ready:                'payment_released',
+};
+
 export type BuildCommercialTimelineInput = {
   /** Audit entries from the operational audit store / coordination-snapshot. */
   auditEntries: OperationalAuditEntry[];
@@ -447,7 +467,10 @@ export function buildCommercialTimeline(
 
       if (seenIds.has(soEvent.id)) continue; // dedup
 
-      const stage = SUPPLIER_EVENT_TO_STAGE[soEvent.type] ?? 'invoice_requested';
+      const stage =
+        SUPPLIER_EVENT_TO_STAGE[soEvent.type as SupplierOnboardingEventType] ??
+        PAYMENT_WORKFLOW_EVENT_TO_STAGE[soEvent.type as keyof typeof PAYMENT_WORKFLOW_EVENT_TO_STAGE] ??
+        'invoice_requested';
       const commercialEvent: CommercialTimelineEvent = {
         id: soEvent.id,
         projectId: soEvent.projectId,

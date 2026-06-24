@@ -2,6 +2,8 @@
  * Canonical operational events — event-driven synchronization across the payout ecosystem.
  */
 
+import type { OperationalMutationKind } from '@/lib/operations/orchestration/operational-mutation-kind';
+
 export const OPERATIONAL_EVENT_TYPES = [
   'FUNDING_SOURCE_UPDATED',
   'FUNDING_ALLOCATION_RESERVED',
@@ -21,6 +23,7 @@ export const OPERATIONAL_EVENT_TYPES = [
   'SNAPSHOT_PERSISTED',
   'SYNCHRONIZATION_COMPLETED',
   'RELEASE_BATCH_GENERATED',
+  'SUPPLIER_ONBOARDING_STARTED',
 ] as const;
 
 export type OperationalEventType = (typeof OPERATIONAL_EVENT_TYPES)[number];
@@ -42,16 +45,7 @@ export type OperationalEvent = {
   dedupeKey?: string;
 };
 
-export type OperationalMutationKind =
-  | 'agreement_approval'
-  | 'participant_earnings_save'
-  | 'funding_source_crud'
-  | 'funding_update'
-  | 'payout_verification'
-  | 'attribution_update'
-  | 'snapshot_persist'
-  | 'release_batch_generated'
-  | 'payout_released';
+export type { OperationalMutationKind } from '@/lib/operations/orchestration/operational-mutation-kind';
 
 export const MUTATION_TO_OPERATIONAL_EVENT: Record<OperationalMutationKind, OperationalEventType> = {
   agreement_approval: 'AGREEMENT_APPROVED',
@@ -63,6 +57,7 @@ export const MUTATION_TO_OPERATIONAL_EVENT: Record<OperationalMutationKind, Oper
   snapshot_persist: 'SNAPSHOT_PERSISTED',
   release_batch_generated: 'RELEASE_BATCH_GENERATED',
   payout_released: 'PAYOUT_STATE_UPDATED',
+  supplier_onboarding: 'SUPPLIER_ONBOARDING_STARTED',
 };
 
 export function operationalEventFromMutation(

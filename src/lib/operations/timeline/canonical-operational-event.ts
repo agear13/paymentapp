@@ -19,6 +19,7 @@ const AUDIT_TO_EVENT: Partial<Record<OperationalAuditEntry['type'], OperationalE
   funding_reserved_against_obligations: 'FUNDING_ALLOCATION_RESERVED',
   obligations_generated: 'OBLIGATION_STATE_UPDATED',
   payout_state_updated: 'PAYOUT_STATE_UPDATED',
+  supplier_onboarding_started: 'SUPPLIER_ONBOARDING_STARTED',
   release_batch_generated: 'RELEASE_BATCH_GENERATED',
 };
 

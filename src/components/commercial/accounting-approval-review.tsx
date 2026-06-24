@@ -118,7 +118,7 @@ function ReadinessWarning({ model }: { model: AccountingExportModel }) {
           <p className="text-sm font-medium text-amber-800">Review required before export</p>
           <ul className="mt-1 space-y-0.5">
             {exportReadiness.blockers.map((b, i) => (
-              <li key={i} className="text-xs text-amber-700">• {b}</li>
+              <li key={i} className="text-xs text-amber-700">• {b.explanation}</li>
             ))}
           </ul>
         </div>

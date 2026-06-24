@@ -3,14 +3,9 @@ import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-a
 import type { OperationalSyncScope } from '@/lib/operations/orchestration/synchronize-operational-state';
 import type { WorkspaceRefreshScope } from '@/lib/projects/workspace-refresh-controller';
 
-export type OperationalSyncMutationKind =
-  | 'participant_earnings_save'
-  | 'agreement_approval'
-  | 'payout_verification'
-  | 'funding_update'
-  | 'obligation_generation'
-  | 'snapshot_persist'
-  | 'other';
+import type { OperationalSyncMutationKind } from '@/lib/operations/orchestration/operational-mutation-kind';
+
+export type { OperationalSyncMutationKind } from '@/lib/operations/orchestration/operational-mutation-kind';
 
 export const OPERATIONAL_CONVERGENCE_PHASE_ORDER = [
   'server-commit-complete',

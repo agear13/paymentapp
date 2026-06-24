@@ -14,6 +14,7 @@ const EVENT_TIMELINE_TYPE: Partial<Record<CanonicalOperationalEvent['type'], Tim
   OBLIGATION_STATE_UPDATED: 'obligation_approved',
   RELEASE_BATCH_GENERATED: 'release_generated',
   PAYOUT_STATE_UPDATED: 'settlement_completed',
+  SUPPLIER_ONBOARDING_STARTED: 'state_transition',
   OPERATIONAL_GRAPH_INITIALIZED: 'state_transition',
   SETTLEMENT_INFRASTRUCTURE_READY: 'state_transition',
 };
@@ -31,6 +32,7 @@ const EVENT_TITLES: Partial<Record<CanonicalOperationalEvent['type'], string>> =
   OBLIGATION_STATE_UPDATED: 'Obligations updated',
   RELEASE_BATCH_GENERATED: 'Release batch generated',
   PAYOUT_STATE_UPDATED: 'Payout state updated',
+  SUPPLIER_ONBOARDING_STARTED: 'Payment request sent',
 };
 
 function milestoneToTimelineEvent(milestone: OnboardingMilestoneProjection): TimelineEvent {

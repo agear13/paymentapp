@@ -11,18 +11,11 @@ import {
 } from '@/lib/operations/selectors/operational-coordination-snapshot';
 import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
 
-export type OperationalSyncScope = 'participant' | 'obligation' | 'payout' | 'funding' | 'all';
+import type { OperationalMutationKind } from '@/lib/operations/orchestration/operational-mutation-kind';
 
-export type OperationalMutationKind =
-  | 'agreement_approval'
-  | 'participant_earnings_save'
-  | 'funding_source_crud'
-  | 'funding_update'
-  | 'payout_verification'
-  | 'attribution_update'
-  | 'snapshot_persist'
-  | 'release_batch_generated'
-  | 'payout_released';
+export type { OperationalMutationKind } from '@/lib/operations/orchestration/operational-mutation-kind';
+
+export type OperationalSyncScope = 'participant' | 'obligation' | 'payout' | 'funding' | 'all';
 
 export type OperationalRefreshInput = OperationalCoordinationInput & {
   projectId: string;
@@ -51,6 +44,7 @@ const MUTATION_SCOPE: Record<OperationalMutationKind, OperationalSyncScope> = {
   snapshot_persist: 'all',
   release_batch_generated: 'all',
   payout_released: 'all',
+  supplier_onboarding: 'all',
 };
 
 /** Marks operational readiness caches stale — client controllers call workspace invalidate after this. */
