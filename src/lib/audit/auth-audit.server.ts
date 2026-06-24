@@ -7,6 +7,7 @@ import {
   createAuditLog,
 } from '@/lib/audit/audit-log';
 import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
+import { hashIpAddress } from '@/lib/auth/ip-hash';
 
 export type AuthAuditEventInput = {
   eventType: AuditEventType;
@@ -31,13 +32,14 @@ export function recordAuthAuditEvent(input: AuthAuditEventInput): void {
     severity: (input.success ?? true) ? AuditSeverity.INFO : AuditSeverity.WARNING,
     userId: input.userId,
     organizationId: input.organizationId,
-    ipAddress: ctx?.ipAddress,
+    ipAddress: ctx?.ipAddress ? hashIpAddress(ctx.ipAddress) : undefined,
     userAgent: ctx?.userAgent,
     correlationId: input.correlationId ?? ctx?.correlationId,
     metadata: {
       email: input.email,
       success: input.success ?? true,
       reason: input.reason,
+      ipHash: ctx?.ipAddress ? hashIpAddress(ctx.ipAddress) : undefined,
       ...input.metadata,
     },
     timestamp: new Date(),

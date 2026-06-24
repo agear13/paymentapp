@@ -52,6 +52,14 @@ const envSchema = z.object({
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
 
+  // Cloudflare Turnstile (optional)
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
+  TURNSTILE_SECRET_KEY: z.string().optional(),
+  AUTH_TURNSTILE_ALWAYS: z.string().optional(),
+  AUTH_TURNSTILE_AFTER_FAILURES: z.string().optional(),
+  AUTH_VERIFICATION_RESEND_COOLDOWN_SECONDS: z.string().optional(),
+  AUTH_LOGIN_MAX_FAILURES: z.string().optional(),
+
   // OpenAI — Agreement Analyzer extraction (optional until extraction is enabled)
   OPENAI_API_KEY: z.string().optional(),
 

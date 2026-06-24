@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { emitAuthAuditEvent } from '@/lib/security/auth-audit.client';
+import { TurnstileWidget } from '@/components/auth/turnstile-widget';
+import { MIN_PASSWORD_LENGTH, validatePassword } from '@/lib/auth/password-policy';
+import { GENERIC_RESET_RESPONSE } from '@/lib/auth/auth-errors';
 
 export default function ResetPasswordPage() {
   const supabase = createClient();
@@ -21,6 +24,9 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [isRecoveryLink, setIsRecoveryLink] = useState(false);
   const [tokenHash, setTokenHash] = useState<string | null>(null);
+  const [turnstileRequired, setTurnstileRequired] = useState(false);
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -29,6 +35,17 @@ export default function ResetPasswordPage() {
     const token = params.get('token_hash');
     setIsRecoveryLink(type === 'recovery');
     setTokenHash(token);
+  }, []);
+
+  useEffect(() => {
+    void fetch('/api/auth/turnstile-config?scope=reset')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setTurnstileRequired(Boolean(data.required));
+        setTurnstileSiteKey(data.siteKey ?? null);
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -44,8 +61,8 @@ export default function ResetPasswordPage() {
         });
         if (verifyError) throw verifyError;
         setReadyToSetPassword(true);
-      } catch (err: any) {
-        setError(err?.message || 'Password reset link is invalid or expired.');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Password reset link is invalid or expired.');
       } finally {
         setVerifyingToken(false);
       }
@@ -61,17 +78,26 @@ export default function ResetPasswordPage() {
     setMessage(null);
 
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          turnstileToken: turnstileToken ?? undefined,
+        }),
       });
-      if (resetError) throw resetError;
+      const data = await response.json();
+      if (!response.ok) {
+        if (data.turnstileRequired) setTurnstileRequired(true);
+        throw new Error(data.error || 'Could not send reset email.');
+      }
       void emitAuthAuditEvent({
         eventType: 'auth.password.reset.requested',
         email,
       });
-      setMessage('Password reset email sent. Please check your inbox.');
-    } catch (err: any) {
-      setError(err?.message || 'Could not send reset email.');
+      setMessage(data.message ?? GENERIC_RESET_RESPONSE);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not send reset email.');
     } finally {
       setLoading(false);
     }
@@ -89,8 +115,9 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.valid) {
+      setError(passwordCheck.message);
       setLoading(false);
       return;
     }
@@ -103,8 +130,8 @@ export default function ResetPasswordPage() {
         email,
       });
       setMessage('Password updated successfully. You can now sign in.');
-    } catch (err: any) {
-      setError(err?.message || 'Could not update password.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not update password.');
     } finally {
       setLoading(false);
     }
@@ -139,6 +166,9 @@ export default function ResetPasswordPage() {
                 disabled={loading}
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                Must be at least {MIN_PASSWORD_LENGTH} characters
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-password">Confirm new password</Label>
@@ -170,7 +200,14 @@ export default function ResetPasswordPage() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            {turnstileRequired && turnstileSiteKey ? (
+              <TurnstileWidget siteKey={turnstileSiteKey} onToken={setTurnstileToken} />
+            ) : null}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || (turnstileRequired && !turnstileToken)}
+            >
               {loading ? 'Sending reset link...' : 'Send reset link'}
             </Button>
           </form>

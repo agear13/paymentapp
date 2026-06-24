@@ -10,6 +10,8 @@ type ClientAuthAuditEvent =
   | 'auth.mfa.disabled'
   | 'auth.mfa.recovery.used'
   | 'auth.email.verified'
+  | 'auth.email.changed'
+  | 'auth.password.change'
   | 'auth.invite.accepted';
 
 export async function emitAuthAuditEvent(payload: {

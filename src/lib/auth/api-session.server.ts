@@ -3,6 +3,12 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
 import { enforceCsrfForRequest } from '@/lib/security/csrf';
+import { isEmailVerified } from '@/lib/auth/email-verification';
+import {
+  assertNoPendingSuspiciousLogin,
+  emailNotVerifiedResponse,
+  suspiciousLoginResponse,
+} from '@/lib/auth/verified-session.server';
 
 /**
  * Authenticated dashboard API access with CSRF enforcement for mutating requests.
@@ -22,6 +28,16 @@ export async function getCurrentUserForApi(
       user: null,
       response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
     };
+  }
+
+  if (!isEmailVerified(user)) {
+    return { user: null, response: emailNotVerifiedResponse() };
+  }
+
+  try {
+    await assertNoPendingSuspiciousLogin(user.id);
+  } catch {
+    return { user: null, response: suspiciousLoginResponse() };
   }
 
   return { user, response: null };

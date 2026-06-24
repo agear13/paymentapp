@@ -20,6 +20,8 @@ import 'server-only';
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { enforceCsrfForRequest } from '@/lib/security/csrf'
+import { isEmailVerified } from '@/lib/auth/email-verification'
+import { isSuspiciousLoginPending } from '@/lib/auth/login-tracking.server'
 
 function getSupabaseEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -189,6 +191,29 @@ export async function requireAuth(request: NextRequest) {
       user: null,
       session: null,
       response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+    }
+  }
+
+  if (!isEmailVerified(user)) {
+    return {
+      user: null,
+      session: null,
+      response: NextResponse.json(
+        { error: 'Please verify your email address before continuing.', code: 'EMAIL_NOT_VERIFIED' },
+        { status: 403 }
+      ),
+    }
+  }
+
+  const suspicious = await isSuspiciousLoginPending(user.id)
+  if (suspicious) {
+    return {
+      user: null,
+      session: null,
+      response: NextResponse.json(
+        { error: 'Unusual sign-in activity detected.', code: 'SUSPICIOUS_LOGIN_PENDING' },
+        { status: 403 }
+      ),
     }
   }
 

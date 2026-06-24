@@ -10,6 +10,7 @@ export const revalidate = 0;
 import { headers } from 'next/headers';
 
 import { getDashboardProductProfile } from '@/lib/auth/dashboard-product.server';
+import { enforceVerifiedSession } from '@/lib/auth/verified-gate.server';
 import { DashboardLayoutClient } from '@/components/dashboard/dashboard-layout-client';
 import {
   isInfrastructureDomainAllowed,
@@ -32,6 +33,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  await enforceVerifiedSession();
   const productProfile = await getDashboardProductProfile();
   const requestOrigin = await getDashboardRequestOrigin();
   const customerFacing = resolveCustomerFacingOrigin({

@@ -1482,3 +1482,18 @@ model obligation_report_email_events {
   @@index([email_type])
   @@index([provider_message_id])
 }
+
+model user_auth_profiles {
+  user_id                  String    @id @db.VarChar(255)
+  last_login_at            DateTime? @db.Timestamptz(6)
+  last_login_browser       String?   @db.VarChar(64)
+  last_login_os            String?   @db.VarChar(64)
+  last_login_location      String?   @db.VarChar(128)
+  last_login_ip_hash       String?   @db.VarChar(64)
+  previous_login_at        DateTime? @db.Timestamptz(6)
+  previous_login_location  String?   @db.VarChar(128)
+  suspicious_login_pending Boolean   @default(false)
+  suspicious_login_reason  String?   @db.Text
+  created_at               DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime  @updatedAt @db.Timestamptz(6)
+}

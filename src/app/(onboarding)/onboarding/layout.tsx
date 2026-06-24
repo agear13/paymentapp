@@ -2,6 +2,7 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { getUserOrganization } from '@/lib/auth/get-org';
 import { getDashboardProductProfile } from '@/lib/auth/dashboard-product.server';
 import { getOperatorOnboardingState } from '@/lib/onboarding/operator-onboarding.server';
+import { enforceVerifiedSession } from '@/lib/auth/verified-gate.server';
 import { redirect } from 'next/navigation';
 import { CsrfBootstrap } from '@/components/security/csrf-bootstrap';
 
@@ -18,6 +19,8 @@ export default async function OnboardingLayout({
   if (!user) {
     redirect('/auth/login');
   }
+
+  await enforceVerifiedSession({ allowSuspicious: true });
 
   const productProfile = await getDashboardProductProfile();
 

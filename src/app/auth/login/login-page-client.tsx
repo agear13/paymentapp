@@ -15,6 +15,9 @@ import {
   AuthSignupLegalNotice,
 } from '@/components/legal/auth-legal-links';
 import { emitAuthAuditEvent } from '@/lib/security/auth-audit.client';
+import { TurnstileWidget } from '@/components/auth/turnstile-widget';
+import { MIN_PASSWORD_LENGTH } from '@/lib/auth/password-policy';
+import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from '@/lib/auth/disposable-email';
 
 type AuthMode = 'signin' | 'signup';
 
@@ -44,6 +47,9 @@ export function LoginPageClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [turnstileRequired, setTurnstileRequired] = useState(false);
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -57,6 +63,18 @@ export function LoginPageClient() {
     }
     setMode('signin');
   }, [searchParams]);
+
+  useEffect(() => {
+    const scope = mode === 'signup' ? 'signup' : 'login';
+    void fetch(`/api/auth/turnstile-config?scope=${scope}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setTurnstileRequired(Boolean(data.required));
+        setTurnstileSiteKey(data.siteKey ?? null);
+      })
+      .catch(() => undefined);
+  }, [mode]);
 
   const getPostAuthDestination = () => {
     const redirectedFrom = searchParams?.get('redirectedFrom');
@@ -86,12 +104,34 @@ export function LoginPageClient() {
     setNotice(null);
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          turnstileToken: turnstileToken ?? undefined,
+        }),
       });
+      const data = await response.json();
 
-      if (signInError) throw signInError;
+      if (!response.ok) {
+        if (data.turnstileRequired) {
+          setTurnstileRequired(true);
+        }
+        if (data.code === 'EMAIL_NOT_VERIFIED') {
+          setNotice('Please verify your email address before signing in.');
+          setMode('signin');
+          return;
+        }
+        void emitAuthAuditEvent({
+          eventType: 'auth.login.failed',
+          email,
+          success: false,
+          reason: data.error,
+        });
+        throw new Error(data.error || 'Failed to login');
+      }
 
       await waitForSession();
       const { data: sessionData } = await supabase.auth.getSession();
@@ -100,16 +140,15 @@ export function LoginPageClient() {
         email,
         userId: sessionData.session?.user.id,
       });
-      router.replace(getPostAuthDestination());
+
+      if (data.suspiciousLogin) {
+        router.replace('/auth/confirm-login');
+      } else {
+        router.replace(getPostAuthDestination());
+      }
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to login';
-      void emitAuthAuditEvent({
-        eventType: 'auth.login.failed',
-        email,
-        success: false,
-        reason: message,
-      });
       setError(message);
     } finally {
       setLoading(false);
@@ -132,39 +171,47 @@ export function LoginPageClient() {
       return;
     }
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+      setLoading(false);
+      submissionInFlightRef.current = false;
+      return;
+    }
+
+    if (isDisposableEmail(email)) {
+      setError(DISPOSABLE_EMAIL_MESSAGE);
       setLoading(false);
       submissionInFlightRef.current = false;
       return;
     }
 
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          turnstileToken: turnstileToken ?? undefined,
+        }),
       });
+      const data = await response.json();
 
-      if (signUpError) throw signUpError;
-
-      if (data.user && !data.user.identities?.length) {
-        setError('An account with this email already exists');
-        setLoading(false);
-        submissionInFlightRef.current = false;
-        return;
+      if (!response.ok) {
+        if (data.turnstileRequired) {
+          setTurnstileRequired(true);
+        }
+        throw new Error(data.error || 'Failed to create account');
       }
 
-      if (!data.session) {
-        setNotice('Check your email to confirm your account, then sign in.');
+      if (data.requiresVerification) {
+        setNotice(data.message ?? 'Check your email to confirm your account, then sign in.');
         setMode('signin');
         return;
       }
 
       await waitForSession();
-      router.replace('/onboarding');
+      router.replace('/auth/verify-email');
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create account';
@@ -276,7 +323,9 @@ export function LoginPageClient() {
                     className="h-11"
                   />
                   {mode === 'signup' && (
-                    <p className="text-xs text-muted-foreground">Must be at least 8 characters</p>
+                    <p className="text-xs text-muted-foreground">
+                      Must be at least {MIN_PASSWORD_LENGTH} characters
+                    </p>
                   )}
                 </div>
 
@@ -296,6 +345,10 @@ export function LoginPageClient() {
                   </div>
                 )}
               </div>
+
+              {turnstileRequired && turnstileSiteKey ? (
+                <TurnstileWidget siteKey={turnstileSiteKey} onToken={setTurnstileToken} />
+              ) : null}
 
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start gap-3">
@@ -319,7 +372,11 @@ export function LoginPageClient() {
 
               {mode === 'signup' ? <AuthSignupLegalNotice /> : null}
 
-              <Button type="submit" className="w-full h-11 text-base" disabled={loading}>
+              <Button
+                type="submit"
+                className="w-full h-11 text-base"
+                disabled={loading || (turnstileRequired && !turnstileToken)}
+              >
                 {loading ? (
                   <span className="flex items-center gap-2">
                     <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">

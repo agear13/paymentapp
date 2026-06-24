@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Loader2, Download, Trash2, Shield, AlertTriangle } from "lucide-react";
 import { ProvvypayPrivacyLink } from "@/components/legal/provvypay-legal-links";
+import { LastLoginSection } from "@/components/dashboard/settings/last-login-section";
 
 export default function PrivacySettingsPage() {
   const [isExporting, setIsExporting] = useState(false);
@@ -127,6 +128,23 @@ export default function PrivacySettingsPage() {
           Manage your privacy settings and exercise your data rights under GDPR
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center">
+              <Shield className="w-5 h-5 text-violet-600" />
+            </div>
+            <div>
+              <CardTitle>Account Security</CardTitle>
+              <CardDescription>Recent sign-in activity for your account</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <LastLoginSection />
+        </CardContent>
+      </Card>
 
       {/* Data Export */}
       <Card>

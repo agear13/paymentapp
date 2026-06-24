@@ -24,6 +24,10 @@ export enum AuditEventType {
   AUTH_PASSWORD_RESET_REQUESTED = 'auth.password.reset.requested',
   AUTH_PASSWORD_RESET_COMPLETED = 'auth.password.reset.completed',
   AUTH_EMAIL_VERIFIED = 'auth.email.verified',
+  AUTH_ACCOUNT_CREATED = 'auth.account.created',
+  AUTH_VERIFICATION_EMAIL_SENT = 'auth.verification.email.sent',
+  AUTH_EMAIL_CHANGED = 'auth.email.changed',
+  AUTH_SUSPICIOUS_LOGIN = 'auth.suspicious.login',
   AUTH_INVITE_ACCEPTED = 'auth.invite.accepted',
   AUTH_MFA_ENABLED = 'auth.mfa.enabled',
   AUTH_MFA_DISABLED = 'auth.mfa.disabled',
@@ -78,6 +82,7 @@ export enum AuditEventType {
   // Security Events
   SECURITY_CSRF_VIOLATION = 'security.csrf.violation',
   SECURITY_RATE_LIMIT_EXCEEDED = 'security.ratelimit.exceeded',
+  SECURITY_SUSPICIOUS_LOGIN = 'security.suspicious.login',
   SECURITY_IP_BLOCKED = 'security.ip.blocked',
   SECURITY_ENCRYPTION_FAILED = 'security.encryption.failed',
   SECURITY_KEY_ROTATED = 'security.key.rotated',

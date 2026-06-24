@@ -124,10 +124,13 @@ function base64UrlDecode(base64url: string): string {
  * JWT email is BEST-EFFORT and NOT trusted for authorization. Server/API routes
  * must enforce real authorization (verify session and check allowlist server-side).
  */
-function getSessionFromCookies(request: NextRequest): { hasSession: boolean; email: string | null } {
+function getSessionFromCookies(request: NextRequest): {
+  hasSession: boolean;
+  email: string | null;
+  emailVerified: boolean | null;
+} {
   const cookies = request.cookies.getAll();
 
-  // Prefer unchunked cookie: exactly sb-<ref>-auth-token (no .0, .1 suffix)
   const unchunked = cookies.find(
     (c) =>
       c.name.startsWith('sb-') &&
@@ -135,11 +138,10 @@ function getSessionFromCookies(request: NextRequest): { hasSession: boolean; ema
       !/\.\d+$/.test(c.name)
   );
   if (unchunked?.value) {
-    const result = parseTokenValue(unchunked.value);
-    return { hasSession: true, email: result };
+    const parsed = parseTokenValue(unchunked.value);
+    return { hasSession: true, email: parsed.email, emailVerified: parsed.emailVerified };
   }
 
-  // Chunked: find base name from .0 chunk and reconstruct .0, .1, .2... in order
   const chunkedByBase = new Map<string, { index: number; value: string }[]>();
   for (const c of cookies) {
     if (!c.name.startsWith('sb-') || !c.name.includes('-auth-token')) continue;
@@ -154,22 +156,22 @@ function getSessionFromCookies(request: NextRequest): { hasSession: boolean; ema
     entries.sort((a, b) => a.index - b.index);
     const hasZero = entries.some((e) => e.index === 0);
     if (!hasZero) {
-      // Only non-.0 chunks exist: session present but we can't reconstruct token
-      return { hasSession: true, email: null };
+      return { hasSession: true, email: null, emailVerified: null };
     }
     const tokenValue = entries.map((e) => e.value).join('');
-    const result = parseTokenValue(tokenValue);
-    return { hasSession: true, email: result };
+    const parsed = parseTokenValue(tokenValue);
+    return { hasSession: true, email: parsed.email, emailVerified: parsed.emailVerified };
   }
 
-  return { hasSession: false, email: null };
+  return { hasSession: false, email: null, emailVerified: null };
 }
 
-/**
- * Best-effort: parse token value to extract email from JWT payload. Not used for authorization.
- * Returns email or null. On any failure returns null (caller already has hasSession from cookie).
- */
-function parseTokenValue(tokenValue: string): string | null {
+type ParsedSessionToken = {
+  email: string | null;
+  emailVerified: boolean | null;
+};
+
+function parseTokenValue(tokenValue: string): ParsedSessionToken {
   try {
     let jwt = tokenValue;
     if (tokenValue.startsWith('{') || tokenValue.startsWith('%7B')) {
@@ -180,13 +182,24 @@ function parseTokenValue(tokenValue: string): string | null {
       jwt = parsed.access_token || parsed.token || tokenValue;
     }
     const parts = jwt.split('.');
-    if (parts.length !== 3) return null;
+    if (parts.length !== 3) return { email: null, emailVerified: null };
     const payload = parts[1];
     const jsonPayload = base64UrlDecode(payload);
     const claims = JSON.parse(jsonPayload);
-    return claims.email || null;
+    const email = claims.email || null;
+    if (claims.email_confirmed_at) {
+      return { email, emailVerified: true };
+    }
+    const provider = claims.app_metadata?.provider as string | undefined;
+    if (provider && provider !== 'email') {
+      return { email, emailVerified: true };
+    }
+    if (email) {
+      return { email, emailVerified: false };
+    }
+    return { email: null, emailVerified: null };
   } catch {
-    return null;
+    return { email: null, emailVerified: null };
   }
 }
 
@@ -219,7 +232,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Detect session from cookies (lightweight, no Supabase import)
-  const { hasSession, email } = getSessionFromCookies(request);
+  const { hasSession, email, emailVerified } = getSessionFromCookies(request);
 
   // DEV only: log cookie NAMES and pathname decisions (never cookie values or tokens)
   if (DEBUG_MIDDLEWARE) {
@@ -252,10 +265,22 @@ export async function middleware(request: NextRequest) {
 
   // Redirect authenticated users from auth pages to dashboard (except callback routes)
   const isAuthCallbackRoute = pathname.startsWith('/auth/callback');
-  if (hasSession && isAuthRoute && !isAuthCallbackRoute) {
+  const isVerifyEmailRoute = pathname.startsWith('/auth/verify-email');
+  const isConfirmLoginRoute = pathname.startsWith('/auth/confirm-login');
+  const isResetPasswordRoute = pathname.startsWith('/auth/reset-password');
+  const isAuthUtilityRoute = isVerifyEmailRoute || isConfirmLoginRoute || isResetPasswordRoute;
+
+  if (hasSession && isAuthRoute && !isAuthCallbackRoute && !isAuthUtilityRoute) {
     if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=redirect_to_dashboard'); }
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = '/dashboard';
+    redirectUrl.pathname = emailVerified === false ? '/auth/verify-email' : '/dashboard';
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  if (hasSession && isDashboardRoute && emailVerified === false) {
+    if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=redirect_to_verify_email'); }
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = '/auth/verify-email';
     return NextResponse.redirect(redirectUrl);
   }
 
