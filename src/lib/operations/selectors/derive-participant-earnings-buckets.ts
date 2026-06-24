@@ -59,8 +59,8 @@ export const PARTICIPANT_EARNINGS_BUCKET_META: Record<
   },
   awaiting_payout_details: {
     id: 'awaiting_payout_details',
-    title: 'Supplier onboarding required',
-    description: 'Supplier must complete onboarding (bank details, ABN, GST) before settlement can proceed.',
+    title: 'Payment profiles awaiting review',
+    description: 'Participant submitted payment & tax information — operator review required before Xero export.',
   },
   awaiting_orchestration_refresh: {
     id: 'awaiting_orchestration_refresh',
@@ -70,8 +70,8 @@ export const PARTICIPANT_EARNINGS_BUCKET_META: Record<
   },
   awaiting_participant_setup: {
     id: 'awaiting_participant_setup',
-    title: 'Awaiting participant setup',
-    description: 'Approved participants completing payout onboarding.',
+    title: 'Payment & tax forms awaiting completion',
+    description: 'Agreement accepted — participant must complete payment & tax information.',
   },
   recently_released: {
     id: 'recently_released',

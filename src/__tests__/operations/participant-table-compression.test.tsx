@@ -5,7 +5,8 @@ import { render, screen } from '@testing-library/react';
 import { OperatorPayoutVerificationInfo } from '@/components/projects/operator-payout-verification-info';
 import { ProjectParticipantTableRow } from '@/components/projects/project-participant-table-row';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { OPERATOR_PAYOUT_DISCLAIMER, PAYOUT_CONFIRMATION_LABELS } from '@/lib/operations/merchant-operational-copy';
+import { OPERATOR_PAYOUT_DISCLAIMER } from '@/lib/operations/merchant-operational-copy';
+import { formatParticipantStatusLabel } from '@/lib/commercial/participant-commercial-lifecycle';
 
 const baseParticipant: DemoParticipant = {
   id: 'p-1',
@@ -52,13 +53,11 @@ describe('compressed participant table UX', () => {
     expect(text).toMatch(/Provvypay does not currently facilitate/i);
   });
 
-  it('participant row does not repeat full compliance disclaimer', () => {
-    // The row shows the canonical supplier onboarding label (a short confirmation badge/checkbox),
-    // not the full disclaimer paragraph. Use the semantic constant to stay resilient to copy changes.
+  it('participant row shows commercial lifecycle stage instead of payout checkbox', () => {
     const { container } = renderRow();
     const text = container.textContent ?? '';
     expect(text).toContain('Alex Rivera');
-    expect(text).toContain(PAYOUT_CONFIRMATION_LABELS.toggleLabel);
+    expect(text).toContain(formatParticipantStatusLabel('EARNINGS_CONFIGURED'));
     expect(text).not.toContain(OPERATOR_PAYOUT_DISCLAIMER);
   });
 
@@ -68,12 +67,12 @@ describe('compressed participant table UX', () => {
     expect(container.textContent).toContain('Attribution not enabled');
   });
 
-  it('renders stacked agreement and payout cells', () => {
+  it('renders stacked agreement and lifecycle cells', () => {
     const { container } = renderRow({
       ...baseParticipant,
       payoutVerificationConfirmed: false,
     });
-    expect(container.textContent).toContain('Not confirmed');
+    expect(container.textContent).toContain('Earnings Configured');
     expect(container.textContent).toContain('Ready to send to participant');
   });
 

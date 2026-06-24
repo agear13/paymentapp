@@ -22,7 +22,10 @@ import { deriveAgreementLifecycleState } from '@/lib/operations/lifecycle/agreem
 import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
 import type { ParticipantAttributionStatus } from '@/lib/projects/participant-entitlement';
 import { hydrateOperationalParticipant } from '@/lib/operations/hydration/hydrate-operational-participant';
-import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
+import {
+  deriveWorkspaceLifecycleSummary,
+  type ParticipantCommercialLifecycleStage,
+} from '@/lib/commercial/participant-commercial-lifecycle';
 
 /** @deprecated Use ParticipantLifecycleState — kept for table column compatibility */
 export type ParticipantInviteState =
@@ -161,15 +164,17 @@ export type ParticipantSummaryMetrics = {
   missingOnboarding: number;
   readyForPayout: number;
   activeAttribution: number;
+  lifecycleByStage: Record<ParticipantCommercialLifecycleStage, number>;
+  primaryLifecycleMessage: string | null;
 };
 
 export function participantSummaryMetrics(
   participants: DemoParticipant[]
 ): ParticipantSummaryMetrics {
   let pendingAgreements = 0;
-  let missingOnboarding = 0;
   let readyForPayout = 0;
   let activeAttribution = 0;
+  const hydrated: DemoParticipant[] = [];
 
   for (const raw of participants) {
     let p: DemoParticipant;
@@ -178,14 +183,9 @@ export function participantSummaryMetrics(
     } catch {
       continue;
     }
+    hydrated.push(p);
     const agreementApproved = deriveAgreementLifecycleState(p) === 'APPROVED';
     if (!agreementApproved) pendingAgreements += 1;
-
-    const needsPayoutConfirmation =
-      !p.compensationProfile?.exemptFromPayout && isParticipantEarningsConfigured(p);
-    if (agreementApproved && needsPayoutConfirmation && p.payoutVerificationConfirmed !== true) {
-      missingOnboarding += 1;
-    }
 
     if (isParticipantPayoutReady(p)) readyForPayout += 1;
 
@@ -194,12 +194,18 @@ export function participantSummaryMetrics(
     }
   }
 
+  const lifecycle = deriveWorkspaceLifecycleSummary(hydrated);
+  const paymentProfilesAwaitingReview =
+    lifecycle.byStage.OPERATOR_REVIEW + lifecycle.byStage.PAYMENT_INFO_SUBMITTED;
+
   return {
     total: participants.length,
     pendingAgreements,
-    missingOnboarding,
+    missingOnboarding: paymentProfilesAwaitingReview,
     readyForPayout,
     activeAttribution,
+    lifecycleByStage: lifecycle.byStage,
+    primaryLifecycleMessage: lifecycle.primaryNotification?.message ?? null,
   };
 }
 

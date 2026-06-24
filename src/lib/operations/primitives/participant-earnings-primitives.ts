@@ -1,5 +1,9 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
+  deriveLifecycle,
+  type StoredOnboardingState,
+} from '@/lib/commercial/supplier-onboarding-domain';
+import {
   isAllActiveCatalogSource,
   isCatalogScopedCommission,
 } from '@/lib/operations/shared/attribution-compensation-semantics';
@@ -68,12 +72,46 @@ export function hasApprovedAgreement(
   return lifecycle === 'APPROVED' || lifecycle === 'PAYOUT_READY' || lifecycle === 'ACTIVE';
 }
 
+export function hasSupplierOnboardingComplete(
+  participant: DemoParticipant | null | undefined
+): boolean {
+  if (!participant) return false;
+  const stored = participant.supplierOnboarding as StoredOnboardingState | undefined;
+  const lifecycle = deriveLifecycle(stored, {
+    payoutVerificationConfirmed: participant.payoutVerificationConfirmed,
+    payoutOnboardingPhase: participant.payoutOnboardingPhase,
+    onboardingStatus: participant.onboardingStatus,
+  });
+  if (lifecycle === 'APPROVED' || lifecycle === 'SUBMITTED' || lifecycle === 'UNDER_REVIEW') {
+    return true;
+  }
+  if (participant.payoutOnboardingPhase === 'COMPLETED') return true;
+  if (participant.onboardingStatus === 'COMPLETE') return true;
+  return participant.payoutVerificationConfirmed === true;
+}
+
+/**
+ * Payment profile complete for settlement — operator approved or legacy confirmation.
+ * Never evaluated before agreement approval (callers must gate on hasApprovedAgreement).
+ */
 export function hasConfirmedPayout(
   participant: DemoParticipant | null | undefined
 ): boolean {
   if (!participant) return false;
   if (participant.compensationProfile?.exemptFromPayout) return true;
-  return participant.payoutVerificationConfirmed === true;
+  if (!hasApprovedAgreement(participant)) return false;
+
+  const stored = participant.supplierOnboarding as StoredOnboardingState | undefined;
+  const lifecycle = deriveLifecycle(stored, {
+    payoutVerificationConfirmed: participant.payoutVerificationConfirmed,
+    payoutOnboardingPhase: participant.payoutOnboardingPhase,
+    onboardingStatus: participant.onboardingStatus,
+  });
+  if (lifecycle === 'APPROVED') return true;
+  if (participant.payoutVerificationConfirmed === true) return true;
+  if (participant.payoutOnboardingPhase === 'COMPLETED') return true;
+  if (participant.onboardingStatus === 'COMPLETE') return true;
+  return false;
 }
 
 export function hasPersistedAttributionEnabled(

@@ -101,6 +101,7 @@ const CreateFromConversationButton = React.lazy(
 import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
 import { ProjectPageCopilot } from '@/components/operations/project-page-copilot';
 import { ParticipantOnboardingStatusCard } from '@/components/commercial/supplier-onboarding/participant-onboarding-status-card';
+import { AlertCircle } from 'lucide-react';
 
 const ONBOARDING_CHECKLIST = [
   'Plan allocations (roles and budgets)',
@@ -857,6 +858,32 @@ export function ProjectParticipantsView() {
           </Card>
         ) : null}
 
+        {stats.primaryLifecycleMessage ? (
+          <Card
+            className={
+              stats.paymentProfilesAwaitingReview > 0 || stats.earningsConfigurationNeeded > 0
+                ? 'border-amber-200 bg-amber-50/50'
+                : 'border-border'
+            }
+          >
+            <CardContent className="py-4 flex items-start gap-3">
+              <AlertCircle
+                className={
+                  stats.paymentProfilesAwaitingReview > 0 || stats.earningsConfigurationNeeded > 0
+                    ? 'h-5 w-5 text-amber-600 shrink-0 mt-0.5'
+                    : 'h-5 w-5 text-muted-foreground shrink-0 mt-0.5'
+                }
+              />
+              <div>
+                <p className="text-sm font-medium">{stats.primaryLifecycleMessage}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  The dashboard shows the next required action in the participant commercial lifecycle.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
         {/* ═══════════════════════════════════════════════════════════════
             APPROVAL CENTRE — shown when collecting-approvals stage or after
             all approvals are complete (so operator can review the record).
@@ -934,26 +961,26 @@ export function ProjectParticipantsView() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Pending agreements</CardDescription>
-                <CardTitle className="text-2xl">{stats.pendingAgreements}</CardTitle>
+                <CardDescription>Earnings configuration needed</CardDescription>
+                <CardTitle className="text-2xl">{stats.earningsConfigurationNeeded}</CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Missing confirmation</CardDescription>
-                <CardTitle className="text-2xl">{stats.missingConfirmation}</CardTitle>
+                <CardDescription>Agreements ready to send</CardDescription>
+                <CardTitle className="text-2xl">{stats.agreementsReadyToSend}</CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Ready for payout</CardDescription>
-                <CardTitle className="text-2xl">{stats.readyForPayout}</CardTitle>
+                <CardDescription>Awaiting acceptance</CardDescription>
+                <CardTitle className="text-2xl">{stats.awaitingAcceptance}</CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Active attribution</CardDescription>
-                <CardTitle className="text-2xl">{stats.activeAttribution}</CardTitle>
+                <CardDescription>Payment profiles awaiting review</CardDescription>
+                <CardTitle className="text-2xl">{stats.paymentProfilesAwaitingReview}</CardTitle>
               </CardHeader>
             </Card>
           </div>

@@ -15,7 +15,8 @@
 import * as React from 'react';
 import { useParams } from 'next/navigation';
 import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
-import { SupplierOnboardingForm } from '@/components/commercial/supplier-onboarding/supplier-onboarding-form';
+import { PaymentTaxInformationForm } from '@/components/commercial/payment-tax/payment-tax-information-form';
+import { buildAgreementSummaryData } from '@/lib/commercial/participant-commercial-lifecycle';
 import type { SupplierOnboardingInput } from '@/lib/commercial/supplier-onboarding';
 import type { PaymentAttachment } from '@/lib/commercial/payment-setup-types';
 
@@ -217,12 +218,10 @@ export default function PaymentSetupPortalPage() {
           </div>
         )}
 
-        {/* Page intro */}
         <div className="mb-6">
-          <h1 className="text-xl font-bold">Complete your payment information</h1>
+          <h1 className="text-xl font-bold">Payment & Tax Information</h1>
           <p className="text-sm text-muted-foreground mt-1.5">
-            Hi {portalData.participantName}, {portalData.projectName} needs a few details to
-            prepare your payment. This usually takes less than five minutes.
+            Complete your payment details so your approved earnings can be paid.
           </p>
         </div>
 
@@ -232,7 +231,18 @@ export default function PaymentSetupPortalPage() {
           </div>
         )}
 
-        <SupplierOnboardingForm
+        <PaymentTaxInformationForm
+          agreementSummary={buildAgreementSummaryData(
+            {
+              id: portalData.participantId,
+              name: portalData.participantName,
+              role: portalData.participantRole,
+              approvalStatus: 'Approved',
+              commissionKind: 'fixed_amount',
+              commissionValue: (portalData.draftInvoice as { subtotal?: number })?.subtotal ?? 0,
+            },
+            { id: '', name: portalData.projectName }
+          )}
           baseInput={baseInput}
           onSubmit={handleSubmit}
           isSubmitting={isSubmitting}

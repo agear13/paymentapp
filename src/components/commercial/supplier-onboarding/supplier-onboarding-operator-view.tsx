@@ -153,31 +153,41 @@ function CommercialReviewSummaryPanel({ summary }: { summary: CommercialReviewSu
   );
 }
 
-/* ─── Reject modal ──────────────────────────────────────────────────────── */
-function RejectModal({
+function FeedbackModal({
   participantName,
+  mode,
   onConfirm,
   onCancel,
   isLoading,
 }: {
   participantName: string;
+  mode: 'request_changes' | 'reject';
   onConfirm: (reason: string) => void;
   onCancel: () => void;
   isLoading: boolean;
 }) {
   const [reason, setReason] = React.useState('');
+  const isReject = mode === 'reject';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="relative w-full max-w-sm bg-background border rounded-xl shadow-xl p-5 mx-4">
-        <h3 className="text-base font-semibold mb-1">Request changes</h3>
+        <h3 className="text-base font-semibold mb-1">
+          {isReject ? 'Reject submission' : 'Request changes'}
+        </h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Provide a reason for {participantName}. They will be able to resubmit after making corrections.
+          {isReject
+            ? `Reject ${participantName}'s payment & tax information. They can resubmit if appropriate.`
+            : `Describe what ${participantName} should update. They will receive a link to resubmit.`}
         </p>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="e.g. ABN could not be verified. Please resubmit with a valid ABN."
+          placeholder={
+            isReject
+              ? 'e.g. Payment details could not be verified.'
+              : 'e.g. Please update your ABN or bank account name to match your business registration.'
+          }
           className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
           rows={4}
           autoFocus
@@ -195,9 +205,17 @@ function RejectModal({
             type="button"
             onClick={() => reason.trim() && onConfirm(reason.trim())}
             disabled={!reason.trim() || isLoading}
-            className="rounded-md bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-700 disabled:opacity-40 transition-colors"
+            className={`rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-40 transition-colors ${
+              isReject
+                ? 'bg-red-600 text-white hover:bg-red-700'
+                : 'bg-amber-600 text-white hover:bg-amber-700'
+            }`}
           >
-            {isLoading ? 'Rejecting…' : 'Reject submission'}
+            {isLoading
+              ? 'Saving…'
+              : isReject
+              ? 'Reject'
+              : 'Request changes'}
           </button>
         </div>
       </div>
@@ -219,6 +237,8 @@ export type SupplierOnboardingOperatorViewProps = {
   onApproveAndExport?: () => void;
   /** Called when operator rejects with a reason. */
   onReject?: (reason: string) => void;
+  /** Called when operator requests changes without full rejection. */
+  onRequestChanges?: (requestedChanges: string) => void;
   isLoading?: boolean;
 };
 
@@ -238,11 +258,12 @@ export function SupplierOnboardingOperatorView({
   onApprove,
   onApproveAndExport,
   onReject,
+  onRequestChanges,
   isLoading = false,
 }: SupplierOnboardingOperatorViewProps) {
   const { draftInvoice, abnValidation, checklist, xeroReadiness, requiresManualReview } = status;
-  const [showRejectModal, setShowRejectModal] = React.useState(false);
-  const [isRejecting, setIsRejecting] = React.useState(false);
+  const [feedbackMode, setFeedbackMode] = React.useState<'request_changes' | 'reject' | null>(null);
+  const [isFeedbackLoading, setIsFeedbackLoading] = React.useState(false);
   const [showFullBank, setShowFullBank] = React.useState(false);
 
   // H-8: Extract bank details and attachments from participant.supplierOnboarding.submission
@@ -254,13 +275,17 @@ export function SupplierOnboardingOperatorView({
   const paymentMethodType = submission?.paymentMethodType as string | undefined;
   const attachments: PaymentAttachment[] = participant?.paymentSetup?.attachments ?? [];
 
-  const handleReject = async (reason: string) => {
-    setIsRejecting(true);
+  const handleFeedback = async (reason: string) => {
+    setIsFeedbackLoading(true);
     try {
-      await onReject?.(reason);
+      if (feedbackMode === 'reject') {
+        await onReject?.(reason);
+      } else {
+        await onRequestChanges?.(reason);
+      }
     } finally {
-      setIsRejecting(false);
-      setShowRejectModal(false);
+      setIsFeedbackLoading(false);
+      setFeedbackMode(null);
     }
   };
 
@@ -294,12 +319,13 @@ export function SupplierOnboardingOperatorView({
 
   return (
     <>
-      {showRejectModal && (
-        <RejectModal
+      {feedbackMode && (
+        <FeedbackModal
           participantName={status.participantName}
-          onConfirm={handleReject}
-          onCancel={() => setShowRejectModal(false)}
-          isLoading={isRejecting}
+          mode={feedbackMode}
+          onConfirm={handleFeedback}
+          onCancel={() => setFeedbackMode(null)}
+          isLoading={isFeedbackLoading || isLoading}
         />
       )}
 
@@ -511,20 +537,29 @@ export function SupplierOnboardingOperatorView({
                   disabled={isLoading || reviewSummary?.hasBlockers === true}
                   className="w-full flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
                 >
-                  {isLoading ? 'Approving…' : 'Approve supplier'}
+                  {isLoading ? 'Approving…' : 'Approve'}
                   {!isLoading && <CheckCircle2 className="h-4 w-4" />}
                 </button>
               )}
-              {/* Reject */}
+              {onRequestChanges && (
+                <button
+                  type="button"
+                  onClick={() => setFeedbackMode('request_changes')}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-2 rounded-md border border-amber-200 text-amber-800 bg-amber-50 py-2.5 text-sm font-medium hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                >
+                  Request changes
+                </button>
+              )}
               {onReject && (
                 <button
                   type="button"
-                  onClick={() => setShowRejectModal(true)}
+                  onClick={() => setFeedbackMode('reject')}
                   disabled={isLoading}
                   className="w-full flex items-center justify-center gap-2 rounded-md border border-red-200 text-red-700 bg-red-50 py-2.5 text-sm font-medium hover:bg-red-100 disabled:opacity-50 transition-colors"
                 >
                   <XCircle className="h-4 w-4" />
-                  Request changes or reject
+                  Reject
                 </button>
               )}
               {reviewSummary?.hasBlockers && (

@@ -16,6 +16,9 @@ import {
   deriveLifecycleStatus,
 } from '@/lib/commercial/build-supplier-onboarding-input';
 import { deriveSupplierOnboardingStatus } from '@/lib/commercial/supplier-onboarding';
+import { ParticipantLifecycleTimeline } from '@/components/commercial/payment-tax/participant-lifecycle-timeline';
+import { AgreementSummary } from '@/components/commercial/payment-tax/agreement-summary';
+import { buildAgreementSummaryData } from '@/lib/commercial/participant-commercial-lifecycle';
 
 /**
  * Operator Supplier Onboarding Review Page
@@ -148,6 +151,32 @@ export default function SupplierOnboardingReviewPage() {
     }
   };
 
+  const handleRequestChanges = async (requestedChanges: string) => {
+    setIsActing(true);
+    setActionError(null);
+    setSuccessMessage(null);
+    try {
+      const res = await fetch(
+        `/api/deal-network-pilot/participants/${participantId}/supplier-onboarding/request-changes`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestedChanges }),
+        }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? 'Could not request changes. Please try again.');
+      }
+      setSuccessMessage('Changes requested — a new payment & tax link has been sent to the participant.');
+      void refresh({ scope: 'all', silent: true, force: true });
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Something went wrong.');
+    } finally {
+      setIsActing(false);
+    }
+  };
+
   if (!participant || !deal) {
     return (
       <div className="max-w-xl mx-auto py-12 px-4">
@@ -216,10 +245,23 @@ export default function SupplierOnboardingReviewPage() {
           Back to participants
         </Link>
         <div>
-          <h1 className="text-xl font-semibold">Review Payment Information</h1>
+          <h1 className="text-xl font-semibold">Review Payment & Tax Information</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Verify {participant.name}'s details and approve or request changes.
+            Verify {participant.name}'s agreement summary, payment method, and tax details.
           </p>
+        </div>
+      </div>
+
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <AgreementSummary
+          summary={buildAgreementSummaryData(participant, {
+            id: deal.id,
+            name: deal.dealName ?? '',
+          })}
+        />
+        <div className="rounded-lg border p-4">
+          <h2 className="text-sm font-semibold mb-3">Lifecycle</h2>
+          <ParticipantLifecycleTimeline participant={participant} />
         </div>
       </div>
 
@@ -266,6 +308,7 @@ export default function SupplierOnboardingReviewPage() {
         onApprove={handleApprove}
         onApproveAndExport={handleApproveAndExport}
         onReject={handleReject}
+        onRequestChanges={handleRequestChanges}
         isLoading={isActing}
       />
 

@@ -4,7 +4,6 @@ import * as React from 'react';
 import { Copy, ExternalLink, MoreHorizontal, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +15,12 @@ import { TableCell, TableRow } from '@/components/ui/table';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
-import { AGREEMENT_ACTION_COPY, PAYOUT_CONFIRMATION_LABELS } from '@/lib/operations/merchant-operational-copy';
+import {
+  deriveParticipantCommercialLifecycle,
+  deriveParticipantLifecycleAction,
+  formatParticipantStatusLabel,
+} from '@/lib/commercial/participant-commercial-lifecycle';
+import { AGREEMENT_ACTION_COPY } from '@/lib/operations/merchant-operational-copy';
 import { cn } from '@/lib/utils';
 import { hydrateParticipant, participantEntity, type HydrateParticipantContext } from '@/lib/operations/hydration/hydrate-participant';
 import {
@@ -26,7 +30,6 @@ import {
   attributionSecondaryFromContract,
   participantDisplayName,
   participantEmail,
-  payoutVerificationLabelFromContract,
 } from '@/lib/operations/contracts/participant-presentation';
 import { participantTableCellClass } from '@/components/projects/participant-table-layout';
 import { ParticipantReleaseButton } from '@/components/projects/participant-release-button';
@@ -95,7 +98,8 @@ function ProjectParticipantTableRowComponent({
   const entity = hydrated._entity;
   const share = onShareAgreement ?? onCopyAgreement;
   const exempt = hydrated.compensation.exemptFromPayout;
-  const verified = hydrated.payout.verifiedExternally;
+  const lifecycleStage = deriveParticipantCommercialLifecycle(entity);
+  const lifecycleAction = deriveParticipantLifecycleAction(entity);
 
   const viewAgreement = () => {
     const base = entity.agreementUrl ?? participantAgreementPath(entity.inviteToken);
@@ -179,28 +183,13 @@ function ProjectParticipantTableRowComponent({
             <p className="text-xs text-muted-foreground leading-snug">Internal or unpaid role</p>
           </div>
         ) : (
-          <div className="flex flex-col items-start gap-2 leading-tight">
-            <Badge
-              variant={verified ? 'default' : 'outline'}
-              className="whitespace-nowrap text-xs shrink-0"
-            >
-              {payoutVerificationLabelFromContract(
-                hydrated.lifecycle.payoutVerification,
-                verified,
-                hydrated.payout.blocked
-              )}
-            </Badge>
-            <label className="flex items-start gap-1.5 cursor-pointer">
-              <Checkbox
-                checked={verified}
-                onCheckedChange={(v) => onPayoutVerificationChange(hydrated.id, v === true)}
-                className="h-3.5 w-3.5 mt-0.5 shrink-0"
-              />
-              <span className="text-xs text-muted-foreground leading-snug">
-                {PAYOUT_CONFIRMATION_LABELS.toggleLabel}
-              </span>
-            </label>
-          </div>
+          <StackedOperationalCell
+            chip={formatParticipantStatusLabel(lifecycleStage)}
+            chipVariant={
+              lifecycleStage === 'SETTLEMENT_READY' ? 'default' : 'outline'
+            }
+            secondary={lifecycleAction.description}
+          />
         )}
       </TableCell>
 

@@ -73,9 +73,11 @@ export function deriveParticipantState(
   const caps = deriveParticipantCapabilityFlags(p);
   if (caps.payoutReady) return 'READY';
   if (!caps.hasCompensation) return 'COMPENSATION_PENDING';
+  if (!caps.hasAgreement) {
+    if (p.inviteStatus === 'Invited' || p.inviteStatus === 'Opened') return 'INVITED';
+    return 'ONBOARDING';
+  }
   if (!caps.hasPayoutDestination) return 'PAYOUT_DETAILS_PENDING';
-  if (!caps.hasAgreement && p.inviteStatus === 'Invited') return 'INVITED';
-  if (!caps.hasAgreement) return 'ONBOARDING';
   return 'COMPENSATION_PENDING';
 }
 

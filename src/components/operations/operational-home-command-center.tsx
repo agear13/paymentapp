@@ -89,8 +89,8 @@ export function OperationalHomeCommandCenter() {
       notStartedCount: pending,
       requiresReviewCount: 0,
       readyForExportCount: 0,
-      summary: `${completed} of ${total} supplier${total !== 1 ? 's have' : ' has'} provided payment information.`,
-      primaryCta: `Complete payment setup for ${pending} supplier${pending !== 1 ? 's' : ''}`,
+      summary: `${completed} of ${total} participant${total !== 1 ? 's have' : ' has'} completed the commercial lifecycle through settlement.`,
+      primaryCta: pending > 0 ? `Review participant lifecycle — ${pending} need action` : null,
       pendingSuppliers: [],
     };
   }, [workspaceContext]);
