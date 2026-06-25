@@ -109,30 +109,32 @@ export function XeroConnection({ organizationId }: XeroConnectionProps) {
     const success = searchParams.get('xero_success');
     const error = searchParams.get('xero_error');
 
-    if (success === 'connected') {
-      toast.success('Successfully connected to Xero!');
-      await fetchStatus();
+    if (!success && !error) return;
 
-      // Clean up URL after status refresh so account mapping can load accounts
-      const newUrl = window.location.pathname;
-      router.replace(newUrl);
-    }
+    const run = async () => {
+      if (success === 'connected') {
+        toast.success('Successfully connected to Xero!');
+        await fetchStatus();
 
-    if (error) {
-      const errorMessages: Record<string, string> = {
-        missing_parameters: 'Missing required parameters',
-        invalid_state: 'Invalid connection state',
-        unauthorized: 'Session mismatch. Sign in again and retry.',
-        no_tenants: 'No Xero organizations found',
-        connection_failed: 'Failed to establish connection',
-      };
-      
-      toast.error(errorMessages[error] || 'Failed to connect to Xero');
-      
-      // Clean up URL
-      const newUrl = window.location.pathname;
-      router.replace(newUrl);
-    }
+        // Clean up URL after status refresh so account mapping can load accounts
+        router.replace(window.location.pathname);
+      }
+
+      if (error) {
+        const errorMessages: Record<string, string> = {
+          missing_parameters: 'Missing required parameters',
+          invalid_state: 'Invalid connection state',
+          unauthorized: 'Session mismatch. Sign in again and retry.',
+          no_tenants: 'No Xero organizations found',
+          connection_failed: 'Failed to establish connection',
+        };
+
+        toast.error(errorMessages[error] || 'Failed to connect to Xero');
+        router.replace(window.location.pathname);
+      }
+    };
+
+    run();
   }, [searchParams, router, fetchStatus]);
 
   // Fetch status on mount
