@@ -10,21 +10,22 @@
  */
 
 import crypto from 'crypto';
-import { log } from '@/lib/logger';
+import { loggers } from '@/lib/logger';
+import { XeroConfigurationError } from './xero-config';
 
 const ALGORITHM = 'aes-256-gcm';
 const KEY_LENGTH = 32; // 256 bits
 const IV_LENGTH = 16; // 128 bits
 const AUTH_TAG_LENGTH = 16;
 
-if (!process.env.XERO_ENCRYPTION_KEY) {
-  throw new Error('Missing XERO_ENCRYPTION_KEY environment variable');
-}
-
-// Derive encryption key from environment variable
 function getEncryptionKey(): Buffer {
-  const key = process.env.XERO_ENCRYPTION_KEY!;
-  // Use SHA-256 to derive a consistent 32-byte key
+  if (!process.env.XERO_ENCRYPTION_KEY) {
+    loggers.xero.error('xero_encryption_key_missing', undefined, {
+      step: 'encryption_key_check',
+    });
+    throw new XeroConfigurationError(['XERO_ENCRYPTION_KEY']);
+  }
+  const key = process.env.XERO_ENCRYPTION_KEY;
   return crypto.createHash('sha256').update(key).digest();
 }
 
@@ -34,6 +35,7 @@ function getEncryptionKey(): Buffer {
  */
 export function encryptToken(token: string): string {
   try {
+    loggers.xero.debug('xero_token_encrypt_start', { step: 'encrypt_token' });
     const key = getEncryptionKey();
     const iv = crypto.randomBytes(IV_LENGTH);
     
@@ -52,30 +54,15 @@ export function encryptToken(token: string): string {
     ]);
     
     const result = combined.toString('base64');
-    
-    // Audit log (without sensitive data)
-    log.info(
-      'Xero token encrypted',
-      {
-        operation: 'xero_token_encrypt',
-        success: true,
-        timestamp: new Date().toISOString(),
-      }
-    );
-    
+
+    loggers.xero.debug('xero_token_encrypt_success', { step: 'encrypt_token' });
+
     return result;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    log.error(
-      'Failed to encrypt Xero token',
-      error instanceof Error ? error : undefined,
-      {
-        operation: 'xero_token_encrypt',
-        success: false,
-        error: errorMessage,
-        timestamp: new Date().toISOString(),
-      }
-    );
+    loggers.xero.error('xero_token_encrypt_failed', error, { step: 'encrypt_token' });
+    if (error instanceof XeroConfigurationError) {
+      throw error;
+    }
     throw new Error('Token encryption failed');
   }
 }
@@ -85,6 +72,7 @@ export function encryptToken(token: string): string {
  */
 export function decryptToken(encryptedToken: string): string {
   try {
+    loggers.xero.debug('xero_token_decrypt_start', { step: 'decrypt_token' });
     const key = getEncryptionKey();
     const combined = Buffer.from(encryptedToken, 'base64');
     
@@ -98,30 +86,15 @@ export function decryptToken(encryptedToken: string): string {
     
     let decrypted = decipher.update(encrypted.toString('hex'), 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    
-    // Audit log (without sensitive data)
-    log.info(
-      'Xero token decrypted',
-      {
-        operation: 'xero_token_decrypt',
-        success: true,
-        timestamp: new Date().toISOString(),
-      }
-    );
-    
+
+    loggers.xero.debug('xero_token_decrypt_success', { step: 'decrypt_token' });
+
     return decrypted;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    log.error(
-      'Failed to decrypt Xero token',
-      error instanceof Error ? error : undefined,
-      {
-        operation: 'xero_token_decrypt',
-        success: false,
-        error: errorMessage,
-        timestamp: new Date().toISOString(),
-      }
-    );
+    loggers.xero.error('xero_token_decrypt_failed', error, { step: 'decrypt_token' });
+    if (error instanceof XeroConfigurationError) {
+      throw error;
+    }
     throw new Error('Token decryption failed');
   }
 }

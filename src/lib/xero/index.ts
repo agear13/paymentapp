@@ -83,6 +83,20 @@ export {
   type ProcessorStats,
 } from './queue-processor';
 
+export {
+  assertXeroConfigured,
+  getXeroEnvStatus,
+  getMissingXeroEnvVars,
+  isXeroFullyConfigured,
+  XeroConfigurationError,
+  type XeroEnvStatus,
+} from './xero-config';
+
+export {
+  runXeroDiagnostics,
+  type XeroDiagnosticsResult,
+} from './xero-diagnostics';
+
 
 
 

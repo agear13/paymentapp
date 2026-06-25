@@ -4,83 +4,88 @@
  */
 
 import { XeroClient } from 'xero-node';
+import { loggers } from '@/lib/logger';
+import {
+  assertXeroConfigured,
+  getMissingXeroEnvVars,
+  XeroConfigurationError,
+} from './xero-config';
 
 /**
- * Check if Xero is properly configured
+ * Check if Xero OAuth credentials are present (client id/secret/redirect).
  */
 export function isXeroConfigured(): boolean {
-  return !!(
-    process.env.XERO_CLIENT_ID &&
-    process.env.XERO_CLIENT_SECRET &&
-    process.env.XERO_REDIRECT_URI
-  );
+  return getMissingXeroEnvVars().length === 0;
 }
 
 /**
  * Create a new Xero client instance
- * IMPORTANT: We create a new instance for each request to avoid token conflicts
- * in a multi-tenant environment. Each organization has different tokens,
- * so sharing a singleton would cause race conditions.
- * @throws Error if Xero credentials are not configured
  */
 export function getXeroClient(): XeroClient {
-  if (!isXeroConfigured()) {
-    throw new Error(
-      'Xero integration is not configured. Please set XERO_CLIENT_ID, XERO_CLIENT_SECRET, and XERO_REDIRECT_URI environment variables.'
-    );
-  }
+  loggers.xero.debug('xero_client_construct', { step: 'construct_xero_client' });
+  assertXeroConfigured();
 
-  // Create a NEW instance for each request (not a singleton)
   return new XeroClient({
     clientId: process.env.XERO_CLIENT_ID!,
     clientSecret: process.env.XERO_CLIENT_SECRET!,
     redirectUris: [process.env.XERO_REDIRECT_URI!],
     scopes: [
-      'offline_access', // For refresh tokens
-      'accounting.transactions', // For invoices and payments
-      'accounting.contacts', // For customer/contact management (read + write)
-      'accounting.settings.read', // For chart of accounts
+      'offline_access',
+      'accounting.transactions',
+      'accounting.contacts',
+      'accounting.settings.read',
     ],
   });
 }
 
-/**
- * Generate authorization URL for OAuth flow
- */
 export async function generateAuthUrl(): Promise<string> {
+  loggers.xero.info('xero_generate_auth_url', { step: 'generate_auth_url' });
   const client = getXeroClient();
   return await client.buildConsentUrl();
 }
 
 /**
  * Exchange authorization code for access tokens.
- * @param callbackUrl Full OAuth callback URL (code + state) as received by the callback route.
  */
 export async function exchangeCodeForTokens(callbackUrl: string): Promise<{
   accessToken: string;
   refreshToken: string;
   expiresAt: Date;
 }> {
-  const client = getXeroClient();
+  loggers.xero.info('xero_exchange_code_start', { step: 'exchange_code_for_tokens' });
 
-  const tokenSet = await client.apiCallback(callbackUrl);
+  try {
+    loggers.xero.debug('xero_exchange_construct_client', { step: 'construct_xero_client' });
+    const client = getXeroClient();
 
-  if (!tokenSet.access_token || !tokenSet.refresh_token || !tokenSet.expires_in) {
-    throw new Error('Invalid token response from Xero');
+    loggers.xero.info('xero_exchange_api_callback', { step: 'call_xero_token_api' });
+    const tokenSet = await client.apiCallback(callbackUrl);
+
+    if (!tokenSet.access_token || !tokenSet.refresh_token || !tokenSet.expires_in) {
+      throw new Error('Invalid token response from Xero');
+    }
+
+    const expiresAt = new Date(Date.now() + tokenSet.expires_in * 1000);
+
+    loggers.xero.info('xero_exchange_code_success', {
+      step: 'exchange_code_for_tokens',
+      expiresAt: expiresAt.toISOString(),
+    });
+
+    return {
+      accessToken: tokenSet.access_token,
+      refreshToken: tokenSet.refresh_token,
+      expiresAt,
+    };
+  } catch (error) {
+    loggers.xero.error('xero_exchange_code_failed', error, { step: 'exchange_code_for_tokens' });
+    if (error instanceof XeroConfigurationError) {
+      throw error;
+    }
+    throw error;
   }
-
-  const expiresAt = new Date(Date.now() + tokenSet.expires_in * 1000);
-
-  return {
-    accessToken: tokenSet.access_token,
-    refreshToken: tokenSet.refresh_token,
-    expiresAt,
-  };
 }
 
-/**
- * Refresh access token using refresh token
- */
 export async function refreshAccessToken(refreshToken: string): Promise<{
   accessToken: string;
   refreshToken: string;
@@ -90,15 +95,18 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
     throw new Error('Refresh token is required but was not provided');
   }
 
-  const client = getXeroClient();
-  
+  loggers.xero.info('xero_refresh_token_start', { step: 'refresh_access_token' });
+
   try {
-    // Set the refresh token on the client
+    loggers.xero.debug('xero_refresh_construct_client', { step: 'construct_xero_client' });
+    const client = getXeroClient();
+
+    loggers.xero.debug('xero_refresh_set_token', { step: 'set_refresh_token' });
     await client.setTokenSet({
       refresh_token: refreshToken,
     });
 
-    // Request a new access token
+    loggers.xero.info('xero_refresh_call_api', { step: 'call_xero_refresh_api' });
     const tokenSet = await client.refreshToken();
 
     if (!tokenSet.access_token || !tokenSet.refresh_token || !tokenSet.expires_in) {
@@ -107,79 +115,83 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
 
     const expiresAt = new Date(Date.now() + tokenSet.expires_in * 1000);
 
+    loggers.xero.info('xero_refresh_token_success', {
+      step: 'refresh_access_token',
+      expiresAt: expiresAt.toISOString(),
+    });
+
     return {
       accessToken: tokenSet.access_token,
       refreshToken: tokenSet.refresh_token,
       expiresAt,
     };
-  } catch (error: any) {
-    // Provide detailed error information for debugging
-    const errorDetails = {
-      message: error.message || 'Unknown error',
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      body: error.response?.body,
+  } catch (error: unknown) {
+    const err = error as {
+      message?: string;
+      response?: { status?: number; statusText?: string; body?: unknown };
     };
-    
-    console.error('Token refresh failed with details:', errorDetails);
-    
+    loggers.xero.error('xero_refresh_token_failed', error, {
+      step: 'refresh_access_token',
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+    });
+
     throw new Error(
-      `Failed to refresh Xero token: ${errorDetails.message}. ` +
-      `This usually means the connection has expired and needs to be re-authorized.`
+      `Failed to refresh Xero token: ${err.message ?? 'Unknown error'}. ` +
+        'This usually means the connection has expired and needs to be re-authorized.'
     );
   }
 }
 
-/**
- * Get Xero tenants (organizations) available to the connected user
- */
 export async function getXeroTenants(accessToken: string): Promise<Array<{
   tenantId: string;
   tenantName: string;
   tenantType: string;
 }>> {
-  const client = getXeroClient();
-  
-  await client.setTokenSet({
-    access_token: accessToken,
-  });
+  loggers.xero.info('xero_get_tenants_start', { step: 'retrieve_tenant_list' });
 
-  const tenants = await client.updateTenants();
+  try {
+    const client = getXeroClient();
 
-  return tenants.map((tenant) => ({
-    tenantId: tenant.tenantId,
-    tenantName: tenant.tenantName || 'Unknown Organization',
-    tenantType: tenant.tenantType,
-  }));
+    await client.setTokenSet({
+      access_token: accessToken,
+    });
+
+    loggers.xero.debug('xero_update_tenants', { step: 'call_xero_connections_api' });
+    const tenants = await client.updateTenants();
+
+    loggers.xero.info('xero_get_tenants_success', {
+      step: 'retrieve_tenant_list',
+      tenantCount: tenants.length,
+    });
+
+    return tenants.map((tenant) => ({
+      tenantId: tenant.tenantId,
+      tenantName: tenant.tenantName || 'Unknown Organization',
+      tenantType: tenant.tenantType,
+    }));
+  } catch (error) {
+    loggers.xero.error('xero_get_tenants_failed', error, { step: 'retrieve_tenant_list' });
+    throw error;
+  }
 }
 
-/**
- * Revoke Xero connection (disconnect)
- */
 export async function revokeConnection(
   accessToken: string,
   tenantId?: string
 ): Promise<void> {
   const client = getXeroClient();
-  
+
   await client.setTokenSet({
     access_token: accessToken,
   });
 
-  // Disconnect from specific tenant if provided, otherwise all tenants
   if (tenantId) {
     await client.disconnect(tenantId);
   } else {
-    // When no tenant specified, get all tenants and disconnect from each
     const tenants = await client.updateTenants();
     for (const tenant of tenants) {
       await client.disconnect(tenant.tenantId);
     }
   }
 }
-
-
-
-
-
-
