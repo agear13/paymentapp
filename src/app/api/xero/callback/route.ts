@@ -16,6 +16,9 @@ import {
   XeroConfigurationError,
 } from '@/lib/xero/xero-config';
 import { isValidOrganizationUuid, warnInvalidOrganizationId } from '@/lib/organization/organization-id';
+import { traceConnectionVsTokenSet } from '@/lib/xero/apply-connection-token-set';
+import { logTokenSetTrace } from '@/lib/xero/token-set-trace';
+import { hashOAuthState } from '@/lib/xero/oauth-state-trace';
 
 export async function GET(request: NextRequest) {
   const organizationIdHint = 'unknown';
@@ -46,6 +49,11 @@ export async function GET(request: NextRequest) {
     }
 
     loggers.xero.info('xero_callback_verify_state', { step: 'verify_oauth_state' });
+    loggers.xero.debug('xero_callback_state_received', {
+      step: 'callback_state_from_url',
+      stateHash: hashOAuthState(state),
+      stateLength: state.length,
+    });
     const stateData = verifyOAuthState<{ organizationId: string; userId: string }>(state);
     if (!stateData?.organizationId || !stateData?.userId) {
       loggers.xero.error('xero_callback_invalid_state', undefined, { step: 'verify_oauth_state' });
@@ -92,13 +100,22 @@ export async function GET(request: NextRequest) {
       step: 'exchange_code_for_tokens',
       organizationId,
     });
-    const tokens = await exchangeCodeForTokens(callbackUrl);
+    const tokens = await exchangeCodeForTokens(callbackUrl, state);
+
+    logTokenSetTrace('callback_after_exchange', {
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+      expires_at: Math.floor(tokens.expiresAt.getTime() / 1000),
+      id_token: tokens.idToken ?? undefined,
+      scope: tokens.scope ?? undefined,
+      token_type: tokens.tokenType ?? undefined,
+    });
 
     loggers.xero.info('xero_callback_fetch_tenants', {
       step: 'retrieve_tenant_list',
       organizationId,
     });
-    const tenants = await getXeroTenants(tokens.accessToken);
+    const tenants = await getXeroTenants(tokens);
 
     if (tenants.length === 0) {
       loggers.xero.error('xero_callback_no_tenants', undefined, {
@@ -122,10 +139,22 @@ export async function GET(request: NextRequest) {
     await storeXeroConnection(
       organizationId,
       selectedTenant.tenantId,
-      tokens.accessToken,
-      tokens.refreshToken,
-      tokens.expiresAt
+      tokens
     );
+
+    const storedConnection = await import('@/lib/xero/connection-service').then((m) =>
+      m.getXeroConnection(organizationId)
+    );
+    if (storedConnection) {
+      traceConnectionVsTokenSet('callback_persisted_vs_exchange', {
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        expires_at: Math.floor(tokens.expiresAt.getTime() / 1000),
+        id_token: tokens.idToken ?? undefined,
+        scope: tokens.scope ?? undefined,
+        token_type: tokens.tokenType ?? undefined,
+      }, storedConnection);
+    }
 
     loggers.xero.info('xero_callback_success', {
       step: 'callback_complete',

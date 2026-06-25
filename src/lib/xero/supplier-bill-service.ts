@@ -49,11 +49,8 @@ export async function createSupplierBillInXero(
   }
 
   const xero = getXeroClient();
-  await xero.setTokenSet({
-    access_token: connection.accessToken,
-    refresh_token: connection.refreshToken,
-    expires_at: connection.expiresAt.getTime(),
-  });
+  const { applyConnectionToXeroClient } = await import('./apply-connection-token-set');
+  await applyConnectionToXeroClient(xero, connection, 'supplier_bill');
   await xero.updateTenants();
 
   const tenantId = connection.tenantId;

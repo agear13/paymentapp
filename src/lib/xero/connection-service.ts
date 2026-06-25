@@ -8,6 +8,14 @@ import { encryptToken, decryptToken } from './encryption';
 import { refreshAccessToken, getXeroTenants, revokeConnection } from './client';
 import { randomUUID } from 'crypto';
 import { loggers } from '@/lib/logger';
+import {
+  compareTokenSetTrace,
+  logTokenSetTrace,
+  buildTokenSetParameters,
+  isLegacyIncompleteXeroConnectionRow,
+  XERO_OAUTH_SCOPES_PERSISTED,
+  type XeroOAuthTokenBundle,
+} from './token-set-trace';
 
 export interface XeroConnection {
   id: string;
@@ -17,6 +25,42 @@ export interface XeroConnection {
   refreshToken: string;
   expiresAt: Date;
   connectedAt: Date;
+  idToken?: string | null;
+  tokenType?: string | null;
+  scope?: string | null;
+}
+
+export type { XeroOAuthTokenBundle } from './token-set-trace';
+
+function mapRowToConnection(
+  connection: {
+    id: string;
+    organization_id: string;
+    tenant_id: string;
+    access_token: string;
+    refresh_token: string;
+    expires_at: Date;
+    connected_at: Date;
+    id_token?: string | null;
+    token_type?: string | null;
+    scope?: string | null;
+  },
+  accessToken: string,
+  refreshToken: string,
+  idToken?: string | null
+): XeroConnection {
+  return {
+    id: connection.id,
+    organizationId: connection.organization_id,
+    tenantId: connection.tenant_id,
+    accessToken,
+    refreshToken,
+    expiresAt: connection.expires_at,
+    connectedAt: connection.connected_at,
+    idToken: idToken ?? null,
+    tokenType: connection.token_type ?? null,
+    scope: connection.scope ?? null,
+  };
 }
 
 /**
@@ -25,15 +69,26 @@ export interface XeroConnection {
 export async function storeXeroConnection(
   organizationId: string,
   tenantId: string,
-  accessToken: string,
-  refreshToken: string,
-  expiresAt: Date
+  tokens: XeroOAuthTokenBundle
 ): Promise<XeroConnection> {
+  const { accessToken, refreshToken, expiresAt, idToken, scope, tokenType } = tokens;
+  const persistedScope = scope?.trim() || XERO_OAUTH_SCOPES_PERSISTED;
+  const persistedTokenType = tokenType?.trim() || 'Bearer';
+
   loggers.xero.info('xero_store_connection_start', {
     step: 'persist_connection',
     organizationId,
     tenantId,
     expiresAt: expiresAt.toISOString(),
+  });
+
+  logTokenSetTrace('store_connection_plaintext', {
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    expires_at: Math.floor(expiresAt.getTime() / 1000),
+    id_token: idToken ?? undefined,
+    scope: persistedScope,
+    token_type: persistedTokenType,
   });
 
   loggers.xero.debug('xero_store_encrypt_tokens', {
@@ -42,6 +97,7 @@ export async function storeXeroConnection(
   });
   const encryptedAccessToken = encryptToken(accessToken);
   const encryptedRefreshToken = encryptToken(refreshToken);
+  const encryptedIdToken = idToken ? encryptToken(idToken) : null;
 
   const connection = await prisma.xero_connections.upsert({
     where: { organization_id: organizationId },
@@ -51,15 +107,50 @@ export async function storeXeroConnection(
       tenant_id: tenantId,
       access_token: encryptedAccessToken,
       refresh_token: encryptedRefreshToken,
+      id_token: encryptedIdToken,
+      token_type: persistedTokenType,
+      scope: persistedScope,
       expires_at: expiresAt,
     },
     update: {
       tenant_id: tenantId,
       access_token: encryptedAccessToken,
       refresh_token: encryptedRefreshToken,
+      id_token: encryptedIdToken,
+      token_type: persistedTokenType,
+      scope: persistedScope,
       expires_at: expiresAt,
     },
   });
+
+  const decryptedAccess = decryptToken(connection.access_token);
+  const decryptedRefresh = decryptToken(connection.refresh_token);
+  const decryptedIdToken = connection.id_token ? decryptToken(connection.id_token) : null;
+
+  logTokenSetTrace('store_connection_decrypted_from_db', {
+    access_token: decryptedAccess,
+    refresh_token: decryptedRefresh,
+    expires_at: Math.floor(connection.expires_at.getTime() / 1000),
+    id_token: decryptedIdToken ?? undefined,
+    scope: connection.scope ?? undefined,
+    token_type: connection.token_type ?? undefined,
+  });
+
+  compareTokenSetTrace('store_connection_round_trip', buildTokenSetParameters({
+    accessToken,
+    refreshToken,
+    expiresAt,
+    idToken,
+    scope: persistedScope,
+    tokenType: persistedTokenType,
+  }), buildTokenSetParameters({
+    accessToken: decryptedAccess,
+    refreshToken: decryptedRefresh,
+    expiresAt: connection.expires_at,
+    idToken: decryptedIdToken,
+    scope: connection.scope,
+    tokenType: connection.token_type,
+  }));
 
   loggers.xero.info('xero_store_connection_success', {
     step: 'persist_connection',
@@ -67,15 +158,12 @@ export async function storeXeroConnection(
     tenantId,
   });
 
-  return {
-    id: connection.id,
-    organizationId: connection.organization_id,
-    tenantId: connection.tenant_id,
-    accessToken: decryptToken(connection.access_token),
-    refreshToken: decryptToken(connection.refresh_token),
-    expiresAt: connection.expires_at,
-    connectedAt: connection.connected_at,
-  };
+  return mapRowToConnection(
+    connection,
+    decryptedAccess,
+    decryptedRefresh,
+    decryptedIdToken
+  );
 }
 
 /**
@@ -110,6 +198,17 @@ export async function getXeroConnection(
     return null;
   }
 
+  if (isLegacyIncompleteXeroConnectionRow(connection)) {
+    loggers.xero.warn('xero_connection_legacy_incomplete', {
+      step: 'load_xero_connection',
+      organizationId,
+      tenantId: connection.tenant_id,
+      message:
+        'Connection predates token metadata migration — re-authorize Xero instead of refreshing',
+    });
+    return null;
+  }
+
   try {
     loggers.xero.debug('xero_get_connection_decrypt', {
       step: 'decrypt_tokens',
@@ -117,15 +216,25 @@ export async function getXeroConnection(
       tenantId: connection.tenant_id,
     });
 
-    const result = {
-      id: connection.id,
-      organizationId: connection.organization_id,
-      tenantId: connection.tenant_id,
-      accessToken: decryptToken(connection.access_token),
-      refreshToken: decryptToken(connection.refresh_token),
-      expiresAt: connection.expires_at,
-      connectedAt: connection.connected_at,
-    };
+    const decryptedAccess = decryptToken(connection.access_token);
+    const decryptedRefresh = decryptToken(connection.refresh_token);
+    const decryptedIdToken = connection.id_token ? decryptToken(connection.id_token) : null;
+
+    logTokenSetTrace('get_connection_decrypted', {
+      access_token: decryptedAccess,
+      refresh_token: decryptedRefresh,
+      expires_at: Math.floor(connection.expires_at.getTime() / 1000),
+      id_token: decryptedIdToken ?? undefined,
+      scope: connection.scope ?? undefined,
+      token_type: connection.token_type ?? undefined,
+    });
+
+    const result = mapRowToConnection(
+      connection,
+      decryptedAccess,
+      decryptedRefresh,
+      decryptedIdToken
+    );
 
     loggers.xero.debug('xero_get_connection_success', {
       step: 'load_xero_connection',
@@ -175,13 +284,14 @@ export async function getValidAccessToken(
   try {
     const refreshed = await refreshAccessToken(connection.refreshToken);
 
-    await storeXeroConnection(
-      organizationId,
-      connection.tenantId,
-      refreshed.accessToken,
-      refreshed.refreshToken,
-      refreshed.expiresAt
-    );
+    await storeXeroConnection(organizationId, connection.tenantId, {
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken,
+      expiresAt: refreshed.expiresAt,
+      idToken: refreshed.idToken,
+      scope: refreshed.scope,
+      tokenType: refreshed.tokenType,
+    });
 
     return refreshed.accessToken;
   } catch (error) {
@@ -241,13 +351,20 @@ export async function getAvailableTenants(
   tenantName: string;
   tenantType: string;
 }> | null> {
-  const accessToken = await getValidAccessToken(organizationId);
+  const connection = await getActiveConnection(organizationId);
 
-  if (!accessToken) {
+  if (!connection) {
     return null;
   }
 
-  return getXeroTenants(accessToken);
+  return getXeroTenants({
+    accessToken: connection.accessToken,
+    refreshToken: connection.refreshToken,
+    expiresAt: connection.expiresAt,
+    idToken: connection.idToken,
+    scope: connection.scope,
+    tokenType: connection.tokenType,
+  });
 }
 
 /**
@@ -307,13 +424,14 @@ export async function getActiveConnection(
   try {
     const refreshed = await refreshAccessToken(connection.refreshToken);
 
-    const stored = await storeXeroConnection(
-      organizationId,
-      connection.tenantId,
-      refreshed.accessToken,
-      refreshed.refreshToken,
-      refreshed.expiresAt
-    );
+    const stored = await storeXeroConnection(organizationId, connection.tenantId, {
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken,
+      expiresAt: refreshed.expiresAt,
+      idToken: refreshed.idToken,
+      scope: refreshed.scope,
+      tokenType: refreshed.tokenType,
+    });
 
     loggers.xero.info('xero_get_active_connection_refreshed', {
       step: 'refresh_access_token',
@@ -379,10 +497,30 @@ export async function getConnectionStatus(
   expiresAt?: Date;
   connectedAt?: Date;
 }> {
+  const row = await getXeroConnectionRow(organizationId);
+
+  if (!row) {
+    return { connected: false };
+  }
+
+  if (isLegacyIncompleteXeroConnectionRow(row)) {
+    return {
+      connected: false,
+      tenantId: row.tenant_id,
+      expiresAt: row.expires_at,
+      connectedAt: row.connected_at,
+    };
+  }
+
   const connection = await getXeroConnection(organizationId);
 
   if (!connection) {
-    return { connected: false };
+    return {
+      connected: false,
+      tenantId: row.tenant_id,
+      expiresAt: row.expires_at,
+      connectedAt: row.connected_at,
+    };
   }
 
   const isValid = await hasValidConnection(organizationId);

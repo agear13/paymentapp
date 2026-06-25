@@ -10,6 +10,17 @@ import {
   getMissingXeroEnvVars,
   XeroConfigurationError,
 } from './xero-config';
+import {
+  assertConsentUrlStateMatches,
+  assertOAuthStateMatchesCallbackUrl,
+  traceOAuthState,
+} from './oauth-state-trace';
+import {
+  logTokenSetTrace,
+  tokenSetParametersFromApiCallback,
+} from './token-set-trace';
+import { applyConnectionToXeroClient } from './apply-connection-token-set';
+import type { XeroOAuthTokenBundle } from './token-set-trace';
 
 /**
  * Check if Xero OAuth credentials are present (client id/secret/redirect).
@@ -19,10 +30,14 @@ export function isXeroConfigured(): boolean {
 }
 
 /**
- * Create a new Xero client instance
+ * Create a new Xero client instance.
+ * `oauthState` must be set for OAuth authorize/callback (xero-node apiCallback checks.config.state).
  */
-export function getXeroClient(): XeroClient {
-  loggers.xero.debug('xero_client_construct', { step: 'construct_xero_client' });
+export function getXeroClient(oauthState?: string): XeroClient {
+  loggers.xero.debug('xero_client_construct', {
+    step: 'construct_xero_client',
+    hasOAuthState: Boolean(oauthState),
+  });
   assertXeroConfigured();
 
   return new XeroClient({
@@ -35,47 +50,63 @@ export function getXeroClient(): XeroClient {
       'accounting.contacts',
       'accounting.settings.read',
     ],
+    ...(oauthState ? { state: oauthState } : {}),
   });
 }
 
-export async function generateAuthUrl(): Promise<string> {
+export async function generateAuthUrl(oauthState: string): Promise<string> {
+  if (!oauthState?.trim()) {
+    throw new Error('OAuth state is required to build Xero consent URL');
+  }
+
+  traceOAuthState('generate_auth_url', oauthState);
   loggers.xero.info('xero_generate_auth_url', { step: 'generate_auth_url' });
-  const client = getXeroClient();
-  return await client.buildConsentUrl();
+  const client = getXeroClient(oauthState);
+  const consentUrl = await client.buildConsentUrl();
+  assertConsentUrlStateMatches(consentUrl, oauthState);
+  return consentUrl;
 }
 
 /**
  * Exchange authorization code for access tokens.
+ * `oauthState` must be the original state value returned by Xero on the callback URL.
  */
-export async function exchangeCodeForTokens(callbackUrl: string): Promise<{
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: Date;
-}> {
+export async function exchangeCodeForTokens(
+  callbackUrl: string,
+  oauthState: string
+): Promise<XeroOAuthTokenBundle> {
+  if (!oauthState?.trim()) {
+    throw new Error('OAuth state is required for Xero token exchange');
+  }
+
+  traceOAuthState('exchange_code_for_tokens', oauthState);
+  assertOAuthStateMatchesCallbackUrl(callbackUrl, oauthState);
+
   loggers.xero.info('xero_exchange_code_start', { step: 'exchange_code_for_tokens' });
 
   try {
     loggers.xero.debug('xero_exchange_construct_client', { step: 'construct_xero_client' });
-    const client = getXeroClient();
+    const client = getXeroClient(oauthState);
 
     loggers.xero.info('xero_exchange_api_callback', { step: 'call_xero_token_api' });
     const tokenSet = await client.apiCallback(callbackUrl);
 
-    if (!tokenSet.access_token || !tokenSet.refresh_token || !tokenSet.expires_in) {
-      throw new Error('Invalid token response from Xero');
-    }
+    logTokenSetTrace('api_callback_raw', tokenSet);
 
-    const expiresAt = new Date(Date.now() + tokenSet.expires_in * 1000);
+    const parsed = tokenSetParametersFromApiCallback(tokenSet);
 
     loggers.xero.info('xero_exchange_code_success', {
       step: 'exchange_code_for_tokens',
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: parsed.expiresAt.toISOString(),
     });
 
     return {
-      accessToken: tokenSet.access_token,
-      refreshToken: tokenSet.refresh_token,
-      expiresAt,
+      accessToken: parsed.accessToken,
+      refreshToken: parsed.refreshToken,
+      expiresAt: parsed.expiresAt,
+      idToken: parsed.idToken ?? null,
+      scope: parsed.scope ?? null,
+      tokenType: parsed.tokenType ?? null,
     };
   } catch (error) {
     loggers.xero.error('xero_exchange_code_failed', error, { step: 'exchange_code_for_tokens' });
@@ -86,11 +117,7 @@ export async function exchangeCodeForTokens(callbackUrl: string): Promise<{
   }
 }
 
-export async function refreshAccessToken(refreshToken: string): Promise<{
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: Date;
-}> {
+export async function refreshAccessToken(refreshToken: string): Promise<XeroOAuthTokenBundle> {
   if (!refreshToken) {
     throw new Error('Refresh token is required but was not provided');
   }
@@ -109,21 +136,22 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
     loggers.xero.info('xero_refresh_call_api', { step: 'call_xero_refresh_api' });
     const tokenSet = await client.refreshToken();
 
-    if (!tokenSet.access_token || !tokenSet.refresh_token || !tokenSet.expires_in) {
-      throw new Error('Invalid token response from Xero refresh: missing required fields');
-    }
+    logTokenSetTrace('refresh_token_raw', tokenSet);
 
-    const expiresAt = new Date(Date.now() + tokenSet.expires_in * 1000);
+    const parsed = tokenSetParametersFromApiCallback(tokenSet);
 
     loggers.xero.info('xero_refresh_token_success', {
       step: 'refresh_access_token',
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: parsed.expiresAt.toISOString(),
     });
 
     return {
-      accessToken: tokenSet.access_token,
-      refreshToken: tokenSet.refresh_token,
-      expiresAt,
+      accessToken: parsed.accessToken,
+      refreshToken: parsed.refreshToken,
+      expiresAt: parsed.expiresAt,
+      idToken: parsed.idToken ?? null,
+      scope: parsed.scope ?? null,
+      tokenType: parsed.tokenType ?? null,
     };
   } catch (error: unknown) {
     const err = error as {
@@ -143,7 +171,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
   }
 }
 
-export async function getXeroTenants(accessToken: string): Promise<Array<{
+export async function getXeroTenants(tokens: XeroOAuthTokenBundle): Promise<Array<{
   tenantId: string;
   tenantName: string;
   tenantType: string;
@@ -153,9 +181,22 @@ export async function getXeroTenants(accessToken: string): Promise<Array<{
   try {
     const client = getXeroClient();
 
-    await client.setTokenSet({
-      access_token: accessToken,
-    });
+    await applyConnectionToXeroClient(
+      client,
+      {
+        id: 'oauth-flow',
+        organizationId: 'oauth-flow',
+        tenantId: 'pending',
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: tokens.expiresAt,
+        connectedAt: new Date(),
+        idToken: tokens.idToken,
+        scope: tokens.scope,
+        tokenType: tokens.tokenType,
+      },
+      'get_tenants'
+    );
 
     loggers.xero.debug('xero_update_tenants', { step: 'call_xero_connections_api' });
     const tenants = await client.updateTenants();

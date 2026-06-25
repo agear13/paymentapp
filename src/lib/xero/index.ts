@@ -35,6 +35,11 @@ export {
 } from './connection-service';
 
 export {
+  isLegacyIncompleteXeroConnectionRow,
+  XERO_OAUTH_SCOPES_PERSISTED,
+} from './token-set-trace';
+
+export {
   fetchXeroAccounts,
   fetchXeroAccountsByType,
   searchXeroAccounts,

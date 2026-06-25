@@ -6,6 +6,7 @@
 import { Account } from 'xero-node';
 import { getXeroClient } from './client';
 import { getActiveConnection } from './connection-service';
+import { applyConnectionToXeroClient } from './apply-connection-token-set';
 
 export interface XeroAccount {
   accountID: string;
@@ -37,11 +38,7 @@ export async function fetchXeroAccounts(
   
   // Initialize Xero client with connection tokens
   const xeroClient = getXeroClient();
-  await xeroClient.setTokenSet({
-    access_token: connection.accessToken,
-    refresh_token: connection.refreshToken,
-    expires_at: connection.expiresAt.getTime(),
-  });
+  await applyConnectionToXeroClient(xeroClient, connection, 'fetch_accounts');
   
   // Update tenants (read-only property, must use updateTenants method)
   await xeroClient.updateTenants();

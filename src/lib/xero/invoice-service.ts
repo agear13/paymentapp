@@ -154,11 +154,8 @@ export async function createXeroInvoice(
 
   // Initialize Xero client
   const xeroClient = getXeroClient();
-  await xeroClient.setTokenSet({
-    access_token: connection.accessToken,
-    refresh_token: connection.refreshToken,
-    expires_at: connection.expiresAt.getTime(),
-  });
+  const { applyConnectionToXeroClient } = await import('./apply-connection-token-set');
+  await applyConnectionToXeroClient(xeroClient, connection, 'create_invoice');
 
   // Update tenants (read-only property, must use updateTenants method)
   await xeroClient.updateTenants();

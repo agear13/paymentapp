@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generateAuthUrl, isXeroConfigured } from '@/lib/xero';
-import { logger } from '@/lib/logger';
+import { logger, loggers } from '@/lib/logger';
 import { signOAuthState } from '@/lib/security/oauth-state';
+import { hashOAuthState } from '@/lib/xero/oauth-state-trace';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
@@ -56,21 +57,25 @@ export async function GET(request: NextRequest) {
     });
     if (entitlementBlock) return entitlementBlock;
 
-    const authUrl = await generateAuthUrl();
-
     const stateParam = signOAuthState({
       organizationId,
       userId: user.id,
     });
 
-    const authUrlWithState = `${authUrl}&state=${stateParam}`;
+    loggers.xero.debug('xero_connect_state_signed', {
+      step: 'sign_oauth_state',
+      stateHash: hashOAuthState(stateParam),
+      stateLength: stateParam.length,
+    });
+
+    const authUrl = await generateAuthUrl(stateParam);
 
     logger.info({
       organizationId,
       userId: user.id,
     }, 'Xero OAuth flow initiated');
 
-    return NextResponse.redirect(authUrlWithState);
+    return NextResponse.redirect(authUrl);
   } catch (error) {
     logger.error({ error }, 'Error initiating Xero OAuth flow');
     return NextResponse.json(
