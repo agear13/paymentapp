@@ -22,6 +22,7 @@ export {
 export {
   storeXeroConnection,
   getXeroConnection,
+  getXeroConnectionRow,
   getValidAccessToken,
   hasValidConnection,
   disconnectXero,
@@ -29,6 +30,7 @@ export {
   updateSelectedTenant,
   getConnectionStatus,
   getActiveConnection,
+  resolveXeroConnectionForApi,
   type XeroConnection,
 } from './connection-service';
 

@@ -19,6 +19,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 interface XeroAccountMappingProps {
   organizationId: string;
@@ -58,25 +59,58 @@ interface AccountMappings {
 }
 
 export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) {
+  const searchParams = useSearchParams();
   const [accounts, setAccounts] = React.useState<XeroAccount[]>([]);
   const [mappings, setMappings] = React.useState<Partial<AccountMappings>>({});
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [connectionReady, setConnectionReady] = React.useState(false);
 
-  // Fetch Xero accounts on mount
-  React.useEffect(() => {
-    fetchAccounts();
-    fetchMappings();
-  }, [organizationId]);
-
-  async function fetchAccounts() {
+  const checkConnectionAndLoad = React.useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
+      const statusRes = await fetch(
+        `/api/xero/status?organization_id=${encodeURIComponent(organizationId)}`,
+        { cache: 'no-store' }
+      );
+      const status = await statusRes.json();
+
+      if (!statusRes.ok || !status.connected) {
+        setConnectionReady(false);
+        setAccounts([]);
+        return;
+      }
+
+      setConnectionReady(true);
+      await fetchAccounts();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [organizationId]);
+
+  React.useEffect(() => {
+    checkConnectionAndLoad();
+    fetchMappings();
+  }, [organizationId, checkConnectionAndLoad]);
+
+  React.useEffect(() => {
+    if (searchParams.get('xero_success') === 'connected') {
+      checkConnectionAndLoad();
+    }
+  }, [searchParams, checkConnectionAndLoad]);
+
+  async function fetchAccounts() {
+    try {
+      setError(null);
+
       const response = await fetch(
-        `/api/xero/accounts?organization_id=${organizationId}`,
+        `/api/xero/accounts?organization_id=${encodeURIComponent(organizationId)}`,
         { cache: 'no-store' }
       );
 
@@ -91,8 +125,6 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
       toast.error(errorMessage);
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -169,6 +201,14 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
           Loading Xero accounts...
         </span>
       </div>
+    );
+  }
+
+  if (!connectionReady) {
+    return (
+      <p className="text-sm text-muted-foreground py-4">
+        Connect Xero above to configure account mapping.
+      </p>
     );
   }
 

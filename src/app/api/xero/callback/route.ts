@@ -8,6 +8,10 @@ import { createClient } from '@/lib/supabase/server';
 import { exchangeCodeForTokens, getXeroTenants, storeXeroConnection } from '@/lib/xero';
 import { logger } from '@/lib/logger';
 import { verifyOAuthState } from '@/lib/security/oauth-state';
+import {
+  buildXeroOAuthCallbackUrl,
+  xeroIntegrationsRedirectUrl,
+} from '@/lib/xero/oauth-redirect';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,60 +20,53 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get('state');
     const error = searchParams.get('error');
 
-    // Check for authorization errors
     if (error) {
       logger.error('Xero OAuth error', { error });
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=${encodeURIComponent(error)}`
+        xeroIntegrationsRedirectUrl(request, { xero_error: error })
       );
     }
 
-    // Validate required parameters
     if (!code || !state) {
       logger.error('Missing code or state in Xero callback');
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=missing_parameters`
+        xeroIntegrationsRedirectUrl(request, { xero_error: 'missing_parameters' })
       );
     }
 
-    // Verify and decode signed state parameter.
     const stateData = verifyOAuthState<{ organizationId: string; userId: string }>(state);
     if (!stateData?.organizationId || !stateData?.userId) {
       logger.error('Invalid state parameter in Xero callback');
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=invalid_state`
+        xeroIntegrationsRedirectUrl(request, { xero_error: 'invalid_state' })
       );
     }
 
     const { organizationId, userId } = stateData;
 
-    // Bind callback to the same authenticated user who initiated OAuth.
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user || user.id !== userId) {
       logger.error('Xero callback user mismatch', { callbackUserId: user?.id, stateUserId: userId });
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=unauthorized`
+        xeroIntegrationsRedirectUrl(request, { xero_error: 'unauthorized' })
       );
     }
 
-    // Exchange authorization code for tokens
-    const tokens = await exchangeCodeForTokens(code);
+    const callbackUrl = buildXeroOAuthCallbackUrl(request);
+    const tokens = await exchangeCodeForTokens(callbackUrl);
 
-    // Get available Xero tenants
     const tenants = await getXeroTenants(tokens.accessToken);
 
     if (tenants.length === 0) {
       logger.error('No Xero tenants available for user', { userId });
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=no_tenants`
+        xeroIntegrationsRedirectUrl(request, { xero_error: 'no_tenants' })
       );
     }
 
-    // Use first tenant by default (or let user select later)
     const selectedTenant = tenants[0];
 
-    // Store connection in database
     await storeXeroConnection(
       organizationId,
       selectedTenant.tenantId,
@@ -85,22 +82,19 @@ export async function GET(request: NextRequest) {
       tenantName: selectedTenant.tenantName,
     });
 
-    // Redirect to settings page with success message
-    const redirectUrl = tenants.length > 1
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_success=connected&select_tenant=true`
-      : `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_success=connected`;
+    const redirectUrl =
+      tenants.length > 1
+        ? xeroIntegrationsRedirectUrl(request, {
+            xero_success: 'connected',
+            select_tenant: 'true',
+          })
+        : xeroIntegrationsRedirectUrl(request, { xero_success: 'connected' });
 
     return NextResponse.redirect(redirectUrl);
   } catch (error) {
     logger.error('Error processing Xero OAuth callback', { error });
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/integrations?xero_error=connection_failed`
+      xeroIntegrationsRedirectUrl(request, { xero_error: 'connection_failed' })
     );
   }
 }
-
-
-
-
-
-

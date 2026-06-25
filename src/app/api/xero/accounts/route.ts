@@ -1,33 +1,27 @@
-/**
- * Xero Accounts API Endpoint
- * Fetches Chart of Accounts from Xero
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { 
-  fetchXeroAccounts, 
+import {
+  fetchXeroAccounts,
   fetchXeroAccountsByType,
-  searchXeroAccounts 
+  searchXeroAccounts,
 } from '@/lib/xero/accounts-service';
+import { resolveXeroConnectionForApi } from '@/lib/xero/connection-service';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(request: NextRequest) {
-  // Get organization from query params (before try block for error logging)
   const { searchParams } = new URL(request.url);
   const organizationId = searchParams.get('organization_id');
-  
+
   try {
-    // Get authenticated user
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     if (!organizationId) {
@@ -35,6 +29,10 @@ export async function GET(request: NextRequest) {
         { error: 'Missing organization_id parameter' },
         { status: 400 }
       );
+    }
+
+    if (!UUID_RE.test(organizationId)) {
+      return NextResponse.json({ error: 'Invalid organization_id' }, { status: 400 });
     }
 
     const canViewSettings = await hasOrganizationPermission(
@@ -49,22 +47,35 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Optional query parameters for filtering
+    const resolved = await resolveXeroConnectionForApi(organizationId);
+    if (!resolved.persisted) {
+      return NextResponse.json(
+        { error: 'No active Xero connection found. Please connect to Xero first.' },
+        { status: 404 }
+      );
+    }
+    if (resolved.stale || !resolved.connection) {
+      return NextResponse.json(
+        {
+          error:
+            'Xero connection needs to be refreshed. Disconnect in Integrations and connect again.',
+        },
+        { status: 503 }
+      );
+    }
+
     const accountType = searchParams.get('type');
     const searchTerm = searchParams.get('search');
 
     let result;
 
     if (searchTerm) {
-      // Search accounts by name or code
       const accounts = await searchXeroAccounts(organizationId, searchTerm);
       result = { accounts, total: accounts.length };
     } else if (accountType) {
-      // Filter by account type
       const accounts = await fetchXeroAccountsByType(organizationId, accountType);
       result = { accounts, total: accounts.length };
     } else {
-      // Fetch all accounts
       result = await fetchXeroAccounts(organizationId);
     }
 
@@ -79,14 +90,13 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const errorStack = error instanceof Error ? error.stack : undefined;
-    
-    logger.error({ 
+
+    logger.error({
       error: errorMessage,
       stack: errorStack,
       organizationId,
     }, 'Error fetching Xero accounts');
-    
-    // Handle specific Xero errors
+
     if (errorMessage.includes('No active Xero connection')) {
       return NextResponse.json(
         { error: 'No active Xero connection found. Please connect to Xero first.' },

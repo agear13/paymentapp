@@ -62,6 +62,15 @@ export async function storeXeroConnection(
 }
 
 /**
+ * Get raw persisted connection row (no token decryption).
+ */
+export async function getXeroConnectionRow(organizationId: string) {
+  return prisma.xero_connections.findUnique({
+    where: { organization_id: organizationId },
+  });
+}
+
+/**
  * Get Xero connection for an organization
  */
 export async function getXeroConnection(
@@ -214,18 +223,16 @@ export async function getActiveConnection(
     return null;
   }
 
-  // Check if token is expired or will expire in the next 5 minutes
-  const expiryBuffer = 5 * 60 * 1000; // 5 minutes in milliseconds
+  const expiryBuffer = 5 * 60 * 1000;
   const isExpired = connection.expiresAt.getTime() - Date.now() < expiryBuffer;
 
   if (!isExpired) {
     return connection;
   }
 
-  // Token is expired, refresh it
   try {
     const refreshed = await refreshAccessToken(connection.refreshToken);
-    
+
     return await storeXeroConnection(
       organizationId,
       connection.tenantId,
@@ -233,17 +240,43 @@ export async function getActiveConnection(
       refreshed.refreshToken,
       refreshed.expiresAt
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as { message?: string; response?: { status?: number; statusText?: string; body?: unknown } };
     console.error('Failed to refresh Xero token:', {
-      error: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      body: error.response?.body,
+      error: err.message,
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+      body: err.response?.body,
       organizationId,
       tenantId: connection.tenantId,
     });
+    // Token may still work briefly — prefer returning the stored connection over failing closed.
+    if (connection.expiresAt.getTime() > Date.now()) {
+      return connection;
+    }
     return null;
   }
+}
+
+/**
+ * Resolve connection for API routes — distinguishes missing vs stale persistence.
+ */
+export async function resolveXeroConnectionForApi(organizationId: string): Promise<{
+  connection: XeroConnection | null;
+  persisted: boolean;
+  stale: boolean;
+}> {
+  const row = await getXeroConnectionRow(organizationId);
+  if (!row) {
+    return { connection: null, persisted: false, stale: false };
+  }
+
+  const connection = await getActiveConnection(organizationId);
+  if (connection) {
+    return { connection, persisted: true, stale: false };
+  }
+
+  return { connection: null, persisted: true, stale: true };
 }
 
 /**

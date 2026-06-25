@@ -111,9 +111,9 @@ export function XeroConnection({ organizationId }: XeroConnectionProps) {
 
     if (success === 'connected') {
       toast.success('Successfully connected to Xero!');
-      fetchStatus();
-      
-      // Clean up URL
+      await fetchStatus();
+
+      // Clean up URL after status refresh so account mapping can load accounts
       const newUrl = window.location.pathname;
       router.replace(newUrl);
     }

@@ -53,17 +53,18 @@ export async function generateAuthUrl(): Promise<string> {
 }
 
 /**
- * Exchange authorization code for access tokens
+ * Exchange authorization code for access tokens.
+ * @param callbackUrl Full OAuth callback URL (code + state) as received by the callback route.
  */
-export async function exchangeCodeForTokens(code: string): Promise<{
+export async function exchangeCodeForTokens(callbackUrl: string): Promise<{
   accessToken: string;
   refreshToken: string;
   expiresAt: Date;
 }> {
   const client = getXeroClient();
-  
-  const tokenSet = await client.apiCallback(process.env.XERO_REDIRECT_URI + `?code=${code}`);
-  
+
+  const tokenSet = await client.apiCallback(callbackUrl);
+
   if (!tokenSet.access_token || !tokenSet.refresh_token || !tokenSet.expires_in) {
     throw new Error('Invalid token response from Xero');
   }
