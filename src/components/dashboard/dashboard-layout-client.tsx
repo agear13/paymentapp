@@ -17,6 +17,7 @@ import { CustomerFacingOriginProvider } from '@/components/operational/customer-
 import { DashboardOperationalStatus } from '@/components/operations/dashboard-operational-status';
 import { OperationalCoordinationProvider } from '@/components/operations/operational-coordination-provider';
 import { CsrfBootstrap } from '@/components/security/csrf-bootstrap';
+import { OrganizationIdentityBootstrap } from '@/components/organization/organization-identity-bootstrap';
 
 interface DashboardLayoutClientProps {
   children: React.ReactNode;
@@ -36,6 +37,7 @@ export function DashboardLayoutClient({
   return (
     <>
     <CsrfBootstrap />
+    <OrganizationIdentityBootstrap />
     <CustomerFacingOriginProvider
       origin={customerFacingOrigin}
       configured={customerFacingConfigured}

@@ -1,6 +1,5 @@
 /**
  * Xero Disconnect Endpoint
- * Revokes and removes Xero connection
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,6 +9,7 @@ import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { disconnectXero } from '@/lib/xero';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
+import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,16 +17,14 @@ export async function POST(request: NextRequest) {
     if (!auth.user) return auth.response!;
     const user = auth.user;
 
-    // Get organization from request body
     const body = await request.json();
-    const { organizationId } = body;
-
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'Missing organizationId' },
-        { status: 400 }
-      );
-    }
+    const resolved = await resolveSessionOrganizationId(
+      user.id,
+      body.organizationId,
+      'xero/disconnect'
+    );
+    if (resolved.response) return resolved.response;
+    const organizationId = resolved.organizationId;
 
     const canManageSettings = await hasOrganizationPermission(
       user.id,
@@ -40,7 +38,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Disconnect Xero
     await disconnectXero(organizationId);
 
     logger.info('Xero connection disconnected', {
@@ -75,9 +72,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-
-
-
-
-

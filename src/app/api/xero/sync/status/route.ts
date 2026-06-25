@@ -11,6 +11,7 @@ import { getSyncStatus } from '@/lib/xero/queue-service';
 import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
+import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
 /**
  * GET /api/xero/sync/status?payment_link_id=xxx&organization_id=xxx
@@ -37,14 +38,21 @@ export async function GET(request: NextRequest) {
     // Get parameters from query params
     const { searchParams } = new URL(request.url);
     const paymentLinkId = searchParams.get('payment_link_id');
-    const organizationId = searchParams.get('organization_id');
 
-    if (!paymentLinkId || !organizationId) {
+    if (!paymentLinkId) {
       return NextResponse.json(
-        { error: 'Missing payment_link_id or organization_id parameter' },
+        { error: 'Missing payment_link_id parameter' },
         { status: 400 }
       );
     }
+
+    const resolved = await resolveSessionOrganizationId(
+      user.id,
+      searchParams.get('organization_id'),
+      'xero/sync/status'
+    );
+    if (resolved.response) return resolved.response;
+    const organizationId = resolved.organizationId;
 
     // Verify payment link belongs to organization
     const paymentLink = await prisma.payment_links.findUnique({

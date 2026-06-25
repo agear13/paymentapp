@@ -8,13 +8,10 @@ import {
 import { resolveXeroConnectionForApi } from '@/lib/xero/connection-service';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const organizationId = searchParams.get('organization_id');
 
   try {
     const supabase = await createClient();
@@ -24,16 +21,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'Missing organization_id parameter' },
-        { status: 400 }
-      );
-    }
-
-    if (!UUID_RE.test(organizationId)) {
-      return NextResponse.json({ error: 'Invalid organization_id' }, { status: 400 });
-    }
+    const resolved = await resolveSessionOrganizationId(
+      user.id,
+      searchParams.get('organization_id'),
+      'xero/accounts'
+    );
+    if (resolved.response) return resolved.response;
+    const organizationId = resolved.organizationId;
 
     const canViewSettings = await hasOrganizationPermission(
       user.id,
@@ -47,14 +41,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const resolved = await resolveXeroConnectionForApi(organizationId);
-    if (!resolved.persisted) {
+    const connectionResolved = await resolveXeroConnectionForApi(organizationId);
+    if (!connectionResolved.persisted) {
       return NextResponse.json(
         { error: 'No active Xero connection found. Please connect to Xero first.' },
         { status: 404 }
       );
     }
-    if (resolved.stale || !resolved.connection) {
+    if (connectionResolved.stale || !connectionResolved.connection) {
       return NextResponse.json(
         {
           error:
@@ -94,7 +88,6 @@ export async function GET(request: NextRequest) {
     logger.error({
       error: errorMessage,
       stack: errorStack,
-      organizationId,
     }, 'Error fetching Xero accounts');
 
     if (errorMessage.includes('No active Xero connection')) {
@@ -110,9 +103,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
-
-
-
-
-

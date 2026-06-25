@@ -1,50 +1,39 @@
-/**
- * Xero OAuth Initiation Endpoint
- * Generates authorization URL and redirects user to Xero
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generateAuthUrl, isXeroConfigured } from '@/lib/xero';
 import { logger } from '@/lib/logger';
 import { signOAuthState } from '@/lib/security/oauth-state';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
+import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
 export async function GET(request: NextRequest) {
   try {
-    // Check if Xero is configured
     if (!isXeroConfigured()) {
       logger.error('Xero integration not configured');
       return NextResponse.json(
-        { 
+        {
           error: 'Xero integration is not configured. Please contact support.',
-          details: 'Missing required environment variables: XERO_CLIENT_ID, XERO_CLIENT_SECRET, XERO_REDIRECT_URI'
+          details: 'Missing required environment variables: XERO_CLIENT_ID, XERO_CLIENT_SECRET, XERO_REDIRECT_URI',
         },
         { status: 503 }
       );
     }
 
-    // Get authenticated user
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get organization from query params
     const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organization_id');
-
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'Missing organization_id parameter' },
-        { status: 400 }
-      );
-    }
+    const resolved = await resolveSessionOrganizationId(
+      user.id,
+      searchParams.get('organization_id'),
+      'xero/connect'
+    );
+    if (resolved.response) return resolved.response;
+    const organizationId = resolved.organizationId;
 
     const canManageSettings = await hasOrganizationPermission(
       user.id,
@@ -67,10 +56,8 @@ export async function GET(request: NextRequest) {
     });
     if (entitlementBlock) return entitlementBlock;
 
-    // Generate authorization URL
     const authUrl = await generateAuthUrl();
 
-    // Store signed state for callback CSRF and replay protection.
     const stateParam = signOAuthState({
       organizationId,
       userId: user.id,
@@ -83,7 +70,6 @@ export async function GET(request: NextRequest) {
       userId: user.id,
     }, 'Xero OAuth flow initiated');
 
-    // Redirect to Xero authorization page
     return NextResponse.redirect(authUrlWithState);
   } catch (error) {
     logger.error({ error }, 'Error initiating Xero OAuth flow');
@@ -93,9 +79,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
-
-
-
-
-

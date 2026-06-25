@@ -1,6 +1,5 @@
 /**
  * Xero Connection Status Endpoint
- * Returns current connection status for an organization
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -12,10 +11,7 @@ import {
 } from '@/lib/xero';
 import { loggers } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
-
-/** Loose UUID shape so Prisma never receives garbage `organization_id` values. */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
 function staleConnectionMessage(): string {
   return 'Xero connection needs to be refreshed. Disconnect in Integrations and connect again.';
@@ -23,7 +19,6 @@ function staleConnectionMessage(): string {
 
 export async function GET(request: NextRequest) {
   try {
-    // Get authenticated user
     const supabase = await createClient();
     const {
       data: { user },
@@ -34,23 +29,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get organization from query params
     const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organization_id');
-
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'Missing organization_id parameter' },
-        { status: 400 }
-      );
-    }
-
-    if (!UUID_RE.test(organizationId)) {
-      return NextResponse.json(
-        { error: 'Invalid organization_id' },
-        { status: 400 }
-      );
-    }
+    const resolved = await resolveSessionOrganizationId(
+      user.id,
+      searchParams.get('organization_id'),
+      'xero/status'
+    );
+    if (resolved.response) return resolved.response;
+    const organizationId = resolved.organizationId;
 
     const canViewSettings = await hasOrganizationPermission(
       user.id,
@@ -73,7 +59,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get connection status
     const status = await getConnectionStatus(organizationId);
 
     let tenants: Awaited<ReturnType<typeof getAvailableTenants>> = null;
@@ -121,9 +106,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
-
-
-
-
-

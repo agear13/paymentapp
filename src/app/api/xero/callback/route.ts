@@ -15,6 +15,7 @@ import {
   assertXeroConfigured,
   XeroConfigurationError,
 } from '@/lib/xero/xero-config';
+import { isValidOrganizationUuid, warnInvalidOrganizationId } from '@/lib/organization/organization-id';
 
 export async function GET(request: NextRequest) {
   const organizationIdHint = 'unknown';
@@ -54,6 +55,13 @@ export async function GET(request: NextRequest) {
     }
 
     const { organizationId, userId } = stateData;
+
+    if (!isValidOrganizationUuid(organizationId)) {
+      warnInvalidOrganizationId(organizationId, 'xero/callback oauth state');
+      return NextResponse.redirect(
+        xeroIntegrationsRedirectUrl(request, { xero_error: 'invalid_state' })
+      );
+    }
 
     loggers.xero.info('xero_callback_verify_session', {
       step: 'verify_user_session',

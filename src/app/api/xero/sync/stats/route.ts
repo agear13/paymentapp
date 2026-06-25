@@ -14,6 +14,7 @@ import {
 } from '@/lib/xero/queue-service';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
+import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
 /**
  * GET /api/xero/sync/stats?organization_id=xxx
@@ -38,14 +39,14 @@ export async function GET(request: NextRequest) {
 
     // Get organization from query params
     const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organization_id');
 
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'Missing organization_id parameter' },
-        { status: 400 }
-      );
-    }
+    const resolved = await resolveSessionOrganizationId(
+      user.id,
+      searchParams.get('organization_id'),
+      'xero/sync/stats'
+    );
+    if (resolved.response) return resolved.response;
+    const organizationId = resolved.organizationId;
 
     const canViewSettings = await hasOrganizationPermission(
       user.id,

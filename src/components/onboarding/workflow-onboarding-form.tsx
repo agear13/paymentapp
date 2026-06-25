@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Button } from '@/components/ui/button';
+import { setStoredOrganizationId } from '@/lib/organization/organization-id.client';
 import {
   Form,
   FormControl,
@@ -330,7 +330,7 @@ export function WorkflowOnboardingForm() {
         const hasOrg = Boolean(payload?.hasOrganization);
         if (payload.organizationId) {
           setOrganizationId(payload.organizationId);
-          window.localStorage.setItem('provvypay.organizationId', payload.organizationId);
+          setStoredOrganizationId(payload.organizationId);
           setOrgCookie();
         }
         const state = payload.state;
@@ -418,7 +418,7 @@ export function WorkflowOnboardingForm() {
     setMerchantSettingsId(data.merchantSettingsId ?? null);
     setProjectId(data.projectId);
     setProjectName(name);
-    window.localStorage.setItem('provvypay.organizationId', data.organizationId);
+    setStoredOrganizationId(data.organizationId);
     setOrgCookie();
     notifyWorkspaceActivationRefresh();
     trackOutcomeOnce('outcome_first_agreement', {
@@ -596,7 +596,7 @@ export function WorkflowOnboardingForm() {
       const data = payload.data ?? payload;
       setOrganizationId(data.organizationId);
       setMerchantSettingsId(data.merchantSettingsId);
-      window.localStorage.setItem('provvypay.organizationId', data.organizationId);
+      setStoredOrganizationId(data.organizationId);
       setOrgCookie();
       projectForm.setValue('defaultCurrency', values.defaultCurrency);
       toast.success('Business created');
@@ -1175,7 +1175,7 @@ export function WorkflowOnboardingForm() {
       setMerchantSettingsId(data.merchantSettingsId ?? null);
       setProjectId(data.projectId);
       setProjectName(values.projectName);
-      window.localStorage.setItem('provvypay.organizationId', data.organizationId);
+      setStoredOrganizationId(data.organizationId);
       setOrgCookie();
 
       saveOnboardingDraft({

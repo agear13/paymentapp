@@ -11,9 +11,7 @@ import {
 } from '@/lib/xero/xero-config';
 import { runXeroDiagnostics } from '@/lib/xero/xero-diagnostics';
 import { loggers } from '@/lib/logger';
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { parseOrganizationIdParam } from '@/lib/organization/resolve-organization-api.server';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,17 +20,14 @@ export async function GET(request: NextRequest) {
       return adminAuth.response!;
     }
 
-    const organizationId = new URL(request.url).searchParams.get('organization_id');
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'Missing organization_id parameter' },
-        { status: 400 }
-      );
-    }
-
-    if (!UUID_RE.test(organizationId)) {
-      return NextResponse.json({ error: 'Invalid organization_id' }, { status: 400 });
-    }
+    const organizationIdParam = new URL(request.url).searchParams.get('organization_id');
+    const parsed = parseOrganizationIdParam(
+      organizationIdParam,
+      'organization_id',
+      'xero/diagnostics'
+    );
+    if (parsed.response) return parsed.response;
+    const organizationId = parsed.organizationId!;
 
     loggers.xero.info('xero_diagnostics_request', {
       organizationId,

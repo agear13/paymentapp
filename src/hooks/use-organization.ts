@@ -1,6 +1,9 @@
 'use client'
 
 import * as React from 'react'
+import {
+  refreshOrganizationIdentityFromApi,
+} from '@/lib/organization/organization-id.client'
 
 type Organization = {
   id: string
@@ -15,57 +18,48 @@ type UseOrganizationResult = {
 }
 
 /**
- * Hook to fetch and cache the current user's organization.
- * Fetches from API and caches in localStorage.
+ * Resolve the current user's workspace organization from the server.
+ * Never trusts stale localStorage — always refreshes from /api/user/organization.
  */
 export function useOrganization(): UseOrganizationResult {
   const [organizationId, setOrganizationId] = React.useState<string | null>(null)
+  const [organizationName, setOrganizationName] = React.useState<string | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    async function fetchOrganization() {
-      try {
-        // Check localStorage first
-        const cached = window.localStorage.getItem('provvypay.organizationId')
-        if (cached) {
-          setOrganizationId(cached)
-          setIsLoading(false)
-          // Still fetch in background to ensure it's correct
-        }
+    let cancelled = false
 
-        // Fetch from API
-        const response = await fetch('/api/user/organization')
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch organization')
-        }
+    async function loadOrganization() {
+      const result = await refreshOrganizationIdentityFromApi()
 
-        const data = await response.json()
-        
-        // Use database UUID for API calls
-        if (data.organizationId) {
-          setOrganizationId(data.organizationId)
-          // Cache it
-          window.localStorage.setItem('provvypay.organizationId', data.organizationId)
-        } else {
-          setError('No organization found')
-        }
-        
-        setIsLoading(false)
-      } catch (e: any) {
-        console.error('Error fetching organization:', e)
-        setError(e?.message || 'Failed to resolve organization')
-        setIsLoading(false)
+      if (cancelled) return
+
+      if (result.organizationId) {
+        setOrganizationId(result.organizationId)
+        setOrganizationName(result.name ?? null)
+        setError(null)
+      } else {
+        setOrganizationId(null)
+        setOrganizationName(null)
+        setError(result.error ?? 'No organization found')
       }
+
+      setIsLoading(false)
     }
 
-    fetchOrganization()
+    void loadOrganization()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return {
     organizationId,
-    organization: organizationId ? { id: organizationId } : null,
+    organization: organizationId
+      ? { id: organizationId, name: organizationName }
+      : null,
     isLoading,
     error,
   }

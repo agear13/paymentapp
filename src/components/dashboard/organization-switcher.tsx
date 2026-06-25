@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useEntitlements } from '@/hooks/use-entitlements';
 import { PlanUpgradeDialog } from '@/components/entitlements/plan-upgrade-dialog';
 import { FEATURE_DISPLAY_NAMES, upgradeBody, upgradeHeadline } from '@/lib/entitlements/feature-labels';
+import { setStoredOrganizationId } from '@/lib/organization/organization-id.client';
 
 type Organization = {
   id: string;
@@ -55,6 +56,7 @@ export function OrganizationSwitcher() {
           
           setOrganizations(formattedOrgs);
           setSelectedOrg(formattedOrgs[0]);
+          setStoredOrganizationId(formattedOrgs[0].id);
         }
       } catch (error) {
         console.error('Failed to fetch organizations:', error);
@@ -125,6 +127,7 @@ export function OrganizationSwitcher() {
             key={org.id}
             onSelect={() => {
               setSelectedOrg(org);
+              setStoredOrganizationId(org.id);
               setOpen(false);
             }}
             className="gap-2"

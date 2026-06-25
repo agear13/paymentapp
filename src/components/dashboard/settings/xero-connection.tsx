@@ -27,6 +27,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { warnInvalidOrganizationId, isValidOrganizationUuid } from '@/lib/organization/organization-id';
 import { Loader2, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -52,6 +53,12 @@ interface ConnectionStatus {
 export function XeroConnection({ organizationId }: XeroConnectionProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  React.useEffect(() => {
+    if (!isValidOrganizationUuid(organizationId)) {
+      warnInvalidOrganizationId(organizationId, 'XeroConnection props');
+    }
+  }, [organizationId]);
   const [status, setStatus] = React.useState<ConnectionStatus | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [connecting, setConnecting] = React.useState(false);
@@ -146,7 +153,7 @@ export function XeroConnection({ organizationId }: XeroConnectionProps) {
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      window.location.href = `/api/xero/connect?organization_id=${organizationId}`;
+      window.location.href = '/api/xero/connect';
     } catch (error) {
       console.error('Error connecting to Xero:', error);
       toast.error('Failed to initiate Xero connection');

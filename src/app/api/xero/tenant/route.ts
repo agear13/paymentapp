@@ -1,6 +1,5 @@
 /**
  * Xero Tenant Selection Endpoint
- * Updates selected Xero tenant for an organization
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -8,6 +7,7 @@ import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { updateSelectedTenant } from '@/lib/xero';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
+import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,13 +15,20 @@ export async function POST(request: NextRequest) {
     if (!auth.user) return auth.response!;
     const user = auth.user;
 
-    // Get data from request body
     const body = await request.json();
-    const { organizationId, tenantId } = body;
+    const { tenantId } = body;
 
-    if (!organizationId || !tenantId) {
+    const resolved = await resolveSessionOrganizationId(
+      user.id,
+      body.organizationId,
+      'xero/tenant'
+    );
+    if (resolved.response) return resolved.response;
+    const organizationId = resolved.organizationId;
+
+    if (!tenantId) {
       return NextResponse.json(
-        { error: 'Missing organizationId or tenantId' },
+        { error: 'Missing tenantId' },
         { status: 400 }
       );
     }
@@ -38,7 +45,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update selected tenant
     await updateSelectedTenant(organizationId, tenantId);
 
     logger.info('Xero tenant updated', {
@@ -59,9 +65,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-
-
-
-
-

@@ -12,6 +12,7 @@ import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { validateMappedAccountCodes } from '@/lib/xero/accounts-service';
+import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
 // GET /api/settings/xero-mappings?organization_id=xxx
 export async function GET(request: NextRequest) {
@@ -29,14 +30,14 @@ export async function GET(request: NextRequest) {
 
     // Get organization from query params
     const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organization_id');
 
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'Missing organization_id parameter' },
-        { status: 400 }
-      );
-    }
+    const resolved = await resolveSessionOrganizationId(
+      user.id,
+      searchParams.get('organization_id'),
+      'settings/xero-mappings GET'
+    );
+    if (resolved.response) return resolved.response;
+    const organizationId = resolved.organizationId;
 
     const canViewSettings = await hasOrganizationPermission(
       user.id,
@@ -85,14 +86,16 @@ export async function PUT(request: NextRequest) {
     const user = auth.user;
 
     const body = await request.json();
-    const { organizationId, ...mappings } = body;
 
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'organizationId is required' },
-        { status: 400 }
-      );
-    }
+    const resolved = await resolveSessionOrganizationId(
+      user.id,
+      body.organizationId,
+      'settings/xero-mappings PUT'
+    );
+    if (resolved.response) return resolved.response;
+    const organizationId = resolved.organizationId;
+    const mappings = { ...body };
+    delete mappings.organizationId;
 
     const canManageSettings = await hasOrganizationPermission(
       user.id,

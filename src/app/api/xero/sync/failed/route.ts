@@ -11,6 +11,7 @@ import { getFailedSyncs } from '@/lib/xero/queue-service';
 import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
+import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
 /**
  * GET /api/xero/sync/failed?organization_id=xxx&limit=50
@@ -36,15 +37,15 @@ export async function GET(request: NextRequest) {
 
     // Get organization from query params
     const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organization_id');
     const limitParam = searchParams.get('limit');
 
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'Missing organization_id parameter' },
-        { status: 400 }
-      );
-    }
+    const resolved = await resolveSessionOrganizationId(
+      user.id,
+      searchParams.get('organization_id'),
+      'xero/sync/failed'
+    );
+    if (resolved.response) return resolved.response;
+    const organizationId = resolved.organizationId;
 
     const limit = limitParam ? Math.min(parseInt(limitParam, 10), 200) : 50;
 
