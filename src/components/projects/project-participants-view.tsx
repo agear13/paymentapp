@@ -1018,6 +1018,7 @@ export function ProjectParticipantsView() {
                   data-pending={p.approvalStatus !== 'Approved' ? 'true' : 'false'}
                   onShareAgreement={openAgreementShare}
                   onConfigureEarnings={openCompensationConfig}
+                  onSendPaymentRequest={handleSendPaymentRequest}
                 />
               ))}
             </div>

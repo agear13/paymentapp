@@ -8,6 +8,7 @@
  *   Earnings not configured → "Configure Earnings"       (primary)
  *   Not yet sent            → "Send Agreement"           (primary, opens send sheet)
  *   Sent, not approved      → "Waiting for Acceptance"   (status)
+ *   Approved, payout missing → "Request Payout Details"  (primary)
  *   Signed                  → "View agreement"        (primary)
  *   Approved                → "View agreement"        (subdued — already done)
  *
@@ -17,6 +18,7 @@
 
 import * as React from 'react';
 import {
+  ArrowRight,
   CheckCircle2,
   ChevronDown,
   Copy,
@@ -59,6 +61,7 @@ import { cn } from '@/lib/utils';
 import type { CommercialTimelineEvent } from '@/lib/commercial/commercial-timeline-events';
 import { buildParticipantCommercialJourney } from '@/lib/commercial/commercial-timeline-events';
 import { ParticipantCommercialHistory } from '@/components/commercial/commercial-timeline';
+import { deriveParticipantOperationalWorkflow } from '@/lib/commercial/participant-commercial-lifecycle';
 
 /* ─── Operational status labels & colours ─────────────────────────────────── */
 
@@ -376,6 +379,7 @@ export type ApprovalCentreParticipantCardProps = {
     options?: { showDialog?: boolean }
   ) => void | Promise<void>;
   onConfigureEarnings: (p: DemoParticipant) => void;
+  onSendPaymentRequest?: (p: DemoParticipant) => void;
   /**
    * Commercial timeline events for this agreement.
    * When provided, shows the participant's commercial relationship history
@@ -394,6 +398,7 @@ export function ApprovalCentreParticipantCard({
   'data-pending': dataPending,
   onShareAgreement,
   onConfigureEarnings,
+  onSendPaymentRequest,
   commercialTimeline,
 }: ApprovalCentreParticipantCardProps) {
   const lifecycle = deriveAgreementLifecycleState(participant);
@@ -445,6 +450,10 @@ export function ApprovalCentreParticipantCard({
   const statusLabel = operationalStatusLabel(lifecycle, earningsConfigured);
   const badgeClass = statusBadgeClass(lifecycle, earningsConfigured);
   const isApproved = lifecycle === 'APPROVED';
+  const operationalWorkflow = deriveParticipantOperationalWorkflow(entity);
+  const shouldRequestPayoutDetails =
+    operationalWorkflow.primaryCta.destination === 'send_payment_request' &&
+    onSendPaymentRequest != null;
 
   const needsSend =
     earningsConfigured &&
@@ -564,6 +573,16 @@ export function ApprovalCentreParticipantCard({
                 onResend={() => onShareAgreement(participant, { showDialog: false })}
               />
             </>
+          ) : shouldRequestPayoutDetails ? (
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 px-3 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background gap-1"
+              onClick={() => onSendPaymentRequest?.(entity)}
+            >
+              {operationalWorkflow.primaryCta.label}
+              <ArrowRight className="h-3 w-3" />
+            </Button>
           ) : isSigned ? (
             /* Primary: view agreement. Secondary: resend → in More menu */
             <>
