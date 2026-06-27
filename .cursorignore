@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Build outputs
+dist/
+build/
+coverage/
+.turbo/
+.cache/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Generated files
+prisma/generated/
+
+# Large binary assets
+**/*.pdf
+**/*.zip
+**/*.mp4
+**/*.mov
+**/*.avi
+**/*.psd
+
+# Demo reports
+src/public/demo-reports/
+
+# Generated exports
+reports/
+exports/
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
