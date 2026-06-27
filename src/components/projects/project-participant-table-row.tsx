@@ -120,6 +120,17 @@ function ParticipantTableNextActionCell({
     );
   }
 
+  if (nextAction.kind === 'ready_for_settlement') {
+    return (
+      <Badge
+        variant="outline"
+        className="text-xs font-medium border-blue-300/80 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300"
+      >
+        {nextAction.label}
+      </Badge>
+    );
+  }
+
   if (nextAction.kind === 'configure_earnings') {
     return (
       <Button

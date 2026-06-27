@@ -84,6 +84,11 @@ const STAGE_CONFIG: Record<
     useReviewPath: true,
     ctaVariant: 'ghost',
   },
+  PAID: {
+    icon: <CheckCircle2 className="h-4 w-4 text-green-600" />,
+    useReviewPath: true,
+    ctaVariant: 'ghost',
+  },
 };
 
 type ParticipantOnboardingStatusCardProps = {
@@ -104,7 +109,7 @@ export function ParticipantOnboardingStatusCard({
   const config = STAGE_CONFIG[stage];
   const stageLabel = LIFECYCLE_STAGE_OPERATOR_LABELS[stage];
 
-  const isComplete = stage === 'SETTLEMENT_READY';
+  const isComplete = stage === 'SETTLEMENT_READY' || stage === 'PAID';
   const isRejected = participant.supplierOnboarding?.rejection != null;
 
   const ctaHref = projectOperatorReviewPath(projectId, participant.id);

@@ -37,6 +37,7 @@ export const PARTICIPANT_COMMERCIAL_LIFECYCLE_STAGES = [
   'OPERATOR_REVIEW',
   'XERO_INVOICE',
   'SETTLEMENT_READY',
+  'PAID',
 ] as const;
 
 export type ParticipantCommercialLifecycleStage =
@@ -52,6 +53,7 @@ export const LIFECYCLE_STAGE_LABELS: Record<ParticipantCommercialLifecycleStage,
   OPERATOR_REVIEW: 'Operator review',
   XERO_INVOICE: 'Invoice created',
   SETTLEMENT_READY: 'Settlement ready',
+  PAID: 'Paid',
 };
 
 /** Operator-facing status chip on participant rows and cards. */
@@ -65,6 +67,7 @@ export const PARTICIPANT_STATUS_DISPLAY: Record<ParticipantCommercialLifecycleSt
   OPERATOR_REVIEW: 'Operator Review',
   XERO_INVOICE: 'Invoice Created',
   SETTLEMENT_READY: 'Settlement Ready',
+  PAID: 'Paid',
 };
 
 export function formatParticipantStatusLabel(
@@ -83,6 +86,7 @@ export const LIFECYCLE_STAGE_OPERATOR_LABELS: Record<ParticipantCommercialLifecy
   OPERATOR_REVIEW: 'Review payment & tax information',
   XERO_INVOICE: 'Push to Xero',
   SETTLEMENT_READY: 'Ready for settlement',
+  PAID: 'Paid',
 };
 
 export const LIFECYCLE_TIMELINE_STEPS: readonly {
@@ -97,6 +101,7 @@ export const LIFECYCLE_TIMELINE_STEPS: readonly {
   { stage: 'OPERATOR_REVIEW', label: 'Operator review' },
   { stage: 'XERO_INVOICE', label: 'Invoice created' },
   { stage: 'SETTLEMENT_READY', label: 'Settlement ready' },
+  { stage: 'PAID', label: 'Paid' },
 ];
 
 /* ─── AI extension hooks (future) ────────────────────────────────────────── */
@@ -125,6 +130,10 @@ function supplierLifecycle(participant: DemoParticipant): SupplierOnboardingLife
 function isXeroExported(participant: DemoParticipant): boolean {
   const ps = participant.paymentSetup;
   return Boolean(ps?.xeroExportedAt && ps?.xeroSyncStatus === 'synced');
+}
+
+function isSettlementPaid(participant: DemoParticipant): boolean {
+  return participant.payoutSettlementStatus === 'Paid' || Boolean(participant.payoutPaidAt);
 }
 
 /** Name, email, and role — required before agreements or payment requests. */
@@ -161,7 +170,8 @@ function mapSupplierToCommercialStage(
 ): ParticipantCommercialLifecycleStage {
   if (xeroExported) return 'SETTLEMENT_READY';
   if (supplier === 'APPROVED') return 'XERO_INVOICE';
-  if (supplier === 'SUBMITTED' || supplier === 'UNDER_REVIEW') return 'OPERATOR_REVIEW';
+  if (supplier === 'UNDER_REVIEW') return 'OPERATOR_REVIEW';
+  if (supplier === 'SUBMITTED') return 'PAYMENT_INFO_SUBMITTED';
   if (supplier === 'REJECTED') return 'PAYMENT_INFO_PENDING';
   if (supplier === 'IN_PROGRESS') return 'PAYMENT_INFO_PENDING';
   if (supplier === 'INVITED') return 'PAYMENT_INFO_PENDING';
@@ -213,6 +223,10 @@ export function buildParticipantPaymentPortalUrl(
 export function deriveParticipantCommercialLifecycle(
   participant: DemoParticipant
 ): ParticipantCommercialLifecycleStage {
+  if (isSettlementPaid(participant)) {
+    return 'PAID';
+  }
+
   const identityReady = hasParticipantIdentityReady(participant);
   const earningsReady =
     isParticipantCompensationExempt(participant) || isParticipantEarningsConfigured(participant);
@@ -298,42 +312,42 @@ export function deriveParticipantLifecycleAction(
       };
     case 'EARNINGS_CONFIGURED':
       return {
-        label: 'Generate agreement',
+        label: 'Send Agreement',
         description: `${name} is ready — generate and send the commercial agreement.`,
         urgency: 'action_required',
         destination: 'send_agreement',
       };
     case 'AGREEMENT_SENT':
       return {
-        label: 'Awaiting acceptance',
+        label: 'Waiting for Acceptance',
         description: `Agreement sent to ${name} — waiting for acceptance.`,
         urgency: 'attention',
         destination: 'await_participant',
       };
     case 'AGREEMENT_ACCEPTED':
       return {
-        label: 'Send payment request',
+        label: 'Request Payout Details',
         description: `${name} accepted the agreement. Generate and share the payment & tax information form.`,
         urgency: 'action_required',
         destination: 'send_payment_request',
       };
     case 'PAYMENT_INFO_PENDING':
       return {
-        label: 'Share payment request',
+        label: 'Waiting for Participant',
         description: `${name} has a payment request — share the secure link or send via your usual channel.`,
         urgency: 'attention',
-        destination: 'share_payment_request',
+        destination: 'await_participant',
       };
     case 'PAYMENT_INFO_SUBMITTED':
       return {
-        label: 'Review payment information',
+        label: 'Verify Payout Details',
         description: `${name} submitted payment & tax information.`,
         urgency: 'action_required',
         destination: 'review_payment',
       };
     case 'OPERATOR_REVIEW':
       return {
-        label: 'Review payment information',
+        label: 'Verify Payout Details',
         description: `Review ${name}'s payment method, tax details, and ABN before approving.`,
         urgency: 'action_required',
         destination: 'review_payment',
@@ -347,10 +361,17 @@ export function deriveParticipantLifecycleAction(
       };
     case 'SETTLEMENT_READY':
       return {
-        label: 'Ready for settlement',
+        label: 'Ready for Settlement',
         description: `${name} is ready for settlement.`,
         urgency: 'none',
         destination: 'settlement',
+      };
+    case 'PAID':
+      return {
+        label: 'Paid',
+        description: `${name} has been paid.`,
+        urgency: 'none',
+        destination: 'none',
       };
     default:
       return {
@@ -411,7 +432,8 @@ const COMMERCIAL_TABLE_STAGE_LABELS: Record<ParticipantCommercialLifecycleStage,
   PAYMENT_INFO_SUBMITTED: 'Awaiting Review',
   OPERATOR_REVIEW: 'Awaiting Review',
   XERO_INVOICE: 'Ready for Xero',
-  SETTLEMENT_READY: 'Completed',
+  SETTLEMENT_READY: 'Ready for Settlement',
+  PAID: 'Paid',
 };
 
 function deriveAgreementTableLabel(participant: DemoParticipant): {
@@ -455,32 +477,32 @@ export function deriveParticipantCommercialTableNextAction(
     case 'EARNINGS_CONFIGURED':
       return {
         kind: 'generate_agreement',
-        label: 'Generate Agreement',
+        label: 'Send Agreement',
         buttonVariant: 'default',
       };
     case 'AGREEMENT_SENT':
       return {
         kind: 'waiting_participant',
-        label: 'Waiting for participant',
+        label: 'Waiting for Acceptance',
         buttonVariant: 'outline',
       };
     case 'AGREEMENT_ACCEPTED':
       return {
         kind: 'share_payment_request',
-        label: 'Share Payment Request',
+        label: 'Request Payout Details',
         buttonVariant: 'default',
       };
     case 'PAYMENT_INFO_PENDING':
       return {
         kind: 'waiting_participant',
-        label: 'Waiting for participant',
+        label: 'Waiting for Participant',
         buttonVariant: 'outline',
       };
     case 'PAYMENT_INFO_SUBMITTED':
     case 'OPERATOR_REVIEW':
       return {
         kind: 'review_submission',
-        label: 'Review Submission',
+        label: 'Verify Payout Details',
         buttonVariant: 'default',
       };
     case 'XERO_INVOICE':
@@ -491,8 +513,14 @@ export function deriveParticipantCommercialTableNextAction(
       };
     case 'SETTLEMENT_READY':
       return {
+        kind: 'ready_for_settlement',
+        label: 'Ready for Settlement',
+        buttonVariant: 'outline',
+      };
+    case 'PAID':
+      return {
         kind: 'completed',
-        label: 'Completed',
+        label: 'Paid',
         buttonVariant: 'outline',
       };
     default:
@@ -585,6 +613,7 @@ const NOTIFICATION_PRIORITY: ParticipantCommercialLifecycleStage[] = [
   'PAYMENT_INFO_PENDING',
   'XERO_INVOICE',
   'SETTLEMENT_READY',
+  'PAID',
 ];
 
 function notificationMessage(stage: ParticipantCommercialLifecycleStage, count: number): string {
@@ -608,13 +637,15 @@ function notificationMessage(stage: ParticipantCommercialLifecycleStage, count: 
       return `${n} participant${plural ? 's' : ''} ready for invoicing`;
     case 'SETTLEMENT_READY':
       return `${n} settlement${plural ? 's' : ''} ready`;
+    case 'PAID':
+      return `${n} participant${plural ? 's' : ''} paid`;
     default:
       return '';
   }
 }
 
 function notificationUrgency(stage: ParticipantCommercialLifecycleStage): WorkspaceLifecycleNotification['urgency'] {
-  if (stage === 'SETTLEMENT_READY') return 'none';
+  if (stage === 'SETTLEMENT_READY' || stage === 'PAID') return 'none';
   if (stage === 'AGREEMENT_SENT' || stage === 'PAYMENT_INFO_PENDING') {
     return 'attention';
   }

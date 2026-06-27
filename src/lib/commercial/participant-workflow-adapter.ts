@@ -102,6 +102,7 @@ function lifecycleToSupplierStage(
   p: ParticipantPhaseData
 ): SupplierOnboardingStage {
   switch (stage) {
+    case 'PAID':
     case 'SETTLEMENT_READY':
       return 'xero_exported';
     case 'XERO_INVOICE':
@@ -132,7 +133,8 @@ function deriveMinimalAccountingView(
 ): MinimalAccountingView {
   const synced =
     p.paymentSetup?.xeroSyncStatus === 'synced' ||
-    lifecycleStage === 'SETTLEMENT_READY';
+    lifecycleStage === 'SETTLEMENT_READY' ||
+    lifecycleStage === 'PAID';
 
   if (p.paymentSetup?.xeroExportedAt) {
     return {
@@ -362,6 +364,7 @@ export function synthesizeSupplierTimelineEvents(
       lifecycleStage === 'OPERATOR_REVIEW' ||
       lifecycleStage === 'XERO_INVOICE' ||
       lifecycleStage === 'SETTLEMENT_READY' ||
+      lifecycleStage === 'PAID' ||
       p.payoutOnboardingPhase === 'COMPLETED' ||
       p.onboardingStatus === 'COMPLETE' ||
       p.payoutVerificationConfirmed === true
@@ -393,7 +396,12 @@ export function synthesizeSupplierTimelineEvents(
       });
     }
 
-    if (p.payoutVerificationConfirmed === true || lifecycleStage === 'XERO_INVOICE') {
+    if (
+      p.payoutVerificationConfirmed === true ||
+      lifecycleStage === 'XERO_INVOICE' ||
+      lifecycleStage === 'SETTLEMENT_READY' ||
+      lifecycleStage === 'PAID'
+    ) {
       events.push({
         id: `${projectId}:${participantId}:operator_approved`,
         projectId,
@@ -419,7 +427,7 @@ export function synthesizeSupplierTimelineEvents(
       });
     }
 
-    if (lifecycleStage === 'SETTLEMENT_READY') {
+    if (lifecycleStage === 'SETTLEMENT_READY' || lifecycleStage === 'PAID') {
       events.push({
         id: `${projectId}:${participantId}:settlement_ready`,
         projectId,

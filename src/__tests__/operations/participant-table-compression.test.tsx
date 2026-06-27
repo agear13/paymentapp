@@ -77,6 +77,6 @@ describe('compressed participant table UX', () => {
   it('uses dropdown actions instead of stacked buttons', () => {
     renderRow();
     expect(screen.getByLabelText('Participant actions')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Generate Agreement/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Send Agreement/i })).toBeTruthy();
   });
 });
