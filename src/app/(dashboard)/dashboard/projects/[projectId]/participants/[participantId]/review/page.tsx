@@ -27,15 +27,15 @@ import { buildAgreementSummaryData } from '@/lib/commercial/participant-commerci
  *
  * Architecture:
  *   This page handles the COMMERCIAL REVIEW step only.
- *   Approve = commercial decision (verifies supplier details are correct)
+ *   Verify = commercial decision (verifies supplier details are correct)
  *   Reject  = commercial decision (supplier can resubmit after corrections)
- *   Push to Xero = accounting integration (separate step, shown after approval)
+ *   Push Supplier Bill to Xero = accounting integration after verification
  *
  * The operator can:
  *   - Review the CommercialReviewSummary (deterministic checks)
- *   - Approve the supplier (sets lifecycle = APPROVED)
+ *   - Verify supplier details (sets lifecycle = APPROVED)
  *   - Reject with a reason (sets lifecycle = REJECTED, allows resubmission)
- *   - After approval: continue to Xero Export from the funding page
+ *   - Push the supplier bill to Xero
  */
 export default function SupplierOnboardingReviewPage() {
   const params = useParams<{ projectId: string; participantId: string }>();
@@ -56,8 +56,8 @@ export default function SupplierOnboardingReviewPage() {
 
   const backHref = `/dashboard/projects/${projectId}/participants?focus=onboarding`;
 
-  /** H-2: Approve is a commercial decision — does NOT trigger Xero export */
-  const handleApprove = async () => {
+  /** Verify is a commercial decision — it must happen before pushing the supplier bill to Xero. */
+  const handleApprove = async (): Promise<boolean> => {
     setIsActing(true);
     setActionError(null);
     setSuccessMessage(null);
@@ -70,17 +70,19 @@ export default function SupplierOnboardingReviewPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? 'Approval failed. Please try again.');
       }
-      setSuccessMessage('Supplier approved. Continue to Xero Export when ready.');
+      setSuccessMessage('Supplier details verified.');
       void refresh({ scope: 'all', silent: true, force: true });
+      return true;
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Something went wrong.');
+      return false;
     } finally {
       setIsActing(false);
     }
   };
 
-  /** Push to Xero — available after approval (H-2) */
-  const handleXeroExport = async () => {
+  /** Push Supplier Bill to Xero — available after verification. */
+  const handleXeroExport = async (): Promise<boolean> => {
     setIsActing(true);
     setActionError(null);
     setSuccessMessage(null);
@@ -91,19 +93,36 @@ export default function SupplierOnboardingReviewPage() {
       );
       if (!xeroRes.ok) {
         const data = await xeroRes.json().catch(() => ({}));
-        throw new Error(data.error ?? 'Xero export failed. Please retry.');
+        throw new Error(data.error ?? 'Supplier bill push failed. Please retry.');
       }
-      setSuccessMessage('Invoice exported to Xero successfully.');
+      setSuccessMessage('Supplier bill pushed to Xero successfully.');
       void refresh({ scope: 'all', silent: true, force: true });
+      return true;
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Something went wrong.');
+      return false;
     } finally {
       setIsActing(false);
     }
   };
 
-  /** Kept for backward-compat with SupplierOnboardingOperatorView which still receives onApproveAndExport */
-  const handleApproveAndExport = handleApprove;
+  const handleVerifyAndPushSupplierBill = async () => {
+    setIsActing(true);
+    setActionError(null);
+    setSuccessMessage(null);
+    try {
+      if (lifecycle !== 'APPROVED') {
+        const approved = await handleApprove();
+        if (!approved) return;
+      }
+      const pushed = await handleXeroExport();
+      if (pushed) {
+        setSuccessMessage('Supplier details verified and supplier bill pushed to Xero.');
+      }
+    } finally {
+      setIsActing(false);
+    }
+  };
 
   /** C-2: Resend payment setup link (generates a fresh token and emails the supplier) */
   const handleResend = async () => {
@@ -245,7 +264,7 @@ export default function SupplierOnboardingReviewPage() {
           Back to participants
         </Link>
         <div>
-          <h1 className="text-xl font-semibold">Review Payment & Tax Information</h1>
+          <h1 className="text-xl font-semibold">Verify Payout Details</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Verify {participant.name}'s agreement summary, payment method, and tax details.
           </p>
@@ -305,33 +324,35 @@ export default function SupplierOnboardingReviewPage() {
         status={status}
         participant={participant}
         reviewSummary={reviewSummary}
-        onApprove={handleApprove}
-        onApproveAndExport={handleApproveAndExport}
         onReject={handleReject}
         onRequestChanges={handleRequestChanges}
         isLoading={isActing}
       />
 
-      {/* H-2: Xero Export is separate from Approve — shown after approval */}
-      {lifecycle === 'APPROVED' && (
+      {(lifecycle === 'SUBMITTED' || lifecycle === 'APPROVED') && (
         <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4 space-y-3">
           <div>
             <p className="text-sm font-medium text-blue-800">
-              Supplier approved — ready for Xero export
+              {lifecycle === 'APPROVED'
+                ? 'Supplier details verified — ready to push supplier bill to Xero'
+                : 'Verify supplier details and push supplier bill to Xero'}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Approval confirms the commercial details are correct. Xero export is a separate accounting step.
+              This single workflow action verifies the payout details and advances the participant to settlement readiness.
             </p>
           </div>
           <div className="flex flex-col gap-2">
-            {/* C-3: Export button always shows, allows retry on failure */}
             <button
               type="button"
-              onClick={handleXeroExport}
+              onClick={() => void handleVerifyAndPushSupplierBill()}
               disabled={isActing}
               className="inline-flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
-              {isActing ? 'Exporting…' : 'Push to Xero'}
+              {isActing
+                ? 'Pushing supplier bill…'
+                : lifecycle === 'APPROVED'
+                  ? 'Push Supplier Bill to Xero'
+                  : 'Verify & Push Supplier Bill to Xero'}
               {!isActing && <CheckCircle2 className="h-4 w-4" />}
             </button>
             <Link

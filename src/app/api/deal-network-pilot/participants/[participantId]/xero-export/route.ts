@@ -25,14 +25,14 @@ const bodySchema = z.object({
 /**
  * POST /api/deal-network-pilot/participants/[participantId]/xero-export
  *
- * Operator exports an approved supplier's invoice to Xero.
+ * Operator pushes an approved supplier bill to Xero.
  *
- * This is an accounting integration concern — separate from the commercial
- * approval decision. Approval must have happened before this can be called.
+ * This is an accounting integration concern. Supplier payout details must have
+ * been verified before this can be called.
  *
  * Actions:
  *   1. Validates operator is authenticated and participant is approved.
- *   2. Calls createSupplierBillInXero() to create ACCPAY invoice in Xero.
+ *   2. Calls createSupplierBillInXero() to create ACCPAY supplier bill in Xero.
  *   3. Persists xeroContactId, xeroInvoiceId, xeroExportedAt.
  *   4. Appends SUPPLIER_INVOICE_GENERATED commercial event.
  *   5. Updates draft invoice status to EXPORTED_TO_XERO.
@@ -67,7 +67,7 @@ export async function POST(
     if (existing.paymentSetup?.xeroExportedAt && existing.paymentSetup?.xeroSyncStatus === 'synced') {
       return NextResponse.json(
         {
-          error: 'Already exported to Xero.',
+          error: 'Supplier bill has already been pushed to Xero.',
           xeroInvoiceId: existing.paymentSetup.xeroInvoiceId,
           xeroExportedAt: existing.paymentSetup.xeroExportedAt,
         },
@@ -104,7 +104,7 @@ export async function POST(
         invoice: draftInvoice,
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Xero export failed';
+      const msg = err instanceof Error ? err.message : 'Push Supplier Bill to Xero failed';
       console.error('[xero-export] createSupplierBillInXero failed:', err);
       xeroError = msg;
       syncStatus = 'failed';
@@ -125,7 +125,7 @@ export async function POST(
 
     if (xeroError) {
       return NextResponse.json(
-        { error: `Xero export failed: ${xeroError}` },
+        { error: `Push Supplier Bill to Xero failed: ${xeroError}` },
         { status: 502 }
       );
     }
@@ -189,6 +189,6 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('[xero-export POST]', e);
-    return NextResponse.json({ error: 'Export failed. Please try again.' }, { status: 500 });
+    return NextResponse.json({ error: 'Push Supplier Bill to Xero failed. Please try again.' }, { status: 500 });
   }
 }

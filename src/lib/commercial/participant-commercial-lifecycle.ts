@@ -58,15 +58,15 @@ export const LIFECYCLE_STAGE_LABELS: Record<ParticipantCommercialLifecycleStage,
 
 /** Operator-facing status chip on participant rows and cards. */
 export const PARTICIPANT_STATUS_DISPLAY: Record<ParticipantCommercialLifecycleStage, string> = {
-  DRAFT: 'Draft',
-  EARNINGS_CONFIGURED: 'Earnings Configured',
-  AGREEMENT_SENT: 'Agreement Sent',
-  AGREEMENT_ACCEPTED: 'Agreement Accepted',
-  PAYMENT_INFO_PENDING: 'Payment Information Pending',
-  PAYMENT_INFO_SUBMITTED: 'Payment Information Submitted',
-  OPERATOR_REVIEW: 'Operator Review',
-  XERO_INVOICE: 'Invoice Created',
-  SETTLEMENT_READY: 'Settlement Ready',
+  DRAFT: 'Configure Earnings',
+  EARNINGS_CONFIGURED: 'Send Agreement',
+  AGREEMENT_SENT: 'Waiting for Acceptance',
+  AGREEMENT_ACCEPTED: 'Request Payout Details',
+  PAYMENT_INFO_PENDING: 'Waiting for Participant',
+  PAYMENT_INFO_SUBMITTED: 'Verify Payout Details',
+  OPERATOR_REVIEW: 'Verify Payout Details',
+  XERO_INVOICE: 'Push Supplier Bill to Xero',
+  SETTLEMENT_READY: 'Ready for Settlement',
   PAID: 'Paid',
 };
 
@@ -77,15 +77,15 @@ export function formatParticipantStatusLabel(
 }
 
 export const LIFECYCLE_STAGE_OPERATOR_LABELS: Record<ParticipantCommercialLifecycleStage, string> = {
-  DRAFT: 'Add participant details',
-  EARNINGS_CONFIGURED: 'Configure earnings',
-  AGREEMENT_SENT: 'Awaiting participant acceptance',
-  AGREEMENT_ACCEPTED: 'Send payment & tax form',
-  PAYMENT_INFO_PENDING: 'Payment & tax forms awaiting completion',
-  PAYMENT_INFO_SUBMITTED: 'Payment profiles awaiting review',
-  OPERATOR_REVIEW: 'Review payment & tax information',
-  XERO_INVOICE: 'Push to Xero',
-  SETTLEMENT_READY: 'Ready for settlement',
+  DRAFT: 'Configure Earnings',
+  EARNINGS_CONFIGURED: 'Agreement Sent',
+  AGREEMENT_SENT: 'Waiting for Acceptance',
+  AGREEMENT_ACCEPTED: 'Payout Details Requested',
+  PAYMENT_INFO_PENDING: 'Waiting for Participant',
+  PAYMENT_INFO_SUBMITTED: 'Verify Payout Details',
+  OPERATOR_REVIEW: 'Verify Payout Details',
+  XERO_INVOICE: 'Supplier Bill Exported',
+  SETTLEMENT_READY: 'Ready for Settlement',
   PAID: 'Paid',
 };
 
@@ -93,14 +93,14 @@ export const LIFECYCLE_TIMELINE_STEPS: readonly {
   stage: ParticipantCommercialLifecycleStage;
   label: string;
 }[] = [
-  { stage: 'DRAFT', label: 'Participant added' },
-  { stage: 'EARNINGS_CONFIGURED', label: 'Earnings configured' },
-  { stage: 'AGREEMENT_SENT', label: 'Agreement sent' },
-  { stage: 'AGREEMENT_ACCEPTED', label: 'Agreement accepted' },
-  { stage: 'PAYMENT_INFO_PENDING', label: 'Payment information' },
-  { stage: 'OPERATOR_REVIEW', label: 'Operator review' },
-  { stage: 'XERO_INVOICE', label: 'Invoice created' },
-  { stage: 'SETTLEMENT_READY', label: 'Settlement ready' },
+  { stage: 'DRAFT', label: 'Configure Earnings' },
+  { stage: 'EARNINGS_CONFIGURED', label: 'Agreement Sent' },
+  { stage: 'AGREEMENT_SENT', label: 'Waiting for Acceptance' },
+  { stage: 'AGREEMENT_ACCEPTED', label: 'Payout Details Requested' },
+  { stage: 'PAYMENT_INFO_PENDING', label: 'Waiting for Participant' },
+  { stage: 'OPERATOR_REVIEW', label: 'Verify Payout Details' },
+  { stage: 'XERO_INVOICE', label: 'Supplier Bill Exported' },
+  { stage: 'SETTLEMENT_READY', label: 'Ready for Settlement' },
   { stage: 'PAID', label: 'Paid' },
 ];
 
@@ -280,6 +280,257 @@ export function isLifecycleStageAtOrPast(
 
 /* ─── Operator next action ───────────────────────────────────────────────── */
 
+export type ParticipantWorkflowReadiness = 'blocked' | 'waiting' | 'ready' | 'complete';
+
+export type ParticipantWorkflowCtaDestination =
+  | 'configure_earnings'
+  | 'send_agreement'
+  | 'await_participant'
+  | 'send_payment_request'
+  | 'review_payment'
+  | 'xero_export'
+  | 'settlement'
+  | 'none';
+
+export type ParticipantWorkflowCtaKind =
+  | 'configure_earnings'
+  | 'send_agreement'
+  | 'waiting_participant'
+  | 'request_payout_details'
+  | 'verify_payout_details'
+  | 'push_to_xero'
+  | 'ready_for_settlement'
+  | 'completed'
+  | 'none';
+
+export type ParticipantWorkflowCta = {
+  kind: ParticipantWorkflowCtaKind;
+  label: string;
+  destination: ParticipantWorkflowCtaDestination;
+  urgency: 'none' | 'attention' | 'action_required';
+  buttonVariant: 'default' | 'outline';
+};
+
+export type ParticipantOperationalWorkflow = {
+  stage: ParticipantCommercialLifecycleStage;
+  badge: string;
+  statusText: string;
+  explanation: string;
+  readiness: ParticipantWorkflowReadiness;
+  progress: {
+    currentStep: number;
+    totalSteps: number;
+    percent: number;
+  };
+  primaryCta: ParticipantWorkflowCta;
+  secondaryCtas: ParticipantWorkflowCta[];
+};
+
+const WORKFLOW_STAGE_ORDER: ParticipantCommercialLifecycleStage[] = [
+  'DRAFT',
+  'EARNINGS_CONFIGURED',
+  'AGREEMENT_SENT',
+  'AGREEMENT_ACCEPTED',
+  'PAYMENT_INFO_PENDING',
+  'PAYMENT_INFO_SUBMITTED',
+  'XERO_INVOICE',
+  'SETTLEMENT_READY',
+  'PAID',
+];
+
+const WORKFLOW_STAGE_CONFIG: Record<
+  ParticipantCommercialLifecycleStage,
+  Omit<ParticipantOperationalWorkflow, 'stage' | 'explanation' | 'progress'>
+> = {
+  DRAFT: {
+    badge: 'Configure Earnings',
+    statusText: 'Earnings not configured',
+    readiness: 'blocked',
+    primaryCta: {
+      kind: 'configure_earnings',
+      label: 'Configure Earnings',
+      destination: 'configure_earnings',
+      urgency: 'action_required',
+      buttonVariant: 'outline',
+    },
+    secondaryCtas: [],
+  },
+  EARNINGS_CONFIGURED: {
+    badge: 'Agreement Ready',
+    statusText: 'Agreement not sent',
+    readiness: 'ready',
+    primaryCta: {
+      kind: 'send_agreement',
+      label: 'Send Agreement',
+      destination: 'send_agreement',
+      urgency: 'action_required',
+      buttonVariant: 'default',
+    },
+    secondaryCtas: [],
+  },
+  AGREEMENT_SENT: {
+    badge: 'Waiting for Acceptance',
+    statusText: 'Agreement pending',
+    readiness: 'waiting',
+    primaryCta: {
+      kind: 'waiting_participant',
+      label: 'Waiting for Acceptance',
+      destination: 'await_participant',
+      urgency: 'attention',
+      buttonVariant: 'outline',
+    },
+    secondaryCtas: [],
+  },
+  AGREEMENT_ACCEPTED: {
+    badge: 'Agreement Accepted',
+    statusText: 'Payout details missing',
+    readiness: 'ready',
+    primaryCta: {
+      kind: 'request_payout_details',
+      label: 'Request Payout Details',
+      destination: 'send_payment_request',
+      urgency: 'action_required',
+      buttonVariant: 'default',
+    },
+    secondaryCtas: [],
+  },
+  PAYMENT_INFO_PENDING: {
+    badge: 'Waiting for Participant',
+    statusText: 'Payout request sent',
+    readiness: 'waiting',
+    primaryCta: {
+      kind: 'waiting_participant',
+      label: 'Waiting for Participant',
+      destination: 'await_participant',
+      urgency: 'attention',
+      buttonVariant: 'outline',
+    },
+    secondaryCtas: [],
+  },
+  PAYMENT_INFO_SUBMITTED: {
+    badge: 'Verify Payout Details',
+    statusText: 'Payout details submitted',
+    readiness: 'ready',
+    primaryCta: {
+      kind: 'verify_payout_details',
+      label: 'Verify Payout Details',
+      destination: 'review_payment',
+      urgency: 'action_required',
+      buttonVariant: 'default',
+    },
+    secondaryCtas: [],
+  },
+  OPERATOR_REVIEW: {
+    badge: 'Verify Payout Details',
+    statusText: 'Payout details submitted',
+    readiness: 'ready',
+    primaryCta: {
+      kind: 'verify_payout_details',
+      label: 'Verify Payout Details',
+      destination: 'review_payment',
+      urgency: 'action_required',
+      buttonVariant: 'default',
+    },
+    secondaryCtas: [],
+  },
+  XERO_INVOICE: {
+    badge: 'Ready for Xero',
+    statusText: 'Commercial data complete',
+    readiness: 'ready',
+    primaryCta: {
+      kind: 'push_to_xero',
+      label: 'Push Supplier Bill to Xero',
+      destination: 'xero_export',
+      urgency: 'action_required',
+      buttonVariant: 'default',
+    },
+    secondaryCtas: [],
+  },
+  SETTLEMENT_READY: {
+    badge: 'Ready for Settlement',
+    statusText: 'Supplier bill created',
+    readiness: 'complete',
+    primaryCta: {
+      kind: 'ready_for_settlement',
+      label: 'Release Settlement',
+      destination: 'settlement',
+      urgency: 'none',
+      buttonVariant: 'outline',
+    },
+    secondaryCtas: [],
+  },
+  PAID: {
+    badge: 'Paid',
+    statusText: 'Settlement completed',
+    readiness: 'complete',
+    primaryCta: {
+      kind: 'completed',
+      label: 'Paid',
+      destination: 'none',
+      urgency: 'none',
+      buttonVariant: 'outline',
+    },
+    secondaryCtas: [],
+  },
+};
+
+function workflowStageOrderIndex(stage: ParticipantCommercialLifecycleStage): number {
+  const index = WORKFLOW_STAGE_ORDER.indexOf(stage);
+  if (index >= 0) return index;
+  if (stage === 'OPERATOR_REVIEW') return WORKFLOW_STAGE_ORDER.indexOf('PAYMENT_INFO_SUBMITTED');
+  return 0;
+}
+
+function workflowExplanation(
+  stage: ParticipantCommercialLifecycleStage,
+  name: string
+): string {
+  switch (stage) {
+    case 'DRAFT':
+      return `${name} needs earnings configuration before an agreement can be sent.`;
+    case 'EARNINGS_CONFIGURED':
+      return `${name} is ready for the commercial agreement to be sent.`;
+    case 'AGREEMENT_SENT':
+      return `Agreement sent to ${name}. Waiting for acceptance.`;
+    case 'AGREEMENT_ACCEPTED':
+      return `${name} accepted the agreement. Request payout and tax details next.`;
+    case 'PAYMENT_INFO_PENDING':
+      return `Payout request sent to ${name}. Waiting for participant submission.`;
+    case 'PAYMENT_INFO_SUBMITTED':
+    case 'OPERATOR_REVIEW':
+      return `${name} submitted payout details. Verify them before exporting to Xero.`;
+    case 'XERO_INVOICE':
+      return `${name}'s commercial data is complete. Push the supplier bill to Xero.`;
+    case 'SETTLEMENT_READY':
+      return `${name}'s supplier bill is in Xero and they are ready for settlement.`;
+    case 'PAID':
+      return `${name} has been paid.`;
+    default:
+      return '';
+  }
+}
+
+export function deriveParticipantOperationalWorkflow(
+  participant: DemoParticipant
+): ParticipantOperationalWorkflow {
+  const stage = deriveParticipantCommercialLifecycle(participant);
+  const name = participant.name?.trim() || 'Participant';
+  const currentIndex = workflowStageOrderIndex(stage);
+  const totalSteps = WORKFLOW_STAGE_ORDER.length;
+  const config = WORKFLOW_STAGE_CONFIG[stage];
+
+  return {
+    stage,
+    ...config,
+    explanation: workflowExplanation(stage, name),
+    progress: {
+      currentStep: currentIndex + 1,
+      totalSteps,
+      percent: Math.round(((currentIndex + 1) / totalSteps) * 100),
+    },
+  };
+}
+
 export type ParticipantLifecycleAction = {
   label: string;
   description: string;
@@ -299,88 +550,13 @@ export type ParticipantLifecycleAction = {
 export function deriveParticipantLifecycleAction(
   participant: DemoParticipant
 ): ParticipantLifecycleAction {
-  const stage = deriveParticipantCommercialLifecycle(participant);
-  const name = participant.name?.trim() || 'Participant';
-
-  switch (stage) {
-    case 'DRAFT':
-      return {
-        label: 'Configure earnings',
-        description: `${name} needs earnings configuration before an agreement can be generated.`,
-        urgency: 'action_required',
-        destination: 'configure_earnings',
-      };
-    case 'EARNINGS_CONFIGURED':
-      return {
-        label: 'Send Agreement',
-        description: `${name} is ready — generate and send the commercial agreement.`,
-        urgency: 'action_required',
-        destination: 'send_agreement',
-      };
-    case 'AGREEMENT_SENT':
-      return {
-        label: 'Waiting for Acceptance',
-        description: `Agreement sent to ${name} — waiting for acceptance.`,
-        urgency: 'attention',
-        destination: 'await_participant',
-      };
-    case 'AGREEMENT_ACCEPTED':
-      return {
-        label: 'Request Payout Details',
-        description: `${name} accepted the agreement. Generate and share the payment & tax information form.`,
-        urgency: 'action_required',
-        destination: 'send_payment_request',
-      };
-    case 'PAYMENT_INFO_PENDING':
-      return {
-        label: 'Waiting for Participant',
-        description: `${name} has a payment request — share the secure link or send via your usual channel.`,
-        urgency: 'attention',
-        destination: 'await_participant',
-      };
-    case 'PAYMENT_INFO_SUBMITTED':
-      return {
-        label: 'Verify Payout Details',
-        description: `${name} submitted payment & tax information.`,
-        urgency: 'action_required',
-        destination: 'review_payment',
-      };
-    case 'OPERATOR_REVIEW':
-      return {
-        label: 'Verify Payout Details',
-        description: `Review ${name}'s payment method, tax details, and ABN before approving.`,
-        urgency: 'action_required',
-        destination: 'review_payment',
-      };
-    case 'XERO_INVOICE':
-      return {
-        label: 'Push to Xero',
-        description: `${name} is approved — review the invoice before pushing to Xero.`,
-        urgency: 'action_required',
-        destination: 'xero_export',
-      };
-    case 'SETTLEMENT_READY':
-      return {
-        label: 'Ready for Settlement',
-        description: `${name} is ready for settlement.`,
-        urgency: 'none',
-        destination: 'settlement',
-      };
-    case 'PAID':
-      return {
-        label: 'Paid',
-        description: `${name} has been paid.`,
-        urgency: 'none',
-        destination: 'none',
-      };
-    default:
-      return {
-        label: 'No action required',
-        description: '',
-        urgency: 'none',
-        destination: 'none',
-      };
-  }
+  const workflow = deriveParticipantOperationalWorkflow(participant);
+  return {
+    label: workflow.primaryCta.label,
+    description: workflow.explanation,
+    urgency: workflow.primaryCta.urgency,
+    destination: workflow.primaryCta.destination,
+  };
 }
 
 /** Whether payout / payment details should surface in UI for this participant. */
@@ -395,10 +571,11 @@ export function shouldRequestPayoutDetails(participant: DemoParticipant): boolea
 
 export type ParticipantCommercialTablePrimaryActionKind =
   | 'send_payment_request'
-  | 'share_payment_request'
   | 'review_payment'
   | 'configure_earnings'
   | 'send_agreement'
+  | 'xero_export'
+  | 'settlement'
   | 'none';
 
 export type ParticipantTableNextActionKind =
@@ -421,19 +598,6 @@ export type ParticipantTableNextAction = {
 export type ParticipantCommercialTablePrimaryAction = {
   kind: ParticipantCommercialTablePrimaryActionKind;
   label: string;
-};
-
-const COMMERCIAL_TABLE_STAGE_LABELS: Record<ParticipantCommercialLifecycleStage, string> = {
-  DRAFT: 'Not Started',
-  EARNINGS_CONFIGURED: 'Not Started',
-  AGREEMENT_SENT: 'Not Started',
-  AGREEMENT_ACCEPTED: 'Not Started',
-  PAYMENT_INFO_PENDING: 'Payment Information Pending',
-  PAYMENT_INFO_SUBMITTED: 'Awaiting Review',
-  OPERATOR_REVIEW: 'Awaiting Review',
-  XERO_INVOICE: 'Ready for Xero',
-  SETTLEMENT_READY: 'Ready for Settlement',
-  PAID: 'Paid',
 };
 
 function deriveAgreementTableLabel(participant: DemoParticipant): {
@@ -466,90 +630,53 @@ function deriveAgreementTableLabel(participant: DemoParticipant): {
 export function deriveParticipantCommercialTableNextAction(
   participant: DemoParticipant
 ): ParticipantTableNextAction {
-  const stage = deriveParticipantCommercialLifecycle(participant);
-  switch (stage) {
-    case 'DRAFT':
-      return {
-        kind: 'configure_earnings',
-        label: 'Configure Earnings',
-        buttonVariant: 'outline',
-      };
-    case 'EARNINGS_CONFIGURED':
-      return {
-        kind: 'generate_agreement',
-        label: 'Send Agreement',
-        buttonVariant: 'default',
-      };
-    case 'AGREEMENT_SENT':
-      return {
-        kind: 'waiting_participant',
-        label: 'Waiting for Acceptance',
-        buttonVariant: 'outline',
-      };
-    case 'AGREEMENT_ACCEPTED':
-      return {
-        kind: 'share_payment_request',
-        label: 'Request Payout Details',
-        buttonVariant: 'default',
-      };
-    case 'PAYMENT_INFO_PENDING':
-      return {
-        kind: 'waiting_participant',
-        label: 'Waiting for Participant',
-        buttonVariant: 'outline',
-      };
-    case 'PAYMENT_INFO_SUBMITTED':
-    case 'OPERATOR_REVIEW':
-      return {
-        kind: 'review_submission',
-        label: 'Verify Payout Details',
-        buttonVariant: 'default',
-      };
-    case 'XERO_INVOICE':
-      return {
-        kind: 'push_to_xero',
-        label: 'Push to Xero',
-        buttonVariant: 'default',
-      };
-    case 'SETTLEMENT_READY':
-      return {
-        kind: 'ready_for_settlement',
-        label: 'Ready for Settlement',
-        buttonVariant: 'outline',
-      };
-    case 'PAID':
-      return {
-        kind: 'completed',
-        label: 'Paid',
-        buttonVariant: 'outline',
-      };
-    default:
-      return { kind: 'none', label: '', buttonVariant: 'outline' };
-  }
+  const workflow = deriveParticipantOperationalWorkflow(participant);
+  const kindByWorkflow: Record<ParticipantWorkflowCtaKind, ParticipantTableNextActionKind> = {
+    configure_earnings: 'configure_earnings',
+    send_agreement: 'generate_agreement',
+    waiting_participant: 'waiting_participant',
+    request_payout_details: 'share_payment_request',
+    verify_payout_details: 'review_submission',
+    push_to_xero: 'push_to_xero',
+    ready_for_settlement: 'ready_for_settlement',
+    completed: 'completed',
+    none: 'none',
+  };
+
+  return {
+    kind: kindByWorkflow[workflow.primaryCta.kind],
+    label: workflow.primaryCta.label,
+    buttonVariant: workflow.primaryCta.buttonVariant,
+  };
 }
 
 export function deriveParticipantCommercialTablePrimaryAction(
   participant: DemoParticipant
 ): ParticipantCommercialTablePrimaryAction {
-  const next = deriveParticipantCommercialTableNextAction(participant);
-  switch (next.kind) {
-    case 'configure_earnings':
-      return { kind: 'configure_earnings', label: next.label };
-    case 'generate_agreement':
-      return { kind: 'send_agreement', label: next.label };
-    case 'share_payment_request':
-      return { kind: 'share_payment_request', label: next.label };
-    case 'review_submission':
-      return { kind: 'review_payment', label: next.label };
-    case 'push_to_xero':
-      return { kind: 'review_payment', label: next.label };
-    default:
-      return { kind: 'none', label: '' };
-  }
+  const workflow = deriveParticipantOperationalWorkflow(participant);
+  const kindByDestination: Record<
+    ParticipantWorkflowCtaDestination,
+    ParticipantCommercialTablePrimaryActionKind
+  > = {
+    configure_earnings: 'configure_earnings',
+    send_agreement: 'send_agreement',
+    await_participant: 'none',
+    send_payment_request: 'send_payment_request',
+    review_payment: 'review_payment',
+    xero_export: 'xero_export',
+    settlement: 'settlement',
+    none: 'none',
+  };
+
+  return {
+    kind: kindByDestination[workflow.primaryCta.destination],
+    label: workflow.primaryCta.urgency === 'none' ? '' : workflow.primaryCta.label,
+  };
 }
 
 export type ParticipantCommercialTablePresentation = {
   stage: ParticipantCommercialLifecycleStage;
+  workflow: ParticipantOperationalWorkflow;
   agreementChip: string;
   agreementSecondary: string;
   commercialChip: string;
@@ -562,15 +689,17 @@ export type ParticipantCommercialTablePresentation = {
 export function deriveParticipantCommercialTablePresentation(
   participant: DemoParticipant
 ): ParticipantCommercialTablePresentation {
-  const stage = deriveParticipantCommercialLifecycle(participant);
+  const workflow = deriveParticipantOperationalWorkflow(participant);
+  const stage = workflow.stage;
   const payoutColumnActive = isLifecycleStageAtOrPast(stage, 'AGREEMENT_ACCEPTED');
   const agreement = deriveAgreementTableLabel(participant);
-  const commercialLabel = COMMERCIAL_TABLE_STAGE_LABELS[stage];
+  const commercialLabel = workflow.badge;
   const nextAction = deriveParticipantCommercialTableNextAction(participant);
   const primaryAction = deriveParticipantCommercialTablePrimaryAction(participant);
 
   return {
     stage,
+    workflow,
     agreementChip: agreement.label,
     agreementSecondary: agreement.hint ?? '',
     commercialChip: commercialLabel,

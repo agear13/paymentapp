@@ -5,9 +5,9 @@
  *
  * Exactly ONE primary action per state:
  *
- *   Earnings not configured → "Set up earnings"      (primary)
- *   Not yet sent            → "Send approval"         (primary, opens send sheet)
- *   Sent, not approved      → "Resend approval"       (primary, opens send sheet)
+ *   Earnings not configured → "Configure Earnings"       (primary)
+ *   Not yet sent            → "Send Agreement"           (primary, opens send sheet)
+ *   Sent, not approved      → "Waiting for Acceptance"   (status)
  *   Signed                  → "View agreement"        (primary)
  *   Approved                → "View agreement"        (subdued — already done)
  *
@@ -26,6 +26,7 @@ import {
   MoreHorizontal,
   QrCode,
   Send,
+  Share2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -65,12 +66,12 @@ function operationalStatusLabel(
   lifecycle: AgreementLifecycleState,
   earningsConfigured: boolean
 ): string {
-  if (!earningsConfigured) return 'Set up earnings';
+  if (!earningsConfigured) return 'Configure Earnings';
   switch (lifecycle) {
     case 'APPROVED': return 'Approved';
     case 'SIGNED':
-    case 'VIEWED':   return 'Opened — waiting to approve';
-    case 'SHARED':   return 'Waiting to approve';
+    case 'VIEWED':   return 'Waiting for Acceptance';
+    case 'SHARED':   return 'Waiting for Acceptance';
     case 'GENERATED':
     case 'DRAFTED':
     case 'NOT_CREATED':
@@ -137,53 +138,98 @@ function deriveLastActivity(p: DemoParticipant): string | null {
 type SendApprovalSheetProps = {
   participant: DemoParticipant;
   fullAgreementUrl: string;
-  onResend: () => void;
+  onShareAgreement: () => void | Promise<void>;
   isResend: boolean;
 };
 
 function SendApprovalSheet({
   participant,
   fullAgreementUrl,
-  onResend,
+  onShareAgreement,
   isResend,
 }: SendApprovalSheetProps) {
   const [open, setOpen] = React.useState(false);
+  const [sharingMethod, setSharingMethod] = React.useState<string | null>(null);
 
   const handleCopy = async () => {
+    setSharingMethod('copy');
     try {
       await navigator.clipboard.writeText(fullAgreementUrl);
+      await onShareAgreement();
       toast.success('Approval link copied');
       setOpen(false);
     } catch {
       toast.error('Could not copy — try right-clicking the link instead.');
+    } finally {
+      setSharingMethod(null);
     }
   };
 
-  const handleEmail = () => {
+  const handleEmail = async () => {
     if (!participant.email?.trim()) {
       toast.error('No email address on file for this participant.');
       return;
     }
+    setSharingMethod('email');
     const subject = encodeURIComponent('Your participation agreement');
     const body = encodeURIComponent(
       `Hi ${participant.name},\n\nPlease review and approve your participation agreement:\n${fullAgreementUrl}\n\nThis should only take a few minutes.`
     );
-    window.location.href = `mailto:${participant.email.trim()}?subject=${subject}&body=${body}`;
-    setOpen(false);
+    try {
+      window.location.href = `mailto:${participant.email.trim()}?subject=${subject}&body=${body}`;
+      await onShareAgreement();
+      setOpen(false);
+    } finally {
+      setSharingMethod(null);
+    }
   };
 
-  const handleWhatsApp = () => {
+  const handleWhatsApp = async () => {
+    setSharingMethod('whatsapp');
     const text = encodeURIComponent(
       `Hi ${participant.name}, please review and approve your participation agreement: ${fullAgreementUrl}`
     );
-    window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener,noreferrer');
-    setOpen(false);
+    try {
+      window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener,noreferrer');
+      await onShareAgreement();
+      setOpen(false);
+    } finally {
+      setSharingMethod(null);
+    }
   };
 
-  const handleQr = () => {
+  const handleQr = async () => {
+    setSharingMethod('qr');
     const qrHref = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(fullAgreementUrl)}`;
-    window.open(qrHref, '_blank', 'noopener,noreferrer');
-    setOpen(false);
+    try {
+      window.open(qrHref, '_blank', 'noopener,noreferrer');
+      await onShareAgreement();
+      setOpen(false);
+    } finally {
+      setSharingMethod(null);
+    }
+  };
+
+  const handleNativeShare = async () => {
+    if (typeof navigator === 'undefined' || !navigator.share) {
+      toast.error('Native share is not available in this browser.');
+      return;
+    }
+    setSharingMethod('native');
+    try {
+      await navigator.share({
+        title: 'Participation agreement',
+        text: `Please review and approve your participation agreement for ${participant.name}.`,
+        url: fullAgreementUrl,
+      });
+      await onShareAgreement();
+      setOpen(false);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      toast.error('Could not open native share.');
+    } finally {
+      setSharingMethod(null);
+    }
   };
 
   return (
@@ -195,7 +241,7 @@ function SendApprovalSheet({
           className="h-7 px-3 text-xs font-medium gap-1.5 bg-foreground hover:bg-foreground/90 text-background"
         >
           <Send className="h-3 w-3" />
-          {isResend ? 'Resend approval' : 'Send approval'}
+          {isResend ? 'Resend Agreement' : 'Send Agreement'}
           <ChevronDown className="h-3 w-3 ml-0.5 opacity-70" />
         </Button>
       </PopoverTrigger>
@@ -204,33 +250,50 @@ function SendApprovalSheet({
           type="button"
           className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors"
           onClick={() => void handleCopy()}
+          disabled={sharingMethod != null}
         >
           <Copy className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          Copy approval link
+          {sharingMethod === 'copy' ? 'Saving…' : 'Copy approval link'}
         </button>
         <button
           type="button"
           className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors"
-          onClick={handleEmail}
+          onClick={() => void handleEmail()}
+          disabled={sharingMethod != null}
         >
           <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          Email participant
+          {sharingMethod === 'email' ? 'Saving…' : 'Email participant'}
         </button>
         <button
           type="button"
           className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors"
-          onClick={handleWhatsApp}
+          onClick={() => void handleWhatsApp()}
+          disabled={sharingMethod != null}
         >
           <MessageCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          WhatsApp
+          {sharingMethod === 'whatsapp' ? 'Saving…' : 'WhatsApp'}
         </button>
         <button
           type="button"
           className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors"
-          onClick={handleQr}
+          onClick={() => void handleQr()}
+          disabled={sharingMethod != null}
         >
           <QrCode className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          Generate QR code
+          {sharingMethod === 'qr' ? 'Saving…' : 'Generate QR code'}
+        </button>
+        <button
+          type="button"
+          className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors disabled:opacity-50"
+          onClick={() => void handleNativeShare()}
+          disabled={
+            sharingMethod != null ||
+            typeof navigator === 'undefined' ||
+            !navigator.share
+          }
+        >
+          <Share2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          {sharingMethod === 'native' ? 'Saving…' : 'Native share'}
         </button>
         {isResend ? (
           <>
@@ -239,12 +302,12 @@ function SendApprovalSheet({
               type="button"
               className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors"
               onClick={() => {
-                onResend();
+                void onShareAgreement();
                 setOpen(false);
               }}
             >
               <Send className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              Open share dialog
+              Resend Agreement
             </button>
           </>
         ) : null}
@@ -283,7 +346,7 @@ function MoreMenu({ onViewAgreement, onCopyReferralLink, onResend }: MoreMenuPro
         {onResend ? (
           <DropdownMenuItem onClick={onResend} className="gap-2 text-xs">
             <Send className="h-3.5 w-3.5 text-muted-foreground" />
-            Resend approval
+            Resend Agreement
           </DropdownMenuItem>
         ) : null}
         {onCopyReferralLink ? (
@@ -308,7 +371,10 @@ export type ApprovalCentreParticipantCardProps = {
   isHighlighted?: boolean;
   'data-approval-card'?: boolean;
   'data-pending'?: string;
-  onShareAgreement: (p: DemoParticipant) => void;
+  onShareAgreement: (
+    p: DemoParticipant,
+    options?: { showDialog?: boolean }
+  ) => void | Promise<void>;
   onConfigureEarnings: (p: DemoParticipant) => void;
   /**
    * Commercial timeline events for this agreement.
@@ -384,11 +450,10 @@ export function ApprovalCentreParticipantCard({
     earningsConfigured &&
     (lifecycle === 'NOT_CREATED' ||
       lifecycle === 'DRAFTED' ||
-      lifecycle === 'GENERATED' ||
-      lifecycle === 'SHARED' ||
-      lifecycle === 'VIEWED');
+      lifecycle === 'GENERATED');
   const isResend = lifecycle === 'SHARED' || lifecycle === 'VIEWED';
   const isSigned = lifecycle === 'SIGNED';
+  const isWaitingForAcceptance = lifecycle === 'SHARED' || lifecycle === 'VIEWED';
 
   return (
     <div
@@ -468,23 +533,37 @@ export function ApprovalCentreParticipantCard({
         {/* ── Actions: one primary + optional more menu ── */}
         <div className="flex items-center gap-1.5 shrink-0 justify-end">
           {!earningsConfigured ? (
-            /* Primary: set up earnings */
+            /* Primary: Configure Earnings */
             <Button
               type="button"
               size="sm"
               className="h-7 px-3 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background"
               onClick={() => onConfigureEarnings(participant)}
             >
-              Set up earnings
+              Configure Earnings
             </Button>
           ) : needsSend ? (
             /* Primary: send / resend approval */
             <SendApprovalSheet
               participant={participant}
               fullAgreementUrl={fullAgreementUrl}
-              onResend={() => onShareAgreement(participant)}
+              onShareAgreement={() => onShareAgreement(participant, { showDialog: false })}
               isResend={isResend}
             />
+          ) : isWaitingForAcceptance ? (
+            <>
+              <Badge
+                variant="outline"
+                className="h-7 px-3 text-xs border-amber-300/80 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
+              >
+                Waiting for Acceptance
+              </Badge>
+              <MoreMenu
+                onViewAgreement={handleViewAgreement}
+                onCopyReferralLink={referralUrl ? handleCopyReferralLink : null}
+                onResend={() => onShareAgreement(participant, { showDialog: false })}
+              />
+            </>
           ) : isSigned ? (
             /* Primary: view agreement. Secondary: resend → in More menu */
             <>
@@ -500,7 +579,7 @@ export function ApprovalCentreParticipantCard({
               <MoreMenu
                 onViewAgreement={handleViewAgreement}
                 onCopyReferralLink={referralUrl ? handleCopyReferralLink : null}
-                onResend={() => onShareAgreement(participant)}
+                onResend={() => onShareAgreement(participant, { showDialog: false })}
               />
             </>
           ) : (

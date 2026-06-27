@@ -18,6 +18,10 @@ import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 const getOrganizationForUser = getOrganizationForAuthenticatedUser;
 import { dispatchCommercialNotification } from '@/lib/commercial/dispatch-commercial-notification.server';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  orchestrateOperationalMutation,
+  operationalSyncJson,
+} from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 
 const paymentBankSchema = z.object({
   accountName: z.string().nullable(),
@@ -136,7 +140,7 @@ export async function POST(
     // Invalidate the token so the supplier cannot resubmit
     await invalidatePaymentSetupToken(participantDbId);
 
-    // Notify operator
+    // Notify operator and recompute operational state for all operator surfaces.
     const org = await getOrganizationForUser(deal.user_id);
     if (org) {
       void dispatchCommercialNotification({
@@ -148,7 +152,18 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({ success: true, lifecycle: 'SUBMITTED' });
+    const operationalSync = await orchestrateOperationalMutation({
+      userId: deal.user_id,
+      mutation: 'supplier_onboarding',
+      projectId: dealId,
+      focusParticipant: updated,
+    });
+
+    return NextResponse.json({
+      success: true,
+      lifecycle: 'SUBMITTED',
+      ...operationalSyncJson(operationalSync),
+    });
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid request', details: e.issues }, { status: 400 });

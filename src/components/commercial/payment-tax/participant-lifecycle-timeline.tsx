@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
-  deriveParticipantCommercialLifecycle,
+  deriveParticipantOperationalWorkflow,
   LIFECYCLE_TIMELINE_STEPS,
   lifecycleStageIndex,
   type ParticipantCommercialLifecycleStage,
@@ -55,7 +55,7 @@ function StepIcon({ status }: { status: 'complete' | 'active' | 'pending' }) {
  * Visual participant lifecycle timeline for operator profile surfaces.
  */
 export function ParticipantLifecycleTimeline({ participant, compact, className }: Props) {
-  const current = deriveParticipantCommercialLifecycle(participant);
+  const current = deriveParticipantOperationalWorkflow(participant).stage;
 
   if (compact) {
     const activeStep = LIFECYCLE_TIMELINE_STEPS.find(

@@ -262,7 +262,7 @@ function derivePrimaryCTA(stage: CommercialWorkflowStage, participantName: strin
     case 'awaiting_operator_review':
       return { label: `Review ${participantName}'s details`, actor: 'operator', isUrgent: true, destination: 'operator_review' };
     case 'awaiting_xero_export':
-      return { label: 'Approve & Push to Xero', actor: 'operator', isUrgent: true, destination: 'xero_export' };
+      return { label: 'Push Supplier Bill to Xero', actor: 'operator', isUrgent: true, destination: 'xero_export' };
     case 'awaiting_funding':
       return { label: 'Review funding status', actor: 'operator', isUrgent: false, destination: 'funding_page' };
     case 'awaiting_settlement':
@@ -291,7 +291,7 @@ function deriveNotification(
         participantId: participant.id,
         participantName: participant.name,
         title: `${participant.name} completed supplier onboarding`,
-        message: `${participant.name} has submitted their bank details, ABN, and GST status. Review and approve to proceed with Xero export.`,
+        message: `${participant.name} has submitted their bank details, ABN, and GST status. Verify payout details before pushing the supplier bill to Xero.`,
         urgency: 'action_required',
         nextAction: `Review ${participant.name}'s supplier details`,
         destination: 'operator_review',
@@ -303,9 +303,9 @@ function deriveNotification(
         participantId: participant.id,
         participantName: participant.name,
         title: `${participant.name} is ready for Xero`,
-        message: `Invoice for ${participant.name} has been approved. Export to Xero to complete accounting.`,
+        message: `Payout details for ${participant.name} have been verified. Push the supplier bill to Xero to continue.`,
         urgency: 'action_required',
-        nextAction: 'Approve & Push to Xero',
+        nextAction: 'Push Supplier Bill to Xero',
         destination: 'xero_export',
         generatedAt: currentDate,
       };
@@ -328,7 +328,7 @@ function deriveNotification(
           participantId: participant.id,
           participantName: participant.name,
           title: `${participant.name} requires manual review`,
-          message: `${participant.name} has declared their ABN is not applicable or is using an alternative payment method. Manual operator review is required before Xero export.`,
+          message: `${participant.name} has declared their ABN is not applicable or is using an alternative payment method. Verification is required before pushing the supplier bill to Xero.`,
           urgency: 'action_required',
           nextAction: 'Review supplier details',
           destination: 'operator_review',

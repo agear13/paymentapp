@@ -54,7 +54,7 @@ export type CommercialEventKind =
   | 'invoice_requested'          // Invoice requested from a participant
   | 'invoice_received'           // Invoice uploaded and received
   | 'invoice_approved'           // Invoice verified and approved for payment
-  | 'invoice_exported'           // Invoice exported to Xero / accounting system
+  | 'invoice_exported'           // Supplier bill pushed to Xero / accounting system
   | 'revenue_expected'           // Revenue source added to the forecast
   | 'revenue_confirmed'          // Revenue source confirmed (HIGH confidence / received)
   | 'funding_evidence_uploaded'  // Payment evidence attached (remittance, receipt, grant)
@@ -64,7 +64,7 @@ export type CommercialEventKind =
   | 'settlement_completed'       // All obligations settled — agreement is operational
   | 'supplier_onboarding_started'    // Agreement approved — onboarding auto-initiated
   | 'supplier_details_submitted'     // Supplier completed their onboarding form
-  | 'supplier_onboarding_approved'   // Operator reviewed and approved supplier details
+  | 'supplier_onboarding_approved'   // Operator verified supplier details
   | 'supplier_invoice_generated'     // Draft invoice auto-generated from agreement
   | 'supplier_invoice_exported';     // Invoice pushed to Xero by operator
 
@@ -296,7 +296,7 @@ const EVENT_TIMELINE_TEMPLATES: Record<
         : `An invoice was received${amountStr}.`;
     },
     commercialImpact: () =>
-      'Invoice is ready for approval and Xero export. Settlement can proceed once approved.',
+      'Invoice is ready for verification before the supplier bill is pushed to Xero.',
   },
   invoice_approved: {
     stage: 'invoice_received',
@@ -307,16 +307,16 @@ const EVENT_TIMELINE_TEMPLATES: Record<
         ? `${e.actorName}'s invoice has been verified and approved for payment.`
         : 'Invoice has been verified and approved for payment.',
     commercialImpact: () =>
-      'Payment is authorised. Ready for Xero export and payment release.',
+      'Payment is authorised. Ready to push the supplier bill to Xero and release payment.',
   },
   invoice_exported: {
     stage: 'exported_to_xero',
     type: 'exported_to_xero',
-    title: (e) => (e.actorName ? `Invoice exported to Xero for ${e.actorName}` : 'Exported to Xero'),
+    title: (e) => (e.actorName ? `Supplier bill pushed to Xero for ${e.actorName}` : 'Supplier bill pushed to Xero'),
     description: (e) =>
       e.actorName
-        ? `${e.actorName}'s invoice was exported to Xero.`
-        : 'Invoice was exported to the accounting system.',
+        ? `${e.actorName}'s supplier bill was pushed to Xero.`
+        : 'Supplier bill was pushed to the accounting system.',
     commercialImpact: () =>
       'Accounting records are updated. Payment can now be released.',
   },
@@ -382,7 +382,7 @@ const EVENT_TIMELINE_TEMPLATES: Record<
   settlement_ready: {
     stage: 'obligations_created',
     type: 'obligations_funded',
-    title: () => 'Settlement ready',
+    title: () => 'Ready for Settlement',
     description: () =>
       'All obligations are funded and verified. Settlement can proceed.',
     commercialImpact: () =>
@@ -434,22 +434,22 @@ const EVENT_TIMELINE_TEMPLATES: Record<
       e.actorName ? `${e.actorName} submitted onboarding details` : 'Supplier submitted details',
     description: (e) =>
       e.actorName
-        ? `${e.actorName} has submitted their bank details, ABN, and GST status. Operator review required.`
+        ? `${e.actorName} has submitted their bank details, ABN, and GST status. Verify payout details.`
         : 'Supplier submitted bank details, ABN, and GST status.',
     commercialImpact: () =>
-      'Operator must review and approve supplier details before the invoice can be exported to Xero.',
+      'Operator must verify payout details before pushing the supplier bill to Xero.',
   },
   supplier_onboarding_approved: {
     stage: 'agreement_approved',
     type: 'supplier_invoice_approved',
     title: (e) =>
-      e.actorName ? `Operator approved ${e.actorName}'s supplier details` : 'Supplier details approved',
+      e.actorName ? `${e.actorName}'s payout details verified` : 'Payout details verified',
     description: (e) =>
       e.actorName
-        ? `Operator reviewed and approved ${e.actorName}'s bank details, ABN, and GST status.`
-        : 'Operator approved supplier details.',
+        ? `${e.actorName}'s bank details, ABN, and GST status were verified.`
+        : 'Supplier payout details verified.',
     commercialImpact: () =>
-      'Invoice is ready for Xero export. Accounting review is now required.',
+      'Supplier bill is ready to push to Xero.',
   },
   supplier_invoice_generated: {
     stage: 'agreement_approved',
@@ -467,11 +467,11 @@ const EVENT_TIMELINE_TEMPLATES: Record<
     stage: 'obligations_created',
     type: 'supplier_invoice_exported_to_xero',
     title: (e) =>
-      e.actorName ? `Invoice exported to Xero for ${e.actorName}` : 'Invoice exported to Xero',
+      e.actorName ? `Supplier bill pushed to Xero for ${e.actorName}` : 'Supplier bill pushed to Xero',
     description: (e) =>
       e.actorName
-        ? `${e.actorName}'s invoice was approved and exported to Xero by the operator.`
-        : 'Invoice exported to Xero.',
+        ? `${e.actorName}'s supplier bill was pushed to Xero by the operator.`
+        : 'Supplier bill pushed to Xero.',
     commercialImpact: () =>
       'Accounting is complete. Settlement preparation can now begin.',
   },
@@ -692,13 +692,13 @@ function deriveWorkflowEffect(
     case 'supplier_details_submitted':
       return {
         advancesWorkflow: true,
-        unlockedStage: 'Operator review',
+        unlockedStage: 'Verify Payout Details',
       };
 
     case 'supplier_onboarding_approved':
       return {
         advancesWorkflow: true,
-        unlockedStage: 'Xero export',
+        unlockedStage: 'Push Supplier Bill to Xero',
       };
 
     case 'supplier_invoice_exported':
@@ -787,21 +787,21 @@ function buildNotification(
     case 'supplier_details_submitted':
       return {
         title: `${actor} completed supplier onboarding`,
-        description: `${actor} submitted their bank details, ABN, and GST status. Review and approve to proceed with Xero export.`,
+        description: `${actor} submitted their bank details, ABN, and GST status. Verify payout details before pushing the supplier bill to Xero.`,
         level: 'warning',
       };
 
     case 'supplier_onboarding_approved':
       return {
-        title: `${actor}'s details approved`,
-        description: `${actor}'s supplier details have been approved. The invoice is ready to export to Xero.`,
+        title: `${actor}'s payout details verified`,
+        description: `${actor}'s payout details have been verified. The supplier bill is ready to push to Xero.`,
         level: 'success',
       };
 
     case 'supplier_invoice_exported':
       return {
-        title: `Invoice exported to Xero for ${actor}`,
-        description: `${actor}'s invoice has been pushed to Xero. Settlement preparation can now begin.`,
+        title: `Supplier bill pushed to Xero for ${actor}`,
+        description: `${actor}'s supplier bill has been pushed to Xero. Settlement preparation can now begin.`,
         level: 'success',
       };
 
@@ -829,14 +829,14 @@ function buildNotification(
     case 'invoice_approved':
       return {
         title: 'Invoice approved',
-        description: `${actor}'s invoice is approved. Ready for Xero export and payment release.`,
+        description: `${actor}'s invoice is approved. Ready to push the supplier bill to Xero and release payment.`,
         level: 'success',
       };
 
     case 'invoice_exported':
       return {
-        title: 'Exported to Xero',
-        description: `${actor}'s invoice has been exported. Payment can now be released.`,
+        title: 'Supplier bill pushed to Xero',
+        description: `${actor}'s supplier bill has been pushed to Xero. Payment can now be released.`,
         level: 'success',
       };
 

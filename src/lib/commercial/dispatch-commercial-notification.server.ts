@@ -81,8 +81,8 @@ const TEMPLATES: Partial<Record<CommercialEventKind, CommercialNotificationTempl
   supplier_details_submitted: {
     title: (ctx) => `${ctx.participantName} submitted payment information`,
     message: (ctx) =>
-      `${ctx.participantName} has submitted their bank details, ABN, and GST status. Review and approve to proceed with Xero export.`,
-    consequence: () => 'Review is required before the invoice can be exported to Xero.',
+      `${ctx.participantName} has submitted their bank details, ABN, and GST status. Verify payout details before pushing the supplier bill to Xero.`,
+    consequence: () => 'Verification is required before the supplier bill can be pushed to Xero.',
     action: 'Review payment information',
     actionPath: (ctx) =>
       ctx.participantId
@@ -127,7 +127,7 @@ const TEMPLATES: Partial<Record<CommercialEventKind, CommercialNotificationTempl
   invoice_approved: {
     title: (ctx) => `Invoice approved for ${ctx.participantName}`,
     message: (ctx) =>
-      `The commercial invoice for ${ctx.participantName} has been approved and is ready for Xero export.`,
+      `Payout details for ${ctx.participantName} have been verified and the supplier bill is ready to push to Xero.`,
     consequence: () => 'Export the invoice to complete the accounting workflow.',
     action: 'Export to Xero',
     actionPath: (ctx) =>
@@ -135,7 +135,7 @@ const TEMPLATES: Partial<Record<CommercialEventKind, CommercialNotificationTempl
   },
 
   invoice_exported: {
-    title: (ctx) => `Invoice exported to Xero for ${ctx.participantName}`,
+    title: (ctx) => `Supplier bill pushed to Xero for ${ctx.participantName}`,
     message: (ctx) =>
       `The accounting export for ${ctx.participantName} is complete. Xero has been updated.`,
     consequence: () => 'Accounting is reconciled. Proceed to settlement when revenue is received.',
@@ -156,7 +156,7 @@ const TEMPLATES: Partial<Record<CommercialEventKind, CommercialNotificationTempl
   },
 
   settlement_ready: {
-    title: () => 'Settlement ready',
+    title: () => 'Ready for Settlement',
     message: (ctx) =>
       `All commercial obligations for this agreement are funded and ready for payment release.`,
     consequence: () => 'Release payments to all participants to complete the commercial cycle.',

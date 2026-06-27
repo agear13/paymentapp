@@ -3,12 +3,12 @@
 /**
  * AccountingApprovalReview
  *
- * The final operator review screen before an invoice is exported to Xero.
+ * The final operator review screen before a supplier bill is pushed to Xero.
  *
  * Design rules:
- *   - One primary CTA: "Approve & Push to Xero"
- *   - Nothing is exported automatically — operator must explicitly approve.
- *   - Shows complete invoice detail before the operator commits.
+ *   - One primary CTA: "Push Supplier Bill to Xero"
+ *   - Nothing is pushed automatically — operator must explicitly continue.
+ *   - Shows complete supplier bill detail before the operator commits.
  *   - Derives entirely from AccountingExportModel (no independent calculations).
  *
  * What the operator sees:
@@ -21,7 +21,7 @@
  *   • Tracking category (if applicable)
  *   • Invoice PDF preview (description block)
  *
- * Primary CTA: Approve & Push to Xero
+ * Primary CTA: Push Supplier Bill to Xero
  * Secondary: Edit (navigates back to supplier onboarding form)
  * Destructive: Reject (navigates back to review with a rejection reason)
  */
@@ -115,7 +115,7 @@ function ReadinessWarning({ model }: { model: AccountingExportModel }) {
       <div className="flex items-start gap-2">
         <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-medium text-amber-800">Review required before export</p>
+          <p className="text-sm font-medium text-amber-800">Review required before pushing supplier bill</p>
           <ul className="mt-1 space-y-0.5">
             {exportReadiness.blockers.map((b, i) => (
               <li key={i} className="text-xs text-amber-700">• {b.explanation}</li>
@@ -146,11 +146,11 @@ function DecisionButtons({ onApprove, onReject, isReady, approving }: DecisionBu
         className="w-full flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {approving ? (
-          'Approving...'
+          'Pushing supplier bill...'
         ) : (
           <>
             <CheckCircle2 className="h-4 w-4" />
-            Approve & Push to Xero
+            Push Supplier Bill to Xero
           </>
         )}
       </button>
@@ -181,9 +181,9 @@ export type AccountingApprovalReviewProps = {
 /**
  * AccountingApprovalReview
  *
- * Final operator review before Xero export.
- * One primary CTA: "Approve & Push to Xero"
- * Nothing exports automatically.
+ * Final operator review before pushing the supplier bill to Xero.
+ * One primary CTA: "Push Supplier Bill to Xero"
+ * Nothing pushes automatically.
  */
 export function AccountingApprovalReview({
   model,
@@ -199,7 +199,7 @@ export function AccountingApprovalReview({
       <div className="rounded-lg border bg-muted/30 p-6 text-center">
         <AlertCircle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
         <p className="text-sm text-muted-foreground">
-          Invoice preview is not yet available. Payment information must be submitted first.
+          Supplier bill preview is not yet available. Payout details must be submitted first.
         </p>
       </div>
     );

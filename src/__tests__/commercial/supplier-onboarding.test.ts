@@ -778,7 +778,7 @@ describe('deriveWorkspaceOnboardingStatus', () => {
 
   test('primaryCta mentions review when supplier submitted', () => {
     const workspace = deriveWorkspaceOnboardingStatus([makeInput()]); // submitted, awaiting review
-    expect(workspace.primaryCta).toContain('Review');
+    expect(workspace.primaryCta).toContain('Verify payout details');
   });
 
   test('readyForExportCount includes operator-approved participants', () => {
@@ -818,7 +818,7 @@ describe('buildSupplierOnboardingNarrative', () => {
     const input = makeInput({ abn: makeABN({ abn: null, abnNotApplicable: true }) });
     const workspace = deriveWorkspaceOnboardingStatus([input]);
     const narrative = buildSupplierOnboardingNarrative(workspace);
-    expect(narrative).toMatch(/manual review/i);
+    expect(narrative).toMatch(/verification/i);
   });
 });
 
@@ -894,7 +894,7 @@ describe('James Tourism Scenario', () => {
     const workspace = deriveWorkspaceOnboardingStatus([makeSarahInput(), makeBenInput()]);
     expect(workspace.totalCount).toBe(2);
     expect(workspace.inProgressCount + workspace.completedCount).toBeGreaterThanOrEqual(0);
-    expect(workspace.primaryCta).toContain('Review');
+    expect(workspace.primaryCta).toContain('Verify payout details');
   });
 
   test('Stage 6: Operator approves Sarah — ready for Xero', () => {

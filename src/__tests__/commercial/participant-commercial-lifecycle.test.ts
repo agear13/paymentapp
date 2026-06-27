@@ -4,6 +4,7 @@
 
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
+  deriveParticipantOperationalWorkflow,
   deriveParticipantCommercialLifecycle,
   deriveParticipantCommercialTablePresentation,
   deriveParticipantLifecycleAction,
@@ -33,24 +34,201 @@ function baseParticipant(overrides: Partial<DemoParticipant> = {}): DemoParticip
 }
 
 describe('participant-commercial-lifecycle', () => {
+  function expectWorkflow(
+    participant: DemoParticipant,
+    expected: {
+      stage: ReturnType<typeof deriveParticipantCommercialLifecycle>;
+      badge: string;
+      cta: string;
+      readiness: ReturnType<typeof deriveParticipantOperationalWorkflow>['readiness'];
+      progressStep: number;
+      visibleButton: boolean;
+    }
+  ) {
+    const workflow = deriveParticipantOperationalWorkflow(participant);
+    const table = deriveParticipantCommercialTablePresentation(participant);
+    const action = deriveParticipantLifecycleAction(participant);
+
+    expect(workflow.stage).toBe(expected.stage);
+    expect(workflow.badge).toBe(expected.badge);
+    expect(workflow.primaryCta.label).toBe(expected.cta);
+    expect(workflow.readiness).toBe(expected.readiness);
+    expect(workflow.progress.currentStep).toBe(expected.progressStep);
+    expect(workflow.secondaryCtas).toHaveLength(0);
+    expect(action.label).toBe(expected.cta);
+    expect(table.workflow).toEqual(workflow);
+    expect(table.nextAction.label).toBe(expected.cta);
+    expect(table.commercialChip).toBe(expected.badge);
+
+    const hasClickableTableAction = table.nextAction.kind !== 'waiting_participant'
+      && table.nextAction.kind !== 'ready_for_settlement'
+      && table.nextAction.kind !== 'completed'
+      && table.nextAction.kind !== 'none';
+    expect(hasClickableTableAction).toBe(expected.visibleButton);
+  }
+
+  it('executes the complete participant operational workflow without regression', () => {
+    let participant = baseParticipant({
+      commissionValue: 0,
+      compensationProfile: undefined,
+      approvalStatus: 'Pending approval',
+    });
+
+    expectWorkflow(participant, {
+      stage: 'DRAFT',
+      badge: 'Configure Earnings',
+      cta: 'Configure Earnings',
+      readiness: 'blocked',
+      progressStep: 1,
+      visibleButton: true,
+    });
+
+    participant = baseParticipant();
+    expectWorkflow(participant, {
+      stage: 'EARNINGS_CONFIGURED',
+      badge: 'Agreement Ready',
+      cta: 'Send Agreement',
+      readiness: 'ready',
+      progressStep: 2,
+      visibleButton: true,
+    });
+
+    participant = {
+      ...participant,
+      agreementUrl: '/agreement/p-1',
+      inviteSentAt: '2024-01-02T00:00:00Z',
+      inviteStatus: 'Invited',
+    };
+    expectWorkflow(participant, {
+      stage: 'AGREEMENT_SENT',
+      badge: 'Waiting for Acceptance',
+      cta: 'Waiting for Acceptance',
+      readiness: 'waiting',
+      progressStep: 3,
+      visibleButton: false,
+    });
+
+    participant = {
+      ...participant,
+      approvalStatus: 'Approved',
+      approvedAt: '2024-01-03T00:00:00Z',
+    };
+    expectWorkflow(participant, {
+      stage: 'AGREEMENT_ACCEPTED',
+      badge: 'Agreement Accepted',
+      cta: 'Request Payout Details',
+      readiness: 'ready',
+      progressStep: 4,
+      visibleButton: true,
+    });
+
+    participant = {
+      ...participant,
+      paymentSetup: {
+        paymentRequestGeneratedAt: '2024-01-04T00:00:00Z',
+        token: 'tok',
+        tokenExpiresAt: '2099-01-01T00:00:00Z',
+      },
+      supplierOnboarding: { lifecycle: 'INVITED' },
+      payoutOnboardingPhase: 'INVITED',
+    };
+    expectWorkflow(participant, {
+      stage: 'PAYMENT_INFO_PENDING',
+      badge: 'Waiting for Participant',
+      cta: 'Waiting for Participant',
+      readiness: 'waiting',
+      progressStep: 5,
+      visibleButton: false,
+    });
+
+    participant = {
+      ...participant,
+      supplierOnboarding: {
+        lifecycle: 'SUBMITTED',
+        submission: { submittedAt: '2024-01-05T00:00:00Z', declarationAccepted: true },
+      },
+      payoutOnboardingPhase: 'SUBMITTED',
+    };
+    expectWorkflow(participant, {
+      stage: 'PAYMENT_INFO_SUBMITTED',
+      badge: 'Verify Payout Details',
+      cta: 'Verify Payout Details',
+      readiness: 'ready',
+      progressStep: 6,
+      visibleButton: true,
+    });
+
+    participant = {
+      ...participant,
+      supplierOnboarding: { ...participant.supplierOnboarding, lifecycle: 'APPROVED' },
+      payoutVerificationConfirmed: true,
+      payoutOnboardingPhase: 'APPROVED',
+    };
+    expectWorkflow(participant, {
+      stage: 'XERO_INVOICE',
+      badge: 'Ready for Xero',
+      cta: 'Push Supplier Bill to Xero',
+      readiness: 'ready',
+      progressStep: 7,
+      visibleButton: true,
+    });
+
+    participant = {
+      ...participant,
+      paymentSetup: {
+        ...participant.paymentSetup,
+        xeroExportedAt: '2024-01-06T00:00:00Z',
+        xeroSyncStatus: 'synced',
+      },
+    };
+    expectWorkflow(participant, {
+      stage: 'SETTLEMENT_READY',
+      badge: 'Ready for Settlement',
+      cta: 'Release Settlement',
+      readiness: 'complete',
+      progressStep: 8,
+      visibleButton: false,
+    });
+
+    participant = {
+      ...participant,
+      payoutSettlementStatus: 'Paid',
+      payoutPaidAt: '2024-01-07T00:00:00Z',
+    };
+    expectWorkflow(participant, {
+      stage: 'PAID',
+      badge: 'Paid',
+      cta: 'Paid',
+      readiness: 'complete',
+      progressStep: 9,
+      visibleButton: false,
+    });
+  });
+
   it('derives one mutually exclusive next action for every workflow state', () => {
     const cases: Array<{
       name: string;
       participant: DemoParticipant;
       stage: ReturnType<typeof deriveParticipantCommercialLifecycle>;
+      badge: string;
       nextAction: string;
+      readiness: ReturnType<typeof deriveParticipantOperationalWorkflow>['readiness'];
     }> = [
       {
         name: 'earnings not configured',
         participant: baseParticipant({ compensationProfile: undefined, commissionValue: 0 }),
         stage: 'DRAFT',
+        badge: 'Configure Earnings',
         nextAction: 'Configure Earnings',
+        readiness: 'blocked',
       },
       {
         name: 'agreement not sent',
         participant: baseParticipant(),
         stage: 'EARNINGS_CONFIGURED',
+        badge: 'Agreement Ready',
         nextAction: 'Send Agreement',
+        readiness: 'ready',
       },
       {
         name: 'agreement pending',
@@ -59,7 +237,9 @@ describe('participant-commercial-lifecycle', () => {
           inviteStatus: 'Invited',
         }),
         stage: 'AGREEMENT_SENT',
+        badge: 'Waiting for Acceptance',
         nextAction: 'Waiting for Acceptance',
+        readiness: 'waiting',
       },
       {
         name: 'agreement accepted but payout details missing',
@@ -68,7 +248,9 @@ describe('participant-commercial-lifecycle', () => {
           approvedAt: '2024-01-03T00:00:00Z',
         }),
         stage: 'AGREEMENT_ACCEPTED',
+        badge: 'Agreement Accepted',
         nextAction: 'Request Payout Details',
+        readiness: 'ready',
       },
       {
         name: 'payout request sent but participant has not submitted',
@@ -84,7 +266,9 @@ describe('participant-commercial-lifecycle', () => {
           payoutOnboardingPhase: 'INVITED',
         }),
         stage: 'PAYMENT_INFO_PENDING',
+        badge: 'Waiting for Participant',
         nextAction: 'Waiting for Participant',
+        readiness: 'waiting',
       },
       {
         name: 'payout details submitted but not verified',
@@ -97,7 +281,9 @@ describe('participant-commercial-lifecycle', () => {
           },
         }),
         stage: 'PAYMENT_INFO_SUBMITTED',
+        badge: 'Verify Payout Details',
         nextAction: 'Verify Payout Details',
+        readiness: 'ready',
       },
       {
         name: 'commercial data verified and ready for Xero',
@@ -107,7 +293,9 @@ describe('participant-commercial-lifecycle', () => {
           payoutVerificationConfirmed: true,
         }),
         stage: 'XERO_INVOICE',
-        nextAction: 'Push to Xero',
+        badge: 'Ready for Xero',
+        nextAction: 'Push Supplier Bill to Xero',
+        readiness: 'ready',
       },
       {
         name: 'supplier bill created',
@@ -120,7 +308,9 @@ describe('participant-commercial-lifecycle', () => {
           },
         }),
         stage: 'SETTLEMENT_READY',
-        nextAction: 'Ready for Settlement',
+        badge: 'Ready for Settlement',
+        nextAction: 'Release Settlement',
+        readiness: 'complete',
       },
       {
         name: 'settlement completed',
@@ -135,15 +325,27 @@ describe('participant-commercial-lifecycle', () => {
           payoutPaidAt: '2024-01-06T00:00:00Z',
         }),
         stage: 'PAID',
+        badge: 'Paid',
         nextAction: 'Paid',
+        readiness: 'complete',
       },
     ];
 
     for (const item of cases) {
       const stage = deriveParticipantCommercialLifecycle(item.participant);
+      const workflow = deriveParticipantOperationalWorkflow(item.participant);
       const table = deriveParticipantCommercialTablePresentation(item.participant);
       expect(stage).toBe(item.stage);
+      expect(workflow.stage).toBe(item.stage);
+      expect(workflow.badge).toBe(item.badge);
+      expect(workflow.primaryCta.label).toBe(item.nextAction);
+      expect(workflow.readiness).toBe(item.readiness);
+      expect(workflow.progress.currentStep).toBeGreaterThanOrEqual(1);
+      expect(workflow.progress.currentStep).toBeLessThanOrEqual(workflow.progress.totalSteps);
+      expect(workflow.progress.percent).toBeGreaterThan(0);
       expect(table.stage).toBe(item.stage);
+      expect(table.workflow).toEqual(workflow);
+      expect(table.commercialChip).toBe(item.badge);
       expect(table.nextAction.label).toBe(item.nextAction);
       expect(table.nextAction.label).not.toEqual('');
     }
@@ -173,7 +375,7 @@ describe('participant-commercial-lifecycle', () => {
     });
     expect(deriveParticipantCommercialLifecycle(p)).toBe('DRAFT');
     const table = deriveParticipantCommercialTablePresentation(p);
-    expect(table.commercialChip).toBe('Not Started');
+    expect(table.commercialChip).toBe('Configure Earnings');
     expect(table.commercialChip).not.toMatch(/Agreement Sent/i);
   });
 
@@ -182,7 +384,7 @@ describe('participant-commercial-lifecycle', () => {
     expect(deriveParticipantCommercialLifecycle(p)).toBe('DRAFT');
     const table = deriveParticipantCommercialTablePresentation(p);
     expect(table.agreementChip).toBe('Draft');
-    expect(table.commercialChip).toBe('Not Started');
+    expect(table.commercialChip).toBe('Configure Earnings');
     expect(table.payoutColumnActive).toBe(false);
   });
 
@@ -245,10 +447,10 @@ describe('participant-commercial-lifecycle', () => {
     });
     expect(deriveParticipantCommercialLifecycle(p)).toBe('XERO_INVOICE');
     const action = deriveParticipantLifecycleAction(p);
-    expect(action.label).toBe('Push to Xero');
+    expect(action.label).toBe('Push Supplier Bill to Xero');
     const table = deriveParticipantCommercialTablePresentation(p);
     expect(table.commercialChip).toBe('Ready for Xero');
-    expect(table.nextAction.label).toBe('Push to Xero');
+    expect(table.nextAction.label).toBe('Push Supplier Bill to Xero');
   });
 
   it('supplier bill created moves to ready for settlement', () => {
@@ -262,9 +464,9 @@ describe('participant-commercial-lifecycle', () => {
     });
     expect(deriveParticipantCommercialLifecycle(p)).toBe('SETTLEMENT_READY');
     const action = deriveParticipantLifecycleAction(p);
-    expect(action.label).toBe('Ready for Settlement');
+    expect(action.label).toBe('Release Settlement');
     const table = deriveParticipantCommercialTablePresentation(p);
-    expect(table.nextAction.label).toBe('Ready for Settlement');
+    expect(table.nextAction.label).toBe('Release Settlement');
   });
 
   it('settlement completed is terminal paid state', () => {

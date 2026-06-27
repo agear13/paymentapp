@@ -88,6 +88,13 @@ function ParticipantTableNextActionCell({
   onConfigureCompensation,
   onGenerateAgreement,
   onSharePaymentRequest,
+  releaseReady,
+  canRelease,
+  releaseDisabledReason,
+  releaseSyncHandlers,
+  organizationId,
+  workspaceCurrency,
+  participantName,
 }: {
   nextAction: ParticipantTableNextAction;
   projectId?: string;
@@ -95,6 +102,13 @@ function ParticipantTableNextActionCell({
   onConfigureCompensation: () => void;
   onGenerateAgreement: () => void;
   onSharePaymentRequest?: () => void;
+  releaseReady?: boolean;
+  canRelease?: boolean;
+  releaseDisabledReason?: string | null;
+  releaseSyncHandlers?: OperationalSyncHandlers;
+  organizationId?: string | null;
+  workspaceCurrency?: string;
+  participantName?: string;
 }) {
   const labelWithArrow = `${nextAction.label} →`;
 
@@ -121,6 +135,22 @@ function ParticipantTableNextActionCell({
   }
 
   if (nextAction.kind === 'ready_for_settlement') {
+    if (releaseSyncHandlers && workspaceCurrency) {
+      return (
+        <ParticipantReleaseButton
+          participantId={participantId}
+          participantName={participantName ?? 'participant'}
+          organizationId={organizationId}
+          currency={workspaceCurrency}
+          releaseReady={releaseReady ?? true}
+          canRelease={canRelease ?? false}
+          disabledReason={releaseDisabledReason}
+          syncHandlers={releaseSyncHandlers}
+          className={ROW_ACTION_BUTTON_CLASS}
+          label={nextAction.label}
+        />
+      );
+    }
     return (
       <Badge
         variant="outline"
@@ -342,24 +372,19 @@ function ProjectParticipantTableRowComponent({
             onConfigureCompensation={openCompensation}
             onGenerateAgreement={openShare}
             onSharePaymentRequest={openSharePaymentRequest}
+            releaseReady={releaseReady}
+            canRelease={canRelease}
+            releaseDisabledReason={releaseDisabledReason}
+            releaseSyncHandlers={releaseSyncHandlers}
+            organizationId={organizationId}
+            workspaceCurrency={workspaceCurrency}
+            participantName={participantDisplayName(hydrated)}
           />
         )}
       </TableCell>
 
       <TableCell className={participantTableCellClass('actions')}>
         <div className="flex justify-end items-center gap-1 w-full">
-          {releaseSyncHandlers ? (
-            <ParticipantReleaseButton
-              participantId={hydrated.id}
-              participantName={participantDisplayName(hydrated)}
-              organizationId={organizationId}
-              currency={workspaceCurrency}
-              releaseReady={releaseReady}
-              canRelease={canRelease}
-              disabledReason={releaseDisabledReason}
-              syncHandlers={releaseSyncHandlers}
-            />
-          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

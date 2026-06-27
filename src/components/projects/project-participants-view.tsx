@@ -32,7 +32,7 @@ import { ParticipantPaymentRequestShareDialog } from '@/components/commercial/pa
 import { projectPaymentRequestsPath } from '@/lib/projects/project-routes';
 import {
   buildParticipantPaymentPortalUrl,
-  deriveParticipantCommercialLifecycle,
+  deriveParticipantOperationalWorkflow,
 } from '@/lib/commercial/participant-commercial-lifecycle';
 import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-guidance';
 import { OperatorPayoutVerificationInfo } from '@/components/projects/operator-payout-verification-info';
@@ -330,7 +330,7 @@ export function ProjectParticipantsView() {
   }, [invalidate, refreshSilent]);
 
   const openAgreementShare = React.useCallback(
-    async (p: DemoParticipant) => {
+    async (p: DemoParticipant, options?: { showDialog?: boolean }) => {
       if (!isAllowed('approval_workflows')) {
         setApprovalUpgradeOpen(true);
         return;
@@ -346,10 +346,13 @@ export function ProjectParticipantsView() {
       updated = applyParticipantAgreementShared(updated);
 
       const nextParticipants = allParticipants.map((x) => (x.id === p.id ? updated : x));
-      void saveSnapshot(allDeals, nextParticipants);
-      setAgreementShareParticipant(updated);
+      patchParticipants((list) => list.map((x) => (x.id === p.id ? updated : x)));
+      await saveSnapshot(allDeals, nextParticipants);
+      if (options?.showDialog !== false) {
+        setAgreementShareParticipant(updated);
+      }
     },
-    [allDeals, allParticipants, isAllowed, saveSnapshot]
+    [allDeals, allParticipants, isAllowed, patchParticipants, saveSnapshot]
   );
 
   const openPaymentRequestShare = React.useCallback(
@@ -475,6 +478,7 @@ export function ProjectParticipantsView() {
       const nextParticipants = allParticipants.map((p) =>
         p.id === participantId ? optimistic : p
       );
+      patchParticipants((list) => list.map((p) => (p.id === participantId ? optimistic : p)));
       void saveSnapshot(allDeals, nextParticipants);
 
       try {
@@ -504,7 +508,7 @@ export function ProjectParticipantsView() {
         toast.error(e instanceof Error ? e.message : 'Update failed');
       }
     },
-    [patchParticipants, projectId, syncHandlers]
+    [allDeals, allParticipants, patchParticipants, projectId, saveSnapshot, syncHandlers]
   );
 
   const handleInvite = React.useCallback(
@@ -542,6 +546,11 @@ export function ProjectParticipantsView() {
       });
 
       try {
+        const optimistic = applyCompensationProfileToParticipant(prev, profile);
+        patchParticipants((list) =>
+          list.map((p) => (p.id === participantId ? optimistic : p))
+        );
+
         const res = await fetch(`/api/deal-network-pilot/participants/${participantId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -597,6 +606,9 @@ export function ProjectParticipantsView() {
           }
         });
       } catch (e: unknown) {
+        patchParticipants((list) =>
+          list.map((p) => (p.id === participantId ? prev : p))
+        );
         logCompensationPersistenceTrace('save-failure', traceCtx, {
           error: e instanceof Error ? e.message : String(e),
         });
@@ -745,10 +757,10 @@ export function ProjectParticipantsView() {
     if (!focusPaymentRequests || showApprovalCentre) return;
     const target =
       displayParticipants.find(
-        (p) => deriveParticipantCommercialLifecycle(p) === 'AGREEMENT_ACCEPTED'
+        (p) => deriveParticipantOperationalWorkflow(p).stage === 'AGREEMENT_ACCEPTED'
       ) ??
       displayParticipants.find(
-        (p) => deriveParticipantCommercialLifecycle(p) === 'PAYMENT_INFO_PENDING'
+        (p) => deriveParticipantOperationalWorkflow(p).stage === 'PAYMENT_INFO_PENDING'
       );
     if (!target) return;
     setRecentlySavedParticipantId(target.id);
@@ -1004,7 +1016,7 @@ export function ProjectParticipantsView() {
                   isHighlighted={highlightedApprovalId === p.id}
                   data-approval-card
                   data-pending={p.approvalStatus !== 'Approved' ? 'true' : 'false'}
-                  onShareAgreement={(part) => void openAgreementShare(part)}
+                  onShareAgreement={openAgreementShare}
                   onConfigureEarnings={openCompensationConfig}
                 />
               ))}
@@ -1021,7 +1033,7 @@ export function ProjectParticipantsView() {
             the SupplierOnboardingOperatorView shows:
               - Invoice summary and draft details
               - ABN / GST / bank detail status
-              - Review & approve CTA → triggers Xero export readiness
+              - Verify payout details → pushes supplier bill to Xero
 
             Replaces the old "Confirm payout details" checkbox pattern.
             ═══════════════════════════════════════════════════════════════════ */}

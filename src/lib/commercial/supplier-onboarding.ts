@@ -13,7 +13,7 @@
  *       ↓
  *   Operator Review
  *       ↓
- *   Push to Xero
+ *   Push Supplier Bill to Xero
  *       ↓
  *   Settlement
  *
@@ -664,10 +664,10 @@ function deriveStage(input: SupplierOnboardingInput): SupplierOnboardingStage {
 
 const STAGE_LABELS: Record<SupplierOnboardingStage, string> = {
   not_started: 'Awaiting agreement approval',
-  invoice_generated: 'Supplier setup required',
-  in_progress: 'Supplier setup in progress',
-  submitted: 'Awaiting operator review',
-  operator_approved: 'Approved — ready for Xero',
+  invoice_generated: 'Payout Details Requested',
+  in_progress: 'Waiting for Participant',
+  submitted: 'Verify Payout Details',
+  operator_approved: 'Push Supplier Bill to Xero',
   xero_exported: 'Complete',
 };
 
@@ -713,8 +713,8 @@ function deriveChecklist(input: SupplierOnboardingInput): OnboardingChecklistIte
     }
   } else if (payment.preference === 'alternative' && payment.alternativePaymentMethod) {
     paymentStatus = 'requires_review';
-    paymentExplanation = 'Alternative payment method supplied — operator review required.';
-    paymentAction = 'Review and confirm the payment method before export.';
+    paymentExplanation = 'Alternative payment method supplied — verification required.';
+    paymentAction = 'Verify and confirm the payment method before pushing the supplier bill to Xero.';
     paymentIsBlocker = false;
   } else {
     paymentExplanation = 'Payment details are required.';
@@ -739,8 +739,8 @@ function deriveChecklist(input: SupplierOnboardingInput): OnboardingChecklistIte
 
   if (abn.abnNotApplicable) {
     abnStatus = 'requires_review';
-    abnExplanation = 'Supplier has declared ABN is not applicable — manual review required.';
-    abnAction = 'Verify the supplier is genuinely exempt before exporting to Xero.';
+    abnExplanation = 'Supplier has declared ABN is not applicable — verification required.';
+    abnAction = 'Verify the supplier is genuinely exempt before pushing the supplier bill to Xero.';
     abnIsBlocker = false;
   } else if (abnVal.isValid) {
     abnStatus = 'complete';
@@ -774,8 +774,8 @@ function deriveChecklist(input: SupplierOnboardingInput): OnboardingChecklistIte
     gstIsBlocker = false;
   } else if (gst.gstStatus === 'not_applicable') {
     gstStatus = 'requires_review';
-    gstExplanation = 'GST declared as not applicable — operator review required.';
-    gstAction = 'Verify GST status before exporting to Xero.';
+    gstExplanation = 'GST declared as not applicable — verification required.';
+    gstAction = 'Verify GST status before pushing the supplier bill to Xero.';
     gstIsBlocker = false;
   } else {
     gstExplanation = 'Supplier must confirm their GST registration status.';
@@ -802,14 +802,14 @@ function deriveChecklist(input: SupplierOnboardingInput): OnboardingChecklistIte
     isBlocker: !submitted,
   });
 
-  /* 6. Operator approval */
+  /* 6. Operator verification */
   const approved = Boolean(operator.approvedAt);
   items.push({
     id: 'operator_approval',
-    label: 'Operator approved',
+    label: 'Payout details verified',
     status: approved ? 'complete' : submitted ? 'in_progress' : 'not_started',
-    explanation: approved ? null : submitted ? 'Review supplier details and approve for Xero export.' : 'Waiting for supplier to complete onboarding.',
-    action: approved ? null : submitted ? 'Review and approve supplier details.' : null,
+    explanation: approved ? null : submitted ? 'Verify payout details before pushing the supplier bill to Xero.' : 'Waiting for supplier to complete onboarding.',
+    action: approved ? null : submitted ? 'Verify payout details.' : null,
     isBlocker: !approved,
   });
 
@@ -846,7 +846,7 @@ function deriveTimelineEvents(
       type: 'supplier_abn_manual_review',
       title: 'ABN manual review required',
       description: `${participant.name} has declared ABN is not applicable to their situation.`,
-      commercialImpact: 'Operator must review ABN exemption before exporting to Xero.',
+      commercialImpact: 'Operator must verify ABN exemption before pushing the supplier bill to Xero.',
       occurredAt: input.submission.submittedAt ?? new Date().toISOString(),
     });
   } else if (validateABN(input.abn.abn).isValid) {
@@ -857,7 +857,7 @@ function deriveTimelineEvents(
       type: 'supplier_abn_verified',
       title: 'ABN verified',
       description: `${participant.name}'s ABN has been validated.`,
-      commercialImpact: 'ABN confirmed — invoice is eligible for Xero export.',
+      commercialImpact: 'ABN confirmed — supplier bill can be pushed to Xero after verification.',
       occurredAt: input.submission.submittedAt ?? new Date().toISOString(),
     });
   }
@@ -904,7 +904,7 @@ function deriveTimelineEvents(
       type: 'supplier_onboarding_completed',
       title: 'Supplier onboarding complete',
       description: `${participant.name} has completed supplier onboarding.`,
-      commercialImpact: 'All supplier details confirmed. Operator can now review and approve for Xero.',
+      commercialImpact: 'All supplier details confirmed. Operator can now verify payout details.',
       occurredAt: input.submission.submittedAt ?? new Date().toISOString(),
     });
   }
@@ -915,9 +915,9 @@ function deriveTimelineEvents(
       projectId,
       participantId: participant.id,
       type: 'supplier_invoice_approved',
-      title: 'Invoice approved by operator',
-      description: `Invoice for ${participant.name} has been reviewed and approved.`,
-      commercialImpact: 'Invoice is cleared for Xero export.',
+      title: 'Payout details verified',
+      description: `${participant.name}'s payout details have been verified.`,
+      commercialImpact: 'Supplier bill is ready to push to Xero.',
       occurredAt: input.operator.approvedAt,
     });
   }
@@ -928,8 +928,8 @@ function deriveTimelineEvents(
       projectId,
       participantId: participant.id,
       type: 'supplier_invoice_exported_to_xero',
-      title: 'Invoice exported to Xero',
-      description: `${participant.name}'s invoice has been pushed to Xero.`,
+      title: 'Supplier bill pushed to Xero',
+      description: `${participant.name}'s supplier bill has been pushed to Xero.`,
       commercialImpact: 'Bill recorded in the accounting system. Payment can now be processed.',
       occurredAt: input.operator.xeroExportedAt,
     });
@@ -1010,15 +1010,15 @@ function deriveNextAction(
     case 'not_started':
       return 'Waiting for participant to approve the agreement.';
     case 'invoice_generated':
-      return `Send ${input.participant.name} the supplier onboarding link.`;
+      return `Request payout details from ${input.participant.name}.`;
     case 'in_progress': {
       const blocker = checklist.find((i) => i.isBlocker && i.status !== 'complete');
       return blocker?.action ?? `Ask ${input.participant.name} to complete their supplier details.`;
     }
     case 'submitted':
-      return `Review ${input.participant.name}'s supplier details and approve for Xero.`;
+      return `Verify ${input.participant.name}'s payout details.`;
     case 'operator_approved':
-      return `Export ${input.participant.name}'s invoice to Xero.`;
+      return `Push ${input.participant.name}'s supplier bill to Xero.`;
     case 'xero_exported':
       return null;
   }
@@ -1079,8 +1079,8 @@ export function deriveWorkspaceOnboardingStatus(
 }
 
 function derivePrimaryNeed(status: SupplierOnboardingStatus): string {
-  if (status.stage === 'submitted') return 'Awaiting operator review';
-  if (status.stage === 'operator_approved') return 'Ready for Xero export';
+  if (status.stage === 'submitted') return 'Verify Payout Details';
+  if (status.stage === 'operator_approved') return 'Push Supplier Bill to Xero';
   const firstBlocker = status.checklist.find(
     (i) => i.isBlocker && i.status !== 'complete'
   );
@@ -1094,9 +1094,9 @@ function derivePrimaryCta(
 ): string | null {
   if (completedCount === total) return null;
   const awaiting = participants.filter((p) => p.stage === 'submitted');
-  if (awaiting.length > 0) return `Review ${awaiting.length} supplier${awaiting.length > 1 ? 's' : ''} awaiting approval`;
+  if (awaiting.length > 0) return `Verify payout details for ${awaiting.length} supplier${awaiting.length > 1 ? 's' : ''}`;
   const ready = participants.filter((p) => p.stage === 'operator_approved');
-  if (ready.length > 0) return `Export ${ready.length} approved invoice${ready.length > 1 ? 's' : ''} to Xero`;
+  if (ready.length > 0) return `Push Supplier Bill to Xero for ${ready.length} supplier${ready.length > 1 ? 's' : ''}`;
   return 'Continue supplier onboarding';
 }
 
@@ -1115,7 +1115,7 @@ export function buildSupplierOnboardingNarrative(workspace: WorkspaceOnboardingS
 
   if (workspace.requiresReviewCount > 0) {
     lines.push('');
-    lines.push(`${workspace.requiresReviewCount} supplier${workspace.requiresReviewCount > 1 ? 's require' : ' requires'} manual review before Xero export.`);
+    lines.push(`${workspace.requiresReviewCount} supplier${workspace.requiresReviewCount > 1 ? 's require' : ' requires'} verification before pushing supplier bills to Xero.`);
   }
 
   if (workspace.pendingSuppliers.length > 0) {

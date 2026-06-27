@@ -13,7 +13,8 @@
  *
  * Design rules:
  *   - No silent failures — every failed export has a visible reason and action.
- *   - Every export preview is reviewable before the operator clicks "Push to Xero".
+ *   - Every supplier bill preview is reviewable before the operator clicks
+ *     "Push Supplier Bill to Xero".
  *   - Re-export required is shown as a warning, not hidden.
  *   - One primary action per participant.
  */
@@ -111,7 +112,7 @@ function ParticipantExportCard({
     },
     needs_review: {
       icon: <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />,
-      label: model.statusLabel === 'Awaiting Review' ? 'Awaiting Review' : 'Needs review',
+      label: model.statusLabel === 'Verify Payout Details' ? 'Verify Payout Details' : 'Needs review',
       badgeVariant: 'outline' as const,
       badgeClass: 'border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-400',
     },
@@ -123,13 +124,13 @@ function ParticipantExportCard({
     },
     exporting: {
       icon: <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />,
-      label: 'Exporting…',
+      label: 'Pushing supplier bill…',
       badgeVariant: 'secondary' as const,
       badgeClass: '',
     },
     ready: {
       icon: <FileText className="h-4 w-4 text-muted-foreground" />,
-      label: model.exportReadiness.ready ? 'Ready for Xero' : model.statusLabel,
+      label: model.exportReadiness.ready ? 'Push Supplier Bill to Xero' : model.statusLabel,
       badgeVariant: 'secondary' as const,
       badgeClass: '',
     },
@@ -200,12 +201,12 @@ function ParticipantExportCard({
               ) : model.status === 're_export_required' ? (
                 <>
                   <RefreshCw className="h-3 w-3" />
-                  Re-export to Xero
+                  Push Supplier Bill to Xero
                 </>
               ) : (
                 <>
                   <ExternalLink className="h-3 w-3" />
-                  Push to Xero
+                  Push Supplier Bill to Xero
                 </>
               )}
             </Button>

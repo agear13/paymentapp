@@ -20,6 +20,8 @@ import {
 import { z } from 'zod';
 import { AuditEventType, createAuditLog, AuditSeverity } from '@/lib/audit/audit-log';
 import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
+import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import type { Prisma } from '@prisma/client';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -88,6 +90,10 @@ export async function POST(
     }
 
     const paidAtDate = paid_at ? new Date(paid_at) : new Date();
+    const pilotParticipant = await prisma.deal_network_pilot_participants.findUnique({
+      where: { id: payout.user_id },
+      include: { deal: true },
+    });
 
     await prisma.$transaction(async (tx) => {
       await tx.payouts.update({
@@ -107,6 +113,22 @@ export async function POST(
         where: { payout_id: id },
         data: { status: 'PAID', paid_at: paidAtDate },
       });
+      if (pilotParticipant) {
+        const payload = pilotParticipant.participant_payload as unknown as DemoParticipant;
+        const paidPayload: DemoParticipant = {
+          ...payload,
+          payoutSettlementStatus: 'Paid',
+          payoutPaidAt: paidAtDate.toISOString(),
+        };
+        await tx.deal_network_pilot_participants.update({
+          where: { id: pilotParticipant.id },
+          data: { participant_payload: paidPayload as unknown as Prisma.InputJsonValue },
+        });
+        await tx.deal_network_pilot_obligations.updateMany({
+          where: { participant_id: pilotParticipant.id },
+          data: { status: 'PAID' },
+        });
+      }
     });
 
     log.info('Payout marked paid', {
@@ -138,8 +160,9 @@ export async function POST(
     });
 
     const operationalSync = await orchestrateOperationalMutation({
-      userId: user.id,
+      userId: pilotParticipant?.deal.user_id ?? user.id,
       mutation: 'payout_released',
+      projectId: pilotParticipant?.deal_id,
     });
 
     return NextResponse.json({

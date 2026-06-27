@@ -18,6 +18,7 @@ export type ParticipantReleaseButtonProps = {
   disabledReason?: string | null;
   syncHandlers: OperationalSyncHandlers;
   className?: string;
+  label?: string;
 };
 
 export function ParticipantReleaseButton({
@@ -30,6 +31,7 @@ export function ParticipantReleaseButton({
   disabledReason,
   syncHandlers,
   className,
+  label = 'Release',
 }: ParticipantReleaseButtonProps) {
   const [loading, setLoading] = React.useState(false);
 
@@ -89,7 +91,7 @@ export function ParticipantReleaseButton({
       {loading ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
       ) : (
-        'Release'
+        label
       )}
     </Button>
   );

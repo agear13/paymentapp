@@ -24,9 +24,7 @@ import { cn } from '@/lib/utils';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { projectOperatorReviewPath } from '@/lib/projects/project-routes';
 import {
-  deriveParticipantCommercialLifecycle,
-  deriveParticipantLifecycleAction,
-  LIFECYCLE_STAGE_OPERATOR_LABELS,
+  deriveParticipantOperationalWorkflow,
   type ParticipantCommercialLifecycleStage,
 } from '@/lib/commercial/participant-commercial-lifecycle';
 import { ParticipantLifecycleTimeline } from '@/components/commercial/payment-tax/participant-lifecycle-timeline';
@@ -102,12 +100,12 @@ export function ParticipantOnboardingStatusCard({
   participant,
   projectId,
   onSendPaymentRequest,
-  onSharePaymentRequest,
 }: ParticipantOnboardingStatusCardProps) {
-  const stage = deriveParticipantCommercialLifecycle(participant);
-  const action = deriveParticipantLifecycleAction(participant);
+  const workflow = deriveParticipantOperationalWorkflow(participant);
+  const stage = workflow.stage;
+  const action = workflow.primaryCta;
   const config = STAGE_CONFIG[stage];
-  const stageLabel = LIFECYCLE_STAGE_OPERATOR_LABELS[stage];
+  const stageLabel = workflow.badge;
 
   const isComplete = stage === 'SETTLEMENT_READY' || stage === 'PAID';
   const isRejected = participant.supplierOnboarding?.rejection != null;
@@ -141,7 +139,9 @@ export function ParticipantOnboardingStatusCard({
             )}
             <span className="text-xs font-medium text-muted-foreground">{stageLabel}</span>
           </div>
-          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{action.description}</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            {workflow.explanation}
+          </p>
           <div className="mt-3 max-w-md">
             <ParticipantLifecycleTimeline participant={participant} compact={false} />
           </div>
@@ -161,22 +161,10 @@ export function ParticipantOnboardingStatusCard({
             <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
           </Button>
         ) : null}
-        {action.destination === 'share_payment_request' && onSharePaymentRequest ? (
-          <Button
-            type="button"
-            size="sm"
-            variant={config.ctaVariant}
-            className="whitespace-nowrap"
-            onClick={() => onSharePaymentRequest(participant)}
-          >
-            {action.label}
-            <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-          </Button>
-        ) : null}
         {action.destination !== 'none' &&
         action.urgency !== 'none' &&
         action.destination !== 'send_payment_request' &&
-        action.destination !== 'share_payment_request' ? (
+        action.destination !== 'await_participant' ? (
           <Button asChild size="sm" variant={config.ctaVariant} className="whitespace-nowrap">
             <Link href={ctaHref}>
               {action.label}

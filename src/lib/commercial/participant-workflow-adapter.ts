@@ -11,9 +11,9 @@
  *
  * Design rules:
  *   - PURE function — no network calls, no side effects.
- *   - `deriveParticipantCommercialLifecycle()` is the single source of truth
- *     for participant stage; adapters translate from lifecycle, not duplicate
- *     payout phase heuristics.
+ *   - `deriveParticipantOperationalWorkflow()` is the single source of truth
+ *     for participant stage; adapters translate from canonical workflow output,
+ *     not duplicate payout phase heuristics.
  *   - Conservative: when in doubt, use the least-advanced stage.
  */
 
@@ -29,7 +29,7 @@ import type {
 import type { AccountingExportModel } from '@/lib/commercial/accounting-export';
 import type { AccountingSyncStatus } from '@/lib/commercial/accounting-connector';
 import {
-  deriveParticipantCommercialLifecycle,
+  deriveParticipantOperationalWorkflow,
   type ParticipantCommercialLifecycleStage,
 } from '@/lib/commercial/participant-commercial-lifecycle';
 import { normalizeDemoParticipantRole } from '@/lib/projects/normalize-participant-role';
@@ -70,10 +70,10 @@ export type ParticipantPhaseData = {
 
 const SUPPLIER_STAGE_LABELS: Record<SupplierOnboardingStage, string> = {
   not_started:       'Awaiting agreement approval',
-  invoice_generated: 'Payment request ready to send',
-  in_progress:       'Payment information in progress',
-  submitted:         'Awaiting operator review',
-  operator_approved: 'Approved — ready for Xero',
+  invoice_generated: 'Payout Details Requested',
+  in_progress:       'Waiting for Participant',
+  submitted:         'Verify Payout Details',
+  operator_approved: 'Push Supplier Bill to Xero',
   xero_exported:     'Complete',
 };
 
@@ -149,9 +149,9 @@ function deriveMinimalAccountingView(
   if (lifecycleStage === 'XERO_INVOICE') {
     return {
       status: 'ready',
-      statusLabel: 'Ready for Xero',
+      statusLabel: 'Push Supplier Bill to Xero',
       ready: true,
-      nextAction: null,
+      nextAction: 'Push Supplier Bill to Xero',
       blockerReason: null,
     };
   }
@@ -159,9 +159,9 @@ function deriveMinimalAccountingView(
   if (lifecycleStage === 'OPERATOR_REVIEW' || lifecycleStage === 'PAYMENT_INFO_SUBMITTED') {
     return {
       status: 'needs_review',
-      statusLabel: 'Awaiting Review',
+      statusLabel: 'Verify Payout Details',
       ready: false,
-      nextAction: 'Review payment & tax information',
+      nextAction: 'Verify Payout Details',
       blockerReason: 'invoice_not_verified',
     };
   }
@@ -169,9 +169,9 @@ function deriveMinimalAccountingView(
   if (lifecycleStage === 'PAYMENT_INFO_PENDING') {
     return {
       status: 'ready',
-      statusLabel: 'Awaiting supplier onboarding',
+      statusLabel: 'Waiting for Participant',
       ready: false,
-      nextAction: 'Share payment request with participant',
+      nextAction: 'Waiting for Participant',
       blockerReason: 'invoice_not_received',
     };
   }
@@ -181,7 +181,7 @@ function deriveMinimalAccountingView(
       status: 'ready',
       statusLabel: 'Draft',
       ready: false,
-      nextAction: 'Send payment request',
+      nextAction: 'Request Payout Details',
       blockerReason: 'invoice_not_received',
     };
   }
@@ -204,7 +204,7 @@ function buildMinimalOnboardingStatus(
 ): SupplierOnboardingStatus | null {
   if (p.approvalStatus !== 'Approved') return null;
 
-  const lifecycleStage = deriveParticipantCommercialLifecycle(toLifecycleParticipant(p));
+  const lifecycleStage = deriveParticipantOperationalWorkflow(toLifecycleParticipant(p)).stage;
   const stage = lifecycleToSupplierStage(lifecycleStage, p);
   const amount = p.commissionValue ?? 0;
   const now = new Date().toISOString();
@@ -328,7 +328,7 @@ export function synthesizeSupplierTimelineEvents(
     if (p.approvalStatus !== 'Approved') continue;
 
     const participant = toLifecycleParticipant(p);
-    const lifecycleStage = deriveParticipantCommercialLifecycle(participant);
+    const lifecycleStage = deriveParticipantOperationalWorkflow(participant).stage;
     const participantId = p.id;
     const approvedAt = p.approvedAt ?? new Date().toISOString();
     const role = normalizeDemoParticipantRole(p.role);
@@ -376,9 +376,9 @@ export function synthesizeSupplierTimelineEvents(
         projectId,
         participantId,
         type: 'supplier_onboarding_completed',
-        title: 'Payment information submitted',
-        description: `${p.name} submitted payment & tax information.`,
-        commercialImpact: 'Ready for operator review before Xero export.',
+        title: 'Payout details submitted',
+        description: `${p.name} submitted payout and tax details.`,
+        commercialImpact: 'Ready to verify payout details before pushing the supplier bill to Xero.',
         occurredAt: submittedAt,
       });
     }
@@ -389,9 +389,9 @@ export function synthesizeSupplierTimelineEvents(
         projectId,
         participantId,
         type: 'supplier_onboarding_completed',
-        title: 'Operator review started',
-        description: `${p.name}'s payment & tax details are awaiting operator review.`,
-        commercialImpact: 'Review and approve before pushing to Xero.',
+        title: 'Verify Payout Details',
+        description: `${p.name}'s payout and tax details are ready for verification.`,
+        commercialImpact: 'Verify payout details before pushing the supplier bill to Xero.',
         occurredAt: approvedAt,
       });
     }
@@ -407,9 +407,9 @@ export function synthesizeSupplierTimelineEvents(
         projectId,
         participantId,
         type: 'supplier_invoice_approved',
-        title: 'Operator approved',
-        description: `${p.name}'s payment & tax information was approved.`,
-        commercialImpact: 'Invoice is ready to push to Xero.',
+        title: 'Payout details verified',
+        description: `${p.name}'s payout and tax details were verified.`,
+        commercialImpact: 'Supplier bill is ready to push to Xero.',
         occurredAt: approvedAt,
       });
     }
@@ -420,8 +420,8 @@ export function synthesizeSupplierTimelineEvents(
         projectId,
         participantId,
         type: 'supplier_invoice_exported_to_xero',
-        title: 'Xero invoice created',
-        description: `Invoice exported to Xero for ${p.name}.`,
+        title: 'Supplier bill pushed to Xero',
+        description: `Supplier bill pushed to Xero for ${p.name}.`,
         commercialImpact: 'Accounting record is in sync — settlement can proceed.',
         occurredAt: p.paymentSetup.xeroExportedAt,
       });
@@ -433,7 +433,7 @@ export function synthesizeSupplierTimelineEvents(
         projectId,
         participantId,
         type: 'supplier_invoice_exported_to_xero',
-        title: 'Settlement ready',
+        title: 'Ready for Settlement',
         description: `${p.name} is cleared for settlement.`,
         commercialImpact: 'All commercial and accounting steps are complete.',
         occurredAt: p.paymentSetup?.xeroExportedAt ?? approvedAt,
@@ -473,7 +473,7 @@ export function buildMinimalAccountingExportModels(
   const approved = participants.filter((p) => p.approvalStatus === 'Approved');
 
   return approved.map((p) => {
-    const lifecycleStage = deriveParticipantCommercialLifecycle(toLifecycleParticipant(p));
+    const lifecycleStage = deriveParticipantOperationalWorkflow(toLifecycleParticipant(p)).stage;
     const accountingView = deriveMinimalAccountingView(lifecycleStage, p);
     const amount = p.commissionValue ?? 0;
     const exportId = `${projectId}:${p.id}:accounting_export`;
@@ -489,9 +489,9 @@ export function buildMinimalAccountingExportModels(
                 accountingView.blockerReason === 'invoice_not_received'
                   ? 'Payment & tax information has not been received from the participant.'
                   : accountingView.blockerReason === 'invoice_not_verified'
-                  ? 'Operator review is required before export.'
+                  ? 'Verify payout details before pushing the supplier bill to Xero.'
                   : 'Settlement readiness is incomplete.',
-              consequence: 'Invoice cannot be exported to Xero until this is resolved.',
+              consequence: 'Supplier bill cannot be pushed to Xero until this is resolved.',
               action: accountingView.nextAction ?? 'Complete the required step',
             },
           ];
@@ -563,11 +563,11 @@ export function deriveWorkspaceOnboardingFromParticipants(
 
   const primaryCta =
     readyForExportCount > 0
-      ? `Approve ${readyForExportCount} supplier${readyForExportCount !== 1 ? 's' : ''} for Xero export`
+      ? `Push Supplier Bill to Xero for ${readyForExportCount} supplier${readyForExportCount !== 1 ? 's' : ''}`
       : notStartedCount > 0
-      ? `Send onboarding to ${notStartedCount} supplier${notStartedCount !== 1 ? 's' : ''}`
+      ? `Request payout details from ${notStartedCount} supplier${notStartedCount !== 1 ? 's' : ''}`
       : inProgressCount > 0
-      ? `${inProgressCount} supplier${inProgressCount !== 1 ? 's' : ''} completing onboarding`
+      ? `${inProgressCount} supplier${inProgressCount !== 1 ? 's' : ''} waiting for participant`
       : null;
 
   const pendingSuppliers = statuses
@@ -576,12 +576,12 @@ export function deriveWorkspaceOnboardingFromParticipants(
       participantName: s.participantName,
       primaryNeed:
         s.stage === 'not_started'
-          ? 'Onboarding not started'
+          ? 'Payout details not requested'
           : s.stage === 'invoice_generated'
           ? 'Awaiting supplier response'
           : s.stage === 'in_progress'
-          ? 'Supplier onboarding in progress'
-          : 'Awaiting operator review',
+          ? 'Waiting for Participant'
+          : 'Verify Payout Details',
     }));
 
   return {

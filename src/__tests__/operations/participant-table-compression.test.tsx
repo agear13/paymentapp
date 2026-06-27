@@ -71,7 +71,7 @@ describe('compressed participant table UX', () => {
       payoutVerificationConfirmed: false,
     });
     expect(container.textContent).toContain('Ready to send');
-    expect(container.textContent).toContain('Not Started');
+    expect(container.textContent).toContain('Agreement Ready');
   });
 
   it('uses dropdown actions instead of stacked buttons', () => {

@@ -65,7 +65,7 @@ export function projectOperatorReviewPath(projectId: string, participantId: stri
 
 /**
  * Deep-links to the Accounting Approval section within the Funding tab.
- * Used for the "Approve & Push to Xero" CTA.
+ * Used for the "Push Supplier Bill to Xero" CTA.
  */
 export function projectXeroExportPath(projectId: string): string {
   return `/dashboard/projects/${encodeURIComponent(projectId)}/funding?section=accounting`;

@@ -194,7 +194,8 @@ export function useProjectContext(projectId: string): ProjectContextValue {
     (updater: (list: DemoParticipant[]) => DemoParticipant[]) => {
       setAllParticipants((prev) => {
         const next = updater(prev);
-        invalidateWorkspaceCache(projectId, 'participants');
+        invalidateWorkspaceCache(projectId, 'all');
+        controllerRef.current?.invalidate('all');
         return next;
       });
     },

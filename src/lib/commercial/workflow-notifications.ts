@@ -103,7 +103,7 @@ export function buildWorkflowNotificationForStage(
         title: `${participantName} is ready for Xero`,
         message: `Invoice for ${participantName} is approved. Export to Xero to complete accounting before settlement.`,
         urgency: 'action_required',
-        nextAction: 'Approve & Push to Xero',
+        nextAction: 'Push Supplier Bill to Xero',
         destination: 'xero_export',
         generatedAt,
       };

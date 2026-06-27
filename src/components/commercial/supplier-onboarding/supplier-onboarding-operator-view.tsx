@@ -6,7 +6,7 @@
  * The operator-facing review interface for supplier onboarding.
  *
  * Architecture:
- *   Approval  = commercial decision (operator reviewed and accepted the submission)
+ *   Verification = commercial decision (operator reviewed and accepted the submission)
  *   Rejection = commercial decision (operator reviewed and rejected — supplier can resubmit)
  *   Xero      = accounting integration (separate downstream concern — shown after approval)
  *
@@ -15,7 +15,7 @@
  *   - Invoice summary
  *   - ABN / GST / payment details
  *   - Onboarding checklist
- *   - Approve | Reject CTAs (approval ≠ accounting export)
+ *   - Request changes | Reject secondary CTAs
  *
  * Derives from deriveSupplierOnboardingStatus() — no independent calculations.
  * Designed so AI-assisted review checks can be layered in later (review check IDs are stable).
@@ -231,10 +231,8 @@ export type SupplierOnboardingOperatorViewProps = {
   participant?: DemoParticipant;
   /** Commercial review summary (deterministic checks). */
   reviewSummary?: CommercialReviewSummary;
-  /** Called when operator clicks Approve (commercial decision). */
+  /** Called when operator verifies payout details (commercial decision). */
   onApprove?: () => void;
-  /** Called when operator clicks Approve & Push to Xero (legacy combined action). */
-  onApproveAndExport?: () => void;
   /** Called when operator rejects with a reason. */
   onReject?: (reason: string) => void;
   /** Called when operator requests changes without full rejection. */
@@ -246,17 +244,16 @@ export type SupplierOnboardingOperatorViewProps = {
  * SupplierOnboardingOperatorView
  *
  * Shows the operator a complete picture of one supplier's onboarding status.
- * Surfaces the commercial review summary, all submitted details, and approve/reject CTAs.
+ * Surfaces the commercial review summary, all submitted details, and secondary review CTAs.
  *
- * Approval is a commercial decision — it does NOT export to Xero.
- * After approval, the operator is directed to the accounting export step separately.
+ * Verification is a commercial decision. The parent workflow owns the primary
+ * "Verify & Push Supplier Bill to Xero" CTA so this card never competes with it.
  */
 export function SupplierOnboardingOperatorView({
   status,
   participant,
   reviewSummary,
   onApprove,
-  onApproveAndExport,
   onReject,
   onRequestChanges,
   isLoading = false,
@@ -513,23 +510,12 @@ export function SupplierOnboardingOperatorView({
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-blue-700 mb-2">
                 <CheckCircle2 className="h-4 w-4" />
-                <span className="text-sm font-medium">Supplier approved — accounting export available</span>
+              <span className="text-sm font-medium">Supplier details verified — supplier bill can be pushed to Xero</span>
               </div>
-              {onApproveAndExport && (
-                <button
-                  type="button"
-                  onClick={onApproveAndExport}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                >
-                  {isLoading ? 'Exporting…' : 'Push to Xero'}
-                  {!isLoading && <ArrowRight className="h-4 w-4" />}
-                </button>
-              )}
             </div>
           ) : status.stage === 'submitted' ? (
             <div className="space-y-2">
-              {/* Approve — commercial decision, NOT accounting export */}
+              {/* Verification is owned by the parent workflow CTA. */}
               {onApprove && (
                 <button
                   type="button"
@@ -537,7 +523,7 @@ export function SupplierOnboardingOperatorView({
                   disabled={isLoading || reviewSummary?.hasBlockers === true}
                   className="w-full flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
                 >
-                  {isLoading ? 'Approving…' : 'Approve'}
+                  {isLoading ? 'Verifying…' : 'Verify Payout Details'}
                   {!isLoading && <CheckCircle2 className="h-4 w-4" />}
                 </button>
               )}
@@ -564,7 +550,7 @@ export function SupplierOnboardingOperatorView({
               )}
               {reviewSummary?.hasBlockers && (
                 <p className="text-xs text-red-600 text-center">
-                  Resolve checklist blockers before approving.
+                  Resolve checklist blockers before verifying payout details.
                 </p>
               )}
             </div>
