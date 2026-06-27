@@ -216,17 +216,7 @@ export function buildParticipantPaymentPortalUrl(
   return `${base}/payment-setup/${token}`;
 }
 
-/**
- * Derive the canonical commercial lifecycle stage for a participant.
- * Pure function — no side effects.
- */
-export function deriveParticipantCommercialLifecycle(
-  participant: DemoParticipant
-): ParticipantCommercialLifecycleStage {
-  if (isSettlementPaid(participant)) {
-    return 'PAID';
-  }
-
+function deriveSetupLifecycle(participant: DemoParticipant): ParticipantCommercialLifecycleStage {
   const identityReady = hasParticipantIdentityReady(participant);
   const earningsReady =
     isParticipantCompensationExempt(participant) || isParticipantEarningsConfigured(participant);
@@ -236,28 +226,50 @@ export function deriveParticipantCommercialLifecycle(
   }
 
   if (isParticipantCompensationExempt(participant)) {
-    if (hasApprovedAgreement(participant)) {
-      if (isXeroExported(participant)) return 'SETTLEMENT_READY';
-      if (supplierLifecycle(participant) === 'APPROVED') return 'XERO_INVOICE';
-      return 'AGREEMENT_ACCEPTED';
-    }
     if (isAgreementSent(participant)) return 'AGREEMENT_SENT';
     return 'EARNINGS_CONFIGURED';
-  }
-
-  if (hasApprovedAgreement(participant)) {
-    if (!isPaymentRequestSent(participant)) {
-      return 'AGREEMENT_ACCEPTED';
-    }
-    return mapSupplierToCommercialStage(
-      supplierLifecycle(participant),
-      isXeroExported(participant)
-    );
   }
 
   if (isAgreementSent(participant)) return 'AGREEMENT_SENT';
 
   return 'EARNINGS_CONFIGURED';
+}
+
+function deriveOperationalLifecycle(participant: DemoParticipant): ParticipantCommercialLifecycleStage {
+  if (isXeroExported(participant)) return 'SETTLEMENT_READY';
+  if (isParticipantCompensationExempt(participant)) {
+    if (supplierLifecycle(participant) === 'APPROVED') return 'XERO_INVOICE';
+    return 'AGREEMENT_ACCEPTED';
+  }
+  if (!isPaymentRequestSent(participant)) {
+    return 'AGREEMENT_ACCEPTED';
+  }
+  return mapSupplierToCommercialStage(
+    supplierLifecycle(participant),
+    isXeroExported(participant)
+  );
+}
+
+/**
+ * Derive the canonical commercial lifecycle stage for a participant.
+ * Pure function — no side effects.
+ *
+ * Setup prerequisites only control pre-acceptance states. Once the agreement is
+ * accepted, the workflow is monotonic and follows the furthest completed
+ * business event; missing setup data is reported as integrity issues instead.
+ */
+export function deriveParticipantCommercialLifecycle(
+  participant: DemoParticipant
+): ParticipantCommercialLifecycleStage {
+  if (isSettlementPaid(participant)) {
+    return 'PAID';
+  }
+
+  if (hasApprovedAgreement(participant)) {
+    return deriveOperationalLifecycle(participant);
+  }
+
+  return deriveSetupLifecycle(participant);
 }
 
 export function lifecycleStageIndex(stage: ParticipantCommercialLifecycleStage): number {
@@ -311,6 +323,12 @@ export type ParticipantWorkflowCta = {
   buttonVariant: 'default' | 'outline';
 };
 
+export type ParticipantWorkflowIntegrityIssue = {
+  field: 'name' | 'email' | 'role' | 'compensationProfile';
+  severity: 'warning' | 'blocker';
+  message: string;
+};
+
 export type ParticipantOperationalWorkflow = {
   stage: ParticipantCommercialLifecycleStage;
   badge: string;
@@ -324,6 +342,7 @@ export type ParticipantOperationalWorkflow = {
   };
   primaryCta: ParticipantWorkflowCta;
   secondaryCtas: ParticipantWorkflowCta[];
+  integrityIssues: ParticipantWorkflowIntegrityIssue[];
 };
 
 const WORKFLOW_STAGE_ORDER: ParticipantCommercialLifecycleStage[] = [
@@ -340,7 +359,7 @@ const WORKFLOW_STAGE_ORDER: ParticipantCommercialLifecycleStage[] = [
 
 const WORKFLOW_STAGE_CONFIG: Record<
   ParticipantCommercialLifecycleStage,
-  Omit<ParticipantOperationalWorkflow, 'stage' | 'explanation' | 'progress'>
+  Omit<ParticipantOperationalWorkflow, 'stage' | 'explanation' | 'progress' | 'integrityIssues'>
 > = {
   DRAFT: {
     badge: 'Configure Earnings',
@@ -510,6 +529,47 @@ function workflowExplanation(
   }
 }
 
+function deriveOperationalIntegrityIssues(
+  participant: DemoParticipant,
+  stage: ParticipantCommercialLifecycleStage
+): ParticipantWorkflowIntegrityIssue[] {
+  if (workflowStageOrderIndex(stage) < workflowStageOrderIndex('AGREEMENT_ACCEPTED')) return [];
+
+  const issues: ParticipantWorkflowIntegrityIssue[] = [];
+  if (!participant.name?.trim()) {
+    issues.push({
+      field: 'name',
+      severity: 'warning',
+      message: 'Participant name missing. Review before settlement.',
+    });
+  }
+  if (!participant.email?.trim()) {
+    issues.push({
+      field: 'email',
+      severity: 'warning',
+      message: 'Participant email missing. Agreement may have been accepted via shared link.',
+    });
+  }
+  if (!participant.role?.trim()) {
+    issues.push({
+      field: 'role',
+      severity: 'warning',
+      message: 'Participant role missing. Review before settlement.',
+    });
+  }
+  if (
+    !isParticipantCompensationExempt(participant) &&
+    !isParticipantEarningsConfigured(participant)
+  ) {
+    issues.push({
+      field: 'compensationProfile',
+      severity: 'warning',
+      message: 'Compensation profile missing. Review before settlement.',
+    });
+  }
+  return issues;
+}
+
 export function deriveParticipantOperationalWorkflow(
   participant: DemoParticipant
 ): ParticipantOperationalWorkflow {
@@ -523,6 +583,7 @@ export function deriveParticipantOperationalWorkflow(
     stage,
     ...config,
     explanation: workflowExplanation(stage, name),
+    integrityIssues: deriveOperationalIntegrityIssues(participant, stage),
     progress: {
       currentStep: currentIndex + 1,
       totalSteps,
@@ -694,6 +755,7 @@ export function deriveParticipantCommercialTablePresentation(
   const payoutColumnActive = isLifecycleStageAtOrPast(stage, 'AGREEMENT_ACCEPTED');
   const agreement = deriveAgreementTableLabel(participant);
   const commercialLabel = workflow.badge;
+  const commercialSecondary = workflow.integrityIssues.map((issue) => issue.message).join(' ');
   const nextAction = deriveParticipantCommercialTableNextAction(participant);
   const primaryAction = deriveParticipantCommercialTablePrimaryAction(participant);
 
@@ -703,7 +765,7 @@ export function deriveParticipantCommercialTablePresentation(
     agreementChip: agreement.label,
     agreementSecondary: agreement.hint ?? '',
     commercialChip: commercialLabel,
-    commercialSecondary: '',
+    commercialSecondary,
     payoutColumnActive,
     primaryAction,
     nextAction,

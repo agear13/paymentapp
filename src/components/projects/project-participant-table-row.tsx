@@ -327,9 +327,16 @@ function ProjectParticipantTableRowComponent({
             <p className="text-xs text-muted-foreground mt-0.5">Internal or unpaid role</p>
           </div>
         ) : (
-          <span className="text-sm font-medium text-foreground">
-            {tablePresentation.commercialChip}
-          </span>
+          <div className="leading-tight">
+            <span className="text-sm font-medium text-foreground">
+              {tablePresentation.commercialChip}
+            </span>
+            {tablePresentation.commercialSecondary ? (
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                {tablePresentation.commercialSecondary}
+              </p>
+            ) : null}
+          </div>
         )}
       </TableCell>
 

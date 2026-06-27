@@ -483,6 +483,18 @@ export function ApprovalCentreParticipantCard({
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
               {workflow.explanation}
             </p>
+            {workflow.integrityIssues.length > 0 ? (
+              <div className="mt-1 space-y-0.5">
+                {workflow.integrityIssues.map((issue) => (
+                  <p
+                    key={`${issue.field}-${issue.message}`}
+                    className="text-[11px] text-amber-700 dark:text-amber-300 leading-snug"
+                  >
+                    {issue.message}
+                  </p>
+                ))}
+              </div>
+            ) : null}
 
             {/* Last activity */}
             {lastActivity ? (

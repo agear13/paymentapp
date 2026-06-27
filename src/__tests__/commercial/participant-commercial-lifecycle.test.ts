@@ -406,6 +406,76 @@ describe('participant-commercial-lifecycle', () => {
     expect(shouldRequestPayoutDetails(p)).toBe(true);
   });
 
+  it('accepted participant with missing email never regresses to DRAFT or Configure Earnings', () => {
+    const p = baseParticipant({
+      email: '',
+      approvalStatus: 'Approved',
+      agreementLifecycle: 'APPROVED',
+      approvedAt: '2024-01-03T00:00:00Z',
+    });
+    const workflow = deriveParticipantOperationalWorkflow(p);
+    const table = deriveParticipantCommercialTablePresentation(p);
+
+    expect(deriveParticipantCommercialLifecycle(p)).toBe('AGREEMENT_ACCEPTED');
+    expect(workflow.stage).not.toBe('DRAFT');
+    expect(workflow.badge).not.toBe('Configure Earnings');
+    expect(workflow.primaryCta.label).toBe('Request Payout Details');
+    expect(table.commercialChip).toBe('Agreement Accepted');
+    expect(table.nextAction.label).toBe('Request Payout Details');
+    expect(workflow.integrityIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'email', severity: 'warning' }),
+      ])
+    );
+  });
+
+  it('accepted participant with missing role never regresses to DRAFT or Configure Earnings', () => {
+    const p = baseParticipant({
+      role: '' as DemoParticipant['role'],
+      approvalStatus: 'Approved',
+      agreementLifecycle: 'APPROVED',
+      approvedAt: '2024-01-03T00:00:00Z',
+    });
+    const workflow = deriveParticipantOperationalWorkflow(p);
+    const table = deriveParticipantCommercialTablePresentation(p);
+
+    expect(deriveParticipantCommercialLifecycle(p)).toBe('AGREEMENT_ACCEPTED');
+    expect(workflow.stage).not.toBe('DRAFT');
+    expect(workflow.badge).not.toBe('Configure Earnings');
+    expect(workflow.primaryCta.label).toBe('Request Payout Details');
+    expect(table.commercialChip).toBe('Agreement Accepted');
+    expect(table.nextAction.label).toBe('Request Payout Details');
+    expect(workflow.integrityIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'role', severity: 'warning' }),
+      ])
+    );
+  });
+
+  it('accepted participant with missing compensation profile never regresses to DRAFT or Configure Earnings', () => {
+    const p = baseParticipant({
+      compensationProfile: undefined,
+      commissionValue: 0,
+      approvalStatus: 'Approved',
+      agreementLifecycle: 'APPROVED',
+      approvedAt: '2024-01-03T00:00:00Z',
+    });
+    const workflow = deriveParticipantOperationalWorkflow(p);
+    const table = deriveParticipantCommercialTablePresentation(p);
+
+    expect(deriveParticipantCommercialLifecycle(p)).toBe('AGREEMENT_ACCEPTED');
+    expect(workflow.stage).not.toBe('DRAFT');
+    expect(workflow.badge).not.toBe('Configure Earnings');
+    expect(workflow.primaryCta.label).toBe('Request Payout Details');
+    expect(table.commercialChip).toBe('Agreement Accepted');
+    expect(table.nextAction.label).toBe('Request Payout Details');
+    expect(workflow.integrityIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'compensationProfile', severity: 'warning' }),
+      ])
+    );
+  });
+
   it('payment request sent moves to PAYMENT_INFO_PENDING', () => {
     const p = baseParticipant({
       approvalStatus: 'Approved',
