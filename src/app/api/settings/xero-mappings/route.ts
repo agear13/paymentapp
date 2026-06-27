@@ -109,8 +109,12 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Validate all required mappings
+    // Standard exports need revenue; clearing accounts remain optional so setup does not
+    // block standard businesses before an accountant reviews settlement details.
     const required = [
+      'xero_revenue_account_id',
+    ];
+    const mappingFields = [
       'xero_revenue_account_id',
       'xero_receivable_account_id',
       'xero_stripe_clearing_account_id',
@@ -137,7 +141,7 @@ export async function PUT(request: NextRequest) {
       mappings.xero_usdc_clearing_account_id,
       mappings.xero_usdt_clearing_account_id,
       mappings.xero_audd_clearing_account_id,
-    ];
+    ].filter(Boolean);
 
     const uniqueCryptoAccounts = new Set(cryptoAccounts);
     if (uniqueCryptoAccounts.size !== cryptoAccounts.length) {
@@ -147,7 +151,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const mappedCodes = required
+    const mappedCodes = mappingFields
       .map((field) => mappings[field] as string)
       .filter(Boolean);
     const mappingValidation = await validateMappedAccountCodes(organizationId, mappedCodes);
@@ -187,7 +191,7 @@ export async function PUT(request: NextRequest) {
 
     logger.info('Updated Xero account mappings', {
       organizationId,
-      mappingsCount: required.length,
+      mappingsCount: mappedCodes.length,
     });
 
     const auditCtx = extractRequestAuditContext(request);
@@ -199,7 +203,7 @@ export async function PUT(request: NextRequest) {
       resource: 'xero_mappings',
       resourceId: organizationId,
       action: 'update',
-      newValue: JSON.stringify({ fieldsUpdated: required.length }),
+      newValue: JSON.stringify({ fieldsUpdated: mappedCodes.length }),
       ipAddress: auditCtx.ipAddress,
       userAgent: auditCtx.userAgent,
       correlationId: auditCtx.correlationId,

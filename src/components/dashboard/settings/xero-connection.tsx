@@ -31,6 +31,7 @@ import { warnInvalidOrganizationId, isValidOrganizationUuid } from '@/lib/organi
 import { Loader2, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link';
 
 interface XeroConnectionProps {
   organizationId: string;
@@ -64,6 +65,7 @@ export function XeroConnection({ organizationId }: XeroConnectionProps) {
   const [connecting, setConnecting] = React.useState(false);
   const [disconnecting, setDisconnecting] = React.useState(false);
   const [changingTenant, setChangingTenant] = React.useState(false);
+  const [connectionSuccessMessage, setConnectionSuccessMessage] = React.useState<string | null>(null);
 
   // Fetch connection status
   const fetchStatus = React.useCallback(async () => {
@@ -114,13 +116,21 @@ export function XeroConnection({ organizationId }: XeroConnectionProps) {
   // Handle OAuth callback results
   React.useEffect(() => {
     const success = searchParams.get('xero_success');
+    const accounting = searchParams.get('xero_accounting');
     const error = searchParams.get('xero_error');
 
     if (!success && !error) return;
 
     const run = async () => {
       if (success === 'connected') {
-        toast.success('Successfully connected to Xero!');
+        const message =
+          accounting === 'configured'
+            ? 'Provvypay has automatically configured your accounting settings. Your workspace is ready to export customer invoices and supplier bills to Xero.'
+            : accounting === 'recommendation'
+              ? 'Provvypay has configured your required accounting settings. One optional account could not be matched and can be reviewed later.'
+              : 'Successfully connected to Xero!';
+        setConnectionSuccessMessage(message);
+        toast.success(message);
         await fetchStatus();
 
         // Clean up URL after status refresh so account mapping can load accounts
@@ -218,6 +228,14 @@ export function XeroConnection({ organizationId }: XeroConnectionProps) {
     await handleConnect();
   };
 
+  const handleOpenAdvancedAccounting = () => {
+    const advanced = document.getElementById('advanced-accounting-settings') as HTMLDetailsElement | null;
+    if (advanced) {
+      advanced.open = true;
+      advanced.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -232,6 +250,24 @@ export function XeroConnection({ organizationId }: XeroConnectionProps) {
         <Alert>
           <AlertTitle>Xero</AlertTitle>
           <AlertDescription>{status.operatorMessage}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {connectionSuccessMessage ? (
+        <Alert>
+          <CheckCircle className="h-4 w-4" />
+          <AlertTitle>Xero Connected</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p>{connectionSuccessMessage}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" asChild>
+                <Link href="/dashboard">Continue</Link>
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleOpenAdvancedAccounting}>
+                Advanced Accounting Settings
+              </Button>
+            </div>
+          </AlertDescription>
         </Alert>
       ) : null}
 

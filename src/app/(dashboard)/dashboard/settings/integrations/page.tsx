@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { XeroConnection } from '@/components/dashboard/settings/xero-connection';
 import { XeroSyncQueue } from '@/components/dashboard/settings/xero-sync-queue';
 import { XeroAccountMapping } from '@/components/dashboard/settings/xero-account-mapping';
+import { XeroAccountingHealth } from '@/components/dashboard/settings/xero-accounting-health';
 import { XeroIntegrationsGate } from '@/components/entitlements/xero-integrations-gate';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getUserOrganization } from '@/lib/auth/get-org';
@@ -215,7 +216,19 @@ export default async function IntegrationsPage() {
             </CardContent>
           </Card>
 
-          <XeroAccountMapping organizationId={organizationId} />
+          <XeroAccountingHealth organizationId={organizationId} />
+
+          <details id="advanced-accounting-settings" className="rounded-lg border bg-card">
+            <summary className="cursor-pointer px-6 py-4 text-sm font-medium">
+              Advanced Accounting Settings
+            </summary>
+            <div className="border-t p-6">
+              <XeroAccountMapping
+                organizationId={organizationId}
+                stablecoinSettlementsEnabled={hederaConfigured}
+              />
+            </div>
+          </details>
           <XeroSyncQueue organizationId={organizationId} />
         </XeroIntegrationsGate>
       </section>

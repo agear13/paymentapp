@@ -19,6 +19,7 @@ import { isValidOrganizationUuid, warnInvalidOrganizationId } from '@/lib/organi
 import { traceConnectionVsTokenSet } from '@/lib/xero/apply-connection-token-set';
 import { logTokenSetTrace } from '@/lib/xero/token-set-trace';
 import { hashOAuthState } from '@/lib/xero/oauth-state-trace';
+import { applyXeroDefaultAccountingMappingsIfEmpty } from '@/lib/xero/default-accounting-mappings';
 
 export async function GET(request: NextRequest) {
   const organizationIdHint = 'unknown';
@@ -156,6 +157,8 @@ export async function GET(request: NextRequest) {
       }, storedConnection);
     }
 
+    const defaultMappingResult = await applyXeroDefaultAccountingMappingsIfEmpty(organizationId);
+
     loggers.xero.info('xero_callback_success', {
       step: 'callback_complete',
       organizationId,
@@ -163,15 +166,29 @@ export async function GET(request: NextRequest) {
       tenantId: selectedTenant.tenantId,
       tenantName: selectedTenant.tenantName,
       tenantCount: tenants.length,
+      defaultMappingStatus: defaultMappingResult.status,
     });
+
+    const accountingParam =
+      defaultMappingResult.status === 'applied'
+        ? defaultMappingResult.recommendations.length > 0
+          ? 'recommendation'
+          : 'configured'
+        : defaultMappingResult.status === 'skipped_existing'
+          ? 'existing'
+          : 'unavailable';
 
     const redirectUrl =
       tenants.length > 1
         ? xeroIntegrationsRedirectUrl(request, {
             xero_success: 'connected',
+            xero_accounting: accountingParam,
             select_tenant: 'true',
           })
-        : xeroIntegrationsRedirectUrl(request, { xero_success: 'connected' });
+        : xeroIntegrationsRedirectUrl(request, {
+            xero_success: 'connected',
+            xero_accounting: accountingParam,
+          });
 
     return NextResponse.redirect(redirectUrl);
   } catch (error) {

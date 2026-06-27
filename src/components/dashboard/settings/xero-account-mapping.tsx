@@ -20,9 +20,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
+import { DefaultAccountingMappingService } from '@/lib/accounting/default-accounting-mapping-service';
 
 interface XeroAccountMappingProps {
   organizationId: string;
+  stablecoinSettlementsEnabled?: boolean;
 }
 
 interface XeroAccount {
@@ -58,10 +60,14 @@ interface AccountMappings {
   xero_fee_expense_account_id: string;
 }
 
-export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) {
+export function XeroAccountMapping({
+  organizationId,
+  stablecoinSettlementsEnabled = false,
+}: XeroAccountMappingProps) {
   const searchParams = useSearchParams();
   const [accounts, setAccounts] = React.useState<XeroAccount[]>([]);
   const [mappings, setMappings] = React.useState<Partial<AccountMappings>>({});
+  const [dirty, setDirty] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -141,6 +147,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
       const { data } = await response.json();
       if (data) {
         setMappings(data);
+        setDirty(false);
       }
     } catch (err) {
       console.error('Error fetching mappings:', err);
@@ -178,6 +185,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
       }
 
       toast.success('Xero account mappings saved successfully');
+      setDirty(false);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to save mappings';
       setError(errorMessage);
@@ -190,7 +198,13 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
   function handleReset() {
     const defaults = getDefaultMappings(accounts);
     setMappings(defaults);
+    setDirty(true);
     toast.info('Mappings reset to suggested defaults');
+  }
+
+  function updateMapping(field: keyof AccountMappings, value: string) {
+    setMappings((current) => ({ ...current, [field]: value }));
+    setDirty(true);
   }
 
   if (loading) {
@@ -231,10 +245,12 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-medium">Xero Account Mapping</h3>
+        <h3 className="text-lg font-medium">Advanced Accounting Settings</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Map your Provvypay accounts to Xero accounts for automated sync.
-          Each crypto token requires a separate clearing account.
+          Provvypay has already configured recommended accounting settings for your business.
+          Most businesses never need to modify these. Only change these settings if your
+          accountant has instructed you to, your chart of accounts changes, or you enable
+          stablecoin settlements.
         </p>
       </div>
 
@@ -252,9 +268,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
           description="Sales revenue from invoices"
           accounts={getAccountOptions(accounts, ['SALES', 'REVENUE'])}
           value={mappings.xero_revenue_account_id || ''}
-          onChange={(value) =>
-            setMappings({ ...mappings, xero_revenue_account_id: value })
-          }
+          onChange={(value) => updateMapping('xero_revenue_account_id', value)}
           placeholder="Select revenue account (e.g., 4000 Revenue)"
         />
 
@@ -264,9 +278,7 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
           description="Customer invoices pending payment"
           accounts={getAccountOptions(accounts, ['CURRENT', 'CURRLIAB'])}
           value={mappings.xero_receivable_account_id || ''}
-          onChange={(value) =>
-            setMappings({ ...mappings, xero_receivable_account_id: value })
-          }
+          onChange={(value) => updateMapping('xero_receivable_account_id', value)}
           placeholder="Select receivable account (e.g., 1200 Accounts Receivable)"
         />
 
@@ -276,59 +288,8 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
           description="Stripe payment settlements"
           accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
           value={mappings.xero_stripe_clearing_account_id || ''}
-          onChange={(value) =>
-            setMappings({ ...mappings, xero_stripe_clearing_account_id: value })
-          }
+          onChange={(value) => updateMapping('xero_stripe_clearing_account_id', value)}
           placeholder="Select Stripe clearing account"
-        />
-
-        {/* HBAR Clearing */}
-        <AccountMappingField
-          label="Crypto Clearing - HBAR"
-          description="HBAR cryptocurrency settlements"
-          accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
-          value={mappings.xero_hbar_clearing_account_id || ''}
-          onChange={(value) =>
-            setMappings({ ...mappings, xero_hbar_clearing_account_id: value })
-          }
-          placeholder="Select HBAR clearing account (typically 1051)"
-        />
-
-        {/* USDC Clearing */}
-        <AccountMappingField
-          label="Crypto Clearing - USDC"
-          description="USDC stablecoin settlements"
-          accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
-          value={mappings.xero_usdc_clearing_account_id || ''}
-          onChange={(value) =>
-            setMappings({ ...mappings, xero_usdc_clearing_account_id: value })
-          }
-          placeholder="Select USDC clearing account (typically 1052)"
-        />
-
-        {/* USDT Clearing */}
-        <AccountMappingField
-          label="Crypto Clearing - USDT"
-          description="USDT stablecoin settlements"
-          accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
-          value={mappings.xero_usdt_clearing_account_id || ''}
-          onChange={(value) =>
-            setMappings({ ...mappings, xero_usdt_clearing_account_id: value })
-          }
-          placeholder="Select USDT clearing account (typically 1053)"
-        />
-
-        {/* AUDD Clearing ⭐ NEW */}
-        <AccountMappingField
-          label="Crypto Clearing - AUDD"
-          description="AUDD (Australian Digital Dollar) stablecoin settlements"
-          accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
-          value={mappings.xero_audd_clearing_account_id || ''}
-          onChange={(value) =>
-            setMappings({ ...mappings, xero_audd_clearing_account_id: value })
-          }
-          placeholder="Select AUDD clearing account (typically 1054)"
-          badge="🇦🇺 AUD Stablecoin"
         />
 
         {/* Processor Fee Expense */}
@@ -337,32 +298,75 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
           description="Payment processing fees"
           accounts={getAccountOptions(accounts, ['EXPENSE', 'OVERHEADS'])}
           value={mappings.xero_fee_expense_account_id || ''}
-          onChange={(value) =>
-            setMappings({ ...mappings, xero_fee_expense_account_id: value })
-          }
+          onChange={(value) => updateMapping('xero_fee_expense_account_id', value)}
           placeholder="Select expense account (e.g., 6100 Bank Fees)"
         />
+
+        {stablecoinSettlementsEnabled ? (
+          <details className="rounded-lg border bg-muted/20 p-4">
+            <summary className="cursor-pointer text-sm font-medium">
+              Advanced Settlement Accounts
+            </summary>
+            <div className="mt-4 space-y-4">
+              <AccountMappingField
+                label="HBAR"
+                description="Optional HBAR settlement clearing account"
+                accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
+                value={mappings.xero_hbar_clearing_account_id || ''}
+                onChange={(value) => updateMapping('xero_hbar_clearing_account_id', value)}
+                placeholder="Select HBAR clearing account"
+              />
+              <AccountMappingField
+                label="USDC"
+                description="Optional USDC stablecoin settlement clearing account"
+                accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
+                value={mappings.xero_usdc_clearing_account_id || ''}
+                onChange={(value) => updateMapping('xero_usdc_clearing_account_id', value)}
+                placeholder="Select USDC clearing account"
+              />
+              <AccountMappingField
+                label="USDT"
+                description="Optional USDT stablecoin settlement clearing account"
+                accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
+                value={mappings.xero_usdt_clearing_account_id || ''}
+                onChange={(value) => updateMapping('xero_usdt_clearing_account_id', value)}
+                placeholder="Select USDT clearing account"
+              />
+              <AccountMappingField
+                label="AUDD"
+                description="Optional AUDD stablecoin settlement clearing account"
+                accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
+                value={mappings.xero_audd_clearing_account_id || ''}
+                onChange={(value) => updateMapping('xero_audd_clearing_account_id', value)}
+                placeholder="Select AUDD clearing account"
+                badge="AUD Stablecoin"
+              />
+            </div>
+          </details>
+        ) : null}
       </div>
 
       {/* Action Buttons */}
       <div className="flex gap-3 pt-4 border-t">
-        <Button
-          onClick={handleSave}
-          disabled={saving || loading}
-          className="min-w-[120px]"
-        >
-          {saving ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Save Mappings
-            </>
-          )}
-        </Button>
+        {dirty ? (
+          <Button
+            onClick={handleSave}
+            disabled={saving || loading}
+            className="min-w-[120px]"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        ) : null}
 
         <Button
           onClick={handleReset}
@@ -403,26 +407,30 @@ export function XeroAccountMapping({ organizationId }: XeroAccountMappingProps) 
               accountId={mappings.xero_stripe_clearing_account_id}
               accounts={accounts}
             />
-            <MappingSummaryItem
-              label="HBAR"
-              accountId={mappings.xero_hbar_clearing_account_id}
-              accounts={accounts}
-            />
-            <MappingSummaryItem
-              label="USDC"
-              accountId={mappings.xero_usdc_clearing_account_id}
-              accounts={accounts}
-            />
-            <MappingSummaryItem
-              label="USDT"
-              accountId={mappings.xero_usdt_clearing_account_id}
-              accounts={accounts}
-            />
-            <MappingSummaryItem
-              label="AUDD 🇦🇺"
-              accountId={mappings.xero_audd_clearing_account_id}
-              accounts={accounts}
-            />
+            {stablecoinSettlementsEnabled ? (
+              <>
+                <MappingSummaryItem
+                  label="HBAR"
+                  accountId={mappings.xero_hbar_clearing_account_id}
+                  accounts={accounts}
+                />
+                <MappingSummaryItem
+                  label="USDC"
+                  accountId={mappings.xero_usdc_clearing_account_id}
+                  accounts={accounts}
+                />
+                <MappingSummaryItem
+                  label="USDT"
+                  accountId={mappings.xero_usdt_clearing_account_id}
+                  accounts={accounts}
+                />
+                <MappingSummaryItem
+                  label="AUDD"
+                  accountId={mappings.xero_audd_clearing_account_id}
+                  accounts={accounts}
+                />
+              </>
+            ) : null}
             <MappingSummaryItem
               label="Fees"
               accountId={mappings.xero_fee_expense_account_id}
@@ -519,13 +527,6 @@ function validateMappings(mappings: Partial<AccountMappings>): {
 } {
   const required = [
     { field: 'xero_revenue_account_id', label: 'Revenue Account' },
-    { field: 'xero_receivable_account_id', label: 'Accounts Receivable' },
-    { field: 'xero_stripe_clearing_account_id', label: 'Stripe Clearing' },
-    { field: 'xero_hbar_clearing_account_id', label: 'HBAR Clearing' },
-    { field: 'xero_usdc_clearing_account_id', label: 'USDC Clearing' },
-    { field: 'xero_usdt_clearing_account_id', label: 'USDT Clearing' },
-    { field: 'xero_audd_clearing_account_id', label: 'AUDD Clearing' },
-    { field: 'xero_fee_expense_account_id', label: 'Fee Expense' },
   ];
 
   for (const { field, label } of required) {
@@ -559,26 +560,13 @@ function validateMappings(mappings: Partial<AccountMappings>): {
 
 // Get default mappings by searching for matching account codes
 function getDefaultMappings(accounts: XeroAccount[]): Partial<AccountMappings> {
+  const result = new DefaultAccountingMappingService().resolve(accounts);
   return {
-    xero_revenue_account_id: findAccount(accounts, ['4000', '4100', 'revenue'])?.code,
-    xero_receivable_account_id: findAccount(accounts, ['1200', '1100', 'receivable'])?.code,
-    xero_stripe_clearing_account_id: findAccount(accounts, ['1050', 'stripe'])?.code,
-    xero_hbar_clearing_account_id: findAccount(accounts, ['1051', 'hbar', 'crypto'])?.code,
-    xero_usdc_clearing_account_id: findAccount(accounts, ['1052', 'usdc'])?.code,
-    xero_usdt_clearing_account_id: findAccount(accounts, ['1053', 'usdt'])?.code,
-    xero_audd_clearing_account_id: findAccount(accounts, ['1054', 'audd'])?.code,
-    xero_fee_expense_account_id: findAccount(accounts, ['6100', '6200', 'fee', 'bank charges'])?.code,
+    xero_revenue_account_id: result.mappings.revenueAccountCode,
+    xero_receivable_account_id: result.mappings.receivableAccountCode,
+    xero_stripe_clearing_account_id: result.mappings.stripeClearingAccountCode,
+    xero_fee_expense_account_id: result.mappings.processorFeeExpenseAccountCode,
   };
-}
-
-// Helper to find account by code or name
-function findAccount(accounts: XeroAccount[], searchTerms: string[]): XeroAccount | undefined {
-  return accounts.find(account =>
-    searchTerms.some(term =>
-      account.code?.toLowerCase().includes(term.toLowerCase()) ||
-      account.name?.toLowerCase().includes(term.toLowerCase())
-    )
-  );
 }
 
 function getAccountOptions(accounts: XeroAccount[], preferredTypes: string[]): XeroAccount[] {
