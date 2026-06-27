@@ -2,20 +2,18 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Copy, ExternalLink, MoreHorizontal, Pencil } from 'lucide-react';
+import { MoreHorizontal, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TableCell, TableRow } from '@/components/ui/table';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
-import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import {
   deriveParticipantCommercialTablePresentation,
   type ParticipantTableNextAction,
@@ -24,7 +22,6 @@ import {
   projectOperatorReviewPath,
   projectXeroExportPath,
 } from '@/lib/projects/project-routes';
-import { AGREEMENT_ACTION_COPY } from '@/lib/operations/merchant-operational-copy';
 import { cn } from '@/lib/utils';
 import { hydrateParticipant, participantEntity, type HydrateParticipantContext } from '@/lib/operations/hydration/hydrate-participant';
 import {
@@ -271,18 +268,9 @@ function ProjectParticipantTableRowComponent({
   const exempt = hydrated.compensation.exemptFromPayout;
   const tablePresentation = deriveParticipantCommercialTablePresentation(entity);
 
-  const viewAgreement = () => {
-    const base = entity.agreementUrl ?? participantAgreementPath(entity.inviteToken);
-    const path = base.includes('?') ? `${base}&mode=preview` : `${base}?mode=preview`;
-    if (typeof window !== 'undefined') {
-      window.open(path, '_blank', 'noopener,noreferrer');
-    }
-  };
-
   const openCompensation = () => onConfigureCompensation(participantEntity(hydrated));
   const openEdit = () => onEdit(participantEntity(hydrated));
   const openShare = () => share(participantEntity(hydrated));
-  const openCopy = () => onCopyAgreement(participantEntity(hydrated));
   const openSharePaymentRequest = () => {
     const p = participantEntity(hydrated);
     onSharePaymentRequest?.(p);
@@ -397,31 +385,9 @@ function ProjectParticipantTableRowComponent({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={openCompensation}>
+              <DropdownMenuItem onClick={openEdit}>
                 <Pencil className="mr-2 h-3.5 w-3.5" />
-                Configure earnings
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={openEdit}>Edit participant</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={openCopy}
-                title={AGREEMENT_ACTION_COPY.copyLink.tooltip}
-              >
-                <Copy className="mr-2 h-3.5 w-3.5" />
-                {AGREEMENT_ACTION_COPY.copyLink.label}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={openShare}
-                title={AGREEMENT_ACTION_COPY.shareForApproval.tooltip}
-              >
-                {AGREEMENT_ACTION_COPY.shareForApproval.label}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={viewAgreement}
-                title={AGREEMENT_ACTION_COPY.preview.tooltip}
-              >
-                <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                {AGREEMENT_ACTION_COPY.preview.label}
+                Edit participant
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

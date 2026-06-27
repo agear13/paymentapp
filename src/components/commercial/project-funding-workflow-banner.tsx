@@ -4,8 +4,7 @@
  * ProjectFundingWorkflowBanner
  *
  * Lightweight workflow status panel for the Funding page.
- * Derives status from participant counts available in the workspace context —
- * no deep engine calls required.
+ * Derives status from the canonical participant operational workflow.
  *
  * Shows:
  *   - Supplier onboarding progress (counts from participant fields)
@@ -26,6 +25,11 @@ import { useProjectWorkspace } from '@/components/projects/project-workspace-pro
 import { projectSupplierOnboardingPath } from '@/lib/projects/project-routes';
 import { XeroExportStatusPanel } from '@/components/commercial/accounting/xero-export-status-panel';
 import { buildMinimalAccountingExportModels } from '@/lib/commercial/participant-workflow-adapter';
+import {
+  deriveParticipantOperationalWorkflow,
+  type ParticipantCommercialLifecycleStage,
+} from '@/lib/commercial/participant-commercial-lifecycle';
+import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 
 type OnboardingCounts = {
   total: number;
@@ -33,23 +37,35 @@ type OnboardingCounts = {
   pending: number;
 };
 
-function deriveOnboardingCounts(participants: Array<{
-  approvalStatus?: string;
-  payoutVerificationConfirmed?: boolean;
-  payoutOnboardingPhase?: string;
-  onboardingStatus?: string;
-}>): OnboardingCounts {
-  const approved = participants.filter((p) => p.approvalStatus === 'Approved');
-  const completed = approved.filter(
-    (p) =>
-      p.payoutVerificationConfirmed === true ||
-      p.payoutOnboardingPhase === 'COMPLETED' ||
-      p.onboardingStatus === 'COMPLETE'
+const SUPPLIER_ONBOARDING_STAGES: ParticipantCommercialLifecycleStage[] = [
+  'AGREEMENT_ACCEPTED',
+  'PAYMENT_INFO_PENDING',
+  'PAYMENT_INFO_SUBMITTED',
+  'OPERATOR_REVIEW',
+  'XERO_INVOICE',
+  'SETTLEMENT_READY',
+  'PAID',
+];
+
+const SUPPLIER_ONBOARDING_COMPLETE_STAGES: ParticipantCommercialLifecycleStage[] = [
+  'PAYMENT_INFO_SUBMITTED',
+  'OPERATOR_REVIEW',
+  'XERO_INVOICE',
+  'SETTLEMENT_READY',
+  'PAID',
+];
+
+function deriveOnboardingCounts(participants: DemoParticipant[]): OnboardingCounts {
+  const onboarding = participants.filter((p) =>
+    SUPPLIER_ONBOARDING_STAGES.includes(deriveParticipantOperationalWorkflow(p).stage)
+  );
+  const completed = onboarding.filter((p) =>
+    SUPPLIER_ONBOARDING_COMPLETE_STAGES.includes(deriveParticipantOperationalWorkflow(p).stage)
   );
   return {
-    total: approved.length,
+    total: onboarding.length,
     completed: completed.length,
-    pending: approved.length - completed.length,
+    pending: onboarding.length - completed.length,
   };
 }
 

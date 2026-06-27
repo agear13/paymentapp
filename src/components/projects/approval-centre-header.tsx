@@ -5,10 +5,10 @@
  *
  * Two states:
  *
- *   State A — Approvals outstanding
+ *   State A — Agreement acceptance outstanding
  *     Progress bar · counts · Provvy guidance line (who to chase next)
  *
- *   State B — Everyone approved
+ *   State B — Everyone accepted
  *     ✓ strip · one next-step CTA (first unresolved bottleneck only)
  *
  * Design rules:
@@ -24,9 +24,18 @@ import { ArrowRight, CheckCircle2, Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import type { CommercialCapabilities } from '@/components/workflow/commercial-decision-engine';
-import { deriveAgreementLifecycleState } from '@/lib/operations/lifecycle/agreement-lifecycle';
-import { projectOverviewPath } from '@/lib/projects/project-routes';
+import {
+  deriveParticipantOperationalWorkflow,
+  type ParticipantOperationalWorkflow,
+  type ParticipantWorkflowCtaDestination,
+} from '@/lib/commercial/participant-commercial-lifecycle';
+import {
+  projectOperatorReviewPath,
+  projectPaymentRequestsPath,
+  projectParticipantsPath,
+  projectSettlementPath,
+  projectXeroExportPath,
+} from '@/lib/projects/project-routes';
 import { cn } from '@/lib/utils';
 
 /* ─── Approval stat derivation ─────────────────────────────────────────────── */
@@ -34,11 +43,11 @@ import { cn } from '@/lib/utils';
 export type ApprovalStats = {
   total: number;
   approved: number;
-  /** Shared / viewed / signed — sent but not yet approved */
+  /** Sent but not yet accepted */
   waiting: number;
   /** Agreement not yet generated or shared */
   notSent: number;
-  /** total − approved */
+  /** total − accepted */
   pending: number;
   percentage: number;
 };
@@ -54,12 +63,16 @@ export function deriveApprovalStats(participants: DemoParticipant[]): ApprovalSt
   let notSent = 0;
 
   for (const p of participants) {
-    if (p.approvalStatus === 'Approved') {
+    const workflow = deriveParticipantOperationalWorkflow(p);
+    if (
+      workflow.stage !== 'DRAFT' &&
+      workflow.stage !== 'EARNINGS_CONFIGURED' &&
+      workflow.stage !== 'AGREEMENT_SENT'
+    ) {
       approved++;
       continue;
     }
-    const lc = deriveAgreementLifecycleState(p);
-    if (lc === 'SHARED' || lc === 'VIEWED' || lc === 'SIGNED') {
+    if (workflow.stage === 'AGREEMENT_SENT') {
       waiting++;
     } else {
       notSent++;
@@ -105,7 +118,7 @@ function ApprovalProgressBar({ percentage }: { percentage: number }) {
  * read a paragraph. Examples:
  *   "Send the agreement to Sam — they are the only one waiting."
  *   "2 participants still need the agreement sent."
- *   "1 participant has opened the agreement but not yet approved."
+ *   "1 participant has received the agreement and is waiting."
  */
 
 function deriveGuidanceLine(
@@ -117,19 +130,22 @@ function deriveGuidanceLine(
   // Single participant not yet sent → name them directly
   if (stats.notSent === 1 && stats.waiting === 0) {
     const p = participants.find((x) => {
-      const lc = deriveAgreementLifecycleState(x);
-      return x.approvalStatus !== 'Approved' && lc !== 'SHARED' && lc !== 'VIEWED' && lc !== 'SIGNED';
+      const workflow = deriveParticipantOperationalWorkflow(x);
+      return workflow.stage === 'DRAFT' || workflow.stage === 'EARNINGS_CONFIGURED';
     });
-    if (p?.name) return `Send the agreement to ${p.name} — they haven't received it yet.`;
+    if (p?.name) {
+      const label = deriveParticipantOperationalWorkflow(p).primaryCta.label.toLowerCase();
+      return `${label.charAt(0).toUpperCase()}${label.slice(1)} for ${p.name}.`;
+    }
   }
 
-  // Single participant waiting (sent but not approved)
+  // Single participant waiting on acceptance.
   if (stats.waiting === 1 && stats.notSent === 0) {
     const p = participants.find((x) => {
-      const lc = deriveAgreementLifecycleState(x);
-      return lc === 'SHARED' || lc === 'VIEWED' || lc === 'SIGNED';
+      const workflow = deriveParticipantOperationalWorkflow(x);
+      return workflow.stage === 'AGREEMENT_SENT';
     });
-    if (p?.name) return `${p.name} has received the agreement but hasn't approved yet.`;
+    if (p?.name) return deriveParticipantOperationalWorkflow(p).explanation;
   }
 
   // Multiple unsent
@@ -139,7 +155,7 @@ function deriveGuidanceLine(
 
   // All sent, some waiting
   if (stats.waiting > 0) {
-    return `${stats.waiting} ${stats.waiting === 1 ? 'participant has' : 'participants have'} received the agreement but haven't approved yet.`;
+    return `${stats.waiting} ${stats.waiting === 1 ? 'participant is' : 'participants are'} waiting for agreement acceptance.`;
   }
 
   return null;
@@ -159,48 +175,57 @@ type NextBottleneck = {
 };
 
 export function deriveNextBottleneck(
-  caps: CommercialCapabilities,
+  participants: DemoParticipant[],
   projectId: string
 ): NextBottleneck | null {
-  const base = `/dashboard/projects/${encodeURIComponent(projectId)}`;
+  const ranked = participants
+    .map((participant) => ({
+      participant,
+      workflow: deriveParticipantOperationalWorkflow(participant),
+    }))
+    .filter(({ workflow }) => workflow.primaryCta.destination !== 'none')
+    .sort((a, b) => workflowPriority(a.workflow) - workflowPriority(b.workflow));
 
-  if (!caps.paymentProviderConnected) {
-    return {
-      title: 'Set up payments',
-      description: 'Connect a payment provider so customers can pay and revenue can flow.',
-      ctaLabel: 'Connect payment provider',
-      href: '/dashboard/settings/merchant#payment-provider',
-    };
+  const next = ranked[0];
+  if (!next) return null;
+
+  return {
+    title: next.workflow.badge,
+    description: next.workflow.explanation,
+    ctaLabel: next.workflow.primaryCta.label,
+    href: workflowCtaHref(projectId, next.participant.id, next.workflow.primaryCta.destination),
+  };
+}
+
+function workflowPriority(workflow: ParticipantOperationalWorkflow): number {
+  if (workflow.primaryCta.urgency === 'action_required') return 0;
+  if (workflow.primaryCta.urgency === 'attention') return 1;
+  return 2;
+}
+
+function workflowCtaHref(
+  projectId: string,
+  participantId: string | undefined,
+  destination: ParticipantWorkflowCtaDestination
+): string {
+  switch (destination) {
+    case 'send_payment_request':
+    case 'await_participant':
+      return projectPaymentRequestsPath(projectId);
+    case 'review_payment':
+      return participantId
+        ? projectOperatorReviewPath(projectId, participantId)
+        : projectPaymentRequestsPath(projectId);
+    case 'xero_export':
+      return projectXeroExportPath(projectId);
+    case 'settlement':
+      return projectSettlementPath(projectId);
+    case 'configure_earnings':
+    case 'send_agreement':
+    case 'none':
+    default:
+      return projectParticipantsPath(projectId);
   }
-
-  if (!caps.revenueFlowing) {
-    return {
-      title: 'Start collecting revenue',
-      description: 'Share your payment links to begin collecting customer payments.',
-      ctaLabel: 'View agreement',
-      href: projectOverviewPath(projectId),
-    };
-  }
-
-  if (caps.revenueFlowing && !caps.settlementReady) {
-    return {
-      title: 'Review obligations',
-      description: 'Revenue is flowing. Confirm what each participant is owed before releasing payments.',
-      ctaLabel: 'Review obligations',
-      href: `${base}/payouts`,
-    };
-  }
-
-  if (caps.settlementReady) {
-    return {
-      title: 'Release payments',
-      description: 'Revenue has been collected. Review what each participant is owed.',
-      ctaLabel: 'Review obligations',
-      href: `${base}/payouts`,
-    };
-  }
-
-  return null;
 }
 
 /* ─── Props ─────────────────────────────────────────────────────────────────── */
@@ -208,7 +233,7 @@ export function deriveNextBottleneck(
 type ApprovalCentreHeaderProps = {
   participants: DemoParticipant[];
   agreementName: string;
-  commercialCapabilities: CommercialCapabilities | null;
+  commercialCapabilities?: unknown;
   /** Required for next-bottleneck CTA links in State B */
   projectId: string;
 };
@@ -227,12 +252,11 @@ export function ApprovalCentreHeader({
     [participants, stats]
   );
 
-  const caps = commercialCapabilities;
-  const approvalsComplete = caps?.approvalsComplete ?? false;
-  const nextBottleneck =
-    approvalsComplete && caps ? deriveNextBottleneck(caps, projectId) : null;
+  void commercialCapabilities;
+  const approvalsComplete = stats.total > 0 && stats.pending === 0;
+  const nextBottleneck = approvalsComplete ? deriveNextBottleneck(participants, projectId) : null;
 
-  /* ─── STATE B: Everyone approved ─── */
+  /* ─── STATE B: Everyone accepted ─── */
 
   if (approvalsComplete) {
     return (
@@ -244,7 +268,7 @@ export function ApprovalCentreHeader({
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold text-[rgb(29,111,66)] leading-tight">
-              Everyone has approved.
+              Everyone has accepted.
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               {agreementName} is payment-ready.
@@ -286,7 +310,7 @@ export function ApprovalCentreHeader({
   const outstandingLabel =
     stats.pending === 1
       ? 'Waiting on 1 person'
-      : `${stats.pending} approvals outstanding`;
+      : `${stats.pending} acceptances outstanding`;
 
   return (
     <div className="rounded-xl border border-border/60 bg-card px-5 py-4 space-y-3">
@@ -298,7 +322,7 @@ export function ApprovalCentreHeader({
           </div>
           <div>
             <h2 className="text-sm font-semibold text-foreground leading-tight">
-              Approvals
+              Agreement Acceptance
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[30ch]">
               {agreementName}
@@ -328,7 +352,7 @@ export function ApprovalCentreHeader({
             <div className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-[rgb(29,111,66)] shrink-0" />
               <span className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{stats.approved}</span> Approved
+                <span className="font-semibold text-foreground">{stats.approved}</span> Accepted
               </span>
             </div>
           ) : null}
@@ -336,7 +360,7 @@ export function ApprovalCentreHeader({
             <div className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
               <span className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{stats.waiting}</span> Waiting to approve
+                <span className="font-semibold text-foreground">{stats.waiting}</span> Waiting for acceptance
               </span>
             </div>
           ) : null}

@@ -39,6 +39,9 @@ import {
   projectParticipantsPath,
   projectApprovalCentrePath,
   projectPayoutsPath,
+  projectPaymentRequestsPath,
+  projectOperatorReviewPath,
+  projectXeroExportPath,
   projectActivityPath,
 } from '../../lib/projects/project-routes';
 import {
@@ -405,7 +408,7 @@ describe('Step 4 — Approval Centre State Machine (deriveApprovalStats)', () =>
         earnings: null,
         setupStatus: 'active',
         payoutVerificationConfirmed: true,
-        compensationProfile: null,
+        compensationProfile: { configured: true },
         projectId: PROJECT_ID,
       } as never);
     }
@@ -422,7 +425,7 @@ describe('Step 4 — Approval Centre State Machine (deriveApprovalStats)', () =>
         earnings: null,
         setupStatus: 'active',
         payoutVerificationConfirmed: false,
-        compensationProfile: null,
+        compensationProfile: { configured: true },
         projectId: PROJECT_ID,
       } as never);
     }
@@ -438,7 +441,7 @@ describe('Step 4 — Approval Centre State Machine (deriveApprovalStats)', () =>
         earnings: null,
         setupStatus: 'active',
         payoutVerificationConfirmed: false,
-        compensationProfile: null,
+        compensationProfile: { configured: true },
         projectId: PROJECT_ID,
       } as never);
     }
@@ -533,44 +536,109 @@ describe('Step 5 — All Approved (preparing-payments)', () => {
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 describe('Step 6 — Post-Approval Bottleneck Navigation (deriveNextBottleneck)', () => {
-  const allApprovedCaps = capabilities(STEP_ALL_APPROVED);
-  const providerConnectedCaps = capabilities(STEP_PROVIDER_CONNECTED);
-  const revenueFlowingCaps = capabilities(STEP_REVENUE_FLOWING);
-  const settlementReadyCaps = capabilities(STEP_SETTLEMENT_READY);
+  const workflowParticipant = (
+    id: string,
+    overrides: Record<string, unknown> = {}
+  ): Parameters<typeof deriveNextBottleneck>[0][number] => ({
+    id,
+    name: id,
+    email: `${id}@example.com`,
+    role: 'Partner',
+    approvalStatus: 'Approved',
+    agreementLifecycle: 'APPROVED',
+    compensationProfile: { configured: true },
+    projectId: PROJECT_ID,
+    ...overrides,
+  } as never);
 
-  it('priority 1: !paymentProviderConnected → MERCHANT_STRIPE_HREF (A4 fix)', () => {
-    const next = deriveNextBottleneck(allApprovedCaps, PROJECT_ID);
+  it('priority 1: agreement accepted → request payout details', () => {
+    const next = deriveNextBottleneck(
+      [workflowParticipant('accepted')],
+      PROJECT_ID
+    );
     expect(next).not.toBeNull();
-    expect(next!.href).toBe(MERCHANT_STRIPE_HREF);
-    expect(next!.href).not.toContain('/funding');
+    expect(next!.href).toBe(projectPaymentRequestsPath(PROJECT_ID));
+    expect(next!.ctaLabel).toBe('Request Payout Details');
   });
 
-  it('priority 2: provider connected, !revenueFlowing → agreement overview (A3 fix — no /overview 404)', () => {
-    const next = deriveNextBottleneck(providerConnectedCaps, PROJECT_ID);
+  it('priority 2: payout request sent → waiting for participant', () => {
+    const next = deriveNextBottleneck(
+      [
+        workflowParticipant('waiting', {
+          supplierOnboarding: { lifecycle: 'INVITED' },
+          paymentRequestGeneratedAt: '2026-01-01T00:00:00.000Z',
+        }),
+      ],
+      PROJECT_ID
+    );
     expect(next).not.toBeNull();
-    // Must resolve to projectOverviewPath(PROJECT_ID), not ${base}/overview which 404s
-    expect(next!.href).toBe(projectOverviewPath(PROJECT_ID));
-    expect(next!.href).not.toMatch(/\/overview$/);
+    expect(next!.href).toBe(projectPaymentRequestsPath(PROJECT_ID));
+    expect(next!.ctaLabel).toBe('Waiting for Participant');
   });
 
-  it('priority 3: revenueFlowing && !settlementReady → review obligations (E1 fix — no silent state)', () => {
-    const next = deriveNextBottleneck(revenueFlowingCaps, PROJECT_ID);
+  it('priority 3: payout details submitted → verify payout details', () => {
+    const next = deriveNextBottleneck(
+      [
+        workflowParticipant('submitted', {
+          supplierOnboarding: { lifecycle: 'SUBMITTED' },
+          onboardingStatus: 'INCOMPLETE',
+        }),
+      ],
+      PROJECT_ID
+    );
     expect(next).not.toBeNull();
-    expect(next!.href).toBe(`${BASE}/payouts`);
+    expect(next!.href).toBe(projectOperatorReviewPath(PROJECT_ID, 'submitted'));
+    expect(next!.ctaLabel).toBe('Verify Payout Details');
+  });
+
+  it('priority 4: commercial data complete → push supplier bill to Xero', () => {
+    const next = deriveNextBottleneck(
+      [
+        workflowParticipant('xero', {
+          supplierOnboarding: { lifecycle: 'APPROVED' },
+          payoutVerificationConfirmed: true,
+        }),
+      ],
+      PROJECT_ID
+    );
+    expect(next).not.toBeNull();
+    expect(next!.href).toBe(projectXeroExportPath(PROJECT_ID));
+    expect(next!.ctaLabel).toBe('Push Supplier Bill to Xero');
+  });
+
+  it('priority 5: supplier bill created → release settlement', () => {
+    const next = deriveNextBottleneck(
+      [
+        workflowParticipant('settlement', {
+          supplierOnboarding: { lifecycle: 'APPROVED' },
+          payoutVerificationConfirmed: true,
+          paymentSetup: {
+            xeroExportedAt: '2026-01-01T00:00:00.000Z',
+            xeroSyncStatus: 'synced',
+          },
+        }),
+      ],
+      PROJECT_ID
+    );
+    expect(next).not.toBeNull();
     expect(next!.href).toBe(projectPayoutsPath(PROJECT_ID));
-    expect(next!.ctaLabel).toMatch(/obligations/i);
+    expect(next!.ctaLabel).toBe('Release Settlement');
   });
 
-  it('priority 4: settlementReady → release payouts', () => {
-    const next = deriveNextBottleneck(settlementReadyCaps, PROJECT_ID);
-    expect(next).not.toBeNull();
-    expect(next!.href).toBe(`${BASE}/payouts`);
-  });
-
-  it('every approval-complete state has a next bottleneck — no silent state (E1)', () => {
-    const states = [allApprovedCaps, providerConnectedCaps, revenueFlowingCaps, settlementReadyCaps];
-    for (const caps of states) {
-      const next = deriveNextBottleneck(caps, PROJECT_ID);
+  it('every active participant workflow state has a next bottleneck — no silent state (E1)', () => {
+    const participants = [
+      [workflowParticipant('accepted')],
+      [workflowParticipant('waiting', { supplierOnboarding: { lifecycle: 'INVITED' } })],
+      [workflowParticipant('submitted', { supplierOnboarding: { lifecycle: 'SUBMITTED' } })],
+      [
+        workflowParticipant('xero', {
+          supplierOnboarding: { lifecycle: 'APPROVED' },
+          payoutVerificationConfirmed: true,
+        }),
+      ],
+    ];
+    for (const stateParticipants of participants) {
+      const next = deriveNextBottleneck(stateParticipants, PROJECT_ID);
       expect(next).not.toBeNull();
     }
   });

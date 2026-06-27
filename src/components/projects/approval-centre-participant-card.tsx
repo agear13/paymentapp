@@ -3,29 +3,22 @@
 /**
  * Approval Centre Participant Card
  *
- * Exactly ONE primary action per state:
+ * Renders participant workflow state from `deriveParticipantOperationalWorkflow`.
  *
- *   Earnings not configured → "Configure Earnings"       (primary)
- *   Not yet sent            → "Send Agreement"           (primary, opens send sheet)
- *   Sent, not approved      → "Waiting for Acceptance"   (status)
- *   Approved, payout missing → "Request Payout Details"  (primary)
- *   Signed                  → "View agreement"        (primary)
- *   Approved                → "View agreement"        (subdued — already done)
- *
- * Secondary actions (copy referral link, etc.) live in a More (⋯) dropdown.
- * No two equal-weight buttons appear side by side.
+ * Agreement lifecycle is intentionally not consumed here. Agreement state feeds
+ * the canonical participant workflow engine, and this component renders only
+ * the canonical status, explanation, primary CTA, and secondary CTAs.
  */
 
 import * as React from 'react';
+import Link from 'next/link';
 import {
   ArrowRight,
   CheckCircle2,
   ChevronDown,
   Copy,
-  ExternalLink,
   Mail,
   MessageCircle,
-  MoreHorizontal,
   QrCode,
   Send,
   Share2,
@@ -34,75 +27,43 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import {
-  deriveAgreementLifecycleState,
-  type AgreementLifecycleState,
-} from '@/lib/operations/lifecycle/agreement-lifecycle';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import {
   hydrateParticipant,
   participantEntity,
 } from '@/lib/operations/hydration/hydrate-participant';
-import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import { cn } from '@/lib/utils';
 import type { CommercialTimelineEvent } from '@/lib/commercial/commercial-timeline-events';
 import { buildParticipantCommercialJourney } from '@/lib/commercial/commercial-timeline-events';
 import { ParticipantCommercialHistory } from '@/components/commercial/commercial-timeline';
-import { deriveParticipantOperationalWorkflow } from '@/lib/commercial/participant-commercial-lifecycle';
+import {
+  deriveParticipantOperationalWorkflow,
+  type ParticipantWorkflowCta,
+} from '@/lib/commercial/participant-commercial-lifecycle';
+import {
+  projectOperatorReviewPath,
+  projectXeroExportPath,
+} from '@/lib/projects/project-routes';
+import { ParticipantReleaseButton } from '@/components/projects/participant-release-button';
+import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-client';
 
-/* ─── Operational status labels & colours ─────────────────────────────────── */
+/* ─── Workflow display classes ────────────────────────────────────────────── */
 
-function operationalStatusLabel(
-  lifecycle: AgreementLifecycleState,
-  earningsConfigured: boolean
-): string {
-  if (!earningsConfigured) return 'Configure Earnings';
-  switch (lifecycle) {
-    case 'APPROVED': return 'Approved';
-    case 'SIGNED':
-    case 'VIEWED':   return 'Waiting for Acceptance';
-    case 'SHARED':   return 'Waiting for Acceptance';
-    case 'GENERATED':
-    case 'DRAFTED':
-    case 'NOT_CREATED':
-    default:         return 'Ready to send';
-  }
-}
-
-function statusBadgeClass(
-  lifecycle: AgreementLifecycleState,
-  earningsConfigured: boolean
-): string {
-  if (!earningsConfigured) {
-    return 'border-border text-muted-foreground bg-muted/40';
-  }
-  switch (lifecycle) {
-    case 'APPROVED':
-      return 'border-transparent bg-[rgb(29,111,66)] text-white hover:bg-[rgb(29,111,66)]';
-    case 'SIGNED':
-    case 'VIEWED':
-    case 'SHARED':
-      return 'border-amber-300/70 text-amber-700 bg-amber-50/80 dark:bg-amber-950/40 dark:text-amber-300';
-    case 'GENERATED':
-    case 'DRAFTED':
-    case 'NOT_CREATED':
-    default:
-      return 'border-blue-300/70 text-blue-700 bg-blue-50/80 dark:bg-blue-950/40 dark:text-blue-300';
-  }
-}
+const WORKFLOW_BADGE_CLASS: Record<
+  ReturnType<typeof deriveParticipantOperationalWorkflow>['readiness'],
+  string
+> = {
+  blocked: 'border-border text-muted-foreground bg-muted/40',
+  waiting: 'border-amber-300/70 text-amber-700 bg-amber-50/80 dark:bg-amber-950/40 dark:text-amber-300',
+  ready: 'border-blue-300/70 text-blue-700 bg-blue-50/80 dark:bg-blue-950/40 dark:text-blue-300',
+  complete: 'border-transparent bg-[rgb(29,111,66)] text-white hover:bg-[rgb(29,111,66)]',
+};
 
 /* ─── Last activity ────────────────────────────────────────────────────────── */
 
@@ -132,9 +93,9 @@ function deriveLastActivity(p: DemoParticipant): string | null {
   return null;
 }
 
-/* ─── Send approval sheet ──────────────────────────────────────────────────
+/* ─── Send agreement sheet ─────────────────────────────────────────────────
  *
- * The primary CTA for "not yet approved" states.
+ * The primary CTA for the canonical send-agreement state.
  * Opens a popover with delivery options.
  */
 
@@ -142,14 +103,14 @@ type SendApprovalSheetProps = {
   participant: DemoParticipant;
   fullAgreementUrl: string;
   onShareAgreement: () => void | Promise<void>;
-  isResend: boolean;
+  label: string;
 };
 
 function SendApprovalSheet({
   participant,
   fullAgreementUrl,
   onShareAgreement,
-  isResend,
+  label,
 }: SendApprovalSheetProps) {
   const [open, setOpen] = React.useState(false);
   const [sharingMethod, setSharingMethod] = React.useState<string | null>(null);
@@ -159,7 +120,7 @@ function SendApprovalSheet({
     try {
       await navigator.clipboard.writeText(fullAgreementUrl);
       await onShareAgreement();
-      toast.success('Approval link copied');
+      toast.success('Agreement link copied');
       setOpen(false);
     } catch {
       toast.error('Could not copy — try right-clicking the link instead.');
@@ -244,7 +205,7 @@ function SendApprovalSheet({
           className="h-7 px-3 text-xs font-medium gap-1.5 bg-foreground hover:bg-foreground/90 text-background"
         >
           <Send className="h-3 w-3" />
-          {isResend ? 'Resend Agreement' : 'Send Agreement'}
+          {label}
           <ChevronDown className="h-3 w-3 ml-0.5 opacity-70" />
         </Button>
       </PopoverTrigger>
@@ -298,71 +259,8 @@ function SendApprovalSheet({
           <Share2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           {sharingMethod === 'native' ? 'Saving…' : 'Native share'}
         </button>
-        {isResend ? (
-          <>
-            <div className="my-1 h-px bg-border/50" />
-            <button
-              type="button"
-              className="flex items-center gap-2.5 w-full px-2 py-1.5 text-xs rounded-sm hover:bg-accent text-foreground transition-colors"
-              onClick={() => {
-                void onShareAgreement();
-                setOpen(false);
-              }}
-            >
-              <Send className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              Resend Agreement
-            </button>
-          </>
-        ) : null}
       </PopoverContent>
     </Popover>
-  );
-}
-
-/* ─── More menu (secondary actions) ────────────────────────────────────────── */
-
-type MoreMenuProps = {
-  onViewAgreement: () => void;
-  onCopyReferralLink: (() => void) | null;
-  onResend?: () => void;
-};
-
-function MoreMenu({ onViewAgreement, onCopyReferralLink, onResend }: MoreMenuProps) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-          aria-label="More actions"
-        >
-          <MoreHorizontal className="h-3.5 w-3.5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuItem onClick={onViewAgreement} className="gap-2 text-xs">
-          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-          View agreement
-        </DropdownMenuItem>
-        {onResend ? (
-          <DropdownMenuItem onClick={onResend} className="gap-2 text-xs">
-            <Send className="h-3.5 w-3.5 text-muted-foreground" />
-            Resend Agreement
-          </DropdownMenuItem>
-        ) : null}
-        {onCopyReferralLink ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onCopyReferralLink} className="gap-2 text-xs">
-              <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-              Copy referral link
-            </DropdownMenuItem>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
@@ -380,6 +278,13 @@ export type ApprovalCentreParticipantCardProps = {
   ) => void | Promise<void>;
   onConfigureEarnings: (p: DemoParticipant) => void;
   onSendPaymentRequest?: (p: DemoParticipant) => void;
+  projectId?: string;
+  organizationId?: string | null;
+  workspaceCurrency?: string;
+  releaseReady?: boolean;
+  canRelease?: boolean;
+  releaseDisabledReason?: string | null;
+  releaseSyncHandlers?: OperationalSyncHandlers;
   /**
    * Commercial timeline events for this agreement.
    * When provided, shows the participant's commercial relationship history
@@ -399,16 +304,21 @@ export function ApprovalCentreParticipantCard({
   onShareAgreement,
   onConfigureEarnings,
   onSendPaymentRequest,
+  projectId,
+  organizationId,
+  workspaceCurrency = 'AUD',
+  releaseReady = false,
+  canRelease = false,
+  releaseDisabledReason,
+  releaseSyncHandlers,
   commercialTimeline,
 }: ApprovalCentreParticipantCardProps) {
-  const lifecycle = deriveAgreementLifecycleState(participant);
-
   const entity = React.useMemo(
     () => participantEntity(hydrateParticipant(participant)),
     [participant]
   );
 
-  const earningsConfigured = isParticipantEarningsConfigured(entity);
+  const workflow = deriveParticipantOperationalWorkflow(entity);
   const roleLabel = operationalRoleLabel(entity);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -418,51 +328,110 @@ export function ApprovalCentreParticipantCard({
 
   const lastActivity = React.useMemo(() => deriveLastActivity(participant), [participant]);
 
-  const agreementPath =
-    participant.agreementUrl ?? participantAgreementPath(participant.inviteToken);
+  const agreementPath = participant.agreementUrl ?? participantAgreementPath(participant.inviteToken);
   const fullAgreementUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin}${agreementPath}`
       : agreementPath;
 
-  const referralUrl =
-    participant.referralCode && typeof window !== 'undefined'
-      ? `${window.location.origin}/r/${participant.referralCode}`
-      : null;
+  const renderCta = (cta: ParticipantWorkflowCta, secondary = false) => {
+    const variant = secondary ? 'outline' : cta.buttonVariant;
+    const className = secondary
+      ? 'h-7 px-3 text-xs gap-1 text-muted-foreground hover:text-foreground'
+      : 'h-7 px-3 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background gap-1';
 
-  const handleViewAgreement = React.useCallback(() => {
-    const preview = agreementPath.includes('?')
-      ? `${agreementPath}&mode=preview`
-      : `${agreementPath}?mode=preview`;
-    window.open(preview, '_blank', 'noopener,noreferrer');
-  }, [agreementPath]);
-
-  const handleCopyReferralLink = React.useCallback(() => {
-    if (!referralUrl) return;
-    navigator.clipboard.writeText(referralUrl).then(
-      () => toast.success('Referral link copied'),
-      () => toast.error('Could not copy link')
-    );
-  }, [referralUrl]);
-
-  /* ─── Derived display values ─── */
-
-  const statusLabel = operationalStatusLabel(lifecycle, earningsConfigured);
-  const badgeClass = statusBadgeClass(lifecycle, earningsConfigured);
-  const isApproved = lifecycle === 'APPROVED';
-  const operationalWorkflow = deriveParticipantOperationalWorkflow(entity);
-  const shouldRequestPayoutDetails =
-    operationalWorkflow.primaryCta.destination === 'send_payment_request' &&
-    onSendPaymentRequest != null;
-
-  const needsSend =
-    earningsConfigured &&
-    (lifecycle === 'NOT_CREATED' ||
-      lifecycle === 'DRAFTED' ||
-      lifecycle === 'GENERATED');
-  const isResend = lifecycle === 'SHARED' || lifecycle === 'VIEWED';
-  const isSigned = lifecycle === 'SIGNED';
-  const isWaitingForAcceptance = lifecycle === 'SHARED' || lifecycle === 'VIEWED';
+    switch (cta.destination) {
+      case 'configure_earnings':
+        return (
+          <Button
+            key={cta.kind}
+            type="button"
+            variant={variant}
+            size="sm"
+            className={className}
+            onClick={() => onConfigureEarnings(entity)}
+          >
+            {cta.label}
+            {!secondary ? <ArrowRight className="h-3 w-3" /> : null}
+          </Button>
+        );
+      case 'send_agreement':
+        return (
+          <SendApprovalSheet
+            key={cta.kind}
+            participant={entity}
+            fullAgreementUrl={fullAgreementUrl}
+            onShareAgreement={() => onShareAgreement(entity, { showDialog: false })}
+            label={cta.label}
+          />
+        );
+      case 'send_payment_request':
+        return (
+          <Button
+            key={cta.kind}
+            type="button"
+            variant={variant}
+            size="sm"
+            className={className}
+            onClick={() => onSendPaymentRequest?.(entity)}
+            disabled={!onSendPaymentRequest}
+          >
+            {cta.label}
+            {!secondary ? <ArrowRight className="h-3 w-3" /> : null}
+          </Button>
+        );
+      case 'review_payment':
+        return projectId ? (
+          <Button key={cta.kind} asChild variant={variant} size="sm" className={className}>
+            <Link href={projectOperatorReviewPath(projectId, entity.id)}>
+              {cta.label}
+              {!secondary ? <ArrowRight className="h-3 w-3" /> : null}
+            </Link>
+          </Button>
+        ) : null;
+      case 'xero_export':
+        return projectId ? (
+          <Button key={cta.kind} asChild variant={variant} size="sm" className={className}>
+            <Link href={projectXeroExportPath(projectId)}>
+              {cta.label}
+              {!secondary ? <ArrowRight className="h-3 w-3" /> : null}
+            </Link>
+          </Button>
+        ) : null;
+      case 'settlement':
+        return releaseSyncHandlers ? (
+          <ParticipantReleaseButton
+            key={cta.kind}
+            participantId={entity.id}
+            participantName={entity.name}
+            organizationId={organizationId}
+            currency={workspaceCurrency}
+            releaseReady={releaseReady}
+            canRelease={canRelease}
+            disabledReason={releaseDisabledReason}
+            syncHandlers={releaseSyncHandlers}
+            className="h-7 px-3 text-xs font-medium gap-1 shrink-0"
+            label={cta.label}
+          />
+        ) : (
+          <Badge key={cta.kind} variant="outline" className="h-7 px-3 text-xs">
+            {cta.label}
+          </Badge>
+        );
+      case 'await_participant':
+      case 'none':
+      default:
+        return (
+          <Badge
+            key={cta.kind}
+            variant="outline"
+            className="h-7 px-3 text-xs border-amber-300/80 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
+          >
+            {cta.label}
+          </Badge>
+        );
+    }
+  };
 
   return (
     <div
@@ -472,7 +441,7 @@ export function ApprovalCentreParticipantCard({
       className={cn(
         'rounded-lg border px-4 py-3 transition-colors duration-700',
         isHighlighted && 'bg-primary/5 border-primary/30',
-        isApproved && !isHighlighted
+        workflow.readiness === 'complete' && !isHighlighted
           ? 'border-[rgba(29,111,66,0.2)] bg-[rgba(29,111,66,0.015)]'
           : !isHighlighted && 'border-border/70 bg-card'
       )}
@@ -484,15 +453,15 @@ export function ApprovalCentreParticipantCard({
           <div
             className={cn(
               'h-9 w-9 rounded-full flex items-center justify-center shrink-0 text-sm font-semibold select-none',
-              isApproved
+              workflow.readiness === 'complete'
                 ? 'bg-[rgba(29,111,66,0.12)] text-[rgb(29,111,66)]'
-                : !earningsConfigured
+                : workflow.readiness === 'blocked'
                   ? 'bg-muted/60 text-muted-foreground/60'
                   : 'bg-muted text-muted-foreground'
             )}
             aria-hidden
           >
-            {isApproved ? (
+            {workflow.readiness === 'complete' ? (
               <CheckCircle2 className="h-4 w-4" />
             ) : (
               (participant.name?.[0] ?? '?').toUpperCase()
@@ -511,6 +480,9 @@ export function ApprovalCentreParticipantCard({
                 {[roleLabel, earningsModel].filter(Boolean).join(' · ')}
               </p>
             ) : null}
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              {workflow.explanation}
+            </p>
 
             {/* Last activity */}
             {lastActivity ? (
@@ -525,9 +497,9 @@ export function ApprovalCentreParticipantCard({
         <div className="sm:w-44 shrink-0">
           <Badge
             variant="outline"
-            className={cn('text-xs whitespace-nowrap font-medium', badgeClass)}
+            className={cn('text-xs whitespace-nowrap font-medium', WORKFLOW_BADGE_CLASS[workflow.readiness])}
           >
-            {statusLabel}
+            {workflow.badge}
           </Badge>
         </div>
 
@@ -541,87 +513,8 @@ export function ApprovalCentreParticipantCard({
 
         {/* ── Actions: one primary + optional more menu ── */}
         <div className="flex items-center gap-1.5 shrink-0 justify-end">
-          {!earningsConfigured ? (
-            /* Primary: Configure Earnings */
-            <Button
-              type="button"
-              size="sm"
-              className="h-7 px-3 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background"
-              onClick={() => onConfigureEarnings(participant)}
-            >
-              Configure Earnings
-            </Button>
-          ) : needsSend ? (
-            /* Primary: send / resend approval */
-            <SendApprovalSheet
-              participant={participant}
-              fullAgreementUrl={fullAgreementUrl}
-              onShareAgreement={() => onShareAgreement(participant, { showDialog: false })}
-              isResend={isResend}
-            />
-          ) : isWaitingForAcceptance ? (
-            <>
-              <Badge
-                variant="outline"
-                className="h-7 px-3 text-xs border-amber-300/80 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
-              >
-                Waiting for Acceptance
-              </Badge>
-              <MoreMenu
-                onViewAgreement={handleViewAgreement}
-                onCopyReferralLink={referralUrl ? handleCopyReferralLink : null}
-                onResend={() => onShareAgreement(participant, { showDialog: false })}
-              />
-            </>
-          ) : shouldRequestPayoutDetails ? (
-            <Button
-              type="button"
-              size="sm"
-              className="h-7 px-3 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background gap-1"
-              onClick={() => onSendPaymentRequest?.(entity)}
-            >
-              {operationalWorkflow.primaryCta.label}
-              <ArrowRight className="h-3 w-3" />
-            </Button>
-          ) : isSigned ? (
-            /* Primary: view agreement. Secondary: resend → in More menu */
-            <>
-              <Button
-                type="button"
-                size="sm"
-                className="h-7 px-3 text-xs font-medium bg-foreground hover:bg-foreground/90 text-background gap-1"
-                onClick={handleViewAgreement}
-              >
-                <ExternalLink className="h-3 w-3" />
-                View agreement
-              </Button>
-              <MoreMenu
-                onViewAgreement={handleViewAgreement}
-                onCopyReferralLink={referralUrl ? handleCopyReferralLink : null}
-                onResend={() => onShareAgreement(participant, { showDialog: false })}
-              />
-            </>
-          ) : (
-            /* APPROVED — primary action is subdued; no further approval work needed */
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-3 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                onClick={handleViewAgreement}
-              >
-                <ExternalLink className="h-3 w-3" />
-                View agreement
-              </Button>
-              {referralUrl ? (
-                <MoreMenu
-                  onViewAgreement={handleViewAgreement}
-                  onCopyReferralLink={handleCopyReferralLink}
-                />
-              ) : null}
-            </>
-          )}
+          {renderCta(workflow.primaryCta)}
+          {workflow.secondaryCtas.map((cta) => renderCta(cta, true))}
         </div>
       </div>
 

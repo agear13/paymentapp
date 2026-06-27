@@ -713,7 +713,19 @@ export function ProjectParticipantsView() {
   // Show Approval Centre layout when collecting approvals OR when approvals are
   // complete but the operator may still want to view the approval record.
   const isCollectingApprovals = workflowCtx?.currentStage === 'collecting-approvals';
-  const approvalsComplete = commercialCapabilities?.approvalsComplete ?? false;
+  const approvalsComplete = React.useMemo(
+    () =>
+      displayParticipants.length > 0 &&
+      displayParticipants.every((p) => {
+        const stage = deriveParticipantOperationalWorkflow(p).stage;
+        return (
+          stage !== 'DRAFT' &&
+          stage !== 'EARNINGS_CONFIGURED' &&
+          stage !== 'AGREEMENT_SENT'
+        );
+      }),
+    [displayParticipants]
+  );
   const showApprovalCentre = isCollectingApprovals || approvalsComplete;
 
   // Show Supplier Onboarding panel after all approvals complete, when operator
@@ -725,7 +737,14 @@ export function ProjectParticipantsView() {
   // already complete — so the operator can see the full status at a glance.
   const onboardingParticipants = React.useMemo(() => {
     if (!showOnboardingPanel) return [];
-    return displayParticipants.filter((p) => p.approvalStatus === 'Approved');
+    return displayParticipants.filter((p) => {
+      const stage = deriveParticipantOperationalWorkflow(p).stage;
+      return (
+        stage !== 'DRAFT' &&
+        stage !== 'EARNINGS_CONFIGURED' &&
+        stage !== 'AGREEMENT_SENT'
+      );
+    });
   }, [showOnboardingPanel, displayParticipants]);
 
   // When arriving from Dashboard → "Open Approval Centre" (?focus=approvals),
@@ -733,9 +752,10 @@ export function ProjectParticipantsView() {
   const [highlightedApprovalId, setHighlightedApprovalId] = React.useState<string | null>(null);
   React.useEffect(() => {
     if (!focusApprovals || !showApprovalCentre) return;
-    const firstPending = displayParticipants.find(
-      (p) => p.approvalStatus !== 'Approved' && (p.approvalStatus as string) !== 'Declined'
-    );
+    const firstPending = displayParticipants.find((p) => {
+      const workflow = deriveParticipantOperationalWorkflow(p);
+      return workflow.primaryCta.urgency === 'action_required';
+    });
     const targetId = firstPending?.id ?? displayParticipants[0]?.id ?? null;
     if (!targetId) return;
     setHighlightedApprovalId(targetId);
@@ -781,16 +801,21 @@ export function ProjectParticipantsView() {
     [hydratedParticipants]
   );
 
-  // All participants not yet approved — drives the Approval Centre card list ordering.
+  // Participants requiring action first, then waiting, then complete.
   const pendingApprovalParticipants = React.useMemo(() => {
     if (!showApprovalCentre) return [];
-    return displayParticipants.filter(
-      (p) => p.approvalStatus !== 'Approved' && (p.approvalStatus as string) !== 'Declined'
-    );
+    return displayParticipants.filter((p) => {
+      const workflow = deriveParticipantOperationalWorkflow(p);
+      return workflow.primaryCta.urgency !== 'none';
+    });
   }, [showApprovalCentre, displayParticipants]);
 
   const approvedParticipants = React.useMemo(
-    () => displayParticipants.filter((p) => p.approvalStatus === 'Approved'),
+    () =>
+      displayParticipants.filter((p) => {
+        const workflow = deriveParticipantOperationalWorkflow(p);
+        return workflow.primaryCta.urgency === 'none';
+      }),
     [displayParticipants]
   );
 
@@ -1015,10 +1040,21 @@ export function ProjectParticipantsView() {
                   participant={p}
                   isHighlighted={highlightedApprovalId === p.id}
                   data-approval-card
-                  data-pending={p.approvalStatus !== 'Approved' ? 'true' : 'false'}
+                  data-pending={
+                    deriveParticipantOperationalWorkflow(p).primaryCta.urgency !== 'none'
+                      ? 'true'
+                      : 'false'
+                  }
                   onShareAgreement={openAgreementShare}
                   onConfigureEarnings={openCompensationConfig}
                   onSendPaymentRequest={handleSendPaymentRequest}
+                  projectId={projectId}
+                  organizationId={organizationId}
+                  workspaceCurrency={workspaceCurrency}
+                  releaseReady={releaseReadyByParticipantId.get(p.id) === true}
+                  canRelease={canCreateParticipantRelease}
+                  releaseDisabledReason={releaseDisabledReason}
+                  releaseSyncHandlers={syncHandlers}
                 />
               ))}
             </div>
