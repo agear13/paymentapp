@@ -15,11 +15,6 @@ import {
   orchestrateOperationalMutation,
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
-import {
-  approvalTraceFields,
-  traceRuntime,
-  watchParticipantAcceptedTransition,
-} from '@/lib/operations/dev/participant-accepted-runtime-trace';
 import { normalizeCompensationAttributionSemantics } from '@/lib/operations/derivations/derive-currency-consistency';
 import { applyCompensationProfileToParticipant } from '@/lib/participants/participant-compensation';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
@@ -93,17 +88,6 @@ export async function PATCH(
     const user = await requireAuth(request);
     const { participantId } = await context.params;
     const body = patchSchema.parse(await request.json());
-    watchParticipantAcceptedTransition(
-      'PATCH /api/deal-network-pilot/participants/[participantId] request',
-      { id: participantId, ...body }
-    );
-    traceRuntime('HTTP request', {
-      url: request.url,
-      method: request.method,
-      participantId,
-      body,
-      participantApprovalFields: approvalTraceFields(body),
-    });
 
     const snapshot = await getPilotSnapshotForUser(user.id);
     const existing = snapshot.participants.find((p) => p.id === participantId);
@@ -179,10 +163,6 @@ export async function PATCH(
     }
 
     const persisted = await updatePilotParticipantPayload(participantId, user.id, payloadPatch);
-    watchParticipantAcceptedTransition(
-      'PATCH /api/deal-network-pilot/participants/[participantId] response',
-      persisted
-    );
 
     if (!persisted) {
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
@@ -223,19 +203,10 @@ export async function PATCH(
       }
     }
 
-    const responseBody = {
+    return NextResponse.json({
       participant: persisted,
       ...operationalSyncJson(operationalSync),
-    };
-    traceRuntime('HTTP response', {
-      url: request.url,
-      method: request.method,
-      participantId,
-      body: responseBody,
-      participantApprovalFields: approvalTraceFields(persisted),
     });
-
-    return NextResponse.json(responseBody);
   } catch (e: unknown) {
     const err = e as { statusCode?: number; message?: string };
     if (err.statusCode === 401) {

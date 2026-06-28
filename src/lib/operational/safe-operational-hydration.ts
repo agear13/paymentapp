@@ -14,11 +14,6 @@ import {
 } from '@/lib/operations/guards/hydration-guards';
 import { defaultCompensationProfile } from '@/lib/participants/participant-compensation';
 import type { ParticipantCompensationProfile } from '@/lib/participants/participant-compensation-types';
-import {
-  approvalTraceFields,
-  traceRuntime,
-  watchParticipantAcceptedTransition,
-} from '@/lib/operations/dev/participant-accepted-runtime-trace';
 
 export type SafeCompensationView = {
   status: ReturnType<typeof safeCompensationState>;
@@ -43,18 +38,7 @@ export type SafeParticipantReadiness = {
 };
 
 export function normalizeParticipant(participant: DemoParticipant | null | undefined) {
-  watchParticipantAcceptedTransition('normalizeParticipant input', participant);
-  traceRuntime('normalizeParticipant input', {
-    participant,
-    participantApprovalFields: approvalTraceFields(participant),
-  });
-  const normalized = normalizeParticipantEntity(participant);
-  watchParticipantAcceptedTransition('normalizeParticipant output', normalized);
-  traceRuntime('normalizeParticipant output', {
-    participant: normalized,
-    participantApprovalFields: approvalTraceFields(normalized),
-  });
-  return normalized;
+  return normalizeParticipantEntity(participant);
 }
 
 export function safeCompensationProfile(

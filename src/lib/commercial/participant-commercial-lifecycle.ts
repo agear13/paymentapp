@@ -136,11 +136,9 @@ function isSettlementPaid(participant: DemoParticipant): boolean {
   return participant.payoutSettlementStatus === 'Paid' || Boolean(participant.payoutPaidAt);
 }
 
-/** Name, email, and role — required before agreements or payment requests. */
+/** Participant record and role are required before agreements. Delivery channels validate contact details separately. */
 export function hasParticipantIdentityReady(participant: DemoParticipant): boolean {
-  return Boolean(
-    participant.name?.trim() && participant.email?.trim() && participant.role?.trim()
-  );
+  return Boolean(participant.id?.trim() && participant.role?.trim());
 }
 
 function isAgreementGenerated(participant: DemoParticipant): boolean {
@@ -676,11 +674,10 @@ function deriveAgreementTableLabel(participant: DemoParticipant): {
     return { label: 'Ready to send', hint: null };
   }
   if (stage === 'DRAFT') {
-    const hint = !participant.email?.trim()
-      ? 'Email required'
-      : !isParticipantEarningsConfigured(participant) && !isParticipantCompensationExempt(participant)
+    const hint =
+      !isParticipantEarningsConfigured(participant) && !isParticipantCompensationExempt(participant)
         ? 'Configure earnings first'
-        : !participant.name?.trim() || !participant.role?.trim()
+        : !participant.id?.trim() || !participant.role?.trim()
           ? 'Complete participant details'
           : null;
     return { label: 'Draft', hint };

@@ -373,18 +373,23 @@ describe('participant-commercial-lifecycle', () => {
       inviteStatus: 'Invited',
       email: '',
     });
-    expect(deriveParticipantCommercialLifecycle(p)).toBe('DRAFT');
+    expect(deriveParticipantCommercialLifecycle(p)).toBe('EARNINGS_CONFIGURED');
     const table = deriveParticipantCommercialTablePresentation(p);
-    expect(table.commercialChip).toBe('Configure Earnings');
+    expect(table.commercialChip).toBe('Agreement Ready');
+    expect(table.nextAction.label).toBe('Send Agreement');
     expect(table.commercialChip).not.toMatch(/Agreement Sent/i);
   });
 
-  it('missing email keeps participant in DRAFT with awaiting agreement commercial column', () => {
+  it('missing email does not block agreement readiness', () => {
     const p = baseParticipant({ email: '' });
-    expect(deriveParticipantCommercialLifecycle(p)).toBe('DRAFT');
+    const workflow = deriveParticipantOperationalWorkflow(p);
     const table = deriveParticipantCommercialTablePresentation(p);
-    expect(table.agreementChip).toBe('Draft');
-    expect(table.commercialChip).toBe('Configure Earnings');
+    expect(workflow.stage).toBe('EARNINGS_CONFIGURED');
+    expect(workflow.badge).toBe('Agreement Ready');
+    expect(workflow.primaryCta.label).toBe('Send Agreement');
+    expect(table.agreementChip).toBe('Ready to send');
+    expect(table.agreementSecondary).toBe('');
+    expect(table.commercialChip).toBe('Agreement Ready');
     expect(table.payoutColumnActive).toBe(false);
   });
 
