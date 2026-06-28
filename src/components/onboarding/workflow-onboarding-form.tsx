@@ -264,6 +264,8 @@ export function WorkflowOnboardingForm() {
       defaultCurrency: DEFAULT_WORKSPACE_CURRENCY,
     },
   });
+  const { setValue: setWorkspaceFormValue } = workspaceForm;
+  const { reset: resetProjectForm } = projectForm;
 
   const railsForm = useForm<RailsFormValues>({
     resolver: zodResolver(railsSchema),
@@ -280,7 +282,7 @@ export function WorkflowOnboardingForm() {
       setSelectedUseCase(draft.useCase);
     }
     if (draft.project) {
-      projectForm.reset({
+      resetProjectForm({
         projectName: draft.project.projectName,
         description: draft.project.description ?? '',
         estimatedValue: draft.project.estimatedValue ?? '',
@@ -336,7 +338,7 @@ export function WorkflowOnboardingForm() {
         }
         const state = payload.state;
         if (state?.workspace_name) {
-          workspaceForm.setValue('workspaceName', state.workspace_name);
+          setWorkspaceFormValue('workspaceName', state.workspace_name);
         }
         if (state?.onboarding_use_case) {
           setUseCase(state.onboarding_use_case);
@@ -363,7 +365,7 @@ export function WorkflowOnboardingForm() {
         /* resume optional */
       }
     })();
-  }, []);
+  }, [resetProjectForm, setWorkspaceFormValue]);
 
   React.useEffect(() => {
     if (searchParams?.get('billing') !== 'canceled') return;
