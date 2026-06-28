@@ -1,5 +1,12 @@
 'use client';
 
+/**
+ * Rabbit Hole Deal Network pilot.
+ *
+ * Frozen production pilot for Alex. This UI is a compatibility surface and must
+ * not be changed by Provvypay Agreements work unless explicitly requested.
+ */
+
 import * as React from 'react';
 import {
   Card,

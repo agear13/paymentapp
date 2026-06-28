@@ -2,6 +2,9 @@
 
 /**
  * Operator obligations view — who is owed what, funding status, and payout readiness.
+ *
+ * Rabbit Hole Deal Network pilot compatibility surface. Keep runtime behaviour
+ * frozen for Alex unless Rabbit Hole pilot changes are explicitly requested.
  */
 
 import * as React from 'react';

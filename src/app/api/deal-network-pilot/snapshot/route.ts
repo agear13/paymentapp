@@ -1,3 +1,11 @@
+/**
+ * Rabbit Hole Deal Network pilot snapshot API.
+ *
+ * Frozen compatibility endpoint for Alex's production pilot. Shared repositories
+ * can remain shared, but this route contract should not be changed by Agreements
+ * work without explicit Rabbit Hole pilot approval.
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import {

@@ -1,5 +1,12 @@
 'use client';
 
+/**
+ * Provvypay Agreements workspace context.
+ *
+ * This provider owns Agreements UI state. Shared repositories/domain services may
+ * remain shared, but Rabbit Hole pilot UI must not depend on this context.
+ */
+
 import * as React from 'react';
 import { useProjectContext, type ProjectContextValue } from '@/hooks/use-project-context';
 

@@ -1,3 +1,10 @@
+/**
+ * Rabbit Hole Deal Network pilot snapshot client.
+ *
+ * Compatibility layer for Alex's frozen pilot. Agreements may read shared domain
+ * repositories, but routine Agreements UI work must not change this contract.
+ */
+
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 
