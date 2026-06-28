@@ -21,6 +21,11 @@ import { deriveAgreementLifecycleState } from '@/lib/operations/lifecycle/agreem
 import { deriveAttributionLifecycleState } from '@/lib/operations/lifecycle/attribution-lifecycle';
 import { deriveParticipantLifecycleState } from '@/lib/operations/lifecycle/participant-lifecycle';
 import { derivePayoutOnboardingPhase } from '@/lib/operations/lifecycle/payout-lifecycle';
+import {
+  approvalTraceFields,
+  traceRuntime,
+  watchParticipantAcceptedTransition,
+} from '@/lib/operations/dev/participant-accepted-runtime-trace';
 
 export type HydrateParticipantContext = CommissionScopeContext;
 
@@ -110,19 +115,40 @@ export function hydrateParticipant(
   context: HydrateParticipantContext = {}
 ): HydratedParticipant {
   try {
+    watchParticipantAcceptedTransition('hydrateParticipant raw input', raw);
+    traceRuntime('hydrateParticipant raw input', {
+      participant: raw,
+      participantApprovalFields: approvalTraceFields(raw),
+    });
     const adapted = adaptParticipantInput(raw);
     if (!adapted) return emptyHydratedParticipant(context);
+    watchParticipantAcceptedTransition('hydrateParticipant adapted', adapted);
+    traceRuntime('hydrateParticipant adapted', {
+      participant: adapted,
+      participantApprovalFields: approvalTraceFields(adapted),
+    });
     const source = detectParticipantEntitySource(adapted, true);
     auditParticipantInput(adapted);
     const entity = hydrateOperationalParticipant(adapted);
+    watchParticipantAcceptedTransition('hydrateParticipant entity', entity);
+    traceRuntime('hydrateParticipant entity', {
+      participant: entity,
+      participantApprovalFields: approvalTraceFields(entity),
+    });
     const hydrated = buildHydratedParticipant(entity, context);
-    return {
+    const result = {
       ...hydrated,
       metadata: {
         ...hydrated.metadata,
         source,
       },
     };
+    traceRuntime('hydrateParticipant output', {
+      hydrated: result,
+      participantApprovalFields: approvalTraceFields(result._entity),
+    });
+    watchParticipantAcceptedTransition('hydrateParticipant output', result._entity);
+    return result;
   } catch (error) {
     const id =
       raw && typeof raw === 'object' && 'id' in raw && typeof raw.id === 'string'
@@ -143,5 +169,10 @@ export function hydrateParticipants(
 
 /** Access hydrated storage entity for mutations only. */
 export function participantEntity(hydrated: HydratedParticipant): DemoParticipant {
+  watchParticipantAcceptedTransition('participantEntity output', hydrated._entity);
+  traceRuntime('participantEntity output', {
+    participant: hydrated._entity,
+    participantApprovalFields: approvalTraceFields(hydrated._entity),
+  });
   return hydrated._entity;
 }

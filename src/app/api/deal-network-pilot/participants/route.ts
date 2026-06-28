@@ -12,6 +12,11 @@ import {
   orchestrateOperationalMutation,
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+import {
+  approvalTraceFields,
+  traceRuntime,
+  watchParticipantAcceptedTransition,
+} from '@/lib/operations/dev/participant-accepted-runtime-trace';
 
 const createParticipantSchema = z.object({
   participant: z.record(z.string(), z.unknown()),
@@ -22,6 +27,13 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth(request);
     const body = createParticipantSchema.parse(await request.json());
     const participant = body.participant as unknown as DemoParticipant;
+    watchParticipantAcceptedTransition('POST /api/deal-network-pilot/participants request', participant);
+    traceRuntime('HTTP request', {
+      url: request.url,
+      method: request.method,
+      body,
+      participantApprovalFields: approvalTraceFields(participant),
+    });
 
     if (!participant.id || !participant.dealId || !participant.inviteToken) {
       return NextResponse.json(
@@ -60,6 +72,7 @@ export async function POST(request: NextRequest) {
     });
 
     const persisted = participantRowToDemo(row);
+    watchParticipantAcceptedTransition('POST /api/deal-network-pilot/participants response', persisted);
     const operationalSync = await orchestrateOperationalMutation({
       userId: user.id,
       mutation: 'snapshot_persist',
@@ -67,10 +80,18 @@ export async function POST(request: NextRequest) {
       focusParticipant: persisted,
     });
 
-    return NextResponse.json({
+    const responseBody = {
       participant: persisted,
       ...operationalSyncJson(operationalSync),
+    };
+    traceRuntime('HTTP response', {
+      url: request.url,
+      method: request.method,
+      body: responseBody,
+      participantApprovalFields: approvalTraceFields(persisted),
     });
+
+    return NextResponse.json(responseBody);
   } catch (e: unknown) {
     const err = e as { statusCode?: number };
     if (err.statusCode === 401) {

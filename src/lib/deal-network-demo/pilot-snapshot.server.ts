@@ -51,6 +51,11 @@ import {
   materializeConversationImportHistoryForDeal,
   mergeConversationImportHistoryOnDeal,
 } from '@/lib/operations/audit/conversation-import-audit';
+import {
+  approvalTraceFields,
+  traceRuntime,
+  watchParticipantAcceptedTransition,
+} from '@/lib/operations/dev/participant-accepted-runtime-trace';
 
 export function participantRowToDemo(row: {
   id: string;
@@ -61,11 +66,28 @@ export function participantRowToDemo(row: {
   approved_at?: Date | null;
 }): DemoParticipant {
   const payload = row.participant_payload as unknown as DemoParticipant;
+  watchParticipantAcceptedTransition('participantRowToDemo input payload', payload);
+  traceRuntime('participantRowToDemo input', {
+    row: {
+      id: row.id,
+      deal_id: row.deal_id,
+      invite_token: row.invite_token,
+      approval_status: row.approval_status,
+      approved_at: row.approved_at,
+      participant_payload: payload,
+    },
+    rowApprovalFields: {
+      id: row.id,
+      approval_status: row.approval_status,
+      approved_at: row.approved_at,
+    },
+    payloadApprovalFields: approvalTraceFields(payload),
+  });
   const approvalStatus: DemoParticipant['approvalStatus'] =
     row.approval_status === 'Approved' || payload.approvalStatus === 'Approved'
       ? 'Approved'
       : 'Pending approval';
-  return normalizeParticipant({
+  const participantForNormalization = {
     ...payload,
     id: row.id,
     dealId: row.deal_id,
@@ -80,7 +102,18 @@ export function participantRowToDemo(row: {
           ? 'Opened'
           : payload.inviteStatus ?? 'Invited'
         : payload.inviteStatus ?? 'Invited',
+  };
+  watchParticipantAcceptedTransition(
+    'participantRowToDemo before normalizeParticipant',
+    participantForNormalization
+  );
+  const normalized = normalizeParticipant(participantForNormalization);
+  watchParticipantAcceptedTransition('participantRowToDemo output', normalized);
+  traceRuntime('participantRowToDemo output', {
+    participant: normalized,
+    participantApprovalFields: approvalTraceFields(normalized),
   });
+  return normalized;
 }
 
 export type ReferralIssuanceSummary = {
