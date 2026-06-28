@@ -51,6 +51,8 @@ import {
   projectXeroExportPath,
 } from '@/lib/projects/project-routes';
 import { ParticipantReleaseButton } from '@/components/projects/participant-release-button';
+import { AccountingReconciliationCard } from '@/components/commercial/accounting-reconciliation-card';
+import type { AccountingReconciliationResult } from '@/lib/commercial/accounting-reconciliation';
 import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-client';
 
 /* ─── Workflow display classes ────────────────────────────────────────────── */
@@ -284,6 +286,7 @@ export type ApprovalCentreParticipantCardProps = {
   releaseReady?: boolean;
   canRelease?: boolean;
   releaseDisabledReason?: string | null;
+  accountingReconciliation?: AccountingReconciliationResult | null;
   releaseSyncHandlers?: OperationalSyncHandlers;
   /**
    * Commercial timeline events for this agreement.
@@ -310,6 +313,7 @@ export function ApprovalCentreParticipantCard({
   releaseReady = false,
   canRelease = false,
   releaseDisabledReason,
+  accountingReconciliation,
   releaseSyncHandlers,
   commercialTimeline,
 }: ApprovalCentreParticipantCardProps) {
@@ -400,19 +404,28 @@ export function ApprovalCentreParticipantCard({
         ) : null;
       case 'settlement':
         return releaseSyncHandlers ? (
-          <ParticipantReleaseButton
-            key={cta.kind}
-            participantId={entity.id}
-            participantName={entity.name}
-            organizationId={organizationId}
-            currency={workspaceCurrency}
-            releaseReady={releaseReady}
-            canRelease={canRelease}
-            disabledReason={releaseDisabledReason}
-            syncHandlers={releaseSyncHandlers}
-            className="h-7 px-3 text-xs font-medium gap-1 shrink-0"
-            label={cta.label}
-          />
+          <div key={cta.kind} className="space-y-2">
+            {accountingReconciliation ? (
+              <AccountingReconciliationCard reconciliation={accountingReconciliation} />
+            ) : null}
+            <ParticipantReleaseButton
+              participantId={entity.id}
+              participantName={entity.name}
+              organizationId={organizationId}
+              currency={workspaceCurrency}
+              releaseReady={releaseReady}
+              canRelease={canRelease && (accountingReconciliation?.releaseAllowed ?? true)}
+              disabledReason={
+                accountingReconciliation && !accountingReconciliation.releaseAllowed
+                  ? accountingReconciliation.reason
+                  : releaseDisabledReason
+              }
+              reconciliation={accountingReconciliation}
+              syncHandlers={releaseSyncHandlers}
+              className="h-7 px-3 text-xs font-medium gap-1 shrink-0"
+              label={cta.label}
+            />
+          </div>
         ) : (
           <Badge key={cta.kind} variant="outline" className="h-7 px-3 text-xs">
             {cta.label}

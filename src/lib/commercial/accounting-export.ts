@@ -43,6 +43,7 @@ import type { GSTStatus } from '@/lib/commercial/supplier-onboarding';
 import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
 import { isInvoiceAtOrAfter } from '@/lib/commercial/invoice-lifecycle';
 import type { InvoiceLifecycleState } from '@/lib/commercial/invoice-lifecycle';
+import type { AccountingReconciliationResult } from '@/lib/commercial/accounting-reconciliation';
 
 /* ─── Input types ─────────────────────────────────────────────────────────── */
 
@@ -214,6 +215,9 @@ export type AccountingExportModel = {
 
   /** Preview for operator approval. null when not ready. */
   preview: AccountingExportPreview | null;
+
+  /** Reconciliation between the supplier invoice projection and obligation ledger. */
+  accountingReconciliation?: AccountingReconciliationResult | null;
 
   /** ISO date export was approved by operator. */
   exportApprovedAt: string | null;

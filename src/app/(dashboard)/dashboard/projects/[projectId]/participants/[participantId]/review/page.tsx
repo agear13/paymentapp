@@ -19,6 +19,8 @@ import { deriveSupplierOnboardingStatus } from '@/lib/commercial/supplier-onboar
 import { ParticipantLifecycleTimeline } from '@/components/commercial/payment-tax/participant-lifecycle-timeline';
 import { AgreementSummary } from '@/components/commercial/payment-tax/agreement-summary';
 import { buildAgreementSummaryData } from '@/lib/commercial/participant-commercial-lifecycle';
+import { AccountingReconciliationCard } from '@/components/commercial/accounting-reconciliation-card';
+import { reconcileSupplierInvoiceToObligations } from '@/lib/commercial/accounting-reconciliation';
 
 /**
  * Operator Supplier Onboarding Review Page
@@ -87,6 +89,9 @@ export default function SupplierOnboardingReviewPage() {
     setActionError(null);
     setSuccessMessage(null);
     try {
+      if (accountingReconciliation && !accountingReconciliation.releaseAllowed) {
+        throw new Error(accountingReconciliation.reason);
+      }
       const xeroRes = await fetch(
         `/api/deal-network-pilot/participants/${participantId}/xero-export`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }
@@ -251,6 +256,20 @@ export default function SupplierOnboardingReviewPage() {
   const input = buildSupplierOnboardingInput(participant, { id: deal.id, name: deal.dealName ?? '' });
   const status = deriveSupplierOnboardingStatus(input);
   const reviewSummary = buildCommercialReviewSummary(participant, { id: deal.id, name: deal.dealName ?? '' });
+  const accountingReconciliation = participant.paymentSetup?.draftInvoice
+    ? reconcileSupplierInvoiceToObligations({
+        invoice: participant.paymentSetup.draftInvoice,
+        obligationLines: [
+          {
+            id: `${participant.id}:supplier-bill`,
+            amount: participant.paymentSetup.draftInvoice.total,
+            currency: participant.paymentSetup.draftInvoice.currency,
+            label: 'Supplier bill payable',
+            invoiceBacked: true,
+          },
+        ],
+      })
+    : null;
 
   return (
     <div className="max-w-xl mx-auto py-8 px-4">
@@ -328,6 +347,12 @@ export default function SupplierOnboardingReviewPage() {
         onRequestChanges={handleRequestChanges}
         isLoading={isActing}
       />
+
+      {accountingReconciliation && (
+        <div className="mt-4">
+          <AccountingReconciliationCard reconciliation={accountingReconciliation} />
+        </div>
+      )}
 
       {(lifecycle === 'SUBMITTED' || lifecycle === 'APPROVED') && (
         <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4 space-y-3">

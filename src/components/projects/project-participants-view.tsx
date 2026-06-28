@@ -105,6 +105,10 @@ import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector
 import { ProjectPageCopilot } from '@/components/operations/project-page-copilot';
 import { ParticipantOnboardingStatusCard } from '@/components/commercial/supplier-onboarding/participant-onboarding-status-card';
 import { AlertCircle } from 'lucide-react';
+import {
+  reconcileSupplierInvoiceToObligations,
+  type AccountingReconciliationResult,
+} from '@/lib/commercial/accounting-reconciliation';
 
 const ONBOARDING_CHECKLIST = [
   'Plan allocations (roles and budgets)',
@@ -637,6 +641,46 @@ export function ProjectParticipantsView() {
     );
   }, [hydratedParticipants, pinnedOrder]);
 
+  const accountingReconciliationByParticipantId = React.useMemo(() => {
+    const map = new Map<string, AccountingReconciliationResult>();
+    const obligationsByParticipant = new Map<
+      string,
+      Array<{ id: string; amount: number; currency: string }>
+    >();
+
+    for (const obligation of graph?.obligations ?? []) {
+      if (!obligation.participantId) continue;
+      const lines = obligationsByParticipant.get(obligation.participantId) ?? [];
+      lines.push({
+        id: obligation.id,
+        amount: obligation.amount,
+        currency: obligation.currency,
+      });
+      obligationsByParticipant.set(obligation.participantId, lines);
+    }
+
+    for (const participant of displayParticipants) {
+      const invoice = participant.paymentSetup?.draftInvoice;
+      if (!invoice) continue;
+
+      const obligationLines = obligationsByParticipant.get(participant.id) ?? [];
+      map.set(
+        participant.id,
+        reconcileSupplierInvoiceToObligations({
+          invoice,
+          obligationLines: obligationLines.map((line) => ({
+            id: line.id,
+            amount: line.amount,
+            currency: line.currency,
+            invoiceBacked: true,
+          })),
+        })
+      );
+    }
+
+    return map;
+  }, [displayParticipants, graph?.obligations]);
+
   const stats = React.useMemo(
     () =>
       deriveParticipantViewStats({
@@ -1058,6 +1102,7 @@ export function ProjectParticipantsView() {
                   releaseReady={releaseReadyByParticipantId.get(p.id) === true}
                   canRelease={canCreateParticipantRelease}
                   releaseDisabledReason={releaseDisabledReason}
+                  accountingReconciliation={accountingReconciliationByParticipantId.get(p.id) ?? null}
                   releaseSyncHandlers={syncHandlers}
                 />
               ))}
@@ -1270,6 +1315,7 @@ export function ProjectParticipantsView() {
                           releaseReady={releaseReadyByParticipantId.get(p.id) === true}
                           canRelease={canCreateParticipantRelease}
                           releaseDisabledReason={releaseDisabledReason}
+                          accountingReconciliation={accountingReconciliationByParticipantId.get(p.id) ?? null}
                           releaseSyncHandlers={syncHandlers}
                         />
                       </SafeParticipantBoundary>

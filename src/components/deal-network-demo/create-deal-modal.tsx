@@ -74,7 +74,7 @@ interface RoleCommissionState {
 export interface CreateDealModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (deal: RecentDeal) => void;
+  onCreate: (deal: RecentDeal) => void | boolean | Promise<void | boolean>;
   editDeal?: RecentDeal | null;
   experienceMode?: 'referral' | 'project';
 }

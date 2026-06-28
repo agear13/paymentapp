@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -2047,6 +2048,36 @@ export function WorkflowOnboardingForm() {
           onGoToDashboard={finishOnboarding}
           onCreateAnother={() => {
             setWorkspaceJustCreated(false);
+            setProjectId(null);
+            setProjectName('');
+            setConfirmedParticipants([]);
+            setTemplateCommercialTerms([]);
+            setTemplateOriginalCommercialTerms([]);
+            setSelectedTemplate(null);
+            setStartMethod(null);
+            setSelectedStartMethod(null);
+            setAgreementInsight(null);
+            setExtractionResult(null);
+            setImportRawText('');
+            projectForm.reset({
+              projectName: '',
+              description: '',
+              estimatedValue: '',
+              defaultCurrency: workspaceForm.getValues('defaultCurrency') || DEFAULT_WORKSPACE_CURRENCY,
+            });
+            saveOnboardingDraft({
+              step: 'start_method',
+              project: undefined,
+              participants: [],
+              projectId: null,
+              organizationId,
+              merchantSettingsId,
+              collectionPreference,
+            });
+            void persistState('start_method', {
+              projectId: null,
+              onboarding_start_method: null,
+            });
             setStep('start_method');
           }}
           checkoutLoading={billingCheckoutLoading}

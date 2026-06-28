@@ -33,6 +33,7 @@ import {
 import { participantTableCellClass } from '@/components/projects/participant-table-layout';
 import { ParticipantReleaseButton } from '@/components/projects/participant-release-button';
 import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-client';
+import type { AccountingReconciliationResult } from '@/lib/commercial/accounting-reconciliation';
 
 const ROW_ACTION_BUTTON_CLASS =
   'h-9 px-3 text-xs font-medium gap-1 shrink-0';
@@ -88,6 +89,7 @@ function ParticipantTableNextActionCell({
   releaseReady,
   canRelease,
   releaseDisabledReason,
+  accountingReconciliation,
   releaseSyncHandlers,
   organizationId,
   workspaceCurrency,
@@ -102,6 +104,7 @@ function ParticipantTableNextActionCell({
   releaseReady?: boolean;
   canRelease?: boolean;
   releaseDisabledReason?: string | null;
+  accountingReconciliation?: AccountingReconciliationResult | null;
   releaseSyncHandlers?: OperationalSyncHandlers;
   organizationId?: string | null;
   workspaceCurrency?: string;
@@ -140,8 +143,13 @@ function ParticipantTableNextActionCell({
           organizationId={organizationId}
           currency={workspaceCurrency}
           releaseReady={releaseReady ?? true}
-          canRelease={canRelease ?? false}
-          disabledReason={releaseDisabledReason}
+          canRelease={(canRelease ?? false) && (accountingReconciliation?.releaseAllowed ?? true)}
+          disabledReason={
+            accountingReconciliation && !accountingReconciliation.releaseAllowed
+              ? accountingReconciliation.reason
+              : releaseDisabledReason
+          }
+          reconciliation={accountingReconciliation}
           syncHandlers={releaseSyncHandlers}
           className={ROW_ACTION_BUTTON_CLASS}
           label={nextAction.label}
@@ -239,6 +247,7 @@ export type ProjectParticipantTableRowProps = {
   releaseReady?: boolean;
   canRelease?: boolean;
   releaseDisabledReason?: string | null;
+  accountingReconciliation?: AccountingReconciliationResult | null;
   releaseSyncHandlers?: OperationalSyncHandlers;
 };
 
@@ -257,6 +266,7 @@ function ProjectParticipantTableRowComponent({
   releaseReady = false,
   canRelease = false,
   releaseDisabledReason,
+  accountingReconciliation,
   releaseSyncHandlers,
 }: ProjectParticipantTableRowProps) {
   const hydrated = React.useMemo(
@@ -370,6 +380,7 @@ function ProjectParticipantTableRowComponent({
             releaseReady={releaseReady}
             canRelease={canRelease}
             releaseDisabledReason={releaseDisabledReason}
+            accountingReconciliation={accountingReconciliation}
             releaseSyncHandlers={releaseSyncHandlers}
             organizationId={organizationId}
             workspaceCurrency={workspaceCurrency}

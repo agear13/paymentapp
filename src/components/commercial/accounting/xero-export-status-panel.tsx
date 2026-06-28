@@ -36,6 +36,7 @@ import { Badge } from '@/components/ui/badge';
 import type { AccountingExportModel, AccountingExportPreview } from '@/lib/commercial/accounting-export';
 import type { AccountingSyncStatus } from '@/lib/commercial/accounting-connector';
 import { formatForecastAmount } from '@/lib/commercial/commercial-forecast';
+import { AccountingReconciliationCard } from '@/components/commercial/accounting-reconciliation-card';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -90,6 +91,7 @@ function ParticipantExportCard({
 
   const handlePush = async () => {
     if (!onPushToXero || pushing) return;
+    if (model.accountingReconciliation && !model.accountingReconciliation.releaseAllowed) return;
     setPushing(true);
     try {
       await onPushToXero(model.participantId);
@@ -142,7 +144,12 @@ function ParticipantExportCard({
 
   const config = statusConfig[model.status] ?? statusConfig.ready;
 
-  const canExport = model.exportReadiness.ready && model.status !== 'exported' && onPushToXero;
+  const reconciliationAllowsExport = model.accountingReconciliation?.releaseAllowed ?? true;
+  const canExport =
+    model.exportReadiness.ready &&
+    reconciliationAllowsExport &&
+    model.status !== 'exported' &&
+    onPushToXero;
   const showBlockers = !model.exportReadiness.ready && model.exportReadiness.blockers.length > 0;
 
   return (
@@ -225,6 +232,10 @@ function ParticipantExportCard({
       {/* Export preview table */}
       {expanded && model.preview && (
         <ExportPreviewTable preview={model.preview} />
+      )}
+
+      {model.accountingReconciliation && (
+        <AccountingReconciliationCard reconciliation={model.accountingReconciliation} />
       )}
 
       {/* Failure reason — never silent */}

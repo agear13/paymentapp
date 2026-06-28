@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { createParticipantReleaseBatch } from '@/lib/payouts/create-participant-release-batch';
 import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-client';
 import { applyGlobalOperationalSync } from '@/hooks/use-global-operational-sync';
+import type { AccountingReconciliationResult } from '@/lib/commercial/accounting-reconciliation';
 
 export type ParticipantReleaseButtonProps = {
   participantId: string;
@@ -16,6 +17,7 @@ export type ParticipantReleaseButtonProps = {
   releaseReady: boolean;
   canRelease: boolean;
   disabledReason?: string | null;
+  reconciliation?: AccountingReconciliationResult | null;
   syncHandlers: OperationalSyncHandlers;
   className?: string;
   label?: string;
@@ -29,6 +31,7 @@ export function ParticipantReleaseButton({
   releaseReady,
   canRelease,
   disabledReason,
+  reconciliation,
   syncHandlers,
   className,
   label = 'Release',
@@ -43,7 +46,11 @@ export function ParticipantReleaseButton({
       return;
     }
     if (!canRelease) {
-      toast.error(disabledReason ?? 'Release is not available right now');
+      toast.error(disabledReason ?? reconciliation?.reason ?? 'Release is not available right now');
+      return;
+    }
+    if (reconciliation && !reconciliation.releaseAllowed) {
+      toast.error(reconciliation.reason);
       return;
     }
 
@@ -85,7 +92,7 @@ export function ParticipantReleaseButton({
       size="sm"
       className={className ?? 'h-7 text-xs shrink-0'}
       disabled={loading || !canRelease || !organizationId}
-      title={!canRelease ? (disabledReason ?? undefined) : `Release ${participantName}`}
+      title={!canRelease ? (disabledReason ?? reconciliation?.reason ?? undefined) : `Release ${participantName}`}
       onClick={() => void handleRelease()}
     >
       {loading ? (

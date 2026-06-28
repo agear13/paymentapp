@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +19,7 @@ const PAYOUT_TRIGGER_MANUAL = 'Manual' as const;
 export type CreateDealModalProjectProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (deal: RecentDeal) => void;
+  onCreate: (deal: RecentDeal) => void | boolean | Promise<void | boolean>;
   editDeal?: RecentDeal | null;
 };
 
@@ -35,6 +34,7 @@ export function CreateDealModalProject({
   const [partnerName, setPartnerName] = React.useState('');
   const [dealValue, setDealValue] = React.useState('');
   const [linkedPaymentUrl, setLinkedPaymentUrl] = React.useState('');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
@@ -77,9 +77,9 @@ export function CreateDealModalProject({
     );
   }, [open, editDeal, dealName, projectDescription, partnerName, dealValue, linkedPaymentUrl]);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || isSubmitting) return;
     const now = new Date().toISOString();
     const next: RecentDeal = editDeal
       ? {
@@ -110,9 +110,14 @@ export function CreateDealModalProject({
           projectValueCurrency: 'AUD',
           latestUpdate: projectDescription.trim() || undefined,
         };
-    onCreate(next);
-    toast.success(editDeal ? 'Agreement updated' : 'Agreement created');
-    onOpenChange(false);
+    setIsSubmitting(true);
+    try {
+      const created = await onCreate(next);
+      if (created === false) return;
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function requestClose() {
@@ -215,11 +220,11 @@ export function CreateDealModalProject({
             </div>
           </div>
           <div className="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 border-t bg-background px-6 py-4">
-            <Button type="button" variant="outline" onClick={requestClose}>
+            <Button type="button" variant="outline" onClick={requestClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!canSubmit}>
-              {editDeal ? 'Save changes' : 'Create agreement'}
+            <Button type="submit" disabled={!canSubmit || isSubmitting}>
+              {isSubmitting ? 'Saving…' : editDeal ? 'Save changes' : 'Create agreement'}
             </Button>
           </div>
         </form>

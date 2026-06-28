@@ -28,6 +28,8 @@ import type {
 } from '@/lib/commercial/supplier-onboarding';
 import type { AccountingExportModel } from '@/lib/commercial/accounting-export';
 import type { AccountingSyncStatus } from '@/lib/commercial/accounting-connector';
+import { reconcileSupplierInvoiceToObligations } from '@/lib/commercial/accounting-reconciliation';
+import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
 import {
   deriveParticipantOperationalWorkflow,
   type ParticipantCommercialLifecycleStage,
@@ -62,7 +64,7 @@ export type ParticipantPhaseData = {
     portalFirstOpenedAt?: string | null;
     xeroExportedAt?: string | null;
     xeroSyncStatus?: string | null;
-    draftInvoice?: { status?: string } | null;
+    draftInvoice?: NonNullable<DemoParticipant['paymentSetup']>['draftInvoice'] | null;
   } | null;
 };
 
@@ -475,7 +477,22 @@ export function buildMinimalAccountingExportModels(
   return approved.map((p) => {
     const lifecycleStage = deriveParticipantOperationalWorkflow(toLifecycleParticipant(p)).stage;
     const accountingView = deriveMinimalAccountingView(lifecycleStage, p);
-    const amount = p.commissionValue ?? 0;
+    const draftInvoice = p.paymentSetup?.draftInvoice ?? null;
+    const amount = draftInvoice?.total ?? p.commissionValue ?? 0;
+    const gstTreatment = getSupplierGstTaxTreatment(draftInvoice?.gstStatus ?? 'pending');
+    const accountingReconciliation = draftInvoice
+      ? reconcileSupplierInvoiceToObligations({
+          invoice: draftInvoice,
+          obligationLines: [
+            {
+              id: `${p.id}:supplier-bill`,
+              amount: draftInvoice.total,
+              currency: draftInvoice.currency,
+              invoiceBacked: true,
+            },
+          ],
+        })
+      : null;
     const exportId = `${projectId}:${p.id}:accounting_export`;
     const role = normalizeDemoParticipantRole(p.role);
 
@@ -512,20 +529,24 @@ export function buildMinimalAccountingExportModels(
       preview: accountingView.ready
         ? {
             supplier: p.name,
-            description: `${role} services`,
-            reference: `${projectId}:${p.id}`,
+            description: draftInvoice?.description ?? `${role} services`,
+            reference: draftInvoice?.agreementReference ?? `${projectId}:${p.id}`,
             invoiceNumber: null,
             amount,
-            gstAmount: 0,
-            gstIncluded: false,
-            currency: 'AUD',
+            gstAmount: draftInvoice?.gstAmount ?? 0,
+            gstIncluded: draftInvoice?.gstIncluded ?? false,
+            gstStatus: draftInvoice?.gstStatus ?? 'pending',
+            gstStatusLabel: gstTreatment.displayStatus,
+            xeroTaxCode: gstTreatment.xeroTaxCode,
+            currency: draftInvoice?.currency ?? 'AUD',
             trackingCategory: null,
-            dueDate: null,
+            dueDate: draftInvoice?.dueDate ?? null,
             accountingSystem: 'xero',
             accountingSystemLabel: 'Xero',
             abn: null,
           }
         : null,
+      accountingReconciliation,
       exportApprovedAt: null,
       exportedAt: p.paymentSetup?.xeroExportedAt ?? null,
       providerReference: null,

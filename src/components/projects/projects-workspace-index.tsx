@@ -122,18 +122,20 @@ export function ProjectsWorkspaceIndex() {
         'workspace_import_replace'
       );
       if (!ok) {
+        setDeals(deals);
         toast({
           title: 'Could not save agreement',
           description: 'Try again from the agreements workspace.',
           variant: 'destructive',
         });
-        return;
+        return false;
       }
       toast({ title: 'Agreement created', description: deal.dealName });
       trackOutcomeOnce('outcome_first_agreement', { agreementName: deal.dealName, projectId: deal.id });
       setCreateOpen(false);
       router.push(`/dashboard/projects/${encodeURIComponent(deal.id)}`);
       router.refresh();
+      return true;
     },
     [deals, participants, router, toast]
   );
