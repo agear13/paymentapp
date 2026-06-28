@@ -48,6 +48,7 @@ import type {
 } from '@/lib/commercial/supplier-onboarding';
 import type { CommercialReviewSummary, ReviewCheck, ReviewCheckStatus } from '@/lib/commercial/supplier-onboarding-domain';
 import type { PaymentAttachment } from '@/lib/commercial/payment-setup-types';
+import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
 
 /* ─── Utilities ─────────────────────────────────────────────────────────── */
 function fmt(amount: number, currency = 'AUD'): string {
@@ -259,6 +260,7 @@ export function SupplierOnboardingOperatorView({
   isLoading = false,
 }: SupplierOnboardingOperatorViewProps) {
   const { draftInvoice, abnValidation, checklist, xeroReadiness, requiresManualReview } = status;
+  const gstTreatment = getSupplierGstTaxTreatment(draftInvoice.gstStatus);
   const [feedbackMode, setFeedbackMode] = React.useState<'request_changes' | 'reject' | null>(null);
   const [isFeedbackLoading, setIsFeedbackLoading] = React.useState(false);
   const [showFullBank, setShowFullBank] = React.useState(false);
@@ -384,13 +386,7 @@ export function SupplierOnboardingOperatorView({
           <div>
             <p className="text-xs text-muted-foreground">GST</p>
             <p className="text-sm font-medium">
-              {draftInvoice.gstStatus === 'yes'
-                ? 'GST registered'
-                : draftInvoice.gstStatus === 'no'
-                ? 'Not registered'
-                : draftInvoice.gstStatus === 'not_applicable'
-                ? 'Not applicable'
-                : 'Pending'}
+              {gstTreatment.displayStatus}
             </p>
           </div>
         </div>

@@ -14,6 +14,7 @@ import {
 } from '@/lib/commercial/payment-setup.server';
 import { buildSupplierOnboardingInput } from '@/lib/commercial/build-supplier-onboarding-input';
 import { generateDraftInvoice } from '@/lib/commercial/supplier-onboarding';
+import { buildPersistedDraftInvoiceProjection } from '@/lib/commercial/supplier-invoice-projection';
 import {
   appendOnboardingEvent,
   type StoredOnboardingState,
@@ -130,7 +131,8 @@ export async function generatePaymentRequestForParticipant(
 
   let persistedInvoice: PersistedDraftInvoice | undefined = cur.paymentSetup?.draftInvoice;
   if (!persistedInvoice) {
-    persistedInvoice = {
+    persistedInvoice = buildPersistedDraftInvoiceProjection({
+      derived,
       id: uuidv4(),
       createdAt: now,
       status: 'SUPPLIER_REVIEW',
@@ -138,23 +140,7 @@ export async function generatePaymentRequestForParticipant(
       participantId: cur.id,
       agreementReference: null,
       projectName: dealName,
-      description: derived.description,
-      currency: derived.currency,
-      subtotal: derived.subtotal,
-      gstAmount: derived.gstAmount,
-      total: derived.total,
-      gstIncluded: derived.gstStatus === 'yes',
-      gstStatus: derived.gstStatus,
-      dueDate: derived.dueDate ?? null,
-      lineItems: [
-        {
-          description: derived.description,
-          quantity: 1,
-          unitAmount: derived.subtotal,
-          taxType: derived.gstStatus === 'yes' ? 'INPUT' : 'NONE',
-        },
-      ],
-    };
+    });
     await persistDraftInvoice(participantId, persistedInvoice);
   } else if (persistedInvoice.status === 'DRAFT') {
     persistedInvoice = { ...persistedInvoice, status: 'SUPPLIER_REVIEW' };

@@ -35,6 +35,7 @@
  */
 
 import { calculateGstFromExclusiveSubtotal } from '@/lib/commercial/gst-utils';
+import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
 
 /* ─── Onboarding stage ──────────────────────────────────────────────────── */
 
@@ -94,7 +95,8 @@ export type DraftInvoice = {
   /** Subtotal before GST. */
   subtotal: number;
   /**
-   * GST component. null while gstStatus is 'pending' or 'no' or 'not_applicable'.
+   * GST component. null while gstStatus is 'pending', 'no' (not registered), or
+   * 'not_applicable' (overseas supplier).
    * 10% of subtotal when gstStatus is 'yes'.
    */
   gstAmount: number | null;
@@ -447,10 +449,7 @@ export function generateDraftInvoice(
 
 function buildLineItems(input: SupplierOnboardingInput): InvoiceLineItem[] {
   const { projectId, participant, agreement, obligation, gst } = input;
-  const taxType =
-    gst.gstStatus === 'yes' ? 'GST'
-    : gst.gstStatus === 'no' ? 'EXEMPT'
-    : 'PENDING';
+  const taxType = getSupplierGstTaxTreatment(gst.gstStatus).invoiceLineTaxType;
 
   const items: InvoiceLineItem[] = [];
 
@@ -774,8 +773,8 @@ function deriveChecklist(input: SupplierOnboardingInput): OnboardingChecklistIte
     gstIsBlocker = false;
   } else if (gst.gstStatus === 'not_applicable') {
     gstStatus = 'requires_review';
-    gstExplanation = 'GST declared as not applicable — verification required.';
-    gstAction = 'Verify GST status before pushing the supplier bill to Xero.';
+    gstExplanation = 'Overseas supplier — Australian GST is not applicable.';
+    gstAction = 'Verify tax residency before pushing the supplier bill to Xero.';
     gstIsBlocker = false;
   } else {
     gstExplanation = 'Supplier must confirm their GST registration status.';
@@ -874,7 +873,7 @@ function deriveTimelineEvents(
           ? `${participant.name} is registered for GST — invoice updated to include GST.`
           : input.gst.gstStatus === 'no'
           ? `${participant.name} is not registered for GST — invoice is ex-GST.`
-          : `${participant.name} has indicated GST is not applicable.`,
+          : `${participant.name} is an overseas supplier — Australian GST is not applicable.`,
       commercialImpact: 'Invoice GST calculation is finalised.',
       occurredAt: input.submission.submittedAt ?? new Date().toISOString(),
     });

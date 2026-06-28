@@ -39,6 +39,7 @@ import type {
   SupplierPaymentDetails,
   SupplierOnboardingInput,
 } from '@/lib/commercial/supplier-onboarding';
+import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
 
 /* ─── 1. Lifecycle state machine ─────────────────────────────────────────── */
 
@@ -251,6 +252,7 @@ export type SupplierTaxProfile = {
   businessName: string | null;
   gstRegistered: boolean;
   gstNotApplicable: boolean;
+  gstClassification: 'gst_registered' | 'not_registered_for_gst' | 'overseas_supplier' | 'pending';
   requiresManualReview: boolean;
 };
 
@@ -480,6 +482,14 @@ export function buildSupplierProfile(input: SupplierOnboardingInput): SupplierPr
     businessName: abn.businessName ?? null,
     gstRegistered: gst.gstStatus === 'yes',
     gstNotApplicable: gst.gstStatus === 'not_applicable',
+    gstClassification:
+      gst.gstStatus === 'yes'
+        ? 'gst_registered'
+        : gst.gstStatus === 'no'
+          ? 'not_registered_for_gst'
+          : gst.gstStatus === 'not_applicable'
+            ? 'overseas_supplier'
+            : 'pending',
     requiresManualReview: !abn.abnVerified && !abn.abnNotApplicable,
   };
 
@@ -573,9 +583,9 @@ export function generateCommercialReviewSummary(
   if (abn.abnNotApplicable) {
     checks.push({
       id: 'abn',
-      label: 'ABN — not applicable',
+      label: 'ABN — overseas supplier',
       status: 'warn',
-      detail: 'Overseas supplier or exempt — manual review required before export',
+      detail: 'Supplier has non-Australian tax residency — manual review required before export',
     });
   } else if (abn.abnVerified && abn.abn) {
     checks.push({
@@ -609,13 +619,14 @@ export function generateCommercialReviewSummary(
       detail: 'Supplier did not confirm their GST registration status',
     });
   } else {
+    const gstTreatment = getSupplierGstTaxTreatment(gst.gstStatus);
     const gstLabel =
       gst.gstStatus === 'yes' ? 'GST registered — invoice includes GST' :
       gst.gstStatus === 'no' ? 'Not GST registered — invoice is ex-GST' :
-      'GST not applicable — overseas supplier';
+      'Overseas supplier — Australian GST not applicable';
     checks.push({
       id: 'gst',
-      label: 'GST status confirmed',
+      label: gstTreatment.displayStatus,
       status: 'pass',
       detail: gstLabel,
     });

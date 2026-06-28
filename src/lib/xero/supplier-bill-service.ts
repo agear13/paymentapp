@@ -11,6 +11,7 @@ import 'server-only';
 import { getXeroClient } from './client';
 import { getActiveConnection } from './connection-service';
 import type { PersistedDraftInvoice } from '@/lib/commercial/payment-setup-types';
+import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
 
 export type SupplierBillInput = {
   organizationId: string;
@@ -54,6 +55,7 @@ export async function createSupplierBillInXero(
   await xero.updateTenants();
 
   const tenantId = connection.tenantId;
+  const gstTreatment = getSupplierGstTaxTreatment(invoice.gstStatus);
 
   /* ── 1. Upsert supplier contact ────────────────────────────────────────── */
   const contactPayload = {
@@ -76,7 +78,7 @@ export async function createSupplierBillInXero(
     description: li.description,
     quantity: li.quantity,
     unitAmount: li.unitAmount,
-    taxType: li.taxType,
+    taxType: gstTreatment.xeroTaxCode,
     accountCode: '200', // Default expense account — operator can remap in Xero settings
   }));
 
@@ -89,7 +91,7 @@ export async function createSupplierBillInXero(
     dueDate: invoice.dueDate ?? undefined,
     status: 'DRAFT' as const,
     reference: invoice.agreementReference ?? `${invoice.projectName}`,
-    lineAmountTypes: invoice.gstIncluded ? ('INCLUSIVE' as const) : ('EXCLUSIVE' as const),
+    lineAmountTypes: gstTreatment.gstIncluded ? ('INCLUSIVE' as const) : ('EXCLUSIVE' as const),
     currencyCode: invoice.currency as unknown as undefined, // typed as CurrencyCode in xero-node
   };
 

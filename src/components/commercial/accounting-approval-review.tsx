@@ -97,7 +97,7 @@ function AmountBlock({ preview }: { preview: NonNullable<AccountingExportModel['
         {preview.gstIncluded
           ? 'GST registered supplier — 10% GST included.'
           : preview.gstAmount === 0
-          ? 'Supplier has declared they are not GST registered. No GST applied.'
+          ? `${preview.gstStatusLabel}. No GST applied.`
           : 'GST status pending.'}
       </p>
     </div>

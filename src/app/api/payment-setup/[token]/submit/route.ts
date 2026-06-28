@@ -12,6 +12,9 @@ import {
   buildSupplierVerification,
 } from '@/lib/commercial/supplier-onboarding-domain';
 import type { StoredOnboardingState } from '@/lib/commercial/supplier-onboarding-domain';
+import { buildSupplierOnboardingInput } from '@/lib/commercial/build-supplier-onboarding-input';
+import { generateDraftInvoice } from '@/lib/commercial/supplier-onboarding';
+import { buildPersistedDraftInvoiceProjection } from '@/lib/commercial/supplier-invoice-projection';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 
 // Alias: the submit route has the deal owner's user_id, not an authenticated session
@@ -116,10 +119,28 @@ export async function POST(
       lifecycle: 'SUBMITTED',
     };
 
-    // Update draft invoice status if present
-    const updatedDraftInvoice = participant.paymentSetup?.draftInvoice
-      ? { ...participant.paymentSetup.draftInvoice, status: 'SUBMITTED' as const }
-      : undefined;
+    const dealPayload = deal.deal_payload as { dealName?: string; name?: string } | null;
+    const dealName = dealPayload?.dealName ?? dealPayload?.name ?? 'Your project';
+    const participantWithSubmission: DemoParticipant = {
+      ...participant,
+      supplierOnboarding: updatedOnboarding,
+    };
+    const rebuiltInput = buildSupplierOnboardingInput(participantWithSubmission, {
+      id: dealId,
+      name: dealName,
+    });
+    const rebuiltInvoice = generateDraftInvoice(rebuiltInput, now);
+    const updatedDraftInvoice = buildPersistedDraftInvoiceProjection({
+      derived: rebuiltInvoice,
+      existing: participant.paymentSetup?.draftInvoice,
+      id: uuidv4(),
+      createdAt: now,
+      status: 'SUBMITTED',
+      supplier: participant.name,
+      participantId: participantDbId,
+      agreementReference: participant.paymentSetup?.draftInvoice?.agreementReference ?? null,
+      projectName: dealName,
+    });
 
     const updated: DemoParticipant = {
       ...participant,
@@ -128,7 +149,7 @@ export async function POST(
       onboardingStatus: 'COMPLETE',
       paymentSetup: {
         ...participant.paymentSetup,
-        ...(updatedDraftInvoice ? { draftInvoice: updatedDraftInvoice } : {}),
+        draftInvoice: updatedDraftInvoice,
       },
     };
 

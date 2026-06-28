@@ -34,6 +34,9 @@ const {
   deriveWorkspaceOnboardingStatus,
   buildSupplierOnboardingNarrative,
 } = require('../../lib/commercial/supplier-onboarding');
+const {
+  buildPersistedDraftInvoiceProjection,
+} = require('../../lib/commercial/supplier-invoice-projection');
 
 /* ─── Fixtures ────────────────────────────────────────────────────────────── */
 
@@ -256,9 +259,106 @@ describe('generateDraftInvoice', () => {
     expect(invoice.lineItems[0].taxType).toBe('EXEMPT');
   });
 
+  test('sets tax type EXEMPT when supplier is overseas', () => {
+    const invoice = generateDraftInvoice(makeInput({ gst: makeGST({ gstStatus: 'not_applicable' }) }));
+    expect(invoice.lineItems[0].taxType).toBe('EXEMPT');
+  });
+
   test('sets tax type PENDING when gstStatus is pending', () => {
     const invoice = generateDraftInvoice(makeInput({ gst: makeGST({ gstStatus: 'pending' }) }));
     expect(invoice.lineItems[0].taxType).toBe('PENDING');
+  });
+
+  test('persists Australian GST registered invoice with GST and Xero INPUT tax code', () => {
+    const derived = generateDraftInvoice(makeInput({ gst: makeGST({ gstStatus: 'yes' }) }));
+    const persisted = buildPersistedDraftInvoiceProjection({
+      derived,
+      id: 'invoice-1',
+      createdAt: CURRENT_DATE,
+      status: 'SUBMITTED',
+      supplier: 'Sarah Chen',
+      participantId: 'sarah-001',
+      projectName: 'Sunset Sessions Tourism',
+    });
+
+    expect(persisted.subtotal).toBe(8000);
+    expect(persisted.gstAmount).toBe(800);
+    expect(persisted.total).toBe(8800);
+    expect(persisted.gstIncluded).toBe(true);
+    expect(persisted.gstStatus).toBe('yes');
+    expect(persisted.lineItems[0].taxType).toBe('INPUT');
+  });
+
+  test('persists Australian not registered invoice with no GST and Xero NONE tax code', () => {
+    const derived = generateDraftInvoice(makeInput({ gst: makeGST({ gstStatus: 'no' }) }));
+    const persisted = buildPersistedDraftInvoiceProjection({
+      derived,
+      id: 'invoice-1',
+      createdAt: CURRENT_DATE,
+      status: 'SUBMITTED',
+      supplier: 'Sarah Chen',
+      participantId: 'sarah-001',
+      projectName: 'Sunset Sessions Tourism',
+    });
+
+    expect(persisted.subtotal).toBe(8000);
+    expect(persisted.gstAmount).toBeNull();
+    expect(persisted.total).toBe(8000);
+    expect(persisted.gstIncluded).toBe(false);
+    expect(persisted.gstStatus).toBe('no');
+    expect(persisted.lineItems[0].taxType).toBe('NONE');
+  });
+
+  test('persists overseas supplier invoice with no GST and Xero EXEMPTEXPENSES tax code', () => {
+    const derived = generateDraftInvoice(makeInput({ gst: makeGST({ gstStatus: 'not_applicable' }) }));
+    const persisted = buildPersistedDraftInvoiceProjection({
+      derived,
+      id: 'invoice-1',
+      createdAt: CURRENT_DATE,
+      status: 'SUBMITTED',
+      supplier: 'Sarah Chen',
+      participantId: 'sarah-001',
+      projectName: 'Sunset Sessions Tourism',
+    });
+
+    expect(persisted.subtotal).toBe(8000);
+    expect(persisted.gstAmount).toBeNull();
+    expect(persisted.total).toBe(8000);
+    expect(persisted.gstIncluded).toBe(false);
+    expect(persisted.gstStatus).toBe('not_applicable');
+    expect(persisted.lineItems[0].taxType).toBe('EXEMPTEXPENSES');
+  });
+
+  test('rebuilding an existing draft invoice after GST changes preserves identity and recalculates totals', () => {
+    const pending = generateDraftInvoice(makeInput({ gst: makeGST({ gstStatus: 'pending' }) }));
+    const existing = buildPersistedDraftInvoiceProjection({
+      derived: pending,
+      id: 'invoice-1',
+      createdAt: CURRENT_DATE,
+      status: 'SUPPLIER_REVIEW',
+      supplier: 'Sarah Chen',
+      participantId: 'sarah-001',
+      projectName: 'Sunset Sessions Tourism',
+    });
+    const confirmed = generateDraftInvoice(makeInput({ gst: makeGST({ gstStatus: 'yes' }) }));
+    const rebuilt = buildPersistedDraftInvoiceProjection({
+      derived: confirmed,
+      existing,
+      id: 'invoice-2',
+      createdAt: '2024-06-20T00:00:00Z',
+      status: 'SUBMITTED',
+      supplier: 'Sarah Chen',
+      participantId: 'sarah-001',
+      projectName: 'Sunset Sessions Tourism',
+    });
+
+    expect(rebuilt.id).toBe(existing.id);
+    expect(rebuilt.createdAt).toBe(existing.createdAt);
+    expect(rebuilt.status).toBe('SUBMITTED');
+    expect(rebuilt.gstStatus).toBe('yes');
+    expect(rebuilt.gstAmount).toBe(800);
+    expect(rebuilt.total).toBe(8800);
+    expect(rebuilt.lineItems[0].taxType).toBe('INPUT');
   });
 });
 

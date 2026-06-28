@@ -17,7 +17,7 @@ export type DraftInvoiceStatus =
   | 'EXPORTED_TO_XERO'   // Exported to Xero — accounting record created
   | 'SETTLED';           // Payment released to supplier
 
-/** A persisted draft invoice — the source of truth, generated once at agreement approval. */
+/** A persisted draft invoice projection rebuilt from agreement and onboarding state. */
 export type PersistedDraftInvoice = {
   /** Unique invoice ID (uuid). */
   id: string;
@@ -39,7 +39,7 @@ export type PersistedDraftInvoice = {
   currency: string;
   /** Pre-GST subtotal. */
   subtotal: number;
-  /** GST amount (null when GST not applicable or pending). */
+  /** GST amount (null when GST is pending, supplier is not registered, or supplier is overseas). */
   gstAmount: number | null;
   /** Invoice total (subtotal + GST). */
   total: number;

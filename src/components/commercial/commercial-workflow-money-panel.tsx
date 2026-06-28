@@ -32,6 +32,7 @@ import {
 import type { WorkspaceOnboardingStatus, SupplierOnboardingStatus } from '@/lib/commercial/supplier-onboarding';
 import type { WorkspaceAccountingSyncStatus } from '@/lib/commercial/accounting-export';
 import type { WorkspaceSettlementReadiness } from '@/lib/commercial/settlement-readiness';
+import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
 
 /* ─── Utilities ─────────────────────────────────────────────────────────── */
 function fmt(amount: number, currency = 'AUD'): string {
@@ -203,11 +204,7 @@ function InvoiceStatusPanel({
                 {fmt(item.invoice.total, item.invoice.currency)}
               </p>
               <p className="text-xs text-muted-foreground">
-                {item.invoice.gstStatus === 'yes'
-                  ? 'Inc. GST'
-                  : item.invoice.gstStatus === 'no'
-                  ? 'Ex-GST'
-                  : 'GST pending'}
+                {getSupplierGstTaxTreatment(item.invoice.gstStatus).displayStatus}
               </p>
             </div>
           </div>

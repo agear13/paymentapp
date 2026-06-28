@@ -59,7 +59,8 @@ function ExportPreviewTable({ preview }: { preview: AccountingExportPreview }) {
     ['Amount', <span className="font-semibold tabular-nums">{formatForecastAmount(preview.amount, preview.currency)} {preview.currency}</span>],
     ['GST', preview.gstIncluded
       ? <span className="text-amber-700 dark:text-amber-300">{formatForecastAmount(preview.gstAmount, preview.currency)} {preview.currency} (included)</span>
-      : <span className="text-muted-foreground">Not applicable</span>],
+      : <span className="text-muted-foreground">{preview.gstStatusLabel}</span>],
+    ['Xero tax code', <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{preview.xeroTaxCode}</code>],
     ['Due Date', preview.dueDate ?? '—'],
   ];
 

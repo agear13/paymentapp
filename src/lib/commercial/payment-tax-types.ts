@@ -64,7 +64,7 @@ export type TaxResidencyDetails = {
   country: TaxResidencyCountry;
   abn?: string | null;
   businessName?: string | null;
-  gstRegistered?: 'yes' | 'no' | 'not_applicable' | null;
+  gstRegistered?: 'yes' | 'no' | null;
   businessRegistrationNumber?: string | null;
   taxIdentificationNumber?: string | null;
   taxNotApplicable?: boolean;
@@ -139,24 +139,15 @@ export function mapTaxToSupplierGst(
       gstStatus: 'not_applicable',
       abnInput: {
         abn: tax.taxIdentificationNumber ?? tax.businessRegistrationNumber ?? null,
-        abnNotApplicable: tax.taxNotApplicable ?? true,
+        abnNotApplicable: true,
         abnVerified: false,
         businessName: null,
       },
     };
   }
 
-  const gstStatus =
-    tax.gstRegistered === 'yes'
-      ? 'yes'
-      : tax.gstRegistered === 'no'
-      ? 'no'
-      : tax.gstRegistered === 'not_applicable'
-      ? 'not_applicable'
-      : 'pending';
-
   return {
-    gstStatus,
+    gstStatus: tax.gstRegistered === 'yes' ? 'yes' : tax.gstRegistered === 'no' ? 'no' : 'pending',
     abnInput: {
       abn: tax.abn ?? null,
       abnNotApplicable: false,

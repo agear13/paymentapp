@@ -39,6 +39,8 @@ import {
   calculateGstFromExclusiveSubtotal,
   toGstInclusiveTotal,
 } from '@/lib/commercial/gst-utils';
+import type { GSTStatus } from '@/lib/commercial/supplier-onboarding';
+import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
 import { isInvoiceAtOrAfter } from '@/lib/commercial/invoice-lifecycle';
 import type { InvoiceLifecycleState } from '@/lib/commercial/invoice-lifecycle';
 
@@ -71,8 +73,10 @@ export type AccountingExportParticipantInput = {
   taxDetails: {
     abn?: string | null;
     gstRegistered?: boolean | null;
+    gstStatus?: GSTStatus;
     businessName?: string | null;
     abnValid?: boolean;
+    abnNotApplicable?: boolean;
   };
 
   bankDetails: {
@@ -170,6 +174,12 @@ export type AccountingExportPreview = {
   gstAmount: number;
   /** True when GST is included. */
   gstIncluded: boolean;
+  /** Canonical supplier GST status. */
+  gstStatus: GSTStatus;
+  /** Human-readable GST status label. */
+  gstStatusLabel: string;
+  /** Provider tax code that will be used for Xero supplier bill lines. */
+  xeroTaxCode: string;
   currency: string;
   /** Optional tracking category. */
   trackingCategory: string | null;
@@ -362,14 +372,14 @@ export function deriveExportReadiness(
 
   /* 4. ABN must be provided */
   const abn = taxDetails.abn?.replace(/\s/g, '') ?? '';
-  if (!abn) {
+  if (!abn && taxDetails.abnNotApplicable !== true) {
     blockers.push({
       reason: 'abn_missing',
       explanation: 'An ABN has not been provided for this participant.',
       consequence: 'Payments to suppliers without an ABN may require tax withholding.',
       action: 'Request an ABN from the participant.',
     });
-  } else {
+  } else if (taxDetails.abnNotApplicable !== true) {
     /* 5. ABN must be valid */
     const abnIsValid = taxDetails.abnValid ?? validateAbn(abn);
     if (!abnIsValid) {
@@ -383,7 +393,10 @@ export function deriveExportReadiness(
   }
 
   /* 6. GST registration status must be confirmed */
-  if (taxDetails.gstRegistered === undefined || taxDetails.gstRegistered === null) {
+  if (
+    taxDetails.gstStatus !== 'not_applicable' &&
+    (taxDetails.gstRegistered === undefined || taxDetails.gstRegistered === null)
+  ) {
     blockers.push({
       reason: 'gst_not_confirmed',
       explanation: "The participant's GST registration status has not been confirmed.",
@@ -470,7 +483,10 @@ function buildPreview(
    * amount). Convert to inclusive first so the GST component is consistent with what
    * supplier onboarding would have generated.
    */
-  const gstIncluded = taxDetails.gstRegistered === true;
+  const gstStatus = taxDetails.gstStatus ??
+    (taxDetails.gstRegistered === true ? 'yes' : taxDetails.gstRegistered === false ? 'no' : 'pending');
+  const gstTreatment = getSupplierGstTaxTreatment(gstStatus);
+  const gstIncluded = gstTreatment.gstIncluded;
   const totalAmount =
     invoice.invoiceAmount != null
       ? invoice.invoiceAmount
@@ -487,6 +503,9 @@ function buildPreview(
     amount: totalAmount,
     gstAmount,
     gstIncluded,
+    gstStatus,
+    gstStatusLabel: gstTreatment.displayStatus,
+    xeroTaxCode: gstTreatment.xeroTaxCode,
     currency: obligation.currency,
     trackingCategory: accounting.trackingCategory ?? null,
     dueDate: invoice.dueDate ?? null,

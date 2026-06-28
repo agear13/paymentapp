@@ -42,6 +42,7 @@ import {
   validateBankDetails,
   generateDraftInvoice,
 } from '@/lib/commercial/supplier-onboarding';
+import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
 import type {
   SupplierOnboardingInput,
   GSTStatus,
@@ -521,11 +522,28 @@ type GSTSectionState = {
 function GSTSection({
   state,
   onChange,
+  overseasAllowed = false,
 }: {
   state: GSTSectionState;
   onChange: (s: GSTSectionState) => void;
+  overseasAllowed?: boolean;
 }) {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [confirmNotRegistered, setConfirmNotRegistered] = React.useState(false);
+  const options: Array<{ value: GSTStatus; label: string; sub: string }> = [
+    { value: 'yes', label: 'Yes — I am registered for GST', sub: 'GST will be added to your invoice (10%).' },
+    { value: 'no', label: 'No — I am not registered for GST', sub: 'Your invoice will be ex-GST. This is not treated as overseas supplier status.' },
+    ...(overseasAllowed
+      ? [{ value: 'not_applicable' as GSTStatus, label: 'Overseas supplier — Australian GST not applicable', sub: 'Use only when your tax residency is outside Australia.' }]
+      : []),
+  ];
+  const chooseGstStatus = (value: GSTStatus) => {
+    if (value === 'no') {
+      setConfirmNotRegistered(true);
+      return;
+    }
+    onChange({ gstStatus: value });
+  };
 
   return (
     <div className="space-y-5">
@@ -543,11 +561,7 @@ function GSTSection({
       </div>
 
       <div className="space-y-2">
-        {([
-          { value: 'yes', label: 'Yes — I am registered for GST', sub: 'GST will be added to your invoice (10%).' },
-          { value: 'no', label: 'No — I am not registered for GST', sub: 'Your invoice will be ex-GST.' },
-          { value: 'not_applicable', label: 'Not applicable', sub: 'For overseas suppliers or situations where GST does not apply.' },
-        ] as { value: GSTStatus; label: string; sub: string }[]).map(({ value, label, sub }) => (
+        {options.map(({ value, label, sub }) => (
           <label
             key={value}
             className={`flex items-start gap-3 p-3.5 rounded-lg border cursor-pointer transition-colors ${
@@ -561,7 +575,7 @@ function GSTSection({
               name="gstStatus"
               value={value}
               checked={state.gstStatus === value}
-              onChange={() => onChange({ gstStatus: value })}
+              onChange={() => chooseGstStatus(value)}
               className="mt-0.5"
             />
             <div>
@@ -587,11 +601,48 @@ function GSTSection({
             {state.gstStatus === 'yes'
               ? 'GST (10%) will be added to your invoice. Total will be updated when you submit.'
               : state.gstStatus === 'no'
-              ? 'Your invoice will not include GST.'
-              : 'The organiser will review your GST status before processing.'}
+              ? 'Your invoice will not include GST. This is recorded as Not Registered for GST.'
+              : 'The organiser will review your overseas supplier status before processing.'}
           </p>
         </div>
       )}
+      {confirmNotRegistered ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-lg border bg-background p-5 shadow-xl space-y-4">
+            <div>
+              <h3 className="text-base font-semibold">Confirm GST registration status</h3>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                Australian businesses generally need to register for GST once annual GST turnover
+                reaches A$75,000, or A$150,000 for non-profit organisations. If you are below the
+                threshold and not registered for GST, your invoice should not include GST.
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              This will be recorded as <strong>Not Registered for GST</strong>, not as an overseas
+              supplier.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-md border px-3 py-2 text-sm"
+                onClick={() => setConfirmNotRegistered(false)}
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+                onClick={() => {
+                  onChange({ gstStatus: 'no' });
+                  setConfirmNotRegistered(false);
+                }}
+              >
+                Confirm not registered
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -633,7 +684,7 @@ function DeclarationSection({
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">GST status</span>
           <span>
-            {invoice.gstStatus === 'yes' ? 'GST registered' : invoice.gstStatus === 'no' ? 'Ex-GST' : 'Not applicable'}
+            {getSupplierGstTaxTreatment(invoice.gstStatus).displayStatus}
           </span>
         </div>
       </div>
@@ -756,7 +807,7 @@ export function SupplierOnboardingForm({
       abnVerified: validateABN(abnState.abn || null).isValid,
       businessName: null,
     },
-    gst: { gstStatus: gstState.gstStatus },
+    gst: { gstStatus: abnState.notApplicable ? 'not_applicable' : gstState.gstStatus },
     submission: { submittedAt: null, declarationAccepted: false },
     operator: { approvedAt: null, xeroExportedAt: null, notes: null },
   };
@@ -777,7 +828,7 @@ export function SupplierOnboardingForm({
         if (abnState.notApplicable) return true;
         return validateABN(abnState.abn || null).isValid;
       }
-      case 3: return gstState.gstStatus !== 'pending';
+      case 3: return abnState.notApplicable || gstState.gstStatus !== 'pending';
       case 4: return declarationState.accepted;
       default: return false;
     }
@@ -855,7 +906,13 @@ export function SupplierOnboardingForm({
           </>
         )}
         {step === 2 && <ABNSection state={abnState} onChange={setABNState} />}
-        {step === 3 && <GSTSection state={gstState} onChange={setGSTState} />}
+        {step === 3 && (
+          <GSTSection
+            state={abnState.notApplicable ? { gstStatus: 'not_applicable' } : gstState}
+            onChange={setGSTState}
+            overseasAllowed={abnState.notApplicable}
+          />
+        )}
         {step === 4 && <DeclarationSection state={declarationState} onChange={setDeclarationState} invoice={draftInvoice} />}
       </div>
 

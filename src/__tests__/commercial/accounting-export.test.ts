@@ -414,6 +414,8 @@ describe('deriveAccountingExportPreview', () => {
   it('calculates GST correctly for GST-registered suppliers', () => {
     const preview = deriveAccountingExportPreview(makeReadyInput(), makeContext());
     expect(preview?.gstIncluded).toBe(true);
+    expect(preview?.gstStatus).toBe('yes');
+    expect(preview?.xeroTaxCode).toBe('INPUT');
     // GST = amount / 11
     const expectedGst = Math.round((2750 / 11) * 100) / 100;
     expect(preview?.gstAmount).toBe(expectedGst);
@@ -425,6 +427,30 @@ describe('deriveAccountingExportPreview', () => {
       makeContext()
     );
     expect(preview?.gstIncluded).toBe(false);
+    expect(preview?.gstStatus).toBe('no');
+    expect(preview?.xeroTaxCode).toBe('NONE');
+    expect(preview?.gstAmount).toBe(0);
+  });
+
+  it('exports overseas suppliers with the overseas Xero tax code', () => {
+    const preview = deriveAccountingExportPreview(
+      makeReadyInput({
+        taxDetails: makeTaxDetails({
+          abn: null,
+          abnNotApplicable: true,
+          abnValid: false,
+          gstRegistered: false,
+          gstStatus: 'not_applicable',
+          businessName: 'Overseas Supplier Ltd',
+        }),
+      }),
+      makeContext()
+    );
+
+    expect(preview?.gstIncluded).toBe(false);
+    expect(preview?.gstStatus).toBe('not_applicable');
+    expect(preview?.gstStatusLabel).toBe('Overseas Supplier');
+    expect(preview?.xeroTaxCode).toBe('EXEMPTEXPENSES');
     expect(preview?.gstAmount).toBe(0);
   });
 

@@ -43,6 +43,7 @@
 import type { SupplierOnboardingStatus, SupplierOnboardingStage } from './supplier-onboarding';
 import type { SettlementReadinessResult } from './settlement-readiness';
 import type { AccountingExportModel } from './accounting-export';
+import { getSupplierGstTaxTreatment } from './supplier-invoice-projection';
 
 /* ─── Workflow stage ─────────────────────────────────────────────────────── */
 
@@ -447,11 +448,7 @@ function deriveJourneySteps(
       })(),
       detail: (() => {
         if (!onboarding) return null;
-        const gst = onboarding.draftInvoice.gstStatus;
-        if (gst === 'yes') return 'GST registered';
-        if (gst === 'no') return 'No GST';
-        if (gst === 'not_applicable') return 'Not applicable';
-        return 'Pending';
+        return getSupplierGstTaxTreatment(onboarding.draftInvoice.gstStatus).displayStatus;
       })(),
     },
     {

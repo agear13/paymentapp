@@ -27,6 +27,7 @@ import {
   mapPaymentMethodToSupplierPayment,
   mapTaxToSupplierGst,
 } from '@/lib/commercial/payment-tax-types';
+import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
 
 type Props = {
   agreementSummary: AgreementSummaryData;
@@ -44,8 +45,53 @@ function GSTInfoPopover() {
   return (
     <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground leading-relaxed max-w-sm">
       If you are registered for GST, your invoices generally include GST where applicable. If you
-      are not registered, your invoices generally will not include GST. If you are unsure, please
-      consult your accountant.
+      are not registered, your invoices generally will not include GST. In Australia, GST
+      registration is generally required once annual GST turnover reaches A$75,000 for most
+      businesses, or A$150,000 for non-profit organisations. If you are unsure, please consult your
+      accountant.
+    </div>
+  );
+}
+
+function GstNotRegisteredConfirmation({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-md rounded-lg border bg-background p-5 shadow-xl space-y-4">
+        <div>
+          <h2 className="text-base font-semibold">Confirm GST registration status</h2>
+          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+            Australian businesses are generally required to register for GST once annual GST
+            turnover reaches A$75,000, or A$150,000 for non-profit organisations. If you are below
+            the threshold and not registered for GST, your invoice should not include GST.
+          </p>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          This will be recorded as <strong>Not Registered for GST</strong>, not as an overseas
+          supplier.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            className="rounded-md border px-3 py-2 text-sm"
+            onClick={onCancel}
+          >
+            Go back
+          </button>
+          <button
+            type="button"
+            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+            onClick={onConfirm}
+          >
+            Confirm not registered
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -66,13 +112,20 @@ export function PaymentTaxInformationForm({
     bankAccountNumber: baseInput.payment.bankDetails.accountNumber,
   });
   const [tax, setTax] = React.useState<TaxResidencyDetails>({
-    country: 'australia',
+    country:
+      baseInput.abn.abnNotApplicable || baseInput.gst.gstStatus === 'not_applicable'
+        ? 'other'
+        : 'australia',
     abn: baseInput.abn.abn,
-    gstRegistered: baseInput.gst.gstStatus === 'pending' ? null : baseInput.gst.gstStatus,
+    gstRegistered:
+      baseInput.gst.gstStatus === 'yes' || baseInput.gst.gstStatus === 'no'
+        ? baseInput.gst.gstStatus
+        : null,
     taxNotApplicable: baseInput.abn.abnNotApplicable,
   });
   const [declarationAccepted, setDeclarationAccepted] = React.useState(false);
   const [gstInfoOpen, setGstInfoOpen] = React.useState(false);
+  const [gstNotRegisteredConfirmOpen, setGstNotRegisteredConfirmOpen] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
   const [abrLoading, setAbrLoading] = React.useState(false);
   const [abrMessage, setAbrMessage] = React.useState<string | null>(null);
@@ -80,6 +133,15 @@ export function PaymentTaxInformationForm({
 
   const abnValidation = validateABN(tax.abn ?? null, tax.taxNotApplicable ?? false);
   const isAu = isAustralianTaxResidency(tax.country);
+  const selectedGstStatus = isAu ? (tax.gstRegistered ?? 'pending') : 'not_applicable';
+  const selectedGstTreatment = getSupplierGstTaxTreatment(selectedGstStatus);
+  const setGstRegistered = (value: 'yes' | 'no') => {
+    if (value === 'no') {
+      setGstNotRegisteredConfirmOpen(true);
+      return;
+    }
+    setTax((t) => ({ ...t, gstRegistered: value }));
+  };
 
   const lookupAbnLive = React.useCallback(async (abnValue: string) => {
     if (!abnValue.trim()) return;
@@ -312,7 +374,12 @@ export function PaymentTaxInformationForm({
           <select
             value={tax.country}
             onChange={(e) =>
-              setTax((t) => ({ ...t, country: e.target.value as TaxResidencyCountry }))
+              setTax((t) => ({
+                ...t,
+                country: e.target.value as TaxResidencyCountry,
+                gstRegistered: e.target.value === 'australia' ? t.gstRegistered : null,
+                taxNotApplicable: e.target.value === 'australia' ? t.taxNotApplicable : true,
+              }))
             }
             className="rounded-md border px-3 py-2 text-sm w-full"
           >
@@ -375,14 +442,14 @@ export function PaymentTaxInformationForm({
                 </div>
                 {gstInfoOpen && <GSTInfoPopover />}
                 <div className="flex flex-wrap gap-3 mt-2">
-                  {(['yes', 'no', 'not_applicable'] as const).map((v) => (
+                  {(['yes', 'no'] as const).map((v) => (
                     <label key={v} className="flex items-center gap-1.5 text-sm">
                       <input
                         type="radio"
                         checked={tax.gstRegistered === v}
-                        onChange={() => setTax((t) => ({ ...t, gstRegistered: v }))}
+                        onChange={() => setGstRegistered(v)}
                       />
-                      {v === 'not_applicable' ? 'Not Applicable' : v === 'yes' ? 'Yes' : 'No'}
+                      {v === 'yes' ? 'Yes, registered for GST' : 'No, not registered for GST'}
                     </label>
                   ))}
                 </div>
@@ -414,6 +481,10 @@ export function PaymentTaxInformationForm({
                 />
                 Not Applicable
               </label>
+              <p className="text-xs text-muted-foreground">
+                Non-Australian tax residency will be recorded as an overseas supplier for Australian
+                GST purposes.
+              </p>
             </div>
           )}
         </section>
@@ -427,6 +498,9 @@ export function PaymentTaxInformationForm({
           </p>
           <p className="text-sm text-muted-foreground">
             Tax residency: {TAX_RESIDENCY_LABELS[tax.country]}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            GST status: {selectedGstTreatment.displayStatus}
           </p>
           <label className="flex items-start gap-2 text-sm">
             <input
@@ -471,6 +545,15 @@ export function PaymentTaxInformationForm({
           </button>
         )}
       </div>
+      {gstNotRegisteredConfirmOpen ? (
+        <GstNotRegisteredConfirmation
+          onCancel={() => setGstNotRegisteredConfirmOpen(false)}
+          onConfirm={() => {
+            setTax((t) => ({ ...t, gstRegistered: 'no' }));
+            setGstNotRegisteredConfirmOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

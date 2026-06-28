@@ -16,6 +16,7 @@ import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { persistDraftInvoice } from '@/lib/commercial/payment-setup.server';
 import { buildSupplierOnboardingInput } from '@/lib/commercial/build-supplier-onboarding-input';
 import { generateDraftInvoice } from '@/lib/commercial/supplier-onboarding';
+import { buildPersistedDraftInvoiceProjection } from '@/lib/commercial/supplier-invoice-projection';
 import { v4 as uuidv4 } from 'uuid';
 import type { PersistedDraftInvoice } from '@/lib/commercial/payment-setup-types';
 
@@ -106,31 +107,17 @@ export async function POST(
             name: dealName,
           });
           const derived = generateDraftInvoice(input);
-          const persistedInvoice: PersistedDraftInvoice = {
+          const createdAt = new Date().toISOString();
+          const persistedInvoice: PersistedDraftInvoice = buildPersistedDraftInvoiceProjection({
+            derived,
             id: uuidv4(),
-            createdAt: new Date().toISOString(),
+            createdAt,
             status: 'DRAFT',
             supplier: result.participant.name,
             participantId: result.participant.id,
             agreementReference: null,
             projectName: dealName,
-            description: derived.description,
-            currency: derived.currency,
-            subtotal: derived.subtotal,
-            gstAmount: derived.gstAmount,
-            total: derived.total,
-            gstIncluded: derived.gstStatus === 'yes',
-            gstStatus: derived.gstStatus,
-            dueDate: derived.dueDate ?? null,
-            lineItems: [
-              {
-                description: derived.description,
-                quantity: 1,
-                unitAmount: derived.subtotal,
-                taxType: derived.gstStatus === 'yes' ? 'INPUT' : 'NONE',
-              },
-            ],
-          };
+          });
           await persistDraftInvoice(result.participant.id, persistedInvoice);
 
           const org = await getOrganizationForAuthenticatedUser(owner.user_id);
