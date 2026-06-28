@@ -14,6 +14,8 @@ import { ParticipantAgreementShareDialog } from '@/components/projects/participa
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import { earningsStructureSummary } from '@/lib/projects/participant-entitlement';
+import { persistParticipantAgreementShare } from '@/lib/projects/participant-agreement-share';
+import { toast } from 'sonner';
 
 interface PostExtractionPromptProps {
   open: boolean;
@@ -30,17 +32,26 @@ export function PostExtractionPrompt({
 }: PostExtractionPromptProps) {
   const [shareParticipant, setShareParticipant] = React.useState<DemoParticipant | null>(null);
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
+  const [sharingParticipantId, setSharingParticipantId] = React.useState<string | null>(null);
 
   const configuredCount = participants.filter((p) => {
     const summary = earningsStructureSummary(p);
     return summary !== 'Earnings not configured';
   }).length;
 
-  const handleGenerateAgreement = (participant: DemoParticipant) => {
-    const path = participantAgreementPath(participant.inviteToken);
-    const base = typeof window !== 'undefined' ? window.location.origin : '';
-    setShareParticipant(participant);
-    setShareUrl(`${base}${path}`);
+  const handleGenerateAgreement = async (participant: DemoParticipant) => {
+    setSharingParticipantId(participant.id);
+    try {
+      const shared = await persistParticipantAgreementShare(participant);
+      const path = shared.agreementUrl ?? participantAgreementPath(shared.inviteToken);
+      const base = typeof window !== 'undefined' ? window.location.origin : '';
+      setShareParticipant(shared);
+      setShareUrl(`${base}${path}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Agreement share failed');
+    } finally {
+      setSharingParticipantId(null);
+    }
   };
 
   const handleSkip = () => {
@@ -117,9 +128,10 @@ export function PostExtractionPrompt({
                       size="sm"
                       variant="outline"
                       className="h-7 text-xs"
-                      onClick={() => handleGenerateAgreement(p)}
+                      onClick={() => void handleGenerateAgreement(p)}
+                      disabled={sharingParticipantId != null}
                     >
-                      Generate Agreement
+                      {sharingParticipantId === p.id ? 'Saving…' : 'Generate Agreement'}
                     </Button>
                   </div>
                 ))}

@@ -38,11 +38,8 @@ import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-
 import { OperatorPayoutVerificationInfo } from '@/components/projects/operator-payout-verification-info';
 import type { DemoParticipantRole } from '@/components/deal-network-demo/invite-participant-modal';
 import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
+import { persistParticipantAgreementShare } from '@/lib/projects/participant-agreement-share';
 import { projectCommercialRolesPath } from '@/lib/projects/project-routes';
-import {
-  applyParticipantAgreementGenerated,
-  applyParticipantAgreementShared,
-} from '@/lib/operations/lifecycle/participant-lifecycle';
 import { ProjectReadinessBreakdown } from '@/components/projects/project-readiness-breakdown';
 import { ProjectOperationalLoadingState } from '@/components/projects/project-operational-loading-state';
 import { ParticipantCompensationDialog } from '@/components/projects/participant-compensation-dialog';
@@ -334,38 +331,21 @@ export function ProjectParticipantsView() {
         return;
       }
       const path = p.agreementUrl ?? participantAgreementPath(p.inviteToken);
-      const url =
-        typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
+      const now = new Date().toISOString();
 
-      let updated = p;
-      if (!p.agreementUrl) {
-        updated = applyParticipantAgreementGenerated(p, path);
-      }
-      updated = applyParticipantAgreementShared(updated);
-
-      patchParticipants((list) => list.map((x) => (x.id === p.id ? updated : x)));
-      const res = await fetch(`/api/deal-network-pilot/participants/${p.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agreementUrl: updated.agreementUrl,
-          agreementSharedAt: updated.agreementSharedAt,
-          inviteSentAt: updated.inviteSentAt,
-          inviteStatus: updated.inviteStatus,
-          agreementLifecycle: updated.agreementLifecycle,
-          participantLifecycle: updated.participantLifecycle,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error || 'Agreement share failed');
-      }
-      const json = (await res.json()) as { participant?: DemoParticipant };
-      if (json.participant) {
-        patchParticipants((list) => list.map((x) => (x.id === p.id ? json.participant! : x)));
-      }
+      const optimistic: DemoParticipant = {
+        ...p,
+        agreementUrl: p.agreementUrl ?? path,
+        agreementSharedAt: now,
+        inviteSentAt: now,
+        agreementLifecycle: 'SHARED',
+        participantLifecycle: 'INVITE_SENT',
+      };
+      patchParticipants((list) => list.map((x) => (x.id === p.id ? optimistic : x)));
+      const persisted = await persistParticipantAgreementShare(p);
+      patchParticipants((list) => list.map((x) => (x.id === p.id ? persisted : x)));
       if (options?.showDialog !== false) {
-        setAgreementShareParticipant(json.participant ?? updated);
+        setAgreementShareParticipant(persisted);
       }
     },
     [isAllowed, patchParticipants]
@@ -1382,6 +1362,11 @@ export function ProjectParticipantsView() {
           project={deal}
           organizationId={organizationId}
           onSubmit={handleInvite}
+          onAgreementShared={(participant) => {
+            patchParticipants((list) =>
+              list.map((p) => (p.id === participant.id ? participant : p))
+            );
+          }}
         />
 
         <OperationalDiagnosticsPanel

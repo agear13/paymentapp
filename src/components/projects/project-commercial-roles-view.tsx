@@ -274,6 +274,11 @@ export function ProjectCommercialRolesView() {
         project={deal}
         organizationId={organizationId}
         onSubmit={handleInviteSubmit}
+        onAgreementShared={(participant) => {
+          patchParticipants((list) =>
+            list.map((p) => (p.id === participant.id ? participant : p))
+          );
+        }}
       />
     </div>
   );

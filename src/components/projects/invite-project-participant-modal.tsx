@@ -41,6 +41,7 @@ import {
   participationModelToCommissionKind,
   type ProjectParticipationModel,
 } from '@/lib/projects/participant-entitlement';
+import { persistParticipantAgreementShare } from '@/lib/projects/participant-agreement-share';
 import type { OperationalParticipantRole } from '@/lib/projects/participants-for-project';
 import { getProjectDisplayName } from '@/lib/projects/get-project-display-name';
 
@@ -50,6 +51,7 @@ type InviteProjectParticipantModalProps = {
   project: RecentDeal;
   organizationId: string | null;
   onSubmit: (participant: DemoParticipant) => Promise<DemoParticipant | void>;
+  onAgreementShared?: (participant: DemoParticipant) => void;
 };
 
 type ModalStep = 1 | 2 | 'agreement';
@@ -92,6 +94,7 @@ export function InviteProjectParticipantModal({
   project,
   organizationId,
   onSubmit,
+  onAgreementShared,
 }: InviteProjectParticipantModalProps) {
   const projectLabel = getProjectDisplayName({ dealName: project.dealName });
 
@@ -231,10 +234,12 @@ export function InviteProjectParticipantModal({
 
       const saved = await onSubmit(participant);
       const finalParticipant = saved ?? participant;
+      const sharedParticipant = await persistParticipantAgreementShare(finalParticipant);
+      onAgreementShared?.(sharedParticipant);
 
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const agreementPath =
-        finalParticipant.agreementUrl ?? participantAgreementPath(finalParticipant.inviteToken);
+        sharedParticipant.agreementUrl ?? participantAgreementPath(sharedParticipant.inviteToken);
       const fullAgreementUrl = origin ? `${origin}${agreementPath}` : agreementPath;
 
       setAgreementLink(fullAgreementUrl);
