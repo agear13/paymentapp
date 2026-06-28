@@ -277,7 +277,7 @@ export function ExtractionReviewModal({
           deals: [newDeal, ...existing.deals.filter((d) => d.id !== newDeal.id)],
           participants: [...existing.participants, ...newParticipants],
         };
-        const ok = await persistPilotSnapshot(persistPayload);
+        const ok = await persistPilotSnapshot(persistPayload, 'workspace_import_replace');
         if (!ok) throw new Error('Could not save project. Please try again.');
         logExtractorDebugSnapshot({ persistedParticipants: newParticipants.length });
         await fetch('/api/deal-network-pilot/obligations/refresh', {
@@ -339,10 +339,13 @@ export function ExtractionReviewModal({
           d.id === existingDeal.id ? appendConversationImportToDeal(d, importRecord) : d
         );
 
-        const ok = await persistPilotSnapshot({
-          deals: updatedDeals,
-          participants: updatedParticipants,
-        });
+        const ok = await persistPilotSnapshot(
+          {
+            deals: updatedDeals,
+            participants: updatedParticipants,
+          },
+          'workspace_import_replace'
+        );
         if (!ok) throw new Error('Could not save participants. Please try again.');
         logExtractorDebugSnapshot({
           persistedParticipants: addedCount + updatedCount,

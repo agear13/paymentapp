@@ -41,8 +41,7 @@ export function ProjectCommercialRolesView() {
     deal,
     projectParticipants,
     allDeals,
-    allParticipants,
-    saveSnapshot,
+    patchParticipants,
     refresh,
     loading,
     notFound,
@@ -64,22 +63,45 @@ export function ProjectCommercialRolesView() {
     async (nextDeals: typeof allDeals) => {
       setSaving(true);
       try {
-        const ok = await saveSnapshot(nextDeals, allParticipants);
-        if (!ok) throw new Error('Save failed');
+        const nextDeal = nextDeals.find((d) => d.id === projectId);
+        if (!nextDeal) throw new Error('Project not found');
+        const res = await fetch(
+          `/api/deal-network-pilot/deals/${encodeURIComponent(projectId)}/commercial-roles`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ commercialRoles: nextDeal.commercialRoles ?? [] }),
+          }
+        );
+        if (!res.ok) throw new Error('Save failed');
+        await refresh({ scope: 'summary', silent: true, force: true });
         return true;
       } finally {
         setSaving(false);
       }
     },
-    [allParticipants, saveSnapshot]
+    [projectId, refresh]
   );
 
   const handleInviteSubmit = async (participant: DemoParticipant) => {
-    const next = [...allParticipants, participant];
-    const ok = await saveSnapshot(allDeals, next);
-    if (!ok) throw new Error('Failed to save participant');
+    patchParticipants((list) => [...list, participant]);
+    const res = await fetch('/api/deal-network-pilot/participants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participant }),
+    });
+    if (!res.ok) {
+      patchParticipants((list) => list.filter((p) => p.id !== participant.id));
+      throw new Error('Failed to save participant');
+    }
+    const json = (await res.json()) as { participant?: DemoParticipant };
+    if (json.participant) {
+      patchParticipants((list) =>
+        list.map((p) => (p.id === participant.id ? json.participant! : p))
+      );
+    }
     await refresh({ scope: 'participants', silent: false, force: true });
-    return participant;
+    return json.participant ?? participant;
   };
 
   const handleDelete = async (roleId: string) => {

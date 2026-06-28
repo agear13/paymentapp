@@ -4,7 +4,6 @@ import { requireAuth } from '@/lib/auth/middleware';
 import {
   getPilotSnapshotForUser,
   updatePilotParticipantPayload,
-  syncPilotSnapshotForUser,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import {
   appendOnboardingEvent,
@@ -107,11 +106,6 @@ export async function POST(
     if (!persisted) {
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
     }
-
-    const nextParticipants = snapshot.participants.map((p) =>
-      p.id === participantId ? persisted : p
-    );
-    await syncPilotSnapshotForUser(user.id, snapshot.deals, nextParticipants);
 
     // Regenerate payment setup token so the supplier can resubmit via a new secure link
     let newPortalUrl: string | null = null;

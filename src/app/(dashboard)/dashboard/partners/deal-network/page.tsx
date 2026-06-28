@@ -667,11 +667,6 @@ export default function DealNetworkPage() {
     setParticipants((prev) => syncInternalRoleParticipants(prev, deals));
   }, [deals, syncInternalRoleParticipants]);
 
-  React.useEffect(() => {
-    if (!pilotHydrated) return;
-    void persistPilotSnapshot({ deals, participants });
-  }, [deals, participants, pilotHydrated]);
-
   const handleCreateDeal = React.useCallback((deal: RecentDeal) => {
     setDeals((prev) => {
       const exists = prev.some((d) => d.id === deal.id);

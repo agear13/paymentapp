@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth/middleware';
 import {
   getPilotSnapshotForUser,
-  syncPilotSnapshotForUser,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { generatePaymentRequestForParticipant } from '@/lib/commercial/payment-request.server';
 import {
@@ -51,11 +50,6 @@ export async function POST(
     if (!result) {
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
     }
-
-    const nextParticipants = snapshot.participants.map((p) =>
-      p.id === participantId ? result.participant : p
-    );
-    await syncPilotSnapshotForUser(user.id, snapshot.deals, nextParticipants);
 
     const operationalSync = await orchestrateOperationalMutation({
       userId: user.id,

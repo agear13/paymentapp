@@ -123,9 +123,7 @@ export function ProjectParticipantsView() {
     summary,
     projectId,
     projectParticipants,
-    allDeals,
     allParticipants,
-    saveSnapshot,
     patchParticipants,
     refresh,
     isRefreshing,
@@ -345,14 +343,32 @@ export function ProjectParticipantsView() {
       }
       updated = applyParticipantAgreementShared(updated);
 
-      const nextParticipants = allParticipants.map((x) => (x.id === p.id ? updated : x));
       patchParticipants((list) => list.map((x) => (x.id === p.id ? updated : x)));
-      await saveSnapshot(allDeals, nextParticipants);
+      const res = await fetch(`/api/deal-network-pilot/participants/${p.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agreementUrl: updated.agreementUrl,
+          agreementSharedAt: updated.agreementSharedAt,
+          inviteSentAt: updated.inviteSentAt,
+          inviteStatus: updated.inviteStatus,
+          agreementLifecycle: updated.agreementLifecycle,
+          participantLifecycle: updated.participantLifecycle,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'Agreement share failed');
+      }
+      const json = (await res.json()) as { participant?: DemoParticipant };
+      if (json.participant) {
+        patchParticipants((list) => list.map((x) => (x.id === p.id ? json.participant! : x)));
+      }
       if (options?.showDialog !== false) {
-        setAgreementShareParticipant(updated);
+        setAgreementShareParticipant(json.participant ?? updated);
       }
     },
-    [allDeals, allParticipants, isAllowed, patchParticipants, saveSnapshot]
+    [isAllowed, patchParticipants]
   );
 
   const openPaymentRequestShare = React.useCallback(
@@ -475,11 +491,7 @@ export function ProjectParticipantsView() {
         roleDetails: patch.roleDetails,
         agreementNotes: patch.agreementNotes,
       };
-      const nextParticipants = allParticipants.map((p) =>
-        p.id === participantId ? optimistic : p
-      );
       patchParticipants((list) => list.map((p) => (p.id === participantId ? optimistic : p)));
-      void saveSnapshot(allDeals, nextParticipants);
 
       try {
         const res = await fetch(`/api/deal-network-pilot/participants/${participantId}`, {
@@ -508,17 +520,29 @@ export function ProjectParticipantsView() {
         toast.error(e instanceof Error ? e.message : 'Update failed');
       }
     },
-    [allDeals, allParticipants, patchParticipants, projectId, saveSnapshot, syncHandlers]
+    [patchParticipants, projectId, projectParticipants, syncHandlers]
   );
 
   const handleInvite = React.useCallback(
     async (participant: DemoParticipant): Promise<DemoParticipant> => {
-      const next = [...allParticipants, participant];
-      const ok = await saveSnapshot(allDeals, next);
-      if (!ok) throw new Error('persist failed');
-      return participant;
+      patchParticipants((list) => [...list, participant]);
+      const res = await fetch('/api/deal-network-pilot/participants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participant }),
+      });
+      if (!res.ok) {
+        patchParticipants((list) => list.filter((p) => p.id !== participant.id));
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'persist failed');
+      }
+      const json = (await res.json()) as { participant?: DemoParticipant };
+      if (json.participant) {
+        patchParticipants((list) => list.map((p) => (p.id === participant.id ? json.participant! : p)));
+      }
+      return json.participant ?? participant;
     },
-    [allDeals, allParticipants, saveSnapshot]
+    [patchParticipants]
   );
 
   const saveCompensation = React.useCallback(

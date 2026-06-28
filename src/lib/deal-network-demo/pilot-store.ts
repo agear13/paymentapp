@@ -6,6 +6,8 @@ export interface PilotStoreData {
   participants: DemoParticipant[];
 }
 
+export type PilotSnapshotPersistOperation = 'workspace_import_replace';
+
 /**
  * Load Rabbit Hole pilot snapshot for the current session user (Postgres via API).
  * localStorage is no longer used.
@@ -21,12 +23,15 @@ export async function fetchPilotSnapshot(): Promise<PilotStoreData | null> {
 }
 
 /** Persist full pilot snapshot for the current user (replaces prior sync pattern). */
-export async function persistPilotSnapshot(data: PilotStoreData): Promise<boolean> {
+export async function persistPilotSnapshot(
+  data: PilotStoreData,
+  operation?: PilotSnapshotPersistOperation
+): Promise<boolean> {
   const res = await fetch('/api/deal-network-pilot/snapshot', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, operation }),
     cache: 'no-store',
   });
   return res.ok;

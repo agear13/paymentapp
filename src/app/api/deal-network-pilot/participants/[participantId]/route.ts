@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth/middleware';
 import {
   getPilotSnapshotForUser,
-  syncPilotSnapshotForUser,
   updatePilotParticipantPayload,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import {
@@ -25,6 +24,7 @@ import { isAttributionAllActiveWithoutCatalog } from '@/lib/operations/truth/att
 import { ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES } from '@/lib/operations/merchant-operational-copy';
 import { assertOperationalInvariants } from '@/lib/operations/dev/operational-invariants';
 import { logParticipantEarningsPersistenceDiagnostic } from '@/lib/operations/dev/participant-earnings-persistence-diagnostic';
+import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 
 const compensationProfileSchema = z.object({
   compensationType: z.enum(PARTICIPANT_COMPENSATION_TYPES),
@@ -50,6 +50,12 @@ const patchSchema = z
     role: z.enum(['Introducer', 'Connector', 'Closer', 'Contributor']).optional(),
     roleDetails: z.string().max(2000).optional(),
     agreementNotes: z.string().max(2000).optional(),
+    agreementUrl: z.string().max(2000).optional(),
+    agreementSharedAt: z.string().optional(),
+    inviteSentAt: z.string().optional(),
+    inviteStatus: z.enum(['Invited', 'Opened']).optional(),
+    agreementLifecycle: z.enum(['NOT_CREATED', 'GENERATED', 'SHARED', 'VIEWED', 'APPROVED']).optional(),
+    participantLifecycle: z.string().optional(),
     compensationProfile: compensationProfileSchema.optional(),
   })
   .refine(
@@ -60,6 +66,12 @@ const patchSchema = z
       body.role != null ||
       body.roleDetails != null ||
       body.agreementNotes != null ||
+      body.agreementUrl != null ||
+      body.agreementSharedAt != null ||
+      body.inviteSentAt != null ||
+      body.inviteStatus != null ||
+      body.agreementLifecycle != null ||
+      body.participantLifecycle != null ||
       body.compensationProfile != null,
     { message: 'No updates provided' }
   );
@@ -101,6 +113,14 @@ export async function PATCH(
     if (body.role != null) payloadPatch.role = body.role;
     if (body.roleDetails != null) payloadPatch.roleDetails = body.roleDetails;
     if (body.agreementNotes != null) payloadPatch.agreementNotes = body.agreementNotes;
+    if (body.agreementUrl != null) payloadPatch.agreementUrl = body.agreementUrl;
+    if (body.agreementSharedAt != null) payloadPatch.agreementSharedAt = body.agreementSharedAt;
+    if (body.inviteSentAt != null) payloadPatch.inviteSentAt = body.inviteSentAt;
+    if (body.inviteStatus != null) payloadPatch.inviteStatus = body.inviteStatus;
+    if (body.agreementLifecycle != null) payloadPatch.agreementLifecycle = body.agreementLifecycle;
+    if (body.participantLifecycle != null) {
+      payloadPatch.participantLifecycle = body.participantLifecycle as DemoParticipant['participantLifecycle'];
+    }
 
     if (body.compensationProfile) {
       const org = await getOrganizationForAuthenticatedUser(user.id);
@@ -155,11 +175,6 @@ export async function PATCH(
         payloadConfiguredAt: body.compensationProfile.configuredAt ?? null,
       });
     }
-
-    const nextParticipants = snapshot.participants.map((p) =>
-      p.id === participantId ? persisted : p
-    );
-    await syncPilotSnapshotForUser(user.id, snapshot.deals, nextParticipants);
 
     const mutation = body.compensationProfile
       ? 'participant_earnings_save'

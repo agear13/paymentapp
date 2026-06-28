@@ -34,7 +34,14 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       deals?: RecentDeal[];
       participants?: DemoParticipant[];
+      operation?: string;
     };
+    if (body.operation !== 'workspace_import_replace') {
+      return NextResponse.json(
+        { error: 'Full snapshot persistence is restricted to explicit workspace import/replace operations' },
+        { status: 409 }
+      );
+    }
     const deals = Array.isArray(body.deals) ? body.deals : [];
     const participants = Array.isArray(body.participants) ? body.participants : [];
     await syncPilotSnapshotForUser(user.id, deals, participants);

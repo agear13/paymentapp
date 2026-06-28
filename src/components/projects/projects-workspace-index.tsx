@@ -117,7 +117,10 @@ export function ProjectsWorkspaceIndex() {
     async (deal: RecentDeal) => {
       const nextDeals = [deal, ...deals.filter((d) => d.id !== deal.id)];
       setDeals(nextDeals);
-      const ok = await persistPilotSnapshot({ deals: nextDeals, participants });
+      const ok = await persistPilotSnapshot(
+        { deals: nextDeals, participants },
+        'workspace_import_replace'
+      );
       if (!ok) {
         toast({
           title: 'Could not save agreement',

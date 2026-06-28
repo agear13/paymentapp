@@ -4,7 +4,6 @@ import { requireAuth } from '@/lib/auth/middleware';
 import {
   getPilotSnapshotForUser,
   updatePilotParticipantPayload,
-  syncPilotSnapshotForUser,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { dispatchCommercialNotification } from '@/lib/commercial/dispatch-commercial-notification.server';
@@ -121,11 +120,6 @@ export async function POST(
     if (!persisted) {
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
     }
-
-    const nextParticipants = snapshot.participants.map((p) =>
-      p.id === participantId ? persisted : p
-    );
-    await syncPilotSnapshotForUser(user.id, snapshot.deals, nextParticipants);
 
     const org = await getOrganizationForAuthenticatedUser(user.id);
     if (org) {
