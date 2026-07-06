@@ -22,7 +22,6 @@ export async function getOnboardingSetupChecklist(
     loadPaymentLinksOrgContext(organizationId),
   ]);
 
-  const stripeConnected = railSetup.stripeConfigured;
   const defaultCurrencyConfigured = Boolean(merchant?.default_currency?.trim());
   const revenueCollectionReady =
     railSetup.anyRailConfigured ||
@@ -32,7 +31,11 @@ export async function getOnboardingSetupChecklist(
   const workspaceActivated = onboardingState?.completed === true;
 
   return [
-    { id: 'stripe', label: 'Stripe settlement configured', complete: stripeConnected },
+    {
+      id: 'payment_rail',
+      label: 'Payment rail configured',
+      complete: railSetup.anyRailConfigured,
+    },
     {
       id: 'currency',
       label: 'Default currency configured',

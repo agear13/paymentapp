@@ -1,6 +1,7 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { WorkspaceActivationInput } from '@/lib/onboarding/workspace-activation-state';
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type {
   ActivationChecklistItem,
   WorkspaceActivationPhase,
@@ -80,8 +81,7 @@ function buildChecklist(
   snapshot: OperationalCoordinationSnapshot,
   payoutSummary: OperationalKPIs
 ): ActivationChecklistItem[] {
-  const provider =
-    input.stripeConfigured || input.wiseConfigured || input.hederaConfigured;
+  const provider = resolveAnyRailConfigured(input);
   const revenue =
     provider ||
     input.paymentLinkCount > 0 ||
@@ -253,6 +253,8 @@ export function guidanceFromOperationalGraph(input: {
       stripeConfigured: input.workspace.stripeConfigured,
       wiseConfigured: input.workspace.wiseConfigured,
       hederaConfigured: input.workspace.hederaConfigured,
+      evmWalletConfigured: input.workspace.evmWalletConfigured,
+      anyRailConfigured: input.workspace.anyRailConfigured,
       releaseEligibleCount: input.workspace.releaseEligibleCount,
       releaseBatchCount: input.workspace.releaseBatchCount,
       primaryProjectId: input.workspace.primaryProjectId ?? null,

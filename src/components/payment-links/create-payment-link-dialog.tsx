@@ -7,6 +7,7 @@
 
 import * as React from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import type { PaymentMethod } from '@prisma/client';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format } from 'date-fns';
@@ -44,13 +45,16 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { CurrencySelect } from './currency-select';
 import { cn } from '@/lib/utils';
 import {
+  buildInvoicePaymentMethodOptions,
   computePaymentLinkRailSetup,
+  guardrailKindForUnconfiguredPaymentMethod,
   pickAlternativePaymentMethod,
   toPaymentLinkRailSnapshot,
   type PaymentLinkRailSetupStatus,
+  type PaymentLinksGuardrailKind,
 } from '@/lib/payment-links/setup-status';
+import { PaymentLinkMethodSchema } from '@/lib/validations/schemas';
 import { PaymentLinksGuardrailModal } from '@/components/payment-links-onboarding/payment-links-guardrail-modal';
-import type { PaymentLinksGuardrailKind } from '@/components/payment-links-onboarding/payment-links-guardrail-modal';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -64,7 +68,7 @@ warnIfUndefined('Input', Input, 'create-payment-link-dialog.tsx');
 warnIfUndefined('Dialog', Dialog, 'create-payment-link-dialog.tsx');
 
 interface PaymentMethodOption {
-  value: 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO' | 'MANUAL_BANK';
+  value: z.infer<typeof PaymentLinkMethodSchema>;
   label: string;
   available: boolean;
   unavailableReason?: string;
@@ -73,8 +77,14 @@ interface PaymentMethodOption {
 interface MerchantSettings {
   stripeAccountId?: string;
   hederaAccountId?: string;
+  evmWalletEnabled?: boolean;
+  evmWalletAddress?: string | null;
+  evmSupportedNetworks?: string[] | null;
+  evmSupportedTokens?: string[] | null;
   wiseEnabled?: boolean;
   wiseProfileId?: string;
+  wiseGloballyEnabled?: boolean;
+  evmGloballyEnabled?: boolean;
   /** Merchant default / accounting currency (ISO 4217) — used as invoice currency default, not payment rail. */
   defaultCurrency?: string | null;
 }
@@ -83,7 +93,7 @@ interface MerchantSettings {
 const createPaymentLinkFormSchema = z
   .object({
   collectionMode: z.enum(['payment_request', 'invoice_only']),
-  paymentMethod: z.enum(['STRIPE', 'HEDERA', 'WISE', 'CRYPTO', 'MANUAL_BANK']).optional(),
+  paymentMethod: PaymentLinkMethodSchema.optional(),
   hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']).optional(),
   cryptoNetwork: z.string().optional(),
   cryptoAddress: z.string().optional(),
@@ -372,8 +382,14 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
             setMerchantSettings({
               stripeAccountId: settings.stripe_account_id,
               hederaAccountId: settings.hedera_account_id,
+              evmWalletEnabled: settings.evm_wallet_enabled,
+              evmWalletAddress: settings.evm_wallet_address,
+              evmSupportedNetworks: settings.evm_supported_networks,
+              evmSupportedTokens: settings.evm_supported_tokens,
               wiseEnabled: settings.wise_enabled,
               wiseProfileId: settings.wise_profile_id,
+              wiseGloballyEnabled: settings._features?.wiseGloballyEnabled ?? false,
+              evmGloballyEnabled: settings._features?.evmGloballyEnabled ?? false,
               defaultCurrency: settings.default_currency ?? null,
             });
           } else {
@@ -397,48 +413,29 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     if (!open) setGuardrail(null);
   }, [open]);
 
-  const railSetup = React.useMemo(
-    () => computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings)),
-    [merchantSettings]
+  const platformFeatures = React.useMemo(
+    () => ({
+      wisePayments: merchantSettings?.wiseGloballyEnabled ?? false,
+      evmWalletPayments: merchantSettings?.evmGloballyEnabled ?? false,
+    }),
+    [merchantSettings?.wiseGloballyEnabled, merchantSettings?.evmGloballyEnabled]
   );
 
-  // Compute available payment methods — Wise availability follows shared rail setup only
+  const railSetup = React.useMemo(
+    () =>
+      computePaymentLinkRailSetup(
+        toPaymentLinkRailSnapshot(merchantSettings),
+        platformFeatures
+      ),
+    [merchantSettings, platformFeatures]
+  );
+
   const paymentMethodOptions = React.useMemo((): PaymentMethodOption[] => {
-    return [
-      {
-        value: 'STRIPE',
-        label: 'Credit / Debit card (Stripe)',
-        available: true,
-      },
-      {
-        value: 'HEDERA',
-        label: 'Crypto (Hashpack, auto-verified on Hedera)',
-        available: true,
-      },
-      {
-        value: 'WISE',
-        label: 'Bank transfer (Wise)',
-        available: railSetup.wiseConfigured,
-        unavailableReason: !merchantSettings?.wiseEnabled
-          ? 'Wise payments not enabled'
-          : railSetup.wiseIncomplete
-            ? 'Wise Profile ID not configured'
-            : !railSetup.wiseConfigured
-              ? 'Wise not fully configured'
-              : undefined,
-      },
-      {
-        value: 'CRYPTO',
-        label: 'Crypto (manual wallet instructions)',
-        available: true,
-      },
-      {
-        value: 'MANUAL_BANK',
-        label: 'Manual bank transfer (bank / Wise / Revolut / other)',
-        available: true,
-      },
-    ];
-  }, [merchantSettings?.wiseEnabled, railSetup.wiseConfigured, railSetup.wiseIncomplete]);
+    return buildInvoicePaymentMethodOptions({
+      setup: railSetup,
+      features: platformFeatures,
+    });
+  }, [railSetup, platformFeatures]);
 
   /** Prefer merchant accounting currency for new invoices (not payment rail). */
   React.useEffect(() => {
@@ -537,7 +534,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         collectionMode: invoiceOnly ? 'invoice_only' : 'payment_request',
         paymentMethod: invoiceOnly
           ? undefined
-          : ((editPaymentLink.paymentMethod as 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO' | 'MANUAL_BANK') || 'STRIPE'),
+          : ((editPaymentLink.paymentMethod as 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET' | 'CRYPTO' | 'MANUAL_BANK') || 'STRIPE'),
         hederaCheckoutMode:
           (editPaymentLink.hederaCheckoutMode as 'INTERACTIVE' | 'MANUAL') || 'INTERACTIVE',
         cryptoNetwork: editPaymentLink.cryptoNetwork ?? '',
@@ -966,7 +963,10 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         return false;
       }
 
-      const setup = computePaymentLinkRailSetup(toPaymentLinkRailSnapshot(merchantSettings));
+      const setup = computePaymentLinkRailSetup(
+        toPaymentLinkRailSnapshot(merchantSettings),
+        platformFeatures
+      );
 
       const pm = data.paymentMethod;
       if (pm === 'CRYPTO' || pm === 'MANUAL_BANK') {
@@ -978,17 +978,12 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
         return false;
       }
 
-      if (pm === 'STRIPE' && !setup.stripeConfigured) {
-        setGuardrail({ kind: 'stripe', setup });
-        return false;
-      }
-      if (pm === 'WISE' && (!setup.wiseConfigured || setup.wiseIncomplete)) {
-        setGuardrail({ kind: 'wise', setup });
-        return false;
-      }
-      if (pm === 'HEDERA' && !setup.hederaConfigured) {
-        setGuardrail({ kind: 'hedera', setup });
-        return false;
+      if (pm) {
+        const guardrailKind = guardrailKindForUnconfiguredPaymentMethod(pm, setup);
+        if (guardrailKind) {
+          setGuardrail({ kind: guardrailKind, setup });
+          return false;
+        }
       }
 
       return true;
@@ -1044,7 +1039,10 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     const pm = form.getValues('paymentMethod');
     if (!pm) return;
     const snapshot = toPaymentLinkRailSnapshot(merchantSettings);
-    const setup = computePaymentLinkRailSetup(snapshot);
+    const setup = computePaymentLinkRailSetup(
+      snapshot,
+      platformFeatures
+    );
     const alt = pickAlternativePaymentMethod(setup, pm);
     if (alt) {
       form.setValue('paymentMethod', alt);
@@ -1055,7 +1053,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     }
     form.clearErrors('root');
     setGuardrail(null);
-  }, [form, merchantSettings]);
+  }, [form, merchantSettings, platformFeatures]);
 
   // Handle validation errors - focus first invalid field
   const onInvalidSubmit = (errors: any) => {
@@ -1176,7 +1174,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                       value={field.value ?? 'STRIPE'}
                       disabled={wiseTransferLocked}
                       onChange={(e) => {
-                        const selectedValue = e.target.value as 'STRIPE' | 'HEDERA' | 'WISE' | 'CRYPTO' | 'MANUAL_BANK';
+                        const selectedValue = e.target.value as PaymentMethod;
                         const option = paymentMethodOptions.find((opt) => opt.value === selectedValue);
                         if (option?.available) {
                           field.onChange(selectedValue);
@@ -1972,7 +1970,10 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       onChooseAnotherPaymentMethod={handleGuardrailChooseAnother}
       alternativeAvailable={
         guardrail && selectedPaymentMethod
-          ? pickAlternativePaymentMethod(guardrail.setup, selectedPaymentMethod) !== null
+          ? pickAlternativePaymentMethod(
+              guardrail.setup,
+              selectedPaymentMethod as 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET'
+            ) !== null
           : false
       }
     />

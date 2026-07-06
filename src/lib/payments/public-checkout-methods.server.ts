@@ -20,7 +20,10 @@ export type PublicCheckoutMethodFlags = Record<PublicCheckoutMethodKey, boolean>
 type MerchantCheckoutSettings = {
   stripe_account_id?: string | null;
   hedera_account_id?: string | null;
+  evm_wallet_enabled?: boolean | null;
   evm_wallet_address?: string | null;
+  evm_supported_networks?: string[] | null;
+  evm_supported_tokens?: string[] | null;
   wise_enabled?: boolean | null;
   wise_profile_id?: string | null;
 } | null;

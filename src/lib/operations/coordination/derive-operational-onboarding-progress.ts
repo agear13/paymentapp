@@ -1,3 +1,4 @@
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type { OperationalOnboardingState } from '@/lib/operations/onboarding/operational-onboarding-phases';
 import { onboardingInitializationProgress } from '@/lib/operations/onboarding/operational-onboarding-phases';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
@@ -50,7 +51,7 @@ function deriveProgressStages(
     id: 'provider',
     label: 'Payment provider connected',
     complete:
-      workspace.stripeConfigured || workspace.wiseConfigured || workspace.hederaConfigured,
+      resolveAnyRailConfigured(workspace),
     required: true,
     releaseImpact: 'Revenue collection must be active before funding obligations.',
   });

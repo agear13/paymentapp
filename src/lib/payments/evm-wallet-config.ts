@@ -11,7 +11,14 @@ export function isEvmWalletAddressConfigured(value: string | null | undefined): 
 }
 
 export function evmWalletConfiguredFromMerchantSnapshot(
-  merchant: { evm_wallet_address?: string | null } | null | undefined
+  merchant: {
+    evm_wallet_enabled?: boolean | null;
+    evm_wallet_address?: string | null;
+  } | null
+  | undefined
 ): boolean {
-  return isEvmWalletAddressConfigured(merchant?.evm_wallet_address);
+  return (
+    merchant?.evm_wallet_enabled === true &&
+    isEvmWalletAddressConfigured(merchant.evm_wallet_address)
+  );
 }

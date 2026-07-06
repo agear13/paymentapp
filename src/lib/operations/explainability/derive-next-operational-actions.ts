@@ -1,3 +1,4 @@
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type { OperationalAction } from '@/lib/operations/explainability/types';
 import type { OperationalExplainability } from '@/lib/operations/explainability/types';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
@@ -21,7 +22,7 @@ export function deriveNextOperationalActions(
     ctx.participantCount > 0 &&
     ctx.participantsConfiguredCount >= ctx.participantCount;
   const provider =
-    ctx.stripeConfigured || ctx.wiseConfigured || ctx.hederaConfigured;
+    resolveAnyRailConfigured(ctx);
 
   if (ctx.participantCount > 0 && !participantsConfigured) {
     actions.push({

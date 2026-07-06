@@ -10,6 +10,15 @@ import { log } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { runOperationalInitializationConvergence } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
 import { operationalInitializationEvent } from '@/lib/operations/onboarding/operational-initialization-events';
+import {
+  EVM_RAIL_DEFAULT_NETWORKS,
+  EVM_RAIL_DEFAULT_TOKENS,
+} from '@/lib/payments/payment-rail-registry';
+
+const evmNetworkSchema = z.enum(
+  EVM_RAIL_DEFAULT_NETWORKS as [string, ...string[]]
+);
+const evmTokenSchema = z.enum(EVM_RAIL_DEFAULT_TOKENS as [string, ...string[]]);
 
 const updateMerchantSettingsSchema = z.object({
   displayName: z.string().min(2).max(255).optional(),
@@ -22,6 +31,16 @@ const updateMerchantSettingsSchema = z.object({
   wiseProfileId: z.string().optional().nullable(),
   wiseEnabled: z.boolean().optional(),
   wiseCurrency: z.string().length(3).optional().nullable(),
+  evmWalletEnabled: z.boolean().optional(),
+  evmWalletAddress: z
+    .string()
+    .optional()
+    .nullable()
+    .refine((val) => !val || /^0x[a-fA-F0-9]{40}$/.test(val.trim()), {
+      message: 'EVM wallet address must be a valid 0x address',
+    }),
+  evmSupportedNetworks: z.array(evmNetworkSchema).optional(),
+  evmSupportedTokens: z.array(evmTokenSchema).optional(),
 });
 
 // GET /api/merchant-settings/[id]
@@ -120,6 +139,18 @@ export async function PATCH(
     if (body.wiseProfileId !== undefined) updateData.wise_profile_id = body.wiseProfileId;
     if (body.wiseEnabled !== undefined) updateData.wise_enabled = body.wiseEnabled;
     if (body.wiseCurrency !== undefined) updateData.wise_currency = body.wiseCurrency;
+    if (body.evmWalletEnabled !== undefined) {
+      updateData.evm_wallet_enabled = body.evmWalletEnabled;
+    }
+    if (body.evmWalletAddress !== undefined) {
+      updateData.evm_wallet_address = body.evmWalletAddress?.trim() || null;
+    }
+    if (body.evmSupportedNetworks !== undefined) {
+      updateData.evm_supported_networks = body.evmSupportedNetworks;
+    }
+    if (body.evmSupportedTokens !== undefined) {
+      updateData.evm_supported_tokens = body.evmSupportedTokens;
+    }
 
     const settings = await prisma.merchant_settings.update({
       where: { id },
@@ -180,7 +211,11 @@ export async function PATCH(
       body.stripeAccountId !== undefined ||
       body.hederaAccountId !== undefined ||
       body.wiseProfileId !== undefined ||
-      body.wiseEnabled !== undefined;
+      body.wiseEnabled !== undefined ||
+      body.evmWalletEnabled !== undefined ||
+      body.evmWalletAddress !== undefined ||
+      body.evmSupportedNetworks !== undefined ||
+      body.evmSupportedTokens !== undefined;
 
     let operationalOnboarding;
     let operationalInitialization;

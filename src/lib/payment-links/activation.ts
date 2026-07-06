@@ -3,7 +3,7 @@
  * Client-safe — only data passed in from API or other modules.
  *
  * Heuristic (aligned with product goals):
- * - Activated when at least one valid payment rail is configured (Stripe, Wise, or Hedera),
+ * - Activated when at least one valid payment rail is configured,
  *   OR at least one payment link / invoice exists for the org.
  * - Otherwise the merchant is treated as “new” for sidebar simplification.
  *

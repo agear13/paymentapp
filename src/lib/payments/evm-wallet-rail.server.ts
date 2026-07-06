@@ -23,8 +23,17 @@ export function isEvmWalletRailGloballyEnabled(): boolean {
  * Same pattern as Wise profile id / Hedera account id resolution.
  */
 export function resolveMerchantEvmWallet(settings: {
+  evm_wallet_enabled?: boolean | null;
   evm_wallet_address?: string | null;
 } | null | undefined): string | null {
+  if (settings?.evm_wallet_enabled !== true) {
+    const fromEnv = process.env.EVM_MERCHANT_WALLET_ADDRESS?.trim();
+    if (fromEnv && isEvmWalletAddressConfigured(fromEnv)) {
+      return fromEnv;
+    }
+    return null;
+  }
+
   const fromSettings = settings?.evm_wallet_address?.trim();
   if (fromSettings && isEvmWalletAddressConfigured(fromSettings)) {
     return fromSettings;
@@ -38,17 +47,38 @@ export function resolveMerchantEvmWallet(settings: {
   return null;
 }
 
-export function buildEvmWalletCheckoutConfig(merchantWalletAddress: string) {
-  const networks = Object.values(EVM_NETWORKS).map((network) => ({
-    id: network.id,
-    name: network.name,
-    chainId: network.chain.id,
-    tokens: EVM_SETTLEMENT_TOKENS.map((token) => ({
-      symbol: token,
-      contractAddress: getTokenAddress(token, network.id),
-      decimals: 6,
-    })),
-  }));
+export function buildEvmWalletCheckoutConfig(
+  merchantWalletAddress: string,
+  options?: {
+    supportedNetworks?: string[] | null;
+    supportedTokens?: string[] | null;
+  }
+) {
+  const networkFilter = new Set(
+    (options?.supportedNetworks?.length
+      ? options.supportedNetworks
+      : Object.keys(EVM_NETWORKS)
+    ).map((id) => id.toLowerCase())
+  );
+  const tokenFilter = new Set(
+    (options?.supportedTokens?.length ? options.supportedTokens : EVM_SETTLEMENT_TOKENS).map(
+      (token) => token.toUpperCase()
+    )
+  );
+
+  const networks = Object.values(EVM_NETWORKS)
+    .filter((network) => networkFilter.has(network.id))
+    .map((network) => ({
+      id: network.id,
+      name: network.name,
+      chainId: network.chain.id,
+      tokens: EVM_SETTLEMENT_TOKENS.filter((token) => tokenFilter.has(token)).map((token) => ({
+        symbol: token,
+        contractAddress: getTokenAddress(token, network.id),
+        decimals: 6,
+      })),
+    }))
+    .filter((network) => network.tokens.length > 0);
 
   return {
     merchantWalletAddress,

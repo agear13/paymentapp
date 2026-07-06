@@ -1,5 +1,6 @@
 import type { OperationalCoordinationSnapshot } from '@/lib/operations/selectors/operational-coordination-snapshot';
 import type { WorkspaceActivationInput } from '@/lib/onboarding/workspace-activation-state';
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { OperationalGuidanceBundle } from '@/lib/operations/explainability/types';
@@ -117,6 +118,8 @@ function workspaceContextFromActivationSeed(
     stripeConfigured: activation.stripeConfigured,
     wiseConfigured: activation.wiseConfigured,
     hederaConfigured: activation.hederaConfigured,
+    evmWalletConfigured: activation.evmWalletConfigured ?? false,
+    anyRailConfigured: resolveAnyRailConfigured(activation),
     projectCount: activation.projectCreated ? 1 : 0,
     primaryProjectId: activation.primaryProjectId ?? null,
     participantCount: activation.participantCount,
@@ -143,6 +146,8 @@ export function workspaceContextFromCanonicalState(
       stripeConfigured: base?.stripeConfigured ?? false,
       wiseConfigured: base?.wiseConfigured ?? false,
       hederaConfigured: base?.hederaConfigured ?? false,
+      evmWalletConfigured: base?.evmWalletConfigured ?? false,
+      anyRailConfigured: base?.anyRailConfigured ?? false,
       projectCount: base?.projectCount ?? 0,
       primaryProjectId: base?.primaryProjectId != null ? base.primaryProjectId : null,
       participantCount: Math.max(base?.participantCount ?? 0, kpis.participantCount),
@@ -162,6 +167,8 @@ export function workspaceContextFromCanonicalState(
     stripeConfigured: activation.stripeConfigured,
     wiseConfigured: activation.wiseConfigured,
     hederaConfigured: activation.hederaConfigured,
+    evmWalletConfigured: activation.evmWalletConfigured ?? false,
+    anyRailConfigured: resolveAnyRailConfigured(activation),
     projectCount: activation.projectCreated ? 1 : 0,
     primaryProjectId: activation.primaryProjectId ?? null,
     participantCount: Math.max(activation.participantCount, kpis.participantCount),
@@ -179,8 +186,7 @@ export function activationFromCanonicalState(
   activation: WorkspaceActivationInput
 ): WorkspaceActivationSnapshot {
   const kpis = deriveOperationalKPIs(state);
-  const provider =
-    activation.stripeConfigured || activation.wiseConfigured || activation.hederaConfigured;
+  const provider = resolveAnyRailConfigured(activation);
   const revenue =
     provider ||
     activation.paymentLinkCount > 0 ||

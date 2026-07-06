@@ -1,3 +1,4 @@
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type { TrustSignal, TrustLevel } from '@/lib/operations/explainability/types';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
@@ -26,7 +27,7 @@ export function deriveTrustSignals(input: TrustSignalsInput): TrustSignal[] {
   const signals: TrustSignal[] = [];
 
   const provider =
-    workspace.stripeConfigured || workspace.wiseConfigured || workspace.hederaConfigured;
+    resolveAnyRailConfigured(workspace);
 
   if (provider) {
     const rails: string[] = [];

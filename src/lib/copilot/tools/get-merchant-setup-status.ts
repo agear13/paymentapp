@@ -4,6 +4,14 @@
  */
 
 import { loadPaymentLinksOrgContext } from '@/lib/payment-links/org-context.server';
+import {
+  isMultiCheckoutRailConfigured,
+  isMultiCheckoutRailIncomplete,
+} from '@/lib/payment-links/setup-status';
+import {
+  getMultiCheckoutRails,
+  multiCheckoutMerchantLabels,
+} from '@/lib/payments/payment-rail-registry';
 
 export type MerchantSetupStepStatus = 'complete' | 'incomplete' | 'attention';
 
@@ -44,9 +52,6 @@ export type MerchantSetupStatusResult = {
 export async function getMerchantSetupStatus(organizationId: string): Promise<MerchantSetupStatusResult> {
   const { railSetup: setup, paymentLinkCount } = await loadPaymentLinksOrgContext(organizationId);
   const hasRail = setup.anyRailConfigured;
-  const hasStripe = setup.stripeConfigured;
-  const hasWise = setup.wiseConfigured;
-  const hasHedera = setup.hederaConfigured;
   const hasFirstInvoice = paymentLinkCount > 0;
 
   const steps: MerchantSetupStep[] = [];
@@ -56,55 +61,42 @@ export async function getMerchantSetupStatus(organizationId: string): Promise<Me
       code: 'no_payment_rail_configured',
       title: 'No payment method configured',
       status: 'incomplete',
-      description:
-        'Connect at least one rail (Stripe, Wise, or Hedera) in merchant settings before customers can pay you.',
+      description: `Connect at least one rail (${multiCheckoutMerchantLabels()}) in merchant settings before customers can pay you.`,
       actionLabel: 'Open merchant settings',
       actionIntent: 'open_merchant_settings',
     });
   }
 
-  steps.push({
-    code: 'stripe',
-    title: 'Stripe',
-    status: hasStripe ? 'complete' : 'incomplete',
-    description: hasStripe
-      ? 'Stripe Connect is linked for card and wallet checkouts.'
-      : 'Connect Stripe to accept card payments through Payment Links.',
-    actionLabel: hasStripe ? undefined : 'Configure in merchant settings',
-    actionIntent: hasStripe ? undefined : 'open_merchant_settings',
-  });
+  for (const rail of getMultiCheckoutRails()) {
+    const configured = isMultiCheckoutRailConfigured(setup, rail.id);
+    const incomplete = isMultiCheckoutRailIncomplete(setup, rail.id);
 
-  let wiseStepStatus: MerchantSetupStepStatus = 'incomplete';
-  let wiseDescription =
-    'Enable Wise and attach a Wise profile to offer bank-friendly payouts where supported.';
-  if (hasWise) {
-    wiseStepStatus = 'complete';
-    wiseDescription = 'Wise is enabled and a profile is on file.';
-  } else if (setup.wiseIncomplete) {
-    wiseStepStatus = 'attention';
-    wiseDescription =
-      'Wise is toggled on but no profile ID is set. Finish Wise setup in merchant settings.';
+    let status: MerchantSetupStepStatus = 'incomplete';
+    let description =
+      rail.merchantSetupIncompleteDescription ??
+      `Configure ${rail.merchantSettingsLabel} in collection & settlement setup.`;
+
+    if (configured) {
+      status = 'complete';
+      description =
+        rail.merchantSetupCompleteDescription ??
+        `${rail.merchantSettingsLabel} is configured.`;
+    } else if (incomplete) {
+      status = 'attention';
+      description =
+        rail.merchantSetupAttentionDescription ??
+        `${rail.merchantSettingsLabel} is enabled but missing required configuration.`;
+    }
+
+    steps.push({
+      code: rail.id,
+      title: rail.merchantSettingsLabel,
+      status,
+      description,
+      actionLabel: status === 'complete' ? undefined : 'Configure in merchant settings',
+      actionIntent: status === 'complete' ? undefined : 'open_merchant_settings',
+    });
   }
-
-  steps.push({
-    code: 'wise',
-    title: 'Wise',
-    status: wiseStepStatus,
-    description: wiseDescription,
-    actionLabel: wiseStepStatus === 'complete' ? undefined : 'Review Wise setup',
-    actionIntent: wiseStepStatus === 'complete' ? undefined : 'open_merchant_settings',
-  });
-
-  steps.push({
-    code: 'hedera_wallet',
-    title: 'Hedera wallet',
-    status: hasHedera ? 'complete' : 'incomplete',
-    description: hasHedera
-      ? 'A Hedera account is configured for on-ledger settlement options.'
-      : 'Optionally add a Hedera account ID for supported token flows.',
-    actionLabel: hasHedera ? undefined : 'Add Hedera account',
-    actionIntent: hasHedera ? undefined : 'open_merchant_settings',
-  });
 
   steps.push({
     code: 'first_payment_link',
@@ -119,7 +111,7 @@ export async function getMerchantSetupStatus(organizationId: string): Promise<Me
 
   const hasAttention = steps.some((s) => s.status === 'attention');
 
-  /** Ready = can receive $ (≥1 rail) + at least one invoice; Wise “attention” blocks until fixed. */
+  /** Ready = can receive $ (≥1 rail) + at least one invoice; incomplete rails block until fixed. */
   let overallStatus: MerchantSetupOverallStatus;
   if (!hasRail && !hasFirstInvoice) {
     overallStatus = 'not_started';
@@ -139,8 +131,10 @@ export async function getMerchantSetupStatus(organizationId: string): Promise<Me
     summary =
       'Start by connecting a payment rail in merchant settings, then create your first invoice.';
   } else if (hasAttention) {
-    summary =
-      'Resolve the highlighted item (Wise needs attention), then confirm your first invoice is created.';
+    const attentionRail = steps.find((s) => s.status === 'attention');
+    summary = attentionRail
+      ? `Resolve the highlighted item (${attentionRail.title} needs attention), then confirm your first invoice is created.`
+      : 'Resolve the highlighted setup items, then confirm your first invoice is created.';
   } else {
     summary =
       'Finish the remaining items below to start collecting payments with confidence.';
@@ -168,3 +162,4 @@ export async function getMerchantSetupStatus(organizationId: string): Promise<Me
     nextRecommendedAction,
   };
 }
+

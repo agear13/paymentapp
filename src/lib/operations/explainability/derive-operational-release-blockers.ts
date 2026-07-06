@@ -1,3 +1,4 @@
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { OperationalBlockerDetail } from '@/lib/operations/contracts/approval-state';
 import {
@@ -232,7 +233,7 @@ export function deriveOperationalReleaseBlockers(
     });
   }
 
-  if (workspace && !workspace.stripeConfigured && !workspace.wiseConfigured && !workspace.hederaConfigured) {
+  if (workspace && !resolveAnyRailConfigured(workspace)) {
     details.push({
       id: 'provider-missing',
       category: 'provider_missing',

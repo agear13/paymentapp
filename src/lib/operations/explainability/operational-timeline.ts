@@ -1,3 +1,4 @@
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type { TimelineEvent } from '@/lib/operations/explainability/types';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 
@@ -50,7 +51,7 @@ export function buildOperationalTimeline(input: TimelineInput): TimelineEvent[] 
     });
   }
 
-  const provider = w.stripeConfigured || w.wiseConfigured || w.hederaConfigured;
+  const provider = resolveAnyRailConfigured(w);
   if (provider) {
     events.push({
       id: 'provider',

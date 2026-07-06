@@ -2,6 +2,7 @@ import type { OperationalGuidanceBundle } from '@/lib/operations/explainability'
 import type { OperationalReleaseBlockerDetail } from '@/lib/operations/explainability/derive-operational-release-blockers';
 import { deriveOperationalReleaseBlockers } from '@/lib/operations/explainability/derive-operational-release-blockers';
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { AttentionItem, OperationalSeverity } from '@/lib/operations/severity/types';
 import {
@@ -74,7 +75,7 @@ export function deriveOperationalSeverity(input: SeverityDerivationInput): Atten
   }
 
   const provider =
-    workspace.stripeConfigured || workspace.wiseConfigured || workspace.hederaConfigured;
+    resolveAnyRailConfigured(workspace);
   if (provider && !workspace.wiseConfigured && workspace.stripeConfigured) {
     items.push({
       id: 'provider-partial',

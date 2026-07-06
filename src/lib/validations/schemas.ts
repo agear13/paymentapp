@@ -4,11 +4,13 @@
  */
 
 import { z } from 'zod';
+import type { PaymentMethod } from '@prisma/client';
 import {
   isValidPaymentLinkAttachmentStorageKey,
   PAYMENT_LINK_ATTACHMENT_BUCKET,
   PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
 } from '@/lib/payment-links/payment-link-attachment.shared';
+import { getInvoiceSelectablePaymentMethods } from '@/lib/payments/payment-rail-registry';
 
 // ============================================================================
 // ENUM SCHEMAS
@@ -38,15 +40,12 @@ export const PaymentEventTypeSchema = z.enum([
   'RECURRING_EXECUTION',
 ]);
 
+const invoiceSelectableMethods = getInvoiceSelectablePaymentMethods();
+
 /** Collection rails selectable on payment_links (not operator mark-paid). */
-export const PaymentLinkMethodSchema = z.enum([
-  'STRIPE',
-  'HEDERA',
-  'WISE',
-  'EVM_WALLET',
-  'CRYPTO',
-  'MANUAL_BANK',
-]);
+export const PaymentLinkMethodSchema = z.enum(
+  invoiceSelectableMethods as [PaymentMethod, ...PaymentMethod[]]
+);
 
 /** Settlement rails recorded on payment_events (includes operator off-rail settlement). */
 export const PaymentEventMethodSchema = z.enum([

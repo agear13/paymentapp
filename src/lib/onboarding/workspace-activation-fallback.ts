@@ -2,6 +2,7 @@ import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-act
 import type { NextRecommendedAction } from '@/lib/onboarding/next-recommended-action';
 import { deriveWorkspaceActivationFromOperations } from '@/lib/operations/orchestration/activation-bridge';
 import type { WorkspaceActivationInput } from '@/lib/onboarding/workspace-activation-state';
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import { deriveNextRecommendedAction } from '@/lib/onboarding/next-recommended-action';
 
 export const ACTIVATION_FALLBACK_CHECKLIST = [
@@ -32,6 +33,8 @@ export function createFallbackActivation(
     stripeConfigured: false,
     wiseConfigured: false,
     hederaConfigured: false,
+    evmWalletConfigured: false,
+    anyRailConfigured: false,
     releaseEligibleCount: 0,
     releaseBatchCount: 0,
     primaryProjectId: null,
@@ -95,7 +98,7 @@ export function safeDeriveActivationResponse(input: WorkspaceActivationInput): {
   } catch {
     const activation = createFallbackActivation({
       primaryProjectId: input.primaryProjectId,
-      providerConnected: input.stripeConfigured || input.wiseConfigured || input.hederaConfigured,
+      providerConnected: resolveAnyRailConfigured(input),
       participantCount: input.participantCount,
     });
     return {

@@ -6,10 +6,19 @@
 import 'server-only';
 
 import { prisma } from '@/lib/server/prisma';
+import config from '@/lib/config/env';
 import {
   computePaymentLinkRailSetup,
   type PaymentLinkRailSetupStatus,
+  type PaymentRailPlatformFeatures,
 } from '@/lib/payment-links/setup-status';
+
+function serverPaymentRailPlatformFeatures(): PaymentRailPlatformFeatures {
+  return {
+    wisePayments: config.features.wisePayments,
+    evmWalletPayments: config.features.evmWalletPayments,
+  };
+}
 
 export type PaymentLinksOrgContext = {
   railSetup: PaymentLinkRailSetupStatus;
@@ -25,6 +34,10 @@ export async function loadPaymentLinksOrgContext(
       select: {
         stripe_account_id: true,
         hedera_account_id: true,
+        evm_wallet_enabled: true,
+        evm_wallet_address: true,
+        evm_supported_networks: true,
+        evm_supported_tokens: true,
         wise_enabled: true,
         wise_profile_id: true,
       },
@@ -34,7 +47,10 @@ export async function loadPaymentLinksOrgContext(
     }),
   ]);
 
-  const railSetup = computePaymentLinkRailSetup(merchant);
+  const railSetup = computePaymentLinkRailSetup(
+    merchant,
+    serverPaymentRailPlatformFeatures()
+  );
 
   return { railSetup, paymentLinkCount };
 }

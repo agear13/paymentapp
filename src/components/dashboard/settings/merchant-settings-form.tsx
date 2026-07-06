@@ -34,10 +34,20 @@ import {
   maskHederaAccountId,
   maskStripeAccountId,
   maskWiseProfileId,
+  maskEvmWalletAddress,
 } from '@/lib/settings/mask-credential';
 
 import { WORKSPACE_CURRENCIES, DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  EVM_RAIL_DEFAULT_NETWORKS,
+  EVM_RAIL_DEFAULT_TOKENS,
+  evmNetworkDisplayName,
+  getPaymentRail,
+} from '@/lib/payments/payment-rail-registry';
+
+const evmRail = getPaymentRail('evm_wallet');
 
 const merchantSettingsSchema = z.object({
   displayName: z.string().min(2, 'Display name must be at least 2 characters').max(255),
@@ -69,6 +79,16 @@ const merchantSettingsSchema = z.object({
   ),
   wiseEnabled: z.boolean().optional(),
   wiseCurrency: z.string().length(3, 'Currency must be a 3-letter ISO code').optional().or(z.literal('')),
+  evmWalletEnabled: z.boolean().optional(),
+  evmWalletAddress: z
+    .string()
+    .optional()
+    .or(z.literal(''))
+    .refine((val) => !val || /^0x[a-fA-F0-9]{40}$/.test(val.trim()), {
+      message: 'EVM wallet address must be a valid 0x address (42 characters)',
+    }),
+  evmSupportedNetworks: z.array(z.string()).optional(),
+  evmSupportedTokens: z.array(z.string()).optional(),
 });
 
 const pilotMerchantSettingsSchema = z.object({
@@ -102,6 +122,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
   const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
   const [logoPreviewError, setLogoPreviewError] = React.useState(false);
   const [wiseGloballyEnabled, setWiseGloballyEnabled] = React.useState(true); // Default to true, will be updated from API
+  const [evmGloballyEnabled, setEvmGloballyEnabled] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const form = useForm<MerchantSettingsFormValues>({
@@ -115,6 +136,10 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
       wiseProfileId: '',
       wiseEnabled: false,
       wiseCurrency: '',
+      evmWalletEnabled: false,
+      evmWalletAddress: '',
+      evmSupportedNetworks: [...EVM_RAIL_DEFAULT_NETWORKS],
+      evmSupportedTokens: [...EVM_RAIL_DEFAULT_TOKENS],
     },
   });
 
@@ -143,6 +168,16 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
               wiseProfileId: settings.wise_profile_id || '',
               wiseEnabled: settings.wise_enabled || false,
               wiseCurrency: settings.wise_currency || '',
+              evmWalletEnabled: settings.evm_wallet_enabled || false,
+              evmWalletAddress: settings.evm_wallet_address || '',
+              evmSupportedNetworks:
+                settings.evm_supported_networks?.length > 0
+                  ? settings.evm_supported_networks
+                  : [...EVM_RAIL_DEFAULT_NETWORKS],
+              evmSupportedTokens:
+                settings.evm_supported_tokens?.length > 0
+                  ? settings.evm_supported_tokens
+                  : [...EVM_RAIL_DEFAULT_TOKENS],
             });
             
             // Set logo preview if URL exists
@@ -154,6 +189,9 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
             // Update global Wise feature flag from API response
             if (settings._features?.wiseGloballyEnabled !== undefined) {
               setWiseGloballyEnabled(settings._features.wiseGloballyEnabled);
+            }
+            if (settings._features?.evmGloballyEnabled !== undefined) {
+              setEvmGloballyEnabled(settings._features.evmGloballyEnabled);
             }
           }
         }
@@ -262,6 +300,18 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
 
     setIsLoading(true);
     try {
+      const evmWalletEnabled = data.evmWalletEnabled === true;
+      const evmWalletAddress =
+        evmWalletEnabled && data.evmWalletAddress?.trim()
+          ? data.evmWalletAddress.trim()
+          : null;
+      const evmSupportedNetworks = evmWalletEnabled
+        ? data.evmSupportedNetworks ?? [...EVM_RAIL_DEFAULT_NETWORKS]
+        : [...EVM_RAIL_DEFAULT_NETWORKS];
+      const evmSupportedTokens = evmWalletEnabled
+        ? data.evmSupportedTokens ?? [...EVM_RAIL_DEFAULT_TOKENS]
+        : [...EVM_RAIL_DEFAULT_TOKENS];
+
       if (settingsId) {
         // Update existing settings
         const updatePayload = isPilotVariant
@@ -279,6 +329,10 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
               wiseProfileId: data.wiseProfileId || undefined,
               wiseEnabled: data.wiseEnabled,
               wiseCurrency: data.wiseCurrency || undefined,
+              evmWalletEnabled,
+              evmWalletAddress,
+              evmSupportedNetworks,
+              evmSupportedTokens,
             };
         const response = await fetch(`/api/merchant-settings/${settingsId}`, {
           method: 'PATCH',
@@ -314,6 +368,10 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
               wiseProfileId: data.wiseProfileId || undefined,
               wiseEnabled: data.wiseEnabled,
               wiseCurrency: data.wiseCurrency || undefined,
+              evmWalletEnabled,
+              evmWalletAddress,
+              evmSupportedNetworks,
+              evmSupportedTokens,
             };
         const response = await fetch('/api/merchant-settings', {
           method: 'POST',
@@ -645,6 +703,151 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
             </FormItem>
           )}
         />
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <h4 className="text-base font-medium">{evmRail.merchantSettingsLabel}</h4>
+          </div>
+
+          {!evmGloballyEnabled ? (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                EVM Wallet payments are not enabled on this environment. Contact your administrator to
+                enable EVM wallet payments.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="evmWalletEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Enable EVM Wallet payments</FormLabel>
+                      <FormDescription>
+                        Accept automated USDC and USDT payments on supported EVM networks.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="evmWalletAddress"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Merchant receive wallet address</FormLabel>
+                    <FormControl>
+                      <MaskedCredentialInput
+                        id="evm-wallet-address"
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                        mask={maskEvmWalletAddress}
+                        placeholder="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
+                        disabled={!form.watch('evmWalletEnabled')}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Your EVM receive address (0x + 40 hex characters). Customer payments settle to
+                      this wallet.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="evmSupportedNetworks"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Supported networks</FormLabel>
+                    <div className="space-y-2 rounded-lg border p-4">
+                      {EVM_RAIL_DEFAULT_NETWORKS.map((networkId) => {
+                        const checked = (field.value ?? []).includes(networkId);
+                        return (
+                          <label
+                            key={networkId}
+                            className="flex items-center gap-2 text-sm"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              disabled={!form.watch('evmWalletEnabled')}
+                              onCheckedChange={(value) => {
+                                const next = new Set(field.value ?? []);
+                                if (value) next.add(networkId);
+                                else next.delete(networkId);
+                                field.onChange([...next]);
+                              }}
+                            />
+                            {evmNetworkDisplayName(networkId)}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="evmSupportedTokens"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Supported tokens</FormLabel>
+                    <div className="space-y-2 rounded-lg border p-4">
+                      {EVM_RAIL_DEFAULT_TOKENS.map((token) => {
+                        const checked = (field.value ?? []).includes(token);
+                        return (
+                          <label key={token} className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              checked={checked}
+                              disabled={!form.watch('evmWalletEnabled')}
+                              onCheckedChange={(value) => {
+                                const next = new Set(field.value ?? []);
+                                if (value) next.add(token);
+                                else next.delete(token);
+                                field.onChange([...next]);
+                              }}
+                            />
+                            {token}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {form.watch('evmWalletEnabled') && !form.watch('evmWalletAddress')?.trim() && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    EVM Wallet is enabled but no receive wallet is set. The rail will not appear on
+                    invoices until you add your wallet address.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {form.watch('evmWalletEnabled') && form.watch('evmWalletAddress')?.trim() && (
+                <Alert className="border-violet-200 bg-violet-50">
+                  <Info className="h-4 w-4 text-violet-600" />
+                  <AlertDescription className="text-violet-900">
+                    EVM Wallet is configured and will appear as a payment option on your invoices.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="space-y-4">
           <div className="flex items-center gap-2">

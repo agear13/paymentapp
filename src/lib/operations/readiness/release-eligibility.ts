@@ -1,3 +1,4 @@
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { OperationalReadinessResult } from '@/lib/operations/types/readiness-result';
 import { emptyReadiness } from '@/lib/operations/types/readiness-result';
@@ -26,7 +27,7 @@ export function deriveReleaseEligibility(
     blockers.push('No obligations tracked');
   }
   const provider =
-    ctx.stripeConfigured || ctx.wiseConfigured || ctx.hederaConfigured;
+    resolveAnyRailConfigured(ctx);
   if (!provider) {
     blockers.push('No payment provider connected');
   }

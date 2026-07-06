@@ -4,6 +4,7 @@ import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { computePaymentLinkRailSetup } from '@/lib/payment-links/setup-status';
+import config from '@/lib/config/env';
 import { orchestrateOperationalMutation } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selectors/resolve-operational-coordination.server';
 import type { OperationalOnboardingPhase } from '@/lib/operations/onboarding/operational-onboarding-phases';
@@ -95,15 +96,22 @@ export async function ensureSettlementRailsInitialized(
     select: {
       stripe_account_id: true,
       hedera_account_id: true,
+      evm_wallet_enabled: true,
+      evm_wallet_address: true,
+      evm_supported_networks: true,
+      evm_supported_tokens: true,
       wise_enabled: true,
       wise_profile_id: true,
     },
   });
 
-  const rails = computePaymentLinkRailSetup(merchant);
+  const rails = computePaymentLinkRailSetup(merchant, {
+    wisePayments: config.features.wisePayments,
+    evmWalletPayments: config.features.evmWalletPayments,
+  });
   return {
     ready: rails.anyRailConfigured,
-    stripeConnected: rails.stripeConfigured,
+    stripeConnected: rails.multiRails.stripe.configured,
     rails,
   };
 }

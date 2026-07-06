@@ -21,6 +21,7 @@ const customConfig = {
   testEnvironment: 'jest-environment-node',
   testMatch: ['**/__tests__/load/**/*.test.ts'],
   testTimeout: 60000,
+  setupFiles: ['<rootDir>/jest.setup-env.js'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },

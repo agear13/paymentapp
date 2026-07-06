@@ -5,6 +5,7 @@ import { prisma } from '@/lib/server/prisma';
 import { getOperatorOnboardingState } from '@/lib/onboarding/operator-onboarding.server';
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { merchantRowToRailFlags } from '@/lib/onboarding/workspace-activation-state';
+import config from '@/lib/config/env';
 import { evaluateWorkspaceCompensationReadiness } from '@/lib/participants/participant-compensation';
 import { safeDeriveActivationResponse } from '@/lib/onboarding/workspace-activation-fallback';
 import { resolveOperationalCoordinationSnapshot } from '@/lib/operations/selectors/resolve-operational-coordination.server';
@@ -64,6 +65,8 @@ export async function GET(request: Request) {
           stripeConfigured: false,
           wiseConfigured: false,
           hederaConfigured: false,
+          evmWalletConfigured: false,
+          anyRailConfigured: false,
           releaseEligibleCount: 0,
           releaseBatchCount: 0,
           primaryProjectId: null,
@@ -103,6 +106,10 @@ export async function GET(request: Request) {
               default_currency: true,
               stripe_account_id: true,
               hedera_account_id: true,
+              evm_wallet_enabled: true,
+              evm_wallet_address: true,
+              evm_supported_networks: true,
+              evm_supported_tokens: true,
               wise_enabled: true,
               wise_profile_id: true,
             },
@@ -129,7 +136,10 @@ export async function GET(request: Request) {
         organizationId: org.id,
       });
 
-      const rails = merchantRowToRailFlags(merchant);
+      const rails = merchantRowToRailFlags(merchant, {
+        wisePayments: config.features.wisePayments,
+        evmWalletPayments: config.features.evmWalletPayments,
+      });
       const projectCreated =
         snapshot.deals.length > 0 ||
         Boolean(onboardingState.projectReady || persistedOnboarding?.projectId);

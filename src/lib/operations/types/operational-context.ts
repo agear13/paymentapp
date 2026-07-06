@@ -12,6 +12,8 @@ export type WorkspaceOperationalContext = {
   stripeConfigured: boolean;
   wiseConfigured: boolean;
   hederaConfigured: boolean;
+  evmWalletConfigured?: boolean;
+  anyRailConfigured?: boolean;
   projectCount: number;
   primaryProjectId: string | null;
   participantCount: number;
@@ -55,6 +57,7 @@ export function defaultWorkspaceContext(): WorkspaceOperationalContext {
     stripeConfigured: false,
     wiseConfigured: false,
     hederaConfigured: false,
+    evmWalletConfigured: false,
     projectCount: 0,
     primaryProjectId: null,
     participantCount: 0,

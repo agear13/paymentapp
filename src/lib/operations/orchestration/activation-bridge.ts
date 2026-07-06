@@ -3,6 +3,7 @@
  */
 
 import type { WorkspaceActivationInput } from '@/lib/onboarding/workspace-activation-state';
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type {
   ActivationChecklistItem,
   WorkspaceActivationPhase,
@@ -21,6 +22,8 @@ function inputToContext(input: WorkspaceActivationInput): WorkspaceOperationalCo
     stripeConfigured: input.stripeConfigured,
     wiseConfigured: input.wiseConfigured,
     hederaConfigured: input.hederaConfigured,
+    evmWalletConfigured: input.evmWalletConfigured ?? false,
+    anyRailConfigured: resolveAnyRailConfigured(input),
     projectCount: input.projectCreated ? 1 : 0,
     primaryProjectId: input.primaryProjectId,
     participantCount: input.participantCount,
@@ -48,8 +51,7 @@ function mapPhase(state: string): { phase: WorkspaceActivationPhase; label: stri
 }
 
 function buildLegacyChecklist(input: WorkspaceActivationInput): ActivationChecklistItem[] {
-  const provider =
-    input.stripeConfigured || input.wiseConfigured || input.hederaConfigured;
+  const provider = resolveAnyRailConfigured(input);
   const revenue =
     provider ||
     input.paymentLinkCount > 0 ||
@@ -82,8 +84,7 @@ export function deriveWorkspaceActivationFromOperations(
   const orch = orchestrateOperations({ workspace: ctx });
   const { phase, label } = mapPhase(orch.workspaceState);
   const checklist = buildLegacyChecklist(input);
-  const provider =
-    input.stripeConfigured || input.wiseConfigured || input.hederaConfigured;
+  const provider = resolveAnyRailConfigured(input);
   const revenue =
     provider ||
     input.paymentLinkCount > 0 ||

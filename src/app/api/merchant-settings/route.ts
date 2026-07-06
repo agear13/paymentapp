@@ -9,6 +9,15 @@ import config from '@/lib/config/env';
 import { resolveWiseFieldsForCreate } from '@/lib/merchant-settings/resolve-wise-create-fields';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { runOperationalInitializationConvergence } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
+import {
+  EVM_RAIL_DEFAULT_NETWORKS,
+  EVM_RAIL_DEFAULT_TOKENS,
+} from '@/lib/payments/payment-rail-registry';
+
+const evmNetworkSchema = z.enum(
+  EVM_RAIL_DEFAULT_NETWORKS as [string, ...string[]]
+);
+const evmTokenSchema = z.enum(EVM_RAIL_DEFAULT_TOKENS as [string, ...string[]]);
 
 const createMerchantSettingsSchema = z.object({
   organizationId: z.string().uuid(),
@@ -21,6 +30,16 @@ const createMerchantSettingsSchema = z.object({
   wiseProfileId: z.string().optional(),
   wiseEnabled: z.boolean().optional(),
   wiseCurrency: z.string().length(3).optional(),
+  evmWalletEnabled: z.boolean().optional(),
+  evmWalletAddress: z
+    .string()
+    .optional()
+    .nullable()
+    .refine((val) => !val || /^0x[a-fA-F0-9]{40}$/.test(val.trim()), {
+      message: 'EVM wallet address must be a valid 0x address',
+    }),
+  evmSupportedNetworks: z.array(evmNetworkSchema).optional(),
+  evmSupportedTokens: z.array(evmTokenSchema).optional(),
 });
 
 // GET /api/merchant-settings?organizationId=xxx
@@ -58,6 +77,7 @@ export async function GET(request: NextRequest) {
       ...s,
       _features: {
         wiseGloballyEnabled: config.features.wisePayments,
+        evmGloballyEnabled: config.features.evmWalletPayments,
       },
     }));
 
@@ -113,6 +133,14 @@ export async function POST(request: NextRequest) {
       wise_profile_id: wiseFields.wise_profile_id,
       wise_enabled: wiseFields.wise_enabled,
       wise_currency: wiseFields.wise_currency,
+      evm_wallet_enabled: body.evmWalletEnabled === true,
+      evm_wallet_address:
+        body.evmWalletEnabled && body.evmWalletAddress?.trim()
+          ? body.evmWalletAddress.trim()
+          : null,
+      evm_supported_networks:
+        body.evmSupportedNetworks ?? [...EVM_RAIL_DEFAULT_NETWORKS],
+      evm_supported_tokens: body.evmSupportedTokens ?? [...EVM_RAIL_DEFAULT_TOKENS],
     };
 
     const settings = await prisma.merchant_settings.create({
@@ -127,7 +155,8 @@ export async function POST(request: NextRequest) {
       Boolean(body.stripeAccountId) ||
       Boolean(body.hederaAccountId) ||
       Boolean(body.wiseProfileId) ||
-      wiseFields.wise_enabled;
+      wiseFields.wise_enabled ||
+      body.evmWalletEnabled === true;
 
     let operationalOnboarding;
     let operationalInitialization;

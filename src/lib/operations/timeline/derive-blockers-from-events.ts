@@ -1,3 +1,4 @@
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type { OperationalEventType } from '@/lib/operations/contracts/operational-events';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { EventDerivedBlocker, OperationalTimelineReducerState } from '@/lib/operations/timeline/types';
@@ -19,7 +20,7 @@ const BLOCKER_RULES: BlockerRule[] = [
     missingEventType: 'STRIPE_CONNECT_COMPLETED',
     reason: 'Payment provider connection has not been recorded in the operational event stream.',
     remediation: 'Complete Stripe Connect onboarding to enable revenue collection.',
-    applies: (ctx) => !ctx.stripeConfigured && !ctx.wiseConfigured && !ctx.hederaConfigured,
+    applies: (ctx) => !resolveAnyRailConfigured(ctx),
     severity: 'blocking',
   },
   {

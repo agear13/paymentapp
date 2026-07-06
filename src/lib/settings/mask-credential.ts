@@ -33,6 +33,11 @@ export function maskWiseProfileId(profileId: string): string {
   return maskMiddle(profileId, 4, 0);
 }
 
+export function maskEvmWalletAddress(address: string): string {
+  if (!address.trim()) return '';
+  return maskMiddle(address, 6, 4);
+}
+
 export function isStripeTestAccountId(accountId: string | undefined | null): boolean {
   if (!accountId?.trim()) return false;
   return accountId.includes('acct_test');

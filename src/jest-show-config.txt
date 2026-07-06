@@ -1,0 +1,207 @@
+﻿{
+  "configs": [
+    {
+      "automock": false,
+      "cache": true,
+      "cacheDirectory": "C:\\Users\\alish\\AppData\\Local\\Temp\\jest",
+      "clearMocks": false,
+      "collectCoverageFrom": [],
+      "coverageDirectory": "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\coverage",
+      "coveragePathIgnorePatterns": [
+        "\\\\node_modules\\\\"
+      ],
+      "cwd": "C:\\Users\\alish\\Documents\\paymentlink-repo\\src",
+      "detectLeaks": false,
+      "detectOpenHandles": false,
+      "errorOnDeprecated": false,
+      "extensionsToTreatAsEsm": [],
+      "fakeTimers": {
+        "enableGlobally": false
+      },
+      "forceCoverageMatch": [],
+      "globals": {},
+      "haste": {
+        "computeSha1": false,
+        "enableSymlinks": false,
+        "forceNodeFilesystemAPI": true,
+        "throwOnModuleCollision": false
+      },
+      "id": "511334e01e40983dade7b18198703fa2",
+      "injectGlobals": true,
+      "moduleDirectories": [
+        "node_modules"
+      ],
+      "moduleFileExtensions": [
+        "js",
+        "mjs",
+        "cjs",
+        "jsx",
+        "ts",
+        "tsx",
+        "json",
+        "node"
+      ],
+      "moduleNameMapper": [
+        [
+          "^.+\\.module\\.(css|sass|scss)$",
+          "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\next\\dist\\build\\jest\\object-proxy.js"
+        ],
+        [
+          "^.+\\.(css|sass|scss)$",
+          "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\next\\dist\\build\\jest\\__mocks__\\styleMock.js"
+        ],
+        [
+          "^.+\\.(png|jpg|jpeg|gif|webp|avif|ico|bmp)$",
+          "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\next\\dist\\build\\jest\\__mocks__\\fileMock.js"
+        ],
+        [
+          "^.+\\.(svg)$",
+          "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\next\\dist\\build\\jest\\__mocks__\\fileMock.js"
+        ],
+        [
+          "@next/font/(.*)",
+          "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\next\\dist\\build\\jest\\__mocks__\\nextFontMock.js"
+        ],
+        [
+          "next/font/(.*)",
+          "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\next\\dist\\build\\jest\\__mocks__\\nextFontMock.js"
+        ],
+        [
+          "^server-only$",
+          "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\next\\dist\\build\\jest\\__mocks__\\empty.js"
+        ],
+        [
+          "^@/(.*)$",
+          "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\$1"
+        ],
+        [
+          "^.+\\.(css|scss|sass|png|jpg|jpeg|gif|svg|ico|webp|avif)$",
+          "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\__mocks__\\fileMock.js"
+        ]
+      ],
+      "modulePathIgnorePatterns": [
+        "C:\\\\Users\\\\alish\\\\Documents\\\\paymentlink-repo\\\\src\\\\e2e\\\\"
+      ],
+      "openHandlesTimeout": 1000,
+      "prettierPath": "prettier",
+      "resetMocks": false,
+      "resetModules": false,
+      "restoreMocks": false,
+      "rootDir": "C:\\Users\\alish\\Documents\\paymentlink-repo\\src",
+      "roots": [
+        "C:\\Users\\alish\\Documents\\paymentlink-repo\\src"
+      ],
+      "runner": "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\jest-runner\\build\\index.js",
+      "sandboxInjectedGlobals": [],
+      "setupFiles": [
+        "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\jest.setup-env.js"
+      ],
+      "setupFilesAfterEnv": [],
+      "skipFilter": false,
+      "slowTestThreshold": 5,
+      "snapshotFormat": {
+        "escapeString": false,
+        "printBasicPrototype": false
+      },
+      "snapshotSerializers": [],
+      "testEnvironment": "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\jest-environment-node\\build\\index.js",
+      "testEnvironmentOptions": {},
+      "testLocationInResults": false,
+      "testMatch": [
+        "**/__tests__/**/*.test.ts",
+        "**/__tests__/**/*.test.tsx"
+      ],
+      "testPathIgnorePatterns": [
+        "\\\\node_modules\\\\",
+        "\\\\.next\\\\",
+        "\\\\node_modules\\\\",
+        "C:\\\\Users\\\\alish\\\\Documents\\\\paymentlink-repo\\\\src\\\\__tests__\\\\load\\\\"
+      ],
+      "testRegex": [],
+      "testRunner": "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\jest-circus\\runner.js",
+      "transform": [
+        [
+          "^.+\\.(js|jsx|ts|tsx|mjs)$",
+          "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\babel-jest\\build\\index.js",
+          {
+            "presets": [
+              [
+                "next/babel",
+                {
+                  "preset-env": {
+                    "targets": {
+                      "node": "current"
+                    }
+                  }
+                }
+              ]
+            ]
+          }
+        ]
+      ],
+      "transformIgnorePatterns": [
+        "\\\\node_modules\\\\(?!.pnpm)(?!(geist)\\\\)",
+        "\\\\node_modules\\\\.pnpm\\\\(?!(geist)@)",
+        "^.+\\.module\\.(css|sass|scss)$",
+        "\\\\node_modules\\\\(?!(server-only)\\\\)"
+      ],
+      "watchPathIgnorePatterns": [
+        "\\\\.next\\\\"
+      ]
+    }
+  ],
+  "globalConfig": {
+    "bail": 0,
+    "changedFilesWithAncestor": false,
+    "ci": false,
+    "collectCoverage": false,
+    "collectCoverageFrom": [],
+    "coverageDirectory": "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\coverage",
+    "coverageProvider": "babel",
+    "coverageReporters": [
+      "json",
+      "text",
+      "lcov",
+      "clover"
+    ],
+    "detectLeaks": false,
+    "detectOpenHandles": false,
+    "errorOnDeprecated": false,
+    "expand": false,
+    "findRelatedTests": false,
+    "forceExit": false,
+    "json": false,
+    "lastCommit": false,
+    "listTests": false,
+    "logHeapUsage": false,
+    "maxConcurrency": 5,
+    "maxWorkers": 7,
+    "noStackTrace": false,
+    "nonFlagArgs": [],
+    "notify": false,
+    "notifyMode": "failure-change",
+    "onlyChanged": false,
+    "onlyFailures": false,
+    "openHandlesTimeout": 1000,
+    "passWithNoTests": false,
+    "projects": [],
+    "rootDir": "C:\\Users\\alish\\Documents\\paymentlink-repo\\src",
+    "runTestsByPath": false,
+    "seed": 2105242484,
+    "skipFilter": false,
+    "snapshotFormat": {
+      "escapeString": false,
+      "printBasicPrototype": false
+    },
+    "testFailureExitCode": 1,
+    "testPathPattern": "",
+    "testSequencer": "C:\\Users\\alish\\Documents\\paymentlink-repo\\src\\node_modules\\@jest\\test-sequencer\\build\\index.js",
+    "updateSnapshot": "new",
+    "useStderr": false,
+    "watch": false,
+    "watchAll": false,
+    "watchman": true,
+    "workerThreads": false
+  },
+  "version": "29.7.0"
+}

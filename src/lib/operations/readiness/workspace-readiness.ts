@@ -1,3 +1,4 @@
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { OperationalCompleteness } from '@/lib/operations/types/operational-completeness';
 import { defaultOperationalCompleteness } from '@/lib/operations/types/operational-completeness';
@@ -16,8 +17,7 @@ export type WorkspaceOperationalHealth = OperationalReadinessResult & {
 export function deriveWorkspaceState(ctx: WorkspaceOperationalContext): WorkspaceState {
   if (!ctx.hasOrganization) return 'DRAFT';
   if (!ctx.onboardingCompleted) return 'CONFIGURING';
-  const provider =
-    ctx.stripeConfigured || ctx.wiseConfigured || ctx.hederaConfigured;
+  const provider = resolveAnyRailConfigured(ctx);
   const participantsConfigured =
     ctx.participantCount > 0 &&
     ctx.participantsConfiguredCount >= ctx.participantCount;
@@ -35,8 +35,7 @@ export function deriveWorkspaceOperationalHealth(
 ): WorkspaceOperationalHealth {
   try {
     const state = deriveWorkspaceState(ctx);
-    const provider =
-      ctx.stripeConfigured || ctx.wiseConfigured || ctx.hederaConfigured;
+    const provider = resolveAnyRailConfigured(ctx);
     const revenueConfigured =
       provider ||
       ctx.paymentLinkCount > 0 ||

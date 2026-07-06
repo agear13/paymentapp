@@ -53,13 +53,18 @@ export async function GET(
 
     const merchantSettings = await prisma.merchant_settings.findFirst({
       where: { organization_id: paymentLink.organization_id },
-      select: { evm_wallet_address: true },
+      select: {
+        evm_wallet_enabled: true,
+        evm_wallet_address: true,
+        evm_supported_networks: true,
+        evm_supported_tokens: true,
+      },
     });
 
     const merchantWallet = resolveMerchantEvmWallet(merchantSettings);
     if (!merchantWallet) {
       return NextResponse.json(
-        { error: 'Merchant MetaMask receive address is not configured' },
+        { error: 'Merchant EVM receive wallet is not configured' },
         { status: 400 }
       );
     }
@@ -67,7 +72,10 @@ export async function GET(
     return NextResponse.json({
       data: {
         paymentLinkId: paymentLink.id,
-        ...buildEvmWalletCheckoutConfig(merchantWallet),
+        ...buildEvmWalletCheckoutConfig(merchantWallet, {
+          supportedNetworks: merchantSettings?.evm_supported_networks,
+          supportedTokens: merchantSettings?.evm_supported_tokens,
+        }),
       },
     });
   } catch (error: unknown) {

@@ -1,3 +1,4 @@
+import { resolveAnyRailConfigured } from '@/lib/onboarding/workspace-activation-state';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/types';
 import type { ReleaseConfidenceLevel } from '@/lib/operations/explainability/types';
@@ -76,7 +77,7 @@ export function deriveReleaseConfidence(input: ReleaseConfidenceInput): ReleaseC
   }
 
   const riskWarnings: string[] = [];
-  if (!input.workspace.stripeConfigured && !input.workspace.wiseConfigured && !input.workspace.hederaConfigured) {
+  if (!resolveAnyRailConfigured(input.workspace)) {
     riskWarnings.push('No payment provider connected');
   }
   if (input.treasury?.projectHealth === 'settlement_risk') {

@@ -147,6 +147,9 @@ model merchant_settings {
   hedera_account_id String? @db.VarChar(50)
   /// EVM receive address for MetaMask checkout (0x…)
   evm_wallet_address String? @db.VarChar(42)
+  evm_wallet_enabled Boolean @default(false)
+  evm_supported_networks String[] @default(["base", "ethereum", "polygon"])
+  evm_supported_tokens String[] @default(["USDC", "USDT"])
 
   // Sprint 26: Invoice UX Improvements
   organization_logo_url String? @db.VarChar(1024)
