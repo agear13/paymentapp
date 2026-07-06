@@ -292,6 +292,17 @@ export const WORKSPACE_PLATFORM_PREVIEW_NAVIGATION_REGISTRY = [
   },
 ] as const satisfies readonly WorkspaceNavigationRegistryItem[];
 
+export const WORKSPACE_PARTNER_PREVIEW_NAVIGATION_REGISTRY = [
+  {
+    id: 'partner-preview',
+    title: 'Partner Workspace',
+    icon: Building2,
+    href: '/dashboard/partner-preview',
+    requiredFeature: WorkspaceFeature.Dashboard,
+    adminOnly: true,
+  },
+] as const satisfies readonly WorkspaceNavigationRegistryItem[];
+
 export const RABBIT_HOLE_PILOT_NAVIGATION_REGISTRY = [
   {
     id: 'deal-network',

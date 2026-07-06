@@ -22,6 +22,7 @@ import {
   RABBIT_HOLE_PILOT_NAVIGATION_REGISTRY,
   STRAIT_EXPERIENCES_PILOT_NAVIGATION_REGISTRY,
   WORKSPACE_PLATFORM_PREVIEW_NAVIGATION_REGISTRY,
+  WORKSPACE_PARTNER_PREVIEW_NAVIGATION_REGISTRY,
 } from '@/lib/workspace-features';
 import {
   Sidebar,
@@ -314,6 +315,13 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
           path={path}
           label="Platform Preview"
           sections={WORKSPACE_PLATFORM_PREVIEW_NAVIGATION_REGISTRY}
+        />
+
+        <RegistrySidebarNavGroup
+          productProfile={productProfile}
+          path={path}
+          label="Partner Workspace"
+          sections={WORKSPACE_PARTNER_PREVIEW_NAVIGATION_REGISTRY}
         />
       </SidebarContent>
 
