@@ -2,25 +2,20 @@ import 'server-only';
 
 import type { PaymentMethod } from '@prisma/client';
 import config from '@/lib/config/env';
-import {
-  paymentLinkAllowsMultiCheckoutRail,
-  paymentLinkIsDedicatedRail,
-} from '@/lib/payments/payment-link-rail-access';
 import { resolveMerchantEvmWallet } from '@/lib/payments/evm-wallet-rail.server';
+import {
+  PAYMENT_RAIL_REGISTRY,
+  paymentLinkAllowsCheckoutRail,
+  type PaymentRailId,
+  type PublicCheckoutMethodKey,
+} from '@/lib/payments/payment-rail-registry';
 import {
   filterPaymentMethodsByReferralRails,
   merchantRailAvailabilityFromSettings,
   resolveAvailablePaymentRails,
 } from '@/lib/referrals/referral-payment-rails';
 
-export type PublicCheckoutMethodFlags = {
-  stripe: boolean;
-  hedera: boolean;
-  wise: boolean;
-  crypto: boolean;
-  manualBank: boolean;
-  metamask: boolean;
-};
+export type PublicCheckoutMethodFlags = Record<PublicCheckoutMethodKey, boolean>;
 
 type MerchantCheckoutSettings = {
   stripe_account_id?: string | null;
@@ -30,65 +25,115 @@ type MerchantCheckoutSettings = {
   wise_profile_id?: string | null;
 } | null;
 
+type CheckoutAvailabilityContext = {
+  invoiceOnly: boolean;
+  lockedPaymentMethod: PaymentMethod | null | undefined;
+  merchant: MerchantCheckoutSettings;
+};
+
+function emptyCheckoutFlags(): PublicCheckoutMethodFlags {
+  return {
+    stripe: false,
+    hedera: false,
+    wise: false,
+    metamask: false,
+    crypto: false,
+    manualBank: false,
+  };
+}
+
+const RAIL_AVAILABILITY: Record<
+  PaymentRailId,
+  (ctx: CheckoutAvailabilityContext) => boolean
+> = {
+  stripe: (ctx) =>
+    !ctx.invoiceOnly &&
+    paymentLinkAllowsCheckoutRail(ctx.lockedPaymentMethod, 'STRIPE') &&
+    !!ctx.merchant?.stripe_account_id,
+
+  hedera: (ctx) =>
+    !ctx.invoiceOnly &&
+    paymentLinkAllowsCheckoutRail(ctx.lockedPaymentMethod, 'HEDERA') &&
+    !!ctx.merchant?.hedera_account_id,
+
+  wise: (ctx) => {
+    const allowsWise = paymentLinkAllowsCheckoutRail(ctx.lockedPaymentMethod, 'WISE');
+    const linkAllowsWise =
+      allowsWise &&
+      (!ctx.lockedPaymentMethod || ctx.lockedPaymentMethod === 'WISE');
+    const merchantWiseConfigured =
+      !!ctx.merchant?.wise_enabled && !!ctx.merchant?.wise_profile_id;
+    return (
+      !ctx.invoiceOnly &&
+      allowsWise &&
+      config.features.wisePayments &&
+      linkAllowsWise &&
+      merchantWiseConfigured
+    );
+  },
+
+  evm_wallet: (ctx) => {
+    const allowsEvmWallet =
+      !ctx.invoiceOnly &&
+      paymentLinkAllowsCheckoutRail(ctx.lockedPaymentMethod, 'EVM_WALLET');
+    const merchantWallet = resolveMerchantEvmWallet(ctx.merchant);
+    return config.features.evmWalletPayments && allowsEvmWallet && !!merchantWallet;
+  },
+
+  crypto: (ctx) =>
+    !ctx.invoiceOnly &&
+    paymentLinkAllowsCheckoutRail(ctx.lockedPaymentMethod, 'CRYPTO'),
+
+  manual_bank: (ctx) =>
+    !ctx.invoiceOnly &&
+    paymentLinkAllowsCheckoutRail(ctx.lockedPaymentMethod, 'MANUAL_BANK'),
+};
+
 export function resolvePublicCheckoutMethods(input: {
   invoiceOnly: boolean;
   lockedPaymentMethod: PaymentMethod | null | undefined;
   merchantSettings: MerchantCheckoutSettings;
   referralCheckoutConfig?: unknown;
 }): PublicCheckoutMethodFlags {
-  const pm = input.lockedPaymentMethod;
-  const merchant = input.merchantSettings;
-  const invoiceOnly = input.invoiceOnly;
-
-  const allowsStripe = paymentLinkAllowsMultiCheckoutRail(pm, 'STRIPE');
-  const allowsHedera = paymentLinkAllowsMultiCheckoutRail(pm, 'HEDERA');
-  const allowsWise = paymentLinkAllowsMultiCheckoutRail(pm, 'WISE');
-  const allowsEvmWallet =
-    !invoiceOnly && paymentLinkAllowsMultiCheckoutRail(pm, 'EVM_WALLET');
-  const allowsCrypto = !invoiceOnly && paymentLinkIsDedicatedRail(pm, 'CRYPTO');
-  const allowsManualBank =
-    !invoiceOnly && paymentLinkIsDedicatedRail(pm, 'MANUAL_BANK');
-
-  const globalWiseEnabled = config.features.wisePayments;
-  const evmMerchantWallet = resolveMerchantEvmWallet(merchant);
-  const metamaskAvailable =
-    config.features.evmWalletPayments && allowsEvmWallet && !!evmMerchantWallet;
-
-  const linkAllowsWise =
-    allowsWise && (!pm || pm === 'WISE');
-  const merchantWiseConfigured = !!merchant?.wise_enabled && !!merchant?.wise_profile_id;
-  const wiseAvailable = globalWiseEnabled && linkAllowsWise && merchantWiseConfigured;
-
-  let methods: PublicCheckoutMethodFlags = {
-    stripe: !invoiceOnly && allowsStripe && !!merchant?.stripe_account_id,
-    hedera: !invoiceOnly && allowsHedera && !!merchant?.hedera_account_id,
-    wise: !invoiceOnly && allowsWise && wiseAvailable,
-    crypto: allowsCrypto,
-    manualBank: allowsManualBank,
-    metamask: metamaskAvailable,
+  const ctx: CheckoutAvailabilityContext = {
+    invoiceOnly: input.invoiceOnly,
+    lockedPaymentMethod: input.lockedPaymentMethod,
+    merchant: input.merchantSettings,
   };
 
-  if (input.referralCheckoutConfig) {
-    const resolvedRails = resolveAvailablePaymentRails({
-      checkoutConfig: input.referralCheckoutConfig,
-      merchant: merchantRailAvailabilityFromSettings(merchant, {
-        globalWiseEnabled: config.features.wisePayments,
-      }),
-    });
-    if (resolvedRails.length > 0) {
-      methods = {
-        ...filterPaymentMethodsByReferralRails({
-          methods,
-          resolvedRails,
-        }),
-        crypto: methods.crypto,
-        manualBank: methods.manualBank,
-        metamask: methods.metamask,
-      };
+  const methods = emptyCheckoutFlags();
+  for (const rail of PAYMENT_RAIL_REGISTRY) {
+    if (RAIL_AVAILABILITY[rail.id](ctx)) {
+      methods[rail.publicCheckoutKey] = true;
     }
   }
 
-  return methods;
+  if (!input.referralCheckoutConfig) {
+    return methods;
+  }
+
+  const resolvedRails = resolveAvailablePaymentRails({
+    checkoutConfig: input.referralCheckoutConfig,
+    merchant: merchantRailAvailabilityFromSettings(input.merchantSettings, {
+      globalWiseEnabled: config.features.wisePayments,
+    }),
+  });
+
+  if (resolvedRails.length === 0) {
+    return methods;
+  }
+
+  const filtered = filterPaymentMethodsByReferralRails({
+    methods,
+    resolvedRails,
+  });
+
+  return {
+    ...filtered,
+    crypto: methods.crypto,
+    manualBank: methods.manualBank,
+    metamask: methods.metamask,
+  };
 }
 
 export function resolveEvmMerchantWalletForCheckout(

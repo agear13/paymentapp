@@ -1,34 +1,39 @@
 /**
- * Shared payment-link rail access rules for public checkout.
- * Mirrors conventions used by Stripe, Wise, HashPack, and MetaMask flows.
+ * @deprecated Import from `@/lib/payments/payment-rail-registry` instead.
+ * Re-exports preserved for existing imports.
  */
 
-import type { PaymentMethod } from '@prisma/client';
+export {
+  type MultiCheckoutRail,
+  type DedicatedCheckoutRail,
+  paymentLinkAllowsCheckoutRail,
+} from '@/lib/payments/payment-rail-registry';
 
-/** Checkout rails exposed alongside each other on a multi-method invoice. */
-export type MultiCheckoutRail = Extract<
-  PaymentMethod,
-  'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET'
->;
+import {
+  getPaymentRailByMethod,
+  paymentLinkAllowsCheckoutRail,
+  type MultiCheckoutRail,
+  type DedicatedCheckoutRail,
+} from '@/lib/payments/payment-rail-registry';
 
-/** Dedicated manual-instruction invoice types. */
-export type DedicatedCheckoutRail = Extract<PaymentMethod, 'CRYPTO' | 'MANUAL_BANK'>;
-
-/**
- * True when the link accepts a given multi-rail checkout option.
- * Null `lockedMethod` means all configured rails are allowed.
- */
+/** Multi-rail checkout guard — delegates to registry access rules. */
 export function paymentLinkAllowsMultiCheckoutRail(
-  lockedMethod: PaymentMethod | null | undefined,
+  lockedMethod: Parameters<typeof paymentLinkAllowsCheckoutRail>[0],
   rail: MultiCheckoutRail
 ): boolean {
-  return !lockedMethod || lockedMethod === rail;
+  const definition = getPaymentRailByMethod(rail);
+  return definition?.checkoutSurface === 'multi'
+    ? paymentLinkAllowsCheckoutRail(lockedMethod, definition)
+    : false;
 }
 
-/** True when the invoice is locked to a dedicated manual rail (CRYPTO / MANUAL_BANK). */
+/** Dedicated-rail checkout guard — delegates to registry access rules. */
 export function paymentLinkIsDedicatedRail(
-  lockedMethod: PaymentMethod | null | undefined,
+  lockedMethod: Parameters<typeof paymentLinkAllowsCheckoutRail>[0],
   rail: DedicatedCheckoutRail
 ): boolean {
-  return lockedMethod === rail;
+  const definition = getPaymentRailByMethod(rail);
+  return definition?.checkoutSurface === 'dedicated'
+    ? paymentLinkAllowsCheckoutRail(lockedMethod, definition)
+    : false;
 }

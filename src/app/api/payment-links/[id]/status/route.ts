@@ -21,7 +21,7 @@ import {
   PAID_TRANSITION_BLOCKED_CODE,
 } from '@/lib/payments/payment-link-status-api-policy';
 import { prisma } from '@/lib/server/prisma';
-import { PUBLIC_CHECKOUT_METHOD_LABELS } from '@/lib/payments/public-checkout-labels';
+import { PUBLIC_CHECKOUT_METHOD_LABELS } from '@/lib/payments/payment-rail-registry';
 
 const StatusTransitionSchema = z.object({
   status: PaymentLinkStatusSchema,

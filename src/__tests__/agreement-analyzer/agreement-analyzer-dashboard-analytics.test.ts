@@ -1,3 +1,7 @@
+import {
+  dailyCountFixtureDay,
+  startOfAnalyticsWindowForFixtures,
+} from '@/__tests__/agreement-analyzer/analytics-window-fixtures';
 import { getAgreementAnalyzerAttributionAnalytics } from '@/lib/agreement-analyzer/dashboard/agreement-analyzer-attribution-analytics.server';
 import { getAgreementAnalyzerAnalytics } from '@/lib/agreement-analyzer/dashboard/agreement-analyzer-dashboard-analytics.server';
 import { prisma } from '@/lib/server/prisma';
@@ -49,10 +53,13 @@ describe('agreement analyzer dashboard analytics', () => {
   });
 
   it('aggregates funnel metrics and daily series', async () => {
+    const windowStart = startOfAnalyticsWindowForFixtures();
+    const fixtureDay = dailyCountFixtureDay(windowStart, 0);
+
     (prisma.$queryRaw as jest.Mock)
-      .mockResolvedValueOnce([{ day: new Date('2026-06-01T00:00:00.000Z'), count: 2n }])
-      .mockResolvedValueOnce([{ day: new Date('2026-06-01T00:00:00.000Z'), count: 1n }])
-      .mockResolvedValueOnce([{ day: new Date('2026-06-01T00:00:00.000Z'), count: 68 }])
+      .mockResolvedValueOnce([{ day: fixtureDay, count: 2n }])
+      .mockResolvedValueOnce([{ day: fixtureDay, count: 1n }])
+      .mockResolvedValueOnce([{ day: fixtureDay, count: 68 }])
       .mockResolvedValueOnce([{ count: 5n }])
       .mockResolvedValueOnce([{ count: 3n }]);
 

@@ -1,3 +1,7 @@
+import {
+  buildLeadDetailActivityFixtures,
+  fixtureDateRelativeToNow,
+} from '@/__tests__/agreement-analyzer/analytics-window-fixtures';
 import { getAgreementAnalyzerLeadDetail } from '@/lib/agreement-analyzer/dashboard/agreement-analyzer-dashboard-queries.server';
 import { prisma } from '@/lib/server/prisma';
 
@@ -26,6 +30,8 @@ describe('agreement analyzer dashboard queries', () => {
   });
 
   it('loads lead detail with qualification, report insights, and activity timeline', async () => {
+    const fixtures = buildLeadDetailActivityFixtures();
+
     (prisma.obligation_report_leads.findUnique as jest.Mock).mockResolvedValue({
       id: 'lead-1',
       first_name: 'Alex',
@@ -34,8 +40,8 @@ describe('agreement analyzer dashboard queries', () => {
       company_name: 'Harbour Events',
       business_type: 'Hospitality',
       lifecycle_stage: 'REPORT_VIEWED',
-      created_at: new Date('2026-06-01T10:00:00.000Z'),
-      updated_at: new Date('2026-06-03T12:00:00.000Z'),
+      created_at: fixtures.leadCreatedAt,
+      updated_at: fixtures.leadUpdatedAt,
       obligation_report_lead_scores: [
         {
           overall_score: 75,
@@ -52,12 +58,12 @@ describe('agreement analyzer dashboard queries', () => {
       ],
       agreement_uploads: [
         {
-          uploaded_at: new Date('2026-06-01T10:05:00.000Z'),
-          created_at: new Date('2026-06-01T10:00:00.000Z'),
+          uploaded_at: fixtures.uploadedAt,
+          created_at: fixtures.uploadCreatedAt,
           agreement_obligation_reports: [
             {
-              created_at: new Date('2026-06-01T11:00:00.000Z'),
-              viewed_at: new Date('2026-06-02T09:00:00.000Z'),
+              created_at: fixtures.reportCreatedAt,
+              viewed_at: fixtures.viewedAt,
               settlement_readiness_score: 78,
               report_json: {
                 parties: [{ name: 'Promoter' }],
@@ -78,8 +84,8 @@ describe('agreement analyzer dashboard queries', () => {
       ],
       obligation_report_email_events: [
         {
-          delivered_at: new Date('2026-06-01T11:30:00.000Z'),
-          opened_at: new Date('2026-06-02T08:00:00.000Z'),
+          delivered_at: fixtures.deliveredAt,
+          opened_at: fixtures.openedAt,
           clicked_at: null,
         },
       ],
@@ -87,11 +93,11 @@ describe('agreement analyzer dashboard queries', () => {
         {
           id: 'booking-1',
           calendly_event_id: 'scheduled_events/EVT/invitees/INV',
-          meeting_time: new Date('2026-06-01T10:00:00.000Z'),
+          meeting_time: fixtures.meetingTime,
           invitee_name: 'Alex Rivera',
           invitee_email: 'alex@example.com',
           booking_source: 'calendly_webhook',
-          created_at: new Date('2026-06-03T12:00:00.000Z'),
+          created_at: fixtures.demoBookingCreatedAt,
         },
       ],
     });
@@ -146,7 +152,7 @@ describe('agreement analyzer dashboard queries', () => {
       .mockResolvedValueOnce([
         {
           id: 'lead-1',
-          created_at: new Date('2026-06-01T10:00:00.000Z'),
+          created_at: fixtureDateRelativeToNow(-5, 10),
           first_name: 'Alex',
           last_name: 'Rivera',
           email: 'alex@example.com',
