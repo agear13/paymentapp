@@ -8,10 +8,13 @@
  * then pass the row into {@link computePaymentLinkRailSetup}.
  */
 
+import { evmWalletConfiguredFromMerchantSnapshot } from '@/lib/payments/evm-wallet-config';
+
 /** Merchant fields required to evaluate rail setup (matches typical Prisma select). */
 export type PaymentLinkMerchantRailSnapshot = {
   stripe_account_id: string | null;
   hedera_account_id: string | null;
+  evm_wallet_address?: string | null;
   wise_enabled: boolean;
   wise_profile_id: string | null;
 };
@@ -25,6 +28,8 @@ export type PaymentLinkRailSetupStatus = {
   /** Wise toggled on in UI but profile id missing — needs attention before relying on Wise. */
   wiseIncomplete: boolean;
   hederaConfigured: boolean;
+  /** MetaMask / EVM_WALLET receive address configured (settings or env fallback). */
+  evmWalletConfigured: boolean;
   /** True if Stripe, or fully configured Wise, or Hedera account is present. */
   anyRailConfigured: boolean;
   /** True when at least one valid receiving rail exists (same as anyRailConfigured for Payment Links). */
@@ -48,6 +53,7 @@ export function computePaymentLinkRailSetup(
       wiseConfigured: false,
       wiseIncomplete: false,
       hederaConfigured: false,
+      evmWalletConfigured: false,
       anyRailConfigured: false,
       readyForPaymentRequests: false,
     };
@@ -58,6 +64,7 @@ export function computePaymentLinkRailSetup(
   const wiseConfigured = merchant.wise_enabled === true && nonEmpty(merchant.wise_profile_id);
   const wiseIncomplete = merchant.wise_enabled === true && !nonEmpty(merchant.wise_profile_id);
   const hederaConfigured = nonEmpty(merchant.hedera_account_id);
+  const evmWalletConfigured = evmWalletConfiguredFromMerchantSnapshot(merchant);
 
   const anyRailConfigured = stripeConfigured || wiseConfigured || hederaConfigured;
   const readyForPaymentRequests = anyRailConfigured;
@@ -67,6 +74,7 @@ export function computePaymentLinkRailSetup(
     wiseConfigured,
     wiseIncomplete,
     hederaConfigured,
+    evmWalletConfigured,
     anyRailConfigured,
     readyForPaymentRequests,
   };

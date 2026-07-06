@@ -87,6 +87,15 @@ const envSchema = z.object({
   ENABLE_XERO_SYNC: z.string().optional().default('true'),
   ENABLE_BETA_OPS: z.string().optional().default('false'),
   ENABLE_WISE_PAYMENTS: z.string().optional().default('false'),
+  ENABLE_EVM_WALLET_PAYMENTS: z.string().optional().default('false'),
+  /** Alchemy API key for EVM RPC + Notify */
+  ALCHEMY_API_KEY: z.string().optional(),
+  /** Alchemy Notify webhook HMAC signing key */
+  ALCHEMY_WEBHOOK_SIGNING_KEY: z.string().optional(),
+  /** HMAC secret for /api/webhooks/evm-wallet */
+  EVM_WALLET_WEBHOOK_SECRET: z.string().optional(),
+  /** Fallback merchant EVM receive address when per-merchant setting is unset */
+  EVM_MERCHANT_WALLET_ADDRESS: z.string().optional(),
   /** Show Wise as a payment option in UI for demo (even when backend not configured) */
   NEXT_PUBLIC_SHOW_WISE_DEMO: z.string().optional().default('true'),
   /** Beta lockdown mode - restrict Revenue Share and Platform Preview to admin only */
@@ -336,6 +345,9 @@ export const config = {
     // Wise: enabled when ENABLE_WISE_PAYMENTS is "true" or "1" (case-insensitive) AND API token present
     // Note: WISE_PROFILE_ID is now optional globally; prefer per-merchant wise_profile_id
     wisePayments: ['true', '1'].includes((env.ENABLE_WISE_PAYMENTS || '').toLowerCase()) && !!env.WISE_API_TOKEN,
+    evmWalletPayments:
+      ['true', '1'].includes((env.ENABLE_EVM_WALLET_PAYMENTS || '').toLowerCase()) &&
+      !!env.ALCHEMY_API_KEY,
     // Beta lockdown: restrict Revenue Share and Platform Preview to admin emails only
     betaLockdown: ['true', '1'].includes((env.BETA_LOCKDOWN_MODE || 'true').toLowerCase()),
   },

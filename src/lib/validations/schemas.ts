@@ -43,6 +43,7 @@ export const PaymentLinkMethodSchema = z.enum([
   'STRIPE',
   'HEDERA',
   'WISE',
+  'EVM_WALLET',
   'CRYPTO',
   'MANUAL_BANK',
 ]);
@@ -52,6 +53,7 @@ export const PaymentEventMethodSchema = z.enum([
   'STRIPE',
   'HEDERA',
   'WISE',
+  'EVM_WALLET',
   'CRYPTO',
   'MANUAL_BANK',
   'MANUAL',

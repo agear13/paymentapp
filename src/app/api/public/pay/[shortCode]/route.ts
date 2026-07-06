@@ -144,6 +144,7 @@ export async function GET(
         organization_logo_url: true,
         stripe_account_id: true,
         hedera_account_id: true,
+        evm_wallet_address: true,
         wise_profile_id: true,
         wise_enabled: true,
         wise_currency: true,
@@ -159,54 +160,18 @@ export async function GET(
       referralCheckoutConfig = referralLink?.checkout_config ?? null;
     }
 
-    // Wise is available when:
-    // a) global config.features.wisePayments === true (ENABLE_WISE_PAYMENTS + WISE_API_TOKEN)
-    // b) payment link allows WISE (payment_method is WISE or null for all methods)
-    // c) merchant_settings.wise_enabled === true
-    // d) merchant_settings.wise_profile_id is present
     const invoiceOnly = paymentLink.invoice_only_mode === true;
-    const pm = paymentLink.payment_method;
-    const allowsStripe = !pm || pm === 'STRIPE';
-    const allowsHedera = !pm || pm === 'HEDERA';
-    const allowsWise = !pm || pm === 'WISE';
-    const allowsCrypto = !invoiceOnly && pm === 'CRYPTO';
-    const allowsManualBank = !invoiceOnly && pm === 'MANUAL_BANK';
+    const { resolvePublicCheckoutMethods, resolveEvmMerchantWalletForCheckout } =
+      await import('@/lib/payments/public-checkout-methods.server');
 
-    const globalWiseEnabled = config.features.wisePayments;
-    const linkAllowsWise = allowsWise && (!paymentLink.payment_method || paymentLink.payment_method === 'WISE');
-    const merchantWiseConfigured = !!merchantSettings?.wise_enabled && !!merchantSettings?.wise_profile_id;
-    const wiseAvailable = globalWiseEnabled && linkAllowsWise && merchantWiseConfigured;
+    const availablePaymentMethods = resolvePublicCheckoutMethods({
+      invoiceOnly,
+      lockedPaymentMethod: paymentLink.payment_method,
+      merchantSettings,
+      referralCheckoutConfig,
+    });
 
-    // Determine available payment methods (invoice-only links never expose checkout rails here)
-    let availablePaymentMethods = {
-      stripe:
-        !invoiceOnly && allowsStripe && !!merchantSettings?.stripe_account_id,
-      hedera:
-        !invoiceOnly && allowsHedera && !!merchantSettings?.hedera_account_id,
-      wise: !invoiceOnly && allowsWise && wiseAvailable,
-      crypto: allowsCrypto,
-      manualBank: allowsManualBank,
-    };
-
-    if (referralCheckoutConfig) {
-      const {
-        resolveAvailablePaymentRails,
-        filterPaymentMethodsByReferralRails,
-        merchantRailAvailabilityFromSettings,
-      } = await import('@/lib/referrals/referral-payment-rails');
-      const resolvedRails = resolveAvailablePaymentRails({
-        checkoutConfig: referralCheckoutConfig,
-        merchant: merchantRailAvailabilityFromSettings(merchantSettings, {
-          globalWiseEnabled: config.features.wisePayments,
-        }),
-      });
-      if (resolvedRails.length > 0) {
-        availablePaymentMethods = filterPaymentMethodsByReferralRails({
-          methods: availablePaymentMethods,
-          resolvedRails,
-        });
-      }
-    }
+    const evmMerchantWallet = resolveEvmMerchantWalletForCheckout(merchantSettings);
 
     // Select best FX snapshot:
     // 1. If selectedToken is provided, find matching snapshot
@@ -309,6 +274,7 @@ export async function GET(
         invoiceOnlyMode: invoiceOnly,
         hederaCheckoutMode: paymentLink.hedera_checkout_mode ?? null,
         hederaWalletAddress: merchantSettings?.hedera_account_id ?? null,
+        evmWalletAddress: evmMerchantWallet,
         cryptoNetwork: paymentLink.crypto_network ?? null,
         cryptoAddress: paymentLink.crypto_address ?? null,
         cryptoCurrency: paymentLink.crypto_currency ?? null,

@@ -43,9 +43,14 @@ export function derivePaymentMethod(
     source_type: string | null;
   },
   fallback: string | null
-): 'STRIPE' | 'HEDERA' | 'WISE' {
+): 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET' {
   const candidate = paymentEvent.payment_method || fallback || '';
-  if (candidate === 'STRIPE' || candidate === 'HEDERA' || candidate === 'WISE') {
+  if (
+    candidate === 'STRIPE' ||
+    candidate === 'HEDERA' ||
+    candidate === 'WISE' ||
+    candidate === 'EVM_WALLET'
+  ) {
     return candidate;
   }
   if (candidate === 'MANUAL_BANK' || candidate === 'MANUAL') {
@@ -53,6 +58,9 @@ export function derivePaymentMethod(
   }
   if (paymentEvent.source_type === 'WISE' || paymentEvent.source_type === 'MANUAL') {
     return 'WISE';
+  }
+  if (paymentEvent.source_type === 'EVM_WALLET') {
+    return 'EVM_WALLET';
   }
   return 'STRIPE';
 }
@@ -307,7 +315,7 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
 
     let fxRate: number | undefined;
     let cryptoAmount: string | undefined;
-    if (paymentMethod === 'HEDERA' && paymentToken) {
+    if ((paymentMethod === 'HEDERA' || paymentMethod === 'EVM_WALLET') && paymentToken) {
       const fxSnapshot = paymentLink.fx_snapshots.find((s) => s.token_type === paymentToken);
       if (fxSnapshot) {
         fxRate = fxSnapshot.rate.toNumber();

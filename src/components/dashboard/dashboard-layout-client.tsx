@@ -18,6 +18,7 @@ import { DashboardOperationalStatus } from '@/components/operations/dashboard-op
 import { OperationalCoordinationProvider } from '@/components/operations/operational-coordination-provider';
 import { CsrfBootstrap } from '@/components/security/csrf-bootstrap';
 import { OrganizationIdentityBootstrap } from '@/components/organization/organization-identity-bootstrap';
+import { WorkspaceFeatureProvider } from '@/components/workspace-features';
 
 interface DashboardLayoutClientProps {
   children: React.ReactNode;
@@ -43,23 +44,25 @@ export function DashboardLayoutClient({
       configured={customerFacingConfigured}
       infrastructureOverride={infrastructureOverride}
     >
-      <OperationalCoordinationProvider>
-        <SidebarProvider>
-          <OperationalChunkRecovery scope="dashboard-layout" />
-          <div className="flex h-screen w-full overflow-hidden">
-            <AppSidebar productProfile={productProfile} />
-            <div className="flex flex-1 flex-col overflow-hidden">
-              <AppHeader productProfile={productProfile} />
-              <main className="flex-1 overflow-y-auto bg-muted/30 p-6">
-                <div className="mx-auto max-w-6xl space-y-6">
-                  <DashboardOperationalStatus />
-                  {children}
-                </div>
-              </main>
+      <WorkspaceFeatureProvider>
+        <OperationalCoordinationProvider>
+          <SidebarProvider>
+            <OperationalChunkRecovery scope="dashboard-layout" />
+            <div className="flex h-screen w-full overflow-hidden">
+              <AppSidebar productProfile={productProfile} />
+              <div className="flex flex-1 flex-col overflow-hidden">
+                <AppHeader productProfile={productProfile} />
+                <main className="flex-1 overflow-y-auto bg-muted/30 p-6">
+                  <div className="mx-auto max-w-6xl space-y-6">
+                    <DashboardOperationalStatus />
+                    {children}
+                  </div>
+                </main>
+              </div>
             </div>
-          </div>
-        </SidebarProvider>
-      </OperationalCoordinationProvider>
+          </SidebarProvider>
+        </OperationalCoordinationProvider>
+      </WorkspaceFeatureProvider>
     </CustomerFacingOriginProvider>
     </>
   );

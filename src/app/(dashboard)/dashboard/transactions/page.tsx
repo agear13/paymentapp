@@ -59,6 +59,8 @@ export default async function TransactionsPage() {
   // Filter by payment method
   const stripeEvents = allEvents.filter(e => e.payment_method === 'STRIPE');
   const hederaEvents = allEvents.filter(e => e.payment_method === 'HEDERA');
+  const wiseEvents = allEvents.filter(e => e.payment_method === 'WISE');
+  const evmWalletEvents = allEvents.filter(e => e.payment_method === 'EVM_WALLET');
   const showPropagationTraceHints = isBetaAdminEmail(user.email);
 
   return (
@@ -67,7 +69,7 @@ export default async function TransactionsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Funding activity</h1>
         <p className="text-muted-foreground">
-          View funding events across Stripe, Wise, and Hedera that support agreement obligations.
+          View funding events across Stripe, Wise, Hedera, and EVM wallets that support agreement obligations.
         </p>
         {showPropagationTraceHints && (
           <p className="text-xs text-muted-foreground mt-2 max-w-3xl">
@@ -88,6 +90,8 @@ export default async function TransactionsPage() {
           <TabsTrigger value="all">All ({allEvents.length})</TabsTrigger>
           <TabsTrigger value="stripe">Stripe ({stripeEvents.length})</TabsTrigger>
           <TabsTrigger value="hedera">Hedera ({hederaEvents.length})</TabsTrigger>
+          <TabsTrigger value="wise">Wise ({wiseEvents.length})</TabsTrigger>
+          <TabsTrigger value="evm-wallet">EVM Wallet ({evmWalletEvents.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="space-y-4">
@@ -95,7 +99,7 @@ export default async function TransactionsPage() {
             <CardHeader>
               <CardTitle>All funding activity</CardTitle>
               <CardDescription>
-                Complete funding history across Stripe, Wise, and Hedera.
+                Complete funding history across Stripe, Wise, Hedera, and EVM wallets.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -146,6 +150,50 @@ export default async function TransactionsPage() {
               ) : (
                 <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
                   No Hedera funding activity yet.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="wise" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Wise funding activity</CardTitle>
+              <CardDescription>
+                Bank transfer transactions via Wise.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {wiseEvents.length > 0 ? (
+                <TransactionsTable events={wiseEvents} showPropagationTraceHints={showPropagationTraceHints} />
+              ) : allEvents.length === 0 ? (
+                <PaymentLinksTransactionsEmpty />
+              ) : (
+                <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
+                  No Wise funding activity yet.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="evm-wallet" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>EVM wallet funding activity</CardTitle>
+              <CardDescription>
+                Confirmed EVM wallet payments with on-chain transaction metadata.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {evmWalletEvents.length > 0 ? (
+                <TransactionsTable events={evmWalletEvents} showPropagationTraceHints={showPropagationTraceHints} />
+              ) : allEvents.length === 0 ? (
+                <PaymentLinksTransactionsEmpty />
+              ) : (
+                <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
+                  No EVM wallet funding activity yet.
                 </div>
               )}
             </CardContent>

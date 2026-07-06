@@ -15,10 +15,11 @@ export interface CreateReferralConversionParams {
   paymentEventId: string;
   grossAmount: number;
   currency: string;
-  provider: 'stripe' | 'hedera' | 'wise' | 'manual';
+  provider: 'stripe' | 'hedera' | 'wise' | 'manual' | 'evm_wallet';
   stripePaymentIntentId?: string;
   hederaTransactionId?: string;
   wiseTransferId?: string;
+  evmTransactionHash?: string;
 }
 
 export interface CreateReferralConversionResult {
@@ -89,6 +90,7 @@ export async function createReferralConversionFromPaymentConfirmed(
       payment_link_id: paymentLinkId,
       stripe_payment_intent_id: params.stripePaymentIntentId ?? null,
       hedera_transaction_id: params.hederaTransactionId ?? null,
+      evm_transaction_hash: params.evmTransactionHash ?? null,
       advocate_referral_code: attrRow.advocate_referral_code ?? null,
     };
 

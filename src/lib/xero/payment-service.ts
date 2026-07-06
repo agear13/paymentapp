@@ -19,7 +19,7 @@ export interface PaymentRecordingParams {
   amount: string;
   currency: string;
   paymentDate: Date;
-  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE';
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET';
   paymentToken?: TokenType;
   transactionId: string;
   fxRate?: number;
@@ -174,7 +174,7 @@ export async function recordXeroPayment(
 function getClearingAccountId(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   settings: any,
-  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE',
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET',
   paymentToken?: TokenType
 ): string | null {
   if (paymentMethod === 'STRIPE') {
@@ -201,7 +201,7 @@ function getClearingAccountId(
  * Build payment reference for Xero
  */
 function buildPaymentReference(
-  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE',
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET',
   paymentToken: TokenType | undefined,
   transactionId: string
 ): string {
@@ -211,6 +211,9 @@ function buildPaymentReference(
   if (paymentMethod === 'WISE') {
     return `WISE: ${transactionId.substring(0, 30)}`;
   }
+  if (paymentMethod === 'EVM_WALLET') {
+    return `EVM: ${transactionId.substring(0, 30)}`;
+  }
   return `${paymentToken}: ${transactionId.substring(0, 30)}`;
 }
 
@@ -218,7 +221,7 @@ function buildPaymentReference(
  * Build payment narration per specification
  */
 function buildPaymentNarration(
-  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE',
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET',
   paymentToken: TokenType | undefined,
   transactionId: string,
   fxRate: number | undefined,
@@ -231,6 +234,23 @@ function buildPaymentNarration(
   }
   if (paymentMethod === 'WISE') {
     return `Payment via WISE\nTransfer: ${transactionId}\nAmount: ${fiatAmount} ${fiatCurrency}`;
+  }
+  if (paymentMethod === 'EVM_WALLET') {
+    const parts = [
+      `Payment via EVM_WALLET_${paymentToken}`,
+      `Transaction: ${transactionId}`,
+      `Token: ${paymentToken}`,
+    ];
+
+    if (fxRate && cryptoAmount) {
+      const rateFormatted = fxRate.toFixed(8);
+      parts.push(
+        `FX Rate: ${rateFormatted} ${paymentToken}/${fiatCurrency} @ ${new Date().toISOString()}`
+      );
+      parts.push(`Amount: ${cryptoAmount} ${paymentToken} = ${fiatAmount} ${fiatCurrency}`);
+    }
+
+    return parts.join('\n');
   }
   // Hedera payment
   const parts = [

@@ -14,6 +14,7 @@ import { buildWiseReference, getMerchantWiseConfig, persistWiseContextForPayment
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isValidShortCode } from '@/lib/short-code';
 import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
+import { paymentLinkAllowsMultiCheckoutRail } from '@/lib/payments/payment-link-rail-access';
 import {
   cachePublicShortCodeMiss,
   isPublicShortCodeNegativelyCached,
@@ -112,7 +113,7 @@ export async function GET(
     cachePublicShortCodeMiss(shortCode);
     return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
   }
-  if (paymentLink.payment_method && paymentLink.payment_method !== 'WISE') {
+  if (paymentLink.payment_method && !paymentLinkAllowsMultiCheckoutRail(paymentLink.payment_method, 'WISE')) {
     return NextResponse.json({ error: 'Wise is not enabled for this payment link' }, { status: 400 });
   }
 
@@ -180,7 +181,7 @@ export async function POST(
     cachePublicShortCodeMiss(shortCode);
     return NextResponse.json({ error: 'Payment link not found' }, { status: 404 });
   }
-  if (paymentLink.payment_method && paymentLink.payment_method !== 'WISE') {
+  if (paymentLink.payment_method && !paymentLinkAllowsMultiCheckoutRail(paymentLink.payment_method, 'WISE')) {
     return NextResponse.json({ error: 'Wise is not enabled for this payment link' }, { status: 400 });
   }
 

@@ -26,14 +26,32 @@ const HederaPaymentOption = dynamic(
   }
 );
 
+const MetaMaskPaymentOption = dynamic(
+  () =>
+    import('@/components/public/metamask-payment-option').then((mod) => ({
+      default: mod.MetaMaskPaymentOption,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-8 border-2 border-slate-200 rounded-lg flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+        <span className="ml-2 text-sm text-slate-600">Loading MetaMask payment option...</span>
+      </div>
+    ),
+  }
+);
+
 interface PaymentMethodSelectorProps {
   availablePaymentMethods: {
     stripe: boolean;
     hedera: boolean;
     wise?: boolean;
+    metamask?: boolean;
   };
-  selectedMethod: 'stripe' | 'hedera' | 'wise' | null;
-  onSelectMethod: (method: 'stripe' | 'hedera' | 'wise') => void;
+  selectedMethod: 'stripe' | 'hedera' | 'wise' | 'metamask' | null;
+  onSelectMethod: (method: 'stripe' | 'hedera' | 'wise' | 'metamask') => void;
+  onPaymentSubmitted?: () => void;
   paymentLinkId: string;
   shortCode: string;
   amount: string;
@@ -49,6 +67,7 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   availablePaymentMethods,
   selectedMethod,
   onSelectMethod,
+  onPaymentSubmitted,
   paymentLinkId,
   shortCode,
   amount,
@@ -59,7 +78,7 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   invoiceReference = null,
   availableFxSnapshots = [],
 }) => {
-  const [hoveredMethod, setHoveredMethod] = useState<'stripe' | 'hedera' | 'wise' | null>(null);
+  const [hoveredMethod, setHoveredMethod] = useState<'stripe' | 'hedera' | 'wise' | 'metamask' | null>(null);
 
   const useManualHedera =
     availablePaymentMethods.hedera &&
@@ -81,7 +100,8 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   const hasAnyMethod =
     availablePaymentMethods.stripe ||
     availablePaymentMethods.hedera ||
-    !!availablePaymentMethods.wise;
+    !!availablePaymentMethods.wise ||
+    !!availablePaymentMethods.metamask;
 
   if (!hasAnyMethod) {
     return (
@@ -158,6 +178,22 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
         />
       )}
 
+      {availablePaymentMethods.metamask && (
+        <MetaMaskPaymentOption
+          isAvailable={availablePaymentMethods.metamask}
+          isSelected={selectedMethod === 'metamask'}
+          isHovered={hoveredMethod === 'metamask'}
+          onSelect={() => onSelectMethod('metamask')}
+          onHoverStart={() => setHoveredMethod('metamask')}
+          onHoverEnd={() => setHoveredMethod(null)}
+          onPaymentSubmitted={onPaymentSubmitted}
+          paymentLinkId={paymentLinkId}
+          shortCode={shortCode}
+          amount={amount}
+          currency={currency}
+        />
+      )}
+
       {selectedMethod && (
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-900">
@@ -177,6 +213,11 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             {selectedMethod === 'wise' && (
               <>
                 <span className="font-medium">Wise Payment:</span> Pay by bank transfer. Get payment reference and bank details, then complete the transfer in your bank.
+              </>
+            )}
+            {selectedMethod === 'metamask' && (
+              <>
+                <span className="font-medium">MetaMask Payment:</span> Connect your MetaMask wallet and pay with USDC or USDT on Base, Ethereum, or Polygon.
               </>
             )}
           </p>

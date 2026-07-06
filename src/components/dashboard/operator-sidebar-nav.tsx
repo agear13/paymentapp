@@ -4,13 +4,18 @@ import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
 import {
-  getOperatorNavSections,
   isOperatorNavActive,
   isOperatorSectionActive,
   shouldShowSectionOverviewSubLink,
 } from '@/lib/navigation/operator-nav';
 import { entitlementForNavHref, NAV_LOCKED_VISIBLE_HREFS } from '@/lib/entitlements/nav-entitlements';
 import { useEntitlements } from '@/hooks/use-entitlements';
+import {
+  WORKSPACE_NAVIGATION_REGISTRY,
+  type WorkspaceNavigationRegistryChild,
+  type WorkspaceNavigationRegistryItem,
+} from '@/lib/workspace-features';
+import { useWorkspaceFeatures } from '@/components/workspace-features';
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -29,24 +34,89 @@ type OperatorSidebarNavProps = {
   path: string;
 };
 
-export function OperatorSidebarNav({ productProfile, path }: OperatorSidebarNavProps) {
+type RegistrySidebarNavGroupProps = OperatorSidebarNavProps & {
+  label: string;
+  sections: readonly WorkspaceNavigationRegistryItem[];
+};
+
+type WorkspaceNavigationNode = WorkspaceNavigationRegistryItem | WorkspaceNavigationRegistryChild;
+
+function isAdminVisible(
+  item: WorkspaceNavigationNode,
+  productProfile: DashboardProductProfile
+): boolean {
+  return !item.adminOnly || productProfile === 'admin';
+}
+
+function isWorkspaceFeatureVisible(
+  item: WorkspaceNavigationNode,
+  hasFeature: ReturnType<typeof useWorkspaceFeatures>['hasFeature']
+): boolean {
+  return hasFeature(item.requiredFeature);
+}
+
+function isEntitlementVisible(
+  href: string,
+  isAllowed: ReturnType<typeof useEntitlements>['isAllowed'],
+  pilotBypass: boolean
+): boolean {
+  const feature = entitlementForNavHref(href);
+  if (!feature || pilotBypass) return true;
+  if (NAV_LOCKED_VISIBLE_HREFS.has(href)) return true;
+  return isAllowed(feature);
+}
+
+function filterRegistrySections({
+  sections,
+  productProfile,
+  hasFeature,
+  isAllowed,
+  pilotBypass,
+}: {
+  sections: readonly WorkspaceNavigationRegistryItem[];
+  productProfile: DashboardProductProfile;
+  hasFeature: ReturnType<typeof useWorkspaceFeatures>['hasFeature'];
+  isAllowed: ReturnType<typeof useEntitlements>['isAllowed'];
+  pilotBypass: boolean;
+}): WorkspaceNavigationRegistryItem[] {
+  return sections
+    .filter((section) => isAdminVisible(section, productProfile))
+    .filter((section) => isWorkspaceFeatureVisible(section, hasFeature))
+    .map((section) => ({
+      ...section,
+      items: section.items
+        ?.filter((item) => isAdminVisible(item, productProfile))
+        .filter((item) => isWorkspaceFeatureVisible(item, hasFeature))
+        .filter((item) => isEntitlementVisible(item.href, isAllowed, pilotBypass)),
+    }));
+}
+
+export function RegistrySidebarNavGroup({
+  productProfile,
+  path,
+  label,
+  sections,
+}: RegistrySidebarNavGroupProps) {
   const { isAllowed, pilotBypass } = useEntitlements();
-  const sections = getOperatorNavSections(productProfile).map((section) => ({
-    ...section,
-    items: section.items?.filter((item) => {
-      const feature = entitlementForNavHref(item.href);
-      if (!feature || pilotBypass) return true;
-      if (NAV_LOCKED_VISIBLE_HREFS.has(item.href)) return true;
-      return isAllowed(feature);
-    }),
-  }));
+  const { hasFeature } = useWorkspaceFeatures();
+  const visibleSections = filterRegistrySections({
+    sections,
+    productProfile,
+    hasFeature,
+    isAllowed,
+    pilotBypass,
+  });
+
+  if (visibleSections.length === 0) {
+    return null;
+  }
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {sections.map((section) => {
+          {visibleSections.map((section) => {
             const childItems = section.items ?? [];
             const useCollapsible = childItems.length > 0;
             const sectionActive = isOperatorSectionActive(path, section);
@@ -111,5 +181,16 @@ export function OperatorSidebarNav({ productProfile, path }: OperatorSidebarNavP
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
+  );
+}
+
+export function OperatorSidebarNav({ productProfile, path }: OperatorSidebarNavProps) {
+  return (
+    <RegistrySidebarNavGroup
+      productProfile={productProfile}
+      path={path}
+      label="Workspace"
+      sections={WORKSPACE_NAVIGATION_REGISTRY}
+    />
   );
 }

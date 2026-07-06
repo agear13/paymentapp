@@ -145,6 +145,8 @@ model merchant_settings {
   default_currency  String  @db.Char(3)
   stripe_account_id String? @db.VarChar(255)
   hedera_account_id String? @db.VarChar(50)
+  /// EVM receive address for MetaMask checkout (0x…)
+  evm_wallet_address String? @db.VarChar(42)
 
   // Sprint 26: Invoice UX Improvements
   organization_logo_url String? @db.VarChar(1024)
@@ -326,7 +328,7 @@ model payment_links {
   organization_id   String            @db.Uuid
   short_code        String            @unique @db.VarChar(8)
   status            PaymentLinkStatus @default(DRAFT)
-  payment_method    PaymentMethod? // STRIPE | HEDERA | WISE | CRYPTO (null = legacy, all methods)
+  payment_method    PaymentMethod? // STRIPE | HEDERA | WISE | EVM_WALLET | CRYPTO (null = legacy, all methods)
   amount            Decimal           @db.Decimal(18, 2)
   /// @deprecated Kept in sync with `invoice_currency` for backwards compatibility; prefer `invoice_currency` in new code.
   currency          String            @db.Char(3)
@@ -661,6 +663,7 @@ enum PaymentEventSourceType {
   STRIPE
   CRYPTO
   WISE
+  EVM_WALLET
   MANUAL
   CSV_IMPORT
 }
@@ -690,6 +693,8 @@ enum PaymentMethod {
   STRIPE
   HEDERA
   WISE
+  /// Automated EVM wallet settlement (MetaMask today; Rabby/Coinbase Wallet/etc. via metadata).
+  EVM_WALLET
   /// Manual crypto: merchant supplies network, wallet, asset; payer confirms; merchant approves
   CRYPTO
   /// Manual bank transfer instructions (bank/Wise/Revolut/other), payer confirms submitted transfer.

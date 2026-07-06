@@ -210,6 +210,7 @@ export function filterPaymentMethodsByReferralRails(input: {
     wise: boolean;
     crypto?: boolean;
     manualBank?: boolean;
+    metamask?: boolean;
   };
   resolvedRails: ReferralPaymentRail[];
 }): {
@@ -218,6 +219,7 @@ export function filterPaymentMethodsByReferralRails(input: {
   wise: boolean;
   crypto?: boolean;
   manualBank?: boolean;
+  metamask?: boolean;
 } {
   const allow = (rail: ReferralPaymentRail) => input.resolvedRails.includes(rail);
   return {
@@ -226,6 +228,7 @@ export function filterPaymentMethodsByReferralRails(input: {
     wise: input.methods.wise && allow('wise'),
     crypto: input.methods.crypto,
     manualBank: input.methods.manualBank && allow('manual'),
+    metamask: input.methods.metamask,
   };
 }
 

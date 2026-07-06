@@ -14,65 +14,31 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import {
-  Link as LinkIcon,
   LogOut,
   ChevronRight,
-  Handshake,
-  Layers,
-  Building2,
-  FileCheck,
-  Repeat,
 } from 'lucide-react';
-import { OperatorSidebarNav } from '@/components/dashboard/operator-sidebar-nav';
+import { OperatorSidebarNav, RegistrySidebarNavGroup } from '@/components/dashboard/operator-sidebar-nav';
+import {
+  RABBIT_HOLE_PILOT_NAVIGATION_REGISTRY,
+  STRAIT_EXPERIENCES_PILOT_NAVIGATION_REGISTRY,
+  WORKSPACE_PLATFORM_PREVIEW_NAVIGATION_REGISTRY,
+} from '@/lib/workspace-features';
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-/** Gated internal tooling — beta admin only; unchanged structure. */
-const platformPreviewItems = [
-  {
-    title: 'Platform Preview',
-    icon: Layers,
-    items: [
-      {
-        title: 'Overview',
-        href: '/dashboard/platform-preview/overview',
-      },
-      {
-        title: 'Connections',
-        href: '/dashboard/platform-preview/connections',
-      },
-      {
-        title: 'Inventory',
-        href: '/dashboard/platform-preview/inventory',
-      },
-      {
-        title: 'Unified Ledger',
-        href: '/dashboard/platform-preview/ledger',
-      },
-    ],
-  },
-];
 
 interface AppSidebarProps {
   productProfile: DashboardProductProfile;
 }
 
 export function AppSidebar({ productProfile }: AppSidebarProps) {
-  const isBetaAdmin = productProfile === 'admin';
   const isRabbitHolePilot = productProfile === 'rabbit_hole_pilot';
   const isStraitExperiencesPilot = productProfile === 'strait_experiences_pilot';
   const pathname = usePathname();
@@ -173,11 +139,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
     : '?';
 
   if (isRabbitHolePilot) {
-    const pilotHome = '/dashboard/partners/deal-network';
-    const pilotObligations = `${pilotHome}/obligations`;
-    const isObligationsView = path === pilotObligations;
-    const isDealNetworkSectionActive =
-      path === pilotHome || (path.startsWith(`${pilotHome}/`) && !isObligationsView);
+    const pilotHome = RABBIT_HOLE_PILOT_NAVIGATION_REGISTRY[0].href;
     return (
       <Sidebar collapsible="icon">
         <SidebarHeader>
@@ -199,65 +161,12 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
         </SidebarHeader>
 
         <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Pilot</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isDealNetworkSectionActive}>
-                    <Link href={pilotHome}>
-                      <Handshake className="size-4" />
-                      <span>Deal Network</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isObligationsView}>
-                    <Link href={pilotObligations}>
-                      <FileCheck className="size-4" />
-                      <span>Obligations</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={path === '/dashboard/payment-links' || path.startsWith('/dashboard/payment-links/')}
-                  >
-                    <Link href="/dashboard/payment-links">
-                      <LinkIcon className="size-4" />
-                      <span>Invoices</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={
-                      path === '/dashboard/recurring-templates' ||
-                      path.startsWith('/dashboard/recurring-templates/')
-                    }
-                  >
-                    <Link href="/dashboard/recurring-templates">
-                      <Repeat className="size-4" />
-                      <span>Recurring</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={path === '/dashboard/settings/merchant' || path.startsWith('/dashboard/settings/merchant/')}
-                  >
-                    <Link href="/dashboard/settings/merchant">
-                      <Building2 className="size-4" />
-                      <span>Collection & settlement</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          <RegistrySidebarNavGroup
+            productProfile={productProfile}
+            path={path}
+            label="Pilot"
+            sections={RABBIT_HOLE_PILOT_NAVIGATION_REGISTRY}
+          />
         </SidebarContent>
 
         <SidebarFooter>
@@ -304,11 +213,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
   }
 
   if (isStraitExperiencesPilot) {
-    const pilotHome = '/dashboard/partners/deal-network';
-    const pilotObligations = `${pilotHome}/obligations`;
-    const isObligationsView = path === pilotObligations;
-    const isDealNetworkSectionActive =
-      path === pilotHome || (path.startsWith(`${pilotHome}/`) && !isObligationsView);
+    const pilotHome = STRAIT_EXPERIENCES_PILOT_NAVIGATION_REGISTRY[0].href;
     return (
       <Sidebar collapsible="icon">
         <SidebarHeader>
@@ -330,65 +235,12 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
         </SidebarHeader>
 
         <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isDealNetworkSectionActive}>
-                    <Link href={pilotHome}>
-                      <Handshake className="size-4" />
-                      <span>Agreements</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isObligationsView}>
-                    <Link href={pilotObligations}>
-                      <FileCheck className="size-4" />
-                      <span>Obligations</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={path === '/dashboard/payment-links' || path.startsWith('/dashboard/payment-links/')}
-                  >
-                    <Link href="/dashboard/payment-links">
-                      <LinkIcon className="size-4" />
-                      <span>Invoices</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={
-                      path === '/dashboard/recurring-templates' ||
-                      path.startsWith('/dashboard/recurring-templates/')
-                    }
-                  >
-                    <Link href="/dashboard/recurring-templates">
-                      <Repeat className="size-4" />
-                      <span>Recurring</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={path === '/dashboard/settings/merchant' || path.startsWith('/dashboard/settings/merchant/')}
-                  >
-                    <Link href="/dashboard/settings/merchant">
-                      <Building2 className="size-4" />
-                      <span>Collection & settlement</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          <RegistrySidebarNavGroup
+            productProfile={productProfile}
+            path={path}
+            label="Workspace"
+            sections={STRAIT_EXPERIENCES_PILOT_NAVIGATION_REGISTRY}
+          />
         </SidebarContent>
 
         <SidebarFooter>
@@ -457,45 +309,12 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
       <SidebarContent>
         <OperatorSidebarNav productProfile={productProfile} path={path} />
 
-        {/* Platform Preview — gated beta admin; internal tooling unchanged */}
-        {isBetaAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Platform Preview</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {platformPreviewItems.map((item) => (
-                  <Collapsible key={item.title} asChild defaultOpen={path.includes('/platform-preview')}>
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton>
-                          <item.icon className="size-4" />
-                          <span>{item.title}</span>
-                          <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {item.items?.map((subItem) => {
-                            const isActive = path === subItem.href;
-                            return (
-                              <SidebarMenuSubItem key={subItem.href}>
-                                <SidebarMenuSubButton asChild isActive={isActive}>
-                                  <Link href={subItem.href}>
-                                    <span>{subItem.title}</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            );
-                          })}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        <RegistrySidebarNavGroup
+          productProfile={productProfile}
+          path={path}
+          label="Platform Preview"
+          sections={WORKSPACE_PLATFORM_PREVIEW_NAVIGATION_REGISTRY}
+        />
       </SidebarContent>
 
       <SidebarFooter>

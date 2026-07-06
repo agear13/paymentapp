@@ -112,6 +112,12 @@ export function TransactionsTable({ events, showPropagationTraceHints = false }:
               const fiatEquivalent = getFiatEquivalent(event);
               const receivedAmount = Number(event.amount_received || event.payment_links.amount);
               const receivedCurrency = event.currency_received || event.payment_links.currency;
+              const evmTransactionHash =
+                typeof event.metadata?.transaction_hash === 'string'
+                  ? event.metadata.transaction_hash
+                  : typeof event.metadata?.provider_ref === 'string'
+                    ? event.metadata.provider_ref
+                    : null;
 
               return (
                 <TableRow key={event.id}>
@@ -172,7 +178,12 @@ export function TransactionsTable({ events, showPropagationTraceHints = false }:
                         </a>
                       </div>
                     )}
-                    {!event.stripe_payment_intent_id && !event.hedera_transaction_id && '-'}
+                    {evmTransactionHash && (
+                      <span className="font-mono text-xs truncate block max-w-[150px]">
+                        {evmTransactionHash}
+                      </span>
+                    )}
+                    {!event.stripe_payment_intent_id && !event.hedera_transaction_id && !evmTransactionHash && '-'}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex flex-col items-end gap-0.5">

@@ -28,6 +28,8 @@ export function PaymentConfirmedEmail({
   const paymentMethodDisplay = 
     paymentMethod === 'HEDERA' && tokenType
       ? `Hedera - ${tokenType}`
+      : paymentMethod === 'EVM_WALLET' && tokenType
+      ? `EVM Wallet - ${tokenType}`
       : paymentMethod === 'STRIPE'
       ? 'Credit Card (Stripe)'
       : paymentMethod;
@@ -190,6 +192,8 @@ export function renderPaymentConfirmedEmail(props: PaymentConfirmedEmailProps): 
   const paymentMethodDisplay = 
     props.paymentMethod === 'HEDERA' && props.tokenType
       ? `Hedera - ${props.tokenType}`
+      : props.paymentMethod === 'EVM_WALLET' && props.tokenType
+      ? `EVM Wallet - ${props.tokenType}`
       : props.paymentMethod === 'STRIPE'
       ? 'Credit Card (Stripe)'
       : props.paymentMethod;

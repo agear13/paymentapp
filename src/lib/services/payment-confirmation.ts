@@ -16,6 +16,7 @@ import { generateCorrelationId } from './correlation';
 import { postStripeSettlement } from '@/lib/ledger/posting-rules/stripe';
 import { postHederaSettlement } from '@/lib/ledger/posting-rules/hedera';
 import { postWiseSettlement } from '@/lib/ledger/posting-rules/wise';
+import { postEvmWalletSettlement } from '@/lib/ledger/posting-rules/evm-wallet';
 import { validatePostingBalance } from '@/lib/ledger/balance-validation';
 import config from '@/lib/config/env';
 import { normalizeHederaTransactionId } from '@/lib/hedera/txid';
@@ -37,17 +38,17 @@ import { commissionPropagationTrace } from '@/lib/referrals/commission-propagati
 
 export interface ConfirmPaymentParams {
   paymentLinkId: string;
-  provider: 'stripe' | 'hedera' | 'wise' | 'manual';
-  /** Stripe event_id, Hedera tx_id, or Wise transfer_id/event_id */
+  provider: 'stripe' | 'hedera' | 'wise' | 'manual' | 'evm_wallet';
+  /** Stripe event_id, Hedera tx_id, Wise transfer_id/event_id, or EVM network:tx_hash */
   providerRef: string;
   paymentIntentId?: string; // For Stripe
   checkoutSessionId?: string; // For Stripe
-  transactionId?: string; // For Hedera or Wise transfer id
+  transactionId?: string; // For Hedera, Wise transfer id, or EVM transaction hash
   amountReceived: number;
   currencyReceived: string;
   metadata?: Record<string, unknown>;
   correlationId?: string;
-  // Hedera-specific
+  // Crypto-specific (Hedera/EVM)
   tokenType?: 'HBAR' | 'USDC' | 'USDT' | 'AUDD';
   fxRate?: number;
 }
@@ -102,8 +103,9 @@ async function runCommissionReconcileAfterSettlement(params: {
 
 function referralProviderForConfirmPayment(
   provider: ConfirmPaymentParams['provider']
-): 'stripe' | 'hedera' | 'wise' | 'manual' {
+): 'stripe' | 'hedera' | 'wise' | 'manual' | 'evm_wallet' {
   if (provider === 'hedera') return 'hedera';
+  if (provider === 'evm_wallet') return 'evm_wallet';
   if (provider === 'wise') return 'wise';
   if (provider === 'manual') return 'manual';
   return 'stripe';
@@ -119,6 +121,7 @@ export function resolvePaymentMethodForEvent(
     if (rail === 'MANUAL_BANK' || rail === 'CRYPTO') return rail;
     return 'MANUAL';
   }
+  if (provider === 'evm_wallet') return 'EVM_WALLET' as PaymentMethod;
   return provider.toUpperCase() as PaymentMethod;
 }
 
@@ -179,6 +182,8 @@ export async function confirmPayment(
         ? await checkStripeIdempotency(providerRef)
         : provider === 'wise'
           ? await checkWiseIdempotency(normalizedProviderRef)
+          : provider === 'evm_wallet'
+            ? await checkEvmWalletIdempotency(normalizedProviderRef, transactionId)
           : provider === 'manual'
             ? await checkManualIdempotency(normalizedProviderRef, paymentLinkId)
             : await checkHederaIdempotency(normalizedProviderRef, providerRef);
@@ -207,6 +212,7 @@ export async function confirmPayment(
             ...(provider === 'stripe' && { stripePaymentIntentId: paymentIntentId }),
             ...(provider === 'hedera' && { hederaTransactionId: normalizedProviderRef }),
             ...(provider === 'wise' && { wiseTransferId: transactionId || normalizedProviderRef }),
+            ...(provider === 'evm_wallet' && { evmTransactionHash: transactionId || normalizedProviderRef }),
           });
         } catch {
           // Ignore - already processed path
@@ -332,7 +338,9 @@ export async function confirmPayment(
             ? PaymentEventSourceType.CRYPTO
             : provider === 'manual'
               ? PaymentEventSourceType.MANUAL
-              : PaymentEventSourceType.WISE;
+              : provider === 'evm_wallet'
+                ? ('EVM_WALLET' as PaymentEventSourceType)
+                : PaymentEventSourceType.WISE;
 
       const paymentEventData: any = {
         payment_link_id: paymentLinkId,
@@ -357,6 +365,17 @@ export async function confirmPayment(
             payer_account_id: metadata?.sender,
             merchant_account_id: metadata?.recipient,
             mirror_url: metadata?.mirror_url,
+          }),
+          ...(provider === 'evm_wallet' && tokenType && {
+            token_type: tokenType,
+            network: metadata?.network,
+            wallet_address: metadata?.wallet_address,
+            payer_wallet_address: metadata?.payer_wallet_address,
+            merchant_wallet_address: metadata?.merchant_wallet_address,
+            transaction_hash: metadata?.transaction_hash,
+            token_contract_address: metadata?.token_contract_address,
+            exchange_rate: metadata?.exchange_rate,
+            wallet_provider: metadata?.wallet_provider,
           }),
         },
         created_at: new Date(),
@@ -404,6 +423,12 @@ export async function confirmPayment(
         paymentEventData.metadata = {
           ...paymentEventData.metadata,
           wise_event_id: providerRef,
+        };
+      } else if (provider === 'evm_wallet') {
+        paymentEventData.metadata = {
+          ...paymentEventData.metadata,
+          provider_ref: normalizedProviderRef,
+          transaction_hash: transactionId || metadata?.transaction_hash || providerRef,
         };
       } else if (provider === 'manual') {
         paymentEventData.metadata = {
@@ -493,6 +518,53 @@ export async function confirmPayment(
         );
 
         log.info('Hedera ledger entries posted (atomic)', { correlationId, paymentLinkId });
+      } else if (provider === 'evm_wallet') {
+        // Atomic: any error rolls back the enclosing prisma.$transaction.
+        if (!tokenType) {
+          throw new Error('tokenType is required for EVM wallet payments');
+        }
+
+        const invoiceCurrency = paymentLink.invoice_currency ?? paymentLink.currency;
+        const exchangeRate =
+          fxRate != null
+            ? {
+                rate: fxRate,
+                provider: 'evm_wallet',
+                timestamp: new Date(),
+              }
+            : await getFxService().getRate(tokenType, invoiceCurrency as 'USD' | 'AUD');
+        await getFxSnapshotService().createSettlementSnapshotInTx(tx, {
+          payment_link_id: paymentLinkId,
+          snapshot_type: 'SETTLEMENT',
+          token_type: tokenType,
+          base_currency: tokenType,
+          quote_currency: invoiceCurrency,
+          rate: exchangeRate.rate,
+          provider: exchangeRate.provider,
+          captured_at: exchangeRate.timestamp,
+        });
+        const rate = exchangeRate.rate;
+
+        await postEvmWalletSettlement(
+          {
+            paymentLinkId,
+            organizationId: paymentLink.organization_id,
+            tokenType,
+            tokenAmount: String(amountReceived),
+            invoiceAmount: paymentLink.amount.toString(),
+            invoiceCurrency,
+            fxRate: rate,
+            transactionHash: transactionId || String(metadata?.transaction_hash || providerRef),
+            walletAddress: String(metadata?.wallet_address || metadata?.payer_wallet_address || ''),
+            network: String(metadata?.network || ''),
+            walletProvider: String(metadata?.wallet_provider || 'evm_wallet'),
+            correlationId,
+            idempotencyKey: correlationId,
+          },
+          tx,
+        );
+
+        log.info('EVM wallet ledger entries posted (atomic)', { correlationId, paymentLinkId });
       } else if (provider === 'wise') {
         // Atomic: any error rolls back the enclosing prisma.$transaction.
         await postWiseSettlement(
@@ -655,6 +727,7 @@ export async function confirmPayment(
           ...(provider === 'stripe' && { stripePaymentIntentId: paymentIntentId }),
           ...(provider === 'hedera' && { hederaTransactionId: normalizedProviderRef }),
           ...(provider === 'wise' && { wiseTransferId: transactionId || normalizedProviderRef }),
+          ...(provider === 'evm_wallet' && { evmTransactionHash: transactionId || normalizedProviderRef }),
         });
         if (refResult.created) {
           log.info('[REFERRAL_AUTO_CONVERSION] conversion created', {
@@ -835,6 +908,29 @@ async function checkWiseIdempotency(transferIdOrEventId: string) {
         { correlation_id: transferIdOrEventId },
       ],
     },
+  });
+  return { exists: !!existing, eventId: existing?.id };
+}
+
+/**
+ * Check if an EVM wallet payment already processed by providerRef or tx hash.
+ */
+async function checkEvmWalletIdempotency(providerRef: string, transactionHash?: string) {
+  const normalizedHash = transactionHash?.trim().toLowerCase();
+  const existing = await prisma.payment_events.findFirst({
+    where: {
+      event_type: 'PAYMENT_CONFIRMED',
+      OR: [
+        { source_reference: providerRef },
+        ...(normalizedHash
+          ? [
+              { source_reference: normalizedHash },
+              { metadata: { path: ['transaction_hash'], equals: normalizedHash } },
+            ]
+          : []),
+      ],
+    },
+    select: { id: true },
   });
   return { exists: !!existing, eventId: existing?.id };
 }

@@ -21,6 +21,7 @@ import {
   PAID_TRANSITION_BLOCKED_CODE,
 } from '@/lib/payments/payment-link-status-api-policy';
 import { prisma } from '@/lib/server/prisma';
+import { PUBLIC_CHECKOUT_METHOD_LABELS } from '@/lib/payments/public-checkout-labels';
 
 const StatusTransitionSchema = z.object({
   status: PaymentLinkStatusSchema,
@@ -376,11 +377,16 @@ function generateStatusMessage(status: string, lastEvent?: any): string {
       return 'Crypto payment submitted and recorded on your invoice';
     case 'REQUIRES_REVIEW':
       return 'Crypto payment submitted. Merchant review suggested.';
-    case 'PAID':
+    case 'PAID': {
       const method = lastEvent?.payment_method;
-      return method 
-        ? `Payment completed via ${method === 'STRIPE' ? 'Card' : method === 'HEDERA' ? 'Crypto' : 'Wise bank transfer'}`
-        : 'Payment completed';
+      if (!method) return 'Payment completed';
+      if (method === 'STRIPE') return 'Payment completed via Card';
+      if (method === 'WISE') return 'Payment completed via Wise bank transfer';
+      if (method === 'EVM_WALLET') {
+        return `Payment completed via ${PUBLIC_CHECKOUT_METHOD_LABELS.metamask}`;
+      }
+      return 'Payment completed via Crypto';
+    }
     case 'EXPIRED':
       return 'Payment link has expired';
     case 'CANCELED':

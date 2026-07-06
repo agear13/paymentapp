@@ -33,6 +33,7 @@ describe('resolvePaymentMethodForEvent', () => {
     expect(resolvePaymentMethodForEvent('stripe')).toBe('STRIPE');
     expect(resolvePaymentMethodForEvent('hedera')).toBe('HEDERA');
     expect(resolvePaymentMethodForEvent('wise')).toBe('WISE');
+    expect(resolvePaymentMethodForEvent('evm_wallet')).toBe('EVM_WALLET');
   });
 });
 
@@ -59,5 +60,11 @@ describe('derivePaymentMethod (Xero)', () => {
     expect(
       derivePaymentMethod({ payment_method: null, source_type: 'MANUAL' }, null)
     ).toBe('WISE');
+  });
+
+  it('keeps EVM wallet payments on the EVM rail', () => {
+    expect(
+      derivePaymentMethod({ payment_method: 'EVM_WALLET', source_type: 'EVM_WALLET' }, null)
+    ).toBe('EVM_WALLET');
   });
 });

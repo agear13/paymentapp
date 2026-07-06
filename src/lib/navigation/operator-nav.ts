@@ -1,42 +1,11 @@
-import type { LucideIcon } from 'lucide-react';
-import {
-  LayoutDashboard,
-  FolderKanban,
-  Wallet,
-  Banknote,
-  BarChart3,
-  Settings,
-  Link as LinkIcon,
-  Repeat,
-  CreditCard,
-  FileCheck,
-  CircleDollarSign,
-  History,
-  Building2,
-  Plug,
-  Package,
-  BookOpen,
-  Share2,
-  Activity,
-  Download,
-  Megaphone,
-} from 'lucide-react';
-import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
-
-export type OperatorNavItem = {
-  title: string;
+type OperatorNavItemLike = {
   href: string;
-  icon?: LucideIcon;
-  /** Shown only for beta admin (partner paths / internal tooling) */
-  adminOnly?: boolean;
 };
 
-export type OperatorNavSection = {
+type OperatorNavSectionLike = {
   id: string;
-  title: string;
   href: string;
-  icon: LucideIcon;
-  items?: OperatorNavItem[];
+  items?: readonly OperatorNavItemLike[];
 };
 
 /** Canonical destination for connecting / managing the Stripe payment provider. */
@@ -52,148 +21,6 @@ export const REPORTS_AGREEMENT_INTELLIGENCE_HREF = '/dashboard/reports/agreement
 export const MARKETING_HREF = '/marketing';
 
 const DEAL_NETWORK_BASE = '/dashboard/partners/deal-network';
-
-/** Primary workflow navigation — Agreements and Settlement are always visible. */
-export function getOperatorNavSections(
-  productProfile: DashboardProductProfile
-): OperatorNavSection[] {
-  const isAdmin = productProfile === 'admin';
-
-  const sections: OperatorNavSection[] = [
-    {
-      id: 'home',
-      title: 'Dashboard',
-      href: '/dashboard',
-      icon: LayoutDashboard,
-    },
-    {
-      id: 'projects',
-      title: 'Agreements',
-      href: '/dashboard/projects',
-      icon: FolderKanban,
-    },
-    {
-      id: 'payments',
-      title: 'Funding',
-      href: '/dashboard/payments',
-      icon: Wallet,
-      items: [
-        { title: 'Overview', href: '/dashboard/payments' },
-        { title: 'Invoices', href: '/dashboard/payment-links', icon: LinkIcon },
-        { title: 'Recurring schedules', href: '/dashboard/recurring-templates', icon: Repeat },
-        { title: 'Funding activity', href: '/dashboard/transactions', icon: CreditCard },
-      ],
-    },
-    {
-      id: 'payouts',
-      title: 'Settlement',
-      href: PAYOUTS_HUB_HREF,
-      icon: Banknote,
-      items: [
-        { title: 'Overview', href: PAYOUTS_HUB_HREF },
-        {
-          title: 'Obligations',
-          href: PAYOUTS_OBLIGATIONS_HREF,
-          icon: FileCheck,
-        },
-        {
-          title: 'Earnings & readiness',
-          href: PAYOUTS_COMMISSIONS_HREF,
-          icon: CircleDollarSign,
-        },
-        {
-          title: 'Settlement releases',
-          href: PAYOUTS_SETTLEMENTS_HREF,
-          icon: History,
-        },
-      ],
-    },
-    {
-      id: 'reports',
-      title: 'Reporting',
-      href: '/dashboard/reports',
-      icon: BarChart3,
-      items: [
-        { title: 'Overview', href: '/dashboard/reports' },
-        { title: 'Agreement Intelligence', href: REPORTS_AGREEMENT_INTELLIGENCE_HREF, icon: Activity },
-        { title: 'Ledger', href: REPORTS_LEDGER_HREF, icon: BookOpen },
-        { title: 'Export Center', href: REPORTS_EXPORTS_HREF, icon: Download },
-      ],
-    },
-    {
-      id: 'marketing',
-      title: 'Marketing',
-      href: MARKETING_HREF,
-      icon: Megaphone,
-    },
-    {
-      id: 'settings',
-      title: 'Settings',
-      href: '/dashboard/settings/organization',
-      icon: Settings,
-      items: [
-        {
-          title: 'Organization',
-          href: '/dashboard/settings/organization',
-          icon: Building2,
-        },
-        {
-          title: 'Billing',
-          href: '/dashboard/settings/billing',
-          icon: CreditCard,
-        },
-        { title: 'Collection & settlement infrastructure', href: '/dashboard/settings/merchant' },
-        { title: 'Team', href: '/dashboard/settings/team' },
-        {
-          title: 'Integrations',
-          href: '/dashboard/settings/integrations',
-          icon: Plug,
-        },
-        {
-          title: 'Service catalog',
-          href: '/dashboard/settings/services',
-          icon: Package,
-        },
-        {
-          title: 'Allocation rules',
-          href: '/dashboard/partners/rules',
-          adminOnly: true,
-        },
-        {
-          title: 'Commission links',
-          href: '/dashboard/partners/referral-links',
-          adminOnly: true,
-        },
-        {
-          title: 'Agreement Analyzer',
-          href: '/dashboard/agreement-analyzer',
-          icon: FileCheck,
-          adminOnly: true,
-        },
-        {
-          title: 'Admin operations',
-          href: '/dashboard/admin',
-          icon: Activity,
-          adminOnly: true,
-        },
-        {
-          title: 'Referral sharing',
-          href: '/dashboard/referrals',
-          icon: Share2,
-          adminOnly: true,
-        },
-      ],
-    },
-  ];
-
-  return sections.map((section) => ({
-    ...section,
-    items: section.items?.filter((item) => {
-      if (item.adminOnly && !isAdmin) return false;
-      return true;
-    }),
-  }));
-}
 
 /** Whether a pathname is active for a nav target (supports section hubs and legacy paths). */
 export function isOperatorNavActive(path: string, href: string, sectionId?: string): boolean {
@@ -295,9 +122,13 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
     return (
       path === DEAL_NETWORK_BASE ||
       (path.startsWith(`${DEAL_NETWORK_BASE}/`) &&
-        path !== PAYOUTS_OBLIGATIONS_HREF &&
-        !path.startsWith(`${PAYOUTS_OBLIGATIONS_HREF}/`))
+        path !== `${DEAL_NETWORK_BASE}/obligations` &&
+        !path.startsWith(`${DEAL_NETWORK_BASE}/obligations/`))
     );
+  }
+
+  if (href === `${DEAL_NETWORK_BASE}/obligations`) {
+    return path === href || path.startsWith(`${href}/`);
   }
 
   if (href === '/dashboard/payment-links' || href === '/dashboard/recurring-templates') {
@@ -313,7 +144,7 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
 
 export function isOperatorSectionActive(
   path: string,
-  section: OperatorNavSection
+  section: OperatorNavSectionLike
 ): boolean {
   if (isOperatorNavActive(path, section.href, section.id)) return true;
   return section.items?.some((item) => isOperatorNavActive(path, item.href, section.id)) ?? false;
@@ -321,8 +152,8 @@ export function isOperatorSectionActive(
 
 /** Skip redundant Overview sub-link when it matches section hub or a child href. */
 export function shouldShowSectionOverviewSubLink(
-  section: OperatorNavSection,
-  childItems: OperatorNavItem[]
+  section: OperatorNavItemLike,
+  childItems: readonly OperatorNavItemLike[]
 ): boolean {
   if (childItems.some((item) => item.href === section.href)) return false;
   return true;

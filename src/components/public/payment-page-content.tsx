@@ -35,6 +35,7 @@ interface PaymentPageContentProps {
       stripe: boolean;
       hedera: boolean;
       wise?: boolean;
+      metamask?: boolean;
     };
     paymentMethod?: string | null;
     hederaCheckoutMode?: string | null;
@@ -54,7 +55,7 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
   onPaymentStarted,
 }) => {
   const [currentStep, setCurrentStep] = useState<PaymentStep>('review_invoice');
-  const [selectedMethod, setSelectedMethod] = useState<'stripe' | 'hedera' | 'wise' | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<'stripe' | 'hedera' | 'wise' | 'metamask' | null>(null);
 
   useEffect(() => {
     if (
@@ -65,7 +66,7 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
     }
   }, [paymentLink.paymentMethod, paymentLink.hederaCheckoutMode]);
 
-  const handleMethodSelect = (method: 'stripe' | 'hedera' | 'wise') => {
+  const handleMethodSelect = (method: 'stripe' | 'hedera' | 'wise' | 'metamask') => {
     setSelectedMethod(method);
     setCurrentStep('send_payment');
     onPaymentStarted?.();
@@ -121,6 +122,7 @@ export const PaymentPageContent: React.FC<PaymentPageContentProps> = ({
                 availablePaymentMethods={paymentLink.availablePaymentMethods}
                 selectedMethod={selectedMethod}
                 onSelectMethod={handleMethodSelect}
+                onPaymentSubmitted={onPaymentStarted}
                 paymentLinkId={paymentLink.id}
                 shortCode={paymentLink.shortCode}
                 amount={paymentLink.amount}

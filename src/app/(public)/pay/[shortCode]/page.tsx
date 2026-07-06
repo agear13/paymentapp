@@ -43,6 +43,7 @@ interface PaymentLinkData {
     wise?: boolean;
     crypto?: boolean;
     manualBank?: boolean;
+    metamask?: boolean;
   };
   paymentMethod?: string | null;
   cryptoNetwork?: string | null;

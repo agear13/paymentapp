@@ -5,16 +5,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getFxService } from '@/lib/fx';
 import {
   ESTIMATED_FEES,
   type TokenType,
-  TOKEN_CONFIG,
 } from '@/lib/hedera/constants';
 import type { TokenPaymentAmount } from '@/lib/hedera/types';
 import { log } from '@/lib/logger';
 import { handleApiError } from '@/lib/api/middleware';
 import { formatTokenAmount, isStablecoin } from '@/lib/hedera/token-service';
+import { calculateSimpleTokenCheckoutAmounts } from '@/lib/payments/token-checkout-amounts.server';
 
 const requestSchema = z.object({
   fiatAmount: z.number().positive(),
@@ -35,35 +34,33 @@ export async function POST(request: NextRequest) {
     const { fiatAmount, fiatCurrency, walletBalances } =
       requestSchema.parse(body);
 
-    log.info({ fiatAmount, fiatCurrency }, 'Calculating payment amounts');
+    log.info('Calculating payment amounts', { fiatAmount, fiatCurrency });
 
-    const fxService = getFxService();
     const tokens: TokenType[] = ['HBAR', 'USDC', 'USDT', 'AUDD'];
 
-    // Calculate amounts for all four tokens in parallel
-    const calculations = await Promise.all(
-      tokens.map(async (tokenType) => {
-        const calc = await fxService.calculateCryptoAmount(
-          fiatAmount,
-          fiatCurrency,
-          tokenType
-        );
+    const baseAmounts = await calculateSimpleTokenCheckoutAmounts({
+      fiatAmount,
+      fiatCurrency,
+      tokens,
+      defaultRecommendedToken: 'USDC',
+      formatAmount: (amount, tokenType) =>
+        formatTokenAmount(amount, tokenType as TokenType),
+    });
 
-        const estimatedFee = ESTIMATED_FEES[tokenType];
-        const totalAmount = calc.targetAmount + estimatedFee;
+    const calculations = baseAmounts.map((item) => {
+      const tokenType = item.tokenType as TokenType;
+      const estimatedFee = ESTIMATED_FEES[tokenType];
+      const totalAmount = item.requiredAmountRaw + estimatedFee;
+      return {
+        tokenType,
+        item,
+        estimatedFee,
+        totalAmount,
+      };
+    });
 
-        return {
-          tokenType,
-          calculation: calc,
-          estimatedFee,
-          totalAmount,
-        };
-      })
-    );
-
-    // Determine recommended token
     const paymentAmounts: TokenPaymentAmount[] = calculations.map(
-      ({ tokenType, calculation, estimatedFee, totalAmount }, index) => {
+      ({ tokenType, item, estimatedFee, totalAmount }) => {
         // Recommendation logic
         let isRecommended = false;
         let recommendationReason = '';
@@ -99,14 +96,11 @@ export async function POST(request: NextRequest) {
 
         return {
           tokenType,
-          requiredAmount: formatTokenAmount(
-            calculation.targetAmount,
-            tokenType
-          ),
-          requiredAmountRaw: calculation.targetAmount,
-          fiatAmount: fiatAmount.toFixed(2),
-          fiatCurrency,
-          rate: `${calculation.rate.toFixed(8)} ${fiatCurrency}/${tokenType}`,
+          requiredAmount: item.requiredAmount,
+          requiredAmountRaw: item.requiredAmountRaw,
+          fiatAmount: item.fiatAmount,
+          fiatCurrency: item.fiatCurrency,
+          rate: item.rate,
           estimatedFee: formatTokenAmount(estimatedFee, tokenType),
           totalAmount: formatTokenAmount(totalAmount, tokenType),
           isRecommended,
@@ -130,13 +124,13 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: 'Invalid request data',
-          details: error.errors,
+          details: error.issues,
         },
         { status: 400 }
       );
     }
 
-    return handleApiError(error, 'Failed to calculate payment amounts');
+    return handleApiError(error, 500);
   }
 }
 
