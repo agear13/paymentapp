@@ -6,16 +6,26 @@
 
 import config from '@/lib/config/env';
 import { loggers } from '@/lib/logger';
+import {
+  fetchBankDetailsForCurrency,
+  WISE_ACCOUNT_DETAILS_PATH,
+  type WiseAccountDetailsEntry,
+  type WiseBankDetails,
+} from '@/lib/wise/wise-account-details';
+
+export type { WiseBankDetails } from '@/lib/wise/wise-account-details';
 
 const WISE_API_BASE_V1 = 'https://api.wise.com/v1';
 const WISE_API_BASE_V3 = 'https://api.wise.com/v3';
 
-/** Temporary: set WISE_DEBUG_API=1 to log every outbound Wise HTTP call (invoice-create path). */
+/** Context for Wise HTTP audit logs (invoice-create path uses auditUnconditionally). */
 export type WiseApiDebugContext = {
   requestLabel: string;
   profileId?: string;
   accountId?: string | number | null;
   currency?: string;
+  /** When true, emit loggers.payment.error on every request/response (no env flag). */
+  auditUnconditionally?: boolean;
 };
 
 export function isWiseApiDebugEnabled(): boolean {
@@ -110,18 +120,28 @@ async function wiseFetch<T>(
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  if (isWiseApiDebugEnabled()) {
+  const requestBody =
+    typeof options.body === 'string'
+      ? options.body
+      : options.body != null
+        ? String(options.body)
+        : null;
+
+  const auditPayload = {
+    requestLabel: debug?.requestLabel ?? null,
+    httpMethod: method,
+    fullUrl: url,
+    requestBody,
+    profileId: debug?.profileId ?? null,
+    accountId: debug?.accountId ?? null,
+    currency: debug?.currency ?? null,
+  };
+
+  if (debug?.auditUnconditionally) {
+    loggers.payment.error('WISE_INVOICE_CREATE_HTTP request', undefined, auditPayload);
+  } else if (isWiseApiDebugEnabled()) {
     loggers.payment.info(
-      {
-        wiseDebug: true,
-        phase: 'outbound',
-        requestLabel: debug?.requestLabel ?? null,
-        httpMethod: method,
-        fullUrl: url,
-        profileId: debug?.profileId ?? null,
-        accountId: debug?.accountId ?? null,
-        currency: debug?.currency ?? null,
-      },
+      { wiseDebug: true, phase: 'outbound', ...auditPayload },
       'WISE_API_DEBUG request'
     );
   }
@@ -133,20 +153,17 @@ async function wiseFetch<T>(
 
   const text = await res.text();
 
-  if (isWiseApiDebugEnabled()) {
+  const responsePayload = {
+    ...auditPayload,
+    responseStatus: res.status,
+    responseBody: text,
+  };
+
+  if (debug?.auditUnconditionally) {
+    loggers.payment.error('WISE_INVOICE_CREATE_HTTP response', undefined, responsePayload);
+  } else if (isWiseApiDebugEnabled()) {
     loggers.payment.info(
-      {
-        wiseDebug: true,
-        phase: 'inbound',
-        requestLabel: debug?.requestLabel ?? null,
-        httpMethod: method,
-        fullUrl: url,
-        responseStatus: res.status,
-        responseBody: text,
-        profileId: debug?.profileId ?? null,
-        accountId: debug?.accountId ?? null,
-        currency: debug?.currency ?? null,
-      },
+      { wiseDebug: true, phase: 'inbound', ...responsePayload },
       'WISE_API_DEBUG response'
     );
   }
@@ -258,23 +275,6 @@ export interface WiseBalanceAccount {
   primary: boolean;
 }
 
-export interface WiseBankDetails {
-  id: number;
-  currency: string;
-  bankCode?: string;
-  accountNumber?: string;
-  swift?: string;
-  iban?: string;
-  bankName?: string;
-  accountHolderName?: string;
-  bankAddress?: {
-    addressFirstLine?: string;
-    city?: string;
-    country?: string;
-    postCode?: string;
-  };
-}
-
 /**
  * Get all profiles for the authenticated user.
  * GET /v1/profiles
@@ -298,93 +298,17 @@ export async function getBalances(profileId: string): Promise<WiseBalanceAccount
 
 /**
  * Get bank details for receiving money into a Wise balance.
- * GET /v1/borderless-accounts/{accountId}/bank-details?currency={currency}
- * 
- * This returns the bank details that payers should use to send money to the merchant's Wise account.
+ * GET /v1/profiles/{profileId}/account-details (via wise-account-details adapter)
  */
 export async function getBankDetails(
   profileId: string,
   currency: string
 ): Promise<WiseBankDetails[]> {
-  if (isWiseApiDebugEnabled()) {
-    loggers.payment.info(
-      {
-        wiseDebug: true,
-        phase: 'getBankDetails_start',
-        profileId,
-        currency,
-        flow: 'invoice_creation',
-      },
-      'WISE_API_DEBUG getBankDetails start (invoice create path)'
-    );
-  }
-
-  // First get the borderless account ID
-  const accounts = await wiseFetch<{ id: number; profileId: number }[]>(
-    `/borderless-accounts?profileId=${profileId}`,
-    {},
-    'v1',
-    {
-      requestLabel: 'invoice_create_request_1_borderless_accounts',
-      profileId,
+  return fetchBankDetailsForCurrency(profileId, currency, async (pid) =>
+    wiseFetch<WiseAccountDetailsEntry[]>(WISE_ACCOUNT_DETAILS_PATH(pid), {}, 'v1', {
+      requestLabel: 'profile_account_details',
+      profileId: pid,
       currency,
-    }
+    })
   );
-
-  if (isWiseApiDebugEnabled()) {
-    loggers.payment.info(
-      {
-        wiseDebug: true,
-        phase: 'getBankDetails_borderless_accounts_parsed',
-        profileId,
-        currency,
-        responseIsArray: Array.isArray(accounts),
-        responseTopLevelKeys:
-          accounts && typeof accounts === 'object' && !Array.isArray(accounts)
-            ? Object.keys(accounts as object)
-            : null,
-        responsePreview: accounts,
-        parsedAccountIdFromArrayIndex0: Array.isArray(accounts) ? accounts[0]?.id ?? null : null,
-        parsedAccountIdFromObjectRoot:
-          accounts && typeof accounts === 'object' && !Array.isArray(accounts)
-            ? (accounts as { id?: number }).id ?? null
-            : null,
-      },
-      'WISE_API_DEBUG borderless-accounts response shape'
-    );
-  }
-
-  if (!accounts || accounts.length === 0) {
-    throw new Error('No Wise borderless account found for this profile');
-  }
-
-  const accountId = accounts[0].id;
-
-  if (isWiseApiDebugEnabled()) {
-    loggers.payment.info(
-      {
-        wiseDebug: true,
-        phase: 'getBankDetails_account_id_selected',
-        profileId,
-        currency,
-        accountId: accountId ?? null,
-      },
-      'WISE_API_DEBUG account ID selected for bank-details request'
-    );
-  }
-
-  // Get bank details for the specified currency
-  const bankDetails = await wiseFetch<WiseBankDetails[]>(
-    `/borderless-accounts/${accountId}/bank-details?currency=${currency}`,
-    {},
-    'v1',
-    {
-      requestLabel: 'invoice_create_request_2_bank_details',
-      profileId,
-      accountId,
-      currency,
-    }
-  );
-
-  return bankDetails;
 }
