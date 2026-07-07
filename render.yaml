@@ -23,7 +23,7 @@ services:
     plan: starter
     branch: main
     rootDir: src
-    buildCommand: npm ci --include=dev --legacy-peer-deps && BUILD_ID=${RENDER_GIT_COMMIT:-unknown} GIT_SHA=${RENDER_GIT_COMMIT:-unknown} npm run build
+    buildCommand: npm ci --include=dev --legacy-peer-deps && BUILD_ID=${RENDER_GIT_COMMIT:-unknown} GIT_SHA=${RENDER_GIT_COMMIT:-unknown} npm run render:build
     startCommand: npm run start
     healthCheckPath: /api/health
     minInstances: 1

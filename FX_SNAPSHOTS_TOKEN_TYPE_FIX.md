@@ -72,8 +72,37 @@ npx prisma migrate deploy
 ### For Production (Already Fixed)
 The migration is already marked as applied. Future deployments will automatically include this migration for new environments.
 
+## Follow-up Fix (20260707143000)
+
+Production still had `token_type TEXT` because `ADD COLUMN IF NOT EXISTS` in migration
+`20260101000000` skipped when the emergency TEXT column already existed. Prisma then
+queried with `PaymentToken` enum values → Postgres error:
+
+`operator does not exist: text = "PaymentToken"`
+
+Migration `20260707143000_fx_snapshots_token_type_text_to_enum` converts TEXT/VARCHAR
+`token_type` to `"PaymentToken"` when needed.
+
+### Render verification
+
+After deploy, in Render shell (`rootDir: src`):
+
+```bash
+npx prisma migrate status
+npx prisma db execute --stdin <<'SQL'
+SELECT column_name, udt_name, data_type
+FROM information_schema.columns
+WHERE table_name = 'fx_snapshots' AND column_name = 'token_type';
+SQL
+```
+
+Expected: `udt_name` = `PaymentToken` (not `text`).
+
+Set `WISE_DEBUG_API=1` on Render to capture Wise invoice-create HTTP logs after FX succeeds.
+
 ## Prevention
 - Always run `npx prisma migrate dev` after schema changes
 - Never manually alter production schema without creating a corresponding migration
 - Use `prisma migrate resolve --applied` to sync migration history after emergency manual fixes
+- Prefer `ALTER COLUMN ... TYPE` migrations over `ADD COLUMN IF NOT EXISTS` when fixing type drift
 

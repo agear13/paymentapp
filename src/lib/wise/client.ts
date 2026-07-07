@@ -5,9 +5,22 @@
  */
 
 import config from '@/lib/config/env';
+import { loggers } from '@/lib/logger';
 
 const WISE_API_BASE_V1 = 'https://api.wise.com/v1';
 const WISE_API_BASE_V3 = 'https://api.wise.com/v3';
+
+/** Temporary: set WISE_DEBUG_API=1 to log every outbound Wise HTTP call (invoice-create path). */
+export type WiseApiDebugContext = {
+  requestLabel: string;
+  profileId?: string;
+  accountId?: string | number | null;
+  currency?: string;
+};
+
+export function isWiseApiDebugEnabled(): boolean {
+  return ['1', 'true', 'yes'].includes((process.env.WISE_DEBUG_API || '').toLowerCase());
+}
 
 export interface WiseQuoteRequest {
   profileId: string;
@@ -81,7 +94,8 @@ export function hasWiseCredentials(): boolean {
 async function wiseFetch<T>(
   path: string,
   options: RequestInit = {},
-  apiVersion: 'v1' | 'v3' = 'v3'
+  apiVersion: 'v1' | 'v3' = 'v3',
+  debug?: WiseApiDebugContext
 ): Promise<T> {
   const auth = getAuthHeader();
   if (!auth) {
@@ -89,22 +103,63 @@ async function wiseFetch<T>(
   }
   const base = apiVersion === 'v1' ? WISE_API_BASE_V1 : WISE_API_BASE_V3;
   const url = `${base}${path}`;
+  const method = (options.method || 'GET').toUpperCase();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: auth,
     ...((options.headers as Record<string, string>) || {}),
   };
 
+  if (isWiseApiDebugEnabled()) {
+    loggers.payment.info(
+      {
+        wiseDebug: true,
+        phase: 'outbound',
+        requestLabel: debug?.requestLabel ?? null,
+        httpMethod: method,
+        fullUrl: url,
+        profileId: debug?.profileId ?? null,
+        accountId: debug?.accountId ?? null,
+        currency: debug?.currency ?? null,
+      },
+      'WISE_API_DEBUG request'
+    );
+  }
+
   const res = await fetch(url, {
     ...options,
     headers,
   });
 
+  const text = await res.text();
+
+  if (isWiseApiDebugEnabled()) {
+    loggers.payment.info(
+      {
+        wiseDebug: true,
+        phase: 'inbound',
+        requestLabel: debug?.requestLabel ?? null,
+        httpMethod: method,
+        fullUrl: url,
+        responseStatus: res.status,
+        responseBody: text,
+        profileId: debug?.profileId ?? null,
+        accountId: debug?.accountId ?? null,
+        currency: debug?.currency ?? null,
+      },
+      'WISE_API_DEBUG response'
+    );
+  }
+
   if (!res.ok) {
-    const text = await res.text();
     throw new Error(`Wise API ${res.status}: ${text}`);
   }
-  return res.json() as Promise<T>;
+
+  if (!text) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 
 /**
@@ -251,25 +306,85 @@ export async function getBankDetails(
   profileId: string,
   currency: string
 ): Promise<WiseBankDetails[]> {
+  if (isWiseApiDebugEnabled()) {
+    loggers.payment.info(
+      {
+        wiseDebug: true,
+        phase: 'getBankDetails_start',
+        profileId,
+        currency,
+        flow: 'invoice_creation',
+      },
+      'WISE_API_DEBUG getBankDetails start (invoice create path)'
+    );
+  }
+
   // First get the borderless account ID
   const accounts = await wiseFetch<{ id: number; profileId: number }[]>(
     `/borderless-accounts?profileId=${profileId}`,
     {},
-    'v1'
+    'v1',
+    {
+      requestLabel: 'invoice_create_request_1_borderless_accounts',
+      profileId,
+      currency,
+    }
   );
-  
+
+  if (isWiseApiDebugEnabled()) {
+    loggers.payment.info(
+      {
+        wiseDebug: true,
+        phase: 'getBankDetails_borderless_accounts_parsed',
+        profileId,
+        currency,
+        responseIsArray: Array.isArray(accounts),
+        responseTopLevelKeys:
+          accounts && typeof accounts === 'object' && !Array.isArray(accounts)
+            ? Object.keys(accounts as object)
+            : null,
+        responsePreview: accounts,
+        parsedAccountIdFromArrayIndex0: Array.isArray(accounts) ? accounts[0]?.id ?? null : null,
+        parsedAccountIdFromObjectRoot:
+          accounts && typeof accounts === 'object' && !Array.isArray(accounts)
+            ? (accounts as { id?: number }).id ?? null
+            : null,
+      },
+      'WISE_API_DEBUG borderless-accounts response shape'
+    );
+  }
+
   if (!accounts || accounts.length === 0) {
     throw new Error('No Wise borderless account found for this profile');
   }
 
   const accountId = accounts[0].id;
-  
+
+  if (isWiseApiDebugEnabled()) {
+    loggers.payment.info(
+      {
+        wiseDebug: true,
+        phase: 'getBankDetails_account_id_selected',
+        profileId,
+        currency,
+        accountId: accountId ?? null,
+      },
+      'WISE_API_DEBUG account ID selected for bank-details request'
+    );
+  }
+
   // Get bank details for the specified currency
   const bankDetails = await wiseFetch<WiseBankDetails[]>(
     `/borderless-accounts/${accountId}/bank-details?currency=${currency}`,
     {},
-    'v1'
+    'v1',
+    {
+      requestLabel: 'invoice_create_request_2_bank_details',
+      profileId,
+      accountId,
+      currency,
+    }
   );
-  
+
   return bankDetails;
 }

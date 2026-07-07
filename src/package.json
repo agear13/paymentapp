@@ -11,7 +11,7 @@
     "dev": "next dev",
     "postinstall": "node ./scripts/postinstall.js",
     "build": "node ./scripts/prisma-generate.js && npx --no-install next build",
-    "render:build": "npm run build",
+    "render:build": "npx prisma migrate deploy && npm run build",
     "build:clean": "rimraf .next && npm run build",
     "start": "next start -p $PORT",
     "lint": "eslint .",

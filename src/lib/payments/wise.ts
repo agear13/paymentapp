@@ -1,7 +1,13 @@
 import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
-import { getBankDetails, hasWiseCredentials, type WiseBankDetails } from '@/lib/wise/client';
+import {
+  getBankDetails,
+  hasWiseCredentials,
+  isWiseApiDebugEnabled,
+  type WiseBankDetails,
+} from '@/lib/wise/client';
+import { loggers } from '@/lib/logger';
 import config from '@/lib/config/env';
 
 export interface MerchantWiseConfig {
@@ -72,6 +78,23 @@ export async function buildWisePaymentContext(input: {
   fallbackCurrency: string;
 }): Promise<WisePaymentContext> {
   const merchant = await getMerchantWiseConfig(input.organizationId, input.fallbackCurrency);
+
+  if (isWiseApiDebugEnabled()) {
+    loggers.payment.info(
+      {
+        wiseDebug: true,
+        phase: 'buildWisePaymentContext_start',
+        flow: 'invoice_creation',
+        organizationId: input.organizationId,
+        shortCode: input.shortCode,
+        profileId: merchant.wiseProfileId,
+        currency: merchant.wiseCurrency,
+        fallbackCurrency: input.fallbackCurrency,
+      },
+      'WISE_API_DEBUG buildWisePaymentContext start'
+    );
+  }
+
   const bankDetails = await getBankDetails(merchant.wiseProfileId, merchant.wiseCurrency);
   const details = bankDetails[0] || null;
   const reference = buildWiseReference(input.shortCode);
