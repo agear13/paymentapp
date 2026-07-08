@@ -255,13 +255,32 @@ export async function getProcessableSyncJobById(syncId: string) {
  * @param syncId - Sync record ID
  */
 export async function markSyncInProgress(syncId: string): Promise<void> {
-  await prisma.xero_syncs.update({
+  const sync = await prisma.xero_syncs.update({
     where: { id: syncId },
     data: {
       status: 'RETRYING',
       updated_at: new Date(),
     },
+    select: {
+      id: true,
+      sync_type: true,
+      payment_link_id: true,
+      payment_links: { select: { organization_id: true } },
+    },
   });
+
+  if (sync.payment_links) {
+    const { hookAccountingSyncLifecycle } = await import(
+      '@/lib/payments/lifecycle/lifecycle-hooks'
+    );
+    hookAccountingSyncLifecycle({
+      paymentLinkId: sync.payment_link_id,
+      organizationId: sync.payment_links.organization_id,
+      stage: 'ACCOUNTING_SYNC_STARTED',
+      syncId: sync.id,
+      syncType: sync.sync_type,
+    });
+  }
 }
 
 /**
@@ -279,7 +298,7 @@ export async function markSyncSuccess(
     narration?: string;
   }
 ): Promise<void> {
-  await prisma.xero_syncs.update({
+  const sync = await prisma.xero_syncs.update({
     where: { id: syncId },
     data: {
       status: 'SUCCESS',
@@ -296,12 +315,36 @@ export async function markSyncSuccess(
       next_retry_at: null, // Clear retry time
       updated_at: new Date(),
     },
+    select: {
+      id: true,
+      sync_type: true,
+      payment_link_id: true,
+      payment_links: { select: { organization_id: true } },
+    },
   });
 
   logger.info(
     { syncId, invoiceNumber: result.invoiceNumber },
     'Xero sync completed successfully'
   );
+
+  if (sync.payment_links) {
+    const { hookAccountingSyncLifecycle } = await import(
+      '@/lib/payments/lifecycle/lifecycle-hooks'
+    );
+    hookAccountingSyncLifecycle({
+      paymentLinkId: sync.payment_link_id,
+      organizationId: sync.payment_links.organization_id,
+      stage: 'ACCOUNTING_SYNC_COMPLETED',
+      syncId: sync.id,
+      syncType: sync.sync_type,
+      metadata: {
+        xeroInvoiceId: result.invoiceId ?? null,
+        xeroPaymentId: result.paymentId ?? null,
+        invoiceNumber: result.invoiceNumber ?? null,
+      },
+    });
+  }
 }
 
 /**
@@ -351,6 +394,31 @@ export async function markSyncFailed(
       updated_at: new Date(),
     },
   });
+
+  if (!shouldRetry) {
+    const sync = await prisma.xero_syncs.findUnique({
+      where: { id: syncId },
+      select: {
+        id: true,
+        sync_type: true,
+        payment_link_id: true,
+        payment_links: { select: { organization_id: true } },
+      },
+    });
+    if (sync?.payment_links) {
+      const { hookAccountingSyncLifecycle } = await import(
+        '@/lib/payments/lifecycle/lifecycle-hooks'
+      );
+      hookAccountingSyncLifecycle({
+        paymentLinkId: sync.payment_link_id,
+        organizationId: sync.payment_links.organization_id,
+        stage: 'ACCOUNTING_SYNC_FAILED',
+        syncId: sync.id,
+        syncType: sync.sync_type,
+        metadata: { errorMessage },
+      });
+    }
+  }
 
   if (shouldRetry) {
     logger.warn(

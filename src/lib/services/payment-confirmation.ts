@@ -676,6 +676,20 @@ export async function confirmPayment(
     });
 
     if (result.success && result.paymentEventId && result.alreadyProcessed === false) {
+      const { hookPostPaymentConfirmationLifecycle } = await import(
+        '@/lib/payments/lifecycle/lifecycle-hooks'
+      );
+      hookPostPaymentConfirmationLifecycle({
+        paymentLinkId,
+        paymentEventId: result.paymentEventId,
+        provider,
+        currency: currencyReceived,
+        amount: amountReceived,
+        metadata: metadata as Record<string, unknown> | undefined,
+      });
+    }
+
+    if (result.success && result.paymentEventId && result.alreadyProcessed === false) {
       commissionPropagationTrace('payment_confirmed_committed', {
         correlationId,
         paymentEventId: result.paymentEventId,

@@ -2,8 +2,7 @@
 
 /**
  * Xero Account Mapping Component
- * Maps Provvypay accounts to Xero Chart of Accounts
- * Supports 4 crypto clearing accounts: HBAR, USDC, USDT, AUDD
+ * Maps Provvypay accounts to Xero Chart of Accounts with recommended defaults.
  */
 
 import * as React from 'react';
@@ -16,11 +15,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import {
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  CheckCircle2,
+  Sparkles,
+} from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { DefaultAccountingMappingService } from '@/lib/accounting/default-accounting-mapping-service';
+import {
+  ADVANCED_SETTLEMENT_SECTION_COPY,
+  getClearingAccountsForUi,
+  getSummaryClearingAccounts,
+  RECOMMENDED_SETUP_BANNER,
+  RECOMMENDED_STANDARD_MAPPINGS,
+  type RecommendedClearingAccountConfig,
+  type RecommendedStandardMappingConfig,
+  type XeroMappingField,
+} from '@/lib/accounting/recommended-accounting-config';
+import {
+  buildRecommendedMappings,
+  getMissingRecommendedClearingAccounts,
+  hasAnyRecommendedMappingAvailable,
+  mergeRecommendedMappingsIntoEmptyFields,
+  type RecommendedMappings,
+} from '@/lib/accounting/recommended-clearing-accounts-service';
 
 interface XeroAccountMappingProps {
   organizationId: string;
@@ -37,6 +59,8 @@ interface XeroAccount {
   class?: string;
 }
 
+type AccountMappings = Record<XeroMappingField, string>;
+
 const DEFAULT_ACCOUNT_ORDER = 999;
 
 const ACCOUNT_TYPE_ORDER: Record<string, number> = {
@@ -49,17 +73,6 @@ const ACCOUNT_TYPE_ORDER: Record<string, number> = {
   OVERHEADS: 7,
 };
 
-interface AccountMappings {
-  xero_revenue_account_id: string;
-  xero_receivable_account_id: string;
-  xero_stripe_clearing_account_id: string;
-  xero_hbar_clearing_account_id: string;
-  xero_usdc_clearing_account_id: string;
-  xero_usdt_clearing_account_id: string;
-  xero_audd_clearing_account_id: string;
-  xero_fee_expense_account_id: string;
-}
-
 export function XeroAccountMapping({
   organizationId,
   stablecoinSettlementsEnabled = false,
@@ -70,8 +83,43 @@ export function XeroAccountMapping({
   const [dirty, setDirty] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
+  const [creatingAccounts, setCreatingAccounts] = React.useState(false);
+  const [applyingRecommended, setApplyingRecommended] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [connectionReady, setConnectionReady] = React.useState(false);
+  const [accountsLoaded, setAccountsLoaded] = React.useState(false);
+  const [mappingsLoaded, setMappingsLoaded] = React.useState(false);
+  const autoAppliedRef = React.useRef(false);
+
+  const clearingAccountsForUi = React.useMemo(
+    () => getClearingAccountsForUi(stablecoinSettlementsEnabled),
+    [stablecoinSettlementsEnabled]
+  );
+
+  const stripeClearingConfig = React.useMemo(
+    () => clearingAccountsForUi.find((config) => config.rail === 'Stripe'),
+    [clearingAccountsForUi]
+  );
+
+  const cryptoClearingConfigs = React.useMemo(
+    () => clearingAccountsForUi.filter((config) => config.requiresStablecoinRail),
+    [clearingAccountsForUi]
+  );
+
+  const missingClearingAccounts = React.useMemo(
+    () => getMissingRecommendedClearingAccounts(accounts, clearingAccountsForUi),
+    [accounts, clearingAccountsForUi]
+  );
+
+  const showRecommendedBanner = React.useMemo(
+    () =>
+      hasAnyRecommendedMappingAvailable(
+        accounts,
+        mappings as RecommendedMappings,
+        stablecoinSettlementsEnabled
+      ) || missingClearingAccounts.length > 0,
+    [accounts, mappings, stablecoinSettlementsEnabled, missingClearingAccounts.length]
+  );
 
   const checkConnectionAndLoad = React.useCallback(async () => {
     try {
@@ -87,6 +135,7 @@ export function XeroAccountMapping({
       if (!statusRes.ok || !status.connected) {
         setConnectionReady(false);
         setAccounts([]);
+        setAccountsLoaded(false);
         return;
       }
 
@@ -107,9 +156,28 @@ export function XeroAccountMapping({
 
   React.useEffect(() => {
     if (searchParams.get('xero_success') === 'connected') {
+      autoAppliedRef.current = false;
       checkConnectionAndLoad();
+      fetchMappings();
     }
   }, [searchParams, checkConnectionAndLoad]);
+
+  React.useEffect(() => {
+    if (!accountsLoaded || !mappingsLoaded || autoAppliedRef.current) return;
+    autoAppliedRef.current = true;
+
+    const recommended = buildRecommendedMappings(accounts, mappings as RecommendedMappings, {
+      includeStablecoinRails: stablecoinSettlementsEnabled,
+    });
+    const merged = mergeRecommendedMappingsIntoEmptyFields(
+      mappings as RecommendedMappings,
+      recommended
+    );
+
+    if (JSON.stringify(merged) !== JSON.stringify(mappings)) {
+      setMappings(merged);
+    }
+  }, [accountsLoaded, mappingsLoaded, accounts, mappings, stablecoinSettlementsEnabled]);
 
   async function fetchAccounts() {
     try {
@@ -127,10 +195,12 @@ export function XeroAccountMapping({
 
       const { data } = await response.json();
       setAccounts(data);
+      setAccountsLoaded(true);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
       toast.error(errorMessage);
+      setAccountsLoaded(false);
     }
   }
 
@@ -149,43 +219,45 @@ export function XeroAccountMapping({
         setMappings(data);
         setDirty(false);
       }
+      setMappingsLoaded(true);
     } catch (err) {
       console.error('Error fetching mappings:', err);
-      // Don't show error toast for missing mappings (expected on first load)
+      setMappingsLoaded(true);
     }
+  }
+
+  async function persistMappings(nextMappings: Partial<AccountMappings>, successMessage: string) {
+    const validation = validateMappings(nextMappings);
+    if (!validation.valid) {
+      setError(validation.error!);
+      toast.error(validation.error!);
+      return false;
+    }
+
+    const response = await fetch('/api/settings/xero-mappings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        organizationId,
+        ...nextMappings,
+      }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Failed to save mappings');
+    }
+
+    toast.success(successMessage);
+    setDirty(false);
+    return true;
   }
 
   async function handleSave() {
     try {
       setSaving(true);
       setError(null);
-
-      // Validate all mappings are set
-      const validation = validateMappings(mappings);
-      if (!validation.valid) {
-        setError(validation.error!);
-        toast.error(validation.error!);
-        return;
-      }
-
-      const response = await fetch('/api/settings/xero-mappings', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          organizationId,
-          ...mappings,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to save mappings');
-      }
-
-      toast.success('Xero account mappings saved successfully');
-      setDirty(false);
+      await persistMappings(mappings, 'Xero account mappings saved successfully');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to save mappings';
       setError(errorMessage);
@@ -195,14 +267,109 @@ export function XeroAccountMapping({
     }
   }
 
-  function handleReset() {
-    const defaults = getDefaultMappings(accounts);
-    setMappings(defaults);
-    setDirty(true);
-    toast.info('Mappings reset to suggested defaults');
+  async function handleApplyRecommended() {
+    try {
+      setApplyingRecommended(true);
+      setError(null);
+
+      const recommended = buildRecommendedMappings(accounts, mappings as RecommendedMappings, {
+        includeStablecoinRails: stablecoinSettlementsEnabled,
+      });
+      const merged = mergeRecommendedMappingsIntoEmptyFields(
+        mappings as RecommendedMappings,
+        recommended
+      );
+
+      if (Object.keys(recommended).length === 0) {
+        toast.info('All recommended mappings are already configured');
+        return;
+      }
+
+      setMappings(merged);
+
+      const saved = await persistMappings(
+        merged,
+        'Recommended accounting mappings applied'
+      );
+      if (saved) {
+        setMappings(merged);
+      } else {
+        setDirty(true);
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to apply recommended mappings';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setApplyingRecommended(false);
+    }
   }
 
-  function updateMapping(field: keyof AccountMappings, value: string) {
+  async function handleCreateClearingAccounts() {
+    try {
+      setCreatingAccounts(true);
+      setError(null);
+
+      const response = await fetch('/api/xero/accounts/create-recommended-clearing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to create clearing accounts');
+      }
+
+      const { created, existing, failed, accounts: refreshedAccounts } = payload.data;
+      setAccounts(refreshedAccounts);
+      setAccountsLoaded(true);
+
+      const nextMappings = { ...mappings };
+      for (const item of [...created, ...existing]) {
+        const field = item.mappingField as XeroMappingField;
+        if (!nextMappings[field]) {
+          nextMappings[field] = item.account.code;
+        }
+      }
+      setMappings(nextMappings);
+
+      if (created.length > 0) {
+        const saved = await persistMappings(
+          nextMappings,
+          `Created ${created.length} recommended clearing account${created.length === 1 ? '' : 's'} in Xero`
+        );
+        if (!saved) setDirty(true);
+      } else if (existing.length > 0) {
+        toast.info('Recommended clearing accounts already exist in Xero');
+      }
+
+      if (failed?.length) {
+        toast.error(
+          `${failed.length} account${failed.length === 1 ? '' : 's'} could not be created. Check Xero permissions and try again.`
+        );
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to create clearing accounts';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setCreatingAccounts(false);
+    }
+  }
+
+  function handleReset() {
+    const recommended = buildRecommendedMappings(accounts, {}, {
+      includeStablecoinRails: stablecoinSettlementsEnabled,
+    });
+    setMappings(recommended);
+    setDirty(true);
+    toast.info('Mappings reset to recommended defaults');
+  }
+
+  function updateMapping(field: XeroMappingField, value: string) {
     setMappings((current) => ({ ...current, [field]: value }));
     setDirty(true);
   }
@@ -211,9 +378,7 @@ export function XeroAccountMapping({
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-sm text-muted-foreground">
-          Loading Xero accounts...
-        </span>
+        <span className="ml-2 text-sm text-muted-foreground">Loading Xero accounts...</span>
       </div>
     );
   }
@@ -233,9 +398,7 @@ export function XeroAccountMapping({
         <AlertDescription>
           {error}
           {error.includes('No active Xero connection') && (
-            <span className="block mt-2">
-              Connect to Xero using the button above.
-            </span>
+            <span className="block mt-2">Connect to Xero using the button above.</span>
           )}
         </AlertDescription>
       </Alert>
@@ -254,106 +417,144 @@ export function XeroAccountMapping({
         </p>
       </div>
 
-      {error && (
+      {showRecommendedBanner ? (
+        <Alert className="border-emerald-200 bg-emerald-50/80">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          <AlertTitle className="text-emerald-900">{RECOMMENDED_SETUP_BANNER.title}</AlertTitle>
+          <AlertDescription className="space-y-3 text-emerald-900/90">
+            <p>{RECOMMENDED_SETUP_BANNER.description}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={handleApplyRecommended}
+                disabled={applyingRecommended || saving || creatingAccounts}
+              >
+                {applyingRecommended ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Applying...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {RECOMMENDED_SETUP_BANNER.applyButtonLabel}
+                  </>
+                )}
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {missingClearingAccounts.length > 0 ? (
+        <Alert className="border-amber-200 bg-amber-50/70">
+          <AlertCircle className="h-4 w-4 text-amber-700" />
+          <AlertTitle className="text-amber-900">Recommended clearing accounts</AlertTitle>
+          <AlertDescription className="space-y-3 text-amber-900/90">
+            <p>
+              The following recommended clearing accounts are not in your Xero chart of accounts yet.
+              You can create them in one step — existing accounts with the same name will not be
+              duplicated.
+            </p>
+            <ul className="list-disc pl-5 text-sm space-y-1">
+              {missingClearingAccounts.map((config) => (
+                <li key={config.mappingField}>
+                  <span className="font-medium">{config.accountName}</span>
+                  <span className="text-amber-800/80"> — Current Asset</span>
+                </li>
+              ))}
+            </ul>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-amber-300 bg-white hover:bg-amber-50"
+              onClick={handleCreateClearingAccounts}
+              disabled={creatingAccounts || saving || applyingRecommended}
+            >
+              {creatingAccounts ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating accounts...
+                </>
+              ) : (
+                RECOMMENDED_SETUP_BANNER.createButtonLabel
+              )}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {error ? (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-      )}
+      ) : null}
 
       <div className="space-y-4">
-        {/* Revenue Account */}
-        <AccountMappingField
-          label="Revenue Account"
-          description="Sales revenue from invoices"
-          accounts={getAccountOptions(accounts, ['SALES', 'REVENUE'])}
-          value={mappings.xero_revenue_account_id || ''}
-          onChange={(value) => updateMapping('xero_revenue_account_id', value)}
-          placeholder="Select revenue account (e.g., 4000 Revenue)"
-        />
+        {RECOMMENDED_STANDARD_MAPPINGS.filter(
+          (config) => config.mappingField !== 'xero_fee_expense_account_id'
+        ).map((config) => (
+          <StandardMappingField
+            key={config.mappingField}
+            config={config}
+            accounts={accounts}
+            value={mappings[config.mappingField] || ''}
+            onChange={(value) => updateMapping(config.mappingField, value)}
+          />
+        ))}
 
-        {/* Accounts Receivable */}
-        <AccountMappingField
-          label="Accounts Receivable"
-          description="Customer invoices pending payment"
-          accounts={getAccountOptions(accounts, ['CURRENT', 'CURRLIAB'])}
-          value={mappings.xero_receivable_account_id || ''}
-          onChange={(value) => updateMapping('xero_receivable_account_id', value)}
-          placeholder="Select receivable account (e.g., 1200 Accounts Receivable)"
-        />
+        {stripeClearingConfig ? (
+          <ClearingMappingField
+            config={stripeClearingConfig}
+            accounts={accounts}
+            value={mappings[stripeClearingConfig.mappingField] || ''}
+            onChange={(value) => updateMapping(stripeClearingConfig.mappingField, value)}
+            existsInXero={!missingClearingAccounts.some(
+              (item) => item.mappingField === stripeClearingConfig.mappingField
+            )}
+          />
+        ) : null}
 
-        {/* Stripe Clearing */}
-        <AccountMappingField
-          label="Stripe Clearing Account"
-          description="Stripe payment settlements"
-          accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
-          value={mappings.xero_stripe_clearing_account_id || ''}
-          onChange={(value) => updateMapping('xero_stripe_clearing_account_id', value)}
-          placeholder="Select Stripe clearing account"
-        />
+        {RECOMMENDED_STANDARD_MAPPINGS.filter(
+          (config) => config.mappingField === 'xero_fee_expense_account_id'
+        ).map((config) => (
+          <StandardMappingField
+            key={config.mappingField}
+            config={config}
+            accounts={accounts}
+            value={mappings[config.mappingField] || ''}
+            onChange={(value) => updateMapping(config.mappingField, value)}
+          />
+        ))}
 
-        {/* Processor Fee Expense */}
-        <AccountMappingField
-          label="Processor Fee Expense"
-          description="Payment processing fees"
-          accounts={getAccountOptions(accounts, ['EXPENSE', 'OVERHEADS'])}
-          value={mappings.xero_fee_expense_account_id || ''}
-          onChange={(value) => updateMapping('xero_fee_expense_account_id', value)}
-          placeholder="Select expense account (e.g., 6100 Bank Fees)"
-        />
-
-        {stablecoinSettlementsEnabled ? (
-          <details className="rounded-lg border bg-muted/20 p-4">
+        {stablecoinSettlementsEnabled && cryptoClearingConfigs.length > 0 ? (
+          <details className="rounded-lg border bg-muted/20 p-4" open>
             <summary className="cursor-pointer text-sm font-medium">
               Advanced Settlement Accounts
             </summary>
+            <p className="mt-3 text-sm text-muted-foreground">{ADVANCED_SETTLEMENT_SECTION_COPY}</p>
             <div className="mt-4 space-y-4">
-              <AccountMappingField
-                label="HBAR"
-                description="Optional HBAR settlement clearing account"
-                accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
-                value={mappings.xero_hbar_clearing_account_id || ''}
-                onChange={(value) => updateMapping('xero_hbar_clearing_account_id', value)}
-                placeholder="Select HBAR clearing account"
-              />
-              <AccountMappingField
-                label="USDC"
-                description="Optional USDC stablecoin settlement clearing account"
-                accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
-                value={mappings.xero_usdc_clearing_account_id || ''}
-                onChange={(value) => updateMapping('xero_usdc_clearing_account_id', value)}
-                placeholder="Select USDC clearing account"
-              />
-              <AccountMappingField
-                label="USDT"
-                description="Optional USDT stablecoin settlement clearing account"
-                accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
-                value={mappings.xero_usdt_clearing_account_id || ''}
-                onChange={(value) => updateMapping('xero_usdt_clearing_account_id', value)}
-                placeholder="Select USDT clearing account"
-              />
-              <AccountMappingField
-                label="AUDD"
-                description="Optional AUDD stablecoin settlement clearing account"
-                accounts={getAccountOptions(accounts, ['BANK', 'CURRENT', 'CURRLIAB'])}
-                value={mappings.xero_audd_clearing_account_id || ''}
-                onChange={(value) => updateMapping('xero_audd_clearing_account_id', value)}
-                placeholder="Select AUDD clearing account"
-                badge="AUD Stablecoin"
-              />
+              {cryptoClearingConfigs.map((config) => (
+                <ClearingMappingField
+                  key={config.mappingField}
+                  config={config}
+                  accounts={accounts}
+                  value={mappings[config.mappingField] || ''}
+                  onChange={(value) => updateMapping(config.mappingField, value)}
+                  existsInXero={!missingClearingAccounts.some(
+                    (item) => item.mappingField === config.mappingField
+                  )}
+                />
+              ))}
             </div>
           </details>
         ) : null}
       </div>
 
-      {/* Action Buttons */}
       <div className="flex gap-3 pt-4 border-t">
         {dirty ? (
-          <Button
-            onClick={handleSave}
-            disabled={saving || loading}
-            className="min-w-[120px]"
-          >
+          <Button onClick={handleSave} disabled={saving || loading} className="min-w-[120px]">
             {saving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -368,11 +569,7 @@ export function XeroAccountMapping({
           </Button>
         ) : null}
 
-        <Button
-          onClick={handleReset}
-          disabled={saving || loading}
-          variant="outline"
-        >
+        <Button onClick={handleReset} disabled={saving || loading} variant="outline">
           Reset to Defaults
         </Button>
 
@@ -387,63 +584,76 @@ export function XeroAccountMapping({
         </Button>
       </div>
 
-      {/* Mapping Summary */}
-      {Object.keys(mappings).length > 0 && (
-        <div className="bg-muted/50 p-4 rounded-lg mt-6 space-y-2">
-          <h4 className="font-medium text-sm mb-3">Mapping Summary</h4>
-          <div className="text-sm space-y-1">
-            <MappingSummaryItem
-              label="Revenue"
-              accountId={mappings.xero_revenue_account_id}
-              accounts={accounts}
-            />
-            <MappingSummaryItem
-              label="Receivables"
-              accountId={mappings.xero_receivable_account_id}
-              accounts={accounts}
-            />
-            <MappingSummaryItem
-              label="Stripe"
-              accountId={mappings.xero_stripe_clearing_account_id}
-              accounts={accounts}
-            />
-            {stablecoinSettlementsEnabled ? (
-              <>
-                <MappingSummaryItem
-                  label="HBAR"
-                  accountId={mappings.xero_hbar_clearing_account_id}
-                  accounts={accounts}
-                />
-                <MappingSummaryItem
-                  label="USDC"
-                  accountId={mappings.xero_usdc_clearing_account_id}
-                  accounts={accounts}
-                />
-                <MappingSummaryItem
-                  label="USDT"
-                  accountId={mappings.xero_usdt_clearing_account_id}
-                  accounts={accounts}
-                />
-                <MappingSummaryItem
-                  label="AUDD"
-                  accountId={mappings.xero_audd_clearing_account_id}
-                  accounts={accounts}
-                />
-              </>
-            ) : null}
-            <MappingSummaryItem
-              label="Fees"
-              accountId={mappings.xero_fee_expense_account_id}
-              accounts={accounts}
-            />
-          </div>
-        </div>
-      )}
+      <MappingSummary
+        mappings={mappings}
+        accounts={accounts}
+        stablecoinSettlementsEnabled={stablecoinSettlementsEnabled}
+      />
     </div>
   );
 }
 
-// Account mapping field component
+function StandardMappingField({
+  config,
+  accounts,
+  value,
+  onChange,
+}: {
+  config: RecommendedStandardMappingConfig;
+  accounts: XeroAccount[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <AccountMappingField
+      label={config.label}
+      description={config.description}
+      accounts={getAccountOptions(accounts, config.preferredAccountTypes)}
+      value={value}
+      onChange={onChange}
+      placeholder={`Select ${config.label.toLowerCase()}`}
+    />
+  );
+}
+
+function ClearingMappingField({
+  config,
+  accounts,
+  value,
+  onChange,
+  existsInXero,
+}: {
+  config: RecommendedClearingAccountConfig;
+  accounts: XeroAccount[];
+  value: string;
+  onChange: (value: string) => void;
+  existsInXero: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <AccountMappingField
+        label={config.uiLabel ?? config.accountName}
+        description={
+          config.helperText ??
+          'Temporary clearing account used until funds are settled or converted.'
+        }
+        accounts={getAccountOptions(accounts, config.preferredAccountTypes ?? ['CURRENT'])}
+        value={value}
+        onChange={onChange}
+        placeholder={`Select ${config.accountName}`}
+        badge={existsInXero ? undefined : 'Recommended'}
+      />
+      {!existsInXero ? (
+        <p className="text-xs text-amber-700">
+          Recommended account <span className="font-medium">{config.accountName}</span> is not in
+          your Xero chart yet. Use &ldquo;{RECOMMENDED_SETUP_BANNER.createButtonLabel}&rdquo; above
+          to add it.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function AccountMappingField({
   label,
   description,
@@ -464,14 +674,12 @@ function AccountMappingField({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <label className="block text-sm font-medium">
-          {label}
-        </label>
-        {badge && (
+        <label className="block text-sm font-medium">{label}</label>
+        {badge ? (
           <Badge variant="secondary" className="text-xs">
             {badge}
           </Badge>
-        )}
+        ) : null}
       </div>
       <p className="text-xs text-muted-foreground">{description}</p>
       <Select value={value} onValueChange={onChange}>
@@ -496,49 +704,102 @@ function AccountMappingField({
   );
 }
 
-// Mapping summary item component
-function MappingSummaryItem({
-  label,
-  accountId,
+function MappingSummary({
+  mappings,
   accounts,
+  stablecoinSettlementsEnabled,
 }: {
-  label: string;
-  accountId?: string;
+  mappings: Partial<AccountMappings>;
   accounts: XeroAccount[];
+  stablecoinSettlementsEnabled: boolean;
 }) {
-  const account = accounts.find(a => a.code === accountId);
-  const display = account ? `${account.code} - ${account.name}` : 'Not mapped';
-  const isMapped = !!account;
+  const summaryItems = [
+    ...RECOMMENDED_STANDARD_MAPPINGS.map((config) => ({
+      kind: 'standard' as const,
+      config,
+    })),
+    ...getSummaryClearingAccounts(stablecoinSettlementsEnabled).map((config) => ({
+      kind: 'clearing' as const,
+      config,
+    })),
+  ];
+
+  if (summaryItems.length === 0) return null;
 
   return (
-    <div className="flex items-center justify-between py-1">
-      <span className="text-muted-foreground">{label}:</span>
-      <span className={isMapped ? 'font-mono text-xs' : 'text-xs text-muted-foreground'}>
-        {display}
-      </span>
+    <div className="bg-muted/50 p-4 rounded-lg mt-6 space-y-2">
+      <h4 className="font-medium text-sm mb-3">Mapping Summary</h4>
+      <div className="text-sm space-y-2">
+        {summaryItems.map(({ kind, config }) => {
+          const standardConfig =
+            kind === 'standard' ? (config as RecommendedStandardMappingConfig) : null;
+          const clearingConfig =
+            kind === 'clearing' ? (config as RecommendedClearingAccountConfig) : null;
+
+          return (
+            <MappingSummaryRow
+              key={config.mappingField}
+              summaryLabel={standardConfig?.summaryLabel ?? clearingConfig!.summaryLabel}
+              recommendedTargetName={
+                clearingConfig?.accountName ??
+                (standardConfig?.preferredCodes[0] && standardConfig.preferredNames[0]
+                  ? `${standardConfig.preferredCodes[0]} ${standardConfig.preferredNames[0]}`
+                  : standardConfig?.preferredNames[0])
+              }
+              accountId={mappings[config.mappingField]}
+              accounts={accounts}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-// Validation function
+function MappingSummaryRow({
+  summaryLabel,
+  recommendedTargetName,
+  accountId,
+  accounts,
+}: {
+  summaryLabel: string;
+  recommendedTargetName?: string;
+  accountId?: string;
+  accounts: XeroAccount[];
+}) {
+  const account = accountId ? accounts.find((item) => item.code === accountId) : undefined;
+  const isMapped = Boolean(account);
+  const targetLabel = account
+    ? account.name
+    : (recommendedTargetName ?? 'Not configured');
+
+  return (
+    <div
+      className={`flex items-start justify-between gap-3 rounded-md px-2 py-1.5 ${
+        isMapped ? '' : 'bg-amber-50 border border-amber-200'
+      }`}
+    >
+      <span className={isMapped ? 'text-sm' : 'text-sm text-amber-900'}>
+        {summaryLabel} → {targetLabel}
+      </span>
+      {!isMapped ? (
+        <span className="text-xs text-amber-700 whitespace-nowrap">⚠ Action Recommended</span>
+      ) : null}
+    </div>
+  );
+}
+
 function validateMappings(mappings: Partial<AccountMappings>): {
   valid: boolean;
   error?: string;
 } {
-  const required = [
-    { field: 'xero_revenue_account_id', label: 'Revenue Account' },
-  ];
-
-  for (const { field, label } of required) {
-    if (!mappings[field as keyof AccountMappings]) {
-      return {
-        valid: false,
-        error: `${label} is required. Please select an account.`,
-      };
-    }
+  if (!mappings.xero_revenue_account_id) {
+    return {
+      valid: false,
+      error: 'Revenue Account is required. Please select an account.',
+    };
   }
 
-  // Validate no duplicate crypto clearing accounts
   const cryptoAccounts = [
     mappings.xero_stripe_clearing_account_id,
     mappings.xero_hbar_clearing_account_id,
@@ -558,18 +819,7 @@ function validateMappings(mappings: Partial<AccountMappings>): {
   return { valid: true };
 }
 
-// Get default mappings by searching for matching account codes
-function getDefaultMappings(accounts: XeroAccount[]): Partial<AccountMappings> {
-  const result = new DefaultAccountingMappingService().resolve(accounts);
-  return {
-    xero_revenue_account_id: result.mappings.revenueAccountCode,
-    xero_receivable_account_id: result.mappings.receivableAccountCode,
-    xero_stripe_clearing_account_id: result.mappings.stripeClearingAccountCode,
-    xero_fee_expense_account_id: result.mappings.processorFeeExpenseAccountCode,
-  };
-}
-
-function getAccountOptions(accounts: XeroAccount[], preferredTypes: string[]): XeroAccount[] {
+function getAccountOptions(accounts: XeroAccount[], preferredTypes: readonly string[]): XeroAccount[] {
   const preferred = new Set(preferredTypes);
   return [...accounts].sort((a, b) => {
     const aBucket = preferred.has(a.type) ? 0 : 1;
@@ -587,9 +837,3 @@ function getAccountOptions(accounts: XeroAccount[], preferredTypes: string[]): X
     return `${a.code} ${a.name}`.localeCompare(`${b.code} ${b.name}`);
   });
 }
-
-
-
-
-
-

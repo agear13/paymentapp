@@ -63,6 +63,7 @@ import {
   operationalStatusDescription,
   operationalStatusLabel,
 } from '@/lib/payments/operational-status-labels';
+import { PaymentLifecyclePanel } from '@/components/payment-links/payment-lifecycle-panel';
 
 warnIfUndefined('formatCurrency', formatCurrency, 'payment-link-detail-dialog.tsx');
 warnIfUndefined('Button', Button, 'payment-link-detail-dialog.tsx');
@@ -444,8 +445,9 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
         })()}
 
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="lifecycle">Lifecycle</TabsTrigger>
             <TabsTrigger value="ledger">Ledger</TabsTrigger>
             <TabsTrigger value="operations">Operations</TabsTrigger>
             <TabsTrigger value="qr">QR Code</TabsTrigger>
@@ -848,6 +850,20 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                     </Button>
                   ) : null}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="lifecycle" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Payment Lifecycle</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PaymentLifecyclePanel
+                  paymentLinkId={paymentLink.id}
+                  linkStatus={paymentLink.status}
+                />
               </CardContent>
             </Card>
           </TabsContent>

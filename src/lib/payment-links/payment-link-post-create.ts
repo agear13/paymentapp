@@ -82,4 +82,10 @@ export async function runPaymentLinkPostCreateEffects(params: {
       );
     }
   }
+
+  const { hookInvoiceCreatedLifecycle } = await import('@/lib/payments/lifecycle/lifecycle-hooks');
+  hookInvoiceCreatedLifecycle({
+    paymentLinkId,
+    organizationId,
+  });
 }

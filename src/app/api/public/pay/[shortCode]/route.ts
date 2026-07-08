@@ -251,6 +251,17 @@ export async function GET(
       context: 'api.public.pay',
     });
 
+    if (currentStatus === 'OPEN') {
+      const { hookCustomerOpenedLinkLifecycle } = await import(
+        '@/lib/payments/lifecycle/lifecycle-hooks'
+      );
+      hookCustomerOpenedLinkLifecycle({
+        paymentLinkId: paymentLink.id,
+        organizationId: paymentLink.organization_id,
+        metadata: { shortCode, userAgent: request.headers.get('user-agent') },
+      });
+    }
+
     // Return sanitized data (exclude sensitive info)
     return NextResponse.json({
       data: {
