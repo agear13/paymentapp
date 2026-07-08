@@ -5,6 +5,10 @@
  * and provide appropriate user feedback.
  */
 
+/** Shown on the public invoice page when the HashConnect bundle fails to load. */
+export const CRYPTO_MODULE_LOAD_ERROR_MESSAGE =
+  "The cryptocurrency payment module couldn't be loaded. Please refresh the page or try again in a few moments.";
+
 /**
  * Detects chunk mismatch / manifest errors during dynamic imports
  * These occur when deployment happens while user has stale code
@@ -33,5 +37,21 @@ export function isUriMissingError(err: unknown): boolean {
     msg.includes('pairing string created: undefined') ||
     msg.includes('pairingstring') && msg.includes('undefined')
   );
+}
+
+/**
+ * Maps wallet module load failures to customer-safe copy (never expose chunk IDs).
+ */
+export function formatWalletModuleLoadError(err: unknown): string {
+  if (isChunkMismatchError(err)) {
+    return CRYPTO_MODULE_LOAD_ERROR_MESSAGE;
+  }
+
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/identifier '.+' has already been declared/i.test(msg)) {
+    return CRYPTO_MODULE_LOAD_ERROR_MESSAGE;
+  }
+
+  return msg || CRYPTO_MODULE_LOAD_ERROR_MESSAGE;
 }
 

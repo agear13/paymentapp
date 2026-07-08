@@ -24,6 +24,9 @@ const nextConfig: NextConfig = {
 
   generateBuildId: async () => buildId,
 
+  // Transpile hashconnect so its async client chunk is emitted without SWC mangle collisions (let n,n).
+  transpilePackages: ["hashconnect"],
+
   experimental: {
     optimizePackageImports: ["lucide-react", "date-fns", "@radix-ui/react-icons"],
   },
@@ -46,7 +49,7 @@ const nextConfig: NextConfig = {
   },
 
   // 🔧 Webpack configuration (simplified - client island handles isolation)
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
     if (isServer) {
       // pdf-parse bundles pdfjs-dist ESM which has export incompatibilities.
       // It is only used in server-side extraction routes, so exclude from the bundle.
@@ -70,6 +73,24 @@ const nextConfig: NextConfig = {
       // Prevent scope-hoisting collisions in dynamic import graphs (HashConnect / wallet islands).
       config.optimization = config.optimization || {};
       config.optimization.concatenateModules = false;
+
+      // SWC minify emits invalid duplicate bindings (`let n,n;`) in the hashconnect async chunk.
+      // Use Terser without mangling for client production bundles instead.
+      if (!dev) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const TerserPlugin = require("terser-webpack-plugin");
+        config.optimization.minimizer = [
+          new TerserPlugin({
+            terserOptions: {
+              compress: true,
+              mangle: false,
+              format: {
+                comments: false,
+              },
+            },
+          }),
+        ];
+      }
     }
 
     // Ignore warnings from dynamic imports

@@ -4,6 +4,8 @@
  * Upgrade Wise receive-details API versions here only.
  */
 
+import { logMaskedAccountDetailsAudit } from '@/lib/wise/wise-account-details-audit';
+
 /** Stable DTO consumed by checkout UI and payment_events metadata. */
 export interface WiseBankDetails {
   id: number;
@@ -224,5 +226,11 @@ export async function fetchBankDetailsForCurrency(
   fetchAccountDetails: WiseAccountDetailsFetcher
 ): Promise<WiseBankDetails[]> {
   const entries = await fetchAccountDetails(profileId);
+  logMaskedAccountDetailsAudit({
+    profileId,
+    requestedCurrency: currency,
+    entries,
+    source: 'fetchBankDetailsForCurrency',
+  });
   return resolveBankDetailsForCurrency(entries, currency);
 }

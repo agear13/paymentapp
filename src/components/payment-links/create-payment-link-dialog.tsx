@@ -43,7 +43,9 @@ import {
 } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { CurrencySelect } from './currency-select';
+import { WiseDetailsNotIssuedGuide } from './wise-details-not-issued-guide';
 import { cn } from '@/lib/utils';
+import { WISE_DETAILS_NOT_ISSUED_CODE } from '@/lib/payments/wise-api-error';
 import {
   buildInvoicePaymentMethodOptions,
   computePaymentLinkRailSetup,
@@ -83,6 +85,7 @@ interface MerchantSettings {
   evmSupportedTokens?: string[] | null;
   wiseEnabled?: boolean;
   wiseProfileId?: string;
+  wiseCurrency?: string | null;
   wiseGloballyEnabled?: boolean;
   evmGloballyEnabled?: boolean;
   /** Merchant default / accounting currency (ISO 4217) — used as invoice currency default, not payment rail. */
@@ -353,6 +356,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     kind: PaymentLinksGuardrailKind;
     setup: PaymentLinkRailSetupStatus;
   } | null>(null);
+  const [wiseDetailsNotIssuedCurrency, setWiseDetailsNotIssuedCurrency] = React.useState<
+    string | null
+  >(null);
 
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -367,6 +373,12 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   const initialAttachmentRef = React.useRef<PaymentLinkAttachmentDraft | null>(null);
   const wasOpenRef = React.useRef(false);
   const invoiceRefSuggestionRequestedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!open) {
+      setWiseDetailsNotIssuedCurrency(null);
+    }
+  }, [open]);
 
   // Fetch merchant settings when dialog opens
   React.useEffect(() => {
@@ -388,6 +400,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               evmSupportedTokens: settings.evm_supported_tokens,
               wiseEnabled: settings.wise_enabled,
               wiseProfileId: settings.wise_profile_id,
+              wiseCurrency: settings.wise_currency ?? null,
               wiseGloballyEnabled: settings._features?.wiseGloballyEnabled ?? false,
               evmGloballyEnabled: settings._features?.evmGloballyEnabled ?? false,
               defaultCurrency: settings.default_currency ?? null,
@@ -783,6 +796,11 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
+        if (error?.code === WISE_DETAILS_NOT_ISSUED_CODE) {
+          setWiseDetailsNotIssuedCurrency(error.currency || data.currency);
+          return;
+        }
+        setWiseDetailsNotIssuedCurrency(null);
         throw new Error(error.error || 'Failed to update invoice. Please try again.');
       }
 
@@ -794,12 +812,14 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           'Your changes were saved. The same pay link URL still works for this invoice.',
       });
       initialAttachmentRef.current = data.attachment ?? null;
+      setWiseDetailsNotIssuedCurrency(null);
       setOpen(false);
 
       if (onSuccess) {
         onSuccess(result.data);
       }
     } catch (error: unknown) {
+      setWiseDetailsNotIssuedCurrency(null);
       const message =
         error instanceof Error ? error.message : 'Failed to update invoice. Please try again.';
       form.setError('root', {
@@ -880,7 +900,12 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
+        if (error?.code === WISE_DETAILS_NOT_ISSUED_CODE) {
+          setWiseDetailsNotIssuedCurrency(error.currency || data.currency);
+          return;
+        }
+        setWiseDetailsNotIssuedCurrency(null);
         throw new Error(error.error || 'Failed to create invoice. Please try again.');
       }
 
@@ -934,12 +959,14 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
       });
       initialAttachmentRef.current = null;
       setDescriptionLength(0);
+      setWiseDetailsNotIssuedCurrency(null);
       setOpen(false);
 
       if (onSuccess) {
         onSuccess(result.data);
       }
     } catch (error: unknown) {
+      setWiseDetailsNotIssuedCurrency(null);
       const message = error instanceof Error ? error.message : 'Failed to create invoice. Please try again.';
       form.setError('root', {
         type: 'manual',
@@ -1008,6 +1035,18 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
 
     await performCreate(data);
   };
+
+  const handleWiseRecheck = () => {
+    void form.handleSubmit(handleSubmit)();
+  };
+
+  const effectiveWiseLookupCurrency = React.useMemo(() => {
+    const invoiceCurrency = (wiseDetailsNotIssuedCurrency ?? form.getValues('currency') ?? '')
+      .trim()
+      .toUpperCase();
+    const configured = merchantSettings?.wiseCurrency?.trim().toUpperCase();
+    return configured || invoiceCurrency || 'AUD';
+  }, [form, merchantSettings?.wiseCurrency, wiseDetailsNotIssuedCurrency]);
 
   const handleGuardrailSwitchToInvoiceOnly = React.useCallback(() => {
     form.setValue('collectionMode', 'invoice_only');
@@ -1896,8 +1935,20 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               </div>
             </div>
 
+            {/* Wise receiving account not yet issued */}
+            {wiseDetailsNotIssuedCurrency ? (
+              <WiseDetailsNotIssuedGuide
+                currency={effectiveWiseLookupCurrency}
+                wiseProfileId={merchantSettings?.wiseProfileId}
+                configuredWiseCurrency={merchantSettings?.wiseCurrency}
+                onRecheck={handleWiseRecheck}
+                isRechecking={isSubmitting}
+                onDismiss={() => setWiseDetailsNotIssuedCurrency(null)}
+              />
+            ) : null}
+
             {/* Form-level Error Message */}
-            {form.formState.errors.root && (
+            {!wiseDetailsNotIssuedCurrency && form.formState.errors.root && (
               <div className="rounded-md bg-destructive/15 border border-destructive/20 p-4 text-sm">
                 <p className="font-medium text-destructive mb-1">
                   {mode === 'edit' ? 'Unable to save changes' : 'Unable to create invoice'}
@@ -1916,7 +1967,8 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                   : keys;
               return (
                 visibleKeys.length > 0 &&
-                !err.root && (
+                !err.root &&
+                !wiseDetailsNotIssuedCurrency && (
                   <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-sm">
                     <p className="font-medium text-amber-900 mb-1">Please fix the highlighted fields</p>
                     <p className="text-amber-700">

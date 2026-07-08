@@ -25,6 +25,7 @@ import { sendHbarPayment, sendTokenPayment } from '@/lib/hedera/wallet-client';
 import type { TokenType } from '@/lib/hedera/constants';
 import type { TokenPaymentAmount } from '@/lib/hedera/types';
 import { CURRENT_NETWORK, getTokenConfig } from '@/lib/hedera/constants';
+import { formatWalletModuleLoadError } from '@/lib/walletErrors';
 
 interface HederaPaymentOptionProps {
   isAvailable: boolean;
@@ -115,10 +116,10 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
         setHashConnectError(null);
       })
       .catch((error) => {
-        const errorMsg = error instanceof Error ? error.message : 'Failed to initialize wallet';
+        const errorMsg = formatWalletModuleLoadError(error);
         console.error('[HederaPaymentOption] ❌ HashConnect initialization failed:', error);
         setHashConnectError(errorMsg);
-        toast.error('Failed to initialize crypto wallet: ' + errorMsg);
+        toast.error(errorMsg);
       })
       .finally(() => {
         setIsInitializingHashConnect(false);
@@ -764,7 +765,7 @@ export const HederaPaymentOption: React.FC<HederaPaymentOptionProps> = ({
             {hashConnectError && (
               <div className="flex items-start gap-2 text-sm text-red-600 mb-3">
                 <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <span>Wallet initialization failed: {hashConnectError}</span>
+                <span>{hashConnectError}</span>
               </div>
             )}
 

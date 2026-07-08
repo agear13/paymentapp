@@ -18,8 +18,46 @@
 
 'use client';
 
-import { isUriMissingError, isChunkMismatchError } from './walletErrors';
+import {
+  formatWalletModuleLoadError,
+  isUriMissingError,
+  isChunkMismatchError,
+} from './walletErrors';
 import { HASHCONNECT_CONFIG } from './hedera/constants';
+
+const HASHCONNECT_CHUNK_RELOAD_KEY = 'hc_chunk_retry_v1';
+
+function hasAttemptedHashConnectChunkReload(): boolean {
+  if (typeof sessionStorage === 'undefined') return false;
+  return sessionStorage.getItem(HASHCONNECT_CHUNK_RELOAD_KEY) != null;
+}
+
+function markHashConnectChunkReloadAttempted(): void {
+  if (typeof sessionStorage === 'undefined') return;
+  sessionStorage.setItem(HASHCONNECT_CHUNK_RELOAD_KEY, String(Date.now()));
+}
+
+/**
+ * Dynamic import of hashconnect with a single reload on stale-deploy chunk errors.
+ */
+async function loadHashConnectModule(): Promise<typeof import('hashconnect')> {
+  try {
+    return await import('hashconnect');
+  } catch (error) {
+    if (
+      isChunkMismatchError(error) &&
+      !hasAttemptedHashConnectChunkReload() &&
+      typeof window !== 'undefined'
+    ) {
+      markHashConnectChunkReloadAttempted();
+      console.warn('[HashConnect] Chunk load failed — reloading once for fresh assets');
+      window.location.reload();
+      return new Promise(() => {});
+    }
+
+    throw error;
+  }
+}
 
 // Module-level singleton variables
 let initPromise: Promise<any> | null = null;
@@ -163,7 +201,7 @@ export async function initHashConnect(): Promise<void> {
       }
 
       // Dynamic import (client-only)
-      const hashconnectModule = await import('hashconnect');
+      const hashconnectModule = await loadHashConnectModule();
       const { HashConnect } = hashconnectModule;
 
       // Determine ledger ID based on network (use string literal for v3)
@@ -417,7 +455,7 @@ export async function initHashConnect(): Promise<void> {
       // Keep initPromise set (don't reset to null) to prevent retry loops
       console.error('[HashConnect] ❌ Initialization failed:', error);
       
-      const errorMessage = error instanceof Error ? error.message : 'Failed to initialize HashConnect';
+      const errorMessage = formatWalletModuleLoadError(error);
       updateWalletState({
         isLoading: false,
         error: errorMessage,

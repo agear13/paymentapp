@@ -18,6 +18,7 @@ import {
 } from '@/lib/validations/schemas';
 import { generateUniqueShortCode } from '@/lib/server/short-code';
 import { buildWisePaymentContext, getMerchantWiseConfig } from '@/lib/payments/wise';
+import { formatWisePaymentContextApiError } from '@/lib/payments/wise-api-error';
 import { assertPilotDealOwnedByUser } from '@/lib/deal-network-demo/pilot-deal-invoice-link.server';
 import { derivePaidAtFromEvents } from '@/lib/payments/paid-at';
 import { insertPaymentLinkInTransaction } from '@/lib/payment-links/create-payment-link-in-tx';
@@ -375,8 +376,11 @@ export async function POST(request: NextRequest) {
           fallbackCurrency: effectiveInvoiceCurrency,
         });
       } catch (wiseError: unknown) {
-        const message = wiseError instanceof Error ? wiseError.message : 'Failed to prepare Wise payment context';
-        return NextResponse.json({ error: message, code: 'WISE_CONFIG_ERROR' }, { status: 400 });
+        const { status, body } = formatWisePaymentContextApiError(
+          wiseError,
+          effectiveInvoiceCurrency
+        );
+        return NextResponse.json(body, { status });
       }
     }
 

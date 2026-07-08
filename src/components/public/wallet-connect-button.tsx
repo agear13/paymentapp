@@ -23,7 +23,12 @@ import {
   subscribeToWalletState,
   getWalletState,
 } from '@/lib/hashconnectClient';
-import { isChunkMismatchError, isUriMissingError } from '@/lib/walletErrors';
+import {
+  CRYPTO_MODULE_LOAD_ERROR_MESSAGE,
+  formatWalletModuleLoadError,
+  isChunkMismatchError,
+  isUriMissingError,
+} from '@/lib/walletErrors';
 import { HederaWalletInfoModal } from './HederaWalletInfoModal';
 
 interface WalletState {
@@ -78,9 +83,7 @@ export function WalletConnectButton() {
       // Handle chunk mismatch errors
       if (isChunkMismatchError(error)) {
         setShowChunkMismatchError(true);
-        setErrorMessage(
-          'Deployment in progress. Please hard refresh (Ctrl+Shift+R or Cmd+Shift+R) to load the latest version.'
-        );
+        setErrorMessage(CRYPTO_MODULE_LOAD_ERROR_MESSAGE);
         return;
       }
 
@@ -93,8 +96,7 @@ export function WalletConnectButton() {
       }
 
       // Generic error
-      const errorMsg = error instanceof Error ? error.message : 'Failed to connect wallet';
-      setErrorMessage(errorMsg);
+      setErrorMessage(formatWalletModuleLoadError(error));
     } finally {
       setIsConnecting(false);
     }
