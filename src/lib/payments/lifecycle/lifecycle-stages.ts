@@ -43,6 +43,16 @@ export const LIFECYCLE_STAGE_LABELS: Record<PaymentLifecycleStage, string> = {
   COMPLETED: 'Completed',
 };
 
+/** Merchant-facing lifecycle labels emphasising the three-layer model. */
+export const MERCHANT_LAYER_TIMELINE_STAGES = [
+  { stage: 'INVOICE_CREATED' as const, label: 'Commercial Invoice Created' },
+  { stage: 'PAYMENT_CONFIRMED' as const, label: 'Payment Confirmed' },
+  { stage: 'FX_SNAPSHOT_LOCKED' as const, label: 'Accounting Value Locked' },
+  { stage: 'SETTLEMENT_PENDING' as const, label: 'Settlement Pending' },
+  { stage: 'SETTLEMENT_COMPLETED' as const, label: 'Settlement Completed' },
+  { stage: 'RECONCILED' as const, label: 'Reconciled' },
+] as const;
+
 /** Stages shown in the merchant timeline UI (subset + ordered). */
 export const TIMELINE_DISPLAY_STAGES: readonly PaymentLifecycleStage[] = [
   'INVOICE_CREATED',
@@ -105,4 +115,9 @@ export function maxLifecycleStage(
   return stages.reduce((max, stage) =>
     stageIndex(stage) > stageIndex(max) ? stage : max
   );
+}
+
+export function merchantLayerTimelineLabel(stage: PaymentLifecycleStage): string {
+  const match = MERCHANT_LAYER_TIMELINE_STAGES.find((item) => item.stage === stage);
+  return match?.label ?? LIFECYCLE_STAGE_LABELS[stage];
 }

@@ -28,6 +28,13 @@ function transformPaymentLink(link: any) {
     rate: Number(snapshot.rate),
     provider: snapshot.provider,
     capturedAt: snapshot.captured_at,
+    commercialCurrency: snapshot.commercial_currency ?? null,
+    commercialAmount: snapshot.commercial_amount != null ? Number(snapshot.commercial_amount) : null,
+    accountingCurrency: snapshot.accounting_currency ?? null,
+    accountingAmount: snapshot.accounting_amount != null ? Number(snapshot.accounting_amount) : null,
+    settlementCurrency: snapshot.settlement_currency ?? null,
+    settlementAmount: snapshot.settlement_amount != null ? Number(snapshot.settlement_amount) : null,
+    valuationMethod: snapshot.valuation_method ?? null,
   })) || [];
 
   // Transform payment events to camelCase
@@ -82,6 +89,22 @@ function transformPaymentLink(link: any) {
     amount: Number(link.amount),
     currency: link.currency,
     invoiceCurrency: link.invoice_currency ?? link.currency,
+    commercialCurrency:
+      link.commercial_currency ?? link.invoice_currency ?? link.currency,
+    commercialAmount: link.commercial_amount != null ? Number(link.commercial_amount) : Number(link.amount),
+    accountingCurrency:
+      link.accounting_currency ?? link.base_currency ?? link.invoice_currency ?? link.currency,
+    accountingAmount:
+      link.accounting_amount != null
+        ? Number(link.accounting_amount)
+        : link.base_amount != null
+          ? Number(link.base_amount)
+          : Number(link.amount),
+    settlementCurrency: link.settlement_currency ?? null,
+    settlementAmount:
+      link.settlement_amount != null ? Number(link.settlement_amount) : null,
+    baseCurrency: link.base_currency ?? null,
+    baseAmount: link.base_amount != null ? Number(link.base_amount) : null,
     description: link.description,
     invoiceReference: link.invoice_reference,
     invoiceDate: link.invoice_date ?? null,

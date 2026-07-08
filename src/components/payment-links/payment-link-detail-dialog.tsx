@@ -74,6 +74,13 @@ export interface PaymentLinkDetails {
   status: 'DRAFT' | 'OPEN' | 'PAID_UNVERIFIED' | 'REQUIRES_REVIEW' | 'PAID' | 'EXPIRED' | 'CANCELED';
   amount: number;
   currency: string;
+  invoiceCurrency?: string;
+  commercialCurrency?: string;
+  commercialAmount?: number;
+  accountingCurrency?: string;
+  accountingAmount?: number;
+  settlementCurrency?: string | null;
+  settlementAmount?: number | null;
   description: string;
   invoiceReference: string | null;
   customerEmail: string | null;
@@ -483,6 +490,50 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                       </p>
                     </div>
                   </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Transaction Layers</p>
+                  <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-muted-foreground">Commercial</dt>
+                      <dd className="font-medium">
+                        {formatCurrency(
+                          paymentLink.commercialAmount ?? Number(paymentLink.amount),
+                          paymentLink.commercialCurrency ?? paymentLink.currency
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Accounting</dt>
+                      <dd className="font-medium">
+                        {formatCurrency(
+                          paymentLink.accountingAmount ?? Number(paymentLink.amount),
+                          paymentLink.accountingCurrency ?? paymentLink.currency
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Settlement</dt>
+                      <dd
+                        className={
+                          paymentLink.settlementCurrency ? 'font-medium' : 'text-muted-foreground'
+                        }
+                      >
+                        {paymentLink.settlementCurrency
+                          ? formatCurrency(
+                              paymentLink.settlementAmount ?? 0,
+                              paymentLink.settlementCurrency
+                            )
+                          : 'Awaiting payment'}
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="text-xs text-muted-foreground">
+                    See the Lifecycle tab for payment rail, FX snapshot, and Xero context.
+                  </p>
                 </div>
 
                 <Separator />

@@ -83,6 +83,55 @@ export async function runPaymentLinkPostCreateEffects(params: {
     }
   }
 
+  try {
+    const layerLink = await prisma.payment_links.findUnique({
+      where: { id: paymentLinkId },
+      select: {
+        commercial_currency: true,
+        commercial_amount: true,
+        accounting_currency: true,
+        invoice_currency: true,
+        currency: true,
+        amount: true,
+      },
+    });
+    if (layerLink) {
+      const commercialCurrency =
+        layerLink.commercial_currency ??
+        layerLink.invoice_currency ??
+        layerLink.currency;
+      const accountingCurrency =
+        layerLink.accounting_currency ??
+        layerLink.invoice_currency ??
+        layerLink.currency;
+      const commercialAmount = Number(
+        layerLink.commercial_amount ?? layerLink.amount
+      );
+      if (
+        commercialCurrency &&
+        accountingCurrency &&
+        commercialCurrency.toUpperCase() !== accountingCurrency.toUpperCase()
+      ) {
+        const fxService = getFxService();
+        await fxService.captureAccountingLayerSnapshot({
+          paymentLinkId,
+          commercialCurrency,
+          commercialAmount,
+          accountingCurrency,
+        });
+      }
+    }
+  } catch (accountingFxError: unknown) {
+    const err =
+      accountingFxError instanceof Error
+        ? accountingFxError
+        : new Error(String(accountingFxError));
+    loggers.payment.error(
+      { paymentLinkId, errMessage: err.message },
+      'ACCOUNTING_FX_SNAPSHOT_FAIL'
+    );
+  }
+
   const { hookInvoiceCreatedLifecycle } = await import('@/lib/payments/lifecycle/lifecycle-hooks');
   hookInvoiceCreatedLifecycle({
     paymentLinkId,

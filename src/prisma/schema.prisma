@@ -96,18 +96,28 @@ model operational_job_leases {
 }
 
 model fx_snapshots {
-  id              String         @id @default(uuid()) @db.Uuid
-  payment_link_id String         @db.Uuid
-  snapshot_type   FxSnapshotType
-  token_type      PaymentToken?
-  base_currency   String         @db.VarChar(10)
-  quote_currency  String         @db.VarChar(10)
-  rate            Decimal        @db.Decimal(18, 8)
-  provider        String         @db.VarChar(100)
-  captured_at     DateTime       @default(now()) @db.Timestamptz(6)
-  payment_links   payment_links  @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+  id                   String         @id @default(uuid()) @db.Uuid
+  payment_link_id      String         @db.Uuid
+  payment_event_id     String?        @db.Uuid
+  snapshot_type        FxSnapshotType
+  token_type           PaymentToken?
+  base_currency        String         @db.VarChar(10)
+  quote_currency       String         @db.VarChar(10)
+  rate                 Decimal        @db.Decimal(18, 8)
+  provider             String         @db.VarChar(100)
+  captured_at          DateTime       @default(now()) @db.Timestamptz(6)
+  commercial_currency  String?        @db.VarChar(10)
+  commercial_amount    Decimal?       @db.Decimal(18, 8)
+  accounting_currency  String?        @db.VarChar(10)
+  accounting_amount    Decimal?       @db.Decimal(18, 8)
+  settlement_currency  String?        @db.VarChar(10)
+  settlement_amount    Decimal?       @db.Decimal(18, 8)
+  valuation_method     String?        @db.VarChar(64)
+  payment_links        payment_links  @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
+  payment_events       payment_events? @relation(fields: [payment_event_id], references: [id], onDelete: SetNull)
 
   @@unique([payment_link_id, snapshot_type, base_currency, quote_currency], name: "ux_fx_snapshots_link_type_pair")
+  @@index([payment_event_id])
 }
 
 model ledger_accounts {
@@ -312,6 +322,8 @@ model payment_events {
   amount_received          Decimal?                  @db.Decimal(18, 8)
   correlation_id           String?                   @db.VarChar(255)
   metadata                 Json?
+  /// Enriched commercial / settlement / accounting layer context (additive audit trail).
+  layer_metadata           Json?
   created_at               DateTime                  @default(now()) @db.Timestamptz(6)
   updated_at               DateTime                  @updatedAt @db.Timestamptz(6)
   payment_links            payment_links?            @relation(fields: [payment_link_id], references: [id], onDelete: Cascade)
@@ -320,6 +332,7 @@ model payment_events {
   deal_network_pilot_obligations deal_network_pilot_obligations[]
   payment_lifecycle_events payment_lifecycle_events[]
   payment_settlements      payment_settlements[]
+  fx_snapshots             fx_snapshots[]
 
   @@index([payment_link_id, correlation_id], name: "payment_events_payment_link_correlation_idx")
   @@index([payment_link_id, created_at])
@@ -341,6 +354,15 @@ model payment_links {
   currency          String            @db.Char(3)
   /// ISO 4217 accounting currency for the invoice amount, public display, and Xero ACCREC — independent of payment rail (Stripe / HBAR / etc.).
   invoice_currency  String            @db.Char(3)
+  /// Explicit commercial (contractual) invoice currency — defaults to invoice_currency for legacy rows.
+  commercial_currency String?         @db.VarChar(10)
+  commercial_amount   Decimal?        @db.Decimal(18, 8)
+  /// Merchant accounting / reporting currency valuation at invoice time.
+  accounting_currency String?         @db.VarChar(10)
+  accounting_amount   Decimal?        @db.Decimal(18, 8)
+  /// Populated when payment is confirmed — what was actually transferred.
+  settlement_currency String?         @db.VarChar(10)
+  settlement_amount   Decimal?        @db.Decimal(18, 8)
   description       String
   invoice_reference String?           @db.VarChar(255)
   /// Option B commission: links invoice to `referral_links` so Wise/Hedera (no Stripe metadata) can resolve revenue share.
@@ -635,6 +657,7 @@ model notification_preferences {
 enum FxSnapshotType {
   CREATION
   SETTLEMENT
+  ACCOUNTING
 }
 
 enum LedgerAccountType {
@@ -725,6 +748,12 @@ model payment_settlements {
   status           PaymentSettlementStatus @default(PENDING)
   currency         String                  @db.VarChar(10)
   amount           Decimal                 @db.Decimal(18, 8)
+  commercial_currency String?              @db.VarChar(10)
+  commercial_amount   Decimal?             @db.Decimal(18, 8)
+  accounting_currency String?              @db.VarChar(10)
+  accounting_amount   Decimal?             @db.Decimal(18, 8)
+  fx_rate_applied     Decimal?             @db.Decimal(18, 8)
+  fx_snapshot_id      String?              @db.Uuid
   destination      String?                 @db.VarChar(512)
   settled_at       DateTime?               @db.Timestamptz(6)
   reference        String?                 @db.VarChar(512)

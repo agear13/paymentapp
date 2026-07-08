@@ -192,6 +192,14 @@ export class FxSnapshotService {
           rate: data.rate,
           provider,
           captured_at: capturedAt,
+          commercial_currency: data.commercialCurrency ?? null,
+          commercial_amount: data.commercialAmount ?? null,
+          accounting_currency: data.accountingCurrency ?? null,
+          accounting_amount: data.accountingAmount ?? null,
+          settlement_currency: data.settlementCurrency ?? null,
+          settlement_amount: data.settlementAmount ?? null,
+          valuation_method: data.valuationMethod ?? null,
+          payment_event_id: data.paymentEventId ?? null,
         },
       });
 
@@ -363,6 +371,59 @@ export class FxSnapshotService {
     });
 
     return snapshots as FxSnapshot[];
+  }
+
+  /**
+   * Capture accounting valuation snapshot when commercial and accounting currencies differ.
+   * Immutable lock for Xero-facing amounts — never recalculated.
+   */
+  async captureAccountingLayerSnapshot(params: {
+    paymentLinkId: string;
+    commercialCurrency: string;
+    commercialAmount: number;
+    accountingCurrency: string;
+  }): Promise<FxSnapshot | null> {
+    const commercial = params.commercialCurrency.trim().toUpperCase();
+    const accounting = params.accountingCurrency.trim().toUpperCase();
+    if (commercial === accounting) {
+      return null;
+    }
+
+    logger.info(
+      {
+        paymentLinkId: params.paymentLinkId,
+        pair: `${commercial}/${accounting}`,
+      },
+      'Capturing accounting layer FX snapshot'
+    );
+
+    const rate = await this.fetchRate(commercial as Currency, accounting as Currency);
+    const accountingAmount = Number((params.commercialAmount * rate.rate).toFixed(8));
+
+    const snapshot = await this.createSnapshot({
+      paymentLinkId: params.paymentLinkId,
+      snapshotType: 'ACCOUNTING',
+      baseCurrency: commercial,
+      quoteCurrency: accounting,
+      rate: rate.rate,
+      provider: rate.provider,
+      capturedAt: rate.timestamp,
+      commercialCurrency: commercial,
+      commercialAmount: params.commercialAmount,
+      accountingCurrency: accounting,
+      accountingAmount,
+      valuationMethod: 'INVOICE_CREATION_LOCK',
+    });
+
+    await prisma.payment_links.update({
+      where: { id: params.paymentLinkId },
+      data: {
+        accounting_amount: accountingAmount,
+        base_amount: accountingAmount,
+      },
+    });
+
+    return snapshot;
   }
 
   /**
@@ -593,7 +654,7 @@ export class FxSnapshotService {
       throw new Error('Provider is required');
     }
 
-    if (!['CREATION', 'SETTLEMENT'].includes(data.snapshotType)) {
+    if (!['CREATION', 'SETTLEMENT', 'ACCOUNTING'].includes(data.snapshotType)) {
       throw new Error('Invalid snapshot type');
     }
   }

@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { toast } from 'sonner';
 import type { PaymentHealthStatus } from '@/lib/payments/lifecycle/lifecycle-stages';
+import type { PaymentTransactionLayers } from '@/lib/payments/payment-layers';
+import { PaymentTransactionLayersPanel } from '@/components/payment-links/payment-transaction-layers-panel';
 
 type LifecycleTimelineItem = {
   id: string;
@@ -18,6 +20,13 @@ type LifecycleTimelineItem = {
   actor: string | null;
   provider: string | null;
   reached: boolean;
+};
+
+type LayerTimelineItem = {
+  stage: string;
+  label: string;
+  reached: boolean;
+  createdAt: string | null;
 };
 
 type SettlementItem = {
@@ -35,6 +44,9 @@ type LifecycleSnapshot = {
   healthLabel: string;
   currentStage: string | null;
   timeline: LifecycleTimelineItem[];
+  layerTimeline?: LayerTimelineItem[];
+  transactionLayers?: PaymentTransactionLayers;
+  xeroContext?: Record<string, unknown> | null;
   settlements: SettlementItem[];
 };
 
@@ -126,19 +138,27 @@ export function PaymentLifecyclePanel({
   }
 
   const flowIndex = settlementFlowStep(snapshot.settlements, linkStatus);
-  const displayTimeline = snapshot.timeline.filter((item) =>
-    [
-      'INVOICE_CREATED',
-      'CUSTOMER_OPENED_LINK',
-      'PAYMENT_REQUESTED',
-      'PAYMENT_CONFIRMED',
-      'FX_SNAPSHOT_LOCKED',
-      'ACCOUNTING_SYNC_COMPLETED',
-      'SETTLEMENT_PENDING',
-      'SETTLEMENT_COMPLETED',
-      'RECONCILED',
-    ].includes(item.stage)
-  );
+  const displayTimeline =
+    snapshot.layerTimeline && snapshot.layerTimeline.length > 0
+      ? snapshot.layerTimeline.map((item) => ({
+          id: item.stage,
+          stage: item.stage,
+          label: item.label,
+          createdAt: item.createdAt ?? new Date(0).toISOString(),
+          actor: null,
+          provider: null,
+          reached: item.reached,
+        }))
+      : snapshot.timeline.filter((item) =>
+          [
+            'INVOICE_CREATED',
+            'PAYMENT_CONFIRMED',
+            'FX_SNAPSHOT_LOCKED',
+            'SETTLEMENT_PENDING',
+            'SETTLEMENT_COMPLETED',
+            'RECONCILED',
+          ].includes(item.stage)
+        );
 
   return (
     <div className="space-y-6">
@@ -220,6 +240,13 @@ export function PaymentLifecyclePanel({
           ))}
         </ol>
       </div>
+
+      {snapshot.transactionLayers ? (
+        <PaymentTransactionLayersPanel
+          layers={snapshot.transactionLayers}
+          xeroContext={snapshot.xeroContext}
+        />
+      ) : null}
 
       {snapshot.settlements.length > 0 ? (
         <div className="space-y-3">

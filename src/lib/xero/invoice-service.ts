@@ -11,6 +11,12 @@ import { Invoice, Contact, LineItem } from 'xero-node';
 import { getFxService } from '@/lib/fx';
 import type { Currency } from '@/lib/fx/types';
 
+import type { XeroExportContext } from './xero-layer-export';
+import {
+  buildXeroInvoiceReference,
+  enrichXeroLineDescription,
+} from './xero-layer-export';
+
 export interface InvoiceCreationParams {
   paymentLinkId: string;
   organizationId: string;
@@ -19,6 +25,8 @@ export interface InvoiceCreationParams {
   description: string;
   customerEmail?: string;
   invoiceReference?: string;
+  /** When set, accounting layer drives posting values and FX snapshot immutability. */
+  exportContext?: XeroExportContext;
 }
 
 export interface InvoiceCreationResult {
@@ -45,9 +53,40 @@ async function resolveXeroCurrencyRate(params: {
   paymentLinkId: string;
   invoiceCurrency: string;
   reportingCurrency: string;
+  /** When accounting layer is active, use immutable snapshot only — never live rates. */
+  exportContext?: XeroExportContext;
 }): Promise<number> {
   const inv = params.invoiceCurrency.trim().toUpperCase();
   const rep = params.reportingCurrency.trim().toUpperCase();
+
+  if (params.exportContext?.posting.usesAccountingLayer) {
+    if (inv === rep) {
+      return 1;
+    }
+    const snapshotRate = params.exportContext.accountingFxRate;
+    if (snapshotRate != null && snapshotRate > 0) {
+      loggers.xero.info('xero_invoice_currency_rate_from_accounting_snapshot', {
+        paymentLinkId: params.paymentLinkId,
+        fxSnapshotId: params.exportContext.fxSnapshotId,
+        rate: roundXeroCurrencyRate(snapshotRate),
+      });
+      return roundXeroCurrencyRate(snapshotRate);
+    }
+    const commercial = Number(params.exportContext.metadata.commercialAmount);
+    const accounting = Number(params.exportContext.metadata.accountingAmount);
+    if (commercial > 0 && accounting > 0) {
+      const derived = accounting / commercial;
+      loggers.xero.info('xero_invoice_currency_rate_from_layer_amounts', {
+        paymentLinkId: params.paymentLinkId,
+        rate: roundXeroCurrencyRate(derived),
+      });
+      return roundXeroCurrencyRate(derived);
+    }
+    throw new Error(
+      `Accounting layer is active but no immutable FX snapshot exists for ${inv} → ${rep}. ` +
+        `Ensure an ACCOUNTING FX snapshot was captured at invoice creation.`
+    );
+  }
 
   const pl = await prisma.payment_links.findUnique({
     where: { id: params.paymentLinkId },
@@ -110,7 +149,12 @@ export async function createXeroInvoice(
     description,
     customerEmail,
     invoiceReference,
+    exportContext,
   } = params;
+
+  const postingAmount = exportContext?.posting.amount ?? amount;
+  const postingCurrency = exportContext?.posting.currency ?? currency;
+  const usesAccountingLayer = exportContext?.posting.usesAccountingLayer ?? false;
 
   // Get Xero connection
   const connection = await getActiveConnection(organizationId);
@@ -164,8 +208,8 @@ export async function createXeroInvoice(
    * Merchant reporting currency (Settings). When unset, assume it matches the invoice
    * so we do not invent a rate; set default_currency to your Xero org base (e.g. AUD).
    */
-  const reportingCurrency = (settings.default_currency ?? currency).trim().toUpperCase();
-  const invoiceCurrency = currency.trim().toUpperCase();
+  const reportingCurrency = (settings.default_currency ?? postingCurrency).trim().toUpperCase();
+  const invoiceCurrency = postingCurrency.trim().toUpperCase();
 
   let currencyRate: number | undefined;
   if (invoiceCurrency !== reportingCurrency) {
@@ -174,13 +218,30 @@ export async function createXeroInvoice(
       reportingCurrency,
       paymentLinkId,
       organizationId,
+      usesAccountingLayer,
     });
     currencyRate = await resolveXeroCurrencyRate({
       paymentLinkId,
       invoiceCurrency,
       reportingCurrency,
+      exportContext,
     });
   }
+
+  const lineDescription =
+    exportContext && usesAccountingLayer
+      ? enrichXeroLineDescription(description, exportContext.metadata, usesAccountingLayer)
+      : description;
+
+  const xeroReference =
+    exportContext != null
+      ? buildXeroInvoiceReference({
+          invoiceReference,
+          paymentLinkId,
+          metadata: exportContext.metadata,
+          usesAccountingLayer,
+        })
+      : invoiceReference || undefined;
 
   // Get or create contact
   const contact = await getOrCreateContact(
@@ -191,9 +252,9 @@ export async function createXeroInvoice(
 
   // Create invoice line items
   const lineItems: LineItem[] = [{
-    description,
+    description: lineDescription,
     quantity: 1,
-    unitAmount: parseFloat(amount),
+    unitAmount: parseFloat(postingAmount),
     accountCode: revenueAccountCode,
     taxType: 'EXEMPTOUTPUT', // GST-exempt output (sales) - valid for AU
   }];
@@ -205,7 +266,7 @@ export async function createXeroInvoice(
     date: new Date().toISOString().split('T')[0],
     dueDate: new Date().toISOString().split('T')[0], // Due immediately
     lineItems,
-    reference: invoiceReference || undefined,
+    reference: xeroReference,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     currencyCode: invoiceCurrency as any, // Cast to match Xero SDK type
     ...(currencyRate != null ? { currencyRate } : {}),

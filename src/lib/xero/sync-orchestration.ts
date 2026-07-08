@@ -13,7 +13,11 @@ import { randomUUID } from 'crypto';
 import type { TokenType } from '@/lib/hedera/types';
 import { logger } from '@/lib/logger';
 import { formatXeroSyncError } from './xero-sync-errors';
-import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
+import {
+  enrichXeroRequestPayload,
+  loadXeroExportContext,
+  resolveXeroPostingValues,
+} from './xero-layer-export';
 
 export interface SyncPaymentParams {
   paymentLinkId: string;
@@ -74,6 +78,7 @@ async function upsertSyncStatus(args: {
   invoiceNumber?: string | null;
   paymentId?: string | null;
   payload?: Prisma.InputJsonValue;
+  requestPayload?: Prisma.InputJsonValue;
   errorMessage?: string | null;
 }) {
   const {
@@ -84,8 +89,15 @@ async function upsertSyncStatus(args: {
     invoiceId,
     paymentId,
     payload,
+    requestPayload,
     errorMessage,
   } = args;
+
+  const baseRequestPayload = {
+    paymentLinkId,
+    organizationId,
+    syncType,
+  };
 
   await prisma.xero_syncs.upsert({
     where: {
@@ -99,6 +111,7 @@ async function upsertSyncStatus(args: {
       xero_invoice_id: invoiceId ?? null,
       xero_payment_id: paymentId ?? null,
       response_payload: payload ?? Prisma.JsonNull,
+      ...(requestPayload != null ? { request_payload: requestPayload } : {}),
       error_message: errorMessage ?? null,
       next_retry_at: null,
       updated_at: new Date(),
@@ -110,11 +123,7 @@ async function upsertSyncStatus(args: {
       status,
       xero_invoice_id: invoiceId ?? null,
       xero_payment_id: paymentId ?? null,
-      request_payload: {
-        paymentLinkId,
-        organizationId,
-        syncType,
-      },
+      request_payload: (requestPayload ?? baseRequestPayload) as Prisma.InputJsonValue,
       response_payload: payload ?? Prisma.JsonNull,
       error_message: errorMessage ?? null,
       retry_count: 0,
@@ -128,27 +137,34 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
   const { paymentLinkId, organizationId } = params;
 
   try {
-    const paymentLink = await prisma.payment_links.findUnique({
-      where: { id: paymentLinkId },
-      select: {
-        id: true,
-        status: true,
-        amount: true,
-        currency: true,
-        invoice_currency: true,
-        description: true,
-        customer_email: true,
-        invoice_reference: true,
-      },
+    const loaded = await loadXeroExportContext(prisma, {
+      paymentLinkId,
+      organizationId,
     });
-    if (!paymentLink) {
+    if (!loaded) {
       throw new Error('Payment link not found');
     }
+    const { link: paymentLink, exportContext } = loaded;
+
     if (paymentLink.status !== 'OPEN' && paymentLink.status !== 'PAID') {
       throw new Error(
         `Invoice sync requires OPEN/PAID status (current: ${paymentLink.status})`
       );
     }
+
+    const posting = exportContext.posting;
+    const enrichedRequestPayload = enrichXeroRequestPayload(
+      {
+        paymentLinkId,
+        organizationId,
+        syncType: 'INVOICE',
+        xeroPostingAmount: posting.amount,
+        xeroPostingCurrency: posting.currency,
+        usesAccountingLayer: posting.usesAccountingLayer,
+      },
+      exportContext.layers
+    ) as Prisma.InputJsonValue;
+
     // Idempotency: if we already have an INVOICE success with xero invoice id, reuse it.
     const existingInvoiceSync = await prisma.xero_syncs.findUnique({
       where: {
@@ -173,14 +189,17 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
           typeof payload.invoiceNumber === 'string' ? payload.invoiceNumber : undefined,
       };
     }
+
+    const legacyPosting = resolveXeroPostingValues(paymentLink);
     const invoiceResult = await createXeroInvoice({
       paymentLinkId,
       organizationId,
-      amount: paymentLink.amount.toString(),
-      currency: invoiceDenominationCurrency(paymentLink),
+      amount: legacyPosting.amount,
+      currency: legacyPosting.currency,
       description: paymentLink.description,
       customerEmail: paymentLink.customer_email || undefined,
       invoiceReference: paymentLink.invoice_reference || undefined,
+      exportContext,
     });
     const invoiceId = invoiceResult.invoiceId?.trim();
     const invoiceNumber = invoiceResult.invoiceNumber?.trim();
@@ -196,6 +215,7 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
         organizationId,
         status: 'FAILED',
         errorMessage: msg,
+        requestPayload: enrichedRequestPayload,
       });
       return { success: false, error: msg };
     }
@@ -206,10 +226,12 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
       status: 'SUCCESS',
       invoiceId,
       invoiceNumber,
+      requestPayload: enrichedRequestPayload,
       payload: {
         invoice: invoiceResult as unknown as Prisma.InputJsonValue,
         xeroRawInvoicesResponse: (invoiceResult as { xeroRawInvoicesResponse?: unknown })
           .xeroRawInvoicesResponse ?? null,
+        paymentLayers: exportContext.metadata,
       } as Prisma.InputJsonValue,
     });
     await prisma.payment_links.updateMany({
@@ -249,18 +271,29 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
 export async function syncPaymentToXero(params: SyncPaymentParams): Promise<SyncResult> {
   const { paymentLinkId, organizationId } = params;
   try {
-    const paymentLink = await prisma.payment_links.findUnique({
-      where: { id: paymentLinkId },
-      include: {
-        fx_snapshots: {
-          where: { snapshot_type: 'SETTLEMENT' },
-        },
-      },
+    const loaded = await loadXeroExportContext(prisma, {
+      paymentLinkId,
+      organizationId,
     });
-    if (!paymentLink) throw new Error('Payment link not found');
+    if (!loaded) throw new Error('Payment link not found');
+    const { link: paymentLink, exportContext } = loaded;
+
     if (paymentLink.status !== 'PAID') {
       throw new Error(`Payment sync requires PAID status (current: ${paymentLink.status})`);
     }
+
+    const posting = exportContext.posting;
+    const enrichedRequestPayload = enrichXeroRequestPayload(
+      {
+        paymentLinkId,
+        organizationId,
+        syncType: 'PAYMENT',
+        xeroPostingAmount: posting.amount,
+        xeroPostingCurrency: posting.currency,
+        usesAccountingLayer: posting.usesAccountingLayer,
+      },
+      exportContext.layers
+    ) as Prisma.InputJsonValue;
 
     const invoiceSync = await prisma.xero_syncs.findUnique({
       where: {
@@ -315,28 +348,37 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
 
     let fxRate: number | undefined;
     let cryptoAmount: string | undefined;
-    if ((paymentMethod === 'HEDERA' || paymentMethod === 'EVM_WALLET') && paymentToken) {
-      const fxSnapshot = paymentLink.fx_snapshots.find((s) => s.token_type === paymentToken);
-      if (fxSnapshot) {
-        fxRate = fxSnapshot.rate.toNumber();
+    if (!posting.usesAccountingLayer) {
+      const settlementSnapshots = await prisma.fx_snapshots.findMany({
+        where: { payment_link_id: paymentLinkId, snapshot_type: 'SETTLEMENT' },
+      });
+      if ((paymentMethod === 'HEDERA' || paymentMethod === 'EVM_WALLET') && paymentToken) {
+        const fxSnapshot = settlementSnapshots.find((s) => s.token_type === paymentToken);
+        if (fxSnapshot) {
+          fxRate = fxSnapshot.rate.toNumber();
+        }
+        if (paymentEvent.amount_received) {
+          cryptoAmount = paymentEvent.amount_received.toString();
+        }
       }
-      if (paymentEvent.amount_received) {
-        cryptoAmount = paymentEvent.amount_received.toString();
-      }
+    } else if (paymentEvent.amount_received) {
+      cryptoAmount = paymentEvent.amount_received.toString();
     }
 
+    const legacyPosting = resolveXeroPostingValues(paymentLink);
     const paymentResult = await recordXeroPayment({
       paymentLinkId,
       organizationId,
       invoiceId: invoiceSync.xero_invoice_id,
-      amount: paymentLink.amount.toString(),
-      currency: invoiceDenominationCurrency(paymentLink),
+      amount: legacyPosting.amount,
+      currency: legacyPosting.currency,
       paymentDate: paymentEvent.received_at ?? paymentEvent.created_at,
       paymentMethod,
       paymentToken,
       transactionId,
       fxRate,
       cryptoAmount,
+      exportContext,
     });
 
     const paymentId = paymentResult.paymentId?.trim();
@@ -349,6 +391,7 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
         organizationId,
         status: 'FAILED',
         errorMessage: msg,
+        requestPayload: enrichedRequestPayload,
       });
       return { success: false, error: msg };
     }
@@ -360,8 +403,10 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
       status: 'SUCCESS',
       invoiceId: invoiceSync.xero_invoice_id,
       paymentId,
+      requestPayload: enrichedRequestPayload,
       payload: {
         payment: paymentResult as unknown as Prisma.InputJsonValue,
+        paymentLayers: exportContext.metadata,
       } as Prisma.InputJsonValue,
     });
 

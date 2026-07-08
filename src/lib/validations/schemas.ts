@@ -114,7 +114,7 @@ export const currencyCodeSchema = z
     const validCurrencies = [
       'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'JPY', 'CNY', 'INR',
       'SGD', 'NZD', 'HKD', 'CHF', 'SEK', 'NOK', 'DKK', 'IDR',
-      'HBAR', 'USDC', // Crypto currencies
+      'HBAR', 'USDC', 'USDT', // Crypto / stablecoin invoice currencies
     ];
     return validCurrencies.includes(code);
   }, 'Invalid currency code');

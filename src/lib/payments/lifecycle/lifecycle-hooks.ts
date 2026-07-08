@@ -320,5 +320,63 @@ export function hookPostPaymentConfirmationLifecycle(params: {
       idempotencyKey: `ledger_updated:${params.paymentEventId}`,
       provider: 'PROVVYPAY',
     });
+
+    const fullLink = await prisma.payment_links.findUnique({
+      where: { id: params.paymentLinkId },
+      include: {
+        payment_events: { where: { id: params.paymentEventId } },
+      },
+    });
+    if (fullLink) {
+      const { resolvePaymentTransactionLayers } = await import('@/lib/payments/payment-layers');
+      const { buildXeroPaymentContextMetadata } = await import(
+        '@/lib/payments/xero-payment-context'
+      );
+      const allSnapshots = await prisma.fx_snapshots.findMany({
+        where: { payment_link_id: params.paymentLinkId },
+      });
+      const merchantSettings = await prisma.merchant_settings.findFirst({
+        where: { organization_id: fullLink.organization_id },
+        select: { default_currency: true },
+      });
+      const layers = resolvePaymentTransactionLayers({
+        link: fullLink,
+        paymentEvents: fullLink.payment_events,
+        fxSnapshots: allSnapshots,
+        merchantDefaultCurrency: merchantSettings?.default_currency ?? null,
+      });
+      const xeroContext = buildXeroPaymentContextMetadata(layers);
+
+      await prisma.payment_links.update({
+        where: { id: params.paymentLinkId },
+        data: {
+          settlement_currency: params.currency.toUpperCase(),
+          settlement_amount: params.amount,
+        },
+      });
+
+      await prisma.payment_events.update({
+        where: { id: params.paymentEventId },
+        data: {
+          layer_metadata: xeroContext as object,
+        },
+      });
+
+      if (snapshot) {
+        await prisma.fx_snapshots.update({
+          where: { id: snapshot.id },
+          data: {
+            payment_event_id: params.paymentEventId,
+            commercial_currency: layers.commercial.currency,
+            commercial_amount: layers.commercial.amount,
+            accounting_currency: layers.accounting?.currency ?? layers.commercial.currency,
+            accounting_amount: layers.accounting?.amount ?? layers.commercial.amount,
+            settlement_currency: params.currency.toUpperCase(),
+            settlement_amount: params.amount,
+            valuation_method: layers.accounting?.valuationMethod ?? 'SETTLEMENT_LOCK',
+          },
+        });
+      }
+    }
   });
 }

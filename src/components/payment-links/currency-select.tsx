@@ -43,17 +43,23 @@ export const CURRENCIES: Currency[] = [
   { code: 'IDR', name: 'Indonesian Rupiah', symbol: 'Rp', flag: '🇮🇩' },
 ];
 
-// Crypto currencies
-export const CRYPTO_CURRENCIES: Currency[] = [
+// Crypto / stablecoin currencies for commercial invoicing
+export const COMMERCIAL_CRYPTO_CURRENCIES: Currency[] = [
   { code: 'HBAR', name: 'Hedera', symbol: 'ℏ' },
   { code: 'USDC', name: 'USD Coin', symbol: 'USDC' },
+  { code: 'USDT', name: 'Tether USD', symbol: 'USDT' },
 ];
+
+// Legacy alias
+export const CRYPTO_CURRENCIES: Currency[] = COMMERCIAL_CRYPTO_CURRENCIES;
 
 export interface CurrencySelectProps {
   value?: string;
   onValueChange?: (value: string) => void;
   disabled?: boolean;
   includeCrypto?: boolean;
+  /** When true, shows AUD/USD fiat plus USDC/USDT/HBAR for commercial invoicing. */
+  commercialInvoiceMode?: boolean;
   placeholder?: string;
   className?: string;
 }
@@ -63,9 +69,16 @@ export const CurrencySelect: React.FC<CurrencySelectProps> = ({
   onValueChange,
   disabled = false,
   includeCrypto = false,
+  commercialInvoiceMode = false,
   placeholder = 'Select currency',
   className,
 }) => {
+  const fiatOptions = commercialInvoiceMode
+    ? CURRENCIES.filter((c) => ['AUD', 'USD'].includes(c.code))
+    : CURRENCIES;
+  const cryptoOptions = commercialInvoiceMode ? COMMERCIAL_CRYPTO_CURRENCIES : CRYPTO_CURRENCIES;
+  const showCrypto = includeCrypto || commercialInvoiceMode;
+
   return (
     <Select value={value} onValueChange={onValueChange} disabled={disabled}>
       <SelectTrigger className={className}>
@@ -73,11 +86,11 @@ export const CurrencySelect: React.FC<CurrencySelectProps> = ({
           {value && (
             <span className="flex items-center gap-2">
               {CURRENCIES.find((c) => c.code === value)?.flag ||
-                CRYPTO_CURRENCIES.find((c) => c.code === value)?.symbol}
+                cryptoOptions.find((c) => c.code === value)?.symbol}
               <span className="font-medium">{value}</span>
               <span className="text-muted-foreground">
                 {CURRENCIES.find((c) => c.code === value)?.name ||
-                  CRYPTO_CURRENCIES.find((c) => c.code === value)?.name}
+                  cryptoOptions.find((c) => c.code === value)?.name}
               </span>
             </span>
           )}
@@ -85,8 +98,8 @@ export const CurrencySelect: React.FC<CurrencySelectProps> = ({
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
-          <SelectLabel>Fiat Currencies</SelectLabel>
-          {CURRENCIES.map((currency) => (
+          <SelectLabel>{commercialInvoiceMode ? 'Fiat' : 'Fiat Currencies'}</SelectLabel>
+          {fiatOptions.map((currency) => (
             <SelectItem key={currency.code} value={currency.code}>
               <span className="flex items-center gap-2">
                 <span>{currency.flag}</span>
@@ -99,10 +112,10 @@ export const CurrencySelect: React.FC<CurrencySelectProps> = ({
           ))}
         </SelectGroup>
         
-        {includeCrypto && (
+        {showCrypto && (
           <SelectGroup>
-            <SelectLabel>Crypto Currencies</SelectLabel>
-            {CRYPTO_CURRENCIES.map((currency) => (
+            <SelectLabel>{commercialInvoiceMode ? 'Stablecoins & Crypto' : 'Crypto Currencies'}</SelectLabel>
+            {cryptoOptions.map((currency) => (
               <SelectItem key={currency.code} value={currency.code}>
                 <span className="flex items-center gap-2">
                   <span className="font-medium">{currency.code}</span>

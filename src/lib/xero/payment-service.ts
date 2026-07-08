@@ -12,6 +12,12 @@ import { Payment } from 'xero-node';
 import type { TokenType } from '@/lib/hedera/constants';
 import { fetchXeroAccounts } from './accounts-service';
 
+import type { XeroExportContext } from './xero-layer-export';
+import {
+  buildXeroLayerPaymentNarration,
+  buildXeroLayerPaymentReference,
+} from './xero-layer-export';
+
 export interface PaymentRecordingParams {
   paymentLinkId: string;
   organizationId: string;
@@ -24,6 +30,8 @@ export interface PaymentRecordingParams {
   transactionId: string;
   fxRate?: number;
   cryptoAmount?: string;
+  /** When set, accounting layer drives posting amount; settlement is audit-only. */
+  exportContext?: XeroExportContext;
 }
 
 export interface PaymentRecordingResult {
@@ -50,7 +58,11 @@ export async function recordXeroPayment(
     transactionId,
     fxRate,
     cryptoAmount,
+    exportContext,
   } = params;
+
+  const postingAmount = exportContext?.posting.amount ?? amount;
+  const usesAccountingLayer = exportContext?.posting.usesAccountingLayer ?? false;
 
   // Get Xero connection
   const connection = await getActiveConnection(organizationId);
@@ -94,25 +106,46 @@ export async function recordXeroPayment(
     );
   }
 
-  // Build payment narration
-  const narration = buildPaymentNarration(
-    paymentMethod,
-    paymentToken,
-    transactionId,
-    fxRate,
-    cryptoAmount,
-    amount,
-    currency
-  );
+  const narration = exportContext
+    ? buildXeroLayerPaymentNarration({
+        metadata: exportContext.metadata,
+        posting: exportContext.posting,
+        paymentMethod,
+        paymentToken,
+        transactionId,
+        legacySettlementFxRate: fxRate,
+        legacyCryptoAmount: cryptoAmount,
+      })
+    : buildPaymentNarration(
+        paymentMethod,
+        paymentToken,
+        transactionId,
+        fxRate,
+        cryptoAmount,
+        postingAmount,
+        currency
+      );
+
+  const paymentReference = exportContext
+    ? buildXeroLayerPaymentReference({
+        paymentMethod,
+        paymentToken,
+        transactionId,
+        metadata: exportContext.metadata,
+      })
+    : buildPaymentReference(paymentMethod, paymentToken, transactionId);
+
+  /** Accounting-layer invoices post in org currency — no live settlement FX on payment. */
+  const paymentCurrencyRate = usesAccountingLayer ? undefined : fxRate;
 
   // Create payment
   const payment: Payment = {
     invoice: { invoiceID: invoiceId },
     account: { code: clearingAccountId }, // Use 'code' not 'accountID' for account codes
     date: paymentDate.toISOString().split('T')[0],
-    amount: parseFloat(amount),
-    reference: buildPaymentReference(paymentMethod, paymentToken, transactionId),
-    currencyRate: fxRate,
+    amount: parseFloat(postingAmount),
+    reference: paymentReference,
+    currencyRate: paymentCurrencyRate,
   };
 
   // Create payment in Xero

@@ -7,6 +7,7 @@ import {
   getNextInvoiceReferenceSequence,
   normalizeInvoiceReference,
 } from '@/lib/payment-links/invoice-reference';
+import { buildLayerFieldsForCreate } from '@/lib/payments/payment-layers';
 
 export type WiseInsertContext = {
   metadata: Record<string, unknown>;
@@ -21,6 +22,8 @@ export type CreatePaymentLinkInTxInput = {
   invoiceOnly: boolean;
   resolvedPaymentMethod: PaymentMethod | null;
   effectiveInvoiceCurrency: string;
+  /** Merchant accounting / reporting currency (defaults to commercial when omitted). */
+  accountingCurrency?: string;
   requestedInvoiceReference: string | null;
   wiseContext: WiseInsertContext | null;
   pilotDealIdToStore: string | null;
@@ -46,6 +49,15 @@ export async function insertPaymentLinkInTransaction(
     wiseContext,
     pilotDealIdToStore,
   } = input;
+
+  const commercialCurrency = effectiveInvoiceCurrency.toUpperCase();
+  const accountingCurrency = (input.accountingCurrency ?? commercialCurrency).toUpperCase();
+  const layerFields = buildLayerFieldsForCreate({
+    commercialCurrency,
+    commercialAmount: validatedData.amount,
+    accountingCurrency,
+    accountingAmount: validatedData.amount,
+  });
 
   if (typeof dbOrgId !== 'string' || !dbOrgId.trim()) {
     throw new Error('Missing server org context');
@@ -89,8 +101,14 @@ export async function insertPaymentLinkInTransaction(
     status: 'OPEN',
     payment_method: resolvedPaymentMethod,
     amount: validatedData.amount,
-    currency: effectiveInvoiceCurrency,
-    invoice_currency: effectiveInvoiceCurrency,
+    currency: layerFields.currency,
+    invoice_currency: layerFields.invoice_currency,
+    commercial_currency: layerFields.commercial_currency,
+    commercial_amount: layerFields.commercial_amount,
+    accounting_currency: layerFields.accounting_currency,
+    accounting_amount: layerFields.accounting_amount,
+    base_currency: layerFields.base_currency,
+    base_amount: layerFields.base_amount,
     description: validatedData.description,
     invoice_reference: invoiceReferenceToStore,
     invoice_date: validatedData.invoiceDate

@@ -143,6 +143,20 @@ export class FxService {
   }
 
   /**
+   * Capture accounting layer snapshot when commercial ≠ accounting currency.
+   */
+  async captureAccountingLayerSnapshot(params: {
+    paymentLinkId: string;
+    commercialCurrency: string;
+    commercialAmount: number;
+    accountingCurrency: string;
+  }): Promise<FxSnapshot | null> {
+    await this.ensureInitialized();
+    const snapshotService = getFxSnapshotService();
+    return snapshotService.captureAccountingLayerSnapshot(params);
+  }
+
+  /**
    * Capture settlement-time snapshot (single token)
    */
   async captureSettlementSnapshot(

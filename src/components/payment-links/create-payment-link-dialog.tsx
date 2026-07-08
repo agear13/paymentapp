@@ -1564,17 +1564,18 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                 name="currency"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Invoice currency *</FormLabel>
+                    <FormLabel>Commercial currency *</FormLabel>
                     <FormControl>
                       <CurrencySelect
                         value={field.value}
                         onValueChange={field.onChange}
                         disabled={wiseTransferLocked}
+                        commercialInvoiceMode
                       />
                     </FormControl>
                     <FormDescription>
-                      Accounting denomination for this amount (Xero, PDF, ledger). Independent of how the customer pays
-                      (card, Hashpack, Wise, etc.).
+                      What you are charging the customer (AUD, USD, USDC, USDT, or HBAR). Accounting
+                      valuation in your reporting currency is tracked separately.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

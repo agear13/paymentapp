@@ -88,6 +88,29 @@ function transformPaymentLink(link: Record<string, unknown>) {
     amount: Number(link.amount),
     currency: link.currency,
     invoiceCurrency: (link as { invoice_currency?: string }).invoice_currency ?? link.currency,
+    commercialCurrency:
+      (link as { commercial_currency?: string | null }).commercial_currency ??
+      (link as { invoice_currency?: string }).invoice_currency ??
+      link.currency,
+    commercialAmount: Number(
+      (link as { commercial_amount?: unknown }).commercial_amount ?? link.amount
+    ),
+    accountingCurrency:
+      (link as { accounting_currency?: string | null }).accounting_currency ??
+      (link as { base_currency?: string | null }).base_currency ??
+      (link as { invoice_currency?: string }).invoice_currency ??
+      link.currency,
+    accountingAmount: Number(
+      (link as { accounting_amount?: unknown }).accounting_amount ??
+        (link as { base_amount?: unknown }).base_amount ??
+        link.amount
+    ),
+    settlementCurrency:
+      (link as { settlement_currency?: string | null }).settlement_currency ?? null,
+    settlementAmount:
+      (link as { settlement_amount?: unknown }).settlement_amount != null
+        ? Number((link as { settlement_amount?: unknown }).settlement_amount)
+        : null,
     description: link.description,
     invoiceReference: link.invoice_reference,
     invoiceDate: link.invoice_date ?? null,
@@ -365,6 +388,14 @@ export async function POST(request: NextRequest) {
       validatedData.invoiceCurrency ?? validatedData.currency
     ).toUpperCase();
 
+    const merchantSettings = await prisma.merchant_settings.findFirst({
+      where: { organization_id: dbOrgId },
+      select: { default_currency: true },
+    });
+    const accountingCurrency = (
+      merchantSettings?.default_currency ?? effectiveInvoiceCurrency
+    ).toUpperCase();
+
     if (isWisePayment) {
       try {
         // Validate merchant-level Wise config before creating invoice
@@ -400,6 +431,7 @@ export async function POST(request: NextRequest) {
               invoiceOnly,
               resolvedPaymentMethod,
               effectiveInvoiceCurrency,
+              accountingCurrency,
               requestedInvoiceReference,
               wiseContext: wiseContext
                 ? { metadata: wiseContext.metadata as Record<string, unknown> }

@@ -64,13 +64,21 @@ export interface RateCacheEntry {
  */
 export interface FxSnapshotData {
   paymentLinkId: string;
-  snapshotType: 'CREATION' | 'SETTLEMENT';
+  snapshotType: 'CREATION' | 'SETTLEMENT' | 'ACCOUNTING';
   tokenType?: CryptoCurrency;
   baseCurrency: string;
   quoteCurrency: string;
   rate: number;
   provider: string;
   capturedAt?: Date;
+  commercialCurrency?: string;
+  commercialAmount?: number | string;
+  accountingCurrency?: string;
+  accountingAmount?: number | string;
+  settlementCurrency?: string;
+  settlementAmount?: number | string;
+  valuationMethod?: string;
+  paymentEventId?: string;
 }
 
 /**

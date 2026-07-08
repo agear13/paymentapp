@@ -15,11 +15,17 @@ import {
   LIFECYCLE_STAGE_LABELS,
   LIFECYCLE_STAGE_ORDER,
   maxLifecycleStage,
+  merchantLayerTimelineLabel,
+  MERCHANT_LAYER_TIMELINE_STAGES,
   PAYMENT_HEALTH_LABELS,
   TIMELINE_DISPLAY_STAGES,
   type LifecycleTimelineEntry,
   type PaymentHealthStatus,
 } from '@/lib/payments/lifecycle/lifecycle-stages';
+import {
+  resolvePaymentTransactionLayers,
+} from '@/lib/payments/payment-layers';
+import { buildXeroPaymentContextMetadata } from '@/lib/payments/xero-payment-context';
 import type {
   CreatePendingSettlementInput,
   MarkSettlementSettledInput,
@@ -340,8 +346,30 @@ export async function getPaymentLifecycleSnapshot(paymentLinkId: string) {
       status: true,
       organization_id: true,
       amount: true,
+      currency: true,
       invoice_currency: true,
+      commercial_currency: true,
+      commercial_amount: true,
+      accounting_currency: true,
+      accounting_amount: true,
+      settlement_currency: true,
+      settlement_amount: true,
+      base_currency: true,
+      base_amount: true,
       payment_method: true,
+      payment_events: {
+        orderBy: { created_at: 'asc' },
+        select: {
+          id: true,
+          event_type: true,
+          payment_method: true,
+          amount_received: true,
+          currency_received: true,
+          hedera_transaction_id: true,
+          metadata: true,
+          layer_metadata: true,
+        },
+      },
     },
   });
 
@@ -349,15 +377,39 @@ export async function getPaymentLifecycleSnapshot(paymentLinkId: string) {
     return null;
   }
 
-  const [timeline, settlements, currentStage, fxSnapshots] = await Promise.all([
-    paymentTimeline(paymentLinkId),
-    getSettlementsForPaymentLink(paymentLinkId),
-    currentLifecycleState(paymentLinkId),
-    prisma.fx_snapshots.findMany({
-      where: { payment_link_id: paymentLinkId, snapshot_type: 'SETTLEMENT' },
-      orderBy: { captured_at: 'asc' },
-    }),
-  ]);
+  const [timeline, settlements, currentStage, fxSnapshots, merchantSettings] =
+    await Promise.all([
+      paymentTimeline(paymentLinkId),
+      getSettlementsForPaymentLink(paymentLinkId),
+      currentLifecycleState(paymentLinkId),
+      prisma.fx_snapshots.findMany({
+        where: { payment_link_id: paymentLinkId },
+        orderBy: { captured_at: 'asc' },
+      }),
+      prisma.merchant_settings.findFirst({
+        where: { organization_id: link.organization_id },
+        select: { default_currency: true },
+      }),
+    ]);
+
+  const transactionLayers = resolvePaymentTransactionLayers({
+    link,
+    paymentEvents: link.payment_events,
+    fxSnapshots,
+    merchantDefaultCurrency: merchantSettings?.default_currency ?? null,
+  });
+
+  const xeroContext = buildXeroPaymentContextMetadata(transactionLayers);
+
+  const layerTimeline = MERCHANT_LAYER_TIMELINE_STAGES.map(({ stage, label }) => {
+    const reached = timeline.find((entry) => entry.stage === stage && entry.reached);
+    return {
+      stage,
+      label,
+      reached: Boolean(reached),
+      createdAt: reached?.createdAt ?? null,
+    };
+  });
 
   const hasFailedAccountingSync = timeline.some(
     (entry) => entry.stage === 'ACCOUNTING_SYNC_FAILED' && entry.reached
@@ -377,18 +429,33 @@ export async function getPaymentLifecycleSnapshot(paymentLinkId: string) {
     currentStage,
     health,
     healthLabel: paymentHealthLabel(health),
-    timeline,
+    timeline: timeline.map((entry) => ({
+      ...entry,
+      label: merchantLayerTimelineLabel(entry.stage),
+    })),
+    layerTimeline,
+    transactionLayers,
+    xeroContext,
     settlements,
     fxSnapshots: fxSnapshots.map((snapshot) => ({
       id: snapshot.id,
-      invoiceCurrency: snapshot.quote_currency,
-      settlementCurrency: snapshot.base_currency,
-      invoiceAmount: null,
-      settlementAmount: null,
+      snapshotType: snapshot.snapshot_type,
+      commercialCurrency: snapshot.commercial_currency ?? transactionLayers.commercial.currency,
+      commercialAmount: snapshot.commercial_amount?.toString() ?? transactionLayers.commercial.amount,
+      accountingCurrency:
+        snapshot.accounting_currency ??
+        transactionLayers.accounting?.currency ??
+        snapshot.quote_currency,
+      accountingAmount:
+        snapshot.accounting_amount?.toString() ?? transactionLayers.accounting?.amount ?? null,
+      settlementCurrency: snapshot.settlement_currency ?? transactionLayers.settlement?.currency ?? null,
+      settlementAmount:
+        snapshot.settlement_amount?.toString() ?? transactionLayers.settlement?.amount ?? null,
       exchangeRate: Number(snapshot.rate),
       provider: snapshot.provider,
+      valuationMethod: snapshot.valuation_method,
       lockedAt: snapshot.captured_at,
-      immutable: true,
+      immutable: true as const,
     })),
   };
 }
