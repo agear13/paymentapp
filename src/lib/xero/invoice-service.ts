@@ -7,7 +7,8 @@ import { getXeroClient } from './client';
 import { getActiveConnection } from './connection-service';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
-import { Invoice, Contact, LineItem } from 'xero-node';
+import { Invoice, LineItem } from 'xero-node';
+import { getOrCreateXeroContact, CASH_CUSTOMER_NAME } from './xero-contact-service';
 import { getFxService } from '@/lib/fx';
 import type { Currency } from '@/lib/fx/types';
 
@@ -244,11 +245,12 @@ export async function createXeroInvoice(
       : invoiceReference || undefined;
 
   // Get or create contact
-  const contact = await getOrCreateContact(
+  const contact = await getOrCreateXeroContact({
+    organizationId,
     xeroClient,
-    connection.tenantId,
-    customerEmail || 'Cash Customer'
-  );
+    tenantId: connection.tenantId,
+    emailOrName: customerEmail || CASH_CUSTOMER_NAME,
+  });
 
   // Create invoice line items
   const lineItems: LineItem[] = [{
@@ -319,51 +321,6 @@ export async function createXeroInvoice(
     xeroRawInvoicesResponse: response.body.invoices,
   };
 }
-
-/**
- * Get existing contact or create new one
- */
-async function getOrCreateContact(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  xeroClient: any,
-  tenantId: string,
-  emailOrName: string
-): Promise<Contact> {
-  // Try to find existing contact
-  try {
-    const searchResponse = await xeroClient.accountingApi.getContacts(
-      tenantId,
-      undefined,
-      `EmailAddress=="${emailOrName}" OR Name=="${emailOrName}"`
-    );
-
-    if (searchResponse.body.contacts && searchResponse.body.contacts.length > 0) {
-      return searchResponse.body.contacts[0];
-    }
-  } catch (error) {
-    console.log('Contact not found, will create new one');
-  }
-
-  // Create new contact
-  const newContact: Contact = {
-    name: emailOrName === 'Cash Customer' ? 'Cash Customer' : emailOrName,
-    emailAddress: emailOrName.includes('@') ? emailOrName : undefined,
-  };
-
-  const createResponse = await xeroClient.accountingApi.createContacts(
-    tenantId,
-    { contacts: [newContact] }
-  );
-
-  if (!createResponse.body.contacts || createResponse.body.contacts.length === 0) {
-    throw new Error('Failed to create contact in Xero');
-  }
-
-  return createResponse.body.contacts[0];
-}
-
-
-
 
 
 

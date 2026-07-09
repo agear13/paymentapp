@@ -16,6 +16,7 @@ import {
   enrichXeroRequestPayload,
   type XeroPaymentContextMetadata,
 } from '@/lib/payments/xero-payment-context';
+import type { PrismaClient } from '@prisma/client';
 
 export type XeroPostingValues = {
   amount: string;
@@ -335,14 +336,7 @@ export const XERO_SYNC_LINK_SELECT = {
 } as const;
 
 export async function loadXeroExportContext(
-  prismaClient: {
-    payment_links: {
-      findUnique: (args: unknown) => Promise<unknown>;
-    };
-    merchant_settings: {
-      findFirst: (args: unknown) => Promise<{ default_currency: string | null } | null>;
-    };
-  },
+  prismaClient: Pick<PrismaClient, 'payment_links' | 'merchant_settings'>,
   params: {
     paymentLinkId: string;
     organizationId: string;

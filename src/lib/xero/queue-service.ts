@@ -455,6 +455,15 @@ export function categorizeError(errorMessage: string): {
 } {
   const lowerError = errorMessage.toLowerCase();
 
+  // Recoverable ordering — payment sync self-heals by exporting invoice first.
+  if (
+    lowerError.includes('sync invoice first') ||
+    lowerError.includes('xero invoice not found') ||
+    lowerError.includes('waiting for invoice export')
+  ) {
+    return { type: 'INVOICE_PENDING', retryable: true };
+  }
+
   // Permanent errors (don't retry)
   if (
     lowerError.includes('not found') ||

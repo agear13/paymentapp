@@ -266,6 +266,61 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
 }
 
 /**
+ * Ensure a Xero invoice exists before payment sync.
+ * Self-healing: exports the invoice automatically when missing.
+ */
+export async function ensureXeroInvoiceForPayment(params: {
+  paymentLinkId: string;
+  organizationId: string;
+}): Promise<{ invoiceId: string; invoiceNumber?: string; autoExported: boolean }> {
+  const invoiceSync = await prisma.xero_syncs.findUnique({
+    where: {
+      xero_syncs_payment_link_sync_type_unique: {
+        payment_link_id: params.paymentLinkId,
+        sync_type: 'INVOICE',
+      },
+    },
+    select: {
+      status: true,
+      xero_invoice_id: true,
+      response_payload: true,
+    },
+  });
+
+  if (invoiceSync?.status === 'SUCCESS' && invoiceSync.xero_invoice_id) {
+    const payload = (invoiceSync.response_payload || {}) as Record<string, unknown>;
+    return {
+      invoiceId: invoiceSync.xero_invoice_id,
+      invoiceNumber:
+        typeof payload.invoiceNumber === 'string' ? payload.invoiceNumber : undefined,
+      autoExported: false,
+    };
+  }
+
+  logger.info(
+    {
+      paymentLinkId: params.paymentLinkId,
+      organizationId: params.organizationId,
+      invoiceSyncStatus: invoiceSync?.status ?? 'missing',
+    },
+    'Xero payment sync: invoice missing — auto-exporting invoice first'
+  );
+
+  const invoiceResult = await syncInvoiceToXero(params);
+  if (!invoiceResult.success || !invoiceResult.invoiceId) {
+    throw new Error(
+      invoiceResult.error || 'Failed to export invoice to Xero before payment sync'
+    );
+  }
+
+  return {
+    invoiceId: invoiceResult.invoiceId,
+    invoiceNumber: invoiceResult.invoiceNumber,
+    autoExported: true,
+  };
+}
+
+/**
  * Record payment in Xero for a PAID invoice against an existing Xero invoice.
  */
 export async function syncPaymentToXero(params: SyncPaymentParams): Promise<SyncResult> {
@@ -295,20 +350,16 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
       exportContext.layers
     ) as Prisma.InputJsonValue;
 
-    const invoiceSync = await prisma.xero_syncs.findUnique({
-      where: {
-        xero_syncs_payment_link_sync_type_unique: {
-          payment_link_id: paymentLinkId,
-          sync_type: 'INVOICE',
-        },
-      },
-      select: {
-        status: true,
-        xero_invoice_id: true,
-      },
+    const { invoiceId: xeroInvoiceId, autoExported } = await ensureXeroInvoiceForPayment({
+      paymentLinkId,
+      organizationId,
     });
-    if (!invoiceSync?.xero_invoice_id) {
-      throw new Error('Xero invoice not found for this payment link. Sync invoice first.');
+
+    if (autoExported) {
+      logger.info(
+        { paymentLinkId, organizationId, xeroInvoiceId },
+        'Xero payment sync: invoice auto-exported — proceeding with payment'
+      );
     }
 
     const existingPaymentSync = await prisma.xero_syncs.findUnique({
@@ -323,7 +374,7 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
     if (existingPaymentSync?.status === 'SUCCESS' && existingPaymentSync.xero_payment_id) {
       return {
         success: true,
-        invoiceId: invoiceSync.xero_invoice_id,
+        invoiceId: xeroInvoiceId,
         paymentId: existingPaymentSync.xero_payment_id,
       };
     }
@@ -369,7 +420,7 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
     const paymentResult = await recordXeroPayment({
       paymentLinkId,
       organizationId,
-      invoiceId: invoiceSync.xero_invoice_id,
+      invoiceId: xeroInvoiceId,
       amount: legacyPosting.amount,
       currency: legacyPosting.currency,
       paymentDate: paymentEvent.received_at ?? paymentEvent.created_at,
@@ -401,7 +452,7 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
       syncType: 'PAYMENT',
       organizationId,
       status: 'SUCCESS',
-      invoiceId: invoiceSync.xero_invoice_id,
+      invoiceId: xeroInvoiceId,
       paymentId,
       requestPayload: enrichedRequestPayload,
       payload: {
@@ -412,7 +463,7 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
 
     return {
       success: true,
-      invoiceId: invoiceSync.xero_invoice_id,
+      invoiceId: xeroInvoiceId,
       paymentId,
       narration: paymentResult.narration,
     };

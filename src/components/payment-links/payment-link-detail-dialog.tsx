@@ -64,6 +64,7 @@ import {
   operationalStatusLabel,
 } from '@/lib/payments/operational-status-labels';
 import { PaymentLifecyclePanel } from '@/components/payment-links/payment-lifecycle-panel';
+import { getXeroSyncDisplayStatus } from '@/lib/xero/xero-sync-display';
 
 warnIfUndefined('formatCurrency', formatCurrency, 'payment-link-detail-dialog.tsx');
 warnIfUndefined('Button', Button, 'payment-link-detail-dialog.tsx');
@@ -1128,32 +1129,28 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
           {operationsSection === 'xero' ? (
           <div className="space-y-2">
             {paymentLink.xeroSyncs && paymentLink.xeroSyncs.length > 0 ? (
-              paymentLink.xeroSyncs.map((sync) => (
+              paymentLink.xeroSyncs.map((sync) => {
+                const display = getXeroSyncDisplayStatus(sync, paymentLink.xeroSyncs ?? []);
+                return (
                 <Card key={sync.id}>
                   <CardContent className="py-3">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="text-sm font-medium">{sync.syncType}</p>
-                          <Badge
-                            variant={
-                              sync.status === 'SUCCESS'
-                                ? 'success'
-                                : sync.status === 'FAILED'
-                                ? 'destructive'
-                                : sync.status === 'RETRYING'
-                                ? 'default'
-                                : 'secondary'
-                            }
-                          >
-                            {sync.status}
+                          <Badge variant={display.variant}>
+                            {display.label}
                           </Badge>
                         </div>
-                        {sync.errorMessage && (
-                          <p className="text-xs text-destructive mt-1">
-                            {sync.errorMessage}
+                        {display.detail ? (
+                          <p
+                            className={`text-xs mt-1 ${
+                              display.isProgress ? 'text-muted-foreground' : 'text-destructive'
+                            }`}
+                          >
+                            {display.detail}
                           </p>
-                        )}
+                        ) : null}
                         {sync.syncType === 'INVOICE' &&
                         sync.status === 'SUCCESS' &&
                         sync.xeroInvoiceId ? (
@@ -1175,7 +1172,8 @@ export const PaymentLinkDetailDialog: React.FC<PaymentLinkDetailDialogProps> = (
                     </div>
                   </CardContent>
                 </Card>
-              ))
+                );
+              })
             ) : (
               <div className="text-center py-8">
                 <p className="text-sm text-muted-foreground mb-2">

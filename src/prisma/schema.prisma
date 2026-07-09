@@ -174,6 +174,7 @@ model merchant_settings {
   xero_audd_clearing_account_id   String? @db.VarChar(255)
   xero_wise_clearing_account_id   String? @db.VarChar(255)
   xero_fee_expense_account_id     String? @db.VarChar(255)
+  xero_cash_customer_contact_id   String? @db.VarChar(255)
 
   // Wise (payment links): profile id for API; null = Wise not enabled
   wise_profile_id String? @db.VarChar(255)
