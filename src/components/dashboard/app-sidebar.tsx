@@ -8,7 +8,7 @@
  * See src/app/(dashboard)/layout.tsx for where this prop is computed.
  */
 
-import type { DashboardProductProfile } from '@/lib/auth/admin-shared';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -226,7 +226,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                     <span className="text-lg font-bold">P</span>
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">Agreements</span>
+                    <span className="truncate font-semibold">{PRODUCT_TERMINOLOGY.projects}</span>
                     <span className="truncate text-xs text-muted-foreground">Settlement coordination</span>
                   </div>
                 </Link>
@@ -299,7 +299,7 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Provvypay</span>
-                  <span className="truncate text-xs text-muted-foreground">Agreement Intelligence Platform</span>
+                  <span className="truncate text-xs text-muted-foreground">Project Intelligence Platform</span>
                 </div>
               </Link>
             </SidebarMenuButton>

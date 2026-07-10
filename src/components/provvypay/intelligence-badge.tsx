@@ -1,5 +1,6 @@
 import { Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 
 type IntelligenceBadgeProps = {
   label?: string;
@@ -8,7 +9,7 @@ type IntelligenceBadgeProps = {
 };
 
 export function IntelligenceBadge({
-  label = 'Agreement Intelligence',
+  label = PRODUCT_TERMINOLOGY.projectIntelligence,
   className,
   pulse = false,
 }: IntelligenceBadgeProps) {

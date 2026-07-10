@@ -19,7 +19,7 @@ export function BriefingSectionNav({ projectId, className }: BriefingSectionNavP
         'sticky top-0 z-20 -mx-1 px-1 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-[rgba(124,92,255,0.12)]',
         className
       )}
-      aria-label="Agreement briefing sections"
+      aria-label="Project briefing sections"
     >
       <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
         {BRIEFING_SECTIONS.map((section) => (

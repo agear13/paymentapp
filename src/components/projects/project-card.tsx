@@ -3,7 +3,7 @@ import { ArrowRight, Users, Wallet, Banknote } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { ProjectWorkspaceSummary } from '@/lib/projects/project-workspace-summary';
-import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { AgreementHealthScoreBadge } from '@/components/agreements/health/briefing-agreement-health';
 import { formatParticipantPayoutReadiness } from '@/lib/projects/format-participant-payout-readiness';
 
@@ -70,7 +70,7 @@ export function ProjectCard({ project, health }: ProjectCardProps) {
           </dl>
 
           <div className="flex items-center text-sm font-medium text-primary pt-1">
-            Open agreement
+            {PRODUCT_TERMINOLOGY.openProject}
             <ArrowRight className="ml-1 h-4 w-4" />
           </div>
         </CardContent>

@@ -18,6 +18,7 @@
  */
 
 import * as React from 'react';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { Check, Circle, Dot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WorkflowStage } from '@/components/workflow/workflow-context';
@@ -47,7 +48,7 @@ export const COMMERCIAL_JOURNEY_STEPS: JourneyStep[] = [
   },
   {
     id: 'agreement-created',
-    label: 'Agreement created',
+    label: 'Project created',
     completedWhen: 'configuring',
     currentWhen: 'setup',
   },

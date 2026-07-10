@@ -294,7 +294,7 @@ function buildReviewReasons(
   }
 
   if (!party.role.value?.trim()) {
-    reasons.push({ code: 'missing_role', label: 'Commercial role not defined' });
+    reasons.push({ code: 'missing_role', label: 'Budgeted role not defined' });
   }
 
   return reasons;
@@ -361,7 +361,7 @@ function buildGroupedBlockers(cards: ParticipantCommercialCard[]): GroupedBlocke
     low_confidence_compensation: 'AI Confidence',
     conditional_payment_unconfirmed: 'Conditional Payments',
     missing_revenue_basis: 'Revenue Basis',
-    missing_role: 'Commercial Roles',
+    missing_role: 'Budgeted Roles',
     unresolved_dependency: 'Unresolved Dependencies',
   };
 
@@ -374,7 +374,7 @@ function buildGroupedBlockers(cards: ParticipantCommercialCard[]): GroupedBlocke
       case 'low_confidence_compensation': return `${count} participant${s} have uncertain compensation extractions`;
       case 'conditional_payment_unconfirmed': return `${count} participant${s} have unconfirmed conditional payments`;
       case 'missing_revenue_basis': return `${count} participant${s} missing revenue share basis`;
-      case 'missing_role': return `${count} participant${s} missing a commercial role definition`;
+      case 'missing_role': return `${count} participant${s} missing a budgeted role definition`;
       case 'unresolved_dependency': return `${count} participant${s} have unresolved commercial dependencies`;
       default: return `${count} participant${s} require attention`;
     }

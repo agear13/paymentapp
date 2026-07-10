@@ -86,7 +86,7 @@ function buildInsights(
     if (items.length === 0) {
       items.push({
         id: 'operational-status',
-        headline: 'Agreement is commercially operational.',
+        headline: 'Project is commercially operational.',
         context: "Revenue is flowing and Provvy is monitoring settlement automatically.",
         type: 'positive',
       });

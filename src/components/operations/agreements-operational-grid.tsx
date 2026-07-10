@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { projectOverviewPath } from '@/lib/projects/project-routes';
 import { stageFromScore } from '@/components/workflow/workflow-context';
 
@@ -81,8 +82,8 @@ export function AgreementsOperationalGrid({
 }: AgreementsOperationalGridProps) {
   if (loading && snapshots.length === 0) {
     return (
-      <section aria-label="Your agreements" className="space-y-2.5">
-        <h2 className="text-sm font-semibold text-foreground">Your agreements</h2>
+      <section aria-label={PRODUCT_TERMINOLOGY.yourProjects} className="space-y-2.5">
+        <h2 className="text-sm font-semibold text-foreground">{PRODUCT_TERMINOLOGY.yourProjects}</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {Array.from({ length: 2 }).map((_, i) => (
             <div
@@ -97,12 +98,12 @@ export function AgreementsOperationalGrid({
 
   if (!loading && snapshots.length === 0) {
     return (
-      <section aria-label="Your agreements" className="space-y-2.5">
-        <h2 className="text-sm font-semibold text-foreground">Your agreements</h2>
+      <section aria-label={PRODUCT_TERMINOLOGY.yourProjects} className="space-y-2.5">
+        <h2 className="text-sm font-semibold text-foreground">{PRODUCT_TERMINOLOGY.yourProjects}</h2>
         <div className="rounded-xl border border-dashed border-border/60 bg-white/40 px-5 py-8 text-center space-y-3">
-          <p className="text-sm font-medium text-foreground">No agreements yet.</p>
+          <p className="text-sm font-medium text-foreground">{PRODUCT_TERMINOLOGY.noProjectsYet}</p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Create your first agreement to begin coordinating commercial relationships.
+            Create your first project to begin coordinating commercial relationships.
           </p>
         </div>
       </section>
@@ -112,9 +113,9 @@ export function AgreementsOperationalGrid({
   const sorted = [...snapshots].sort((a, b) => a.score - b.score);
 
   return (
-    <section aria-label="Your agreements" className="space-y-2.5">
+    <section aria-label={PRODUCT_TERMINOLOGY.yourProjects} className="space-y-2.5">
       <div className="flex items-baseline gap-2">
-        <h2 className="text-sm font-semibold text-foreground">Your agreements</h2>
+        <h2 className="text-sm font-semibold text-foreground">{PRODUCT_TERMINOLOGY.yourProjects}</h2>
         <span className="text-xs text-muted-foreground">{snapshots.length} active</span>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">

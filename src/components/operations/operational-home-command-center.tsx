@@ -19,6 +19,7 @@ import { WorkspaceActivityFeed } from '@/components/operations/workspace-activit
 import { AskProvvyPanel } from '@/components/operations/ask-provvy-panel';
 import { deriveQueueTasksFromAttention } from '@/components/operations/operational-queue';
 import { WorkspaceCommercialFinancialSection } from '@/components/operations/workspace-commercial-financial-section';
+import { BusinessPrioritiesCard } from '@/components/operations/business-priorities-card';
 import { SupplierOnboardingDashboardWidget } from '@/components/commercial/supplier-onboarding/supplier-onboarding-operator-view';
 import { projectSupplierOnboardingPath } from '@/lib/projects/project-routes';
 
@@ -132,18 +133,19 @@ export function OperationalHomeCommandCenter() {
         />
       ) : null}
 
-      {/* ── 3. Commercial Position — projection of agreement state ─────────
-          All financial widgets derive from CommercialFinancialSnapshot.
-          No independent dashboard calculations. */}
+      {/* ── 3. Business financial overview — aggregated across all projects ── */}
       <WorkspaceCommercialFinancialSection
-        primaryProjectId={workspaceContext?.primaryProjectId ?? null}
         agreementSnapshots={snapshots}
         portfolio={portfolio}
         attentionItems={attentionItems}
         coordinationLoading={isLoading}
         workspaceContext={workspaceContext ?? null}
         activation={activation ?? null}
+        priorities={queueTasks}
       />
+
+      {/* ── 3b. Business Priorities ─────────────────────────────────────── */}
+      {!isLoading ? <BusinessPrioritiesCard tasks={queueTasks} /> : null}
 
       {/* ── 4. Supplier Onboarding Progress ──────────────────────────────
           Shows when any supplier has not yet completed onboarding.

@@ -10,6 +10,7 @@
  * full navigation intent, including scroll targets and page section anchors.
  */
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import {
   deriveWorkflowContext,
   type WorkflowStage,
@@ -261,7 +262,7 @@ export function resolveAgreementDestination(
         href: `${base}/activity`,
         label: 'View business story',
         estimatedMinutes: 0,
-        reason: 'Review the full business history for this agreement.',
+        reason: `Review the full business history ${PRODUCT_TERMINOLOGY.forThisProject}.`,
       };
   }
 }

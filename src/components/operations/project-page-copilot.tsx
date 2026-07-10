@@ -1,5 +1,7 @@
 'use client';
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
+
 /**
  * ProjectPageCopilot — per-page guidance banner for agreement workspace pages.
  *
@@ -37,7 +39,7 @@ function HistoryGuidance() {
       <div>
         <p className="text-sm font-medium text-foreground">Nothing needs your attention here.</p>
         <p className="text-sm text-muted-foreground mt-0.5">
-          This page records business milestones and operational history for this agreement.
+          This page records business milestones and operational history {PRODUCT_TERMINOLOGY.forThisProject}.
         </p>
       </div>
     </div>

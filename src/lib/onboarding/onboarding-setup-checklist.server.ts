@@ -43,7 +43,7 @@ export async function getOnboardingSetupChecklist(
     },
     {
       id: 'revenue',
-      label: 'Agreement ready for settlement',
+      label: 'Project ready for settlement',
       complete: revenueCollectionReady,
     },
     {

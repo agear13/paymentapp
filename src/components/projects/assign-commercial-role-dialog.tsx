@@ -22,6 +22,7 @@ import type { CommercialRole } from '@/lib/projects/commercial-roles/types';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import { assignCommercialRoleInDeals } from '@/lib/projects/commercial-roles/commercial-roles-payload';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 
 type AssignCommercialRoleDialogProps = {
   projectId: string;
@@ -87,7 +88,7 @@ export function AssignCommercialRoleDialog({
           <DialogHeader>
             <DialogTitle>Assign participant</DialogTitle>
             <DialogDescription>
-              Link {role.title} to a project participant. This does not create an agreement,
+              Link {role.title} to a project participant. This does not create a participation agreement,
               obligation, funding entry, or settlement.
             </DialogDescription>
           </DialogHeader>
@@ -111,7 +112,7 @@ export function AssignCommercialRoleDialog({
             </div>
             {participants.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                Invite a participant first, then return here to assign this commercial role.
+                Invite a participant first, then return here to assign this {PRODUCT_TERMINOLOGY.budgetedRoleLower}.
               </p>
             ) : null}
             {error ? <p className="text-sm text-destructive">{error}</p> : null}

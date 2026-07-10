@@ -1,3 +1,4 @@
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
 import { PAYOUTS_OBLIGATIONS_HREF, PAYOUTS_SETTLEMENTS_HREF } from '@/lib/navigation/operator-nav';
 import { projectParticipantsPath } from '@/lib/projects/project-routes';
@@ -37,17 +38,17 @@ export function deriveNextRecommendedAction(
   if (!activation.projectCreated) {
     return {
       id: 'project',
-      title: 'Create your first agreement',
-      description: 'Agreements organize participants, commercial terms, obligations, and settlement.',
+      title: 'Create your first project',
+      description: 'Projects organize participants, commercial terms, obligations, and settlement.',
       href: '/onboarding',
-      ctaLabel: 'Create agreement',
+      ctaLabel: PRODUCT_TERMINOLOGY.createProject,
     };
   }
 
   if (activation.participantCount === 0) {
     return {
       id: 'participants',
-      title: 'Add participants to your agreement',
+      title: 'Add participants to your project',
       description: 'Participants define who participates in revenue and settlement coordination.',
       href: participantsManagementHref(activation),
       ctaLabel: 'Add participants',

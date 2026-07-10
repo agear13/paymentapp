@@ -53,6 +53,7 @@ import {
 import {
   CommercialTimeline as CanonicalCommercialTimeline,
 } from '@/components/commercial/commercial-timeline';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { deriveAgreementIntelligence } from '@/lib/agreements/intelligence/agreement-intelligence-engine';
 import type { BriefingObligationRowInput } from '@/lib/agreements/agreement-briefing.model';
 import {
@@ -241,7 +242,7 @@ function CommercialSummaryCards({
             : `${snapshot.pendingApprovalCount} of ${snapshot.participantCount} pending`,
       detail:
         snapshot.participantCount === 0
-          ? 'Add team members so agreements can be generated.'
+          ? 'Add team members so participation agreements can be generated.'
           : participantsApproved
             ? 'All participants have approved.'
             : 'Approvals are required before payments can begin.',
@@ -641,7 +642,7 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
     return (
       <ProjectOperationalLoadingState
         variant="error"
-        message="This agreement could not be found. It may still be syncing from onboarding."
+        message={`${PRODUCT_TERMINOLOGY.projectNotFound} It may still be syncing from onboarding.`}
       />
     );
   }
@@ -650,7 +651,7 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
     return (
       <ProjectOperationalLoadingState
         variant="configuring"
-        message="This agreement is still being configured."
+        message="This project is still being configured."
         onRetry={() => {
           invalidate('all');
           void refresh({ scope: 'all', force: true });

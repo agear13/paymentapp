@@ -24,7 +24,7 @@ const TASK_ITEMS = [
 
 const OPERATOR_PHASE_LABELS: Partial<Record<OperationalOnboardingPhase, string>> = {
   PAYMENT_RAIL_INITIALIZED: 'Payment setup connected',
-  OPERATIONAL_GRAPH_READY: 'Agreement data ready',
+  OPERATIONAL_GRAPH_READY: 'Project data ready',
 };
 
 function operatorPhaseLabel(phase: OperationalOnboardingPhase): string {

@@ -3,6 +3,7 @@
  * Single source for UI copy; avoid technical / fintech / orchestration jargon.
  */
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { ReleaseConfidenceLevel } from '@/lib/operations/explainability/types';
 
 export const OPERATOR_LABELS = {
@@ -111,7 +112,7 @@ export const EMPTY_STATE_COPY = {
   },
   funding: {
     title: 'No funding activity yet',
-    body: 'Funding tasks appear once revenue is collected or obligations are created for this agreement.',
+    body: `Funding tasks appear once revenue is collected or obligations are created ${PRODUCT_TERMINOLOGY.forThisProject}.`,
     cta: 'Add revenue source',
   },
 } as const;

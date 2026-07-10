@@ -98,6 +98,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import {
@@ -242,7 +243,7 @@ export default function DealNetworkPage() {
     return recentDealToFeatured(
       {
         id: '__placeholder__',
-        dealName: isProjectMode ? 'No agreement yet' : 'No deal yet',
+        dealName: isProjectMode ? 'No project yet' : 'No deal yet',
         partner: '—',
         value: 0,
         introducer: '',
@@ -898,9 +899,9 @@ export default function DealNetworkPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold tracking-tight">
-              {isProjectMode ? 'Agreements' : 'Commission Operations'}
+              {isProjectMode ? PRODUCT_TERMINOLOGY.projects : 'Commission Operations'}
             </h1>
-            <Badge variant="secondary">{isProjectMode ? 'Agreements' : 'Pilot'}</Badge>
+            <Badge variant="secondary">{isProjectMode ? PRODUCT_TERMINOLOGY.projects : 'Pilot'}</Badge>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Button type="button" variant="outline" size="sm" asChild>
@@ -918,7 +919,7 @@ export default function DealNetworkPage() {
               }}
             >
               <Plus className="h-4 w-4 mr-1" />
-              {isProjectMode ? 'Create agreement' : 'Create Deal'}
+              {isProjectMode ? PRODUCT_TERMINOLOGY.createProject : 'Create Deal'}
             </Button>
           </div>
         </div>
@@ -1450,7 +1451,7 @@ export default function DealNetworkPage() {
                           if (!activeDeal) {
                             return (
                               <span className="text-sm text-muted-foreground">
-                                {isProjectMode ? 'No agreement selected' : 'No deal selected'}
+                                {isProjectMode ? 'No project selected' : 'No deal selected'}
                               </span>
                             );
                           }
@@ -1821,7 +1822,7 @@ export default function DealNetworkPage() {
           <div className="flex flex-wrap gap-2 shrink-0">
             <Button type="button" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4 mr-1" />
-              {isProjectMode ? 'Create agreement' : 'Create deal'}
+              {isProjectMode ? PRODUCT_TERMINOLOGY.createProject : 'Create deal'}
             </Button>
             <Button type="button" variant="outline" onClick={() => setExportOpen(true)}>
               <Download className="h-4 w-4 mr-1" />

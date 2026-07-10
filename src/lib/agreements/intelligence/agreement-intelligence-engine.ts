@@ -1,4 +1,5 @@
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
   composeAgreementBriefingSnapshot,
@@ -102,7 +103,7 @@ function derivePrimaryRecommendation(input: AgreementIntelligenceInput): Agreeme
     fundingReady
   ) {
     return {
-      action: 'Agreement ready for settlement',
+      action: 'Project ready for settlement',
       reason: guidance.releaseConfidence.explainability.headline,
       impact: `${releaseReadyCount} participant${releaseReadyCount === 1 ? '' : 's'} ready for release under this agreement.`,
       ctaLabel: 'Review settlement',
@@ -124,8 +125,8 @@ function derivePrimaryRecommendation(input: AgreementIntelligenceInput): Agreeme
 
   if (participantCount === 0) {
     return {
-      action: 'Add agreement participants',
-      reason: 'No participants are identified for this agreement yet.',
+      action: 'Add participants',
+      reason: `No participants are identified for this project yet.`,
       impact: 'Participants define who earns, approves, and receives settlement.',
       ctaLabel: 'Manage participants',
       ctaHref: projectParticipantsPath(projectId),
@@ -134,10 +135,10 @@ function derivePrimaryRecommendation(input: AgreementIntelligenceInput): Agreeme
   }
 
   return {
-    action: 'Continue agreement coordination',
+    action: 'Continue project coordination',
     reason: guidance.explanation.explainability.headline || input.summary.operationalStageLabel,
     impact: guidance.explanation.explainability.bullets[0] ?? 'Complete setup steps to unlock settlement.',
-    ctaLabel: 'Open agreement',
+    ctaLabel: PRODUCT_TERMINOLOGY.openProject,
     ctaHref: safeOperationalNavigation('open_project', projectId),
     urgency: 'medium',
   };
@@ -206,7 +207,7 @@ function deriveFundingFunnel(input: AgreementIntelligenceEnrichedInput): Agreeme
   return [
     {
       id: 'agreement-created',
-      label: 'Agreement Created',
+      label: 'Project created',
       status: 'complete',
       detail: input.snapshot.createdLabel,
     },

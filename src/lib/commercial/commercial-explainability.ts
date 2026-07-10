@@ -185,7 +185,7 @@ export function deriveExpectedRevenueBreakdown(
       sourceType: 'Revenue Source',
       emptyStateReason: 'No expected revenue yet.',
       emptyStateChecklist: [
-        'Agreements are approved',
+        'Participation agreements are approved',
         'Revenue sources are added',
         'Commercial commitments are created',
       ],
@@ -247,7 +247,7 @@ export function deriveExpectedObligationsBreakdown(
       emptyStateChecklist: [
         'Participants are added to the agreement',
         'Earnings are configured for each participant',
-        'Agreements are approved',
+        'Participation agreements are approved',
       ],
     };
   }
@@ -423,7 +423,7 @@ export function deriveCommercialConfidenceBreakdown(
       confidence: 0,
       emptyStateReason: 'Add revenue sources to see confidence scores.',
       emptyStateChecklist: [
-        'Agreements are approved',
+        'Participation agreements are approved',
         'Revenue sources are added',
         'Invoices are generated',
       ],

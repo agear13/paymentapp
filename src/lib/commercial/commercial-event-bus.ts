@@ -758,7 +758,7 @@ function buildNotification(
   switch (event.kind) {
     case 'agreement_negotiated':
       return {
-        title: 'Agreement created',
+        title: 'Project created',
         description: `Commercial terms for ${agreementName} are ready to be sent for approval.`,
         level: 'success',
       };

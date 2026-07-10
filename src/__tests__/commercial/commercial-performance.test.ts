@@ -826,7 +826,7 @@ describe('James Tourism Scenario', () => {
       projectId: PROJECT_ID,
       stage: 'negotiating',
       type: 'agreement_negotiated',
-      title: 'Agreement created',
+      title: 'Project created',
       description: 'James created the Sunset Sessions agreement.',
       commercialImpact: 'Commercial obligations recorded.',
       occurredAt: '2024-06-01T09:00:00Z',

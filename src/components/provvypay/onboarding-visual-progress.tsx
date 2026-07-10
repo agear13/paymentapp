@@ -1,5 +1,6 @@
 'use client';
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { cn } from '@/lib/utils';
 import {
   resolveOnboardingProgressStep,
@@ -9,7 +10,7 @@ import {
 /** Short labels fit the stepper row without clipping; mobile shows the active full label. */
 const VISUAL_PHASES = [
   { id: 'workspace', label: 'Business', mobileLabel: 'Where am I?' },
-  { id: 'agreement', label: 'Agreement', mobileLabel: 'Create agreement' },
+  { id: 'agreement', label: PRODUCT_TERMINOLOGY.project, mobileLabel: PRODUCT_TERMINOLOGY.createProject },
   { id: 'review', label: 'Review', mobileLabel: 'Is it correct?' },
   { id: 'configure', label: 'Payments', mobileLabel: 'How money moves' },
   { id: 'ready', label: 'Ready', mobileLabel: 'Am I ready?' },

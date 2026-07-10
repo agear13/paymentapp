@@ -1,5 +1,6 @@
 'use client';
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { cn } from '@/lib/utils';
 import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
 import type { TimelineEvent } from '@/lib/operations/explainability/types';
@@ -85,7 +86,7 @@ function toStoryEntry(entry: OperationalAuditEntry): StoryEntry {
     case 'funding_linked':
       return {
         headline: 'Revenue collection is configured.',
-        context: 'Customers can now pay for this agreement.',
+        context: 'Customers can now pay for this project.',
         dotColor: 'bg-[rgb(124,92,255)]',
       };
 

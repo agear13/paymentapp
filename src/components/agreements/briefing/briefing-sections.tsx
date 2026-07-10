@@ -15,6 +15,7 @@ import type {
   AgreementIntelligenceOutput,
   AgreementParticipantAction,
 } from '@/lib/agreements/intelligence/agreement-intelligence.types';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { BriefingSectionShell } from '@/components/agreements/briefing/briefing-section-shell';
 import { BriefingScoreRing } from '@/components/agreements/briefing/briefing-score-ring';
 import { IntelligenceBadge } from '@/components/provvypay/intelligence-badge';
@@ -66,8 +67,8 @@ export function BriefingSummarySection({
   return (
     <BriefingSectionShell
       id="briefing-summary"
-      title="Agreement Summary"
-      description="Commercial relationship status and coordination phase for this agreement."
+      title="Project Summary"
+      description={`Commercial relationship status and coordination phase ${PRODUCT_TERMINOLOGY.forThisProject}.`}
       variant="intelligence"
     >
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
@@ -143,11 +144,11 @@ export function BriefingParticipantsSection({
     <BriefingSectionShell
       id="briefing-participants"
       title="Participants"
-      description="Parties to this agreement — roles, approvals, settlement path, and required actions."
+      description={`Parties to this project — roles, approvals, settlement path, and required actions.`}
     >
       {snapshot.participants.length === 0 ? (
         <p className="text-sm text-muted-foreground py-4">
-          No participants have been identified for this agreement yet. Add participants to begin
+          No participants have been identified for this project yet. Add participants to begin
           coordination.
         </p>
       ) : (
@@ -252,7 +253,7 @@ export function BriefingCommercialTermsSection({
     <BriefingSectionShell
       id="briefing-terms"
       title="Commercial Terms"
-      description="Structured summary of what was agreed — extracted and coordinated by Agreement Intelligence."
+      description={`Structured summary of what was agreed — extracted and coordinated by ${PRODUCT_TERMINOLOGY.projectIntelligence}.`}
       variant="intelligence"
     >
       {snapshot.commercialTerms.length === 0 ? (
@@ -293,7 +294,7 @@ export function BriefingObligationsSection({
     <BriefingSectionShell
       id="briefing-obligations"
       title="Obligations"
-      description="Amounts owed under this agreement — funding and approvals determine settlement eligibility."
+      description={`Amounts owed under this project — funding and approvals determine settlement eligibility.`}
     >
       {total === 0 ? (
         <p className="text-sm text-muted-foreground py-4">
@@ -357,7 +358,7 @@ export function BriefingApprovalsSection({ snapshot }: Pick<BriefingSectionsProp
     >
       {snapshot.approvals.length === 0 ? (
         <p className="text-sm text-muted-foreground py-4 surface-settlement px-4 py-4 rounded-lg border-0">
-          No approvals are required for this agreement. Settlement can proceed when obligations are
+          No approvals are required for this project. Settlement can proceed when obligations are
           funded.
         </p>
       ) : (
@@ -401,7 +402,7 @@ export function BriefingSettlementSection({
     <BriefingSectionShell
       id="briefing-settlement"
       title="Settlement Readiness"
-      description="Funding, confirmations, and eligibility for settlement under this agreement."
+      description={`Funding, confirmations, and eligibility for settlement ${PRODUCT_TERMINOLOGY.forThisProject}.`}
       variant="settlement"
     >
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
@@ -505,13 +506,13 @@ export function BriefingActivitySection({
     <BriefingSectionShell
       id="briefing-activity"
       title="Business Story"
-      description="Business milestones as this agreement progresses — approvals, payments, obligations, and settlement."
+      description={`Business milestones as this project progresses — approvals, payments, obligations, and settlement.`}
       variant="activity"
     >
       <OperationalAuditTimeline
         entries={activityEntries}
         maxItems={16}
-        emptyMessage="Business activity will appear here as this agreement progresses."
+        emptyMessage="Business activity will appear here as this project progresses."
       />
     </BriefingSectionShell>
   );
@@ -528,7 +529,7 @@ export function BriefingAuditSection({ auditEntries }: Pick<BriefingSectionsProp
       <OperationalAuditTimeline
         entries={auditEntries}
         maxItems={20}
-        emptyMessage="Business history will populate as activity is recorded for this agreement."
+        emptyMessage={`Business history will populate as activity is recorded ${PRODUCT_TERMINOLOGY.forThisProject}.`}
       />
     </BriefingSectionShell>
   );
@@ -552,7 +553,7 @@ export function BriefingIntelligencePanel({
   const criticalBlocker = settlementBlockers.find((b) => b.severity === 'blocking') ?? settlementBlockers[0];
 
   const items = [
-    { label: 'Agreement health', value: `${health.score} · ${health.categoryLabel}`, accent: 'intelligence' as const },
+    { label: PRODUCT_TERMINOLOGY.projectHealth, value: `${health.score} · ${health.categoryLabel}`, accent: 'intelligence' as const },
     { label: 'Health trend', value: health.trend.label, accent: 'default' as const },
     {
       label: 'Settlement readiness',
@@ -619,9 +620,9 @@ export function BriefingIntelligencePanel({
 
       <div className="surface-intelligence p-5 space-y-4">
         <IntelligenceBadge />
-        <p className="text-sm font-semibold">Agreement Intelligence</p>
+        <p className="text-sm font-semibold">{PRODUCT_TERMINOLOGY.projectIntelligence}</p>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Live coordination signals for this agreement — updated from participant, obligation, and
+          Live coordination signals {PRODUCT_TERMINOLOGY.forThisProject} — updated from participant, obligation, and
           settlement state.
         </p>
         <ul className="space-y-3">

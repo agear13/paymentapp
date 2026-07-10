@@ -7,6 +7,7 @@ import type { AttentionItem } from '@/lib/operations/severity';
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
 import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/types';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
+import { PRODUCT_TERMINOLOGY, projectCountLabel, projectsProgressingLabel, projectsNeedAttentionLabel } from '@/lib/product/product-terminology';
 
 type BusinessPulseProps = {
   attentionItems: AttentionItem[];
@@ -50,8 +51,8 @@ function buildNarrative(
   if (totalAgreements === 0) {
     return {
       lines: [
-        'No agreements yet.',
-        'Create your first agreement to begin coordinating commercial relationships.',
+        PRODUCT_TERMINOLOGY.noProjectsYet,
+        'Create your first project to begin coordinating commercial relationships.',
       ],
       tone: 'neutral',
     };
@@ -90,11 +91,12 @@ function buildNarrative(
     const lines: string[] = [];
     if (healthyAgreements > 0) {
       lines.push(
-        `${healthyAgreements} ${healthyAgreements === 1 ? 'agreement is' : 'agreements are'} progressing well.`
+        `${projectsProgressingLabel(healthyAgreements)} progressing well.`
       );
     }
     lines.push(
-      `${needsAttentionAgreements} ${needsAttentionAgreements === 1 ? 'agreement needs' : 'agreements need'} attention before payouts can be released.`
+      projectsNeedAttentionLabel(needsAttentionAgreements) +
+        ' before payouts can be released.'
     );
     if (totalMinutes > 0) lines.push(`Estimated work today: ${totalMinutes} minutes.`);
     return { lines, tone: 'attention' };
@@ -128,8 +130,8 @@ function buildNarrative(
       lines: [
         'Everything is progressing well.',
         totalAgreements === 1
-          ? `${primaryAgreement?.agreementName ?? 'Your agreement'} is on track.`
-          : `All ${totalAgreements} agreements are on track.`,
+          ? `${primaryAgreement?.agreementName ?? 'Your project'} is on track.`
+          : `All ${totalAgreements} projects are on track.`,
       ],
       tone: 'positive',
     };
@@ -140,7 +142,7 @@ function buildNarrative(
   if (totalAgreements === 1 && primaryAgreement) {
     lines.push(`${primaryAgreement.agreementName} is in progress.`);
   } else {
-    lines.push(`${totalAgreements} agreements are in progress.`);
+    lines.push(`${totalAgreements} projects are in progress.`);
   }
   if (actionCount > 0) {
     lines.push(

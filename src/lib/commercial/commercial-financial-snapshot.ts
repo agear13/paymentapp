@@ -261,7 +261,7 @@ function deriveAggregatedCashReadiness(
     primaryBlocker: canEveryoneBePaid
       ? null
       : snapshots.find((s) => s.forecast.cashReadiness.primaryBlocker)?.forecast.cashReadiness
-          .primaryBlocker ?? 'One or more agreements have insufficient revenue.',
+          .primaryBlocker ?? 'One or more projects have insufficient revenue.',
     currency,
   };
 }
@@ -289,6 +289,6 @@ function deriveAggregatedConfidence(
   return {
     level,
     score: avgScore,
-    summary: `Aggregated confidence across ${snapshots.length} agreement${snapshots.length !== 1 ? 's' : ''}.`,
+    summary: `Aggregated confidence across ${snapshots.length} ${snapshots.length === 1 ? 'project' : 'projects'}.`,
   };
 }

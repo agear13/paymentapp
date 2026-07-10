@@ -14,7 +14,7 @@ describe('OnboardingVisualProgress', () => {
     render(<OnboardingVisualProgress step="workspace" />);
 
     expect(screen.getByText('Business')).toBeInTheDocument();
-    expect(screen.getByText('Agreement')).toBeInTheDocument();
+    expect(screen.getByText('Project')).toBeInTheDocument();
     expect(screen.getByText('Review')).toBeInTheDocument();
     expect(screen.getByText('Payments')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();

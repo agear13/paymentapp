@@ -1,5 +1,6 @@
 'use client';
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { cn } from '@/lib/utils';
 import type { AttentionItem } from '@/lib/operations/severity';
 import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
@@ -85,7 +86,7 @@ export function WorkloadSnapshot({
       label: 'Open tasks',
       value: allOpen > 0 ? allOpen : '—',
       tone: allOpen > 0 ? 'default' : 'muted',
-      sublabel: allOpen > 0 ? 'across all agreements' : 'nothing outstanding',
+      sublabel: allOpen > 0 ? PRODUCT_TERMINOLOGY.acrossAllProjects : 'nothing outstanding',
     },
     {
       label: 'Completed today',

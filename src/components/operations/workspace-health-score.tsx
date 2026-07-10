@@ -2,6 +2,7 @@
 
 import { Check, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { AgreementHealthPortfolioSummary } from '@/lib/agreements/health/agreement-health.types';
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
@@ -79,7 +80,7 @@ export function WorkspaceHealthScore({
       done: workspace?.hasOrganization ?? activation?.workspaceCreated ?? false,
     },
     {
-      label: 'Agreement created',
+      label: 'Project created',
       done: activation?.projectCreated ?? (portfolio?.totalAgreements ?? 0) > 0,
     },
     { label: 'Participants invited',      done: caps.participantsInvited },

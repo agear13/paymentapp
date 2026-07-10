@@ -1,5 +1,6 @@
 'use client';
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { OperationalGuidanceBundle } from '@/lib/operations/explainability';
 import type { AttentionItem } from '@/lib/operations/severity';
 import { compressOperationalBlockers } from '@/lib/operations/explainability/deduplicate-operational-actions';
@@ -55,7 +56,7 @@ export function OperationalCommandCenterHero({
   return (
     <header className={cn(opSpace.heroY, `pb-5 border-b ${opDivider}`)}>
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className={opTypePageTitle}>Agreement coordination</h1>
+        <h1 className={opTypePageTitle}>{PRODUCT_TERMINOLOGY.projectCoordination}</h1>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <OperationalStatePill phase={workspacePhase} scope="workspace" />

@@ -7,6 +7,7 @@ import { formatCompactCurrency } from '@/lib/formatters/format-currency';
 import type { AttentionItem } from '@/lib/operations/severity';
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
 import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/types';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
 
 type AskProvvyPanelProps = {
@@ -27,19 +28,19 @@ type ProvvyQuery = {
 const QUERIES: ProvvyQuery[] = [
   {
     id: 'blocking-payouts',
-    question: 'What agreements are blocking payouts?',
+    question: 'What projects are blocking payouts?',
     deriveAnswer: ({ snapshots }) => {
       const blocking = snapshots.filter(
         (s) => s.category === 'at_risk' || s.category === 'attention_required'
       );
       if (blocking.length === 0) {
-        return 'No agreements are currently blocking payouts. Everything is on track.';
+        return 'No projects are currently blocking payouts. Everything is on track.';
       }
       const names = blocking.map((s) => s.agreementName);
       const nameList = names.length === 1
         ? names[0]
         : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-      return `${nameList} ${blocking.length === 1 ? 'is' : 'are'} not yet ready for settlement. The primary issue${blocking.length === 1 ? '' : 's'}: ${blocking.map((s) => s.categoryReason.toLowerCase()).filter(Boolean).join('; ') || 'review the agreement for details'}.`;
+      return `${nameList} ${blocking.length === 1 ? 'is' : 'are'} not yet ready for settlement. The primary issue${blocking.length === 1 ? '' : 's'}: ${blocking.map((s) => s.categoryReason.toLowerCase()).filter(Boolean).join('; ') || `review the ${PRODUCT_TERMINOLOGY.projectLower} for details`}.`;
     },
   },
   {
@@ -67,7 +68,7 @@ const QUERIES: ProvvyQuery[] = [
       const currency = releaseConfidence?.currency ?? 'AUD';
       const collected = releaseConfidence?.collectedRevenue ?? 0;
       if (ready > 0) {
-        return `${formatCompactCurrency(ready, currency)} is ready to release right now. You can start a payout batch immediately from the agreement's Money section.`;
+        return `${formatCompactCurrency(ready, currency)} is ready to release right now. You can start a payout batch immediately from the project's Money section.`;
       }
       if (collected > 0) {
         const held = releaseConfidence?.heldBack ?? 0;
@@ -85,13 +86,13 @@ const QUERIES: ProvvyQuery[] = [
   },
   {
     id: 'ready-for-payments',
-    question: 'Which agreements are ready for payments?',
+    question: 'Which projects are ready for payments?',
     deriveAnswer: ({ snapshots }) => {
       const ready = snapshots.filter(
         (s) => s.category === 'excellent' || s.score >= 80
       );
       if (ready.length === 0) {
-        return 'No agreements are fully ready for payments yet. Review the outstanding tasks on each agreement to move them forward.';
+        return `No ${PRODUCT_TERMINOLOGY.projectsLower} are fully ready for payments yet. Review the outstanding tasks on each ${PRODUCT_TERMINOLOGY.projectLower} to move them forward.`;
       }
       const names = ready.map((s) => s.agreementName);
       const nameList = names.length === 1
@@ -102,30 +103,30 @@ const QUERIES: ProvvyQuery[] = [
   },
   {
     id: 'missing-participants',
-    question: 'Show me agreements missing participants.',
+    question: 'Show me projects missing participants.',
     deriveAnswer: ({ snapshots, attentionItems }) => {
       const participantIssues = attentionItems.filter((i) =>
         /participant|invite|approval/i.test(i.title + ' ' + i.explanation)
       );
       if (participantIssues.length === 0) {
-        return 'All agreements have their participants configured. No invitations are outstanding.';
+        return `All ${PRODUCT_TERMINOLOGY.projectsLower} have their participants configured. No invitations are outstanding.`;
       }
       const affectedAgreements = [
         ...new Set(participantIssues.map((i) => i.projectName).filter(Boolean)),
       ] as string[];
       if (affectedAgreements.length === 0) {
-        return `${participantIssues.length} participant ${participantIssues.length === 1 ? 'action needs' : 'actions need'} your attention. Open each agreement to see who to invite.`;
+        return `${participantIssues.length} participant ${participantIssues.length === 1 ? 'action needs' : 'actions need'} your attention. Open each ${PRODUCT_TERMINOLOGY.projectLower} to see who to invite.`;
       }
       return `${affectedAgreements.join(', ')} ${affectedAgreements.length === 1 ? 'has' : 'have'} outstanding participant actions — invitations or approvals still needed.`;
     },
   },
   {
     id: 'why-not-ready',
-    question: "Why isn't my primary agreement ready?",
+    question: "Why isn't my primary project ready?",
     deriveAnswer: ({ snapshots, attentionItems }) => {
       const primary = [...snapshots].sort((a, b) => a.score - b.score)[0];
       if (!primary) {
-        return "There aren't any agreements yet. Create an agreement and I'll guide you through it.";
+        return `There aren't any ${PRODUCT_TERMINOLOGY.projectsLower} yet. ${PRODUCT_TERMINOLOGY.createProject} and I'll guide you through it.`;
       }
       if (primary.category === 'excellent') {
         return `${primary.agreementName} is already ready — no blockers. You can proceed to release payouts.`;

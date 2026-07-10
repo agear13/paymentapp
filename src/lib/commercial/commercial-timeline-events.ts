@@ -15,6 +15,7 @@
  */
 
 import type { OperationalAuditEntry, OperationalAuditEventType } from '@/lib/operations/audit/operational-audit';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { mergeAuditTimeline } from '@/lib/operations/audit/operational-audit';
 import type { CommercialCommitmentStage } from '@/lib/commercial/commitment-lifecycle';
 import type {
@@ -279,7 +280,7 @@ const AUDIT_TO_COMMERCIAL: Partial<Record<OperationalAuditEventType, AuditMappin
     description: (e) =>
       e.actor
         ? `Revenue attribution for ${e.actor} was configured.`
-        : 'Revenue attribution rules were configured for this agreement.',
+        : `Revenue attribution rules were configured ${PRODUCT_TERMINOLOGY.forThisProject}.`,
     commercialImpact:
       'Commission tracking is active. Revenue will be attributed automatically to qualifying participants.',
   },
@@ -296,7 +297,7 @@ const AUDIT_TO_COMMERCIAL: Partial<Record<OperationalAuditEventType, AuditMappin
   project_initialized: {
     type: 'agreement_negotiated',
     stage: 'negotiated',
-    title: 'Agreement created',
+    title: 'Project created',
     description: () => 'Agreement was created in the commercial workspace.',
     commercialImpact:
       'Participants and earnings can now be configured.',

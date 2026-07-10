@@ -23,9 +23,11 @@ import {
   isLikelyProjectIdSegment,
 } from '@/lib/projects/get-project-display-name';
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
+
 const pathTitles: Record<string, string> = {
   dashboard: 'Dashboard',
-  projects: 'Agreements',
+  projects: PRODUCT_TERMINOLOGY.projects,
   partners: 'Partners',
   participants: 'Participants',
   payments: 'Funding',

@@ -23,7 +23,7 @@ import {
 import { useDealNetworkExperience } from '@/components/deal-network-demo/deal-network-experience-provider';
 import { useToast } from '@/hooks/use-toast';
 import { CreateFromConversationButton } from '@/components/ai-extractor/create-from-conversation-button';
-import { trackOutcomeOnce } from '@/lib/agreements/validation/agreement-intelligence-analytics';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 
 export function ProjectsWorkspaceIndex() {
   const router = useRouter();
@@ -124,13 +124,13 @@ export function ProjectsWorkspaceIndex() {
       if (!ok) {
         setDeals(deals);
         toast({
-          title: 'Could not save agreement',
-          description: 'Try again from the agreements workspace.',
+          title: 'Could not save project',
+          description: 'Try again from the projects workspace.',
           variant: 'destructive',
         });
         return false;
       }
-      toast({ title: 'Agreement created', description: deal.dealName });
+      toast({ title: 'Project created', description: deal.dealName });
       trackOutcomeOnce('outcome_first_agreement', { agreementName: deal.dealName, projectId: deal.id });
       setCreateOpen(false);
       router.push(`/dashboard/projects/${encodeURIComponent(deal.id)}`);
@@ -144,9 +144,9 @@ export function ProjectsWorkspaceIndex() {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Agreements</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{PRODUCT_TERMINOLOGY.projects}</h1>
           <p className="text-muted-foreground mt-1 max-w-2xl">
-            Coordinate participants, funding, obligations, and settlement per agreement in one
+            Coordinate participants, funding, obligations, and settlement per project in one
             workspace.
           </p>
         </div>
@@ -165,7 +165,7 @@ export function ProjectsWorkspaceIndex() {
             />
             <GatedButton feature="create_agreement" onClick={() => setCreateOpen(true)} size="lg">
               <Plus className="mr-2 h-4 w-4" />
-              Create agreement
+              {PRODUCT_TERMINOLOGY.createProject}
             </GatedButton>
           </div>
         </div>
@@ -174,7 +174,7 @@ export function ProjectsWorkspaceIndex() {
       {loading ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin mr-2" />
-          Loading agreements…
+          Loading projects…
         </div>
       ) : summaries.length === 0 ? (
         <Card className="border-dashed">
@@ -182,9 +182,9 @@ export function ProjectsWorkspaceIndex() {
             <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
               <FolderKanban className="h-6 w-6 text-primary" />
             </div>
-            <CardTitle>Create your first agreement</CardTitle>
+            <CardTitle>Create your first project</CardTitle>
             <CardDescription className="max-w-md mx-auto">
-              Start by naming an agreement. You will add participants, link funding, track obligations,
+              Start by naming a project. You will add participants, link funding, track obligations,
               and coordinate settlement in one place.
             </CardDescription>
           </CardHeader>
@@ -203,7 +203,7 @@ export function ProjectsWorkspaceIndex() {
             />
             <GatedButton feature="create_agreement" variant="ghost" onClick={() => setCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Create agreement manually
+              {PRODUCT_TERMINOLOGY.createProject} manually
             </GatedButton>
           </CardContent>
         </Card>
@@ -232,9 +232,9 @@ export function ProjectsWorkspaceIndex() {
             {summaries.length === 1 ? (
               <Card className="border-dashed bg-muted/10 h-fit">
                 <CardHeader>
-                  <CardTitle className="text-base">How agreements work</CardTitle>
+                  <CardTitle className="text-base">How projects work</CardTitle>
                   <CardDescription>
-                    Each agreement coordinates one commercial relationship from participant approvals
+                    Each project coordinates one commercial relationship from participant approvals
                     through settlement readiness.
                   </CardDescription>
                 </CardHeader>

@@ -6,6 +6,7 @@ import type { AgreementHealthPortfolioSummary } from '@/lib/agreements/health/ag
 import { IntelligenceBadge } from '@/components/provvypay/intelligence-badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { PRODUCT_TERMINOLOGY, projectCountLabel, projectsNeedAttentionLabel } from '@/lib/product/product-terminology';
 import { projectOverviewPath } from '@/lib/projects/project-routes';
 
 type AgreementHealthOverviewProps = {
@@ -32,7 +33,7 @@ export function AgreementHealthOverview({
       <Card className="surface-intelligence border-0">
         <CardContent className="py-8 flex items-center justify-center text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" />
-          Calculating agreement health…
+          Calculating project health…
         </CardContent>
       </Card>
     );
@@ -52,16 +53,16 @@ export function AgreementHealthOverview({
       <CardHeader className={compact ? 'pb-3' : undefined}>
         <div className="flex flex-wrap items-center gap-2">
           <IntelligenceBadge />
-          <CardTitle className={compact ? 'text-lg' : 'text-xl'}>Agreement health overview</CardTitle>
+          <CardTitle className={compact ? 'text-lg' : 'text-xl'}>{PRODUCT_TERMINOLOGY.projectHealthOverview}</CardTitle>
         </div>
         <CardDescription>
-          {portfolio.totalAgreements} agreement{portfolio.totalAgreements === 1 ? '' : 's'} · Average
+          {projectCountLabel(portfolio.totalAgreements)} · Average
           health {portfolio.averageScore}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile label="Total agreements" value={String(portfolio.totalAgreements)} />
+          <StatTile label={PRODUCT_TERMINOLOGY.totalProjects} value={String(portfolio.totalAgreements)} />
           <StatTile
             label="Healthy"
             value={String(portfolio.byCategory.excellent + portfolio.byCategory.healthy)}
@@ -92,7 +93,7 @@ export function AgreementHealthOverview({
         {attentionCount > 0 ? (
           <div className="rounded-lg border border-amber-500/25 bg-amber-50/50 px-4 py-3">
             <p className="text-sm font-medium text-amber-900">
-              {attentionCount} agreement{attentionCount === 1 ? '' : 's'} need attention
+              {projectsNeedAttentionLabel(attentionCount)}
             </p>
             <ul className="mt-2 space-y-1">
               {portfolio.snapshots

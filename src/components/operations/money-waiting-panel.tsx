@@ -3,9 +3,12 @@
 import { cn } from '@/lib/utils';
 import { formatCompactCurrency } from '@/lib/formatters/format-currency';
 import type { CommercialFinancialSnapshot } from '@/lib/commercial/commercial-financial-snapshot';
+import type { BusinessFinancialSnapshot } from '@/lib/commercial/business-financial-snapshot';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 
 type MoneyWaitingPanelProps = {
   snapshot: CommercialFinancialSnapshot | null | undefined;
+  business?: BusinessFinancialSnapshot | null;
   loading?: boolean;
 };
 
@@ -21,7 +24,7 @@ type MoneyCard = {
  * Money Waiting — settlement pipeline states derived from CommercialFinancialSnapshot.
  * Never reads release confidence directly — all figures come from the shared engine.
  */
-export function MoneyWaitingPanel({ snapshot, loading }: MoneyWaitingPanelProps) {
+export function MoneyWaitingPanel({ snapshot, business = null, loading }: MoneyWaitingPanelProps) {
   if (loading) {
     return (
       <section aria-label="Money" className="space-y-2.5">
@@ -48,7 +51,7 @@ export function MoneyWaitingPanel({ snapshot, loading }: MoneyWaitingPanelProps)
       amount: hasRevenue ? (settlement?.waitingToCollect ?? 0) : 0,
       currency,
       tone: 'pending',
-      emptyText: 'No revenue yet. Revenue appears once agreements begin collecting payments.',
+      emptyText: 'No revenue yet. Revenue appears once projects begin collecting payments.',
     },
     {
       label: 'Waiting for approvals',
@@ -73,9 +76,18 @@ export function MoneyWaitingPanel({ snapshot, loading }: MoneyWaitingPanelProps)
     },
   ];
 
+  const activeProjects = business?.activeProjects ?? 0;
+  const scopeHint =
+    activeProjects > 0
+      ? `Aggregated across ${activeProjects} active ${activeProjects === 1 ? PRODUCT_TERMINOLOGY.projectLower : PRODUCT_TERMINOLOGY.projectsLower}`
+      : null;
+
   return (
     <section aria-label="Money" className="space-y-2.5">
-      <h2 className="text-sm font-semibold text-foreground">Money</h2>
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold text-foreground">Money</h2>
+        {scopeHint ? <span className="text-xs text-muted-foreground">{scopeHint}</span> : null}
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {cards.map((card) => (
           <MoneyCard key={card.label} {...card} />

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { AlertTriangle, Check, TrendingDown, TrendingUp } from 'lucide-react';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { BriefingSectionShell } from '@/components/agreements/briefing/briefing-section-shell';
 import { BriefingScoreRing } from '@/components/agreements/briefing/briefing-score-ring';
 import { IntelligenceBadge } from '@/components/provvypay/intelligence-badge';
@@ -30,7 +31,7 @@ export function BriefingAgreementHealth({ health }: BriefingAgreementHealthProps
   return (
     <BriefingSectionShell
       id="briefing-health"
-      title="Agreement Health"
+      title={PRODUCT_TERMINOLOGY.projectHealth}
       description="Composite coordination posture — fully explainable from settlement, funding, approval, and participant signals."
       variant="intelligence"
     >
@@ -38,7 +39,7 @@ export function BriefingAgreementHealth({ health }: BriefingAgreementHealthProps
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
           <BriefingScoreRing
             value={health.score}
-            label="Agreement health"
+            label={PRODUCT_TERMINOLOGY.projectHealth}
             sublabel={health.categoryLabel}
             variant="intelligence"
           />

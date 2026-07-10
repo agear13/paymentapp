@@ -40,7 +40,7 @@ function deriveDeltas(
   const deltas: ChangeDelta[] = [];
 
   const agreements = countType(recent, ['project_initialized', 'conversation_imported']);
-  if (agreements > 0) deltas.push({ label: 'Agreements created', value: `+${agreements}` });
+  if (agreements > 0) deltas.push({ label: 'Projects created', value: `+${agreements}` });
 
   const approvals = countType(recent, ['agreement_approved']);
   if (approvals > 0) deltas.push({ label: 'Participants approved', value: `+${approvals}` });

@@ -1,5 +1,6 @@
 import type { FeatureRegistryItemWithFeature } from './registry';
 import { WorkspaceFeature } from './types';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 
 export type WorkspaceReportRegistryItem = FeatureRegistryItemWithFeature;
 
@@ -24,7 +25,7 @@ export const WORKSPACE_REPORTING_REGISTRY = [
   },
   {
     id: 'agreement-intelligence',
-    title: 'Agreement Intelligence',
+    title: PRODUCT_TERMINOLOGY.projectIntelligence,
     href: '/dashboard/reports/agreement-intelligence',
     requiredFeature: WorkspaceFeature.AgreementIntelligence,
   },

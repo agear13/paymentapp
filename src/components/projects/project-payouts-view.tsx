@@ -1,5 +1,6 @@
 'use client';
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import Link from 'next/link';
 import { Banknote, FileCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,7 +33,7 @@ export function ProjectPayoutsView() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Payout coordination for this agreement: obligations first, then settlement.
+          Payout coordination {PRODUCT_TERMINOLOGY.forThisProject}: obligations first, then settlement.
         </p>
       </div>
 

@@ -3,14 +3,16 @@
 import { cn } from '@/lib/utils';
 import { formatCompactCurrency } from '@/lib/formatters/format-currency';
 import type { AgreementHealthPortfolioSummary } from '@/lib/agreements/health/agreement-health.types';
-import type { OperationalKPIs } from '@/lib/operations/reducer/types';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { CommercialFinancialSnapshot } from '@/lib/commercial/commercial-financial-snapshot';
+import type { BusinessFinancialSnapshot } from '@/lib/commercial/business-financial-snapshot';
+import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import type { AttentionItem } from '@/lib/operations/severity';
 
 type BusinessSnapshotHeroProps = {
   portfolio: AgreementHealthPortfolioSummary | null;
-  snapshot: CommercialFinancialSnapshot | null | undefined;
-  kpis: OperationalKPIs | null | undefined;
+  business: BusinessFinancialSnapshot | null | undefined;
+  workspaceContext: WorkspaceOperationalContext | null;
   attentionItems: AttentionItem[];
   loading?: boolean;
 };
@@ -37,8 +39,8 @@ function num(n: number): string {
 
 export function BusinessSnapshotHero({
   portfolio,
-  snapshot,
-  kpis,
+  business,
+  workspaceContext,
   attentionItems,
   loading,
 }: BusinessSnapshotHeroProps) {
@@ -61,7 +63,8 @@ export function BusinessSnapshotHero({
     );
   }
 
-  const currency = snapshot?.currency ?? 'AUD';
+  const snapshot = business?.commercial;
+  const currency = snapshot?.currency ?? business?.currency ?? 'AUD';
   const settlement = snapshot?.settlement;
   const hasRevenue = snapshot?.hasRevenueSources ?? false;
 
@@ -77,10 +80,10 @@ export function BusinessSnapshotHero({
   const readyCount =
     (portfolio?.byCategory.excellent ?? 0) + (portfolio?.byCategory.healthy ?? 0);
 
-  const totalParticipants = kpis?.participantCount ?? 0;
-  const approved = kpis?.approvedAgreementCount ?? 0;
-  const awaitingApproval = Math.max(0, totalParticipants - approved);
-  const payoutReady = kpis?.payoutReadyCount ?? 0;
+  const totalParticipants = workspaceContext?.participantCount ?? 0;
+  const configured = workspaceContext?.participantsConfiguredCount ?? 0;
+  const awaitingApproval = Math.max(0, totalParticipants - configured);
+  const payoutReady = workspaceContext?.releaseEligibleCount ?? 0;
 
   const critical = attentionItems.filter((i) => i.severity === 'CRITICAL').length;
   const medium = attentionItems.filter((i) => i.severity === 'ACTION_REQUIRED').length;
@@ -107,7 +110,7 @@ export function BusinessSnapshotHero({
       ],
     },
     {
-      heading: 'Agreements',
+      heading: PRODUCT_TERMINOLOGY.projects,
       metrics: [
         { label: 'Active', value: num(totalAgreements), tone: 'default' },
         {
@@ -122,7 +125,7 @@ export function BusinessSnapshotHero({
       heading: 'Participants',
       metrics: [
         {
-          label: 'Awaiting approval',
+          label: 'Awaiting setup',
           value: num(awaitingApproval),
           tone: awaitingApproval > 0 ? 'urgent' : 'muted',
         },

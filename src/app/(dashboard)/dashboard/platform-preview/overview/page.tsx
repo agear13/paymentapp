@@ -295,7 +295,7 @@ export default function PlatformPreviewOverviewPage() {
           <CardContent>
             <Link href="/dashboard/partners/deal-network">
               <Button variant="outline" className="w-full">
-                View Agreements
+                View Projects
                 <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
             </Link>

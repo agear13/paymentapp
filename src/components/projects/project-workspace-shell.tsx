@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { ProjectContextNav } from '@/components/projects/project-context-nav';
 import { ProjectContextHeader } from '@/components/projects/project-context-header';
@@ -45,7 +46,7 @@ export function ProjectWorkspaceShell({ projectId, children }: ProjectWorkspaceS
         <Button variant="ghost" asChild>
           <Link href="/dashboard/projects">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            All agreements
+            {PRODUCT_TERMINOLOGY.allProjects}
           </Link>
         </Button>
         <ProjectOperationalLoadingState
@@ -63,12 +64,12 @@ export function ProjectWorkspaceShell({ projectId, children }: ProjectWorkspaceS
         <Button variant="ghost" asChild>
           <Link href="/dashboard/projects">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            All agreements
+            {PRODUCT_TERMINOLOGY.allProjects}
           </Link>
         </Button>
         <Card>
           <CardHeader>
-            <CardTitle>Agreement not found</CardTitle>
+            <CardTitle>{PRODUCT_TERMINOLOGY.projectNotFound}</CardTitle>
             <CardDescription>
               This agreement may still be syncing. Your workspace data is safe — try refresh or
               return to onboarding.
@@ -94,7 +95,7 @@ export function ProjectWorkspaceShell({ projectId, children }: ProjectWorkspaceS
         <Button variant="ghost" className="w-fit px-0" asChild>
           <Link href="/dashboard/projects">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            All agreements
+            {PRODUCT_TERMINOLOGY.allProjects}
           </Link>
         </Button>
 

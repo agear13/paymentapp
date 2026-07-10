@@ -1,5 +1,7 @@
 'use client';
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
+
 /**
  * Accounting Status Widget
  *
@@ -74,7 +76,7 @@ export function AccountingStatusWidget({
     return (
       <div className={cn('rounded-xl border border-border/50 bg-card px-5 py-4', className)}>
         <p className="text-sm font-semibold text-foreground">Accounting</p>
-        <p className="text-xs text-muted-foreground mt-1">No accounting exports required for this agreement.</p>
+        <p className="text-xs text-muted-foreground mt-1">No accounting exports required {PRODUCT_TERMINOLOGY.forThisProject}.</p>
       </div>
     );
   }

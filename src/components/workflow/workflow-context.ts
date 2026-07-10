@@ -205,7 +205,7 @@ function deriveNextAction(
     case 'preparing-payments':
       return {
         action: 'Prepare suppliers for payment',
-        hint: 'All agreements are approved. Collect bank details, ABN, and GST status from each supplier before settlement can begin.',
+        hint: 'All participation agreements are approved. Collect bank details, ABN, and GST status from each supplier before settlement can begin.',
         minutes: 5,
         label: 'Complete payment setup',
       };
@@ -232,7 +232,7 @@ function deriveNextAction(
       };
     case 'operational':
       return {
-        action: 'Agreement is commercially operational',
+        action: 'Project is commercially operational',
         hint: 'Your commercial relationship is running. Monitor activity in the business story.',
         minutes: 0,
         label: 'View activity',

@@ -29,6 +29,7 @@ import type { WorkspaceOperationalContext } from '@/lib/operations/types/operati
 import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
 import type { OperationalAuditEntry, OperationalAuditEventType } from '@/lib/operations/audit/operational-audit';
 import type { AttentionItem } from '@/lib/operations/severity';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
 import { formatCompactCurrency } from '@/lib/formatters/format-currency';
 
@@ -178,12 +179,12 @@ function deriveProgressNarrative(decision: CommercialDecisionResult): string {
   const blockers = decision.priorityQueue.length;
   const stage = decision.workflowStage;
 
-  if (stage === 'operational') return 'This agreement is commercially operational.';
-  if (blockers === 0) return 'Everything is on track. This agreement is ready to proceed.';
+  if (stage === 'operational') return 'This project is commercially operational.';
+  if (blockers === 0) return 'Everything is on track. This project is ready to proceed.';
   if (blockers === 1) {
     return `Only one step remains before ${stage === 'preparing-payments' ? 'customer payments can begin' : 'the next milestone is reached'}.`;
   }
-  return `${blockers} steps remain before this agreement is ready.`;
+  return `${blockers} steps remain before this project is ready.`;
 }
 
 function deriveMissionStatement(
@@ -307,7 +308,7 @@ function buildOpeningSummary(
   if (focus.length === 0) {
     switch (mode) {
       case 'operational': return "Everything is running normally. I'll let you know when something needs attention.";
-      case 'mature':      return "Your agreements are commercially operational. I'm monitoring them now.";
+      case 'mature':      return `Your ${PRODUCT_TERMINOLOGY.projectsLower} are commercially operational. I'm monitoring them now.`;
       default:            return "I've reviewed your business. Everything is on track.";
     }
   }

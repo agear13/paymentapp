@@ -1,11 +1,12 @@
 import { SectionHubPage } from '@/components/dashboard/section-hub-page';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { CreditCard, Link as LinkIcon, Repeat } from 'lucide-react';
 
 export default function PaymentsPage() {
   return (
     <SectionHubPage
       title="Funding"
-      description="Coordinate revenue collection that funds agreement obligations — invoices, recurring schedules, and funding activity."
+      description="Coordinate revenue collection that funds project obligations — invoices, recurring schedules, and funding activity."
       links={[
         {
           title: 'Invoices',
@@ -21,7 +22,7 @@ export default function PaymentsPage() {
         },
         {
           title: 'Funding activity',
-          description: 'Review funding events and collection status across your agreements.',
+          description: `Review funding events and collection status ${PRODUCT_TERMINOLOGY.acrossYourProjects}.`,
           href: '/dashboard/transactions',
           icon: CreditCard,
         },

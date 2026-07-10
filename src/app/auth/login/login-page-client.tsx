@@ -1,5 +1,6 @@
 'use client';
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -24,7 +25,7 @@ type AuthMode = 'signin' | 'signup';
 const FEATURE_ROWS = [
   {
     icon: MessageSquare,
-    title: 'Agreement Intelligence',
+    title: PRODUCT_TERMINOLOGY.projectIntelligence,
     description: 'Extract commercial terms automatically from any conversation channel',
   },
   {
@@ -279,7 +280,7 @@ export function LoginPageClient() {
               </h2>
               <p className="text-muted-foreground leading-relaxed">
                 {mode === 'signin'
-                  ? 'Agreement Intelligence · Obligations · Settlement'
+                  ? `${PRODUCT_TERMINOLOGY.projectIntelligence} · Obligations · Settlement`
                   : 'Create a workspace to start turning conversations into obligations'}
               </p>
             </div>

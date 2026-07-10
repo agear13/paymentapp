@@ -27,6 +27,7 @@ import {
   type CreateCommercialRoleInput,
 } from '@/lib/projects/commercial-roles/commercial-roles-payload';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 
 const BUDGET_TYPES: CommercialRoleBudgetType[] = [
   'FIXED',
@@ -84,7 +85,7 @@ export function AddCommercialRoleDialog({
       };
       const nextDeals = addCommercialRoleToDeals(allDeals, projectId, input);
       const ok = await onSave(nextDeals);
-      if (!ok) throw new Error('Could not save commercial role');
+      if (!ok) throw new Error(PRODUCT_TERMINOLOGY.couldNotSaveBudgetedRole);
       reset();
       onOpenChange(false);
       onCreated?.();
@@ -106,9 +107,9 @@ export function AddCommercialRoleDialog({
       <DialogContent className="max-w-md">
         <form onSubmit={(e) => void handleSubmit(e)}>
           <DialogHeader>
-            <DialogTitle>Add commercial role</DialogTitle>
+            <DialogTitle>{PRODUCT_TERMINOLOGY.addBudgetedRole}</DialogTitle>
             <DialogDescription>
-              Plan a role and budget before inviting a participant or creating agreements.
+              Plan a role and budget before inviting a participant.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -169,7 +170,7 @@ export function AddCommercialRoleDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Saving…' : 'Add commercial role'}
+              {submitting ? 'Saving…' : PRODUCT_TERMINOLOGY.addBudgetedRole}
             </Button>
           </DialogFooter>
         </form>

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Check, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { cn } from '@/lib/utils';
 import {
   ONBOARDING_AGREEMENT_TEMPLATES,
@@ -32,8 +33,8 @@ export function OnboardingTemplateGallery({
     <div className={cn('space-y-5', className)}>
       <div>
         <p className="text-muted-foreground text-sm">
-          Templates are a fast-start mechanism — pre-configured agreements you can customize after
-          Agreement Intelligence review.
+          Templates are a fast-start mechanism — pre-configured projects you can customize after
+          {` ${PRODUCT_TERMINOLOGY.projectIntelligence} review.`}
         </p>
       </div>
 

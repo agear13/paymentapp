@@ -1,3 +1,4 @@
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,7 +29,7 @@ export function OnboardingContinuationBanner({
             <h2 className="text-lg font-semibold">Complete your payment setup</h2>
             <p className="text-sm text-muted-foreground max-w-2xl">
               Connect your payment provider and configure revenue collection to unlock payouts
-              across your agreements.
+              {PRODUCT_TERMINOLOGY.acrossYourProjects}.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:shrink-0">

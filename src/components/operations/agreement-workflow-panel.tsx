@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Check, Circle, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { QueueTask } from '@/components/operations/operational-queue';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
 import { projectOverviewPath } from '@/lib/projects/project-routes';
@@ -31,7 +32,7 @@ type WorkflowGroup = {
  */
 function deriveDoneSteps(score: number): string[] {
   const done: string[] = [];
-  if (score >= STAGE_COMPLETION['setup'])                done.push('Agreement created');
+  if (score >= STAGE_COMPLETION['setup'])                done.push('Project created');
   if (score >= STAGE_COMPLETION['configuring'])          done.push('Team added');
   if (score >= STAGE_COMPLETION['collecting-approvals']) done.push('Earnings configured');
   if (score >= STAGE_COMPLETION['preparing-payments'])   done.push('Approvals complete');
@@ -102,7 +103,7 @@ export function AgreementWorkflowPanel({
   if (groups.length === 0) return null;
 
   return (
-    <section aria-label="Agreement workflows" className="space-y-2.5">
+    <section aria-label="Project workflows" className="space-y-2.5">
       <h2 className="text-sm font-semibold text-foreground">Today's work</h2>
       <div className="space-y-2.5">
         {groups.map((group) => (

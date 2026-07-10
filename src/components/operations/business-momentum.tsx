@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { OperationalAuditEntry, OperationalAuditEventType } from '@/lib/operations/audit/operational-audit';
@@ -34,7 +35,7 @@ const MILESTONE_LABELS: Partial<Record<OperationalAuditEventType, { headline: st
   },
   funding_linked: {
     headline: 'Revenue collection is configured.',
-    context: 'Customers can now pay for this agreement.',
+    context: 'Customers can now pay for this project.',
   },
   obligations_generated: {
     headline: 'Payment obligations are confirmed.',

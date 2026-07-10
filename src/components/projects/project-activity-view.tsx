@@ -1,5 +1,6 @@
 'use client';
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { OperationalActivitySection } from '@/components/operations/operational-activity-section';
@@ -32,7 +33,7 @@ export function ProjectActivityView() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Business history — milestones and activity for this agreement.
+          Business history — milestones and activity {PRODUCT_TERMINOLOGY.forThisProject}.
         </p>
       </div>
 

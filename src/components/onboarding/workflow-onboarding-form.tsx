@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { setStoredOrganizationId } from '@/lib/organization/organization-id.client';
 import {
   Form,
@@ -836,7 +837,7 @@ export function WorkflowOnboardingForm() {
         source: importSourceType,
         readinessScore: insight.readinessScore,
       });
-      toast.success('Agreement Intelligence ready');
+      toast.success(`${PRODUCT_TERMINOLOGY.projectIntelligence} ready`);
       await enterAgreementReview(participants, insight);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not analyze agreement');
@@ -1192,11 +1193,11 @@ export function WorkflowOnboardingForm() {
       notifyWorkspaceActivationRefresh();
 
       if (successMutation.status === 'PARTIAL_SUCCESS') {
-        toast.message('Agreement created', {
+        toast.message('Project created', {
           description: successMutation.operationalWarning,
         });
       } else {
-        toast.success('Agreement created');
+        toast.success('Project created');
       }
       setStep('participants');
     } catch {
@@ -1447,7 +1448,7 @@ export function WorkflowOnboardingForm() {
       {step === 'import_source' && (
         <div className="space-y-6">
           <p className="text-muted-foreground text-sm">
-            Select where this commercial discussion took place. Agreement Intelligence adapts to
+            Select where this commercial discussion took place. {PRODUCT_TERMINOLOGY.projectIntelligence} adapts to
             each source format.
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -1686,7 +1687,7 @@ export function WorkflowOnboardingForm() {
                 name="projectName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Agreement name</FormLabel>
+                    <FormLabel>Project name</FormLabel>
                     <FormControl>
                       <Input placeholder="Coastal Promotions Revenue Share" {...field} />
                     </FormControl>

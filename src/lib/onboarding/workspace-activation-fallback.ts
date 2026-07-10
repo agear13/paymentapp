@@ -11,7 +11,7 @@ export const ACTIVATION_FALLBACK_CHECKLIST = [
   { id: 'participants' as const, label: 'Participants added', complete: false },
   { id: 'compensation' as const, label: 'Commercial terms captured', complete: false },
   { id: 'provider' as const, label: 'Settlement infrastructure configured', complete: false },
-  { id: 'revenue' as const, label: 'Agreement ready for settlement', complete: false },
+  { id: 'revenue' as const, label: 'Project ready for settlement', complete: false },
   { id: 'obligations' as const, label: 'Obligations tracked', complete: false },
   { id: 'release' as const, label: 'First payout release completed', complete: false },
 ];

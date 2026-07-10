@@ -1,3 +1,4 @@
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { CollectionPreferenceId } from '@/lib/onboarding/collection-preference';
 
 export const ONBOARDING_USE_CASES = [
@@ -48,13 +49,13 @@ export const ONBOARDING_START_METHODS = [
   },
   {
     id: 'create',
-    title: 'Create New Agreement',
+    title: 'Create New Project',
     headline: 'Starting something new?',
     description:
-      'Create your agreement from scratch by adding participants, responsibilities and payment terms.',
+      'Create your project from scratch by adding participants, responsibilities and payment terms.',
     chips: ['Participants', 'Responsibilities', 'Payments'] as const,
     timeEstimate: '~3–5 minutes',
-    cta: 'Create Agreement',
+    cta: 'Create Project',
   },
   {
     id: 'template',
@@ -347,7 +348,7 @@ export function onboardingStepLabel(step: OnboardingStep): string {
     case 'workspace':
       return 'Create business';
     case 'start_method':
-      return 'Create agreement';
+      return PRODUCT_TERMINOLOGY.createProject;
     case 'agreement_review':
       return 'Review agreement';
     case 'money_setup_intro':
@@ -367,7 +368,7 @@ export function onboardingStepTitle(step: OnboardingStep): string {
     case 'workspace':
       return 'Create your business';
     case 'start_method':
-      return 'How do you want to create your agreement?';
+      return 'How do you want to create your project?';
     case 'import_source':
       return 'Select agreement source';
     case 'import_content':
@@ -375,11 +376,11 @@ export function onboardingStepTitle(step: OnboardingStep): string {
     case 'template_select':
       return 'Choose a starting template';
     case 'template_customize':
-      return 'Build your agreement';
+      return 'Build your project';
     case 'project':
-      return 'Define your agreement';
+      return 'Define your project';
     case 'participants':
-      return 'Who is involved in this agreement?';
+      return 'Who is involved in this project?';
     case 'agreement_review':
       return "We've prepared your agreement";
     case 'money_setup_intro':
@@ -404,7 +405,7 @@ export function onboardingStepSubtext(step: OnboardingStep): string | null {
     case 'start_method':
       return 'Pick the path that fits how you work today.';
     case 'template_customize':
-      return 'Adjust participants and terms — your agreement takes shape as you go.';
+      return 'Adjust participants and terms — your project takes shape as you go.';
     case 'agreement_review':
       return null;
     case 'money_setup_intro':
@@ -412,7 +413,7 @@ export function onboardingStepSubtext(step: OnboardingStep): string | null {
     case 'use_case':
       return 'Pick the workflow that best matches this arrangement.';
     case 'funding':
-      return 'Choose how revenue enters this agreement.';
+      return 'Choose how revenue enters this project.';
     case 'payment_rails':
       return 'Choose how your business collects revenue and pays participants.';
     case 'complete':
@@ -427,10 +428,10 @@ export const ONBOARDING_PRICING_PLANS = [
     id: 'starter',
     name: 'Starter',
     price: '$0',
-    tagline: 'Perfect for exploring Agreement Intelligence.',
+    tagline: `Perfect for exploring ${PRODUCT_TERMINOLOGY.projectIntelligence}.`,
     recommended: false,
     features: [
-      'Up to 3 Agreements',
+      `Up to 3 ${PRODUCT_TERMINOLOGY.projects}`,
       'Up to 3 AI Imports',
       'Single Workspace',
       'Manual Settlement Tracking',
@@ -443,7 +444,7 @@ export const ONBOARDING_PRICING_PLANS = [
     tagline: 'Recommended for active operators.',
     recommended: true,
     features: [
-      'Unlimited Agreements',
+      `Unlimited ${PRODUCT_TERMINOLOGY.projects}`,
       'Unlimited AI Imports',
       'Payment Links',
       'Referral Management',

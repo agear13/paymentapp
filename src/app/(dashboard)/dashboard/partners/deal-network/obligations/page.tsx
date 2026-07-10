@@ -88,6 +88,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { PayoutGlossaryTooltip } from '@/components/payouts/payout-glossary-tooltip';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { cn } from '@/lib/utils';
 import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
 import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
@@ -879,10 +880,10 @@ function DealNetworkObligationsPageContent({
             <div className="flex flex-col gap-2 pt-2 sm:flex-row">
               <Select value={dealFilter} onValueChange={setDealFilter}>
                 <SelectTrigger className="h-9">
-                  <SelectValue placeholder="All agreements" />
+                  <SelectValue placeholder={PRODUCT_TERMINOLOGY.allProjects} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All agreements</SelectItem>
+                  <SelectItem value="__all__">{PRODUCT_TERMINOLOGY.allProjects}</SelectItem>
                   {dealOptions.map(([id, label]) => (
                     <SelectItem key={id} value={id}>
                       {label}

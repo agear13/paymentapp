@@ -15,6 +15,7 @@
  *   - One score. No duplication across components.
  */
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { CommercialForecastResult } from '@/lib/commercial/commercial-forecast';
 import type { CommercialDecisionResult } from '@/components/workflow/commercial-decision-engine';
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
@@ -191,7 +192,7 @@ function deriveAgreementCompletenessDimension(
 ): CommercialHealthDimension {
   if (!kpis) {
     return {
-      name: 'Agreement Completeness',
+      name: 'Project completeness',
       score: 50,
       status: 'Not yet assessed',
       requiresAction: false,
@@ -229,7 +230,7 @@ function deriveAgreementCompletenessDimension(
             : null;
 
   return {
-    name: 'Agreement Completeness',
+    name: 'Project completeness',
     score,
     status,
     requiresAction: score < 100,
@@ -348,7 +349,7 @@ function deriveSettlementReadinessDimension(
 const DIMENSION_WEIGHTS: Record<string, number> = {
   'Forecast': 0.25,
   'Revenue Certainty': 0.20,
-  'Agreement Completeness': 0.25,
+  'Project completeness': 0.25,
   'Workflow': 0.20,
   'Settlement Readiness': 0.10,
 };
@@ -404,19 +405,19 @@ function buildSummary(
   kpis: OperationalKPIs | null
 ): string {
   if (isOperational) {
-    return 'Agreement is commercially operational. All obligations have been settled.';
+    return 'Project is commercially operational. All obligations have been settled.';
   }
 
   switch (level) {
     case 'excellent':
       return forecast?.cashReadiness.canEveryoneBePaid
         ? 'All commercial commitments can be met. Settlement is ready to proceed.'
-        : 'Agreement is in excellent shape. Continue to the next commercial milestone.';
+        : 'Project is in excellent shape. Continue to the next commercial milestone.';
 
     case 'good':
       return decision?.nextStep
-        ? `Agreement is progressing well. Current stage: ${decision.nextStep}.`
-        : 'Agreement is progressing well. Continue to the next step.';
+        ? `Project is progressing well. Current stage: ${decision.nextStep}.`
+        : 'Project is progressing well. Continue to the next step.';
 
     case 'attention': {
       const weakCount = kpis
@@ -435,6 +436,6 @@ function buildSummary(
     case 'blocked':
       return decision?.recommendedAction?.explanation
         ? decision.recommendedAction.explanation
-        : 'Agreement is blocked. Action is required to continue.';
+        : 'Project is blocked. Action is required to continue.';
   }
 }

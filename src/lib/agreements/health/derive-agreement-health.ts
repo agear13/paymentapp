@@ -184,7 +184,7 @@ function buildHealthFactors(
       'fundingProgress',
       'Funding is connected and progressing toward obligation coverage.',
       fundingPendingLabel(input),
-      'Funding sources not yet connected for this agreement.',
+      'Funding sources not yet connected for this project.',
       'Link and confirm funding sources.'
     ),
     factor(
@@ -220,7 +220,7 @@ function buildHealthFactors(
       'settlement',
       'Settlement readiness',
       'settlementReadiness',
-      'Settlement readiness is strong for this agreement.',
+      'Settlement readiness is strong for this project.',
       'Settlement is approaching readiness with remaining gaps.',
       'Settlement is not yet ready at the agreement level.',
       'Resolve blockers and confirm funding.'
@@ -240,10 +240,10 @@ function buildHealthFactors(
       'terms',
       'Commercial terms captured',
       'commercialTermsCompleteness',
-      'Commercial terms define how this agreement settles.',
+      'Commercial terms define how this project settles.',
       'Commercial terms are partially captured.',
       'Commercial terms have not been captured.',
-      'Add commercial roles and settlement schedule.'
+      'Add budgeted roles and settlement schedule.'
     ),
     factor(
       'infrastructure',

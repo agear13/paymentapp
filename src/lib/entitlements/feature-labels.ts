@@ -2,9 +2,11 @@ import type { EntitlementFeature, SubscriptionPlan } from '@/lib/entitlements/ty
 import { requiredPlanLabel } from '@/lib/entitlements/plans';
 import { starterLimitMessage } from '@/lib/entitlements/plan-onboarding-summaries';
 
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
+
 export const FEATURE_DISPLAY_NAMES: Record<EntitlementFeature, string> = {
-  create_agreement: 'Agreements',
-  ai_import: 'AI Agreement Import',
+  create_agreement: PRODUCT_TERMINOLOGY.projects,
+  ai_import: 'AI Project Import',
   payment_links: 'Payment Links',
   referral_management: 'Referral & Affiliate Management',
   xero_integration: 'Xero Integration',
@@ -24,7 +26,7 @@ export function upgradeHeadline(
   subscriptionInactive?: boolean
 ): string {
   if (subscriptionInactive) return 'Active subscription required';
-  if (atLimit && feature === 'create_agreement') return 'Agreement limit reached';
+  if (atLimit && feature === 'create_agreement') return 'Project limit reached';
   if (atLimit && feature === 'ai_import') return 'AI import limit reached';
   return `${FEATURE_DISPLAY_NAMES[feature]} requires an upgrade`;
 }
@@ -42,7 +44,7 @@ export function upgradeBody(
     case 'create_agreement':
       return atLimit
         ? starterLimitMessage('create_agreement')
-        : `Upgrade to ${requiredPlanLabel(requiredPlan)} to create more agreements.`;
+        : `Upgrade to ${requiredPlanLabel(requiredPlan)} to create more projects.`;
     case 'ai_import':
       return atLimit
         ? starterLimitMessage('ai_import')

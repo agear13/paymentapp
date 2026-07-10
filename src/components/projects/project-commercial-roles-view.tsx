@@ -31,6 +31,7 @@ import {
   removeCommercialRoleFromDeals,
 } from '@/lib/projects/commercial-roles/commercial-roles-payload';
 import type { CommercialRole } from '@/lib/projects/commercial-roles/types';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { projectParticipantsPath } from '@/lib/projects/project-routes';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 
@@ -110,9 +111,9 @@ export function ProjectCommercialRolesView() {
       const nextDeals = removeCommercialRoleFromDeals(allDeals, projectId, roleId);
       const ok = await persistDeals(nextDeals);
       if (!ok) throw new Error('Delete failed');
-      toast.success('Commercial role removed');
+      toast.success(PRODUCT_TERMINOLOGY.budgetedRoleRemoved);
     } catch {
-      toast.error('Could not remove commercial role');
+      toast.error(PRODUCT_TERMINOLOGY.couldNotRemoveBudgetedRole);
     } finally {
       setDeletingId(null);
     }
@@ -123,17 +124,16 @@ export function ProjectCommercialRolesView() {
   }
 
   if (notFound || !summary || !deal) {
-    return <p className="text-muted-foreground p-6">Agreement not found.</p>;
+    return <p className="text-muted-foreground p-6">{PRODUCT_TERMINOLOGY.projectNotFound}</p>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Commercial roles</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{PRODUCT_TERMINOLOGY.budgetedRoles}</h1>
           <p className="text-muted-foreground mt-1 text-sm max-w-2xl">
-            Plan roles and budgets before participants join. Stored on the project record for
-            workflow validation only — not agreements, obligations, funding, or settlements.
+            {PRODUCT_TERMINOLOGY.budgetedRolesHelper}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -151,29 +151,28 @@ export function ProjectCommercialRolesView() {
           </Button>
           <Button onClick={() => setAddOpen(true)}>
             <Briefcase className="mr-2 h-4 w-4" />
-            Add commercial role
+            {PRODUCT_TERMINOLOGY.addBudgetedRole}
           </Button>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Planned commercial roles</CardTitle>
+          <CardTitle className="text-lg">{PRODUCT_TERMINOLOGY.budgetedRoles}</CardTitle>
           <CardDescription>
-            Assign participants when ready. Agreement, obligation, funding, and payout workflows are
-            unchanged.
+            {PRODUCT_TERMINOLOGY.budgetedRolesAssignHelper}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {roles.length === 0 ? (
             <div className="py-10 text-center space-y-4">
               <p className="text-sm text-muted-foreground">
-                No commercial roles yet. Add planned roles such as DJ, promoter, or supplier before
+                {PRODUCT_TERMINOLOGY.noBudgetedRolesYet} Add planned roles such as DJ, promoter, or supplier before
                 inviting people.
               </p>
               <Button onClick={() => setAddOpen(true)}>
                 <Briefcase className="mr-2 h-4 w-4" />
-                Add commercial role
+                {PRODUCT_TERMINOLOGY.addBudgetedRole}
               </Button>
             </div>
           ) : (
@@ -243,7 +242,7 @@ export function ProjectCommercialRolesView() {
         >
           Participants
         </Link>{' '}
-        for agreements and earnings, then obligations, funding, and payouts as today.
+        for participant agreements and earnings, then obligations, funding, and payouts as today.
       </p>
 
       <AddCommercialRoleDialog
@@ -252,7 +251,7 @@ export function ProjectCommercialRolesView() {
         open={addOpen}
         onOpenChange={setAddOpen}
         onSave={persistDeals}
-        onCreated={() => toast.success('Commercial role added')}
+        onCreated={() => toast.success(PRODUCT_TERMINOLOGY.budgetedRoleAdded)}
       />
 
       <AssignCommercialRoleDialog

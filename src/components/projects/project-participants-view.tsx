@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { InviteProjectParticipantModal } from '@/components/projects/invite-project-participant-modal';
 import { useOrganization } from '@/hooks/use-organization';
@@ -989,7 +990,7 @@ export function ProjectParticipantsView() {
                 <Button asChild>
                   <Link href={projectCommercialRolesPath(projectId)}>
                     <ClipboardList className="mr-2 h-4 w-4" />
-                    Add commercial role
+                    {PRODUCT_TERMINOLOGY.addBudgetedRole}
                   </Link>
                 </Button>
                 <Button variant="outline" onClick={() => setInviteOpen(true)}>
@@ -1204,7 +1205,7 @@ export function ProjectParticipantsView() {
               <Button size="lg" asChild>
                 <Link href={projectCommercialRolesPath(projectId)}>
                   <ClipboardList className="mr-2 h-4 w-4" />
-                  Add commercial role
+                  {PRODUCT_TERMINOLOGY.addBudgetedRole}
                 </Link>
               </Button>
               <Button variant="outline" size="lg" onClick={() => setInviteOpen(true)}>

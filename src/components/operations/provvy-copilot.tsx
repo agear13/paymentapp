@@ -9,6 +9,7 @@ import type { AttentionItem } from '@/lib/operations/severity';
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
 import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/types';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
+import { PRODUCT_TERMINOLOGY, projectCountLabel, projectsProgressingLabel, projectsNeedAttentionLabel } from '@/lib/product/product-terminology';
 import type { QueueTask } from '@/components/operations/operational-queue';
 import type { OperationalAuditEntry } from '@/lib/operations/audit/operational-audit';
 import { analyseWorkspace } from '@/components/workflow/commercial-decision-engine';
@@ -119,8 +120,8 @@ function buildNarrative(
   if (totalAgreements === 0) {
     return {
       headline: 'Welcome to Provvypay.',
-      body: "Let's create your first commercial agreement and I'll guide you through preparing it for payments.",
-      ctaLabel: 'Create agreement',
+      body: "Let's create your first project and I'll guide you through preparing it for payments.",
+      ctaLabel: PRODUCT_TERMINOLOGY.createProject,
       ctaHref: '/dashboard/onboarding',
       tone: 'empty',
     };
@@ -148,9 +149,9 @@ function buildNarrative(
       eyebrow: greeting(operatorName),
       headline: 'Everything is progressing well.',
       body: secondAgreement
-        ? `${healthyAgreements[0]?.agreementName ?? 'Your agreement'} is now ready for payouts. I'd recommend checking on ${secondAgreement.agreementName} next.`
-        : `${primaryAgreement?.agreementName ?? 'Your agreement'} is now ready for payouts.`,
-      ctaLabel: 'View agreements',
+        ? `${healthyAgreements[0]?.agreementName ?? 'Your project'} is now ready for payouts. I'd recommend checking on ${secondAgreement.agreementName} next.`
+        : `${primaryAgreement?.agreementName ?? 'Your project'} is now ready for payouts.`,
+      ctaLabel: `View ${PRODUCT_TERMINOLOGY.projectsLower}`,
       tone: 'positive',
     };
   }
@@ -212,11 +213,11 @@ function buildNarrative(
     if (totalAgreements > 1 && healthyAgreements.length > 0) {
       return {
         eyebrow: greeting(operatorName),
-        headline: `${healthyAgreements.length} ${healthyAgreements.length === 1 ? 'agreement is' : 'agreements are'} progressing well.`,
+        headline: `${projectsProgressingLabel(healthyAgreements.length)} progressing well.`,
         body: `${primaryAgreement.agreementName} needs attention before payouts can be released.`,
         steps,
         estimatedMinutes: totalMinutes > 0 ? totalMinutes : undefined,
-        outcome: 'Settlement cleared across all agreements.',
+        outcome: 'Settlement cleared across all projects.',
         ctaLabel: `Continue ${primaryAgreement.agreementName}`,
         ctaHref: smartCtaHref,
         tone: 'action',
@@ -241,12 +242,12 @@ function buildNarrative(
   // Fallback
   return {
     eyebrow: greeting(operatorName),
-    headline: `${totalAgreements} agreement${totalAgreements === 1 ? '' : 's'} in progress.`,
+    headline: `${projectCountLabel(totalAgreements)} in progress.`,
     body:
       actionItems.length > 0
         ? `${actionItems.length} action${actionItems.length === 1 ? '' : 's'} need your attention.`
         : undefined,
-    ctaLabel: 'View agreements',
+    ctaLabel: `View ${PRODUCT_TERMINOLOGY.projectsLower}`,
     tone: 'action',
   };
 }

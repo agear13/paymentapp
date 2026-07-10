@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -153,16 +154,16 @@ export function CreateDealModalProject({
         }}
       >
         <DialogHeader className="px-6 pt-6 shrink-0">
-          <DialogTitle>{editDeal ? 'Edit agreement' : 'Create agreement'}</DialogTitle>
+          <DialogTitle>{editDeal ? `Edit ${PRODUCT_TERMINOLOGY.projectLower}` : PRODUCT_TERMINOLOGY.createProject}</DialogTitle>
           <DialogDescription>
-            Name your agreement, optionally describe it, and paste an invoice link when you have one. Referral roles
+            Name your project, optionally describe it, and paste an invoice link when you have one. Referral roles
             stay stored in the background for compatibility but are not used in this mode.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col max-h-[min(90vh,calc(100vh-2rem))]">
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4">
             <div className="space-y-2">
-              <Label htmlFor="dn-proj-name">Agreement name</Label>
+              <Label htmlFor="dn-proj-name">Project name</Label>
               <Input
                 id="dn-proj-name"
                 value={dealName}
@@ -224,7 +225,7 @@ export function CreateDealModalProject({
               Cancel
             </Button>
             <Button type="submit" disabled={!canSubmit || isSubmitting}>
-              {isSubmitting ? 'Saving…' : editDeal ? 'Save changes' : 'Create agreement'}
+              {isSubmitting ? 'Saving…' : editDeal ? 'Save changes' : PRODUCT_TERMINOLOGY.createProject}
             </Button>
           </div>
         </form>

@@ -850,11 +850,11 @@ function buildHealthSummary(
     case 'healthy':
       return forecast.cashReadiness.canEveryoneBePaid
         ? 'Revenue exceeds commitments. All suppliers can be paid.'
-        : 'Agreement is performing well commercially.';
+        : 'Project is performing well commercially.';
     case 'watch':
       return forecast.commercialRisks.length > 0
         ? `One or more commercial risks require monitoring.`
-        : 'Agreement is progressing. Watch for outstanding items.';
+        : 'Project is progressing. Watch for outstanding items.';
     case 'attention':
       return forecast.forecastPosition.status === 'deficit'
         ? 'Revenue is below commitments. Immediate action required.'

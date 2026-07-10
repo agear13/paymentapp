@@ -48,6 +48,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { useDevSimulator } from '@/components/dev/simulator-store';
 import { SIMULATOR_SCENARIOS } from '@/lib/dev/simulator-scenarios';
 import type { DevSimulatorState, SimulatorAuditEventType, SimulatorPlan } from '@/lib/dev/simulator-types';
@@ -260,7 +261,7 @@ const AUDIT_EVENTS: { type: SimulatorAuditEventType; label: string; icon: string
   { type: 'stripe_connected', label: 'Generate Stripe Connected', icon: '💳' },
   { type: 'revenue_received', label: 'Generate Revenue Received', icon: '💰' },
   { type: 'settlement_released', label: 'Generate Settlement Released', icon: '🏦' },
-  { type: 'agreement_created', label: 'Generate Agreement Created', icon: '📄' },
+  { type: 'agreement_created', label: 'Generate Project Created', icon: '📄' },
   { type: 'participant_added', label: 'Generate Participant Added', icon: '👤' },
   { type: 'payment_received', label: 'Generate Payment Received', icon: '💳' },
 ];
@@ -389,7 +390,7 @@ export default function DeveloperControlCentrePage() {
   const LIVE_LINKS = [
     { label: 'Dashboard', href: '/dashboard' },
     { label: 'Projects', href: '/dashboard/projects' },
-    { label: 'Agreement Overview', href: `/dashboard/projects/${PROJECT_DEMO_ID}/overview` },
+    { label: PRODUCT_TERMINOLOGY.projectOverview, href: `/dashboard/projects/${PROJECT_DEMO_ID}/overview` },
     { label: 'Participants (Approval Centre)', href: `/dashboard/projects/${PROJECT_DEMO_ID}/participants?focus=approvals` },
     { label: 'Money & Settlement', href: `/dashboard/projects/${PROJECT_DEMO_ID}/funding` },
     { label: 'Commercial Journey', href: `/dashboard/projects/${PROJECT_DEMO_ID}/commercial-journey` },
@@ -893,7 +894,7 @@ export default function DeveloperControlCentrePage() {
                 href="/dashboard/projects"
                 className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5 text-xs hover:border-primary/50 transition-colors group"
               >
-                <span className="text-foreground font-medium">All Agreements</span>
+                <span className="text-foreground font-medium">{PRODUCT_TERMINOLOGY.allProjects}</span>
                 <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:text-primary transition-colors" />
               </Link>
               <Link

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { AgreementIntelligenceValidationReport } from '@/lib/agreements/validation/aggregate-validation-metrics';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,7 +62,7 @@ export function AgreementIntelligenceValidationDashboard() {
     return (
       <Card>
         <CardContent className="py-8 text-center text-muted-foreground">
-          No validation data yet. Open agreement briefings to begin collecting intelligence usage signals.
+          No validation data yet. Open project briefings to begin collecting intelligence usage signals.
         </CardContent>
       </Card>
     );
@@ -95,10 +96,10 @@ export function AgreementIntelligenceValidationDashboard() {
 
       <Card className="surface-intelligence border-0">
         <CardHeader>
-          <CardTitle>Agreement Intelligence Usage Report</CardTitle>
+          <CardTitle>{PRODUCT_TERMINOLOGY.projectIntelligence} Usage Report</CardTitle>
           <CardDescription>
             {report.eventCount} events · {report.usage.uniqueUsers} operator(s) ·{' '}
-            {report.usage.uniqueAgreementsViewed} agreement(s)
+            {report.usage.uniqueAgreementsViewed} {PRODUCT_TERMINOLOGY.projectLower}(s)
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -223,7 +224,7 @@ export function AgreementIntelligenceValidationDashboard() {
       <Card>
         <CardHeader>
           <CardTitle>User understanding feedback</CardTitle>
-          <CardDescription>Lightweight Yes/No prompts from agreement briefings</CardDescription>
+          <CardDescription>Lightweight Yes/No prompts from project briefings</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <MetricTile label="Recommendation helpful (Yes)" value={report.feedback.recommendationHelpfulYes} />

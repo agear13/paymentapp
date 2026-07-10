@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import type { FeatureRegistryItemWithFeature } from './registry';
 import { WorkspaceFeature } from './types';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 
 export type WorkspaceNavigationRegistryChild = FeatureRegistryItemWithFeature<LucideIcon> & {
   adminOnly?: boolean;
@@ -46,7 +47,7 @@ export const WORKSPACE_NAVIGATION_REGISTRY = [
   },
   {
     id: 'projects',
-    title: 'Agreements',
+    title: PRODUCT_TERMINOLOGY.projects,
     icon: FolderKanban,
     href: '/dashboard/projects',
     requiredFeature: WorkspaceFeature.Agreements,
@@ -138,7 +139,7 @@ export const WORKSPACE_NAVIGATION_REGISTRY = [
       },
       {
         id: 'agreement-intelligence',
-        title: 'Agreement Intelligence',
+        title: PRODUCT_TERMINOLOGY.projectIntelligence,
         href: '/dashboard/reports/agreement-intelligence',
         icon: Activity,
         requiredFeature: WorkspaceFeature.AgreementIntelligence,
@@ -344,7 +345,7 @@ export const RABBIT_HOLE_PILOT_NAVIGATION_REGISTRY = [
 export const STRAIT_EXPERIENCES_PILOT_NAVIGATION_REGISTRY = [
   {
     ...RABBIT_HOLE_PILOT_NAVIGATION_REGISTRY[0],
-    title: 'Agreements',
+    title: PRODUCT_TERMINOLOGY.projects,
   },
   ...RABBIT_HOLE_PILOT_NAVIGATION_REGISTRY.slice(1),
 ] as const satisfies readonly WorkspaceNavigationRegistryItem[];

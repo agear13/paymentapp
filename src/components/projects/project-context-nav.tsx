@@ -74,7 +74,7 @@ export function ProjectContextNav({ projectId }: ProjectContextNavProps) {
   return (
     <nav
       className="flex gap-0.5 border-b border-border/80 pb-px overflow-x-auto"
-      aria-label="Agreement sections"
+      aria-label="Project sections"
     >
       {TABS.map((tab) => {
         const href = hrefForTab(projectId, tab.id);

@@ -20,6 +20,8 @@ import {
   type CommercialHealthLevel,
 } from '@/lib/commercial/commercial-health';
 import type { CommercialFinancialSnapshot } from '@/lib/commercial/commercial-financial-snapshot';
+import type { BusinessFinancialSnapshot } from '@/lib/commercial/business-financial-snapshot';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import {
   RevenueBreakdownDrawer,
   ObligationsBreakdownDrawer,
@@ -32,6 +34,7 @@ import {
 
 export type CommercialPositionCardsProps = {
   snapshot: CommercialFinancialSnapshot | null | undefined;
+  business?: BusinessFinancialSnapshot | null;
   loading?: boolean;
   className?: string;
   projectId?: string;
@@ -43,6 +46,7 @@ type DrawerKind = 'revenue' | 'obligations' | 'net_forecast' | 'cash_readiness' 
 
 export function CommercialPositionCards({
   snapshot,
+  business = null,
   loading = false,
   className,
   projectId,
@@ -51,6 +55,35 @@ export function CommercialPositionCards({
 
   const forecast = snapshot?.forecast ?? null;
   const health = snapshot?.health ?? null;
+  const isBusinessView = Boolean(business);
+  const activeProjects = business?.activeProjects ?? 0;
+  const projectScopeLabel =
+    activeProjects > 0
+      ? `Across ${activeProjects} active ${activeProjects === 1 ? PRODUCT_TERMINOLOGY.projectLower : PRODUCT_TERMINOLOGY.projectsLower}`
+      : undefined;
+
+  const healthBreakdown = business?.projectHealth;
+  const cashBreakdown = business?.cashReadiness;
+
+  const businessHealthValue = (() => {
+    if (!healthBreakdown || healthBreakdown.total === 0) return '—';
+    if (healthBreakdown.blocked > 0) return 'Needs action';
+    if (healthBreakdown.atRisk > 0 || healthBreakdown.attentionRequired > 0) return 'Mixed';
+    return 'Healthy';
+  })();
+
+  const businessHealthSubvalue = healthBreakdown
+    ? [
+        healthBreakdown.healthy > 0 ? `${healthBreakdown.healthy} healthy` : null,
+        healthBreakdown.attentionRequired > 0
+          ? `${healthBreakdown.attentionRequired} need attention`
+          : null,
+        healthBreakdown.atRisk > 0 ? `${healthBreakdown.atRisk} at risk` : null,
+        healthBreakdown.blocked > 0 ? `${healthBreakdown.blocked} blocked` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : undefined;
 
   if (loading) {
     return (
@@ -75,11 +108,30 @@ export function CommercialPositionCards({
       <div className={cn('grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6', className)}>
         {/* 1. Commercial Position */}
         <PositionCard
-          label="Commercial Position"
-          value={health?.level ? healthLevelLabel(health.level) : '—'}
-          subvalue={health?.summary ?? undefined}
-          accent={health ? healthLevelAccent(health.level) : 'neutral'}
-          icon={health ? healthLevelIcon(health.level) : null}
+          label={isBusinessView ? 'Business commercial health' : 'Commercial Position'}
+          value={isBusinessView ? businessHealthValue : health?.level ? healthLevelLabel(health.level) : '—'}
+          subvalue={isBusinessView ? businessHealthSubvalue : health?.summary ?? undefined}
+          accent={
+            isBusinessView
+              ? healthBreakdown && (healthBreakdown.blocked > 0 || healthBreakdown.atRisk > 0)
+                ? 'negative'
+                : healthBreakdown && healthBreakdown.attentionRequired > 0
+                  ? 'warning'
+                  : 'positive'
+              : health
+                ? healthLevelAccent(health.level)
+                : 'neutral'
+          }
+          icon={
+            isBusinessView
+              ? healthBreakdown && healthBreakdown.blocked === 0 && healthBreakdown.atRisk === 0
+                ? <Check className="h-4 w-4" />
+                : null
+              : health
+                ? healthLevelIcon(health.level)
+                : null
+          }
+          href={isBusinessView ? '/dashboard/projects' : undefined}
         />
 
         {/* 2. Expected Revenue */}
@@ -93,11 +145,12 @@ export function CommercialPositionCards({
                 : '—'
           }
           subvalue={
-            forecast && forecast.confirmedRevenue > 0
+            projectScopeLabel ??
+            (forecast && forecast.confirmedRevenue > 0
               ? `${formatForecastAmount(forecast.confirmedRevenue, curr)} confirmed`
               : forecast && forecast.totalExpectedRevenue === 0
                 ? 'No revenue sources yet'
-                : undefined
+                : undefined)
           }
           accent={forecast && forecast.totalExpectedRevenue > 0 ? 'positive' : 'neutral'}
           icon={forecast && forecast.totalExpectedRevenue > 0 ? <ArrowUp className="h-4 w-4" /> : null}
@@ -114,11 +167,12 @@ export function CommercialPositionCards({
               : '—'
           }
           subvalue={
-            forecast && forecast.fixedCommitments.length > 0
+            projectScopeLabel ??
+            (forecast && forecast.fixedCommitments.length > 0
               ? `${forecast.fixedCommitments.length} fixed commitment${forecast.fixedCommitments.length !== 1 ? 's' : ''}`
               : forecast && forecast.totalCommitments === 0
                 ? 'No obligations configured'
-                : undefined
+                : undefined)
           }
           accent="neutral"
           icon={forecast && forecast.totalCommitments > 0 ? <ArrowDown className="h-4 w-4 text-muted-foreground" /> : null}
@@ -166,20 +220,33 @@ export function CommercialPositionCards({
         <PositionCard
           label="Cash Readiness"
           value={
-            cashReady
-              ? cashReady.canEveryoneBePaid
-                ? 'YES'
-                : 'NO'
-              : '—'
+            isBusinessView && cashBreakdown && cashBreakdown.totalCount > 0
+              ? `${cashBreakdown.readyCount} / ${cashBreakdown.totalCount}`
+              : cashReady
+                ? cashReady.canEveryoneBePaid
+                  ? 'YES'
+                  : 'NO'
+                : '—'
           }
           subvalue={
-            cashReady?.canEveryoneBePaid && cashReady.expectedBalanceAfterSettlement != null
-              ? `+${formatForecastAmount(cashReady.expectedBalanceAfterSettlement, curr)} after settlement`
-              : cashReady?.forecastShortfall != null
-                ? `-${formatForecastAmount(cashReady.forecastShortfall, curr)} shortfall`
-                : cashReady && !cashReady.canEveryoneBePaid
-                  ? cashReady.primaryBlocker ?? undefined
-                  : undefined
+            isBusinessView && cashBreakdown
+              ? [
+                  `${cashBreakdown.readyCount} ${cashBreakdown.readyCount === 1 ? PRODUCT_TERMINOLOGY.projectLower : PRODUCT_TERMINOLOGY.projectsLower} ready`,
+                  cashBreakdown.requiresFundingCount > 0
+                    ? `${cashBreakdown.requiresFundingCount} require funding`
+                    : cashBreakdown.notReadyCount > cashBreakdown.requiresFundingCount
+                      ? `${cashBreakdown.notReadyCount - cashBreakdown.requiresFundingCount} not ready`
+                      : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : cashReady?.canEveryoneBePaid && cashReady.expectedBalanceAfterSettlement != null
+                ? `+${formatForecastAmount(cashReady.expectedBalanceAfterSettlement, curr)} after settlement`
+                : cashReady?.forecastShortfall != null
+                  ? `-${formatForecastAmount(cashReady.forecastShortfall, curr)} shortfall`
+                  : cashReady && !cashReady.canEveryoneBePaid
+                    ? cashReady.primaryBlocker ?? undefined
+                    : undefined
           }
           accent={
             cashReady
@@ -212,9 +279,11 @@ export function CommercialPositionCards({
               : '—'
           }
           subvalue={
-            forecast?.overallConfidence.level && forecast.overallConfidence.level !== 'INSUFFICIENT_DATA'
-              ? forecast.overallConfidence.level
-              : undefined
+            isBusinessView
+              ? projectScopeLabel
+              : forecast?.overallConfidence.level && forecast.overallConfidence.level !== 'INSUFFICIENT_DATA'
+                ? forecast.overallConfidence.level
+                : undefined
           }
           accent={
             forecast?.overallConfidence.score != null
@@ -281,6 +350,7 @@ function PositionCard({
   icon,
   interactive = false,
   onClick,
+  href,
 }: {
   label: string;
   value: string;
@@ -289,6 +359,7 @@ function PositionCard({
   icon: React.ReactNode;
   interactive?: boolean;
   onClick?: () => void;
+  href?: string;
 }) {
   const accentClass: Record<CardAccent, string> = {
     positive: 'text-green-700',
@@ -304,23 +375,20 @@ function PositionCard({
     neutral: 'border-border/50',
   };
 
-  return (
-    <div
-      role={interactive ? 'button' : undefined}
-      tabIndex={interactive ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={interactive ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick?.(); } : undefined}
-      className={cn(
-        'rounded-xl border bg-card px-4 py-3.5 space-y-2 min-h-[80px] flex flex-col justify-between',
-        borderClass[accent],
-        interactive && 'cursor-pointer transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-      )}
-    >
+  const cardClass = cn(
+    'rounded-xl border bg-card px-4 py-3.5 space-y-2 min-h-[80px] flex flex-col justify-between',
+    borderClass[accent],
+    (interactive || href) &&
+      'cursor-pointer transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  );
+
+  const content = (
+    <>
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground leading-tight">
           {label}
         </p>
-        {interactive && (
+        {(interactive || href) && (
           <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
         )}
       </div>
@@ -333,6 +401,26 @@ function PositionCard({
           <p className="text-[11px] text-muted-foreground leading-tight line-clamp-2">{subvalue}</p>
         )}
       </div>
+    </>
+  );
+
+  if (href) {
+    return (
+      <a href={href} className={cardClass}>
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <div
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={interactive ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick?.(); } : undefined}
+      className={cardClass}
+    >
+      {content}
     </div>
   );
 }

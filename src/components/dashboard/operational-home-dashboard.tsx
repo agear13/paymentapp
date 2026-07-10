@@ -1,3 +1,4 @@
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,7 @@ type OperationalHomeDashboardProps = {
 
 const WORKFLOW_STEPS = [
   {
-    label: 'Agreements',
+    label: PRODUCT_TERMINOLOGY.projects,
     href: '/dashboard/projects',
     icon: FolderKanban,
     description: 'Commercial relationships',
@@ -47,14 +48,14 @@ export function OperationalHomeDashboard({
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Agreement coordination overview</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{PRODUCT_TERMINOLOGY.projectCoordination} overview</h1>
           <p className="text-muted-foreground mt-1">
             Track settlement readiness, obligations, approvals, reconciliation, and funding activity
-            across agreements.
+            {` ${PRODUCT_TERMINOLOGY.acrossYourProjects}.`}
           </p>
         </div>
         <Button asChild>
-          <Link href="/dashboard/projects">Create agreement</Link>
+          <Link href="/dashboard/projects">{PRODUCT_TERMINOLOGY.createProject}</Link>
         </Button>
       </div>
 
@@ -63,7 +64,7 @@ export function OperationalHomeDashboard({
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Settlement coordination flow</CardTitle>
             <CardDescription>
-              Coordinate revenue, obligations, approvals, and settlement readiness across agreements.
+              Coordinate revenue, obligations, approvals, and settlement readiness {PRODUCT_TERMINOLOGY.acrossYourProjects}.
             </CardDescription>
           </CardHeader>
           <CardContent>

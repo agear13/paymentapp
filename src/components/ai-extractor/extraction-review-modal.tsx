@@ -288,7 +288,7 @@ export function ExtractionReviewModal({
         });
         onOpenChange(false);
         const pCount = newParticipants.length;
-        toast.success('Agreement created from conversation', {
+        toast.success('Project created from conversation', {
           description: pCount > 0
             ? `${pCount} participant${pCount !== 1 ? 's' : ''} added`
             : newDeal.dealName,

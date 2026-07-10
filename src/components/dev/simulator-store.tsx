@@ -195,7 +195,7 @@ export function useDevSimulator(): UseDevSimulatorReturn {
       stripe_connected: 'Stripe connected',
       revenue_received: 'Revenue received',
       settlement_released: 'Settlement released',
-      agreement_created: 'Agreement created',
+      agreement_created: 'Project created',
       participant_added: 'Participant added',
       payment_received: 'Payment received',
     };

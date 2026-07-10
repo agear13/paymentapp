@@ -49,6 +49,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
     console.error('[deal commercial-roles PATCH]', e);
-    return NextResponse.json({ error: 'Failed to update commercial roles' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update budgeted roles' }, { status: 500 });
   }
 }
