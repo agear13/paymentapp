@@ -4,13 +4,13 @@ import { cn } from '@/lib/utils';
 import { formatCompactCurrency } from '@/lib/formatters/format-currency';
 import type { AgreementHealthPortfolioSummary } from '@/lib/agreements/health/agreement-health.types';
 import type { OperationalKPIs } from '@/lib/operations/reducer/types';
-import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/types';
+import type { CommercialFinancialSnapshot } from '@/lib/commercial/commercial-financial-snapshot';
 import type { AttentionItem } from '@/lib/operations/severity';
 
 type BusinessSnapshotHeroProps = {
   portfolio: AgreementHealthPortfolioSummary | null;
+  snapshot: CommercialFinancialSnapshot | null | undefined;
   kpis: OperationalKPIs | null | undefined;
-  releaseConfidence: ReleaseConfidenceSnapshot | null;
   attentionItems: AttentionItem[];
   loading?: boolean;
 };
@@ -37,8 +37,8 @@ function num(n: number): string {
 
 export function BusinessSnapshotHero({
   portfolio,
+  snapshot,
   kpis,
-  releaseConfidence,
   attentionItems,
   loading,
 }: BusinessSnapshotHeroProps) {
@@ -61,10 +61,13 @@ export function BusinessSnapshotHero({
     );
   }
 
-  const currency = releaseConfidence?.currency ?? 'AUD';
-  const collected = releaseConfidence?.collectedRevenue ?? 0;
-  const readyToRelease = releaseConfidence?.readyToRelease ?? 0;
-  const reserved = releaseConfidence?.reservedObligations ?? 0;
+  const currency = snapshot?.currency ?? 'AUD';
+  const settlement = snapshot?.settlement;
+  const hasRevenue = snapshot?.hasRevenueSources ?? false;
+
+  const availableRevenue = hasRevenue ? (settlement?.availableRevenue ?? 0) : 0;
+  const readyToRelease = hasRevenue ? (settlement?.readyToRelease ?? 0) : 0;
+  const waitingForApprovals = settlement?.waitingForApprovals ?? 0;
 
   const totalAgreements = portfolio?.totalAgreements ?? 0;
   const needsAttentionCount =
@@ -86,23 +89,43 @@ export function BusinessSnapshotHero({
     {
       heading: 'Revenue',
       metrics: [
-        { label: 'Collected', value: fmt(collected, currency), tone: collected > 0 ? 'positive' : 'muted' },
-        { label: 'Payout-ready', value: fmt(readyToRelease, currency), tone: readyToRelease > 0 ? 'default' : 'muted' },
-        { label: 'Reserved', value: fmt(reserved, currency), tone: 'muted' },
+        {
+          label: 'Available',
+          value: fmt(availableRevenue, currency),
+          tone: availableRevenue > 0 ? 'positive' : 'muted',
+        },
+        {
+          label: 'Ready to release',
+          value: fmt(readyToRelease, currency),
+          tone: readyToRelease > 0 ? 'default' : 'muted',
+        },
+        {
+          label: 'Obligations',
+          value: fmt(waitingForApprovals, currency),
+          tone: waitingForApprovals > 0 ? 'default' : 'muted',
+        },
       ],
     },
     {
       heading: 'Agreements',
       metrics: [
         { label: 'Active', value: num(totalAgreements), tone: 'default' },
-        { label: 'Needs attention', value: needsAttentionCount > 0 ? String(needsAttentionCount) : '—', tone: needsAttentionCount > 0 ? 'urgent' : 'muted' },
+        {
+          label: 'Needs attention',
+          value: needsAttentionCount > 0 ? String(needsAttentionCount) : '—',
+          tone: needsAttentionCount > 0 ? 'urgent' : 'muted',
+        },
         { label: 'Ready', value: num(readyCount), tone: readyCount > 0 ? 'positive' : 'muted' },
       ],
     },
     {
       heading: 'Participants',
       metrics: [
-        { label: 'Awaiting approval', value: num(awaitingApproval), tone: awaitingApproval > 0 ? 'urgent' : 'muted' },
+        {
+          label: 'Awaiting approval',
+          value: num(awaitingApproval),
+          tone: awaitingApproval > 0 ? 'urgent' : 'muted',
+        },
         { label: 'Payout-ready', value: num(payoutReady), tone: payoutReady > 0 ? 'positive' : 'muted' },
       ],
     },

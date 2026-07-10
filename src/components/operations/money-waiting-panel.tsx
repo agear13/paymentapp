@@ -2,10 +2,10 @@
 
 import { cn } from '@/lib/utils';
 import { formatCompactCurrency } from '@/lib/formatters/format-currency';
-import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/types';
+import type { CommercialFinancialSnapshot } from '@/lib/commercial/commercial-financial-snapshot';
 
 type MoneyWaitingPanelProps = {
-  releaseConfidence: ReleaseConfidenceSnapshot | null;
+  snapshot: CommercialFinancialSnapshot | null | undefined;
   loading?: boolean;
 };
 
@@ -17,17 +17,11 @@ type MoneyCard = {
   emptyText: string;
 };
 
-/* ─── Component ─── */
-
 /**
- * Money Waiting — the most important section for an operator.
- * Operators care about money, not health scores.
- * Four states: collected, held for obligations, ready to release, held back.
+ * Money Waiting — settlement pipeline states derived from CommercialFinancialSnapshot.
+ * Never reads release confidence directly — all figures come from the shared engine.
  */
-export function MoneyWaitingPanel({
-  releaseConfidence,
-  loading,
-}: MoneyWaitingPanelProps) {
+export function MoneyWaitingPanel({ snapshot, loading }: MoneyWaitingPanelProps) {
   if (loading) {
     return (
       <section aria-label="Money" className="space-y-2.5">
@@ -44,33 +38,35 @@ export function MoneyWaitingPanel({
     );
   }
 
-  const currency = releaseConfidence?.currency ?? 'AUD';
+  const settlement = snapshot?.settlement;
+  const currency = settlement?.currency ?? snapshot?.currency ?? 'AUD';
+  const hasRevenue = snapshot?.hasRevenueSources ?? false;
 
   const cards: MoneyCard[] = [
     {
       label: 'Waiting to collect',
-      amount: releaseConfidence?.collectedRevenue ?? null,
+      amount: hasRevenue ? (settlement?.waitingToCollect ?? 0) : 0,
       currency,
       tone: 'pending',
       emptyText: 'No revenue yet. Revenue appears once agreements begin collecting payments.',
     },
     {
       label: 'Waiting for approvals',
-      amount: releaseConfidence?.reservedObligations ?? null,
+      amount: settlement?.waitingForApprovals ?? null,
       currency,
       tone: 'urgent',
       emptyText: 'No payments awaiting approval.',
     },
     {
       label: 'Ready to release',
-      amount: releaseConfidence?.readyToRelease ?? null,
+      amount: hasRevenue ? (settlement?.readyToRelease ?? 0) : 0,
       currency,
       tone: 'positive',
       emptyText: 'Nothing ready to release yet.',
     },
     {
       label: 'Under review',
-      amount: releaseConfidence?.heldBack ?? null,
+      amount: hasRevenue ? (settlement?.moneyUnderReview ?? 0) : 0,
       currency,
       tone: 'neutral',
       emptyText: 'No payments on hold.',

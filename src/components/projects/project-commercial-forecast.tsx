@@ -38,7 +38,10 @@ import { toOperationalSyncHandlers } from '@/lib/operations/orchestration/operat
 import { ProjectFundingSourcesPanel } from '@/components/projects/project-funding-sources-panel';
 import { ProjectPageCopilot } from '@/components/operations/project-page-copilot';
 import {
-  deriveCommercialForecast,
+  deriveCommercialFinancialSnapshot,
+} from '@/lib/commercial/commercial-financial-snapshot';
+import { loadCommercialFinancialInputs } from '@/lib/commercial/load-commercial-financial-inputs';
+import {
   formatForecastAmount,
   formatForecastBalance,
   type CommercialForecastResult,
@@ -91,39 +94,12 @@ export function ProjectCommercialForecast() {
     if (!deal) return;
     setLoading(true);
     try {
-      const [treRes, oblRes, fsRes] = await Promise.all([
-        fetch(`/api/projects/${encodeURIComponent(projectId)}/treasury-summary`, {
-          credentials: 'include',
-          cache: 'no-store',
-        }),
-        fetch(`/api/deal-network-pilot/obligations?dealId=${encodeURIComponent(deal.id)}`, {
-          credentials: 'include',
-          cache: 'no-store',
-        }),
-        fetch(`/api/projects/${encodeURIComponent(projectId)}/funding-sources`, {
-          credentials: 'include',
-          cache: 'no-store',
-        }),
-      ]);
-
-      if (treRes.ok) {
-        const json = await treRes.json();
-        setTreasury(json.data ?? null);
-      }
-      if (oblRes.ok) {
-        const json = await oblRes.json();
-        setObligationRows(
-          Array.isArray(json.data)
-            ? json.data.filter((r: { deal_id: string }) => r.deal_id === deal.id)
-            : []
-        );
-      }
-      if (fsRes.ok) {
-        const json = await fsRes.json();
-        setFundingSources(Array.isArray(json.data) ? json.data : []);
-      }
+      const inputs = await loadCommercialFinancialInputs(projectId, deal.id);
+      setTreasury(inputs.treasury);
+      setObligationRows(inputs.obligationRows);
+      setFundingSources(inputs.fundingSources);
     } catch {
-      // Non-fatal — fallback to aggregates
+      // Non-fatal — fallback to empty inputs
     } finally {
       setLoading(false);
     }
@@ -137,13 +113,17 @@ export function ProjectCommercialForecast() {
 
   const defaultCurrency = summary.currencyLabel?.includes('AUD') ? 'AUD' : 'USD';
 
-  const forecast = deriveCommercialForecast({
+  const financialSnapshot = deriveCommercialFinancialSnapshot({
+    projectId,
+    dealId: deal?.id ?? null,
     fundingSources,
     treasury: treasury ?? null,
     obligationRows,
     releaseConfidence: guidance?.releaseConfidence ?? null,
     currency: defaultCurrency,
   });
+
+  const forecast = financialSnapshot.forecast;
 
   const onTreasuryChange = () => {
     void refresh({ scope: 'all', silent: true, force: true });

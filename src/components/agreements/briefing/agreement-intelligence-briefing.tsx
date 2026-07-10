@@ -73,7 +73,11 @@ import {
 } from '@/components/agreements/briefing/briefing-sections';
 import { BriefingFundingFunnel } from '@/components/agreements/briefing/briefing-funding-funnel';
 import { useAgreementIntelligenceTracking } from '@/hooks/use-agreement-intelligence-tracking';
-import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
+import { loadCommercialFinancialInputs } from '@/lib/commercial/load-commercial-financial-inputs';
+import { deriveCommercialFinancialSnapshot } from '@/lib/commercial/commercial-financial-snapshot';
+import type { ProjectFundingSourceDto, ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
+import { CommercialPositionCards } from '@/components/operations/commercial-position-cards';
+import { MoneyWaitingPanel } from '@/components/operations/money-waiting-panel';
 import { CommercialJourney } from '@/components/workflow/commercial-journey';
 import { useCommercialBrain } from '@/components/workflow/commercial-brain-context';
 import type { WorkflowStage } from '@/components/workflow/workflow-context';
@@ -96,6 +100,17 @@ import {
 } from '@/lib/commercial/participant-workflow-adapter';
 
 /* ─── Stage pill labels (commercial language) ──────────────────────────────── */
+
+function formatCommercialPositionLabel(level: string): string {
+  const LABELS: Record<string, string> = {
+    excellent: 'Excellent',
+    good: 'Good',
+    attention: 'Needs attention',
+    at_risk: 'At risk',
+    blocked: 'Blocked',
+  };
+  return LABELS[level] ?? level.replace(/_/g, ' ');
+}
 
 const STAGE_LABELS: Record<string, string> = {
   'setup':                'Setting up',
@@ -190,6 +205,7 @@ type CommercialSummaryCardsProps = {
   projectId: string;
   paymentProviderConnected: boolean;
   revenueFlowing: boolean;
+  commercialPosition?: string;
 };
 
 function CommercialSummaryCards({
@@ -197,6 +213,7 @@ function CommercialSummaryCards({
   projectId,
   paymentProviderConnected,
   revenueFlowing,
+  commercialPosition,
 }: CommercialSummaryCardsProps) {
   const participantsApproved =
     snapshot.participantCount > 0 &&
@@ -262,9 +279,11 @@ function CommercialSummaryCards({
       title: 'Settlement',
       state: settlementGreen
         ? 'Ready'
-        : snapshot.settlementReadinessScore > 0
-          ? `${snapshot.settlementReadinessScore}% ready`
-          : 'Not ready',
+        : commercialPosition
+          ? formatCommercialPositionLabel(commercialPosition)
+          : snapshot.settlementReadinessScore > 0
+            ? `${snapshot.settlementReadinessScore}% ready`
+            : 'Not ready',
       detail: settlementGreen
         ? 'All requirements are met. Settlement can proceed.'
         : snapshot.blockingIssues.length > 0
@@ -517,6 +536,7 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
   } = useProjectWorkspace();
 
   const [treasury, setTreasury] = React.useState<ProjectTreasurySummary | null>(null);
+  const [fundingSources, setFundingSources] = React.useState<ProjectFundingSourceDto[]>([]);
   const [obligationRows, setObligationRows] = React.useState<BriefingObligationRowInput[]>([]);
   const [obligationsLoading, setObligationsLoading] = React.useState(true);
 
@@ -550,30 +570,13 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
     if (!deal) return;
     setObligationsLoading(true);
     try {
-      const [treRes, oblRes] = await Promise.all([
-        fetch(`/api/projects/${encodeURIComponent(projectId)}/treasury-summary`, {
-          credentials: 'include',
-          cache: 'no-store',
-        }),
-        fetch(`/api/deal-network-pilot/obligations?dealId=${encodeURIComponent(deal.id)}`, {
-          credentials: 'include',
-          cache: 'no-store',
-        }),
-      ]);
-      if (treRes.ok) {
-        const json = (await treRes.json()) as { data: ProjectTreasurySummary };
-        setTreasury(json.data ?? null);
-      }
-      if (oblRes.ok) {
-        const json = (await oblRes.json()) as { data: BriefingObligationRowInput[] };
-        setObligationRows(
-          Array.isArray(json.data) ? json.data.filter((r) => r.deal_id === deal.id) : []
-        );
-      } else {
-        setObligationRows([]);
-      }
+      const inputs = await loadCommercialFinancialInputs(projectId, deal.id);
+      setTreasury(inputs.treasury);
+      setFundingSources(inputs.fundingSources);
+      setObligationRows(inputs.obligationRows);
     } catch {
       setObligationRows([]);
+      setFundingSources([]);
     } finally {
       setObligationsLoading(false);
     }
@@ -661,15 +664,30 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
     workspaceDefaultCurrency: workspaceContext.defaultCurrency,
   });
 
+  const financialSnapshot = React.useMemo(
+    () =>
+      deriveCommercialFinancialSnapshot({
+        projectId,
+        dealId: deal.id,
+        fundingSources,
+        treasury,
+        obligationRows,
+        releaseConfidence: guidance.releaseConfidence ?? null,
+        currency,
+        kpis: kpis ?? null,
+      }),
+    [projectId, deal.id, fundingSources, treasury, obligationRows, guidance.releaseConfidence, currency, kpis]
+  );
+
   const handleTreasuryChange = () => {
     notifyWorkspaceActivationRefresh();
     void loadTreasuryAndObligations();
     void refresh({ scope: 'all', silent: true, force: true });
   };
 
-  // Derive commercial-language facts for summary cards
+  // Derive commercial-language facts for summary cards from the shared financial snapshot
   const paymentProviderConnected = commercialCapabilities?.paymentProviderConnected ?? false;
-  const revenueFlowing = commercialCapabilities?.revenueFlowing ?? false;
+  const revenueFlowing = financialSnapshot.hasRevenueSources;
 
   // Guidance headline (one sentence status)
   const guidanceHeadline =
@@ -715,12 +733,22 @@ export function AgreementIntelligenceBriefing({ projectId }: AgreementIntelligen
         guidanceHeadline={guidanceHeadline}
       />
 
-      {/* 2. Four commercial summary cards */}
+      {/* 2. Commercial financial position — same engine as workspace dashboard */}
+      <CommercialPositionCards
+        snapshot={financialSnapshot}
+        loading={obligationsLoading}
+        projectId={projectId}
+      />
+
+      <MoneyWaitingPanel snapshot={financialSnapshot} loading={obligationsLoading} />
+
+      {/* 3. Four commercial summary cards */}
       <CommercialSummaryCards
         snapshot={intelligence.snapshot}
         projectId={projectId}
         paymentProviderConnected={paymentProviderConnected}
         revenueFlowing={revenueFlowing}
+        commercialPosition={financialSnapshot.health.level}
       />
 
       {/* 3. Current blockers — only shown when blockers exist */}

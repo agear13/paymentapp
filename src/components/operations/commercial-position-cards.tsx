@@ -6,41 +6,20 @@
  * Six live cards for the operator dashboard that answer the core commercial question:
  * "What is the financial state of my business right now?"
  *
- * Cards:
- *   1. Commercial Position  — overall health level
- *   2. Expected Revenue     — total incoming (clickable → Revenue Breakdown Drawer)
- *   3. Expected Obligations — total commitments (clickable → Obligations Breakdown Drawer)
- *   4. Net Forecast         — position (clickable → Net Forecast Breakdown Drawer)
- *   5. Cash Readiness       — can everyone be paid? (clickable → Cash Readiness Drawer)
- *   6. Commercial Confidence — overall confidence (clickable → Confidence Breakdown Drawer)
- *
- * All figures derive exclusively from `deriveCommercialForecast()` and
- * `deriveCommercialHealth()`. No independent calculations in this component.
- *
- * Sprint 7.5: every card (2–6) opens a right-side explainability drawer on click.
- *
- * Design:
- *   - Operator language only. No accounting jargon.
- *   - One answer per card. No charts.
- *   - Primary colour: green (surplus/healthy), red (deficit/blocked), amber (attention).
+ * All figures derive exclusively from `CommercialFinancialSnapshot` — the shared
+ * commercial engine used by both dashboard and agreement overview surfaces.
  */
 
 import * as React from 'react';
 import { ArrowDown, ArrowUp, Check, Minus, X, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
-  deriveCommercialForecast,
   formatForecastAmount,
-  type CommercialForecastResult,
 } from '@/lib/commercial/commercial-forecast';
 import {
-  deriveCommercialHealth,
-  type CommercialHealthScore,
   type CommercialHealthLevel,
 } from '@/lib/commercial/commercial-health';
-import type { ReleaseConfidenceSnapshot } from '@/lib/operations/explainability/types';
-import type { OperationalKPIs } from '@/lib/operations/reducer/types';
-import type { CommercialDecisionResult } from '@/components/workflow/commercial-decision-engine';
+import type { CommercialFinancialSnapshot } from '@/lib/commercial/commercial-financial-snapshot';
 import {
   RevenueBreakdownDrawer,
   ObligationsBreakdownDrawer,
@@ -52,13 +31,9 @@ import {
 /* ─── Props ─────────────────────────────────────────────────────────────────── */
 
 export type CommercialPositionCardsProps = {
-  releaseConfidence: ReleaseConfidenceSnapshot | null | undefined;
-  kpis: OperationalKPIs | null | undefined;
-  decision?: CommercialDecisionResult | null;
-  currency?: string;
+  snapshot: CommercialFinancialSnapshot | null | undefined;
   loading?: boolean;
   className?: string;
-  /** Optional project ID forwarded to drawers for deep-link navigation. */
   projectId?: string;
 };
 
@@ -67,62 +42,15 @@ type DrawerKind = 'revenue' | 'obligations' | 'net_forecast' | 'cash_readiness' 
 /* ─── Main component ────────────────────────────────────────────────────────── */
 
 export function CommercialPositionCards({
-  releaseConfidence,
-  kpis,
-  decision,
-  currency = 'AUD',
+  snapshot,
   loading = false,
   className,
   projectId,
 }: CommercialPositionCardsProps) {
   const [openDrawer, setOpenDrawer] = React.useState<DrawerKind>(null);
-  // Derive forecast from available workspace data
-  // At the dashboard level we use release confidence figures as aggregates
-  const forecast = React.useMemo<CommercialForecastResult | null>(() => {
-    if (!releaseConfidence) return null;
 
-    const confirmedFunding = releaseConfidence.collectedRevenue ?? 0;
-    const obligationsTotal = releaseConfidence.reservedObligations ?? 0;
-    const readyToRelease = releaseConfidence.readyToRelease ?? 0;
-    const heldBack = releaseConfidence.heldBack ?? 0;
-
-    return deriveCommercialForecast({
-      fundingSources: [],
-      treasury: {
-        currency,
-        fundingSourceCount: confirmedFunding > 0 ? 1 : 0,
-        totalExpectedInflows: confirmedFunding,
-        // confirmedFunding = payments fully cleared for release.
-        // heldBack = collected but not yet cleared; treat as pending not forecast
-        // to avoid double-counting collected revenue as forecast revenue.
-        confirmedFunding: readyToRelease,
-        pendingFunding: heldBack,
-        forecastFunding: 0,
-        clearedFunding: readyToRelease,
-        obligationsTotal,
-        obligationsReady: readyToRelease,
-        obligationsAwaitingFunding: heldBack,
-        operationalReadiness: readyToRelease > 0 ? 'ready' : 'awaiting_funding',
-        projectHealth:
-          confirmedFunding >= obligationsTotal
-            ? 'healthy'
-            : confirmedFunding > 0
-              ? 'partially_funded'
-              : 'forecast_heavy',
-        hasFundingSources: confirmedFunding > 0,
-        fundingLabel: '',
-        fundingSubcopy: '',
-      },
-      obligationRows: [],
-      releaseConfidence: releaseConfidence ?? null,
-      currency,
-    });
-  }, [releaseConfidence, currency]);
-
-  const health = React.useMemo<CommercialHealthScore | null>(() => {
-    if (!forecast && !decision && !kpis) return null;
-    return deriveCommercialHealth(forecast ?? null, decision ?? null, kpis ?? null);
-  }, [forecast, decision, kpis]);
+  const forecast = snapshot?.forecast ?? null;
+  const health = snapshot?.health ?? null;
 
   if (loading) {
     return (
@@ -136,7 +64,7 @@ export function CommercialPositionCards({
 
   if (!forecast && !health) return null;
 
-  const curr = currency;
+  const curr = snapshot?.currency ?? forecast?.currency ?? 'AUD';
   const pos = forecast?.forecastPosition;
   const cashReady = forecast?.cashReadiness;
   const isSurplus = pos?.status === 'surplus';
@@ -145,7 +73,7 @@ export function CommercialPositionCards({
   return (
     <>
       <div className={cn('grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6', className)}>
-        {/* 1. Commercial Position — overall health (not interactive, summary only) */}
+        {/* 1. Commercial Position */}
         <PositionCard
           label="Commercial Position"
           value={health?.level ? healthLevelLabel(health.level) : '—'}
@@ -154,13 +82,15 @@ export function CommercialPositionCards({
           icon={health ? healthLevelIcon(health.level) : null}
         />
 
-        {/* 2. Expected Revenue — click to explain */}
+        {/* 2. Expected Revenue */}
         <PositionCard
           label="Expected Revenue"
           value={
             forecast && forecast.totalExpectedRevenue > 0
               ? formatForecastAmount(forecast.totalExpectedRevenue, curr)
-              : '—'
+              : forecast
+                ? formatForecastAmount(0, curr)
+                : '—'
           }
           subvalue={
             forecast && forecast.confirmedRevenue > 0
@@ -175,18 +105,20 @@ export function CommercialPositionCards({
           onClick={forecast ? () => setOpenDrawer('revenue') : undefined}
         />
 
-        {/* 3. Expected Obligations — click to explain */}
+        {/* 3. Expected Obligations */}
         <PositionCard
           label="Expected Obligations"
           value={
-            forecast && forecast.totalCommitments > 0
+            forecast
               ? formatForecastAmount(forecast.totalCommitments, curr)
               : '—'
           }
           subvalue={
             forecast && forecast.fixedCommitments.length > 0
               ? `${forecast.fixedCommitments.length} fixed commitment${forecast.fixedCommitments.length !== 1 ? 's' : ''}`
-              : undefined
+              : forecast && forecast.totalCommitments === 0
+                ? 'No obligations configured'
+                : undefined
           }
           accent="neutral"
           icon={forecast && forecast.totalCommitments > 0 ? <ArrowDown className="h-4 w-4 text-muted-foreground" /> : null}
@@ -194,14 +126,16 @@ export function CommercialPositionCards({
           onClick={forecast ? () => setOpenDrawer('obligations') : undefined}
         />
 
-        {/* 4. Net Forecast — click to explain */}
+        {/* 4. Net Forecast */}
         <PositionCard
           label="Net Forecast"
           value={
             pos && pos.status !== 'insufficient_data'
               ? (pos.forecastBalance >= 0 ? '+' : '') +
                 formatForecastAmount(pos.forecastBalance, curr)
-              : '—'
+              : pos
+                ? formatForecastAmount(pos.forecastBalance, curr)
+                : '—'
           }
           subvalue={
             isSurplus
@@ -210,7 +144,9 @@ export function CommercialPositionCards({
                 ? 'Shortfall'
                 : pos?.status === 'break_even'
                   ? 'Break even'
-                  : undefined
+                  : pos?.status === 'insufficient_data'
+                    ? 'No revenue sources'
+                    : undefined
           }
           accent={isSurplus ? 'positive' : isDeficit ? 'negative' : 'neutral'}
           icon={
@@ -226,7 +162,7 @@ export function CommercialPositionCards({
           onClick={forecast ? () => setOpenDrawer('net_forecast') : undefined}
         />
 
-        {/* 5. Cash Readiness — click to explain */}
+        {/* 5. Cash Readiness */}
         <PositionCard
           label="Cash Readiness"
           value={
@@ -241,7 +177,9 @@ export function CommercialPositionCards({
               ? `+${formatForecastAmount(cashReady.expectedBalanceAfterSettlement, curr)} after settlement`
               : cashReady?.forecastShortfall != null
                 ? `-${formatForecastAmount(cashReady.forecastShortfall, curr)} shortfall`
-                : undefined
+                : cashReady && !cashReady.canEveryoneBePaid
+                  ? cashReady.primaryBlocker ?? undefined
+                  : undefined
           }
           accent={
             cashReady
@@ -263,7 +201,7 @@ export function CommercialPositionCards({
           onClick={forecast ? () => setOpenDrawer('cash_readiness') : undefined}
         />
 
-        {/* 6. Commercial Confidence — click to explain */}
+        {/* 6. Commercial Confidence */}
         <PositionCard
           label="Commercial Confidence"
           value={
@@ -293,7 +231,6 @@ export function CommercialPositionCards({
         />
       </div>
 
-      {/* ── Explainability Drawers ── */}
       {forecast && (
         <>
           <RevenueBreakdownDrawer
@@ -393,7 +330,7 @@ function PositionCard({
           <span className="text-base font-bold tabular-nums leading-none">{value}</span>
         </div>
         {subvalue && (
-          <p className="text-[11px] text-muted-foreground leading-tight">{subvalue}</p>
+          <p className="text-[11px] text-muted-foreground leading-tight line-clamp-2">{subvalue}</p>
         )}
       </div>
     </div>

@@ -254,15 +254,8 @@ export function deriveCommercialForecast(
   const totalRevenueShareEstimate = revenueShareCommitments.reduce((s, c) => s + (c.amount ?? 0), 0);
   const rowsTotalCommitments = totalFixedCommitments + totalRevenueShareEstimate;
 
-  /**
-   * Fallback: when no individual obligation rows are provided (e.g. workspace-level dashboard
-   * view that only has treasury aggregates), use `treasury.obligationsTotal`.
-   * This prevents Expected Obligations from showing as zero when obligations exist.
-   */
-  const totalCommitments =
-    rowsTotalCommitments > 0
-      ? rowsTotalCommitments
-      : (treasury?.obligationsTotal ?? 0);
+  /** Obligations always come from agreement obligation rows — never treasury proxies. */
+  const totalCommitments = rowsTotalCommitments;
 
   /* ── 3. Forecast Position ── */
   const forecastBalance = totalExpectedRevenue - totalCommitments;
@@ -332,7 +325,7 @@ export function deriveCommercialForecast(
 
 function deriveIncomingRevenue(
   fundingSources: ProjectFundingSourceDto[],
-  treasury: ProjectTreasurySummary | null,
+  _treasury: ProjectTreasurySummary | null,
   currency: string
 ): IncomingRevenueItem[] {
   if (fundingSources.length > 0) {
@@ -350,57 +343,8 @@ function deriveIncomingRevenue(
     }));
   }
 
-  // Fallback: derive from treasury aggregates when individual sources aren't available
-  if (!treasury) return [];
-
-  const items: IncomingRevenueItem[] = [];
-
-  if (treasury.confirmedFunding > 0) {
-    items.push({
-      id: 'agg-confirmed',
-      sourceName: 'Confirmed payments',
-      sourceType: 'Revenue',
-      amount: treasury.confirmedFunding,
-      currency,
-      statusLabel: 'Confirmed',
-      status: 'confirmed',
-      expectedDate: null,
-      confidence: { score: 95, label: '95%', reasons: [{ positive: true, label: 'Payment confirmed' }] },
-      hasEvidence: false,
-    });
-  }
-
-  if (treasury.pendingFunding > 0) {
-    items.push({
-      id: 'agg-pending',
-      sourceName: 'Pending payments',
-      sourceType: 'Revenue',
-      amount: treasury.pendingFunding,
-      currency,
-      statusLabel: 'Awaiting payment',
-      status: 'pending',
-      expectedDate: null,
-      confidence: { score: 65, label: '65%', reasons: [{ positive: false, label: 'No confirmed payment date' }] },
-      hasEvidence: false,
-    });
-  }
-
-  if (treasury.forecastFunding > 0) {
-    items.push({
-      id: 'agg-forecast',
-      sourceName: 'Forecast revenue',
-      sourceType: 'Forecast',
-      amount: treasury.forecastFunding,
-      currency,
-      statusLabel: 'Forecast',
-      status: 'forecast',
-      expectedDate: null,
-      confidence: { score: 40, label: '40%', reasons: [{ positive: false, label: 'Revenue expected but not invoiced' }] },
-      hasEvidence: false,
-    });
-  }
-
-  return items;
+  // Revenue only originates from actual revenue sources — no treasury aggregate fallback.
+  return [];
 }
 
 function formatSourceType(sourceType: string): string {
@@ -598,13 +542,21 @@ function deriveCashReadiness(input: {
 }): CashReadiness {
   const { forecastBalance, releaseConfidence, incomingRevenue, currency } = input;
 
-  // Primary signal: does forecasted revenue cover commitments?
-  const canEveryoneBePaid = forecastBalance >= 0;
+  const hasRevenueSources = incomingRevenue.length > 0;
+  const revenueCoversObligations = forecastBalance >= 0;
+  const settlementBlockersCleared =
+    (releaseConfidence?.heldBackReasons?.length ?? 0) === 0 &&
+    releaseConfidence?.level !== 'BLOCKED';
+
+  const canEveryoneBePaid =
+    hasRevenueSources && revenueCoversObligations && settlementBlockersCleared;
 
   // Derive primary blocker
   let primaryBlocker: string | null = null;
 
-  if (!canEveryoneBePaid) {
+  if (!hasRevenueSources) {
+    primaryBlocker = 'No revenue sources connected. Add invoices or payment links to begin collecting revenue.';
+  } else if (!revenueCoversObligations) {
     // Identify the biggest unconfirmed revenue item
     const overdueItems = incomingRevenue.filter((r) => r.status === 'overdue');
     const forecastItems = incomingRevenue.filter((r) => r.status === 'forecast');
@@ -618,6 +570,10 @@ function deriveCashReadiness(input: {
     } else {
       primaryBlocker = 'Insufficient confirmed revenue to cover all commitments.';
     }
+  } else if (!settlementBlockersCleared) {
+    primaryBlocker =
+      releaseConfidence?.heldBackReasons?.[0] ??
+      'Settlement blockers must be resolved before payments can be released.';
   }
 
   return {

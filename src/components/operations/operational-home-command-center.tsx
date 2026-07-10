@@ -12,15 +12,13 @@ import { buildWorkspaceExperience } from '@/components/workflow/operations-manag
 import { ProvvyCopilot } from '@/components/operations/provvy-copilot';
 import { BusinessMomentum } from '@/components/operations/business-momentum';
 import { ContinueWorkflowCard } from '@/components/operations/continue-workflow-card';
-import { BusinessSnapshotHero } from '@/components/operations/business-snapshot-hero';
 import { WorkspaceHealthScore } from '@/components/operations/workspace-health-score';
-import { MoneyWaitingPanel } from '@/components/operations/money-waiting-panel';
 import { AgreementWorkflowPanel } from '@/components/operations/agreement-workflow-panel';
 import { AgreementsOperationalGrid } from '@/components/operations/agreements-operational-grid';
 import { WorkspaceActivityFeed } from '@/components/operations/workspace-activity-feed';
 import { AskProvvyPanel } from '@/components/operations/ask-provvy-panel';
 import { deriveQueueTasksFromAttention } from '@/components/operations/operational-queue';
-import { CommercialPositionCards } from '@/components/operations/commercial-position-cards';
+import { WorkspaceCommercialFinancialSection } from '@/components/operations/workspace-commercial-financial-section';
 import { SupplierOnboardingDashboardWidget } from '@/components/commercial/supplier-onboarding/supplier-onboarding-operator-view';
 import { projectSupplierOnboardingPath } from '@/lib/projects/project-routes';
 
@@ -134,47 +132,20 @@ export function OperationalHomeCommandCenter() {
         />
       ) : null}
 
-      {/* ── 3. Commercial Position — live forecast cards ──────────────────
-          Six cards: Commercial Position · Revenue · Obligations
-          Net Forecast · Cash Readiness · Confidence.
-          All figures from deriveCommercialForecast(). No independent calc. */}
-      <CommercialPositionCards
-        releaseConfidence={guidance.releaseConfidence}
-        kpis={kpis}
-        loading={isLoading}
+      {/* ── 3. Commercial Position — projection of agreement state ─────────
+          All financial widgets derive from CommercialFinancialSnapshot.
+          No independent dashboard calculations. */}
+      <WorkspaceCommercialFinancialSection
+        primaryProjectId={workspaceContext?.primaryProjectId ?? null}
+        agreementSnapshots={snapshots}
+        portfolio={portfolio}
+        attentionItems={attentionItems}
+        coordinationLoading={isLoading}
+        workspaceContext={workspaceContext ?? null}
+        activation={activation ?? null}
       />
 
-      {/* ── 4. Business Snapshot + Workspace Health ───────────────────────
-          Revenue / Agreements / Participants / Actions flow groups.
-          Health score with human interpretation ("Almost ready...").      */}
-      <div className="grid gap-3 xl:grid-cols-[1fr_260px]">
-        <BusinessSnapshotHero
-          portfolio={portfolio}
-          kpis={kpis}
-          releaseConfidence={guidance.releaseConfidence}
-          attentionItems={attentionItems}
-          loading={isLoading}
-        />
-        {!isLoading ? (
-          <WorkspaceHealthScore
-            portfolio={portfolio}
-            kpis={kpis}
-            workspace={workspaceContext}
-            releaseConfidence={guidance.releaseConfidence}
-            activation={activation}
-          />
-        ) : null}
-      </div>
-
-      {/* ── 5. Money Waiting ──────────────────────────────────────────────
-          Four money states: Collected · For approvals · Ready · Held.
-          Operators care about money, not health scores.                   */}
-      <MoneyWaitingPanel
-        releaseConfidence={guidance.releaseConfidence}
-        loading={isLoading}
-      />
-
-      {/* ── 5b. Supplier Onboarding Progress ──────────────────────────────
+      {/* ── 4. Supplier Onboarding Progress ──────────────────────────────
           Shows when any supplier has not yet completed onboarding.
           Hides automatically when all suppliers are complete.
           Falls back to workspace counts when detailed engine data is unavailable. */}

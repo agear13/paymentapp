@@ -694,27 +694,33 @@ describe('deriveCommercialForecast — determinism', () => {
 
 /* ─── Part 9: Treasury fallback (no individual sources) ─────────────────────── */
 
-describe('deriveCommercialForecast — treasury aggregate fallback', () => {
-  test('falls back to treasury aggregates when no funding sources provided', () => {
+describe('deriveCommercialForecast — no treasury revenue fallback', () => {
+  test('returns zero revenue when only treasury aggregates are provided', () => {
     const input = makeInput({
       fundingSources: [],
       treasury: makeTreasury({ confirmedFunding: 30000, pendingFunding: 20000, forecastFunding: 5000 }),
     });
     const result = deriveCommercialForecast(input);
 
-    expect(result.incomingRevenue.length).toBeGreaterThan(0);
-    expect(result.totalExpectedRevenue).toBeGreaterThan(0);
+    expect(result.incomingRevenue).toHaveLength(0);
+    expect(result.totalExpectedRevenue).toBe(0);
   });
 
-  test('confirmed aggregate creates a confirmed revenue item', () => {
+  test('revenue only from funding source records', () => {
     const input = makeInput({
       fundingSources: [],
       treasury: makeTreasury({ confirmedFunding: 30000, pendingFunding: 0, forecastFunding: 0 }),
+      obligationRows: [makeObligationRow()],
     });
-    const result = deriveCommercialForecast(input);
-    const confirmed = result.incomingRevenue.find((r) => r.status === 'confirmed');
-    expect(confirmed).toBeDefined();
-    expect(confirmed.amount).toBe(30000);
+    const withSource = makeInput({
+      fundingSources: [makeFundingSource({ amount: 30000, status: 'CONFIRMED' })],
+      treasury: makeTreasury({ confirmedFunding: 0 }),
+      obligationRows: [makeObligationRow()],
+    });
+    const withoutSource = deriveCommercialForecast(input);
+    const withFunding = deriveCommercialForecast(withSource);
+    expect(withoutSource.totalExpectedRevenue).toBe(0);
+    expect(withFunding.totalExpectedRevenue).toBe(30000);
   });
 
   test('returns no revenue when treasury has all zeros', () => {
@@ -905,15 +911,23 @@ describe('deriveCommercialForecast — edge cases', () => {
   });
 
   test('handles zero amount obligations', () => {
-    // When obligation rows all have amount_owed = 0, rowsTotalCommitments = 0.
-    // The engine falls back to treasury.obligationsTotal. To test zero-commitment
-    // behaviour in isolation, clear the treasury total too.
     const input = makeInput({
       obligationRows: [makeObligationRow({ amount_owed: 0 })],
       treasury: makeTreasury({ obligationsTotal: 0, obligationsReady: 0 }),
     });
     const result = deriveCommercialForecast(input);
     expect(result.totalCommitments).toBe(0);
+  });
+
+  test('cash readiness is NO when no revenue sources exist', () => {
+    const input = makeInput({
+      fundingSources: [],
+      obligationRows: [makeObligationRow({ amount_owed: 300 })],
+      releaseConfidence: makeReleaseConfidence({ level: 'HIGH', heldBackReasons: [] }),
+    });
+    const result = deriveCommercialForecast(input);
+    expect(result.totalExpectedRevenue).toBe(0);
+    expect(result.cashReadiness.canEveryoneBePaid).toBe(false);
   });
 
   test('handles null treasury gracefully', () => {
