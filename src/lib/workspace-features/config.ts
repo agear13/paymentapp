@@ -2,6 +2,7 @@ import { WorkspaceFeature, WorkspaceMode, type WorkspaceFeatureConfig } from './
 
 export const PAYMENTS_MODE_FEATURES = [
   WorkspaceFeature.Dashboard,
+  WorkspaceFeature.Calendar,
   WorkspaceFeature.Payments,
   WorkspaceFeature.Invoices,
   WorkspaceFeature.Reporting,

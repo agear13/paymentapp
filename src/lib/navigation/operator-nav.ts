@@ -28,6 +28,10 @@ export function isOperatorNavActive(path: string, href: string, sectionId?: stri
     return path === '/dashboard';
   }
 
+  if (href === '/dashboard/calendar') {
+    return path === '/dashboard/calendar' || path.startsWith('/dashboard/calendar/');
+  }
+
   if (href === '/dashboard/projects') {
     return path === '/dashboard/projects' || path.startsWith('/dashboard/projects/');
   }

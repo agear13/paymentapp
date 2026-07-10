@@ -5,6 +5,7 @@ import {
   BarChart3,
   BookOpen,
   Building2,
+  CalendarDays,
   CircleDollarSign,
   CreditCard,
   Download,
@@ -44,6 +45,13 @@ export const WORKSPACE_NAVIGATION_REGISTRY = [
     icon: LayoutDashboard,
     href: '/dashboard',
     requiredFeature: WorkspaceFeature.Dashboard,
+  },
+  {
+    id: 'calendar',
+    title: 'Calendar',
+    icon: CalendarDays,
+    href: '/dashboard/calendar',
+    requiredFeature: WorkspaceFeature.Calendar,
   },
   {
     id: 'projects',

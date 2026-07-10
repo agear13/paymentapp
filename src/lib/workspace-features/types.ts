@@ -5,6 +5,7 @@ export enum WorkspaceMode {
 
 export enum WorkspaceFeature {
   Dashboard = 'dashboard',
+  Calendar = 'calendar',
   Payments = 'payments',
   Invoices = 'invoices',
   Reporting = 'reporting',
