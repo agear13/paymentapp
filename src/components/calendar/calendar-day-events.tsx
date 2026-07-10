@@ -1,19 +1,21 @@
 'use client';
 
-import * as React from 'react';
 import { cn } from '@/lib/utils';
-import { CALENDAR_CATEGORY_META, formatCalendarAmount } from '@/lib/calendar/calendar-styles';
-import type { CalendarEvent } from '@/lib/calendar/types';
+import {
+  formatTimelineAmount,
+  TIMELINE_LAYER_META,
+} from '@/lib/workspace-timeline/timeline-layer-badges';
+import type { WorkspaceTimelineEvent } from '@/lib/workspace-timeline/types';
 
 const MAX_VISIBLE = 3;
 
-type CalendarDayEventsProps = {
-  events: CalendarEvent[];
-  onSelect: (event: CalendarEvent) => void;
+type TimelineDayEventsProps = {
+  events: WorkspaceTimelineEvent[];
+  onSelect: (event: WorkspaceTimelineEvent) => void;
   compact?: boolean;
 };
 
-export function CalendarDayEvents({ events, onSelect, compact }: CalendarDayEventsProps) {
+export function TimelineDayEvents({ events, onSelect, compact }: TimelineDayEventsProps) {
   const visible = events.slice(0, MAX_VISIBLE);
   const overflow = events.length - visible.length;
 
@@ -22,7 +24,7 @@ export function CalendarDayEvents({ events, onSelect, compact }: CalendarDayEven
   return (
     <div className={cn('space-y-0.5', compact && 'space-y-px')}>
       {visible.map((event) => (
-        <CalendarEventChip key={event.id} event={event} onSelect={onSelect} compact={compact} />
+        <TimelineEventChip key={event.id} event={event} onSelect={onSelect} compact={compact} />
       ))}
       {overflow > 0 && (
         <p className="text-[10px] text-muted-foreground px-1">+{overflow} more</p>
@@ -31,17 +33,17 @@ export function CalendarDayEvents({ events, onSelect, compact }: CalendarDayEven
   );
 }
 
-function CalendarEventChip({
+function TimelineEventChip({
   event,
   onSelect,
   compact,
 }: {
-  event: CalendarEvent;
-  onSelect: (event: CalendarEvent) => void;
+  event: WorkspaceTimelineEvent;
+  onSelect: (event: WorkspaceTimelineEvent) => void;
   compact?: boolean;
 }) {
-  const meta = CALENDAR_CATEGORY_META[event.type];
-  const amount = formatCalendarAmount(event.amount, event.currency, event.direction);
+  const meta = TIMELINE_LAYER_META[event.layer];
+  const amount = formatTimelineAmount(event.amount, event.currency, event.direction);
 
   return (
     <button
@@ -71,3 +73,6 @@ function CalendarEventChip({
     </button>
   );
 }
+
+/** @deprecated Use TimelineDayEvents */
+export const CalendarDayEvents = TimelineDayEvents;

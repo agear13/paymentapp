@@ -1,5 +1,5 @@
 /**
- * Home — operational coordination dashboard (not analytics KPIs).
+ * Home — Mission Control operational homepage.
  */
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;

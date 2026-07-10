@@ -1,45 +1,66 @@
 'use client';
 
 import * as React from 'react';
-import { startOfWeek } from 'date-fns';
+import { startOfWeek, format } from 'date-fns';
+import { useSearchParams } from 'next/navigation';
 import { CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useCalendarEvents } from '@/hooks/use-calendar-events';
-import { CalendarEventDrawer } from '@/components/calendar/calendar-event-drawer';
-import { CalendarFiltersBar } from '@/components/calendar/calendar-filters';
-import { CalendarSummaryPanel } from '@/components/calendar/calendar-summary-panel';
+import { useWorkspaceTimeline } from '@/hooks/use-workspace-timeline';
+import { TimelineEventDrawer } from '@/components/calendar/timeline-event-drawer';
+import { TimelineFiltersBar } from '@/components/calendar/calendar-filters';
+import { TimelineCashForecast } from '@/components/calendar/timeline-cash-forecast';
+import { TimelineMonthSummaryBar } from '@/components/calendar/timeline-month-summary-bar';
+import { TimelineDailyAgenda } from '@/components/calendar/timeline-daily-agenda';
 import {
-  CalendarAgendaView,
-  CalendarMonthView,
-  CalendarWeekView,
+  TimelineAgendaView,
+  TimelineMonthView,
+  TimelineWeekView,
 } from '@/components/calendar/calendar-views';
-import type { CalendarEvent, CalendarViewMode } from '@/lib/calendar/types';
+import type { TimelineViewMode, WorkspaceTimelineEvent, TimelineLayer, WorkspaceTimelineEventType } from '@/lib/workspace-timeline/types';
 
-const VIEW_MODES: CalendarViewMode[] = ['month', 'week', 'agenda'];
+const VIEW_MODES: TimelineViewMode[] = ['month', 'week', 'agenda'];
+
+const TIMELINE_LAYERS = new Set<TimelineLayer>(['commercial', 'accounting', 'settlement', 'operational']);
 
 export function CommercialOperationsCalendar() {
-  const calendar = useCalendarEvents();
-  const [view, setView] = React.useState<CalendarViewMode>('month');
-  const [month, setMonth] = React.useState(() => new Date());
+  const searchParams = useSearchParams();
+  const timeline = useWorkspaceTimeline();
+  const [view, setView] = React.useState<TimelineViewMode>('month');
   const [weekStart, setWeekStart] = React.useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 })
   );
-  const [selectedEvent, setSelectedEvent] = React.useState<CalendarEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = React.useState<WorkspaceTimelineEvent | null>(null);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
   const currencies = React.useMemo(() => {
     const set = new Set<string>();
-    for (const e of calendar.events) {
+    for (const e of timeline.events) {
       if (e.currency) set.add(e.currency);
     }
     return Array.from(set).sort();
-  }, [calendar.events]);
+  }, [timeline.events]);
 
-  const handleSelectEvent = React.useCallback((event: CalendarEvent) => {
+  const handleSelectEvent = React.useCallback((event: WorkspaceTimelineEvent) => {
     setSelectedEvent(event);
     setDrawerOpen(true);
   }, []);
+
+  React.useEffect(() => {
+    const layer = searchParams.get('layer');
+    const type = searchParams.get('type');
+    if (!layer && !type) return;
+
+    timeline.setFilters((prev) => ({
+      ...prev,
+      ...(layer && TIMELINE_LAYERS.has(layer as TimelineLayer)
+        ? { layer: layer as TimelineLayer }
+        : {}),
+      ...(type ? { type: type as WorkspaceTimelineEventType } : {}),
+    }));
+  }, [searchParams, timeline.setFilters]);
+
+  const today = format(new Date(), 'yyyy-MM-dd');
 
   return (
     <div className="space-y-6">
@@ -47,10 +68,10 @@ export function CommercialOperationsCalendar() {
         <div>
           <div className="flex items-center gap-2">
             <CalendarDays className="h-5 w-5 text-muted-foreground" />
-            <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Workspace Timeline</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            What money is expected to move, why, and what needs your attention.
+            Commercial + accounting + settlement view across all projects.
           </p>
         </div>
 
@@ -61,10 +82,7 @@ export function CommercialOperationsCalendar() {
               type="button"
               variant="ghost"
               size="sm"
-              className={cn(
-                'h-7 px-3 text-xs capitalize',
-                view === mode && 'bg-background shadow-sm'
-              )}
+              className={cn('h-7 px-3 text-xs capitalize', view === mode && 'bg-background shadow-sm')}
               onClick={() => setView(mode)}
             >
               {mode}
@@ -73,56 +91,59 @@ export function CommercialOperationsCalendar() {
         </div>
       </div>
 
-      <CalendarFiltersBar
-        filters={calendar.filters}
-        onChange={calendar.setFilters}
-        deals={calendar.deals}
+      <TimelineMonthSummaryBar summary={timeline.monthSummary} loading={timeline.loading} />
+
+      <TimelineCashForecast points={timeline.cashForecast} loading={timeline.loading} />
+
+      <TimelineFiltersBar
+        filters={timeline.filters}
+        onChange={timeline.setFilters}
+        deals={timeline.deals}
         currencies={currencies}
       />
 
-      {calendar.loading ? (
+      {timeline.loading ? (
         <div className="h-96 rounded-xl border border-border/40 bg-muted/20 animate-pulse" />
-      ) : calendar.error ? (
+      ) : timeline.error ? (
         <div className="rounded-xl border border-red-200 bg-red-50/40 p-6 text-sm text-red-700">
-          {calendar.error}
+          {timeline.error}
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_260px]">
           <div className="min-w-0">
             {view === 'month' && (
-              <CalendarMonthView
-                month={month}
-                onMonthChange={setMonth}
-                events={calendar.filteredEvents}
+              <TimelineMonthView
+                month={timeline.month}
+                onMonthChange={timeline.setMonth}
+                events={timeline.monthEvents}
                 onSelectEvent={handleSelectEvent}
               />
             )}
             {view === 'week' && (
-              <CalendarWeekView
+              <TimelineWeekView
                 weekStart={weekStart}
                 onWeekChange={setWeekStart}
-                events={calendar.filteredEvents}
+                events={timeline.filteredEvents}
                 onSelectEvent={handleSelectEvent}
               />
             )}
             {view === 'agenda' && (
-              <CalendarAgendaView
-                events={calendar.filteredEvents}
+              <TimelineAgendaView
+                events={timeline.filteredEvents}
                 onSelectEvent={handleSelectEvent}
               />
             )}
           </div>
 
-          <CalendarSummaryPanel
-            events={calendar.filteredEvents}
-            month={month}
-            activeProjectCount={calendar.deals.length}
-            onSelectEvent={handleSelectEvent}
+          <TimelineDailyAgenda
+            events={timeline.filteredEvents}
+            today={today}
+            onSelect={handleSelectEvent}
           />
         </div>
       )}
 
-      <CalendarEventDrawer
+      <TimelineEventDrawer
         event={selectedEvent}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}

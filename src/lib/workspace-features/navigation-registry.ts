@@ -41,14 +41,14 @@ export type WorkspaceNavigationRegistryItem = FeatureRegistryItemWithFeature<Luc
 export const WORKSPACE_NAVIGATION_REGISTRY = [
   {
     id: 'home',
-    title: 'Dashboard',
+    title: 'Mission Control',
     icon: LayoutDashboard,
     href: '/dashboard',
     requiredFeature: WorkspaceFeature.Dashboard,
   },
   {
     id: 'calendar',
-    title: 'Calendar',
+    title: 'Timeline',
     icon: CalendarDays,
     href: '/dashboard/calendar',
     requiredFeature: WorkspaceFeature.Calendar,

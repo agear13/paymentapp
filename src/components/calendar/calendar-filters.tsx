@@ -10,41 +10,48 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import type { CalendarFilters, CalendarEventCategory } from '@/lib/calendar/types';
-import { DEFAULT_CALENDAR_FILTERS } from '@/lib/calendar/types';
+import type { TimelineFilters, TimelineLayer } from '@/lib/workspace-timeline/types';
+import { DEFAULT_TIMELINE_FILTERS } from '@/lib/workspace-timeline/types';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 
-type CalendarFiltersBarProps = {
-  filters: CalendarFilters;
-  onChange: (filters: CalendarFilters) => void;
+type TimelineFiltersBarProps = {
+  filters: TimelineFilters;
+  onChange: (filters: TimelineFilters) => void;
   deals: RecentDeal[];
   currencies: string[];
 };
 
-const CATEGORY_OPTIONS: Array<{ value: CalendarEventCategory | 'all'; label: string }> = [
-  { value: 'all', label: 'All types' },
-  { value: 'expected_revenue', label: 'Revenue' },
-  { value: 'money_outgoing', label: 'Settlement / payouts' },
-  { value: 'project_milestone', label: 'Milestones' },
-  { value: 'operational_task', label: 'Tasks' },
+const LAYER_OPTIONS: Array<{ value: TimelineLayer | 'all'; label: string }> = [
+  { value: 'all', label: 'All layers' },
+  { value: 'commercial', label: 'Commercial' },
+  { value: 'accounting', label: 'Accounting' },
+  { value: 'settlement', label: 'Settlement' },
+  { value: 'operational', label: 'Operational' },
 ];
 
-export function CalendarFiltersBar({
+const DIRECTION_OPTIONS = [
+  { value: 'all', label: 'All flows' },
+  { value: 'incoming', label: 'Revenue' },
+  { value: 'outgoing', label: 'Outgoing' },
+] as const;
+
+export function TimelineFiltersBar({
   filters,
   onChange,
   deals,
   currencies,
-}: CalendarFiltersBarProps) {
+}: TimelineFiltersBarProps) {
   const hasActive =
     filters.projectId != null ||
-    filters.category !== 'all' ||
+    filters.layer !== 'all' ||
+    filters.direction !== 'all' ||
     filters.currency != null ||
     filters.search.trim() !== '';
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Input
-        placeholder="Search events…"
+        placeholder="Search timeline…"
         value={filters.search}
         onChange={(e) => onChange({ ...filters, search: e.target.value })}
         className="h-8 w-44 text-sm"
@@ -52,37 +59,45 @@ export function CalendarFiltersBar({
 
       <Select
         value={filters.projectId ?? 'all'}
-        onValueChange={(v) =>
-          onChange({ ...filters, projectId: v === 'all' ? null : v })
-        }
+        onValueChange={(v) => onChange({ ...filters, projectId: v === 'all' ? null : v })}
       >
-        <SelectTrigger className="h-8 w-40 text-xs">
+        <SelectTrigger className="h-8 w-36 text-xs">
           <SelectValue placeholder="Project" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All projects</SelectItem>
           {deals.map((d) => (
-            <SelectItem key={d.id} value={d.id}>
-              {d.dealName}
-            </SelectItem>
+            <SelectItem key={d.id} value={d.id}>{d.dealName}</SelectItem>
           ))}
         </SelectContent>
       </Select>
 
       <Select
-        value={filters.category}
-        onValueChange={(v) =>
-          onChange({ ...filters, category: v as CalendarFilters['category'] })
-        }
+        value={filters.layer}
+        onValueChange={(v) => onChange({ ...filters, layer: v as TimelineFilters['layer'] })}
       >
-        <SelectTrigger className="h-8 w-36 text-xs">
-          <SelectValue placeholder="Type" />
+        <SelectTrigger className="h-8 w-32 text-xs">
+          <SelectValue placeholder="Layer" />
         </SelectTrigger>
         <SelectContent>
-          {CATEGORY_OPTIONS.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </SelectItem>
+          {LAYER_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={filters.direction}
+        onValueChange={(v) =>
+          onChange({ ...filters, direction: v as TimelineFilters['direction'] })
+        }
+      >
+        <SelectTrigger className="h-8 w-28 text-xs">
+          <SelectValue placeholder="Flow" />
+        </SelectTrigger>
+        <SelectContent>
+          {DIRECTION_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -90,19 +105,15 @@ export function CalendarFiltersBar({
       {currencies.length > 0 && (
         <Select
           value={filters.currency ?? 'all'}
-          onValueChange={(v) =>
-            onChange({ ...filters, currency: v === 'all' ? null : v })
-          }
+          onValueChange={(v) => onChange({ ...filters, currency: v === 'all' ? null : v })}
         >
-          <SelectTrigger className="h-8 w-28 text-xs">
+          <SelectTrigger className="h-8 w-24 text-xs">
             <SelectValue placeholder="Currency" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All currencies</SelectItem>
+            <SelectItem value="all">All</SelectItem>
             {currencies.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
+              <SelectItem key={c} value={c}>{c}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -114,7 +125,7 @@ export function CalendarFiltersBar({
           variant="ghost"
           size="sm"
           className="h-8 text-xs"
-          onClick={() => onChange(DEFAULT_CALENDAR_FILTERS)}
+          onClick={() => onChange(DEFAULT_TIMELINE_FILTERS)}
         >
           Reset
         </Button>
@@ -122,3 +133,5 @@ export function CalendarFiltersBar({
     </div>
   );
 }
+
+export const CalendarFiltersBar = TimelineFiltersBar;
