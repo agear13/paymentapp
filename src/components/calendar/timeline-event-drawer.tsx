@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { PaymentLifecyclePanel } from '@/components/payment-links/payment-lifecycle-panel';
-import { TimelineLayerBadge } from '@/lib/workspace-timeline/timeline-layer-badges';
+import { TimelineLayerBadge } from '@/lib/workspace-timeline/timeline-layer-badge';
 import { formatTimelineAmount } from '@/lib/workspace-timeline/timeline-layer-badges';
 import { TIMELINE_LAYER_META } from '@/lib/workspace-timeline/timeline-layer-badges';
 import type { WorkspaceTimelineEvent } from '@/lib/workspace-timeline/types';

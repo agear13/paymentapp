@@ -21,10 +21,20 @@ export const TIMELINE_LAYER_META: Record<
   },
   operational: {
     label: 'Operational',
-    badgeClass: 'bg-slate-50 text-slate-600 border-slate-200/80',
-    dotClass: 'bg-slate-400/70',
+    badgeClass: 'bg-muted/60 text-muted-foreground border-border/80',
+    dotClass: 'bg-muted-foreground/50',
   },
 };
+
+export function formatTimelineAmount(
+  amount: number | null,
+  currency: string | null,
+  direction: 'incoming' | 'outgoing' | 'neutral'
+): string | null {
+  if (amount == null || !currency) return null;
+  const prefix = direction === 'incoming' ? '+' : direction === 'outgoing' ? '-' : '';
+  return `${prefix} ${currency} ${amount.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`;
+}
 
 export function layerForEventType(type: string): TimelineLayer {
   if (

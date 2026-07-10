@@ -2,7 +2,7 @@
 
 import type { WorkspaceTimelineEvent } from '@/lib/workspace-timeline/types';
 import { groupAgendaByUrgency } from '@/lib/workspace-timeline/timeline-filters';
-import { TimelineLayerBadge } from '@/lib/workspace-timeline/timeline-layer-badges';
+import { TimelineLayerBadge } from '@/lib/workspace-timeline/timeline-layer-badge';
 import { formatTimelineAmount } from '@/lib/workspace-timeline/timeline-layer-badges';
 
 type TimelineDailyAgendaProps = {

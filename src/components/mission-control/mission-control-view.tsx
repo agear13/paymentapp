@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { opPage } from '@/lib/design/operational-spacing';
 import { useMissionControl } from '@/hooks/use-mission-control';
 import { WorkspaceActivityFeed } from '@/components/operations/workspace-activity-feed';
-import { TimelineLayerBadge } from '@/lib/workspace-timeline/timeline-layer-badges';
+import { TimelineLayerBadge } from '@/lib/workspace-timeline/timeline-layer-badge';
 import { formatTimelineAmount } from '@/lib/workspace-timeline/timeline-layer-badges';
 import type { WorkspaceTask, WorkspaceTaskSeverity } from '@/lib/mission-control/types';
 import type { BusinessHealthCard } from '@/lib/mission-control/types';

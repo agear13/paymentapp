@@ -71,7 +71,10 @@ export function deriveProjectsRequiringAttention(input: {
     } else if (snap.blockerCount > 0) {
       reason = `${snap.blockerCount} blocker${snap.blockerCount > 1 ? 's' : ''} active`;
       recommendedAction = snap.improvesScore[0] ?? 'Resolve blockers';
-    } else if (!record?.snapshot.hasRevenueSources && record?.snapshot.forecast.totalCommitments > 0) {
+    } else if (
+      !record?.snapshot.hasRevenueSources &&
+      (record?.snapshot.forecast.totalCommitments ?? 0) > 0
+    ) {
       reason = 'Participant earnings missing';
       recommendedAction = 'Configure earnings';
       href = projectOverviewPath(snap.projectId);
