@@ -4,6 +4,10 @@ export function projectOverviewPath(projectId: string): string {
   return `/dashboard/projects/${encodeURIComponent(projectId)}`;
 }
 
+export function projectPlanningPath(projectId: string): string {
+  return `/dashboard/projects/${encodeURIComponent(projectId)}/planning`;
+}
+
 export function projectCommercialRolesPath(projectId: string): string {
   return `/dashboard/projects/${encodeURIComponent(projectId)}/commercial-roles`;
 }
@@ -76,6 +80,7 @@ export function projectSettlementPath(projectId: string): string {
 }
 
 export type ProjectWorkspaceTab =
+  | 'planning'
   | 'overview'
   | 'commercialRoles'
   | 'participants'
@@ -86,6 +91,7 @@ export type ProjectWorkspaceTab =
 
 export function projectTabFromPathname(pathname: string, projectId: string): ProjectWorkspaceTab {
   const base = projectOverviewPath(projectId);
+  if (pathname.startsWith(`${base}/planning`)) return 'planning';
   if (pathname === base) return 'overview';
   if (
     pathname.startsWith(`${base}/commercial-roles`) ||

@@ -40,7 +40,6 @@ export const PRODUCT_TERMINOLOGY = {
     'Create your planned team roles and allocate their budgets before inviting participants.',
   budgetedRolesAssignHelper: "Later you'll assign real people to these budgeted roles.",
 
-  yourProjects: 'Your projects',
   projectCoordination: 'Project coordination',
   projectOverview: 'Project overview',
   projectHealth: 'Project health',
@@ -50,6 +49,23 @@ export const PRODUCT_TERMINOLOGY = {
 
   /** Legal/commercial document — distinct from the workspace "project". */
   participationAgreement: 'participation agreement',
+
+  planning: 'Planning',
+  planningWorkspace: 'Planning workspace',
+  commercialStory: 'Commercial Story',
+  revenueSources: 'Revenue Sources',
+  expectedObligations: 'Expected Obligations',
+  forecastSurplus: 'Forecast Surplus',
+  scenarioUnsavedChanges: 'Unsaved Changes',
+  scenarioSimulationHint:
+    'Forecast updates are being simulated only. Nothing has been changed in the live project.',
+  discardScenario: 'Discard',
+  saveScenario: 'Save Scenario',
+  planningInsights: 'Planning Insights',
+  scenarioSummary: 'Scenario Summary',
+  riskSimulator: 'Risk Simulator',
+  moneyOperationalHint:
+    'This is the operational view of what is actually happening. Edit commercial assumptions in Planning.',
 } as const;
 
 /** "1 project needs attention" / "3 projects need attention" */

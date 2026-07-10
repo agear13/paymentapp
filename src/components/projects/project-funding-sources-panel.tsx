@@ -36,6 +36,8 @@ type ProjectFundingSourcesPanelProps = {
   defaultCurrency?: string;
   onTreasuryChange?: () => void;
   operationalSyncHandlers?: OperationalSyncHandlers;
+  /** When true, hides CRUD actions — operational read-only view. */
+  readOnly?: boolean;
 };
 
 export function ProjectFundingSourcesPanel({
@@ -43,6 +45,7 @@ export function ProjectFundingSourcesPanel({
   defaultCurrency = 'USD',
   onTreasuryChange,
   operationalSyncHandlers,
+  readOnly = false,
 }: ProjectFundingSourcesPanelProps) {
   const [sources, setSources] = React.useState<ProjectFundingSourceDto[]>([]);
   const [treasury, setTreasury] = React.useState<ProjectTreasurySummary | null>(null);
@@ -142,15 +145,19 @@ export function ProjectFundingSourcesPanel({
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => setDialogOpen(true)}>
-              Add funding source
-            </Button>
-            <Button size="sm" variant="outline" asChild>
-              <Link href={createInvoiceHref(projectId)}>Link invoice</Link>
-            </Button>
-            <Button size="sm" variant="outline" asChild>
-              <Link href={createInvoiceHref(projectId)}>Create payment request</Link>
-            </Button>
+            {!readOnly && (
+              <>
+                <Button size="sm" onClick={() => setDialogOpen(true)}>
+                  Add funding source
+                </Button>
+                <Button size="sm" variant="outline" asChild>
+                  <Link href={createInvoiceHref(projectId)}>Link invoice</Link>
+                </Button>
+                <Button size="sm" variant="outline" asChild>
+                  <Link href={createInvoiceHref(projectId)}>Create payment request</Link>
+                </Button>
+              </>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -174,7 +181,7 @@ export function ProjectFundingSourcesPanel({
                     <TableHead>Source</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="w-10" />
+                    {!readOnly && <TableHead className="w-10" />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -187,18 +194,20 @@ export function ProjectFundingSourcesPanel({
                       <TableCell className="text-right">
                         {formatTreasuryAmount(s.amount, s.currency)}
                       </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          disabled={deletingId === s.id}
-                          onClick={() => void handleDelete(s.id)}
-                          aria-label={`Remove ${s.name}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+                      {!readOnly && (
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={deletingId === s.id}
+                            onClick={() => void handleDelete(s.id)}
+                            aria-label={`Remove ${s.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -208,14 +217,16 @@ export function ProjectFundingSourcesPanel({
         </CardContent>
       </Card>
 
-      <AddFundingSourceDialog
-        projectId={projectId}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        defaultCurrency={currency}
-        onCreated={handleCreated}
-        operationalSyncHandlers={operationalSyncHandlers}
-      />
+      {!readOnly && (
+        <AddFundingSourceDialog
+          projectId={projectId}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          defaultCurrency={currency}
+          onCreated={handleCreated}
+          operationalSyncHandlers={operationalSyncHandlers}
+        />
+      )}
     </div>
   );
 }

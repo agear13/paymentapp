@@ -82,6 +82,14 @@ export function removeCommercialRoleFromDeals(
   );
 }
 
+export function updateCommercialRolesInDeals(
+  deals: RecentDeal[],
+  projectId: string,
+  roles: CommercialRole[]
+): RecentDeal[] {
+  return deals.map((d) => (d.id === projectId ? { ...d, commercialRoles: roles } : d));
+}
+
 export function participantNameForCommercialRole(
   role: CommercialRole,
   participants: { id: string; name: string }[]

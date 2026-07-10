@@ -5,31 +5,28 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   projectActivityPath,
-  projectCommercialRolesPath,
   projectFundingPath,
-  projectObligationsPath,
   projectOverviewPath,
   projectParticipantsPath,
-  projectPayoutsPath,
+  projectPlanningPath,
 } from '@/lib/projects/project-routes';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 
 type ProjectContextNavProps = {
   projectId: string;
 };
 
 /**
- * Four-tab navigation aligned to operator workflows:
- * Overview (briefing + health) · Money (funding / obligations / settlement) ·
- * People (participants) · History (activity + audit)
- *
- * All original routes remain accessible — only the primary navigation surface is simplified.
+ * Five-tab navigation aligned to operator workflows:
+ * Planning (commercial forecasting) · Overview · Money · People · History
  */
 type NavTab = {
-  id: 'overview' | 'money' | 'people' | 'history';
+  id: 'planning' | 'overview' | 'money' | 'people' | 'history';
   label: string;
 };
 
 const TABS: NavTab[] = [
+  { id: 'planning', label: PRODUCT_TERMINOLOGY.planning },
   { id: 'overview', label: 'Overview' },
   { id: 'money',    label: 'Money' },
   { id: 'people',   label: 'People' },
@@ -38,6 +35,8 @@ const TABS: NavTab[] = [
 
 function hrefForTab(projectId: string, tab: NavTab['id']): string {
   switch (tab) {
+    case 'planning':
+      return projectPlanningPath(projectId);
     case 'overview':
       return projectOverviewPath(projectId);
     case 'money':
@@ -49,9 +48,10 @@ function hrefForTab(projectId: string, tab: NavTab['id']): string {
   }
 }
 
-/** Map full route pathname to simplified 4-tab id. */
+/** Map full route pathname to simplified tab id. */
 function resolveActiveTab(pathname: string, projectId: string): NavTab['id'] {
   const base = projectOverviewPath(projectId);
+  if (pathname.startsWith(`${base}/planning`)) return 'planning';
   if (pathname === base || pathname.startsWith(`${base}/commercial-roles`) || pathname.startsWith(`${base}/allocations`)) {
     return 'overview';
   }

@@ -19,6 +19,7 @@
  */
 
 import * as React from 'react';
+import Link from 'next/link';
 import {
   AlertTriangle,
   Check,
@@ -55,6 +56,8 @@ import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/type
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
+import { projectPlanningPath } from '@/lib/projects/project-routes';
 
 /* ─── Main component ────────────────────────────────────────────────────────── */
 
@@ -133,6 +136,13 @@ export function ProjectCommercialForecast() {
   return (
     <div className="space-y-6">
       <ProjectPageCopilot page="money" />
+
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
+        <p className="text-sm text-muted-foreground">{PRODUCT_TERMINOLOGY.moneyOperationalHint}</p>
+        <Button asChild variant="outline" size="sm" className="shrink-0">
+          <Link href={projectPlanningPath(projectId)}>Open {PRODUCT_TERMINOLOGY.planning}</Link>
+        </Button>
+      </div>
 
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
@@ -694,6 +704,7 @@ function PaymentEvidenceSection({
             defaultCurrency={defaultCurrency}
             operationalSyncHandlers={operationalSyncHandlers}
             onTreasuryChange={onTreasuryChange}
+            readOnly
           />
         </div>
       )}
