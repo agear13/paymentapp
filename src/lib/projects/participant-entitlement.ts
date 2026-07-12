@@ -98,9 +98,17 @@ export function buildReferralCommerceForProject(input: {
 /**
  * On invite: agreement only — pending approval, attribution inactive, no commerce URL.
  */
+function generateParticipantPortalToken(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `portal-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 export function buildProjectParticipant(input: BuildProjectParticipantInput): DemoParticipant {
   const id = `proj-p-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const inviteToken = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  const participantPortalToken = generateParticipantPortalToken();
   const email = input.email?.trim() ?? '';
   const referralCommerce =
     input.referralCommerce ??
@@ -137,6 +145,7 @@ export function buildProjectParticipant(input: BuildProjectParticipantInput): De
     approvalStatus: 'Pending approval',
     onboardingStatus: 'NOT_STARTED',
     inviteToken,
+    participantPortalToken,
     dealId: input.project.id,
     dealName: input.project.dealName,
     roleDetails:

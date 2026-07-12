@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils';
 import type { CommercialTimelineEvent } from '@/lib/commercial/commercial-timeline-events';
 import { buildParticipantCommercialJourney } from '@/lib/commercial/commercial-timeline-events';
 import { ParticipantCommercialHistory } from '@/components/commercial/commercial-timeline';
+import { ParticipantPortalActions } from '@/components/participant-portal/participant-portal-actions';
 import {
   deriveParticipantOperationalWorkflow,
   type ParticipantWorkflowCta,
@@ -541,6 +542,10 @@ export function ApprovalCentreParticipantCard({
           {renderCta(workflow.primaryCta)}
           {workflow.secondaryCtas.map((cta) => renderCta(cta, true))}
         </div>
+      </div>
+
+      <div className="mt-2 pt-2 border-t border-border/30">
+        <ParticipantPortalActions participant={entity} variant="buttons" />
       </div>
 
       {/* Commercial relationship history — shown on md+ as a compact journey bar */}

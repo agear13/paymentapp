@@ -177,6 +177,12 @@ export interface DemoParticipant {
    * xero*: set after successful export to Xero.
    */
   paymentSetup?: import('@/lib/commercial/payment-setup-types').PaymentSetupState;
+
+  /** UUID for the public participant commercial workspace (/participant/:token). */
+  participantPortalToken?: string;
+  /** First time the participant opened their portal (analytics). */
+  portalOpenedAt?: string;
+  portalLastOpenedAt?: string;
 }
 
 export interface InviteParticipantModalProps {
