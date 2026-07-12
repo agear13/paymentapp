@@ -80,10 +80,12 @@ export async function ensureParticipantPortalToken(
   }
 
   const token = createParticipantPortalToken();
-  const next: DemoParticipant = { ...current, participantPortalToken: token };
-  await updatePilotParticipantPayload(participantId, next);
+  const persisted = await updatePilotParticipantPayload(participantId, userId, {
+    participantPortalToken: token,
+  });
+  const participant = persisted ?? { ...current, participantPortalToken: token };
 
-  return { participant: next, token, created: true };
+  return { participant, token, created: true };
 }
 
 export async function regenerateParticipantPortalToken(
@@ -107,10 +109,12 @@ export async function regenerateParticipantPortalToken(
 
   const current = participantRowToDemo(row);
   const token = createParticipantPortalToken();
-  const next: DemoParticipant = { ...current, participantPortalToken: token };
-  await updatePilotParticipantPayload(participantId, next);
+  const persisted = await updatePilotParticipantPayload(participantId, userId, {
+    participantPortalToken: token,
+  });
+  const participant = persisted ?? { ...current, participantPortalToken: token };
 
-  return { participant: next, token };
+  return { participant, token };
 }
 
 export async function markParticipantPortalOpened(token: string): Promise<void> {
