@@ -43,12 +43,14 @@ export const LIFECYCLE_STAGE_LABELS: Record<PaymentLifecycleStage, string> = {
   COMPLETED: 'Completed',
 };
 
-/** Merchant-facing lifecycle labels emphasising the three-layer model. */
+/** Merchant-facing lifecycle labels emphasising immediate export before payment. */
 export const MERCHANT_LAYER_TIMELINE_STAGES = [
-  { stage: 'INVOICE_CREATED' as const, label: 'Commercial Invoice Created' },
-  { stage: 'PAYMENT_CONFIRMED' as const, label: 'Payment Confirmed' },
-  { stage: 'FX_SNAPSHOT_LOCKED' as const, label: 'Accounting Value Locked' },
-  { stage: 'SETTLEMENT_PENDING' as const, label: 'Settlement Pending' },
+  { stage: 'INVOICE_CREATED' as const, label: 'Invoice Created' },
+  { stage: 'ACCOUNTING_SYNC_COMPLETED' as const, label: 'Invoice Exported' },
+  { stage: 'CUSTOMER_OPENED_LINK' as const, label: 'Awaiting Payment' },
+  { stage: 'PAYMENT_CONFIRMED' as const, label: 'Payment Received' },
+  { stage: 'FX_SNAPSHOT_LOCKED' as const, label: 'Invoice Paid' },
+  { stage: 'SETTLEMENT_PENDING' as const, label: 'Settlement Ready' },
   { stage: 'SETTLEMENT_COMPLETED' as const, label: 'Settlement Completed' },
   { stage: 'RECONCILED' as const, label: 'Reconciled' },
 ] as const;
@@ -56,11 +58,10 @@ export const MERCHANT_LAYER_TIMELINE_STAGES = [
 /** Stages shown in the merchant timeline UI (subset + ordered). */
 export const TIMELINE_DISPLAY_STAGES: readonly PaymentLifecycleStage[] = [
   'INVOICE_CREATED',
+  'ACCOUNTING_SYNC_COMPLETED',
   'CUSTOMER_OPENED_LINK',
-  'PAYMENT_REQUESTED',
   'PAYMENT_CONFIRMED',
   'FX_SNAPSHOT_LOCKED',
-  'ACCOUNTING_SYNC_COMPLETED',
   'SETTLEMENT_PENDING',
   'SETTLEMENT_COMPLETED',
   'RECONCILED',

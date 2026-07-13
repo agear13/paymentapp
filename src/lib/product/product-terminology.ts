@@ -66,6 +66,15 @@ export const PRODUCT_TERMINOLOGY = {
   riskSimulator: 'Risk Simulator',
   moneyOperationalHint:
     'This is the operational view of what is actually happening. Edit commercial assumptions in Planning.',
+
+  commercialTiming: 'Commercial Timing',
+  commercialTimingHelper:
+    'When commercial activity occurs — independent from invoice issue and payment receipt dates.',
+  servicePeriod: 'Service Period',
+  recognitionPeriod: 'Recognition Period',
+  expectedCustomerPayment: 'Expected Customer Payment',
+  expectedParticipantSettlement: 'Expected Participant Settlement',
+  commercialTimingSaved: 'Commercial timing saved',
 } as const;
 
 /** "1 project needs attention" / "3 projects need attention" */

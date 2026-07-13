@@ -645,7 +645,7 @@ export function deriveWorkspaceTimeline(input: WorkspaceTimelineInput, month?: D
   });
 
   const monthSummary = deriveTimelineMonthSummary(input, events, month ?? new Date());
-  const cashForecast = deriveCashFlowForecast(events, input.business, month ?? new Date());
+  const cashForecast = deriveCashFlowForecast(input, month ?? new Date());
 
   return { events, monthSummary, cashForecast };
 }

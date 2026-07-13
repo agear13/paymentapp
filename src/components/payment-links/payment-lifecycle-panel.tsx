@@ -45,6 +45,29 @@ type LifecycleSnapshot = {
   currentStage: string | null;
   timeline: LifecycleTimelineItem[];
   layerTimeline?: LayerTimelineItem[];
+  invoiceLifecycle?: {
+    state: string;
+    stateLabel: string;
+    timeline: {
+      id: string;
+      state: string;
+      label: string;
+      reached: boolean;
+      occurredAt: string | null;
+    }[];
+    amountPaid: number;
+    amountOutstanding: number;
+    exportedToAccounting: boolean;
+    xeroInvoiceId: string | null;
+  };
+  commercialReconciliation?: {
+    reconciliationStatus: string;
+    reconciliationStatusLabel: string;
+    settlementEligible: boolean;
+    paymentRail: string | null;
+    matchedAmount: number;
+    remainingAmount: number;
+  };
   transactionLayers?: PaymentTransactionLayers;
   xeroContext?: Record<string, unknown> | null;
   settlements: SettlementItem[];
@@ -139,32 +162,52 @@ export function PaymentLifecyclePanel({
 
   const flowIndex = settlementFlowStep(snapshot.settlements, linkStatus);
   const displayTimeline =
-    snapshot.layerTimeline && snapshot.layerTimeline.length > 0
-      ? snapshot.layerTimeline.map((item) => ({
-          id: item.stage,
-          stage: item.stage,
+    snapshot.invoiceLifecycle?.timeline && snapshot.invoiceLifecycle.timeline.length > 0
+      ? snapshot.invoiceLifecycle.timeline.map((item) => ({
+          id: item.id,
+          stage: item.state,
           label: item.label,
-          createdAt: item.createdAt ?? new Date(0).toISOString(),
+          createdAt: item.occurredAt ?? new Date(0).toISOString(),
           actor: null,
           provider: null,
           reached: item.reached,
         }))
-      : snapshot.timeline.filter((item) =>
-          [
-            'INVOICE_CREATED',
-            'PAYMENT_CONFIRMED',
-            'FX_SNAPSHOT_LOCKED',
-            'SETTLEMENT_PENDING',
-            'SETTLEMENT_COMPLETED',
-            'RECONCILED',
-          ].includes(item.stage)
-        );
+      : snapshot.layerTimeline && snapshot.layerTimeline.length > 0
+        ? snapshot.layerTimeline.map((item) => ({
+            id: item.stage,
+            stage: item.stage,
+            label: item.label,
+            createdAt: item.createdAt ?? new Date(0).toISOString(),
+            actor: null,
+            provider: null,
+            reached: item.reached,
+          }))
+        : snapshot.timeline.filter((item) =>
+            [
+              'INVOICE_CREATED',
+              'ACCOUNTING_SYNC_COMPLETED',
+              'CUSTOMER_OPENED_LINK',
+              'PAYMENT_CONFIRMED',
+              'FX_SNAPSHOT_LOCKED',
+              'SETTLEMENT_PENDING',
+              'SETTLEMENT_COMPLETED',
+              'RECONCILED',
+            ].includes(item.stage)
+          );
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">Payment Health</span>
         <Badge variant="secondary">{snapshot.healthLabel}</Badge>
+        {snapshot.invoiceLifecycle ? (
+          <Badge variant="outline">{snapshot.invoiceLifecycle.stateLabel}</Badge>
+        ) : null}
+        {snapshot.commercialReconciliation ? (
+          <Badge variant="outline">
+            {snapshot.commercialReconciliation.reconciliationStatusLabel}
+          </Badge>
+        ) : null}
         {snapshot.currentStage ? (
           <span className="text-xs text-muted-foreground">
             Current stage: {snapshot.currentStage.replace(/_/g, ' ').toLowerCase()}

@@ -1,5 +1,6 @@
 import type { AgreementBriefingSnapshot } from '@/lib/agreements/agreement-briefing.model';
 import type { AgreementHealthSnapshot } from '@/lib/agreements/health/agreement-health.types';
+import type { AgreementCommercialTiming } from '@/lib/commercial-timing/types';
 
 export type AgreementRecommendationUrgency = 'critical' | 'high' | 'medium' | 'low';
 
@@ -52,4 +53,6 @@ export type AgreementIntelligenceOutput = {
   fundingFunnel: AgreementFundingFunnelStep[];
   participantActions: AgreementParticipantAction[];
   health: AgreementHealthSnapshot;
+  /** Extracted or existing commercial timing — never fabricated. */
+  commercialTiming?: AgreementCommercialTiming | null;
 };

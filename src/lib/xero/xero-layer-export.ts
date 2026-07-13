@@ -17,6 +17,14 @@ import {
   type XeroPaymentContextMetadata,
 } from '@/lib/payments/xero-payment-context';
 import type { PrismaClient } from '@prisma/client';
+import type { InvoiceCommercialTimingExportContext } from '@/lib/payment-links/invoice-commercial-timing-export';
+import { resolvePaymentLinkCommercialTimingForExport } from '@/lib/payment-links/invoice-commercial-timing-export';
+import type { AccountingReconciliationExportContext } from '@/lib/commercial-reconciliation/types';
+import {
+  deriveCommercialReconciliation,
+  buildAccountingReconciliationExportContext,
+} from '@/lib/commercial-reconciliation';
+import type { RawPaymentEventInput } from '@/lib/commercial-reconciliation/adapters/reconciliation-rail-adapters';
 
 export type XeroPostingValues = {
   amount: string;
@@ -32,6 +40,10 @@ export type XeroExportContext = {
   /** Immutable FX rate from snapshot — never live-fetched when accounting layer is active. */
   accountingFxRate: number | null;
   fxSnapshotId: string | null;
+  /** Resolved commercial timing for accounting export. */
+  commercialTiming?: InvoiceCommercialTimingExportContext;
+  /** Commercial reconciliation context — no export behaviour changes. */
+  commercialReconciliation?: AccountingReconciliationExportContext;
 };
 
 function toAmountString(value: unknown): string {
@@ -220,10 +232,29 @@ export function buildXeroLayerPaymentReference(params: {
 export function enrichXeroLineDescription(
   description: string,
   metadata: XeroPaymentContextMetadata,
-  usesAccountingLayer: boolean
+  usesAccountingLayer: boolean,
+  commercialTiming?: InvoiceCommercialTimingExportContext
 ): string {
+  const lines: string[] = [description];
+
+  if (commercialTiming?.exportContext.hasTiming) {
+    const ctx = commercialTiming.exportContext;
+    if (ctx.servicePeriodLabel) {
+      lines.push(`[Service Period: ${ctx.servicePeriodLabel}]`);
+    }
+    if (ctx.recognitionPeriodLabel) {
+      lines.push(`[Recognition Period: ${ctx.recognitionPeriodLabel}]`);
+    }
+    if (ctx.expectedPaymentDate) {
+      lines.push(`[Expected Payment: ${ctx.expectedPaymentDate.split('T')[0]}]`);
+    }
+    if (ctx.expectedSettlementDate) {
+      lines.push(`[Expected Settlement: ${ctx.expectedSettlementDate.split('T')[0]}]`);
+    }
+  }
+
   if (!usesAccountingLayer) {
-    return description;
+    return lines.join('\n');
   }
   const auditLines = [
     `[Commercial: ${metadata.commercialAmount} ${metadata.commercialCurrency}]`,
@@ -236,7 +267,7 @@ export function enrichXeroLineDescription(
     `[Accounting: ${metadata.accountingAmount} ${metadata.accountingCurrency} @ FX ${metadata.fxRate ?? '1'}]`,
     metadata.fxSnapshotId ? `[FX Snapshot: ${metadata.fxSnapshotId}]` : null,
   ].filter(Boolean);
-  return `${description}\n${auditLines.join('\n')}`;
+  return `${lines.join('\n')}\n${auditLines.join('\n')}`;
 }
 
 /** Payment narration with full three-layer audit context. */
@@ -310,6 +341,9 @@ export type XeroSyncLinkRecord = PaymentLinkLayerInput & {
   customer_email: string | null;
   invoice_reference: string | null;
   invoice_date: Date | null;
+  due_date?: Date | null;
+  commercial_timing?: unknown;
+  pilot_deal_id?: string | null;
   payment_method: string | null;
 };
 
@@ -332,6 +366,9 @@ export const XERO_SYNC_LINK_SELECT = {
   customer_email: true,
   invoice_reference: true,
   invoice_date: true,
+  due_date: true,
+  commercial_timing: true,
+  pilot_deal_id: true,
   payment_method: true,
 } as const;
 
@@ -358,10 +395,15 @@ export async function loadXeroExportContext(
           amount_received: true,
           currency_received: true,
           hedera_transaction_id: true,
+          stripe_payment_intent_id: true,
+          wise_transfer_id: true,
+          source_reference: true,
+          correlation_id: true,
           metadata: true,
           layer_metadata: true,
           received_at: true,
           created_at: true,
+          pilot_deal_id: true,
         },
       },
       fx_snapshots: {
@@ -399,6 +441,31 @@ export async function loadXeroExportContext(
     merchantDefaultCurrency: merchantSettings?.default_currency ?? null,
     settlementTimestamp,
   });
+
+  const commercialTiming = await resolvePaymentLinkCommercialTimingForExport(
+    prismaClient,
+    link
+  );
+  exportContext.commercialTiming = commercialTiming;
+
+  const confirmedEvents = paymentEvents.filter((e) => e.event_type === 'PAYMENT_CONFIRMED');
+  if (confirmedEvents.length > 0) {
+    const reconciliation = deriveCommercialReconciliation({
+      paymentLinkId: params.paymentLinkId,
+      invoiceAmount: Number(link.amount),
+      currency: link.invoice_currency ?? link.currency,
+      organizationId: params.organizationId,
+      agreementId: link.pilot_deal_id ?? null,
+      linkStatus: link.status,
+      paymentEvents: [],
+      rawPaymentEvents: confirmedEvents.map((e) => ({
+        ...(e as RawPaymentEventInput),
+        payment_link_id: params.paymentLinkId,
+      })),
+    });
+    exportContext.commercialReconciliation =
+      buildAccountingReconciliationExportContext(reconciliation);
+  }
 
   return { link, exportContext };
 }

@@ -36,6 +36,7 @@ import type { ProjectFundingSourceDto } from '@/lib/projects/funding-sources/typ
 import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { CommercialTimingSection } from '@/components/projects/commercial-timing-section';
 
 export function ProjectPlanningView() {
   const { summary, projectId, allDeals } = useProjectWorkspace();
@@ -70,6 +71,11 @@ export function ProjectPlanningView() {
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         <div className="space-y-6 min-w-0">
           <CommercialStorySection planning={planning} onAddRole={() => setAddRoleOpen(true)} />
+          <CommercialTimingSection
+            timing={planning.scenarioCommercialTiming}
+            onChange={planning.updateCommercialTiming}
+            disabled={planning.saving}
+          />
           <RiskSimulatorSection planning={planning} />
           <PlanningInsightsSection planning={planning} />
         </div>

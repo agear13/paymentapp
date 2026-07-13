@@ -460,6 +460,8 @@ model payment_links {
   /// Deal Network pilot project (Strait) — optional invoice↔project coordination link.
   pilot_deal_id           String?                   @db.VarChar(255)
   pilot_deal              deal_network_pilot_deals? @relation("PilotDealPaymentLinks", fields: [pilot_deal_id], references: [id], onDelete: SetNull)
+  /// Commercial timing for this invoice — inherits agreement defaults; optional overrides.
+  commercial_timing       Json?
 
   @@index([organization_id, status])
   @@index([due_date])

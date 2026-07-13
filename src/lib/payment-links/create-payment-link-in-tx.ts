@@ -8,6 +8,10 @@ import {
   normalizeInvoiceReference,
 } from '@/lib/payment-links/invoice-reference';
 import { buildLayerFieldsForCreate } from '@/lib/payments/payment-layers';
+import { inheritCommercialTimingForInvoice } from '@/lib/commercial-timing/inherit-commercial-timing';
+import { commercialTimingFromDeal } from '@/lib/commercial-timing/commercial-timing-payload';
+import { commercialTimingToPaymentLinkJson } from '@/lib/commercial-timing/payment-link-timing';
+import { dealRowToRecentDeal } from '@/lib/deal-network-demo/pilot-snapshot.server';
 
 export type WiseInsertContext = {
   metadata: Record<string, unknown>;
@@ -94,6 +98,21 @@ export async function insertPaymentLinkInTransaction(
   const isCrypto = !invoiceOnly && resolvedPaymentMethod === 'CRYPTO';
   const isManualBank = !invoiceOnly && resolvedPaymentMethod === 'MANUAL_BANK';
 
+  let commercialTimingJson = commercialTimingToPaymentLinkJson(
+    validatedData.commercialTiming ?? null
+  );
+  if (!commercialTimingJson && pilotDealIdToStore) {
+    const dealRow = await tx.deal_network_pilot_deals.findUnique({
+      where: { id: pilotDealIdToStore },
+    });
+    if (dealRow) {
+      const inherited = inheritCommercialTimingForInvoice(
+        commercialTimingFromDeal(dealRowToRecentDeal(dealRow))
+      );
+      commercialTimingJson = commercialTimingToPaymentLinkJson(inherited);
+    }
+  }
+
   const linkCreateData: Record<string, unknown> = {
     id: linkId,
     organization_id: dbOrgId,
@@ -160,6 +179,7 @@ export async function insertPaymentLinkInTransaction(
     updated_at: now,
     wise_status: wiseContext ? 'INSTRUCTIONS_READY' : null,
     pilot_deal_id: pilotDealIdToStore,
+    commercial_timing: commercialTimingJson ?? null,
   };
 
   const link = await tx.payment_links.create({

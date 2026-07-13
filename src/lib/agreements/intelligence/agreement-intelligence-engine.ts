@@ -13,6 +13,7 @@ import type {
   AgreementPrimaryRecommendation,
   AgreementSettlementBlocker,
 } from '@/lib/agreements/intelligence/agreement-intelligence.types';
+import type { AgreementCommercialTiming } from '@/lib/commercial-timing/types';
 import { deriveCanonicalAgreementState } from '@/lib/operations/contracts/canonical-agreement-lifecycle';
 import type { OperationalGuidanceBundle } from '@/lib/operations/explainability/types';
 import type { OperationalReleaseBlockerDetail } from '@/lib/operations/explainability/derive-operational-release-blockers';
@@ -26,6 +27,8 @@ import type { ProjectWorkspaceSummary } from '@/lib/projects/project-workspace-s
 import type { WorkspaceOperationalContext } from '@/lib/operations/types/operational-context';
 import { deriveAgreementHealth } from '@/lib/agreements/health/derive-agreement-health';
 import { projectParticipantsPath } from '@/lib/projects/project-routes';
+import { commercialTimingFromDeal } from '@/lib/commercial-timing/commercial-timing-payload';
+import { extractCommercialTimingFromAgreementIntelligence } from '@/lib/commercial-timing/extensions/agreement-intelligence';
 
 const BLOCKER_CATEGORY_LABELS: Record<OperationalReleaseBlockerDetail['category'], string> = {
   funding_missing: 'Funding incomplete',
@@ -464,6 +467,11 @@ export function deriveAgreementIntelligence(input: AgreementIntelligenceInput): 
     recordTrend: typeof window !== 'undefined',
   });
 
+  const commercialTimingExtraction = extractCommercialTimingFromAgreementIntelligence({
+    agreementText: input.deal.importedConversation ?? input.deal.projectDescription ?? null,
+    existingTiming: commercialTimingFromDeal(input.deal),
+  });
+
   return {
     snapshot,
     primaryRecommendation: derivePrimaryRecommendation(enrichedInput),
@@ -471,5 +479,6 @@ export function deriveAgreementIntelligence(input: AgreementIntelligenceInput): 
     fundingFunnel: deriveFundingFunnel(enrichedInput),
     participantActions: deriveParticipantActions(input),
     health,
+    commercialTiming: commercialTimingExtraction.timing,
   };
 }

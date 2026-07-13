@@ -141,6 +141,12 @@ export interface RecentDeal {
    * Not used by operational graph, obligations, funding, or settlement.
    */
   commercialRoles?: import('@/lib/projects/commercial-roles/types').CommercialRole[];
+  /**
+   * Agreement-level commercial timing defaults (stored in deal_payload JSON only).
+   * Source of truth for service period, recognition period, and expected dates.
+   * Downstream invoices and bills inherit by default; accounting consumes later.
+   */
+  commercialTiming?: import('@/lib/commercial-timing/types').AgreementCommercialTiming;
 }
 
 export interface FunnelStage {

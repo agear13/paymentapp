@@ -232,6 +232,13 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
         xeroRawInvoicesResponse: (invoiceResult as { xeroRawInvoicesResponse?: unknown })
           .xeroRawInvoicesResponse ?? null,
         paymentLayers: exportContext.metadata,
+        commercialTiming: exportContext.commercialTiming
+          ? {
+              resolved: exportContext.commercialTiming.resolved,
+              exportContext: exportContext.commercialTiming.exportContext,
+            }
+          : null,
+        commercialReconciliation: exportContext.commercialReconciliation ?? null,
       } as Prisma.InputJsonValue,
     });
     await prisma.payment_links.updateMany({
@@ -458,6 +465,7 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
       payload: {
         payment: paymentResult as unknown as Prisma.InputJsonValue,
         paymentLayers: exportContext.metadata,
+        commercialReconciliation: exportContext.commercialReconciliation ?? null,
       } as Prisma.InputJsonValue,
     });
 

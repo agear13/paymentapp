@@ -44,6 +44,15 @@ import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-pr
 import { isInvoiceAtOrAfter } from '@/lib/commercial/invoice-lifecycle';
 import type { InvoiceLifecycleState } from '@/lib/commercial/invoice-lifecycle';
 import type { AccountingReconciliationResult } from '@/lib/commercial/accounting-reconciliation';
+import {
+  buildAccountingExportTimingContext,
+  resolveBillCommercialTiming,
+  type ResolvedCommercialTiming,
+} from '@/lib/commercial-timing';
+import type {
+  AgreementCommercialTiming,
+  DocumentCommercialTiming,
+} from '@/lib/commercial-timing/types';
 
 /* ─── Input types ─────────────────────────────────────────────────────────── */
 
@@ -112,6 +121,12 @@ export type AccountingExportParticipantInput = {
     trackingCategory?: string | null;
     /** Error message from the last failed export. */
     lastError?: string | null;
+  };
+
+  /** Agreement-level commercial timing — consumed by export, not owned by accounting. */
+  commercialTiming?: {
+    agreementDefaults?: AgreementCommercialTiming | null;
+    documentTiming?: DocumentCommercialTiming | null;
   };
 };
 
@@ -235,6 +250,15 @@ export type AccountingExportModel = {
 
   /** Whether the accounting export is not applicable for this participant type. */
   notApplicable: boolean;
+
+  /**
+   * Resolved commercial timing available for future accounting export mapping.
+   * No export behaviour changes — timing is pass-through context only.
+   */
+  commercialTiming?: {
+    resolved: ResolvedCommercialTiming;
+    exportContext: ReturnType<typeof buildAccountingExportTimingContext>;
+  };
 };
 
 /* ─── Workspace sync status (dashboard) ─────────────────────────────────── */
@@ -311,6 +335,15 @@ export function deriveAccountingExport(
 
   const reExportRequired = accounting.xeroStatus === 're_export_required';
 
+  const resolvedCommercialTiming = resolveBillCommercialTiming(
+    input.commercialTiming?.agreementDefaults,
+    input.commercialTiming?.documentTiming
+  );
+  const commercialTimingExport = {
+    resolved: resolvedCommercialTiming,
+    exportContext: buildAccountingExportTimingContext(resolvedCommercialTiming),
+  };
+
   return {
     exportId,
     participantId: participant.id,
@@ -328,6 +361,7 @@ export function deriveAccountingExport(
     failureAction,
     reExportRequired,
     notApplicable: false,
+    commercialTiming: commercialTimingExport,
   };
 }
 

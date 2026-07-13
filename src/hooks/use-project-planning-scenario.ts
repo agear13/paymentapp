@@ -7,6 +7,10 @@ import { resolveOperationalWorkspaceCurrency } from '@/lib/currency/resolve-oper
 import {
   commercialRolesFromDeal,
 } from '@/lib/projects/commercial-roles/commercial-roles-payload';
+import {
+  commercialTimingFromDeal,
+} from '@/lib/commercial-timing/commercial-timing-payload';
+import type { AgreementCommercialTiming } from '@/lib/commercial-timing/types';
 import type { CommercialRole } from '@/lib/projects/commercial-roles/types';
 import type { ProjectFundingSourceDto } from '@/lib/projects/funding-sources/types';
 import {
@@ -20,6 +24,13 @@ import {
 } from '@/lib/commercial/scenario-commercial-snapshot';
 
 const TEMP_FUNDING_SOURCE_PREFIX = 'plan-fs-';
+
+function commercialTimingEqual(
+  a: AgreementCommercialTiming,
+  b: AgreementCommercialTiming
+): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 export function newPlanningFundingSourceId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -35,9 +46,12 @@ export type UseProjectPlanningScenarioResult = {
   scenario: ScenarioCommercialSnapshot | null;
   scenarioRoles: CommercialRole[];
   scenarioFundingSources: ProjectFundingSourceDto[];
+  scenarioCommercialTiming: AgreementCommercialTiming;
+  baselineCommercialTiming: AgreementCommercialTiming;
   dirty: boolean;
   updateRoleBudget: (roleId: string, budgetValue: number) => void;
   updateFundingAmount: (sourceId: string, amount: number) => void;
+  updateCommercialTiming: (timing: AgreementCommercialTiming) => void;
   addRole: (role: CommercialRole) => void;
   addFundingSource: (source: ProjectFundingSourceDto) => void;
   discard: () => void;
@@ -57,6 +71,10 @@ export function useProjectPlanningScenario(): UseProjectPlanningScenarioResult {
   const [scenarioFundingSources, setScenarioFundingSources] = React.useState<
     ProjectFundingSourceDto[]
   >([]);
+  const [baselineCommercialTiming, setBaselineCommercialTiming] =
+    React.useState<AgreementCommercialTiming>({});
+  const [scenarioCommercialTiming, setScenarioCommercialTiming] =
+    React.useState<AgreementCommercialTiming>({});
 
   const currency = resolveOperationalWorkspaceCurrency({
     projectCurrency: deal?.projectValueCurrency,
@@ -74,16 +92,22 @@ export function useProjectPlanningScenario(): UseProjectPlanningScenarioResult {
         ? ((await res.json()) as { data?: ProjectFundingSourceDto[] }).data ?? []
         : [];
       const roles = commercialRolesFromDeal(deal);
+      const timing = commercialTimingFromDeal(deal);
       setBaselineRoles(roles);
       setBaselineFundingSources(sources);
+      setBaselineCommercialTiming(timing);
       setScenarioRoles(clonePlanningRoles(roles));
       setScenarioFundingSources(clonePlanningFundingSources(sources));
+      setScenarioCommercialTiming({ ...timing });
     } catch {
       const roles = commercialRolesFromDeal(deal);
+      const timing = commercialTimingFromDeal(deal);
       setBaselineRoles(roles);
       setBaselineFundingSources([]);
+      setBaselineCommercialTiming(timing);
       setScenarioRoles(clonePlanningRoles(roles));
       setScenarioFundingSources([]);
+      setScenarioCommercialTiming({ ...timing });
     } finally {
       setLoading(false);
     }
@@ -136,60 +160,82 @@ export function useProjectPlanningScenario(): UseProjectPlanningScenarioResult {
     setScenarioFundingSources((prev) => [...prev, source]);
   }, []);
 
+  const updateCommercialTiming = React.useCallback((timing: AgreementCommercialTiming) => {
+    setScenarioCommercialTiming(timing);
+  }, []);
+
+  const timingDirty = !commercialTimingEqual(baselineCommercialTiming, scenarioCommercialTiming);
+
   const discard = React.useCallback(() => {
     setScenarioRoles(clonePlanningRoles(baselineRoles));
     setScenarioFundingSources(clonePlanningFundingSources(baselineFundingSources));
-  }, [baselineFundingSources, baselineRoles]);
+    setScenarioCommercialTiming({ ...baselineCommercialTiming });
+  }, [baselineCommercialTiming, baselineFundingSources, baselineRoles]);
 
   const save = React.useCallback(async (): Promise<boolean> => {
-    if (!deal || !scenario?.dirty) return true;
+    const scenarioDirty = scenario?.dirty ?? false;
+    if (!deal || (!scenarioDirty && !timingDirty)) return true;
     setSaving(true);
     try {
-      const rolesRes = await fetch(
-        `/api/deal-network-pilot/deals/${encodeURIComponent(projectId)}/commercial-roles`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ commercialRoles: scenarioRoles }),
-        }
-      );
-      if (!rolesRes.ok) throw new Error('Failed to save budgeted roles');
+      if (scenarioDirty) {
+        const rolesRes = await fetch(
+          `/api/deal-network-pilot/deals/${encodeURIComponent(projectId)}/commercial-roles`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ commercialRoles: scenarioRoles }),
+          }
+        );
+        if (!rolesRes.ok) throw new Error('Failed to save budgeted roles');
 
-      for (const source of scenarioFundingSources) {
-        const baseline = baselineFundingSources.find((s) => s.id === source.id);
-        if (baseline && baseline.amount === source.amount) continue;
+        for (const source of scenarioFundingSources) {
+          const baseline = baselineFundingSources.find((s) => s.id === source.id);
+          if (baseline && baseline.amount === source.amount) continue;
 
-        if (source.id.startsWith(TEMP_FUNDING_SOURCE_PREFIX)) {
-          const postRes = await fetch(
-            `/api/projects/${encodeURIComponent(projectId)}/funding-sources`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: source.name,
-                description: source.description,
-                sourceType: source.sourceType,
-                amount: source.amount,
-                currency: source.currency,
-                status: source.status,
-                confidenceLevel: source.confidenceLevel,
-                expectedSettlementDate: source.expectedSettlementDate,
-                notes: source.notes,
-              }),
-            }
-          );
-          if (!postRes.ok) throw new Error('Failed to save revenue source');
-        } else {
-          const patchRes = await fetch(
-            `/api/projects/${encodeURIComponent(projectId)}/funding-sources/${encodeURIComponent(source.id)}`,
-            {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ amount: source.amount }),
-            }
-          );
-          if (!patchRes.ok) throw new Error('Failed to update revenue source');
+          if (source.id.startsWith(TEMP_FUNDING_SOURCE_PREFIX)) {
+            const postRes = await fetch(
+              `/api/projects/${encodeURIComponent(projectId)}/funding-sources`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: source.name,
+                  description: source.description,
+                  sourceType: source.sourceType,
+                  amount: source.amount,
+                  currency: source.currency,
+                  status: source.status,
+                  confidenceLevel: source.confidenceLevel,
+                  expectedSettlementDate: source.expectedSettlementDate,
+                  notes: source.notes,
+                }),
+              }
+            );
+            if (!postRes.ok) throw new Error('Failed to save revenue source');
+          } else {
+            const patchRes = await fetch(
+              `/api/projects/${encodeURIComponent(projectId)}/funding-sources/${encodeURIComponent(source.id)}`,
+              {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: source.amount }),
+              }
+            );
+            if (!patchRes.ok) throw new Error('Failed to update revenue source');
+          }
         }
+      }
+
+      if (timingDirty) {
+        const timingRes = await fetch(
+          `/api/deal-network-pilot/deals/${encodeURIComponent(projectId)}/commercial-timing`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ commercialTiming: scenarioCommercialTiming }),
+          }
+        );
+        if (!timingRes.ok) throw new Error('Failed to save commercial timing');
       }
 
       await refresh({ scope: 'summary', silent: true, force: true });
@@ -203,14 +249,17 @@ export function useProjectPlanningScenario(): UseProjectPlanningScenarioResult {
       setSaving(false);
     }
   }, [
+    baselineCommercialTiming,
     baselineFundingSources,
     deal,
     loadBaseline,
     projectId,
     refresh,
     scenario?.dirty,
+    scenarioCommercialTiming,
     scenarioFundingSources,
     scenarioRoles,
+    timingDirty,
   ]);
 
   return {
@@ -220,9 +269,12 @@ export function useProjectPlanningScenario(): UseProjectPlanningScenarioResult {
     scenario,
     scenarioRoles,
     scenarioFundingSources,
-    dirty: scenario?.dirty ?? false,
+    scenarioCommercialTiming,
+    baselineCommercialTiming,
+    dirty: (scenario?.dirty ?? false) || timingDirty,
     updateRoleBudget,
     updateFundingAmount,
+    updateCommercialTiming,
     addRole,
     addFundingSource,
     discard,

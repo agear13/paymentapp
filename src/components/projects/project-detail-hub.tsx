@@ -1,11 +1,11 @@
 'use client';
 
-import { AgreementIntelligenceBriefing } from '@/components/agreements/briefing/agreement-intelligence-briefing';
+import { CommercialOperationsWorkspace } from '@/components/projects/commercial-operations-workspace';
 
 type ProjectDetailHubProps = {
   projectId: string;
 };
 
 export function ProjectDetailHub({ projectId }: ProjectDetailHubProps) {
-  return <AgreementIntelligenceBriefing projectId={projectId} />;
+  return <CommercialOperationsWorkspace projectId={projectId} />;
 }

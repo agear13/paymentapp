@@ -47,8 +47,8 @@ export function CommercialOperationsCalendar() {
   }, []);
 
   React.useEffect(() => {
-    const layer = searchParams.get('layer');
-    const type = searchParams.get('type');
+    const layer = searchParams?.get('layer');
+    const type = searchParams?.get('type');
     if (!layer && !type) return;
 
     timeline.setFilters((prev) => ({

@@ -49,6 +49,8 @@ export type PersistedDraftInvoice = {
   gstStatus: 'pending' | 'yes' | 'no' | 'not_applicable';
   /** ISO due date (if known). */
   dueDate: string | null;
+  /** Commercial timing — inherits agreement defaults; supports manual overrides. */
+  commercialTiming?: import('@/lib/commercial-timing/types').DocumentCommercialTiming | null;
   /** Invoice line items for Xero export. */
   lineItems: PersistedInvoiceLineItem[];
 };

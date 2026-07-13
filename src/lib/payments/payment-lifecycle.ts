@@ -23,6 +23,15 @@ import {
   type PaymentHealthStatus,
 } from '@/lib/payments/lifecycle/lifecycle-stages';
 import {
+  buildCustomerInvoiceLifecycleSnapshot,
+  sumConfirmedPaymentAmounts,
+} from '@/lib/payment-links/customer-invoice-lifecycle';
+import {
+  deriveCommercialReconciliation,
+  COMMERCIAL_RECONCILIATION_STATUS_LABELS,
+  type CommercialReconciliation,
+} from '@/lib/commercial-reconciliation';
+import {
   resolvePaymentTransactionLayers,
 } from '@/lib/payments/payment-layers';
 import { buildXeroPaymentContextMetadata } from '@/lib/payments/xero-payment-context';
@@ -347,6 +356,9 @@ export async function getPaymentLifecycleSnapshot(paymentLinkId: string) {
       organization_id: true,
       amount: true,
       currency: true,
+      created_at: true,
+      pilot_deal_id: true,
+      payment_method: true,
       invoice_currency: true,
       commercial_currency: true,
       commercial_amount: true,
@@ -366,8 +378,15 @@ export async function getPaymentLifecycleSnapshot(paymentLinkId: string) {
           amount_received: true,
           currency_received: true,
           hedera_transaction_id: true,
+          stripe_payment_intent_id: true,
+          wise_transfer_id: true,
+          source_reference: true,
+          correlation_id: true,
+          received_at: true,
+          created_at: true,
           metadata: true,
           layer_metadata: true,
+          pilot_deal_id: true,
         },
       },
     },
@@ -377,7 +396,7 @@ export async function getPaymentLifecycleSnapshot(paymentLinkId: string) {
     return null;
   }
 
-  const [timeline, settlements, currentStage, fxSnapshots, merchantSettings] =
+  const [timeline, settlements, currentStage, fxSnapshots, merchantSettings, xeroSyncs, paymentSettlements] =
     await Promise.all([
       paymentTimeline(paymentLinkId),
       getSettlementsForPaymentLink(paymentLinkId),
@@ -388,7 +407,32 @@ export async function getPaymentLifecycleSnapshot(paymentLinkId: string) {
       }),
       prisma.merchant_settings.findFirst({
         where: { organization_id: link.organization_id },
-        select: { default_currency: true },
+        select: {
+          default_currency: true,
+          xero_stripe_clearing_account_id: true,
+          xero_wise_clearing_account_id: true,
+          xero_hbar_clearing_account_id: true,
+          xero_usdc_clearing_account_id: true,
+        },
+      }),
+      prisma.xero_syncs.findMany({
+        where: { payment_link_id: paymentLinkId },
+        select: {
+          sync_type: true,
+          status: true,
+          xero_invoice_id: true,
+          xero_payment_id: true,
+          updated_at: true,
+        },
+      }),
+      prisma.payment_settlements.findMany({
+        where: { payment_link_id: paymentLinkId },
+        select: {
+          status: true,
+          settled_at: true,
+          reference: true,
+          provider: true,
+        },
       }),
     ]);
 
@@ -401,8 +445,140 @@ export async function getPaymentLifecycleSnapshot(paymentLinkId: string) {
 
   const xeroContext = buildXeroPaymentContextMetadata(transactionLayers);
 
+  const invoiceSync = xeroSyncs.find((s) => s.sync_type === 'INVOICE') ?? null;
+  const paymentSync = xeroSyncs.find((s) => s.sync_type === 'PAYMENT') ?? null;
+  const amountPaid = sumConfirmedPaymentAmounts(link.payment_events);
+  const paymentConfirmedEvent = link.payment_events.find(
+    (e) => e.event_type === 'PAYMENT_CONFIRMED'
+  );
+  const settlementPendingEvent = timeline.find(
+    (e) => e.stage === 'SETTLEMENT_PENDING' && e.reached
+  );
+
+  const clearingOverrides = merchantSettings
+    ? {
+        xero_stripe_clearing_account_id:
+          merchantSettings.xero_stripe_clearing_account_id ?? undefined,
+        xero_wise_clearing_account_id:
+          merchantSettings.xero_wise_clearing_account_id ?? undefined,
+        xero_hbar_clearing_account_id:
+          merchantSettings.xero_hbar_clearing_account_id ?? undefined,
+        xero_usdc_clearing_account_id:
+          merchantSettings.xero_usdc_clearing_account_id ?? undefined,
+      }
+    : undefined;
+
+  const commercialReconciliation: CommercialReconciliation = deriveCommercialReconciliation({
+    paymentLinkId: link.id,
+    invoiceAmount: Number(link.amount),
+    currency: link.invoice_currency ?? link.currency,
+    organizationId: link.organization_id,
+    agreementId: link.pilot_deal_id,
+    linkStatus: link.status,
+    paymentEvents: [],
+    rawPaymentEvents: link.payment_events.map((e) => ({
+      ...e,
+      payment_link_id: link.id,
+    })),
+    bankSettlements: paymentSettlements.map((s) => ({
+      status: s.status,
+      settledAt: s.settled_at,
+      reference: s.reference,
+      provider: s.provider,
+    })),
+    clearingAccountOverrides: clearingOverrides,
+  });
+
+  const commerciallyReconciledAt = commercialReconciliation.reconciledAt
+    ? new Date(commercialReconciliation.reconciledAt)
+    : null;
+  const bankClearedAt =
+    commercialReconciliation.bankSettlement?.status === 'cleared' &&
+    commercialReconciliation.bankSettlement.settledAt
+      ? new Date(commercialReconciliation.bankSettlement.settledAt)
+      : null;
+
+  const invoiceLifecycle = buildCustomerInvoiceLifecycleSnapshot({
+    linkStatus: link.status,
+    invoiceAmount: Number(link.amount),
+    amountPaid,
+    invoiceSync: invoiceSync
+      ? {
+          syncType: 'INVOICE',
+          status: invoiceSync.status,
+          xeroInvoiceId: invoiceSync.xero_invoice_id,
+          updatedAt: invoiceSync.updated_at,
+        }
+      : null,
+    paymentSync: paymentSync
+      ? {
+          syncType: 'PAYMENT',
+          status: paymentSync.status,
+          xeroPaymentId: paymentSync.xero_payment_id,
+          updatedAt: paymentSync.updated_at,
+        }
+      : null,
+    createdAt: link.created_at,
+    exportedAt:
+      invoiceSync?.status === 'SUCCESS' ? invoiceSync.updated_at : null,
+    paymentConfirmedAt: paymentConfirmedEvent
+      ? timeline.find((e) => e.stage === 'PAYMENT_CONFIRMED' && e.reached)?.createdAt ??
+        null
+      : null,
+    settlementReadyAt: settlementPendingEvent?.createdAt ?? null,
+    commerciallyReconciledAt,
+    bankClearedAt,
+  });
+
+  const invoiceExportReached =
+    invoiceSync?.status === 'SUCCESS' ||
+    timeline.some(
+      (entry) =>
+        entry.stage === 'ACCOUNTING_SYNC_COMPLETED' &&
+        entry.reached &&
+        (entry.metadata as Record<string, unknown> | null)?.syncType === 'INVOICE'
+    );
+
   const layerTimeline = MERCHANT_LAYER_TIMELINE_STAGES.map(({ stage, label }) => {
-    const reached = timeline.find((entry) => entry.stage === stage && entry.reached);
+    let reached = timeline.find((entry) => entry.stage === stage && entry.reached);
+    if (stage === 'ACCOUNTING_SYNC_COMPLETED' && label === 'Invoice Exported') {
+      reached = invoiceExportReached
+        ? {
+            ...(reached ?? {
+              id: 'invoice-export',
+              stage,
+              label,
+              createdAt: invoiceSync?.updated_at ?? link.created_at,
+              actor: null,
+              provider: 'XERO',
+              paymentEventId: null,
+              metadata: { syncType: 'INVOICE' },
+              reached: true,
+            }),
+            reached: true,
+          }
+        : undefined;
+    }
+    if (stage === 'CUSTOMER_OPENED_LINK' && label === 'Awaiting Payment') {
+      const awaiting =
+        invoiceExportReached &&
+        (link.status === 'OPEN' ||
+          link.status === 'PAID_UNVERIFIED' ||
+          link.status === 'REQUIRES_REVIEW');
+      if (awaiting) {
+        reached = {
+          id: 'awaiting-payment',
+          stage,
+          label,
+          createdAt: invoiceSync?.updated_at ?? link.created_at,
+          actor: null,
+          provider: null,
+          paymentEventId: null,
+          metadata: null,
+          reached: true,
+        };
+      }
+    }
     return {
       stage,
       label,
@@ -434,6 +610,18 @@ export async function getPaymentLifecycleSnapshot(paymentLinkId: string) {
       label: merchantLayerTimelineLabel(entry.stage),
     })),
     layerTimeline,
+    invoiceLifecycle,
+    commercialReconciliation: {
+      reconciliationStatus: commercialReconciliation.reconciliationStatus,
+      reconciliationStatusLabel:
+        COMMERCIAL_RECONCILIATION_STATUS_LABELS[
+          commercialReconciliation.reconciliationStatus
+        ],
+      settlementEligible: commercialReconciliation.settlementEligible,
+      paymentRail: commercialReconciliation.paymentRail,
+      matchedAmount: commercialReconciliation.matchedAmount,
+      remainingAmount: commercialReconciliation.remainingAmount,
+    },
     transactionLayers,
     xeroContext,
     settlements,

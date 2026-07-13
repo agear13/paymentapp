@@ -17,6 +17,7 @@ import {
   buildXeroInvoiceReference,
   enrichXeroLineDescription,
 } from './xero-layer-export';
+import { resolveXeroInvoiceDates } from '@/lib/payment-links/invoice-commercial-timing-export';
 
 export interface InvoiceCreationParams {
   paymentLinkId: string;
@@ -230,9 +231,36 @@ export async function createXeroInvoice(
   }
 
   const lineDescription =
-    exportContext && usesAccountingLayer
-      ? enrichXeroLineDescription(description, exportContext.metadata, usesAccountingLayer)
+    exportContext && (usesAccountingLayer || exportContext.commercialTiming?.exportContext.hasTiming)
+      ? enrichXeroLineDescription(
+          description,
+          exportContext.metadata,
+          usesAccountingLayer,
+          exportContext.commercialTiming
+        )
       : description;
+
+  const linkDates = await prisma.payment_links.findUnique({
+    where: { id: paymentLinkId },
+    select: { invoice_date: true, due_date: true },
+  });
+
+  const resolvedDates = exportContext?.commercialTiming
+    ? resolveXeroInvoiceDates({
+        invoiceDate: linkDates?.invoice_date,
+        dueDate: linkDates?.due_date,
+        commercialTiming: exportContext.commercialTiming.resolved,
+      })
+    : {
+        date: (linkDates?.invoice_date ?? new Date()).toISOString().split('T')[0],
+        dueDate: (
+          linkDates?.due_date ??
+          linkDates?.invoice_date ??
+          new Date()
+        )
+          .toISOString()
+          .split('T')[0],
+      };
 
   const xeroReference =
     exportContext != null
@@ -265,8 +293,8 @@ export async function createXeroInvoice(
   const invoice: Invoice = {
     type: Invoice.TypeEnum.ACCREC, // Accounts Receivable
     contact: { contactID: contact.contactID },
-    date: new Date().toISOString().split('T')[0],
-    dueDate: new Date().toISOString().split('T')[0], // Due immediately
+    date: resolvedDates.date,
+    dueDate: resolvedDates.dueDate,
     lineItems,
     reference: xeroReference,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1,4 +1,7 @@
 import type { BusinessFinancialSnapshot } from '@/lib/commercial/business-financial-snapshot';
+import { deriveCommercialForecasting } from '@/lib/commercial-forecasting/derive-commercial-forecast';
+import { buildPortfolioForecastingInput } from '@/lib/workspace-timeline/build-portfolio-forecasting-input';
+import { mapForecastEventsToCashFlowPoints } from '@/lib/workspace-timeline/map-forecast-cashflow-points';
 import type {
   CashFlowForecastPoint,
   TimelineMonthSummary,
@@ -44,8 +47,7 @@ export function deriveTimelineMonthSummary(
   };
 }
 
-export function deriveCashFlowForecast(
-  events: WorkspaceTimelineEvent[],
+function fallbackCashFlowPoint(
   business: BusinessFinancialSnapshot | null,
   month: Date
 ): CashFlowForecastPoint[] {
@@ -53,32 +55,36 @@ export function deriveCashFlowForecast(
   const startingBalance =
     business?.commercial.forecast.forecastPosition.forecastBalance ?? 0;
 
-  const monthEvents = eventsInMonth(events, month);
-  const dates = [...new Set(monthEvents.map((e) => e.date))].sort();
+  return [
+    {
+      date: month.toISOString().slice(0, 10),
+      balance: startingBalance,
+      currency,
+      isDeficit: startingBalance < 0,
+    },
+  ];
+}
 
-  if (dates.length === 0) {
-    return [
-      {
-        date: month.toISOString().slice(0, 10),
-        balance: startingBalance,
-        currency,
-        isDeficit: startingBalance < 0,
-      },
-    ];
+/** Cashflow forecast for the calendar — consumes the Commercial Forecasting Engine. */
+export function deriveCashFlowForecast(
+  input: WorkspaceTimelineInput,
+  month: Date
+): CashFlowForecastPoint[] {
+  const forecastingInput = buildPortfolioForecastingInput(input);
+  if (!forecastingInput) {
+    return fallbackCashFlowPoint(input.business, month);
   }
 
-  let balance = startingBalance;
-  const points: CashFlowForecastPoint[] = [];
+  const forecast = deriveCommercialForecasting(forecastingInput);
+  const openingBalance =
+    input.business?.commercial.forecast.forecastPosition.forecastBalance ??
+    forecast.cashflow.periods[0]?.openingBalance ??
+    0;
 
-  for (const date of dates) {
-    const dayEvents = monthEvents.filter((e) => e.date === date);
-    for (const e of dayEvents) {
-      if (e.amount == null) continue;
-      if (e.direction === 'incoming') balance += e.amount;
-      if (e.direction === 'outgoing') balance -= e.amount;
-    }
-    points.push({ date, balance, currency, isDeficit: balance < 0 });
-  }
-
-  return points;
+  return mapForecastEventsToCashFlowPoints(
+    forecast.events,
+    openingBalance,
+    month,
+    forecast.currency
+  );
 }

@@ -11,6 +11,7 @@ import {
   PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
 } from '@/lib/payment-links/payment-link-attachment.shared';
 import { getInvoiceSelectablePaymentMethods } from '@/lib/payments/payment-rail-registry';
+import { DocumentCommercialTimingSchema } from '@/lib/commercial-timing/validation';
 
 // ============================================================================
 // ENUM SCHEMAS
@@ -318,6 +319,8 @@ export const CreatePaymentLinkSchema = z.object({
   attachment: PaymentLinkAttachmentInputSchema.optional(),
   /** Deal Network pilot: link invoice to a Strait project (deal_network_pilot_deals.id). */
   pilotDealId: uuidSchema.optional(),
+  /** Optional commercial timing overrides — inherits agreement defaults when linked to pilotDealId. */
+  commercialTiming: DocumentCommercialTimingSchema.optional(),
 })
   .refine(
     (d) => {
@@ -406,6 +409,8 @@ export const UpdatePaymentLinkSchema = z
     attachment: PaymentLinkAttachmentInputSchema.nullable().optional(),
     /** Deal Network pilot: link invoice to Strait project; null clears. */
     pilotDealId: uuidSchema.nullable().optional(),
+    /** Commercial timing overrides for this invoice. */
+    commercialTiming: DocumentCommercialTimingSchema.nullable().optional(),
   })
   .strict();
 
