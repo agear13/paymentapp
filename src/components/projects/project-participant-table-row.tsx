@@ -258,6 +258,7 @@ function ProjectParticipantTableRowComponent({
   highlighted = false,
   onCopyAgreement,
   onShareAgreement,
+  onSendPaymentRequest,
   onSharePaymentRequest,
   projectId,
   onEdit,
