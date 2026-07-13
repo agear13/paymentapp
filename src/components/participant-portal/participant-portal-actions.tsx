@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Copy, ExternalLink, Mail, RefreshCw } from 'lucide-react';
+import { Copy, ExternalLink, Mail, RefreshCw, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   DropdownMenuItem,
@@ -10,9 +10,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
+  buildParticipantWorkspacePayoutUrl,
   buildParticipantWorkspaceUrl,
   participantWorkspacePath,
 } from '@/lib/participant-portal/participant-portal-url';
+import {
+  derivePayoutDetailsOrganiserStatus,
+} from '@/lib/participant-portal/participant-workspace-onboarding';
 import { hasApprovedAgreement } from '@/lib/operations/primitives/participant-earnings-primitives';
 
 async function fetchWorkspaceUrl(participantId: string): Promise<string> {
@@ -43,14 +47,22 @@ type Props = {
   participant: DemoParticipant;
   variant?: 'menu-items' | 'buttons';
   onWorkspaceUrlResolved?: (url: string) => void;
+  onRequestPayoutDetails?: (participant: DemoParticipant) => void | Promise<void>;
 };
 
 export function ParticipantWorkspaceActions({
   participant,
   variant = 'menu-items',
   onWorkspaceUrlResolved,
+  onRequestPayoutDetails,
 }: Props) {
-  const [busy, setBusy] = React.useState<'copy' | 'open' | 'regenerate' | 'resend' | null>(null);
+  const [busy, setBusy] = React.useState<
+    'copy' | 'open' | 'regenerate' | 'resend' | 'payout' | null
+  >(null);
+
+  const payoutDetailsStatus = derivePayoutDetailsOrganiserStatus(participant);
+  const showRequestPayoutDetails =
+    hasApprovedAgreement(participant) && payoutDetailsStatus === 'Pending';
 
   const resolveUrl = React.useCallback(async (): Promise<string> => {
     if (participant.participantPortalToken?.trim()) {
@@ -86,6 +98,15 @@ export function ParticipantWorkspaceActions({
     }
   };
 
+  const resolvePayoutUrl = React.useCallback(async (): Promise<string> => {
+    if (participant.participantPortalToken?.trim()) {
+      return buildParticipantWorkspacePayoutUrl(participant.participantPortalToken.trim());
+    }
+    const base = await resolveUrl();
+    const separator = base.includes('?') ? '&' : '?';
+    return `${base}${separator}step=payout`;
+  }, [participant.participantPortalToken, resolveUrl]);
+
   const handleRegenerate = async () => {
     setBusy('regenerate');
     try {
@@ -95,6 +116,37 @@ export function ParticipantWorkspaceActions({
       toast.success('Workspace link regenerated and copied');
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Regenerate failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleRequestPayoutDetails = async () => {
+    setBusy('payout');
+    try {
+      if (onRequestPayoutDetails) {
+        await onRequestPayoutDetails(participant);
+        return;
+      }
+
+      const res = await fetch(
+        `/api/deal-network-pilot/participants/${participant.id}/payment-request/generate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sendEmail: false }),
+        }
+      );
+      const json = (await res.json()) as { error?: string; portalUrl?: string };
+      if (!res.ok) {
+        throw new Error(json.error ?? 'Could not prepare payout request');
+      }
+
+      const payoutUrl = json.portalUrl ?? (await resolvePayoutUrl());
+      await navigator.clipboard.writeText(payoutUrl);
+      toast.success('Payout step link copied — participant opens their workspace to complete details');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Could not request payout details');
     } finally {
       setBusy(null);
     }
@@ -191,6 +243,12 @@ export function ParticipantWorkspaceActions({
         <DropdownMenuItem onClick={() => void handleResend()} disabled={busy != null}>
           <Mail className="mr-2 h-3.5 w-3.5" />
           {busy === 'resend' ? 'Preparing…' : 'Resend Workspace Invitation'}
+        </DropdownMenuItem>
+      ) : null}
+      {showRequestPayoutDetails ? (
+        <DropdownMenuItem onClick={() => void handleRequestPayoutDetails()} disabled={busy != null}>
+          <Wallet className="mr-2 h-3.5 w-3.5" />
+          {busy === 'payout' ? 'Preparing…' : 'Request Payout Details'}
         </DropdownMenuItem>
       ) : null}
       <DropdownMenuItem onClick={() => void handleRegenerate()} disabled={busy != null}>

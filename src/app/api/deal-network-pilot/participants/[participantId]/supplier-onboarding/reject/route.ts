@@ -17,6 +17,7 @@ import {
 import { sendEmail } from '@/lib/email/client';
 import { buildPaymentSetupInviteEmail } from '@/lib/email/templates/payment-setup-invite';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
+import { buildParticipantWorkspacePayoutUrlForParticipant } from '@/lib/participant-portal/participant-workspace-redirect.server';
 import { log } from '@/lib/logger';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -118,9 +119,9 @@ export async function POST(
         if (supplierEmail) {
           const org = await getOrganizationForAuthenticatedUser(user.id);
           const dealName = snapshot.deals[0]?.dealName ?? 'Your project';
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL
-            ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://app.provvypay.com');
-          const portalUrl = `${appUrl}/payment-setup/${tokenData.token}`;
+          const portalUrl =
+            (await buildParticipantWorkspacePayoutUrlForParticipant(participantId)) ??
+            `${process.env.NEXT_PUBLIC_APP_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://app.provvypay.com')}/payment-setup/${tokenData.token}`;
           newPortalUrl = portalUrl;
           const invoiceTotal = existing.paymentSetup?.draftInvoice
             ? new Intl.NumberFormat('en-AU', { style: 'currency', currency: existing.paymentSetup.draftInvoice.currency }).format(existing.paymentSetup.draftInvoice.total)

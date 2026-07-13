@@ -5,21 +5,23 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ParticipantWorkspaceGate } from '@/components/participant-portal/participant-workspace-gate';
 import type { ParticipantCommercialWorkspaceModel } from '@/lib/participant-portal/participant-portal-data';
-import type { ParticipantCommercialState } from '@/lib/participant-portal/participant-workspace-state';
-
-const REFRESH_INTERVAL_MS = 30_000;
+import type { ParticipantWorkspaceOnboarding } from '@/lib/participant-portal/participant-workspace-onboarding';
 
 type WorkspacePayload = {
-  workspace: ParticipantCommercialWorkspaceModel;
-  commercialState: ParticipantCommercialState;
+  workspace: ParticipantCommercialWorkspaceModel | null;
+  onboarding: ParticipantWorkspaceOnboarding;
+  paymentSetupToken: string | null;
   inviteToken: string;
 };
+
+const REFRESH_INTERVAL_MS = 30_000;
 
 export default function ParticipantWorkspacePage() {
   const params = useParams<{ token: string }>();
   const searchParams = useSearchParams();
   const token = String(params?.token ?? '');
   const previewMode = searchParams?.get('mode') === 'preview';
+  const urlStep = searchParams?.get('step');
 
   const [payload, setPayload] = React.useState<WorkspacePayload | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -34,9 +36,10 @@ export default function ParticipantWorkspacePage() {
       setLoadError(null);
 
       try {
-        const res = await fetch(`/api/participant-portal/${encodeURIComponent(token)}`, {
-          cache: 'no-store',
-        });
+        const res = await fetch(
+          `/api/participant-portal/${encodeURIComponent(token)}${urlStep ? `?step=${encodeURIComponent(urlStep)}` : ''}`,
+          { cache: 'no-store' }
+        );
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error((err as { error?: string }).error || 'Workspace not found');
@@ -51,7 +54,7 @@ export default function ParticipantWorkspacePage() {
         setRefreshing(false);
       }
     },
-    [token]
+    [token, urlStep]
   );
 
   React.useEffect(() => {
@@ -108,9 +111,10 @@ export default function ParticipantWorkspacePage() {
     <ParticipantWorkspaceGate
       portalToken={token}
       bootstrap={{
-        commercialState: payload.commercialState,
+        onboarding: payload.onboarding,
         inviteToken: payload.inviteToken,
         workspace: payload.workspace,
+        paymentSetupToken: payload.paymentSetupToken,
       }}
       previewMode={previewMode}
       onRefresh={() => fetchWorkspace({ silent: true })}

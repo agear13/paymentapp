@@ -27,6 +27,7 @@ import {
 } from '@/lib/commercial/participant-lifecycle-primitives';
 import { deriveParticipantWorkflows, deriveParticipantWorkflowBadges } from '@/lib/commercial/workflows/derive-participant-workflows';
 import { mapLegacyParticipantLifecycleStage } from '@/lib/commercial/workflows/map-legacy-lifecycle-stage';
+import { buildParticipantWorkspacePayoutUrl } from '@/lib/participant-portal/participant-portal-url';
 
 /* ─── Lifecycle stages ───────────────────────────────────────────────────── */
 
@@ -143,6 +144,10 @@ export function buildParticipantPaymentPortalUrl(
   participant: DemoParticipant,
   origin?: string
 ): string | null {
+  const portalToken = participant.participantPortalToken?.trim();
+  if (portalToken) {
+    return buildParticipantWorkspacePayoutUrl(portalToken, origin);
+  }
   const token = participant.paymentSetup?.token;
   if (!token) return null;
   const base =

@@ -1,14 +1,29 @@
 /** Client-safe URL helpers for the Participant Workspace (single participant-facing destination). */
 
-export function participantWorkspacePath(token: string): string {
-  return `/participant/${encodeURIComponent(token)}`;
+export type ParticipantWorkspaceStep = 'payout';
+
+export function participantWorkspacePath(
+  token: string,
+  step?: ParticipantWorkspaceStep
+): string {
+  const base = `/participant/${encodeURIComponent(token)}`;
+  if (step === 'payout') return `${base}?step=payout`;
+  return base;
 }
 
-export function buildParticipantWorkspaceUrl(token: string, origin?: string): string {
+export function buildParticipantWorkspaceUrl(
+  token: string,
+  origin?: string,
+  step?: ParticipantWorkspaceStep
+): string {
   const base =
     origin ??
     (typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL ?? '');
-  return `${base}${participantWorkspacePath(token)}`;
+  return `${base}${participantWorkspacePath(token, step)}`;
+}
+
+export function buildParticipantWorkspacePayoutUrl(token: string, origin?: string): string {
+  return buildParticipantWorkspaceUrl(token, origin, 'payout');
 }
 
 /** @deprecated Use participantWorkspacePath */

@@ -4,6 +4,7 @@ import * as React from 'react';
 import { RefreshCw } from 'lucide-react';
 import type { ParticipantCommercialWorkspaceModel } from '@/lib/participant-portal/participant-portal-data';
 import type { CommercialWorkspaceSection } from '@/lib/participant-portal/participant-portal-types';
+import type { ParticipantWorkspaceOnboarding } from '@/lib/participant-portal/participant-workspace-onboarding';
 import { PortalStatusBadge } from '@/components/participant-portal/status-badge';
 import { CommercialSummaryCard } from '@/components/participant-portal/commercial-summary-card';
 import { PaymentTimeline } from '@/components/participant-portal/payment-timeline';
@@ -22,6 +23,7 @@ type Props = {
   onSectionChange: (section: CommercialWorkspaceSection) => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  onboarding?: ParticipantWorkspaceOnboarding;
 };
 
 function formatSyncedAt(iso: string): string {
@@ -127,6 +129,7 @@ export function ParticipantCommercialWorkspaceView({
   onSectionChange,
   onRefresh,
   isRefreshing = false,
+  onboarding,
 }: Props) {
   return (
     <div className="min-h-screen bg-muted/30">
@@ -145,6 +148,18 @@ export function ParticipantCommercialWorkspaceView({
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-6 sm:py-8 space-y-6">
+        {onboarding?.step === 'payout_submitted' ? (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-100">
+            Payout details submitted — your organiser is verifying them. No further action is required
+            from you right now.
+          </div>
+        ) : onboarding?.onboardingComplete ? (
+          <div className="rounded-lg border bg-background px-4 py-3 text-sm text-muted-foreground">
+            Onboarding complete. This is your permanent workspace for agreement, earnings, and
+            settlement activity.
+          </div>
+        ) : null}
+
         <section className="space-y-4">
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">

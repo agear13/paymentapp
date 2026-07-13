@@ -55,8 +55,26 @@ import { ParticipantReleaseButton } from '@/components/projects/participant-rele
 import { AccountingReconciliationCard } from '@/components/commercial/accounting-reconciliation-card';
 import type { AccountingReconciliationResult } from '@/lib/commercial/accounting-reconciliation';
 import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-client';
+import {
+  deriveAgreementOrganiserStatus,
+  derivePayoutDetailsOrganiserStatus,
+  type AgreementOrganiserStatus,
+  type PayoutDetailsOrganiserStatus,
+} from '@/lib/participant-portal/participant-workspace-onboarding';
 
-/* ─── Workflow display classes ────────────────────────────────────────────── */
+/* ─── Onboarding status badges ───────────────────────────────────────────── */
+
+const AGREEMENT_STATUS_CLASS: Record<AgreementOrganiserStatus, string> = {
+  Pending: 'border-amber-300/70 text-amber-700 bg-amber-50/80 dark:bg-amber-950/40 dark:text-amber-300',
+  Approved: 'border-[rgba(29,111,66,0.35)] text-[rgb(29,111,66)] bg-[rgba(29,111,66,0.08)]',
+};
+
+const PAYOUT_STATUS_CLASS: Record<PayoutDetailsOrganiserStatus, string> = {
+  Pending: 'border-amber-300/70 text-amber-700 bg-amber-50/80 dark:bg-amber-950/40 dark:text-amber-300',
+  Submitted: 'border-blue-300/70 text-blue-700 bg-blue-50/80 dark:bg-blue-950/40 dark:text-blue-300',
+  Verified: 'border-[rgba(29,111,66,0.35)] text-[rgb(29,111,66)] bg-[rgba(29,111,66,0.08)]',
+  'Not required': 'border-border text-muted-foreground bg-muted/40',
+};
 
 const WORKFLOW_BADGE_CLASS: Record<
   ReturnType<typeof deriveParticipantOperationalWorkflow>['readiness'],
@@ -332,6 +350,8 @@ export function ApprovalCentreParticipantCard({
     hydrated?.compensation?.earningsPrimaryCompact ?? null;
 
   const lastActivity = React.useMemo(() => deriveLastActivity(participant), [participant]);
+  const agreementStatus = deriveAgreementOrganiserStatus(entity);
+  const payoutDetailsStatus = derivePayoutDetailsOrganiserStatus(entity);
 
   const workspacePath = participantWorkspacePathFromParticipant(participant);
   const fullWorkspaceUrl =
@@ -516,6 +536,21 @@ export function ApprovalCentreParticipantCard({
                 {lastActivity}
               </p>
             ) : null}
+
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Badge
+                variant="outline"
+                className={cn('text-[10px] font-medium px-2 py-0 h-5', AGREEMENT_STATUS_CLASS[agreementStatus])}
+              >
+                Agreement: {agreementStatus}
+              </Badge>
+              <Badge
+                variant="outline"
+                className={cn('text-[10px] font-medium px-2 py-0 h-5', PAYOUT_STATUS_CLASS[payoutDetailsStatus])}
+              >
+                Payout: {payoutDetailsStatus}
+              </Badge>
+            </div>
           </div>
         </div>
 

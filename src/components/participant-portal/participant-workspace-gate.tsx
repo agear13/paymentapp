@@ -4,12 +4,11 @@ import * as React from 'react';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProjectParticipantAgreementPanel } from '@/components/projects/project-participant-agreement-panel';
 import { ParticipantCommercialWorkspaceView } from '@/components/participant-portal/participant-portal-view';
+import { ParticipantWorkspacePayoutPanel } from '@/components/participant-portal/participant-workspace-payout-panel';
+import { ParticipantWorkspaceOnboardingProgress } from '@/components/participant-portal/participant-workspace-onboarding-progress';
 import type { ParticipantCommercialWorkspaceModel } from '@/lib/participant-portal/participant-portal-data';
 import type { CommercialWorkspaceSection } from '@/lib/participant-portal/participant-portal-types';
-import {
-  deriveParticipantWorkspaceExperience,
-  type ParticipantCommercialState,
-} from '@/lib/participant-portal/participant-workspace-state';
+import type { ParticipantWorkspaceOnboarding } from '@/lib/participant-portal/participant-workspace-onboarding';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { ScopedServiceCommissionRow } from '@/lib/projects/participant-compensation-copy';
@@ -23,9 +22,10 @@ type InvitePayload = {
 };
 
 type WorkspaceBootstrap = {
-  commercialState: ParticipantCommercialState;
+  onboarding: ParticipantWorkspaceOnboarding;
   inviteToken: string;
   workspace: ParticipantCommercialWorkspaceModel | null;
+  paymentSetupToken: string | null;
 };
 
 type Props = {
@@ -89,8 +89,28 @@ function AwaitingAgreementSend({ projectName }: { projectName: string }) {
   );
 }
 
+function PayoutSubmittedWaiting({ projectName, participantName }: { projectName: string; participantName: string }) {
+  return (
+    <WorkspaceShell projectName={projectName}>
+      <ParticipantWorkspaceOnboardingProgress
+        currentStep="payout_submitted"
+        nextRequiredAction={null}
+      >
+        <Card className="max-w-xl mx-auto">
+          <CardHeader>
+            <CardTitle>Payout details received</CardTitle>
+            <CardDescription>
+              Thanks, {participantName}. Your organiser is verifying your payout and tax details.
+              You will stay in this workspace — no separate links required.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </ParticipantWorkspaceOnboardingProgress>
+    </WorkspaceShell>
+  );
+}
+
 export function ParticipantWorkspaceGate({
-  portalToken,
   bootstrap,
   previewMode = false,
   onRefresh,
@@ -98,20 +118,19 @@ export function ParticipantWorkspaceGate({
 }: Props) {
   const [activeSection, setActiveSection] = React.useState<CommercialWorkspaceSection>('overview');
   const [workspace, setWorkspace] = React.useState(bootstrap.workspace);
-  const [commercialState, setCommercialState] = React.useState(bootstrap.commercialState);
+  const [onboarding, setOnboarding] = React.useState(bootstrap.onboarding);
+  const [paymentSetupToken, setPaymentSetupToken] = React.useState(bootstrap.paymentSetupToken);
   const [invitePayload, setInvitePayload] = React.useState<InvitePayload | null>(null);
   const [inviteLoading, setInviteLoading] = React.useState(false);
 
-  const experience = deriveParticipantWorkspaceExperience(commercialState);
-
   React.useEffect(() => {
     setWorkspace(bootstrap.workspace);
-    setCommercialState(bootstrap.commercialState);
+    setOnboarding(bootstrap.onboarding);
+    setPaymentSetupToken(bootstrap.paymentSetupToken);
   }, [bootstrap]);
 
-  const participantApproved = workspace?.agreementStatus === 'approved';
   const showAgreementReview =
-    !participantApproved && (experience === 'agreement_review' || previewMode);
+    onboarding.step === 'agreement_review' || (previewMode && onboarding.agreementStatus === 'Pending');
 
   React.useEffect(() => {
     if (!showAgreementReview) return;
@@ -129,43 +148,81 @@ export function ParticipantWorkspaceGate({
     };
   }, [showAgreementReview, bootstrap.inviteToken]);
 
-  const handleApproved = React.useCallback(async () => {
+  const handleStepComplete = React.useCallback(async () => {
     await onRefresh();
   }, [onRefresh]);
 
-  if (experience === 'awaiting_send' && !previewMode) {
-    return (
-      <AwaitingAgreementSend projectName={workspace?.projectName ?? 'Your project'} />
-    );
+  const projectName = workspace?.projectName ?? invitePayload?.deal.dealName ?? 'Your project';
+
+  if (onboarding.step === 'awaiting_agreement_send' && !previewMode) {
+    return <AwaitingAgreementSend projectName={projectName} />;
   }
 
   if (showAgreementReview) {
     if (inviteLoading || !invitePayload) {
       return (
-        <WorkspaceShell projectName={workspace?.projectName ?? 'Your project'}>
-          <p className="text-sm text-muted-foreground text-center py-12">
-            Loading your agreement…
-          </p>
+        <WorkspaceShell projectName={projectName}>
+          <p className="text-sm text-muted-foreground text-center py-12">Loading your agreement…</p>
         </WorkspaceShell>
       );
     }
 
     return (
       <WorkspaceShell projectName={invitePayload.deal.dealName}>
-        <div className="flex justify-center">
-          <ProjectParticipantAgreementPanel
-            token={bootstrap.inviteToken}
-            deal={invitePayload.deal}
-            participant={invitePayload.participant}
-            dealParticipants={invitePayload.dealParticipants ?? []}
-            initialApproved={invitePayload.participant.approvalStatus === 'Approved'}
-            initialReferralIssuance={null}
-            initialScopedServiceRows={invitePayload.scopedServiceRows ?? []}
-            mode={previewMode ? 'preview' : 'approval'}
-            onApproved={handleApproved}
-          />
-        </div>
+        <ParticipantWorkspaceOnboardingProgress
+          currentStep="agreement_review"
+          nextRequiredAction={onboarding.nextRequiredAction}
+        >
+          <div className="flex justify-center">
+            <ProjectParticipantAgreementPanel
+              token={bootstrap.inviteToken}
+              deal={invitePayload.deal}
+              participant={invitePayload.participant}
+              dealParticipants={invitePayload.dealParticipants ?? []}
+              initialApproved={invitePayload.participant.approvalStatus === 'Approved'}
+              initialReferralIssuance={null}
+              initialScopedServiceRows={invitePayload.scopedServiceRows ?? []}
+              mode={previewMode ? 'preview' : 'approval'}
+              onApproved={handleStepComplete}
+            />
+          </div>
+        </ParticipantWorkspaceOnboardingProgress>
       </WorkspaceShell>
+    );
+  }
+
+  if (onboarding.step === 'payout_details') {
+    if (!paymentSetupToken) {
+      return (
+        <WorkspaceShell projectName={projectName}>
+          <p className="text-sm text-muted-foreground text-center py-12">
+            Preparing your payout form…
+          </p>
+        </WorkspaceShell>
+      );
+    }
+
+    return (
+      <WorkspaceShell projectName={projectName}>
+        <ParticipantWorkspaceOnboardingProgress
+          currentStep="payout_details"
+          nextRequiredAction={onboarding.nextRequiredAction}
+        >
+          <ParticipantWorkspacePayoutPanel
+            paymentSetupToken={paymentSetupToken}
+            onSubmitted={handleStepComplete}
+          />
+        </ParticipantWorkspaceOnboardingProgress>
+      </WorkspaceShell>
+    );
+  }
+
+  if (onboarding.step === 'payout_submitted' && !workspace) {
+    return (
+      <PayoutSubmittedWaiting
+        projectName={projectName}
+        participantName={invitePayload?.participant.name ?? 'there'}
+      />
     );
   }
 
@@ -184,6 +241,7 @@ export function ParticipantWorkspaceGate({
       onSectionChange={setActiveSection}
       onRefresh={() => void onRefresh()}
       isRefreshing={isRefreshing}
+      onboarding={onboarding}
     />
   );
 }

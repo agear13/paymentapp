@@ -408,7 +408,10 @@ function ProjectParticipantTableRowComponent({
                 <Pencil className="mr-2 h-3.5 w-3.5" />
                 Edit participant
               </DropdownMenuItem>
-              <ParticipantWorkspaceActions participant={entity} />
+              <ParticipantWorkspaceActions
+                participant={entity}
+                onRequestPayoutDetails={onSendPaymentRequest}
+              />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

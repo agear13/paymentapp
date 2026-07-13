@@ -27,14 +27,23 @@ import {
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { sendEmail } from '@/lib/email/client';
 import { buildPaymentSetupInviteEmail } from '@/lib/email/templates/payment-setup-invite';
+import { buildParticipantWorkspacePayoutUrl } from '@/lib/participant-portal/participant-portal-url';
+import {
+  appBaseUrl,
+  ensurePortalTokenOnParticipantRow,
+} from '@/lib/participant-portal/participant-workspace-redirect.server';
 import { dispatchCommercialNotification } from '@/lib/commercial/dispatch-commercial-notification.server';
 import { log } from '@/lib/logger';
 
+/** @deprecated Legacy payment-setup URLs redirect into the Participant Workspace. */
 export function buildPaymentSetupPortalUrl(token: string): string {
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://app.provvypay.com');
-  return `${appUrl}/payment-setup/${token}`;
+  return `${appBaseUrl()}/payment-setup/${token}`;
+}
+
+async function buildParticipantWorkspacePayoutLink(participantId: string): Promise<string | null> {
+  const portalToken = await ensurePortalTokenOnParticipantRow(participantId);
+  if (!portalToken) return null;
+  return buildParticipantWorkspacePayoutUrl(portalToken, appBaseUrl());
 }
 
 function hasValidPaymentToken(participant: DemoParticipant): boolean {
@@ -78,10 +87,7 @@ export async function generatePaymentRequestForParticipant(
   const input = buildSupplierOnboardingInput(cur, { id: row.deal_id, name: dealName });
   const derived = generateDraftInvoice(input);
 
-  const portalUrlFromExisting =
-    hasValidPaymentToken(cur) && cur.paymentSetup?.token
-      ? buildPaymentSetupPortalUrl(cur.paymentSetup.token)
-      : null;
+  const portalUrlFromExisting = await buildParticipantWorkspacePayoutLink(participantId);
 
   if (isPaymentRequestSent(cur) && portalUrlFromExisting) {
     let emailSent = false;
@@ -193,7 +199,7 @@ export async function generatePaymentRequestForParticipant(
     },
   });
 
-  const portalUrl = buildPaymentSetupPortalUrl(tokenData.token);
+  const portalUrl = (await buildParticipantWorkspacePayoutLink(participantId)) ?? buildPaymentSetupPortalUrl(tokenData.token);
   let emailSent = false;
   let emailError: string | undefined;
 

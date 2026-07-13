@@ -9,7 +9,25 @@ import {
   participantRowToDemo,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { createParticipantPortalToken } from '@/lib/participant-portal/participant-portal.server';
-import { participantWorkspacePath } from '@/lib/participant-portal/participant-portal-url';
+import {
+  buildParticipantWorkspacePayoutUrl,
+  participantWorkspacePath,
+} from '@/lib/participant-portal/participant-portal-url';
+
+export function appBaseUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://app.provvypay.com')
+  );
+}
+
+export async function buildParticipantWorkspacePayoutUrlForParticipant(
+  participantId: string
+): Promise<string | null> {
+  const portalToken = await ensurePortalTokenOnParticipantRow(participantId);
+  if (!portalToken) return null;
+  return buildParticipantWorkspacePayoutUrl(portalToken, appBaseUrl());
+}
 
 export async function ensurePortalTokenOnParticipantRow(
   participantId: string
@@ -46,4 +64,18 @@ export async function resolveWorkspacePathFromInviteToken(
   if (!portalToken) return null;
 
   return participantWorkspacePath(portalToken);
+}
+
+/** Map legacy `/payment-setup/[token]` URLs to `/participant/[workspaceToken]?step=payout`. */
+export async function resolveWorkspacePathFromPaymentSetupToken(
+  paymentSetupToken: string
+): Promise<string | null> {
+  const { findParticipantByPaymentSetupToken } = await import('@/lib/commercial/payment-setup.server');
+  const result = await findParticipantByPaymentSetupToken(paymentSetupToken);
+  if (!result) return null;
+
+  const portalToken = await ensurePortalTokenOnParticipantRow(result.participant.id);
+  if (!portalToken) return null;
+
+  return participantWorkspacePath(portalToken, 'payout');
 }
