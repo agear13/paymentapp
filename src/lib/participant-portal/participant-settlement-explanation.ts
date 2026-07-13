@@ -5,6 +5,7 @@
  */
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { deriveParticipantOperationalWorkflow } from '@/lib/commercial/participant-commercial-lifecycle';
+import { deriveParticipantSettlementWorkflowState } from '@/lib/commercial/workflows/derive-settlement-state';
 import { hasApprovedAgreement } from '@/lib/operations/primitives/participant-earnings-primitives';
 import type {
   PortalObligationSnapshot,
@@ -61,13 +62,14 @@ export function deriveParticipantSettlementExplanation(
   obligations: PortalObligationSnapshot[]
 ): SettlementExplanation {
   const workflow = deriveParticipantOperationalWorkflow(participant);
+  const settlementWorkflow = deriveParticipantSettlementWorkflowState(participant);
   const obligationReason = obligationBlockingReason(obligations);
   const extractedReason = extractedBlockingReason(participant);
 
-  let statusLabel = workflow.badge;
+  let statusLabel = settlementWorkflow.label;
   let blockingReason: string | null = null;
   let nextStep = workflow.explanation;
-  let isBlocked = workflow.readiness === 'blocked';
+  let isBlocked = settlementWorkflow.state === 'BLOCKED';
 
   if (!hasApprovedAgreement(participant)) {
     statusLabel = 'Awaiting agreement acceptance';
@@ -79,8 +81,12 @@ export function deriveParticipantSettlementExplanation(
     blockingReason = null;
     nextStep = 'Settlement has been completed.';
     isBlocked = false;
-  } else if (workflow.stage === 'SETTLEMENT_READY') {
-    statusLabel = 'Ready for settlement';
+  } else if (
+    settlementWorkflow.state === 'READY' ||
+    settlementWorkflow.state === 'INITIATED' ||
+    settlementWorkflow.state === 'PROCESSING'
+  ) {
+    statusLabel = settlementWorkflow.label;
     nextStep = 'Payment will be released once the organiser completes the settlement run.';
     isBlocked = false;
   } else if (obligationReason) {

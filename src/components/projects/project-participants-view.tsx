@@ -38,7 +38,7 @@ import {
 import { ServiceCatalogGuidance } from '@/components/operations/service-catalog-guidance';
 import { OperatorPayoutVerificationInfo } from '@/components/projects/operator-payout-verification-info';
 import type { DemoParticipantRole } from '@/components/deal-network-demo/invite-participant-modal';
-import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
+import { participantWorkspacePathFromParticipant } from '@/lib/projects/participant-entitlement';
 import { persistParticipantAgreementShare } from '@/lib/projects/participant-agreement-share';
 import { projectCommercialRolesPath } from '@/lib/projects/project-routes';
 import { ProjectReadinessBreakdown } from '@/components/projects/project-readiness-breakdown';
@@ -335,7 +335,7 @@ export function ProjectParticipantsView() {
         setApprovalUpgradeOpen(true);
         return;
       }
-      const path = p.agreementUrl ?? participantAgreementPath(p.inviteToken);
+      const path = participantWorkspacePathFromParticipant(p);
       const now = new Date().toISOString();
 
       const optimistic: DemoParticipant = {
@@ -1349,14 +1349,6 @@ export function ProjectParticipantsView() {
 
         <ParticipantAgreementShareDialog
           participant={agreementShareParticipant}
-          agreementUrl={
-            agreementShareParticipant
-              ? `${typeof window !== 'undefined' ? window.location.origin : ''}${
-                  agreementShareParticipant.agreementUrl ??
-                  participantAgreementPath(agreementShareParticipant.inviteToken)
-                }`
-              : null
-          }
           open={Boolean(agreementShareParticipant)}
           onOpenChange={(open) => {
             if (!open) setAgreementShareParticipant(null);

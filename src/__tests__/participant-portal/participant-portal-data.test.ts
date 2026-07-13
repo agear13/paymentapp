@@ -57,6 +57,7 @@ describe('deriveParticipantCommercialWorkspace', () => {
     });
     const ws = deriveParticipantCommercialWorkspace(withProfile, deal, emptyContext);
     expect(ws.participantName).toBe('Sarah');
+    expect(ws.commercialState).toBe('INVITED');
     expect(ws.commercialSections.some((s) => s.kind === 'commission')).toBe(true);
     expect(ws.agreementStatus).toBe('draft');
     expect(ws.performance.metrics.some((m) => m.field === 'promo_code')).toBe(false);

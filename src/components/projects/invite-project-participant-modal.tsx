@@ -37,7 +37,7 @@ import { ReferralCommerceSection } from '@/components/referrals/referral-commerc
 import {
   buildProjectParticipant,
   buildReferralCommerceForProject,
-  participantAgreementPath,
+  participantWorkspacePathFromParticipant,
   participationModelToCommissionKind,
   type ProjectParticipationModel,
 } from '@/lib/projects/participant-entitlement';
@@ -239,12 +239,12 @@ export function InviteProjectParticipantModal({
 
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const agreementPath =
-        sharedParticipant.agreementUrl ?? participantAgreementPath(sharedParticipant.inviteToken);
+        participantWorkspacePathFromParticipant(sharedParticipant);
       const fullAgreementUrl = origin ? `${origin}${agreementPath}` : agreementPath;
 
       setAgreementLink(fullAgreementUrl);
       setStep('agreement');
-      toast.success(`${finalParticipant.name} added. Share the agreement link.`);
+      toast.success(`${finalParticipant.name} added. Share the workspace link.`);
     } catch {
       toast.error('Could not add participant. Try again.');
     } finally {
@@ -268,14 +268,14 @@ export function InviteProjectParticipantModal({
           <DialogHeader>
             <DialogTitle>
               {step === 'agreement'
-                ? 'Agreement link ready'
+                ? 'Workspace invitation ready'
                 : step === 1
                   ? 'Add project participant'
                   : 'Configure participation'}
             </DialogTitle>
             <DialogDescription>
               {step === 'agreement'
-                ? 'Share this link so the participant can review and approve participation. Customer payment links activate only after approval.'
+                ? 'Share this link so the participant can review their agreement and track their commercial relationship in one workspace.'
                 : step === 1
                   ? `Add a stakeholder to ${projectLabel}.`
                   : 'Choose how this participant earns from the project.'}
@@ -285,7 +285,7 @@ export function InviteProjectParticipantModal({
           {step === 'agreement' && agreementLink ? (
             <div className="space-y-4 py-4">
               <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                <Label className="text-xs text-muted-foreground">Participant agreement link</Label>
+                <Label className="text-xs text-muted-foreground">Participant workspace link</Label>
                 <div className="flex gap-2">
                   <Input readOnly value={agreementLink} className="font-mono text-xs" />
                   <Button

@@ -21,6 +21,7 @@ import { DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies'
 import { draftParticipantDefaults } from '@/lib/operations/guards/hydration-guards';
 import { canGenerateAttributionLink } from '@/lib/operations/truth/attribution-truth';
 import { buildInviteCompensationProfile } from '@/lib/participants/participant-compensation';
+import { participantWorkspacePath } from '@/lib/participant-portal/participant-portal-url';
 
 export type ProjectParticipationModel =
   | 'fixed_payout'
@@ -60,8 +61,18 @@ export function isProjectWorkspaceParticipant(participant: DemoParticipant): boo
   return participant.workspaceSource === 'project';
 }
 
-export function participantAgreementPath(token: string): string {
-  return `/deal-invites/${encodeURIComponent(token)}`;
+/** Legacy invite URLs — redirect into the unified Participant Workspace. */
+export function participantAgreementPath(inviteToken: string): string {
+  return `/deal-invites/${encodeURIComponent(inviteToken)}`;
+}
+
+/** Canonical participant-facing workspace URL when a portal token exists. */
+export function participantWorkspacePathFromParticipant(participant: DemoParticipant): string {
+  const portalToken = participant.participantPortalToken?.trim();
+  if (portalToken) {
+    return participantWorkspacePath(portalToken);
+  }
+  return participantAgreementPath(participant.inviteToken);
 }
 
 export function participationModelToCommissionKind(

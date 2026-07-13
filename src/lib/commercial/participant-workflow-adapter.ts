@@ -28,6 +28,9 @@ import type {
 } from '@/lib/commercial/supplier-onboarding';
 import type { AccountingExportModel } from '@/lib/commercial/accounting-export';
 import type { AccountingSyncStatus } from '@/lib/commercial/accounting-connector';
+import {
+  deriveParticipantAccountingWorkflowState,
+} from '@/lib/commercial/workflows/derive-accounting-state';
 import { reconcileSupplierInvoiceToObligations } from '@/lib/commercial/accounting-reconciliation';
 import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
 import {
@@ -133,15 +136,43 @@ function deriveMinimalAccountingView(
   lifecycleStage: ParticipantCommercialLifecycleStage,
   p: ParticipantPhaseData
 ): MinimalAccountingView {
-  const synced =
-    p.paymentSetup?.xeroSyncStatus === 'synced' ||
-    lifecycleStage === 'SETTLEMENT_READY' ||
-    lifecycleStage === 'PAID';
+  const participant = toLifecycleParticipant(p);
+  const accounting = deriveParticipantAccountingWorkflowState(participant);
 
-  if (p.paymentSetup?.xeroExportedAt) {
+  if (accounting.state === 'NOT_REQUIRED') {
+    return {
+      status: 'not_applicable',
+      statusLabel: accounting.label,
+      ready: false,
+      nextAction: null,
+      blockerReason: null,
+    };
+  }
+
+  if (accounting.state === 'SYNCED' || accounting.state === 'EXPORTED') {
     return {
       status: 'exported',
-      statusLabel: synced ? 'Synced' : 'Exported',
+      statusLabel: accounting.label,
+      ready: false,
+      nextAction: null,
+      blockerReason: null,
+    };
+  }
+
+  if (accounting.state === 'FAILED') {
+    return {
+      status: 'failed',
+      statusLabel: accounting.label,
+      ready: false,
+      nextAction: 'Review export error and retry',
+      blockerReason: null,
+    };
+  }
+
+  if (accounting.state === 'QUEUED') {
+    return {
+      status: 'pending',
+      statusLabel: accounting.label,
       ready: false,
       nextAction: null,
       blockerReason: null,
@@ -181,7 +212,7 @@ function deriveMinimalAccountingView(
   if (lifecycleStage === 'AGREEMENT_ACCEPTED') {
     return {
       status: 'ready',
-      statusLabel: 'Draft',
+      statusLabel: 'Not exported',
       ready: false,
       nextAction: 'Request Payout Details',
       blockerReason: 'invoice_not_received',
@@ -190,7 +221,7 @@ function deriveMinimalAccountingView(
 
   return {
     status: 'ready',
-    statusLabel: 'Not ready',
+    statusLabel: accounting.label,
     ready: false,
     nextAction: null,
     blockerReason: 'settlement_readiness_incomplete',

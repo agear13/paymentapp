@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/dialog';
 import { ParticipantAgreementShareDialog } from '@/components/projects/participant-agreement-share-dialog';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
 import { earningsStructureSummary } from '@/lib/projects/participant-entitlement';
 import { persistParticipantAgreementShare } from '@/lib/projects/participant-agreement-share';
 import { toast } from 'sonner';
@@ -31,7 +30,6 @@ export function PostExtractionPrompt({
   projectName,
 }: PostExtractionPromptProps) {
   const [shareParticipant, setShareParticipant] = React.useState<DemoParticipant | null>(null);
-  const [shareUrl, setShareUrl] = React.useState<string | null>(null);
   const [sharingParticipantId, setSharingParticipantId] = React.useState<string | null>(null);
 
   const configuredCount = participants.filter((p) => {
@@ -39,16 +37,13 @@ export function PostExtractionPrompt({
     return summary !== 'Earnings not configured';
   }).length;
 
-  const handleGenerateAgreement = async (participant: DemoParticipant) => {
+  const handleSendWorkspaceInvitation = async (participant: DemoParticipant) => {
     setSharingParticipantId(participant.id);
     try {
       const shared = await persistParticipantAgreementShare(participant);
-      const path = shared.agreementUrl ?? participantAgreementPath(shared.inviteToken);
-      const base = typeof window !== 'undefined' ? window.location.origin : '';
       setShareParticipant(shared);
-      setShareUrl(`${base}${path}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Agreement share failed');
+      toast.error(error instanceof Error ? error.message : 'Workspace invitation failed');
     } finally {
       setSharingParticipantId(null);
     }
@@ -58,16 +53,14 @@ export function PostExtractionPrompt({
     onOpenChange(false);
   };
 
-  if (shareParticipant && shareUrl) {
+  if (shareParticipant) {
     return (
       <ParticipantAgreementShareDialog
         participant={shareParticipant}
-        agreementUrl={shareUrl}
         open={open}
         onOpenChange={(o) => {
           if (!o) {
             setShareParticipant(null);
-            setShareUrl(null);
             onOpenChange(false);
           }
         }}
@@ -109,7 +102,7 @@ export function PostExtractionPrompt({
           {participants.length > 0 && (
             <div className="space-y-2">
               <p className="text-sm font-medium">
-                Would you like to generate an agreement now?
+                Would you like to send a workspace invitation now?
               </p>
               <div className="space-y-1.5">
                 {participants.map((p) => (
@@ -128,10 +121,10 @@ export function PostExtractionPrompt({
                       size="sm"
                       variant="outline"
                       className="h-7 text-xs"
-                      onClick={() => void handleGenerateAgreement(p)}
+                      onClick={() => void handleSendWorkspaceInvitation(p)}
                       disabled={sharingParticipantId != null}
                     >
-                      {sharingParticipantId === p.id ? 'Saving…' : 'Generate Agreement'}
+                      {sharingParticipantId === p.id ? 'Saving…' : 'Send invitation'}
                     </Button>
                   </div>
                 ))}

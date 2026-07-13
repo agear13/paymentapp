@@ -15,34 +15,35 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { AGREEMENT_SHARE_HELPER } from '@/lib/operations/merchant-operational-copy';
-import { buildParticipantPortalUrl } from '@/lib/participant-portal/participant-portal-url';
+import { buildParticipantWorkspaceUrl } from '@/lib/participant-portal/participant-portal-url';
+import { hasApprovedAgreement } from '@/lib/operations/primitives/participant-earnings-primitives';
 
 type ParticipantAgreementShareDialogProps = {
   participant: DemoParticipant | null;
-  agreementUrl: string | null;
+  /** @deprecated Single workspace link — kept for QR compatibility during transition */
+  agreementUrl?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
 export function ParticipantAgreementShareDialog({
   participant,
-  agreementUrl,
   open,
   onOpenChange,
 }: ParticipantAgreementShareDialogProps) {
-  const [portalUrl, setPortalUrl] = React.useState<string | null>(null);
+  const [workspaceUrl, setWorkspaceUrl] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!open || !participant) return;
     if (participant.participantPortalToken?.trim()) {
-      setPortalUrl(buildParticipantPortalUrl(participant.participantPortalToken.trim()));
+      setWorkspaceUrl(buildParticipantWorkspaceUrl(participant.participantPortalToken.trim()));
       return;
     }
     let cancelled = false;
     void fetch(`/api/deal-network-pilot/participants/${participant.id}/portal-token`)
       .then(async (res) => (res.ok ? res.json() : null))
-      .then((data: { portalUrl?: string } | null) => {
-        if (!cancelled && data?.portalUrl) setPortalUrl(data.portalUrl);
+      .then((data: { workspaceUrl?: string; portalUrl?: string } | null) => {
+        if (!cancelled) setWorkspaceUrl(data?.workspaceUrl ?? data?.portalUrl ?? null);
       })
       .catch(() => undefined);
     return () => {
@@ -50,28 +51,30 @@ export function ParticipantAgreementShareDialog({
     };
   }, [open, participant]);
 
-  const qrPath = agreementUrl
-    ? `/api/qr?data=${encodeURIComponent(agreementUrl)}`
+  const qrPath = workspaceUrl
+    ? `/api/qr?data=${encodeURIComponent(workspaceUrl)}`
     : null;
 
   const copyLink = async () => {
-    if (!agreementUrl) return;
+    if (!workspaceUrl) return;
     try {
-      await navigator.clipboard.writeText(agreementUrl);
-      toast.success('Agreement link copied');
+      await navigator.clipboard.writeText(workspaceUrl);
+      toast.success('Workspace link copied');
     } catch {
       toast.error('Could not copy link');
     }
   };
 
   const sendEmail = () => {
-    if (!participant?.email?.trim() || !agreementUrl) return;
-    const subject = encodeURIComponent('Your participation agreement');
-    const portalLine = portalUrl
-      ? `\n\nYour commercial participant portal:\n${portalUrl}`
-      : '';
+    if (!participant?.email?.trim() || !workspaceUrl) return;
+    const approved = hasApprovedAgreement(participant);
+    const subject = encodeURIComponent(
+      approved ? 'Your participant workspace' : 'Your participant workspace — review agreement'
+    );
     const body = encodeURIComponent(
-      `Hi ${participant.name},\n\nPlease review and approve your participation agreement:\n${agreementUrl}${portalLine}`
+      approved
+        ? `Hi ${participant.name},\n\nOpen your participant workspace to track your commercial relationship, earnings, and settlement:\n${workspaceUrl}`
+        : `Hi ${participant.name},\n\nOpen your participant workspace to review and approve your commercial agreement:\n${workspaceUrl}`
     );
     window.location.href = `mailto:${participant.email.trim()}?subject=${subject}&body=${body}`;
   };
@@ -80,7 +83,7 @@ export function ParticipantAgreementShareDialog({
     if (!qrPath) return;
     const a = document.createElement('a');
     a.href = qrPath;
-    a.download = `agreement-${participant?.name ?? 'participant'}.png`;
+    a.download = `workspace-${participant?.name ?? 'participant'}.png`;
     a.click();
   };
 
@@ -90,53 +93,54 @@ export function ParticipantAgreementShareDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share agreement · {participant.name}</DialogTitle>
+          <DialogTitle>Send workspace invitation · {participant.name}</DialogTitle>
           <DialogDescription>
-            Send the agreement link so the participant can review and approve participation.
+            Share one permanent link. The participant reviews their agreement and tracks their
+            commercial relationship in the same workspace.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">Agreement link</p>
+            <p className="text-xs font-medium text-muted-foreground">Participant workspace link</p>
             <div className="flex gap-2">
-              <Input readOnly value={agreementUrl ?? ''} className="text-xs" />
-              <Button type="button" variant="outline" size="icon" onClick={() => void copyLink()}>
+              <Input readOnly value={workspaceUrl ?? ''} className="text-xs" placeholder="Loading…" />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => void copyLink()}
+                disabled={!workspaceUrl}
+              >
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Agreement approval and commercial tracking happen in this single workspace — no
+              separate agreement link.
+            </p>
           </div>
-          {portalUrl ? (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Participant workspace</p>
-              <div className="flex gap-2">
-                <Input readOnly value={portalUrl} className="text-xs" />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(portalUrl);
-                    toast.success('Workspace link copied');
-                  }}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                The participant&apos;s commercial workspace — included in agreement emails automatically.
-              </p>
-            </div>
-          ) : null}
           <p className="text-xs text-muted-foreground leading-relaxed">{AGREEMENT_SHARE_HELPER}</p>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => void copyLink()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void copyLink()}
+              disabled={!workspaceUrl}
+            >
               <Copy className="mr-2 h-3.5 w-3.5" />
-              Copy link
+              Copy workspace link
             </Button>
             {participant.email?.trim() ? (
-              <Button type="button" variant="outline" size="sm" onClick={sendEmail}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={sendEmail}
+                disabled={!workspaceUrl}
+              >
                 <Mail className="mr-2 h-3.5 w-3.5" />
-                Send email
+                Resend invitation
               </Button>
             ) : (
               <span className="text-xs text-muted-foreground self-center">

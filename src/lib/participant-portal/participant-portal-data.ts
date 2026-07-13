@@ -19,6 +19,8 @@ import { deriveParticipantPortalIntelligence } from '@/lib/participant-portal/pa
 import { deriveParticipantCommercialLifecycleSteps } from '@/lib/participant-portal/participant-commercial-lifecycle';
 import { deriveParticipantCommercialPerformance } from '@/lib/participant-portal/participant-commercial-performance';
 import { deriveParticipantSettlementExplanation } from '@/lib/participant-portal/participant-settlement-explanation';
+import { deriveParticipantCommercialState } from '@/lib/participant-portal/participant-workspace-state';
+import { deriveParticipantWorkflowBadges } from '@/lib/commercial/workflows/derive-participant-workflows';
 import type {
   ParticipantCommercialWorkspaceModel,
   ParticipantPortalContext,
@@ -298,6 +300,8 @@ export function deriveParticipantCommercialWorkspace(
     context.attributionActivity?.currency ?? currency
   );
   const settlement = deriveParticipantSettlementExplanation(participant, context.obligations);
+  const commercialState = deriveParticipantCommercialState(participant);
+  const workflowStatus = deriveParticipantWorkflowBadges(participant);
 
   return {
     participantName: participant.name?.trim() || 'Participant',
@@ -322,6 +326,12 @@ export function deriveParticipantCommercialWorkspace(
     syncedAt: context.syncedAt,
     hasEarningsConfiguration:
       isParticipantEarningsConfigured(participant) || performance.metrics.length > 0,
+    commercialState,
+    workflowStatus: {
+      commercial: workflowStatus.commercialStatus,
+      settlement: workflowStatus.settlementStatus,
+      accounting: workflowStatus.accountingStatus,
+    },
   };
 }
 

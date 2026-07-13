@@ -32,7 +32,7 @@ import {
 } from '@/lib/operations/contracts/participant-presentation';
 import { participantTableCellClass } from '@/components/projects/participant-table-layout';
 import { ParticipantReleaseButton } from '@/components/projects/participant-release-button';
-import { ParticipantPortalActions } from '@/components/participant-portal/participant-portal-actions';
+import { ParticipantWorkspaceActions } from '@/components/participant-portal/participant-portal-actions';
 import type { OperationalSyncHandlers } from '@/lib/operations/orchestration/operational-sync-client';
 import type { AccountingReconciliationResult } from '@/lib/commercial/accounting-reconciliation';
 
@@ -408,7 +408,7 @@ function ProjectParticipantTableRowComponent({
                 <Pencil className="mr-2 h-3.5 w-3.5" />
                 Edit participant
               </DropdownMenuItem>
-              <ParticipantPortalActions participant={entity} />
+              <ParticipantWorkspaceActions participant={entity} />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

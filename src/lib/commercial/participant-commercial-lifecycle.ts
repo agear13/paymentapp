@@ -18,12 +18,15 @@ import {
   hasApprovedAgreement,
   isParticipantCompensationExempt,
 } from '@/lib/operations/primitives/participant-earnings-primitives';
-import {
-  deriveLifecycle,
-  type SupplierOnboardingLifecycle,
-  type StoredOnboardingState,
-} from '@/lib/commercial/supplier-onboarding-domain';
 import { buildSupplierOnboardingInput } from '@/lib/commercial/build-supplier-onboarding-input';
+import {
+  hasParticipantIdentityReady,
+  isPaymentRequestSent,
+  isSettlementPaid,
+  supplierLifecycle,
+} from '@/lib/commercial/participant-lifecycle-primitives';
+import { deriveParticipantWorkflows, deriveParticipantWorkflowBadges } from '@/lib/commercial/workflows/derive-participant-workflows';
+import { mapLegacyParticipantLifecycleStage } from '@/lib/commercial/workflows/map-legacy-lifecycle-stage';
 
 /* ─── Lifecycle stages ───────────────────────────────────────────────────── */
 
@@ -118,72 +121,6 @@ export type ParticipantLifecycleAiHooks = {
 
 /* ─── Derivation helpers ─────────────────────────────────────────────────── */
 
-function supplierLifecycle(participant: DemoParticipant): SupplierOnboardingLifecycle {
-  const stored = participant.supplierOnboarding as StoredOnboardingState | undefined;
-  return deriveLifecycle(stored, {
-    payoutVerificationConfirmed: participant.payoutVerificationConfirmed,
-    payoutOnboardingPhase: participant.payoutOnboardingPhase,
-    onboardingStatus: participant.onboardingStatus,
-  });
-}
-
-function isXeroExported(participant: DemoParticipant): boolean {
-  const ps = participant.paymentSetup;
-  return Boolean(ps?.xeroExportedAt && ps?.xeroSyncStatus === 'synced');
-}
-
-function isSettlementPaid(participant: DemoParticipant): boolean {
-  return participant.payoutSettlementStatus === 'Paid' || Boolean(participant.payoutPaidAt);
-}
-
-/** Participant record and role are required before agreements. Delivery channels validate contact details separately. */
-export function hasParticipantIdentityReady(participant: DemoParticipant): boolean {
-  return Boolean(participant.id?.trim() && participant.role?.trim());
-}
-
-function isAgreementGenerated(participant: DemoParticipant): boolean {
-  const agreement = deriveAgreementLifecycleState(participant);
-  if (agreement === 'GENERATED' || agreement === 'SHARED' || agreement === 'VIEWED' || agreement === 'SIGNED' || agreement === 'APPROVED') {
-    return true;
-  }
-  return Boolean(participant.agreementUrl?.trim());
-}
-
-/**
- * Agreement was intentionally shared with the participant — not merely added to the roster.
- * `inviteStatus === 'Invited'` on create does NOT count as sent.
- */
-function isAgreementSent(participant: DemoParticipant): boolean {
-  if (hasApprovedAgreement(participant)) return false;
-  const agreement = deriveAgreementLifecycleState(participant);
-  if (agreement === 'SHARED' || agreement === 'VIEWED' || agreement === 'SIGNED') return true;
-  if (participant.inviteSentAt || participant.agreementSharedAt) return true;
-  if (participant.agreementViewedAt) return true;
-  return false;
-}
-
-function mapSupplierToCommercialStage(
-  supplier: SupplierOnboardingLifecycle,
-  xeroExported: boolean
-): ParticipantCommercialLifecycleStage {
-  if (xeroExported) return 'SETTLEMENT_READY';
-  if (supplier === 'APPROVED') return 'XERO_INVOICE';
-  if (supplier === 'UNDER_REVIEW') return 'OPERATOR_REVIEW';
-  if (supplier === 'SUBMITTED') return 'PAYMENT_INFO_SUBMITTED';
-  if (supplier === 'REJECTED') return 'PAYMENT_INFO_PENDING';
-  if (supplier === 'IN_PROGRESS') return 'PAYMENT_INFO_PENDING';
-  if (supplier === 'INVITED') return 'PAYMENT_INFO_PENDING';
-  return 'AGREEMENT_ACCEPTED';
-}
-
-/** Operator generated and shared the payment & tax portal with the participant. */
-export function isPaymentRequestSent(participant: DemoParticipant): boolean {
-  if (participant.paymentSetup?.paymentRequestGeneratedAt) return true;
-  if (!hasApprovedAgreement(participant)) return false;
-  const sl = supplierLifecycle(participant);
-  return sl !== 'NOT_STARTED';
-}
-
 export type PaymentRequestPortalStatus =
   | 'not_yet_opened'
   | 'opened'
@@ -214,60 +151,21 @@ export function buildParticipantPaymentPortalUrl(
   return `${base}/payment-setup/${token}`;
 }
 
-function deriveSetupLifecycle(participant: DemoParticipant): ParticipantCommercialLifecycleStage {
-  const identityReady = hasParticipantIdentityReady(participant);
-  const earningsReady =
-    isParticipantCompensationExempt(participant) || isParticipantEarningsConfigured(participant);
-
-  if (!identityReady || !earningsReady) {
-    return 'DRAFT';
-  }
-
-  if (isParticipantCompensationExempt(participant)) {
-    if (isAgreementSent(participant)) return 'AGREEMENT_SENT';
-    return 'EARNINGS_CONFIGURED';
-  }
-
-  if (isAgreementSent(participant)) return 'AGREEMENT_SENT';
-
-  return 'EARNINGS_CONFIGURED';
-}
-
-function deriveOperationalLifecycle(participant: DemoParticipant): ParticipantCommercialLifecycleStage {
-  if (isXeroExported(participant)) return 'SETTLEMENT_READY';
-  if (isParticipantCompensationExempt(participant)) {
-    if (supplierLifecycle(participant) === 'APPROVED') return 'XERO_INVOICE';
-    return 'AGREEMENT_ACCEPTED';
-  }
-  if (!isPaymentRequestSent(participant)) {
-    return 'AGREEMENT_ACCEPTED';
-  }
-  return mapSupplierToCommercialStage(
-    supplierLifecycle(participant),
-    isXeroExported(participant)
-  );
-}
+/** Participant record and role are required before agreements. Delivery channels validate contact details separately. */
+export { hasParticipantIdentityReady, isPaymentRequestSent, isSettlementPaid } from '@/lib/commercial/participant-lifecycle-primitives';
 
 /**
  * Derive the canonical commercial lifecycle stage for a participant.
  * Pure function — no side effects.
  *
- * Setup prerequisites only control pre-acceptance states. Once the agreement is
- * accepted, the workflow is monotonic and follows the furthest completed
- * business event; missing setup data is reported as integrity issues instead.
+ * Composes independent commercial, settlement, and accounting workflows via
+ * `mapLegacyParticipantLifecycleStage` so existing UI keeps stable stage labels.
  */
 export function deriveParticipantCommercialLifecycle(
   participant: DemoParticipant
 ): ParticipantCommercialLifecycleStage {
-  if (isSettlementPaid(participant)) {
-    return 'PAID';
-  }
-
-  if (hasApprovedAgreement(participant)) {
-    return deriveOperationalLifecycle(participant);
-  }
-
-  return deriveSetupLifecycle(participant);
+  const workflows = deriveParticipantWorkflows(participant);
+  return mapLegacyParticipantLifecycleStage(participant, workflows);
 }
 
 export function lifecycleStageIndex(stage: ParticipantCommercialLifecycleStage): number {
@@ -739,6 +637,12 @@ export type ParticipantCommercialTablePresentation = {
   agreementSecondary: string;
   commercialChip: string;
   commercialSecondary: string;
+  /** Independent workflow dimensions (commercial / settlement / accounting). */
+  workflowBadges: {
+    commercialStatus: string;
+    settlementStatus: string;
+    accountingStatus: string;
+  };
   payoutColumnActive: boolean;
   primaryAction: ParticipantCommercialTablePrimaryAction;
   nextAction: ParticipantTableNextAction;
@@ -755,6 +659,7 @@ export function deriveParticipantCommercialTablePresentation(
   const commercialSecondary = workflow.integrityIssues.map((issue) => issue.message).join(' ');
   const nextAction = deriveParticipantCommercialTableNextAction(participant);
   const primaryAction = deriveParticipantCommercialTablePrimaryAction(participant);
+  const workflowBadges = deriveParticipantWorkflowBadges(participant);
 
   return {
     stage,
@@ -763,6 +668,7 @@ export function deriveParticipantCommercialTablePresentation(
     agreementSecondary: agreement.hint ?? '',
     commercialChip: commercialLabel,
     commercialSecondary,
+    workflowBadges,
     payoutColumnActive,
     primaryAction,
     nextAction,

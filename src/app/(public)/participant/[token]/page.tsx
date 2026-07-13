@@ -1,23 +1,30 @@
 'use client';
 
 import * as React from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ParticipantCommercialWorkspaceView } from '@/components/participant-portal/participant-portal-view';
+import { ParticipantWorkspaceGate } from '@/components/participant-portal/participant-workspace-gate';
 import type { ParticipantCommercialWorkspaceModel } from '@/lib/participant-portal/participant-portal-data';
-import type { CommercialWorkspaceSection } from '@/lib/participant-portal/participant-portal-types';
+import type { ParticipantCommercialState } from '@/lib/participant-portal/participant-workspace-state';
 
 const REFRESH_INTERVAL_MS = 30_000;
 
-export default function ParticipantPortalPage() {
-  const params = useParams<{ token: string }>();
-  const token = String(params?.token ?? '');
+type WorkspacePayload = {
+  workspace: ParticipantCommercialWorkspaceModel;
+  commercialState: ParticipantCommercialState;
+  inviteToken: string;
+};
 
-  const [workspace, setWorkspace] = React.useState<ParticipantCommercialWorkspaceModel | null>(null);
+export default function ParticipantWorkspacePage() {
+  const params = useParams<{ token: string }>();
+  const searchParams = useSearchParams();
+  const token = String(params?.token ?? '');
+  const previewMode = searchParams?.get('mode') === 'preview';
+
+  const [payload, setPayload] = React.useState<WorkspacePayload | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
-  const [activeSection, setActiveSection] = React.useState<CommercialWorkspaceSection>('overview');
 
   const fetchWorkspace = React.useCallback(
     async (options?: { silent?: boolean }) => {
@@ -32,10 +39,10 @@ export default function ParticipantPortalPage() {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error((err as { error?: string }).error || 'Portal not found');
+          throw new Error((err as { error?: string }).error || 'Workspace not found');
         }
-        const data = (await res.json()) as { workspace: ParticipantCommercialWorkspaceModel };
-        setWorkspace(data.workspace);
+        const data = (await res.json()) as WorkspacePayload;
+        setPayload(data);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Failed to load workspace';
         if (!options?.silent) setLoadError(message);
@@ -50,7 +57,7 @@ export default function ParticipantPortalPage() {
   React.useEffect(() => {
     if (!token) {
       setLoading(false);
-      setLoadError('Missing portal token');
+      setLoadError('Missing workspace token');
       return;
     }
     void fetchWorkspace();
@@ -77,19 +84,19 @@ export default function ParticipantPortalPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
-        <p className="text-sm text-muted-foreground">Loading your commercial workspace…</p>
+        <p className="text-sm text-muted-foreground">Loading your participant workspace…</p>
       </div>
     );
   }
 
-  if (loadError || !workspace) {
+  if (loadError || !payload) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="w-full max-w-xl">
           <CardHeader>
             <CardTitle>Workspace link not found</CardTitle>
             <CardDescription>
-              {loadError || 'This commercial workspace link is invalid or no longer exists.'}
+              {loadError || 'This participant workspace link is invalid or no longer exists.'}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -98,11 +105,15 @@ export default function ParticipantPortalPage() {
   }
 
   return (
-    <ParticipantCommercialWorkspaceView
-      workspace={workspace}
-      activeSection={activeSection}
-      onSectionChange={setActiveSection}
-      onRefresh={() => void fetchWorkspace({ silent: true })}
+    <ParticipantWorkspaceGate
+      portalToken={token}
+      bootstrap={{
+        commercialState: payload.commercialState,
+        inviteToken: payload.inviteToken,
+        workspace: payload.workspace,
+      }}
+      previewMode={previewMode}
+      onRefresh={() => fetchWorkspace({ silent: true })}
       isRefreshing={refreshing}
     />
   );

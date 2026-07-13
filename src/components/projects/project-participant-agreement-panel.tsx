@@ -95,6 +95,8 @@ type Props = {
    * completed — already approved; read-only with confirmation UI.
    */
   mode?: 'preview' | 'approval' | 'completed';
+  /** Called after successful approval — workspace gate uses this to transition in-place. */
+  onApproved?: () => void | Promise<void>;
 };
 
 export function ProjectParticipantAgreementPanel({
@@ -106,6 +108,7 @@ export function ProjectParticipantAgreementPanel({
   initialReferralIssuance,
   initialScopedServiceRows = [],
   mode = 'approval',
+  onApproved,
 }: Props) {
   const { currency: workspaceCurrency } = useOrganizationCurrency();
   const [participant, setParticipant] = React.useState(initialParticipant);
@@ -284,6 +287,7 @@ export function ProjectParticipantAgreementPanel({
         })
       );
       toast.success('Participation approved');
+      await onApproved?.();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Approval failed');
     }

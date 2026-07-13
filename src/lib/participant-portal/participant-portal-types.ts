@@ -122,6 +122,14 @@ export type PortalPaymentTimelineItem = {
 
 export type CommercialWorkspaceSection = 'overview' | 'terms' | 'payments' | 'activity';
 
+import type { ParticipantCommercialState } from '@/lib/participant-portal/participant-workspace-state';
+
+export type WorkflowStatusLabels = {
+  commercial: string;
+  settlement: string;
+  accounting: string;
+};
+
 export type ParticipantCommercialWorkspaceModel = {
   participantName: string;
   participantRole: string;
@@ -139,4 +147,6 @@ export type ParticipantCommercialWorkspaceModel = {
   currency: string;
   syncedAt: string;
   hasEarningsConfiguration: boolean;
+  commercialState: ParticipantCommercialState;
+  workflowStatus: WorkflowStatusLabels;
 };

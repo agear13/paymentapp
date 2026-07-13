@@ -32,7 +32,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import { participantAgreementPath } from '@/lib/projects/participant-entitlement';
+import { participantWorkspacePathFromParticipant } from '@/lib/projects/participant-entitlement';
 import {
   hydrateParticipant,
   participantEntity,
@@ -42,7 +42,7 @@ import { cn } from '@/lib/utils';
 import type { CommercialTimelineEvent } from '@/lib/commercial/commercial-timeline-events';
 import { buildParticipantCommercialJourney } from '@/lib/commercial/commercial-timeline-events';
 import { ParticipantCommercialHistory } from '@/components/commercial/commercial-timeline';
-import { ParticipantPortalActions } from '@/components/participant-portal/participant-portal-actions';
+import { ParticipantWorkspaceActions } from '@/components/participant-portal/participant-portal-actions';
 import {
   deriveParticipantOperationalWorkflow,
   type ParticipantWorkflowCta,
@@ -104,14 +104,14 @@ function deriveLastActivity(p: DemoParticipant): string | null {
 
 type SendApprovalSheetProps = {
   participant: DemoParticipant;
-  fullAgreementUrl: string;
+  fullWorkspaceUrl: string;
   onShareAgreement: () => void | Promise<void>;
   label: string;
 };
 
 function SendApprovalSheet({
   participant,
-  fullAgreementUrl,
+  fullWorkspaceUrl,
   onShareAgreement,
   label,
 }: SendApprovalSheetProps) {
@@ -121,9 +121,9 @@ function SendApprovalSheet({
   const handleCopy = async () => {
     setSharingMethod('copy');
     try {
-      await navigator.clipboard.writeText(fullAgreementUrl);
+      await navigator.clipboard.writeText(fullWorkspaceUrl);
       await onShareAgreement();
-      toast.success('Agreement link copied');
+      toast.success('Workspace link copied');
       setOpen(false);
     } catch {
       toast.error('Could not copy — try right-clicking the link instead.');
@@ -138,9 +138,9 @@ function SendApprovalSheet({
       return;
     }
     setSharingMethod('email');
-    const subject = encodeURIComponent('Your participation agreement');
+    const subject = encodeURIComponent('Your participant workspace');
     const body = encodeURIComponent(
-      `Hi ${participant.name},\n\nPlease review and approve your participation agreement:\n${fullAgreementUrl}\n\nThis should only take a few minutes.`
+      `Hi ${participant.name},\n\nOpen your participant workspace to review and approve your commercial agreement:\n${fullWorkspaceUrl}`
     );
     try {
       window.location.href = `mailto:${participant.email.trim()}?subject=${subject}&body=${body}`;
@@ -154,7 +154,7 @@ function SendApprovalSheet({
   const handleWhatsApp = async () => {
     setSharingMethod('whatsapp');
     const text = encodeURIComponent(
-      `Hi ${participant.name}, please review and approve your participation agreement: ${fullAgreementUrl}`
+      `Hi ${participant.name}, open your participant workspace to review and approve your commercial agreement: ${fullWorkspaceUrl}`
     );
     try {
       window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener,noreferrer');
@@ -167,7 +167,7 @@ function SendApprovalSheet({
 
   const handleQr = async () => {
     setSharingMethod('qr');
-    const qrHref = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(fullAgreementUrl)}`;
+    const qrHref = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(fullWorkspaceUrl)}`;
     try {
       window.open(qrHref, '_blank', 'noopener,noreferrer');
       await onShareAgreement();
@@ -185,9 +185,9 @@ function SendApprovalSheet({
     setSharingMethod('native');
     try {
       await navigator.share({
-        title: 'Participation agreement',
-        text: `Please review and approve your participation agreement for ${participant.name}.`,
-        url: fullAgreementUrl,
+        title: 'Participant workspace',
+        text: `Open your participant workspace to review your commercial agreement for ${participant.name}.`,
+        url: fullWorkspaceUrl,
       });
       await onShareAgreement();
       setOpen(false);
@@ -333,11 +333,11 @@ export function ApprovalCentreParticipantCard({
 
   const lastActivity = React.useMemo(() => deriveLastActivity(participant), [participant]);
 
-  const agreementPath = participant.agreementUrl ?? participantAgreementPath(participant.inviteToken);
-  const fullAgreementUrl =
+  const workspacePath = participantWorkspacePathFromParticipant(participant);
+  const fullWorkspaceUrl =
     typeof window !== 'undefined'
-      ? `${window.location.origin}${agreementPath}`
-      : agreementPath;
+      ? `${window.location.origin}${workspacePath}`
+      : workspacePath;
 
   const renderCta = (cta: ParticipantWorkflowCta, secondary = false) => {
     const variant = secondary ? 'outline' : cta.buttonVariant;
@@ -365,7 +365,7 @@ export function ApprovalCentreParticipantCard({
           <SendApprovalSheet
             key={cta.kind}
             participant={entity}
-            fullAgreementUrl={fullAgreementUrl}
+            fullWorkspaceUrl={fullWorkspaceUrl}
             onShareAgreement={() => onShareAgreement(entity, { showDialog: false })}
             label={cta.label}
           />
@@ -545,7 +545,7 @@ export function ApprovalCentreParticipantCard({
       </div>
 
       <div className="mt-2 pt-2 border-t border-border/30">
-        <ParticipantPortalActions participant={entity} variant="buttons" />
+        <ParticipantWorkspaceActions participant={entity} variant="buttons" />
       </div>
 
       {/* Commercial relationship history — shown on md+ as a compact journey bar */}

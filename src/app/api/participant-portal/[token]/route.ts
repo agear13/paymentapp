@@ -36,6 +36,8 @@ export async function GET(
       workspace,
       /** @deprecated use workspace */
       viewModel: workspace,
+      commercialState: workspace.commercialState,
+      inviteToken: loaded.participant.inviteToken,
       participant: sanitizeParticipantForAgreementView(loaded.participant),
       deal: {
         id: loaded.deal.id,
