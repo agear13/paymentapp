@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkAdminAuth } from '@/lib/auth/admin.server';
+import { requireAuth } from '@/lib/supabase/middleware';
+import { isAdminEmail } from '@/lib/config/env';
 import { collectPilotReadinessSnapshot } from '@/lib/pilot/pilot-readiness.server';
 
 export const dynamic = 'force-dynamic';
@@ -9,8 +10,10 @@ export const dynamic = 'force-dynamic';
  * Admin-only pilot command centre data.
  */
 export async function GET(request: NextRequest) {
-  const admin = await checkAdminAuth();
-  if (!admin.isAdmin) {
+  const auth = await requireAuth(request);
+  if (!auth.user) return auth.response!;
+
+  if (!isAdminEmail(auth.user.email ?? '')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
