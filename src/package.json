@@ -51,7 +51,7 @@
     "generate-keys": "node ../scripts/generate-keys.js",
     "validate-env": "node ../scripts/validate-env.js",
     "setup:production": "bash ../scripts/setup-production.sh",
-    "health-check": "curl -f http://localhost:3000/api/health || echo 'Health check failed'",
+    "pilot:smoke": "tsx scripts/pilot-smoke.ts",
     "worker": "node workers/index.js",
     "cron:invoke": "node scripts/render-cron-invoke.mjs",
     "cron:fx-rates": "node cron/fx-rates.js",

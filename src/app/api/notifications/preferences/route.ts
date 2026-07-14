@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/session'
 import { getCurrentUserForApi } from '@/lib/auth/api-session.server'
+import { hasOrganizationAccess } from '@/lib/auth/organization-access'
 import { prisma } from '@/lib/server/prisma'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -40,6 +41,11 @@ export async function GET(req: NextRequest) {
 
     if (!organization) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+    }
+
+    const isMember = await hasOrganizationAccess(user.id, organization.id)
+    if (!isMember) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     // Get or create preferences
@@ -103,6 +109,11 @@ export async function PUT(req: NextRequest) {
 
     if (!organization) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+    }
+
+    const isMember = await hasOrganizationAccess(user.id, organization.id)
+    if (!isMember) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await req.json()

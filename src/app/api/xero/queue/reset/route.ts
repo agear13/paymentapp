@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
+import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { prisma } from '@/lib/server/prisma';
 import { logger } from '@/lib/logger';
 
@@ -20,6 +21,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing organizationId parameter' },
         { status: 400 }
+      );
+    }
+
+    const canManage = await hasOrganizationPermission(
+      user.id,
+      organizationId,
+      'manage_settings'
+    );
+    if (!canManage) {
+      return NextResponse.json(
+        { error: 'Forbidden - insufficient organization permissions' },
+        { status: 403 }
       );
     }
 

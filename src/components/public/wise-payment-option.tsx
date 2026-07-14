@@ -379,7 +379,7 @@ export const WisePaymentOption: React.FC<WisePaymentOptionProps> = ({
               )}
 
               <p className="text-xs text-slate-500 mt-4">
-                Send a bank transfer using the reference above. We&apos;ll match your payment automatically.
+                Send a bank transfer using the reference above. Your payment will be confirmed manually by the merchant — automatic matching is not available during this pilot.
               </p>
             </>
           )}

@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { PaymentMethod } from '@prisma/client';
 import config from '@/lib/config/env';
+import { isWiseAutoSettlementAvailable } from '@/lib/pilot/wise-auto-settlement';
 import { resolveMerchantEvmWallet } from '@/lib/payments/evm-wallet-rail.server';
 import {
   PAYMENT_RAIL_REGISTRY,
@@ -70,6 +71,7 @@ const RAIL_AVAILABILITY: Record<
       !ctx.invoiceOnly &&
       allowsWise &&
       config.features.wisePayments &&
+      isWiseAutoSettlementAvailable() &&
       linkAllowsWise &&
       merchantWiseConfigured
     );

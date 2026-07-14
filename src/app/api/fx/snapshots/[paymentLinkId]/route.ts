@@ -9,6 +9,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFxService } from '@/lib/fx';
 import { log } from '@/lib/logger';
+import { requireAuth } from '@/lib/supabase/middleware';
+import { checkUserPermission } from '@/lib/auth/permissions';
+import { prisma } from '@/lib/server/prisma';
 
 const logger = log.child({ domain: 'api:fx:snapshots' });
 
@@ -22,9 +25,32 @@ export async function GET(
   context: { params: Promise<{ paymentLinkId: string }> }
 ) {
   try {
+    const auth = await requireAuth(request);
+    if (!auth.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { paymentLinkId } = await context.params;
 
-    logger.info({ paymentLinkId }, 'Fetching FX snapshots');
+    const paymentLink = await prisma.payment_links.findUnique({
+      where: { id: paymentLinkId },
+      select: { id: true, organization_id: true },
+    });
+
+    if (!paymentLink) {
+      return NextResponse.json({ success: false, error: 'Payment link not found' }, { status: 404 });
+    }
+
+    const canView = await checkUserPermission(
+      auth.user.id,
+      paymentLink.organization_id,
+      'view_payment_links'
+    );
+    if (!canView) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    logger.info({ paymentLinkId, userId: auth.user.id }, 'Fetching FX snapshots');
 
     const fxService = getFxService();
 

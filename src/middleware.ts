@@ -232,6 +232,13 @@ function nextWithPathnameAndSecurityHeaders(request: NextRequest, pathname: stri
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  // Block auth debug page in production (exposes session cookies)
+  if (process.env.NODE_ENV === 'production' && pathname === '/auth/debug') {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = '/auth/login';
+    return NextResponse.redirect(redirectUrl);
+  }
+
   // Detect session from cookies (lightweight, no Supabase import)
   const { hasSession, email, emailVerified } = getSessionFromCookies(request);
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/session'
+import { hasOrganizationAccess } from '@/lib/auth/organization-access'
 import { prisma } from '@/lib/server/prisma'
 import { getNotifications, getUnreadNotifications } from '@/lib/notifications/service'
 
@@ -42,6 +43,11 @@ export async function GET(req: NextRequest) {
 
     if (!organization) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+    }
+
+    const isMember = await hasOrganizationAccess(user.id, organization.id)
+    if (!isMember) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { searchParams } = new URL(req.url)

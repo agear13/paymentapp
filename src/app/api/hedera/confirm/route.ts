@@ -225,6 +225,35 @@ export async function POST(request: NextRequest) {
       expectedAmount: paymentLink.amount,
     }, 'Transaction verified');
 
+    // Bind on-chain payment to this invoice via memo (prevents tx hijacking across open invoices).
+    if (transaction.memo_base64) {
+      const txMemo = Buffer.from(transaction.memo_base64, 'base64').toString('utf-8');
+      if (!txMemo.includes(paymentLinkId)) {
+        log.warn({
+          correlationId,
+          paymentLinkId,
+          txId,
+          txMemo,
+        }, 'Transaction memo does not match payment link');
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Transaction memo does not match this payment link',
+          },
+          { status: 400 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Transaction memo is required to confirm this payment link',
+        },
+        { status: 400 }
+      );
+    }
+
     // 6. Validate amount (with tolerance)
     const expectedAmount = Number(paymentLink.amount);
     const tolerance = 0.02; // 2% tolerance

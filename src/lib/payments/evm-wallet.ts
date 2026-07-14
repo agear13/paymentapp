@@ -1,6 +1,10 @@
 import 'server-only';
 
 import type { TokenType } from '@/lib/hedera/constants';
+import { isWithinTolerance } from '@/lib/hedera/payment-validator';
+import { invoiceDenominationCurrency } from '@/lib/payments/invoice-denomination';
+import { getFxService } from '@/lib/fx';
+import { prisma } from '@/lib/server/prisma';
 import { generateCorrelationId } from '@/lib/services/correlation';
 import {
   confirmPayment,
@@ -89,6 +93,28 @@ export async function confirmEvmWalletPayment(
   const amountReceived = Number(params.tokenAmount);
   if (!Number.isFinite(amountReceived) || amountReceived <= 0) {
     throw new Error('EVM token amount must be a positive number');
+  }
+
+  const paymentLink = await prisma.payment_links.findUnique({
+    where: { id: params.paymentLinkId },
+    select: { amount: true, currency: true, invoice_currency: true },
+  });
+  if (!paymentLink) {
+    throw new Error(`Payment link ${params.paymentLinkId} not found`);
+  }
+
+  const invoiceCurrency = invoiceDenominationCurrency(paymentLink);
+  const invoiceAmount = Number(paymentLink.amount);
+  const exchangeRate =
+    params.exchangeRate ??
+    (await getFxService().getRate(token, invoiceCurrency as 'USD' | 'AUD')).rate;
+  const requiredTokenAmount = invoiceAmount / exchangeRate;
+
+  if (!isWithinTolerance(requiredTokenAmount, amountReceived, token)) {
+    throw new Error(
+      `EVM payment amount ${amountReceived} ${token} is outside tolerance for invoice ` +
+        `(required ~${requiredTokenAmount.toFixed(8)} ${token} at rate ${exchangeRate})`
+    );
   }
 
   const providerRef = evmProviderReference({ network, transactionHash });

@@ -8,9 +8,15 @@ import {
   AlertCircle,
   Database,
   FileWarning,
+  Rocket,
 } from 'lucide-react';
 
 const navItems = [
+  {
+    title: 'Pilot Command Centre',
+    href: '/dashboard/pilot',
+    icon: Rocket,
+  },
   {
     title: 'Overview',
     href: '/dashboard/admin',
