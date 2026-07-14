@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { PaymentEventSourceType, PaymentEventType } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import config from '@/lib/config/env';
 import { RABBIT_HOLE_PILOT_EMAILS } from '@/lib/auth/admin-shared';
@@ -16,6 +17,11 @@ import type {
   PilotReadinessSnapshot,
   PilotXeroStatus,
 } from './types';
+
+const STRIPE_PAYMENT_EVENT_TYPES: PaymentEventType[] = [
+  PaymentEventType.PAYMENT_INITIATED,
+  PaymentEventType.PAYMENT_CONFIRMED,
+];
 
 const PILOT_XERO_MAPPING_FIELDS = [
   { key: 'xero_revenue_account_id', label: 'Revenue account' },
@@ -69,30 +75,30 @@ async function buildRailStatuses(organizationId: string | null): Promise<PilotRa
     merchant,
   ] = await Promise.all([
     prisma.payment_events.findFirst({
-      where: { payment_method: 'STRIPE', event_type: 'PAYMENT_CONFIRMED' },
+      where: { payment_method: 'STRIPE', event_type: PaymentEventType.PAYMENT_CONFIRMED },
       orderBy: { created_at: 'desc' },
       select: { created_at: true },
     }),
     prisma.payment_events.findFirst({
       where: {
-        source_type: 'STRIPE',
-        event_type: { in: ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'] },
+        source_type: PaymentEventSourceType.STRIPE,
+        event_type: { in: STRIPE_PAYMENT_EVENT_TYPES },
       },
       orderBy: { created_at: 'desc' },
       select: { created_at: true },
     }),
     prisma.payment_events.findFirst({
-      where: { payment_method: 'HEDERA', event_type: 'PAYMENT_CONFIRMED' },
+      where: { payment_method: 'HEDERA', event_type: PaymentEventType.PAYMENT_CONFIRMED },
       orderBy: { created_at: 'desc' },
       select: { created_at: true },
     }),
     prisma.payment_events.findFirst({
-      where: { payment_method: 'WISE', event_type: 'PAYMENT_CONFIRMED' },
+      where: { payment_method: 'WISE', event_type: PaymentEventType.PAYMENT_CONFIRMED },
       orderBy: { created_at: 'desc' },
       select: { created_at: true },
     }),
     prisma.payment_events.findFirst({
-      where: { payment_method: 'EVM_WALLET', event_type: 'PAYMENT_CONFIRMED' },
+      where: { payment_method: 'EVM_WALLET', event_type: PaymentEventType.PAYMENT_CONFIRMED },
       orderBy: { created_at: 'desc' },
       select: { created_at: true },
     }),
