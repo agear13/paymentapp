@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import type { PilotReadinessSnapshot } from '@/lib/pilot/types';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 
 function healthBadge(health: string) {
   switch (health) {
@@ -87,7 +88,7 @@ export function PilotCommandCentre() {
   async function handleReplayQueue() {
     setReplaying(true);
     try {
-      const res = await fetch('/api/pilot/xero-replay?batchSize=10', { method: 'POST' });
+      const res = await csrfAwareFetch('/api/pilot/xero-replay?batchSize=10', { method: 'POST' });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Replay failed');
       toast.success(

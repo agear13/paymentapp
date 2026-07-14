@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkAdminAuth } from '@/lib/auth/admin.server';
+import { requireAdminForApi } from '@/lib/auth/api-session.server';
 import { processQueue } from '@/lib/xero/queue-processor';
 import { logger } from '@/lib/logger';
 
@@ -10,10 +10,8 @@ export const dynamic = 'force-dynamic';
  * Admin-only: drain Xero retry queue for pilot launch.
  */
 export async function POST(request: NextRequest) {
-  const admin = await checkAdminAuth();
-  if (!admin.isAdmin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const adminAuth = await requireAdminForApi(request);
+  if (!adminAuth.user) return adminAuth.response!;
 
   const { searchParams } = new URL(request.url);
   const batchSize = Math.min(
@@ -21,7 +19,10 @@ export async function POST(request: NextRequest) {
     Math.max(1, parseInt(searchParams.get('batchSize') || '10', 10))
   );
 
-  logger.info({ batchSize, userEmail: admin.userEmail }, 'Pilot Xero replay queue triggered');
+  logger.info(
+    { batchSize, userEmail: adminAuth.user.email },
+    'Pilot Xero replay queue triggered'
+  );
 
   const stats = await processQueue(batchSize);
 
