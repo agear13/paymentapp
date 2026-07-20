@@ -3,12 +3,12 @@ import 'server-only';
 import { PaymentEventSourceType, PaymentEventType } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import config from '@/lib/config/env';
-import { RABBIT_HOLE_PILOT_EMAILS } from '@/lib/auth/admin-shared';
 import { runIntegrityChecks } from '@/lib/payments/integrity-checks';
 import { isXeroConfigured, getConnectionStatus } from '@/lib/xero';
 import { isStripeWebhookSecretValid } from '@/lib/config/production-env-guards';
 import { evaluatePilotEnvironment, derivePilotReadiness } from './evaluate-pilot-environment';
 import { isWiseAutoSettlementAvailable } from './wise-auto-settlement';
+import { resolvePilotOrganizationId } from './resolve-pilot-organization.server';
 import type {
   PilotHealth,
   PilotLedgerStatus,
@@ -33,34 +33,6 @@ function toHealth(ok: boolean, degraded = false): PilotHealth {
   if (ok) return 'healthy';
   if (degraded) return 'degraded';
   return 'unhealthy';
-}
-
-async function resolvePilotOrganizationId(
-  explicitOrgId?: string | null
-): Promise<string | null> {
-  if (explicitOrgId?.trim()) return explicitOrgId.trim();
-
-  const envOrgId = process.env.PILOT_ORGANIZATION_ID?.trim();
-  if (envOrgId) return envOrgId;
-
-  const pilotEmail = RABBIT_HOLE_PILOT_EMAILS[0]?.toLowerCase();
-  if (!pilotEmail) return null;
-
-  const prefs = await prisma.notification_preferences.findFirst({
-    where: { user_email: { equals: pilotEmail, mode: 'insensitive' } },
-    select: { organization_id: true },
-    orderBy: { updated_at: 'desc' },
-  });
-  if (prefs?.organization_id) return prefs.organization_id;
-
-  const orgWithMerchant = await prisma.organizations.findFirst({
-    where: {
-      merchant_settings: { some: { stripe_account_id: { not: null } } },
-    },
-    select: { id: true, name: true },
-    orderBy: { created_at: 'asc' },
-  });
-  return orgWithMerchant?.id ?? null;
 }
 
 async function buildRailStatuses(organizationId: string | null): Promise<PilotRailStatus[]> {
@@ -203,7 +175,7 @@ async function buildXeroStatus(organizationId: string | null): Promise<{
   }
 
   if (!organizationId) {
-    reasons.push('Pilot organization not resolved — set PILOT_ORGANIZATION_ID');
+    reasons.push('Workspace not selected — choose an organization to inspect');
     return {
       status: {
         connected: false,
@@ -370,11 +342,15 @@ async function buildMonitoringStatus(): Promise<PilotMonitoringStatus> {
   };
 }
 
-export async function collectPilotReadinessSnapshot(
-  organizationId?: string | null
-): Promise<PilotReadinessSnapshot> {
+export async function collectPilotReadinessSnapshot(input?: {
+  organizationId?: string | null;
+  userId?: string | null;
+}): Promise<PilotReadinessSnapshot> {
   const environment = evaluatePilotEnvironment();
-  const resolvedOrgId = await resolvePilotOrganizationId(organizationId);
+  const { organizationId: resolvedOrgId } = await resolvePilotOrganizationId({
+    explicitOrgId: input?.organizationId,
+    userId: input?.userId,
+  });
 
   const [rails, xeroResult, ledgerResult, monitoring, merchant, org] = await Promise.all([
     buildRailStatuses(resolvedOrgId),
@@ -401,20 +377,17 @@ export async function collectPilotReadinessSnapshot(
     ? []
     : [stripeRail?.detail ?? 'Stripe rail unhealthy'].filter(Boolean) as string[];
 
-  const danielleReasons: string[] = [];
-  const pilotEmailConfigured = RABBIT_HOLE_PILOT_EMAILS.length > 0;
-  if (!pilotEmailConfigured) {
-    danielleReasons.push('RABBIT_HOLE_PILOT_EMAILS not configured');
-  }
+  const workspaceReasons: string[] = [];
   if (!resolvedOrgId) {
-    danielleReasons.push('Danielle organization not found — complete onboarding or set PILOT_ORGANIZATION_ID');
+    workspaceReasons.push(
+      'No workspace selected — join an organization, pick one from the dropdown, or complete onboarding'
+    );
   }
   if (!merchant?.stripe_account_id) {
-    danielleReasons.push('Pilot merchant Stripe account not connected');
+    workspaceReasons.push('Merchant Stripe account not connected');
   }
 
-  const danielleReady =
-    pilotEmailConfigured && !!resolvedOrgId && !!merchant?.stripe_account_id;
+  const workspaceReady = !!resolvedOrgId && !!merchant?.stripe_account_id;
 
   const readiness = derivePilotReadiness({
     environment,
@@ -425,8 +398,8 @@ export async function collectPilotReadinessSnapshot(
     ledgerHealthy: ledgerResult.healthy,
     ledgerReasons: ledgerResult.reasons,
     failedSyncCount: xeroResult.status.failedSyncCount,
-    danielleReady,
-    danielleReasons,
+    workspaceReady,
+    workspaceReasons,
   });
 
   return {
@@ -436,8 +409,7 @@ export async function collectPilotReadinessSnapshot(
     xero: xeroResult.status,
     ledger: ledgerResult.status,
     monitoring,
-    danielle: {
-      pilotEmailConfigured,
+    workspace: {
       organizationFound: !!resolvedOrgId,
       organizationId: resolvedOrgId,
       organizationName: org?.name ?? null,

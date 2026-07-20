@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { isAdminEmail } from '@/lib/config/env';
+import { hasOrganizationAccess } from '@/lib/auth/organization-access';
 import { collectPilotReadinessSnapshot } from '@/lib/pilot/pilot-readiness.server';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,20 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const organizationId = searchParams.get('organization_id');
 
-  const snapshot = await collectPilotReadinessSnapshot(organizationId);
+  if (organizationId) {
+    const hasAccess = await hasOrganizationAccess(auth.user.id, organizationId);
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: 'You do not have access to this organization' },
+        { status: 403 }
+      );
+    }
+  }
+
+  const snapshot = await collectPilotReadinessSnapshot({
+    organizationId,
+    userId: auth.user.id,
+  });
 
   return NextResponse.json({ success: true, data: snapshot });
 }

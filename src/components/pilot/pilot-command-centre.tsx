@@ -6,6 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Activity,
   AlertTriangle,
   CheckCircle2,
@@ -18,6 +25,11 @@ import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import type { PilotReadinessSnapshot } from '@/lib/pilot/types';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
+
+type UserOrganization = {
+  id: string;
+  name: string;
+};
 
 function healthBadge(health: string) {
   switch (health) {
@@ -52,14 +64,56 @@ function formatRelative(iso: string | null) {
 }
 
 export function PilotCommandCentre() {
+  const [organizations, setOrganizations] = React.useState<UserOrganization[]>([]);
+  const [selectedOrganizationId, setSelectedOrganizationId] = React.useState<string | null>(null);
+  const [orgsLoading, setOrgsLoading] = React.useState(true);
   const [data, setData] = React.useState<PilotReadinessSnapshot | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [replaying, setReplaying] = React.useState(false);
 
+  React.useEffect(() => {
+    async function loadOrganizations() {
+      try {
+        const res = await fetch('/api/organizations');
+        if (!res.ok) {
+          throw new Error(`Organizations ${res.status}`);
+        }
+        const orgs = (await res.json()) as UserOrganization[];
+        setOrganizations(orgs);
+
+        if (orgs.length === 1) {
+          setSelectedOrganizationId(orgs[0].id);
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error('Failed to load organizations');
+      } finally {
+        setOrgsLoading(false);
+      }
+    }
+
+    loadOrganizations();
+  }, []);
+
   const load = React.useCallback(async () => {
+    if (orgsLoading) return;
+
+    const needsSelection = organizations.length > 1 && !selectedOrganizationId;
+    if (needsSelection) {
+      setData(null);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
-      const res = await fetch('/api/pilot/status');
+      const params = new URLSearchParams();
+      if (selectedOrganizationId) {
+        params.set('organization_id', selectedOrganizationId);
+      }
+      const query = params.toString();
+      const res = await fetch(`/api/pilot/status${query ? `?${query}` : ''}`);
       if (!res.ok) {
         throw new Error(`Status ${res.status}`);
       }
@@ -72,13 +126,21 @@ export function PilotCommandCentre() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [orgsLoading, organizations.length, selectedOrganizationId]);
 
   React.useEffect(() => {
-    load();
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
-  }, [load]);
+    if (!orgsLoading) {
+      setLoading(true);
+      load();
+    }
+  }, [orgsLoading, load]);
+
+  React.useEffect(() => {
+    if (!orgsLoading && selectedOrganizationId) {
+      const interval = setInterval(load, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [orgsLoading, selectedOrganizationId, load]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -102,11 +164,59 @@ export function PilotCommandCentre() {
     }
   }
 
-  if (loading) {
+  if (orgsLoading || loading) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" />
         Loading pilot readiness…
+      </div>
+    );
+  }
+
+  if (organizations.length === 0) {
+    return (
+      <Alert variant="destructive">
+        <XCircle className="h-4 w-4" />
+        <AlertTitle>No organizations found</AlertTitle>
+        <AlertDescription>
+          Your account is not a member of any workspace. Complete onboarding or join an organization
+          to inspect pilot readiness.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (organizations.length > 1 && !selectedOrganizationId) {
+    return (
+      <div className="space-y-4">
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Select a workspace</AlertTitle>
+          <AlertDescription>
+            Choose which organization to inspect in the Pilot Command Centre.
+          </AlertDescription>
+        </Alert>
+        <div className="max-w-md">
+          <label className="text-sm font-medium mb-2 block">Workspace</label>
+          <Select
+            value={selectedOrganizationId ?? undefined}
+            onValueChange={(value) => {
+              setLoading(true);
+              setSelectedOrganizationId(value);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select organization" />
+            </SelectTrigger>
+            <SelectContent>
+              {organizations.map((org) => (
+                <SelectItem key={org.id} value={org.id}>
+                  {org.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     );
   }
@@ -122,6 +232,9 @@ export function PilotCommandCentre() {
   }
 
   const isReady = data.pilotStatus === 'READY';
+  const selectedOrgName =
+    organizations.find((org) => org.id === selectedOrganizationId)?.name ??
+    data.workspace.organizationName;
 
   return (
     <div className="space-y-6">
@@ -139,10 +252,32 @@ export function PilotCommandCentre() {
             </p>
           </div>
         </div>
-        <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
-          {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          <span className="ml-2">Refresh</span>
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          {organizations.length > 1 && (
+            <Select
+              value={selectedOrganizationId ?? undefined}
+              onValueChange={(value) => {
+                setLoading(true);
+                setSelectedOrganizationId(value);
+              }}
+            >
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Select organization" />
+              </SelectTrigger>
+              <SelectContent>
+                {organizations.map((org) => (
+                  <SelectItem key={org.id} value={org.id}>
+                    {org.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
+            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            <span className="ml-2">Refresh</span>
+          </Button>
+        </div>
       </div>
 
       {!isReady && data.blockingReasons.length > 0 && (
@@ -188,20 +323,19 @@ export function PilotCommandCentre() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Danielle org</CardTitle>
-            <CardDescription>Pilot workspace validation</CardDescription>
+            <CardTitle>Workspace</CardTitle>
+            <CardDescription>Organization readiness</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <p>{data.danielle.organizationName ?? 'Organization not found'}</p>
+            <p>{selectedOrgName ?? data.workspace.organizationName ?? 'Organization not found'}</p>
             <div className="flex flex-wrap gap-2">
-              {boolBadge(data.danielle.pilotEmailConfigured, 'Pilot email')}
-              {boolBadge(data.danielle.organizationFound, 'Org found')}
-              {boolBadge(data.danielle.merchantConfigured, 'Merchant')}
-              {boolBadge(data.danielle.stripeConnected, 'Stripe Connect')}
+              {boolBadge(data.workspace.organizationFound, 'Org found')}
+              {boolBadge(data.workspace.merchantConfigured, 'Merchant')}
+              {boolBadge(data.workspace.stripeConnected, 'Stripe Connect')}
             </div>
-            {data.danielle.organizationId && (
+            {data.workspace.organizationId && (
               <p className="text-xs text-muted-foreground font-mono truncate">
-                {data.danielle.organizationId}
+                {data.workspace.organizationId}
               </p>
             )}
           </CardContent>
@@ -316,7 +450,9 @@ export function PilotCommandCentre() {
 
       <p className="text-xs text-muted-foreground flex items-center gap-1">
         <Activity className="h-3 w-3" />
-        Auto-refreshes every 30 seconds. Run <code className="font-mono">npm run pilot:smoke</code> from CI or launch terminal.
+        Auto-refreshes every 30 seconds. Run{' '}
+        <code className="font-mono">npm run pilot:smoke -- --organization-id=&lt;uuid&gt;</code> from
+        CI or launch terminal.
       </p>
     </div>
   );

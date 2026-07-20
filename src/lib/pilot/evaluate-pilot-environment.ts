@@ -101,8 +101,8 @@ export function derivePilotReadiness(input: {
   ledgerHealthy: boolean;
   ledgerReasons: string[];
   failedSyncCount: number;
-  danielleReady: boolean;
-  danielleReasons: string[];
+  workspaceReady: boolean;
+  workspaceReasons: string[];
 }): { pilotStatus: 'READY' | 'NOT_READY'; blockingReasons: string[] } {
   const blockingReasons = [
     ...input.environment.blockingReasons,
@@ -112,7 +112,7 @@ export function derivePilotReadiness(input: {
     ...(input.failedSyncCount > 0
       ? [`${input.failedSyncCount} failed Xero sync(s) require attention`]
       : []),
-    ...(input.danielleReady ? [] : input.danielleReasons),
+    ...(input.workspaceReady ? [] : input.workspaceReasons),
   ];
 
   return {

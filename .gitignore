@@ -1,6 +1,13 @@
 node_modules/
 src/node_modules/
 src/generated/
+
+# Canton / Daml build artefacts (cn-quickstart + Provvypay packages)
+**/.daml/
+canton/cn-quickstart/**/node_modules/
+canton/cn-quickstart/**/.gradle/
+canton/cn-quickstart/**/build/
+canton/cn-quickstart/**/logs/
 .env
 .env.*
 env.local
@@ -27,3 +34,4 @@ src/sample-agreements/**/actual.json
 
 # Secrets and configuration values
 XERO_CRON_SETUP_VALUES.txt
+.tools/dpm/

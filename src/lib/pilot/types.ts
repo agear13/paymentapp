@@ -49,8 +49,7 @@ export type PilotMonitoringStatus = {
   retryQueueDepth: number;
 };
 
-export type PilotDanielleStatus = {
-  pilotEmailConfigured: boolean;
+export type PilotWorkspaceStatus = {
   organizationFound: boolean;
   organizationId: string | null;
   organizationName: string | null;
@@ -65,7 +64,7 @@ export type PilotReadinessSnapshot = {
   xero: PilotXeroStatus;
   ledger: PilotLedgerStatus;
   monitoring: PilotMonitoringStatus;
-  danielle: PilotDanielleStatus;
+  workspace: PilotWorkspaceStatus;
   pilotStatus: 'READY' | 'NOT_READY';
   blockingReasons: string[];
 };

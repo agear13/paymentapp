@@ -60,8 +60,8 @@ describe('pilot environment evaluation', () => {
       ledgerHealthy: true,
       ledgerReasons: [],
       failedSyncCount: 0,
-      danielleReady: true,
-      danielleReasons: [],
+      workspaceReady: true,
+      workspaceReasons: [],
     });
     expect(ready.pilotStatus).toBe('READY');
     expect(ready.blockingReasons).toHaveLength(0);
@@ -78,8 +78,8 @@ describe('pilot environment evaluation', () => {
       ledgerHealthy: false,
       ledgerReasons: ['2 critical ledger issues'],
       failedSyncCount: 3,
-      danielleReady: false,
-      danielleReasons: ['Org not found'],
+      workspaceReady: false,
+      workspaceReasons: ['Org not found'],
     });
     expect(notReady.pilotStatus).toBe('NOT_READY');
     expect(notReady.blockingReasons.length).toBeGreaterThan(3);

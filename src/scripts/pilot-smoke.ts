@@ -1,16 +1,20 @@
 #!/usr/bin/env node
 /**
- * Pilot launch smoke test — verifies production readiness before Danielle logs in.
+ * Pilot launch smoke test — verifies production readiness before a customer logs in.
  *
  * Usage:
- *   npm run pilot:smoke
- *   PILOT_SMOKE_URL=https://app.provvypay.com npm run pilot:smoke
- *   PILOT_ORGANIZATION_ID=<uuid> npm run pilot:smoke
+ *   npm run pilot:smoke -- --organization-id=<uuid>
+ *   PILOT_SMOKE_URL=https://app.provvypay.com npm run pilot:smoke -- --organization-id=<uuid>
+ *
+ * In non-production only, PILOT_ORGANIZATION_ID env is accepted as a fallback when the CLI arg is omitted.
  */
 
 import path from 'node:path';
 import fs from 'node:fs';
 import { config as loadEnv } from 'dotenv';
+import {
+  isPilotOrganizationDevFallbackAllowed,
+} from '../lib/pilot/resolve-pilot-organization';
 
 const SRC_ROOT = path.resolve(__dirname, '..');
 loadEnv({ path: path.join(SRC_ROOT, '.env') });
@@ -81,6 +85,24 @@ async function checkStripeConfiguration(): Promise<void> {
   );
 }
 
+function parseOrganizationIdFromArgv(argv: string[]): string | null {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg.startsWith('--organization-id=')) {
+      return arg.slice('--organization-id='.length).trim() || null;
+    }
+    if (arg === '--organization-id' && argv[i + 1]) {
+      return argv[i + 1].trim();
+    }
+  }
+
+  if (isPilotOrganizationDevFallbackAllowed()) {
+    return process.env.PILOT_ORGANIZATION_ID?.trim() || null;
+  }
+
+  return null;
+}
+
 async function checkXeroConnection(organizationId: string | null): Promise<void> {
   const env = evaluatePilotEnvironment();
   if (!env.xeroConfigured) {
@@ -88,7 +110,11 @@ async function checkXeroConnection(organizationId: string | null): Promise<void>
     return;
   }
   if (!organizationId) {
-    record('Xero connection', false, 'PILOT_ORGANIZATION_ID not set — skipping org check');
+    record(
+      'Xero connection',
+      false,
+      'pass --organization-id=<uuid> (PILOT_ORGANIZATION_ID only in development)'
+    );
     return;
   }
 
@@ -223,7 +249,17 @@ async function main() {
   console.log('Provvypay pilot smoke test\n');
 
   const baseUrl = process.env.PILOT_SMOKE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const organizationId = process.env.PILOT_ORGANIZATION_ID?.trim() || null;
+  const organizationId = parseOrganizationIdFromArgv(process.argv.slice(2));
+
+  if (!organizationId) {
+    record(
+      'organization id',
+      false,
+      'pass --organization-id=<uuid> (or set PILOT_ORGANIZATION_ID in development only)'
+    );
+  } else {
+    record('organization id', true, organizationId);
+  }
 
   const env = evaluatePilotEnvironment();
   for (const key of PILOT_REQUIRED_ENV_VARS) {
