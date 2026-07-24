@@ -1,0 +1,10 @@
+export { JourneyLandingPage } from '@/components/journey/lovable/journey-landing-page';
+export { AssessmentLayout } from '@/components/journey/lovable/assessment-layout';
+export { AssessmentObjectiveScreen } from '@/components/journey/lovable/assessment-objective-screen';
+export { AssessmentBusinessScreen } from '@/components/journey/lovable/assessment-business-screen';
+export { AssessmentConnectScreen } from '@/components/journey/lovable/assessment-connect-screen';
+export { AssessmentAnalysisScreen } from '@/components/journey/lovable/assessment-analysis-screen';
+export { WorkflowRecommendationScreen } from '@/components/journey/lovable/workflow-recommendation-screen';
+export { WorkspaceCreateScreen } from '@/components/journey/lovable/workspace-create-screen';
+export { WorkspaceProvisioningScreen } from '@/components/journey/lovable/workspace-provisioning-screen';
+export { LovableJourneyShell } from '@/components/journey/lovable/lovable-journey-shell';
