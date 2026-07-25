@@ -1,0 +1,93 @@
+/* Provvy / Lovable journey styles — scoped to .lovable-journey */
+.lovable-journey {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.18 0.015 275);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.015 275);
+  --primary: oklch(0.52 0.22 292);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.975 0.003 260);
+  --secondary-foreground: oklch(0.22 0.015 275);
+  --accent: oklch(0.965 0.018 295);
+  --accent-foreground: oklch(0.42 0.2 293);
+  --border: oklch(0.925 0.005 260);
+  --ink-soft: oklch(0.46 0.012 270);
+  --gradient-purple: linear-gradient(135deg, oklch(0.55 0.22 292), oklch(0.62 0.2 275));
+  --gradient-hero: radial-gradient(ellipse 70% 45% at 50% 0%, oklch(0.94 0.04 295 / 0.5), transparent 70%);
+  --shadow-soft: 0 1px 2px oklch(0.2 0.02 275 / 0.04);
+  --shadow-glow: 0 1px 2px oklch(0.2 0.02 275 / 0.06), 0 8px 24px -12px oklch(0.52 0.22 292 / 0.18);
+  --shadow-card: 0 1px 2px oklch(0.2 0.02 275 / 0.04), 0 1px 0 oklch(0.2 0.02 275 / 0.02);
+
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+.lovable-journey.dark {
+  --background: oklch(0.16 0.015 275);
+  --foreground: oklch(0.97 0.005 275);
+  --card: oklch(0.2 0.018 275);
+  --card-foreground: oklch(0.97 0.005 275);
+  --primary: oklch(0.68 0.2 293);
+  --primary-foreground: oklch(0.14 0.02 275);
+  --secondary: oklch(0.24 0.02 275);
+  --secondary-foreground: oklch(0.95 0.005 275);
+  --accent: oklch(0.28 0.05 293);
+  --accent-foreground: oklch(0.9 0.05 293);
+  --border: oklch(1 0 0 / 0.08);
+  --ink-soft: oklch(0.72 0.015 270);
+  --gradient-hero: radial-gradient(ellipse 70% 45% at 50% 0%, oklch(0.4 0.15 295 / 0.35), transparent 70%);
+  --shadow-soft: 0 1px 2px oklch(0 0 0 / 0.4);
+  --shadow-glow: 0 1px 2px oklch(0 0 0 / 0.4), 0 8px 24px -12px oklch(0.68 0.2 293 / 0.35);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.03);
+}
+
+.lovable-journey .bg-background { background-color: var(--background); }
+.lovable-journey .text-foreground { color: var(--foreground); }
+.lovable-journey .bg-card { background-color: var(--card); }
+.lovable-journey .text-card-foreground { color: var(--card-foreground); }
+.lovable-journey .bg-primary { background-color: var(--primary); }
+.lovable-journey .text-primary { color: var(--primary); }
+.lovable-journey .text-primary-foreground { color: var(--primary-foreground); }
+.lovable-journey .bg-secondary { background-color: var(--secondary); }
+.lovable-journey .text-secondary-foreground { color: var(--secondary-foreground); }
+.lovable-journey .bg-accent { background-color: var(--accent); }
+.lovable-journey .text-accent-foreground { color: var(--accent-foreground); }
+.lovable-journey .border-border { border-color: var(--border); }
+.lovable-journey .text-ink-soft { color: var(--ink-soft); }
+.lovable-journey .glass {
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.lovable-journey .bg-gradient-purple { background: var(--gradient-purple); }
+.lovable-journey .bg-mesh { background: none; }
+.lovable-journey .text-gradient { color: var(--foreground); }
+.lovable-journey .shadow-soft { box-shadow: var(--shadow-soft); }
+.lovable-journey .shadow-card { box-shadow: var(--shadow-card); }
+.lovable-journey .shadow-glow { box-shadow: var(--shadow-glow); }
+.lovable-journey .border-primary\/20 { border-color: color-mix(in oklch, var(--primary) 20%, transparent); }
+.lovable-journey .border-primary\/30 { border-color: color-mix(in oklch, var(--primary) 30%, transparent); }
+.lovable-journey .border-primary\/40 { border-color: color-mix(in oklch, var(--primary) 40%, transparent); }
+.lovable-journey .ring-primary\/20 { --tw-ring-color: color-mix(in oklch, var(--primary) 20%, transparent); }
+.lovable-journey .ring-primary\/30 { --tw-ring-color: color-mix(in oklch, var(--primary) 30%, transparent); }
+.lovable-journey .bg-primary\/10 { background-color: color-mix(in oklch, var(--primary) 10%, transparent); }
+
+@keyframes lovable-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes lovable-float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes lovable-pulse-glow {
+  0%, 100% { opacity: 0.25; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(1.03); }
+}
+
+.lovable-journey .animate-fade-up { animation: lovable-fade-up 0.6s ease-out both; }
+.lovable-journey .animate-float { animation: lovable-float-slow 6s ease-in-out infinite; }
+.lovable-journey .animate-pulse-glow { animation: lovable-pulse-glow 4s ease-in-out infinite; }
