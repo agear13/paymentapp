@@ -5,6 +5,7 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
   isDevelopmentApprovalSimulatorEnabled,
+  isHackathonJourneyEnabled,
 } from '@/lib/journey/hackathon-journey';
 import {
   listParticipantsAwaitingExternalApproval,
@@ -28,6 +29,28 @@ function buildParticipant(overrides: Partial<DemoParticipant> = {}): DemoPartici
   } as DemoParticipant;
 }
 
+describe('isHackathonJourneyEnabled', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('is false when NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED is unset', () => {
+    delete process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED;
+    expect(isHackathonJourneyEnabled()).toBe(false);
+  });
+
+  it('is true when NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED is true', () => {
+    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED = 'true';
+    expect(isHackathonJourneyEnabled()).toBe(true);
+  });
+});
+
 describe('isDevelopmentApprovalSimulatorEnabled', () => {
   const originalEnv = process.env;
 
@@ -39,26 +62,11 @@ describe('isDevelopmentApprovalSimulatorEnabled', () => {
     process.env = originalEnv;
   });
 
-  it('is disabled in production unless an explicit demo flag is set', () => {
-    process.env.NODE_ENV = 'production';
-    delete process.env.DEMO_APPROVAL_SIMULATOR_ENABLED;
-    delete process.env.NEXT_PUBLIC_DEMO_APPROVAL_SIMULATOR_ENABLED;
-    delete process.env.HACKATHON_JOURNEY_ENABLED;
-
+  it('follows the hackathon public flag', () => {
+    delete process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED;
     expect(isDevelopmentApprovalSimulatorEnabled()).toBe(false);
-  });
 
-  it('is enabled in production when the demo flag is set', () => {
-    process.env.NODE_ENV = 'production';
-    process.env.NEXT_PUBLIC_DEMO_APPROVAL_SIMULATOR_ENABLED = 'true';
-
-    expect(isDevelopmentApprovalSimulatorEnabled()).toBe(true);
-  });
-
-  it('is enabled in development by default', () => {
-    process.env.NODE_ENV = 'development';
-    delete process.env.DEMO_APPROVAL_SIMULATOR_ENABLED;
-
+    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED = 'true';
     expect(isDevelopmentApprovalSimulatorEnabled()).toBe(true);
   });
 });
@@ -106,9 +114,8 @@ describe('simulateExternalParticipantApprovals', () => {
     jest.restoreAllMocks();
   });
 
-  it('does nothing when the simulator is disabled', async () => {
-    process.env.NODE_ENV = 'production';
-    delete process.env.NEXT_PUBLIC_DEMO_APPROVAL_SIMULATOR_ENABLED;
+  it('does nothing when the hackathon flag is disabled', async () => {
+    delete process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED;
 
     const fetchMock = jest.fn();
     global.fetch = fetchMock;
@@ -120,6 +127,8 @@ describe('simulateExternalParticipantApprovals', () => {
   });
 
   it('approves pending participants through the production invite approve route', async () => {
+    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED = 'true';
+
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce({

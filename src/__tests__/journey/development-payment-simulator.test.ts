@@ -1,5 +1,6 @@
 import {
   isDevelopmentPaymentSimulatorEnabled,
+  isHackathonJourneyEnabled,
 } from '@/lib/journey/hackathon-journey';
 import {
   buildSimulatedPinchCollectionResult,
@@ -8,6 +9,28 @@ import {
   simulatePinchPaymentConfirmation,
 } from '@/lib/payments/pinch/development-payment-simulator.client';
 import { isPinchPaymentSuccessful } from '@/lib/payments/pinch/collection-flow.client';
+
+describe('isHackathonJourneyEnabled', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('is false when NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED is unset', () => {
+    delete process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED;
+    expect(isHackathonJourneyEnabled()).toBe(false);
+  });
+
+  it('is true when NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED is true', () => {
+    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED = 'true';
+    expect(isHackathonJourneyEnabled()).toBe(true);
+  });
+});
 
 describe('isDevelopmentPaymentSimulatorEnabled', () => {
   const originalEnv = process.env;
@@ -20,18 +43,11 @@ describe('isDevelopmentPaymentSimulatorEnabled', () => {
     process.env = originalEnv;
   });
 
-  it('is disabled in production unless an explicit demo flag is set', () => {
-    process.env.NODE_ENV = 'production';
-    delete process.env.NEXT_PUBLIC_DEMO_PAYMENT_SIMULATOR_ENABLED;
-    delete process.env.HACKATHON_JOURNEY_ENABLED;
-
+  it('follows the hackathon public flag', () => {
+    delete process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED;
     expect(isDevelopmentPaymentSimulatorEnabled()).toBe(false);
-  });
 
-  it('is enabled in production when the demo flag is set', () => {
-    process.env.NODE_ENV = 'production';
-    process.env.NEXT_PUBLIC_DEMO_PAYMENT_SIMULATOR_ENABLED = 'true';
-
+    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED = 'true';
     expect(isDevelopmentPaymentSimulatorEnabled()).toBe(true);
   });
 });
@@ -40,41 +56,21 @@ describe('shouldSimulatePinchPaymentConfirmation', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    process.env = { ...originalEnv, NODE_ENV: 'development' };
+    process.env = { ...originalEnv };
   });
 
   afterEach(() => {
     process.env = originalEnv;
   });
 
-  it('simulates in production demo builds even when sandbox config exists', () => {
-    expect(
-      shouldSimulatePinchPaymentConfirmation({
-        publishableKey: 'pk_test',
-        payerId: 'pyr_test',
-        isProductionBuild: true,
-      }),
-    ).toBe(true);
+  it('is false when the hackathon flag is unset', () => {
+    delete process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED;
+    expect(shouldSimulatePinchPaymentConfirmation()).toBe(false);
   });
 
-  it('uses the real sandbox flow in development when sandbox config is ready', () => {
-    expect(
-      shouldSimulatePinchPaymentConfirmation({
-        publishableKey: 'pk_test',
-        payerId: 'pyr_test',
-        isProductionBuild: false,
-      }),
-    ).toBe(false);
-  });
-
-  it('simulates in development when sandbox config is missing', () => {
-    expect(
-      shouldSimulatePinchPaymentConfirmation({
-        publishableKey: '',
-        payerId: null,
-        isProductionBuild: false,
-      }),
-    ).toBe(true);
+  it('is true when the hackathon flag is enabled', () => {
+    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED = 'true';
+    expect(shouldSimulatePinchPaymentConfirmation()).toBe(true);
   });
 });
 
@@ -100,6 +96,7 @@ describe('simulateDemoClientPayment', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv, NODE_ENV: 'development' };
+    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED = 'true';
     jest.useFakeTimers();
   });
 
@@ -132,6 +129,7 @@ describe('simulatePinchPaymentConfirmation', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv, NODE_ENV: 'development' };
+    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED = 'true';
     jest.useFakeTimers();
   });
 

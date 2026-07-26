@@ -35,7 +35,10 @@ import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import { persistParticipantAgreementShare } from '@/lib/projects/participant-agreement-share';
 import { buildParticipantWorkspaceUrlForParticipant } from '@/lib/participant-portal/participant-portal-url';
 import {
-  isDevelopmentApprovalSimulatorEnabled,
+  isHackathonJourneyEnabled,
+  logHackathonDemoFlagsInDevelopment,
+} from '@/lib/journey/hackathon-journey';
+import {
   simulateExternalParticipantApprovals,
 } from '@/lib/journey/development-approval-simulator.client';
 import {
@@ -51,7 +54,6 @@ import {
 import {
   deriveDemoClientPaymentPurpose,
   deriveDemoClientPaymentStatus,
-  isDevelopmentPaymentSimulatorEnabled,
   simulateDemoClientPayment,
   type DemoClientPaymentStep,
 } from '@/lib/payments/pinch/development-payment-simulator.client';
@@ -167,6 +169,10 @@ export function WorkflowReconciliationScreen() {
   const [importSnapshot, setImportSnapshot] = useState<WorkflowImportSnapshot | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const stageIndex = WORKFLOW.stages.findIndex((s) => s.key === stage);
+
+  useEffect(() => {
+    logHackathonDemoFlagsInDevelopment();
+  }, []);
 
   const go = (key: StageKey) => {
     setStage(key);
@@ -1473,7 +1479,7 @@ function useWorkflowApprovals(dealId: string | undefined) {
         sentCount > 0 ? "Participant workspace invitations sent" : "Approval requests are up to date"
       );
 
-      if (isDevelopmentApprovalSimulatorEnabled() && dealId) {
+      if (isHackathonJourneyEnabled() && dealId) {
         const snapshot = await fetchPilotSnapshot();
         const dealParticipants = (snapshot?.participants ?? []).filter(
           (participant) => participant.dealId === dealId,
@@ -2167,17 +2173,8 @@ function StageCollection({
   snapshot: WorkflowImportSnapshot | null;
   onNext: () => void;
 }) {
-  const publishableKey = process.env.NEXT_PUBLIC_PINCH_PUBLISHABLE_KEY ?? "";
   const isProductionBuild = process.env.NODE_ENV === "production";
-  const paymentSimulatorEnabled = isDevelopmentPaymentSimulatorEnabled();
-  const [payerId, setPayerId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isProductionBuild && !paymentSimulatorEnabled) return;
-    void fetchPinchDevTestPayerId().then((id) => {
-      if (id) setPayerId(id);
-    });
-  }, [isProductionBuild, paymentSimulatorEnabled]);
+  const hackathonJourneyEnabled = isHackathonJourneyEnabled();
 
   if (!snapshot) {
     return (
@@ -2197,7 +2194,7 @@ function StageCollection({
     );
   }
 
-  if (isProductionBuild && !paymentSimulatorEnabled) {
+  if (isProductionBuild && !hackathonJourneyEnabled) {
     return (
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -2216,11 +2213,7 @@ function StageCollection({
     );
   }
 
-  const sandboxReady = Boolean(publishableKey.trim() && payerId?.trim());
-  const useDemoExperience =
-    paymentSimulatorEnabled && (isProductionBuild || !sandboxReady);
-
-  if (useDemoExperience) {
+  if (hackathonJourneyEnabled) {
     return <StageCollectionDemo snapshot={snapshot} onNext={onNext} />;
   }
 

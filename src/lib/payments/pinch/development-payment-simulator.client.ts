@@ -10,14 +10,17 @@ import {
   PINCH_SANDBOX_BANK_DEFAULTS,
   type PinchCollectionFlowResult,
 } from '@/lib/payments/pinch/collection-flow.client';
-import { isDevelopmentPaymentSimulatorEnabled } from '@/lib/journey/hackathon-journey';
+import {
+  isDevelopmentPaymentSimulatorEnabled,
+  isHackathonJourneyEnabled,
+} from '@/lib/journey/hackathon-journey';
 import type { PinchCreatePaymentResponse } from '@/lib/payments/pinch/payment-service';
 import type {
   PinchCreateSourceResponse,
   PinchSourceType,
 } from '@/lib/payments/pinch/source-service';
 
-export { isDevelopmentPaymentSimulatorEnabled };
+export { isDevelopmentPaymentSimulatorEnabled, isHackathonJourneyEnabled };
 
 const DEFAULT_MIN_DELAY_MS = 3000;
 const DEFAULT_MAX_DELAY_MS = 5000;
@@ -30,14 +33,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function shouldSimulatePinchPaymentConfirmation(options: {
-  publishableKey: string;
-  payerId: string | null;
-  isProductionBuild: boolean;
-}): boolean {
-  if (!isDevelopmentPaymentSimulatorEnabled()) return false;
-  const sandboxReady = Boolean(options.publishableKey.trim() && options.payerId?.trim());
-  return options.isProductionBuild || !sandboxReady;
+export function shouldSimulatePinchPaymentConfirmation(): boolean {
+  return isHackathonJourneyEnabled();
 }
 
 export function buildSimulatedPinchCollectionResult(input: {

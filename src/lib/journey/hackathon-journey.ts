@@ -1,6 +1,9 @@
 /**
  * Hackathon public onboarding journey — routes and feature flag.
  * Lovable source: src/lovable-import/src/routes/
+ *
+ * Client-visible demo behaviour uses the single public flag:
+ * NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED=true
  */
 
 export const JOURNEY_ROUTES = {
@@ -34,48 +37,25 @@ export const JOURNEY_STEPS: { id: JourneyStepId; label: string; href: string }[]
   { id: 'provisioningBuild', label: 'Provisioning', href: JOURNEY_ROUTES.provisioningBuild },
 ];
 
+/** Single public hackathon/demo flag — safe for client and server components. */
 export function isHackathonJourneyEnabled(): boolean {
-  return process.env.HACKATHON_JOURNEY_ENABLED === 'true';
+  return process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED === 'true';
 }
 
-/** Dev/demo-only gate for simulating external participant approvals via the production approve API. */
+/** Approval simulator follows the hackathon public flag. */
 export function isDevelopmentApprovalSimulatorEnabled(): boolean {
-  const explicitOff =
-    process.env.DEMO_APPROVAL_SIMULATOR_ENABLED === 'false' ||
-    process.env.NEXT_PUBLIC_DEMO_APPROVAL_SIMULATOR_ENABLED === 'false';
-  if (explicitOff) return false;
-
-  const explicitOn =
-    process.env.DEMO_APPROVAL_SIMULATOR_ENABLED === 'true' ||
-    process.env.NEXT_PUBLIC_DEMO_APPROVAL_SIMULATOR_ENABLED === 'true' ||
-    isHackathonJourneyEnabled() ||
-    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED === 'true';
-
-  if (process.env.NODE_ENV === 'production') {
-    return explicitOn;
-  }
-
-  return explicitOn || process.env.NODE_ENV === 'development';
+  return isHackathonJourneyEnabled();
 }
 
-/** Dev/demo-only gate for simulating external Pinch payment confirmation without live debits. */
+/** Payment demo follows the hackathon public flag. */
 export function isDevelopmentPaymentSimulatorEnabled(): boolean {
-  const explicitOff =
-    process.env.DEMO_PAYMENT_SIMULATOR_ENABLED === 'false' ||
-    process.env.NEXT_PUBLIC_DEMO_PAYMENT_SIMULATOR_ENABLED === 'false';
-  if (explicitOff) return false;
+  return isHackathonJourneyEnabled();
+}
 
-  const explicitOn =
-    process.env.DEMO_PAYMENT_SIMULATOR_ENABLED === 'true' ||
-    process.env.NEXT_PUBLIC_DEMO_PAYMENT_SIMULATOR_ENABLED === 'true' ||
-    isHackathonJourneyEnabled() ||
-    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED === 'true';
-
-  if (process.env.NODE_ENV === 'production') {
-    return explicitOn;
-  }
-
-  return explicitOn || process.env.NODE_ENV === 'development';
+export function logHackathonDemoFlagsInDevelopment(): void {
+  if (process.env.NODE_ENV !== 'development') return;
+  console.log(`Hackathon Journey Enabled: ${isHackathonJourneyEnabled()}`);
+  console.log(`Demo Payment Simulator Enabled: ${isDevelopmentPaymentSimulatorEnabled()}`);
 }
 
 export function journeyStepIndex(pathname: string): number {
