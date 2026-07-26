@@ -43,6 +43,7 @@ import {
 } from '@/lib/ai-extractor/onboarding-pipeline-instrumentation';
 import { EXTRACTOR_VERSION, SOURCE_TYPE_LABELS } from '@/lib/ai-extractor/extraction-types';
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { toast } from 'sonner';
 import { ConfidenceBadge, CurrencyConfidenceBadge } from './confidence-badge';
 import { resolveCurrencyDisplayState } from '@/lib/ai-extractor/currency-display-state';
@@ -280,7 +281,7 @@ export function ExtractionReviewModal({
         const ok = await persistPilotSnapshot(persistPayload, 'workspace_import_replace');
         if (!ok) throw new Error('Could not save project. Please try again.');
         logExtractorDebugSnapshot({ persistedParticipants: newParticipants.length });
-        await fetch('/api/deal-network-pilot/obligations/refresh', {
+        await csrfAwareFetch('/api/deal-network-pilot/obligations/refresh', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -350,7 +351,7 @@ export function ExtractionReviewModal({
         logExtractorDebugSnapshot({
           persistedParticipants: addedCount + updatedCount,
         });
-        await fetch('/api/deal-network-pilot/obligations/refresh', {
+        await csrfAwareFetch('/api/deal-network-pilot/obligations/refresh', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',

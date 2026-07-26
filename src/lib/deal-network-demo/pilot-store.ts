@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Rabbit Hole Deal Network pilot snapshot client.
  *
@@ -7,6 +9,7 @@
 
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 
 export interface PilotStoreData {
   deals: RecentDeal[];
@@ -34,7 +37,7 @@ export async function persistPilotSnapshot(
   data: PilotStoreData,
   operation?: PilotSnapshotPersistOperation
 ): Promise<boolean> {
-  const res = await fetch('/api/deal-network-pilot/snapshot', {
+  const res = await csrfAwareFetch('/api/deal-network-pilot/snapshot', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },

@@ -1,4 +1,7 @@
+'use client';
+
 import type { OperationalSyncResponse } from '@/lib/operations/orchestration/operational-sync-client';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 
 export type CreateParticipantReleaseBatchInput = {
   organizationId: string;
@@ -20,7 +23,7 @@ const DEFAULT_RELEASE_MIN_THRESHOLD = 50;
 export async function createParticipantReleaseBatch(
   input: CreateParticipantReleaseBatchInput
 ): Promise<CreateParticipantReleaseBatchResult> {
-  const res = await fetch('/api/payout-batches/create', {
+  const res = await csrfAwareFetch('/api/payout-batches/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',

@@ -132,6 +132,35 @@ describe('csrfAwareFetch onboarding mutations', () => {
     expect(mutationCall[1]?.headers?.get('x-csrf-token')).toBe(SIGNED_TOKEN);
   });
 
+  it('bootstraps CSRF before POST /api/ai-extractor/extract (Commercial OS import)', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ csrfToken: SIGNED_TOKEN }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ projectName: { value: 'Test', confidence: 'high' } }),
+      });
+
+    const response = await csrfAwareFetch('/api/ai-extractor/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ rawText: 'Sample agreement text', sourceHint: 'Email' }),
+    });
+
+    expect(response.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/security/csrf-token', {
+      credentials: 'include',
+    });
+
+    const mutationCall = fetchMock.mock.calls[1];
+    expect(mutationCall[0]).toBe('/api/ai-extractor/extract');
+    expect(mutationCall[1]?.headers?.get('x-csrf-token')).toBe(SIGNED_TOKEN);
+  });
+
   it('skips bootstrap fetch for later mutations once the token is ready', async () => {
     fetchMock
       .mockResolvedValueOnce({

@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { ExtractionResult, ExtractorEntryPoint, SourceType } from '@/lib/ai-extractor/extraction-types';
 import { SOURCE_TYPE_LABELS } from '@/lib/ai-extractor/extraction-types';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 
 const SOURCE_TYPES: SourceType[] = ['whatsapp', 'email', 'slack', 'sms', 'meeting_notes', 'other'];
 
@@ -72,7 +73,7 @@ export function ConversationInputModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/ai-extractor/extract', {
+      const res = await csrfAwareFetch('/api/ai-extractor/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
