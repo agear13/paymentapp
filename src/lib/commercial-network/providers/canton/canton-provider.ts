@@ -212,6 +212,25 @@ export class CantonCommercialNetworkProvider implements CommercialNetworkProvide
     this.adapterSubscription();
   }
 
+  /** Restore ledger adapter state from Postgres-persisted workflow (serverless-safe). */
+  hydratePersistedWorkflow(
+    state: import('@/lib/commercial-network/canton-workflow-persistence').CantonWorkflowPersistedState
+  ): void {
+    this.adapter.hydrateAgreement?.(state);
+    if (this.adapter.mode === 'simulated') {
+      try {
+        this.getRuntime().hydrateAgreement(state);
+      } catch {
+        // already hydrated via adapter
+      }
+    }
+  }
+
+  /** Read current workflow projection for an agreement. */
+  async projectAgreement(agreementId: string) {
+    return this.adapter.project(agreementId);
+  }
+
   listExtensionPoints() {
     return getCantonExtensionPoints().map((p) => ({
       ...p,
@@ -305,6 +324,24 @@ export class CantonCommercialNetworkProvider implements CommercialNetworkProvide
   ): Promise<CommercialNetworkResult<ParticipantApprovalResult>> {
     try {
       let open = await this.adapter.getActiveProposal(command.agreementId);
+      if (!open && command.proposalContractId) {
+        const persisted = await this.adapter.project(command.agreementId);
+        open = {
+          templateId: 'CommercialAgreementProposal',
+          contractId: command.proposalContractId,
+          platform: persisted?.platformParty ?? this.defaultPlatformParty,
+          requiredParticipants: persisted?.requiredParticipants ?? [],
+          accepted: persisted?.acceptedParties ?? [],
+          sharedTerms: {
+            provvypayAgreementId: command.agreementId,
+            revision: persisted?.revision ?? 0,
+            title: persisted?.title ?? '',
+            currency: persisted?.currency ?? 'AUD',
+            summary: persisted?.summary ?? '',
+          },
+          active: true,
+        };
+      }
       if (!open && command.inviteToken) {
         // inviteToken may carry the proposal contract id
         open = {
@@ -371,7 +408,24 @@ export class CantonCommercialNetworkProvider implements CommercialNetworkProvide
     command: SettlementApprovalCommand
   ): Promise<CommercialNetworkResult<SettlementApprovalResult>> {
     try {
-      const agreement = await this.adapter.getActiveAgreement(command.agreementId);
+      let agreement = await this.adapter.getActiveAgreement(command.agreementId);
+      if (!agreement && command.agreementContractId) {
+        const projection = await this.adapter.project(command.agreementId);
+        agreement = {
+          templateId: 'CommercialAgreement',
+          contractId: command.agreementContractId,
+          platform: projection?.platformParty ?? this.defaultPlatformParty,
+          requiredParticipants: projection?.requiredParticipants ?? [],
+          sharedTerms: {
+            provvypayAgreementId: command.agreementId,
+            revision: projection?.revision ?? 0,
+            title: projection?.title ?? '',
+            currency: projection?.currency ?? 'AUD',
+            summary: projection?.summary ?? '',
+          },
+          active: true,
+        };
+      }
       if (!agreement) {
         return fail('CommercialAgreement must be Bound before SettlementReady');
       }

@@ -549,6 +549,19 @@ export function createLocalNetJsonApiAdapter(
       return projectFromState(state);
     },
 
+    hydrateAgreement(state) {
+      byAgreement.set(state.provvypayAgreementId, {
+        platform: state.platformParty,
+        requiredParticipants: state.requiredParticipants,
+        sharedTerms: state.sharedTerms,
+        accepted: [...state.acceptedParties],
+        proposalContractId: state.proposalContractId,
+        agreementContractId: state.agreementContractId,
+        settlementReadyContractId: state.settlementReadyContractId,
+        stage: state.stage,
+      });
+    },
+
     subscribe(handler) {
       handlers.add(handler);
       return () => {

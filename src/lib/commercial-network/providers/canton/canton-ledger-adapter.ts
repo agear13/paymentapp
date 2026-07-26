@@ -10,6 +10,7 @@
  * No business logic. No UI. No forecasting / automation / accounting.
  */
 
+import type { CantonWorkflowPersistedState } from '@/lib/commercial-network/canton-workflow-persistence';
 import type { CommercialNetworkEvent } from '@/lib/commercial-network/events';
 import type { Unsubscribe } from '@/lib/commercial-network/types';
 import type {
@@ -74,6 +75,9 @@ export type CantonLedgerAdapter = {
   ): Promise<SettlementReadyContract | null>;
 
   project(provvypayAgreementId: string): Promise<CantonWorkflowProjection | null>;
+
+  /** Restore adapter state from persisted workflow (serverless-safe). */
+  hydrateAgreement?(state: CantonWorkflowPersistedState): void;
 
   subscribe(handler: CantonLedgerEventHandler): Unsubscribe;
 

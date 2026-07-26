@@ -31,6 +31,10 @@ import {
   isAllActiveCatalogSource,
   type CatalogItemRef,
 } from '@/lib/operations/derivations/commission-scope';
+import {
+  syncCantonParticipantApproval,
+  syncCantonProposalOnAgreementShare,
+} from '@/lib/commercial-network/server/canton-workflow-sync.server';
 
 export interface PilotSnapshotPayload {
   deals: RecentDeal[];
@@ -316,6 +320,24 @@ export async function updatePilotParticipantPayload(
     },
   });
 
+  const sharedNow =
+    patch.agreementSharedAt &&
+    !cur.agreementSharedAt &&
+    next.dealId;
+
+  if (sharedNow) {
+    const cantonResult = await syncCantonProposalOnAgreementShare({ dealId: next.dealId! });
+    if (!cantonResult.ok) {
+      await prisma.deal_network_pilot_participants.update({
+        where: { id: row.id },
+        data: {
+          participant_payload: cur as unknown as Prisma.InputJsonValue,
+        },
+      });
+      throw new Error(cantonResult.error ?? 'Canton CommercialAgreementProposal failed');
+    }
+  }
+
   return participantRowToDemo({
     ...row,
     approval_status: next.approvalStatus === 'Approved' ? 'Approved' : row.approval_status,
@@ -567,6 +589,35 @@ export async function approveParticipantByInviteToken(
     pilotParticipantId: row.id,
     dealId: row.deal_id,
   });
+
+  const cantonSync = await syncCantonParticipantApproval({
+    dealId: row.deal_id,
+    participant: {
+      ...next,
+      id: row.id,
+      dealId: row.deal_id,
+      inviteToken: row.invite_token,
+    },
+    note,
+    approverUserId: options?.approverUserId,
+  });
+
+  if (!cantonSync.ok) {
+    log.error('Canton Accept sync failed after participant approval', undefined, {
+      dealId: row.deal_id,
+      participantId: row.id,
+      error: cantonSync.error,
+    });
+    await prisma.deal_network_pilot_participants.update({
+      where: { id: row.id },
+      data: {
+        approval_status: row.approval_status,
+        approved_at: row.approved_at,
+        participant_payload: cur as unknown as Prisma.InputJsonValue,
+      },
+    });
+    throw new Error(cantonSync.error ?? 'Canton Accept failed');
+  }
 
   referralTrace('approveParticipant.start', {
     inviteToken: token,

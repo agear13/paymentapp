@@ -51,7 +51,11 @@ export type CommercialNetworkConfig = {
 };
 
 export const DEFAULT_COMMERCIAL_NETWORK_CONFIG: CommercialNetworkConfig = {
-  provider: 'local',
+  provider:
+    (typeof process !== 'undefined' &&
+      process.env.COMMERCIAL_NETWORK_PROVIDER === 'local')
+      ? 'local'
+      : 'canton',
 };
 
 /* ─── Shared commercial agreement (network view) ──────────────────────────── */
@@ -134,6 +138,8 @@ export type ParticipantApprovalCommand = {
   participantId: string;
   /** Invite token path used by Local / pilot today. */
   inviteToken?: string;
+  /** Persisted open proposal contract id (serverless Canton hydration). */
+  proposalContractId?: string;
   note?: string;
   approverUserId?: string | null;
   occurredAt?: string;
@@ -143,6 +149,8 @@ export type SettlementApprovalCommand = {
   agreementId: string;
   participantId?: string;
   settlementId?: string;
+  /** Persisted bound agreement contract id (serverless Canton hydration). */
+  agreementContractId?: string;
   approvedBy: string;
   note?: string;
   metadata?: Record<string, unknown>;

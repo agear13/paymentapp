@@ -31,6 +31,8 @@ import {
   scopeReleaseBatchToParticipants,
 } from '@/lib/operations/payouts/scope-release-batch-participants';
 import { markScopedPilotParticipantsPaid } from '@/lib/deal-network-demo/pilot-settlement-release.server';
+import { syncCantonSettlementReady } from '@/lib/commercial-network/server/canton-workflow-sync.server';
+import { log } from '@/lib/logger';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -180,6 +182,16 @@ export async function POST(request: NextRequest) {
         eligibleParticipantCount: batchEligibility.participantCount,
         includedParticipantCount: pilotCreated.payoutCount,
       });
+
+      if (graph.projectId) {
+        const cantonReady = await syncCantonSettlementReady({ dealId: graph.projectId });
+        if (!cantonReady.ok) {
+          log.warn('Canton SettlementReady sync skipped or failed before pilot release', {
+            dealId: graph.projectId,
+            error: cantonReady.error,
+          });
+        }
+      }
 
       await markScopedPilotParticipantsPaid(scopedParticipantIds);
 
@@ -358,6 +370,16 @@ export async function POST(request: NextRequest) {
       eligibleParticipantCount: batchEligibility.participantCount,
       includedParticipantCount: payeesAboveThreshold.length,
     });
+
+    if (graph.projectId) {
+      const cantonReady = await syncCantonSettlementReady({ dealId: graph.projectId });
+      if (!cantonReady.ok) {
+        log.warn('Canton SettlementReady sync skipped or failed before commission release', {
+          dealId: graph.projectId,
+          error: cantonReady.error,
+        });
+      }
+    }
 
     await markScopedPilotParticipantsPaid(scopedParticipantIds);
 

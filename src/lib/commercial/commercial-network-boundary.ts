@@ -16,3 +16,10 @@ export {
   type CommercialNetworkScope,
   type OpenCommercialNetworkOptions,
 } from '@/lib/commercial-network/commercial-network';
+
+export type { CantonWorkflowPersistedState } from '@/lib/commercial-network/canton-workflow-persistence';
+export {
+  syncCantonProposalOnAgreementShare,
+  syncCantonParticipantApproval,
+  syncCantonSettlementReady,
+} from '@/lib/commercial-network/server/canton-workflow-sync.server';

@@ -43,11 +43,11 @@ describe('Commercial Network Layer', () => {
       expect(registry.has('azure')).toBe(false);
     });
 
-    it('resolves Local by default for an organisation', () => {
+    it('resolves Canton by default for an organisation', () => {
       const registry = createCommercialNetworkProviderRegistry();
       const provider = registry.resolveFor({ organizationId: 'org-1' });
-      expect(provider.providerId).toBe('local');
-      expect(provider.label).toBe('Local');
+      expect(provider.providerId).toBe('canton');
+      expect(provider.label).toBe('Canton');
     });
 
     it('resolves Canton when organisation config selects it', () => {
@@ -75,7 +75,7 @@ describe('Commercial Network Layer', () => {
 
     it('does not hardcode Canton into the default registry resolution path', () => {
       const registry = getDefaultCommercialNetworkProviderRegistry();
-      // Unconfigured org → Local (backwards compatible)
+      setCommercialNetworkConfig('any-org', { provider: 'local' });
       expect(registry.resolveFor({ organizationId: 'any-org' }).providerId).toBe(
         'local'
       );
@@ -393,6 +393,8 @@ describe('Commercial Network Layer', () => {
           }),
       });
 
+      setCommercialNetworkConfig('org-facade', { provider: 'local' });
+
       const network = openCommercialNetwork(
         { organizationId: 'org-facade' },
         { registry }
@@ -447,9 +449,9 @@ describe('Commercial Network Layer', () => {
   });
 
   describe('backwards compatibility', () => {
-    it('default organisation behaviour remains Local with no config', () => {
+    it('default organisation behaviour uses Canton when no config', () => {
       const network = openCommercialNetwork({ organizationId: 'brand-new-org' });
-      expect(network.provider.providerId).toBe('local');
+      expect(network.provider.providerId).toBe('canton');
     });
   });
 });

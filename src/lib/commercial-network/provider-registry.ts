@@ -32,7 +32,7 @@ export type CommercialNetworkProviderRegistry = {
   create(providerId: AvailableCommercialNetworkProviderId): CommercialNetworkProvider;
   /**
    * Resolve provider for organisation / optional project using network config.
-   * Defaults to Local when unset.
+   * Defaults to Canton when unset (Local via COMMERCIAL_NETWORK_PROVIDER=local).
    */
   resolveFor(input: {
     organizationId: string;

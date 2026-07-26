@@ -4,6 +4,8 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { pilotDealOwnedByUser } from '@/lib/deal-network-demo/pilot-deal-invoice-link.server';
 import { markScopedPilotParticipantsPaid } from '@/lib/deal-network-demo/pilot-settlement-release.server';
+import { syncCantonSettlementReady } from '@/lib/commercial-network/server/canton-workflow-sync.server';
+import { log } from '@/lib/logger';
 import {
   orchestrateOperationalMutation,
   operationalSyncJson,
@@ -65,6 +67,19 @@ export async function POST(
     }
 
     const participantIds = [...new Set(parsed.data.participantIds.map((value) => value.trim()))];
+
+    const cantonReady = await syncCantonSettlementReady({ dealId: id });
+    if (!cantonReady.ok) {
+      log.warn('Canton SettlementReady sync failed before hackathon release', {
+        dealId: id,
+        error: cantonReady.error,
+      });
+      return NextResponse.json(
+        { error: cantonReady.error ?? 'Canton SettlementReady failed' },
+        { status: 409 },
+      );
+    }
+
     await markScopedPilotParticipantsPaid(participantIds);
 
     const operationalSync = await orchestrateOperationalMutation({

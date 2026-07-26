@@ -84,5 +84,9 @@ export function createSimulatedCantonLedgerAdapter(options?: {
     getSimulatedRuntime() {
       return runtime;
     },
+
+    hydrateAgreement(state) {
+      runtime.hydrateAgreement(state);
+    },
   };
 }

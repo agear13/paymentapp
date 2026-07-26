@@ -16,6 +16,7 @@ import {
   type CommercialNetworkEvent,
 } from '@/lib/commercial-network/events';
 import type { CommercialNetworkEventDispatcher } from '@/lib/commercial-network/event-dispatcher';
+import type { CantonWorkflowPersistedState } from '@/lib/commercial-network/canton-workflow-persistence';
 import {
   allRequiredAccepted,
   pendingRoles,
@@ -68,6 +69,9 @@ export type CantonLedgerRuntime = {
   project(provvypayAgreementId: string): CantonWorkflowProjection | null;
 
   listActiveContracts(): CantonWorkflowContract[];
+
+  /** Reconstruct in-memory contracts from Postgres-persisted workflow state. */
+  hydrateAgreement(state: CantonWorkflowPersistedState): void;
 
   reset(): void;
 };
@@ -425,6 +429,64 @@ export function createCantonLedgerRuntime(options?: {
 
     listActiveContracts() {
       return [...contracts.values()].filter((c) => c.active);
+    },
+
+    hydrateAgreement(state) {
+      const agreementId = state.provvypayAgreementId;
+      for (const [cid, contract] of [...contracts.entries()]) {
+        const matches =
+          (contract.templateId === 'CommercialAgreementProposal' &&
+            contract.sharedTerms.provvypayAgreementId === agreementId) ||
+          (contract.templateId === 'CommercialAgreement' &&
+            contract.sharedTerms.provvypayAgreementId === agreementId) ||
+          (contract.templateId === 'SettlementReady' &&
+            contract.agreementProvvypayId === agreementId);
+        if (matches) contracts.delete(cid);
+      }
+
+      if (
+        state.proposalContractId &&
+        (state.stage === 'Proposed' || state.stage === 'PartiallyBound')
+      ) {
+        const proposal: CommercialAgreementProposalContract = {
+          templateId: 'CommercialAgreementProposal',
+          contractId: state.proposalContractId,
+          platform: state.platformParty,
+          requiredParticipants: [...state.requiredParticipants],
+          accepted: [...state.acceptedParties],
+          sharedTerms: { ...state.sharedTerms },
+          active: true,
+        };
+        contracts.set(proposal.contractId, proposal);
+      }
+
+      if (
+        state.agreementContractId &&
+        (state.stage === 'Bound' || state.stage === 'SettlementReady')
+      ) {
+        const agreement: CommercialAgreementContract = {
+          templateId: 'CommercialAgreement',
+          contractId: state.agreementContractId,
+          platform: state.platformParty,
+          requiredParticipants: [...state.requiredParticipants],
+          sharedTerms: { ...state.sharedTerms },
+          active: true,
+        };
+        contracts.set(agreement.contractId, agreement);
+      }
+
+      if (state.settlementReadyContractId && state.stage === 'SettlementReady') {
+        const ready: SettlementReadyContract = {
+          templateId: 'SettlementReady',
+          contractId: state.settlementReadyContractId,
+          platform: state.platformParty,
+          requiredParticipants: [...state.requiredParticipants],
+          sharedTerms: { ...state.sharedTerms },
+          agreementProvvypayId: agreementId,
+          active: true,
+        };
+        contracts.set(ready.contractId, ready);
+      }
     },
 
     reset() {
