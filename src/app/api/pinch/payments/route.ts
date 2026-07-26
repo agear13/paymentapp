@@ -8,6 +8,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { PinchApiError } from '@/lib/payments/pinch/client';
 import { PinchPaymentService } from '@/lib/payments/pinch/payment-service';
 
@@ -55,6 +56,9 @@ export async function POST(request: NextRequest) {
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
   }
+
+  const auth = await getCurrentUserForApi(request);
+  if (!auth.user) return auth.response!;
 
   let body: unknown;
   try {

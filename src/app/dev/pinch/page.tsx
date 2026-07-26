@@ -9,6 +9,7 @@
 
 import Script from 'next/script';
 import { useCallback, useEffect, useState } from 'react';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 
 const CAPTUREJS_SRC = 'https://cdn.getpinch.com.au/capturejs/pinch.capture.v2.js';
 const CAPTUREJS_INTEGRITY =
@@ -139,7 +140,7 @@ export default function PinchDevPage() {
       const token = await createCaptureToken();
       setCaptureToken(token);
 
-      const sourceRes = await fetch('/api/pinch/sources', {
+      const sourceRes = await csrfAwareFetch('/api/pinch/sources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payerId: payerId.trim(), token, sourceType }),
@@ -164,7 +165,7 @@ export default function PinchDevPage() {
         throw new Error('Source response did not include an id');
       }
 
-      const paymentRes = await fetch('/api/pinch/payments', {
+      const paymentRes = await csrfAwareFetch('/api/pinch/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
