@@ -1,9 +1,10 @@
 'use client';
 
+import '@/components/journey/lovable/lovable-journey.css';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, Loader2, Sparkles } from "lucide-react";
-
+import { ArrowRight, Check, Loader2, Sparkles } from 'lucide-react';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 
 const STEPS = [
   "Creating workspace",
@@ -92,7 +93,7 @@ export function WorkspaceProvisioningScreen() {
               Step into your personalised Commercial Operating System.
             </div>
             <Link
-              href="/dashboard"
+              href={COMMERCIAL_OS_ROUTES.workspace}
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
             >
               Enter workspace

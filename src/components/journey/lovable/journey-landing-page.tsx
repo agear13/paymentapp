@@ -1,8 +1,7 @@
 'use client';
 
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
-import { LovableJourneyShell } from '@/components/journey/lovable/lovable-journey-shell';
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Play,
@@ -34,12 +33,15 @@ import {
   Clock,
 } from "lucide-react";
 import { Moon, Sun, Calendar, Menu, X } from "lucide-react";
+import provvyLogo from "@/assets/provvy-logo.png.asset.json";
 
+export const Route = createFileRoute("/")({
+  component: Home,
+});
 
 export function JourneyLandingPage() {
   return (
-    <LovableJourneyShell className="overflow-x-hidden antialiased">
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground overflow-x-hidden antialiased">
       <div className="pointer-events-none fixed inset-0 bg-mesh opacity-60" />
       <div className="relative">
         <Nav />
@@ -55,7 +57,6 @@ export function JourneyLandingPage() {
         <Footer />
       </div>
     </div>
-    </LovableJourneyShell>
   );
 }
 

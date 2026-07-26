@@ -21,6 +21,11 @@ describe('Content-Security-Policy', () => {
     expect(CONTENT_SECURITY_POLICY).toContain('wss://*.supabase.co');
   });
 
+  it('allows Pinch CaptureJS script load and client-side tokenisation', () => {
+    expect(CONTENT_SECURITY_POLICY).toContain('https://cdn.getpinch.com.au');
+    expect(CONTENT_SECURITY_POLICY).toContain('https://api.getpinch.com.au');
+  });
+
   it('buildContentSecurityPolicy is stable', () => {
     expect(buildContentSecurityPolicy()).toBe(CONTENT_SECURITY_POLICY);
   });

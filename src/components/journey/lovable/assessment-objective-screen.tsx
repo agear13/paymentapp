@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from "react";
+import { useState } from 'react';
 import {
   Coins,
   Receipt,
@@ -31,9 +32,9 @@ export function AssessmentObjectiveScreen() {
   const select = (id: string) => {
     setSelected(id);
     try {
-      sessionStorage.setItem("provvy.objective", id);
+      sessionStorage.setItem('provvy.objective', id);
     } catch {}
-    setTimeout(() => router.push("/journey/assessment/business"), 500);
+    setTimeout(() => router.push('/journey/assessment/business'), 500);
   };
 
   return (

@@ -7,4 +7,7 @@ export { AssessmentAnalysisScreen } from '@/components/journey/lovable/assessmen
 export { WorkflowRecommendationScreen } from '@/components/journey/lovable/workflow-recommendation-screen';
 export { WorkspaceCreateScreen } from '@/components/journey/lovable/workspace-create-screen';
 export { WorkspaceProvisioningScreen } from '@/components/journey/lovable/workspace-provisioning-screen';
+export { WorkspaceLayout } from '@/components/journey/lovable/workspace-layout';
+export { WorkspaceHomeScreen } from '@/components/journey/lovable/workspace-home-screen';
+export { WorkflowReconciliationScreen } from '@/components/journey/lovable/workflow-reconciliation-screen';
 export { LovableJourneyShell } from '@/components/journey/lovable/lovable-journey-shell';

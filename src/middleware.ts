@@ -253,6 +253,7 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute = pathname.startsWith('/auth');
   const isDashboardRoute =
     pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/workspace') ||
     pathname === '/marketing' ||
     pathname.startsWith('/marketing/');
   const restricted = isRestrictedPath(pathname);
@@ -281,7 +282,7 @@ export async function middleware(request: NextRequest) {
   if (hasSession && isAuthRoute && !isAuthCallbackRoute && !isAuthUtilityRoute) {
     if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=redirect_to_dashboard'); }
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = emailVerified === false ? '/auth/verify-email' : '/dashboard';
+    redirectUrl.pathname = emailVerified === false ? '/auth/verify-email' : '/workspace';
     return NextResponse.redirect(redirectUrl);
   }
 

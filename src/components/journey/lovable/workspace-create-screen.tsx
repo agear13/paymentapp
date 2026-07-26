@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Mail, Sparkles, Workflow } from "lucide-react";
-
+import { ArrowLeft, ArrowRight, Check, Mail, Sparkles, Workflow } from 'lucide-react';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 
 export function WorkspaceCreateScreen() {
   const [email, setEmail] = useState('');
 
   const proceed = () => {
-    window.location.href = '/auth/signup?redirectedFrom=/journey/provisioning/build';
+    window.location.href = `/auth/signup?redirectedFrom=${encodeURIComponent(COMMERCIAL_OS_ROUTES.provisioningBuild)}`;
   };
 
   return (
@@ -32,9 +32,9 @@ export function WorkspaceCreateScreen() {
 
           <div className="mt-8 space-y-2.5">
             {[
-              "Save your tailored recommendation",
+              'Save your tailored recommendation',
               "Invite your team when you're ready",
-              "Deploy workflows on your systems",
+              'Deploy workflows on your systems',
             ].map((line) => (
               <div key={line} className="flex items-center gap-2.5 text-[13.5px] text-foreground">
                 <div className="grid h-4 w-4 place-items-center rounded-full bg-primary/10 text-primary">
@@ -80,6 +80,7 @@ export function WorkspaceCreateScreen() {
             />
           </div>
           <button
+            type="button"
             onClick={proceed}
             className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-[13px] font-medium text-primary-foreground transition-transform hover:scale-[1.01]"
           >
@@ -87,7 +88,7 @@ export function WorkspaceCreateScreen() {
           </button>
 
           <div className="mt-5 text-center text-[11px] text-ink-soft">
-            By continuing you agree to Provvy's terms and privacy policy.
+            By continuing you agree to Provvy&apos;s terms and privacy policy.
           </div>
         </div>
       </div>
@@ -95,9 +96,10 @@ export function WorkspaceCreateScreen() {
   );
 }
 
-function SsoButton({ provider, onClick }: { provider: "Google" | "Microsoft"; onClick: () => void }) {
+function SsoButton({ provider, onClick }: { provider: 'Google' | 'Microsoft'; onClick: () => void }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-border bg-background px-4 py-2.5 text-[13.5px] font-medium text-foreground transition-colors hover:bg-accent"
     >
@@ -107,8 +109,8 @@ function SsoButton({ provider, onClick }: { provider: "Google" | "Microsoft"; on
   );
 }
 
-function ProviderMark({ provider }: { provider: "Google" | "Microsoft" }) {
-  if (provider === "Google") {
+function ProviderMark({ provider }: { provider: 'Google' | 'Microsoft' }) {
+  if (provider === 'Google') {
     return (
       <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
         <path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6c-.2 1.3-1 2.4-2.1 3.2v2.6h3.4c2-1.9 3.1-4.6 3.1-7.6z" />

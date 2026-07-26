@@ -107,7 +107,8 @@ export function WorkflowRecommendationScreen() {
               You'll be able to review and adjust everything before it goes live.
             </div>
             <button
-              onClick={() => router.push("/journey/provisioning")}
+              type="button"
+              onClick={() => router.push('/journey/provisioning')}
               className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-[13px] font-medium text-primary-foreground transition-transform hover:scale-[1.02]"
             >
               Create my Commercial OS <ArrowRight className="h-3.5 w-3.5" />

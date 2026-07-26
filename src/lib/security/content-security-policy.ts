@@ -20,6 +20,7 @@ export function buildContentSecurityPolicy(options?: {
     "'self'",
     ...(isDev ? ["'unsafe-inline'", "'unsafe-eval'"] : ["'unsafe-inline'"]),
     'https://js.stripe.com',
+    'https://cdn.getpinch.com.au', // Pinch CaptureJS (client-side tokenisation)
     'https://*.supabase.co',
     'https://challenges.cloudflare.com',
   ];
@@ -34,7 +35,7 @@ export function buildContentSecurityPolicy(options?: {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://checkout.stripe.com https://*.upstash.io https://challenges.cloudflare.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://checkout.stripe.com https://api.getpinch.com.au https://*.upstash.io https://challenges.cloudflare.com",
     "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://challenges.cloudflare.com",
     "worker-src 'self' blob:",
   ];

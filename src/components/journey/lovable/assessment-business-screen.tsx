@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from "react";
+import { useMemo, useState } from 'react';
 import { ArrowRight, Brain, Check, Loader2, ArrowLeft } from "lucide-react";
 
 
@@ -38,7 +38,7 @@ export function AssessmentBusinessScreen() {
     try {
       sessionStorage.setItem("provvy.business", JSON.stringify(s));
     } catch {}
-    router.push("/journey/assessment/connect");
+    router.push('/journey/assessment/connect');
   };
 
   return (

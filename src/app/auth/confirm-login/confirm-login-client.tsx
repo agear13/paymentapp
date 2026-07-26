@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ProvvypayLogoMark } from '@/components/provvypay/provvypay-logo-mark';
 import { emitAuthAuditEvent } from '@/lib/security/auth-audit.client';
+import { postLoginDestination } from '@/lib/journey/commercial-os-routes';
 
 export function ConfirmLoginClient({ reason }: { reason?: string | null }) {
   const supabase = createClient();
@@ -28,7 +29,7 @@ export function ConfirmLoginClient({ reason }: { reason?: string | null }) {
       if (!response.ok) {
         throw new Error('Could not confirm sign-in');
       }
-      router.replace('/dashboard');
+      router.replace(postLoginDestination());
       router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not confirm sign-in');

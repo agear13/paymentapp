@@ -1,9 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from "react";
-import { Brain, Check, Loader2 } from "lucide-react";
-
+import { useEffect, useState } from 'react';
+import { Brain, Check, Loader2 } from 'lucide-react';
 
 const STEPS = [
   "Connecting accounting",
@@ -21,7 +21,7 @@ export function AssessmentAnalysisScreen() {
 
   useEffect(() => {
     if (step >= STEPS.length) {
-      const t = setTimeout(() => router.push("/journey/recommendation"), 900);
+      const t = setTimeout(() => router.push('/journey/recommendation'), 900);
       return () => clearTimeout(t);
     }
     const t = setTimeout(() => setStep((s) => s + 1), 1100);

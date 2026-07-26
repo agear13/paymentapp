@@ -2,23 +2,22 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Check, Shield, Zap, TrendingUp } from "lucide-react";
-
+import { ArrowLeft, ArrowRight, Check, Shield, Zap, TrendingUp } from 'lucide-react';
 
 export function AssessmentConnectScreen() {
   const router = useRouter();
 
   const connect = () => {
     try {
-      sessionStorage.setItem("provvy.connected", "xero");
+      sessionStorage.setItem('provvy.connected', 'xero');
     } catch {}
-    router.push("/journey/assessment/analysis");
+    router.push('/journey/assessment/analysis');
   };
   const skip = () => {
     try {
-      sessionStorage.setItem("provvy.connected", "skipped");
+      sessionStorage.setItem('provvy.connected', 'skipped');
     } catch {}
-    router.push("/journey/assessment/analysis");
+    router.push('/journey/assessment/analysis');
   };
 
   return (

@@ -69,6 +69,25 @@ const FILES = [
     exportName: 'WorkspaceProvisioningScreen',
     componentName: 'WorkspaceProvisioningScreen',
   },
+  {
+    source: 'workspace.tsx',
+    out: 'workspace-layout.tsx',
+    exportName: 'WorkspaceLayout',
+    componentName: 'WorkspaceLayout',
+    stripOutlet: true,
+  },
+  {
+    source: 'workspace.index.tsx',
+    out: 'workspace-home-screen.tsx',
+    exportName: 'WorkspaceHomeScreen',
+    componentName: 'WorkspaceHomeScreen',
+  },
+  {
+    source: 'workspace.workflow.reconciliation.tsx',
+    out: 'workflow-reconciliation-screen.tsx',
+    exportName: 'WorkflowReconciliationScreen',
+    componentName: 'WorkflowReconciliationScreen',
+  },
 ];
 
 const ROUTE_MAP = [
@@ -86,13 +105,19 @@ const ROUTE_MAP = [
   ['to="/assessment/connect"', 'href="/journey/assessment/connect"'],
   ['to="/assessment/business"', 'href="/journey/assessment/business"'],
   ['to="/assessment"', 'href="/journey/assessment"'],
-  ['to="/workspace"', 'href="/dashboard"'],
+  ['to="/workspace/workflow/reconciliation"', 'href="/workspace/workflow/reconciliation"'],
+  ['to="/workspace/workflows"', 'href="/workspace/workflows"'],
+  ['to="/workspace/timeline"', 'href="/workspace/timeline"'],
+  ['to="/workspace/connected"', 'href="/workspace/connected"'],
+  ['to="/workspace/advisor"', 'href="/workspace/advisor"'],
+  ['to="/workspace/settings"', 'href="/workspace/settings"'],
+  ['to="/workspace"', 'href="/workspace"'],
   ['to="/"', 'href="/journey"'],
   ['href="/assessment"', 'href="/journey/assessment"'],
   ['href="/login"', 'href="/auth/login"'],
 ];
 
-function transform(raw, { exportName, componentName, stripOutlet }) {
+function transform(raw, { exportName, componentName, stripOutlet, out }) {
   let s = raw;
 
   s = s.replace(/^import provvyLogo from "@\/assets\/provvy-logo\.png\.asset\.json";\n/m, '');
@@ -142,6 +167,9 @@ function transform(raw, { exportName, componentName, stripOutlet }) {
   s = s.replace(/function RecommendationScreen\(\)/g, `export function ${exportName}()`);
   s = s.replace(/function CreateWorkspaceScreen\(\)/g, `export function ${exportName}()`);
   s = s.replace(/function ProvisioningScreen\(\)/g, `export function ${exportName}()`);
+  s = s.replace(/function WorkspaceLayout\(\)/g, `export function ${exportName}({ children }: { children: React.ReactNode })`);
+  s = s.replace(/function WorkspaceHome\(\)/g, `export function ${exportName}()`);
+  s = s.replace(/function WorkflowRoom\(\)/g, `export function ${exportName}()`);
 
   if (stripOutlet) {
     s = s.replace(/<Outlet \/>/g, '{children}');
@@ -164,6 +192,23 @@ function transform(raw, { exportName, componentName, stripOutlet }) {
   s = s.replace(/^import \{ useRouter \} from 'next\/navigation';\s*/m, '');
   s = s.replace(/^import \{ usePathname \} from 'next\/navigation';\s*/m, '');
   s = s.replace(/^import \{ ProvvyBrandMark \}[^;]+;\s*/m, '');
+
+  if (out === 'workspace-layout.tsx' || out === 'workspace-home-screen.tsx' || out === 'workflow-reconciliation-screen.tsx') {
+    if (!s.includes("lovable-journey.css")) {
+      s = s.replace(/^('use client';\n)/, "$1import '@/components/journey/lovable/lovable-journey.css';\n");
+    }
+  }
+
+  if (out === 'workspace-layout.tsx') {
+    s = s.replace(
+      '<div className="min-h-screen bg-background text-foreground antialiased">',
+      '<div className="lovable-journey min-h-screen bg-background text-foreground antialiased">',
+    );
+    s = s.replace(
+      /<Link href="\/workspace" className="flex items-center gap-2">\s*<ProvvyBrandMark href="\/journey" \/>\s*<span[^>]*>Provvy<\/span>\s*<\/Link>/g,
+      '<ProvvyBrandMark href="/workspace" />',
+    );
+  }
 
   s = `${imports.join('\n')}\n${s.trim()}\n`;
 

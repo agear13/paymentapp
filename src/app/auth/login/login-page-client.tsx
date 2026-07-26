@@ -19,6 +19,7 @@ import { emitAuthAuditEvent } from '@/lib/security/auth-audit.client';
 import { TurnstileWidget } from '@/components/auth/turnstile-widget';
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth/password-policy';
 import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from '@/lib/auth/disposable-email';
+import { postLoginDestination } from '@/lib/journey/commercial-os-routes';
 
 type AuthMode = 'signin' | 'signup';
 
@@ -79,10 +80,10 @@ export function LoginPageClient() {
 
   const getPostAuthDestination = () => {
     const redirectedFrom = searchParams?.get('redirectedFrom');
-    if (redirectedFrom && redirectedFrom.startsWith('/dashboard')) {
+    if (redirectedFrom && redirectedFrom.startsWith('/')) {
       return redirectedFrom;
     }
-    return '/dashboard';
+    return postLoginDestination();
   };
 
   const waitForSession = async () => {
