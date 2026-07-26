@@ -38,6 +38,46 @@ export function isHackathonJourneyEnabled(): boolean {
   return process.env.HACKATHON_JOURNEY_ENABLED === 'true';
 }
 
+/** Dev/demo-only gate for simulating external participant approvals via the production approve API. */
+export function isDevelopmentApprovalSimulatorEnabled(): boolean {
+  const explicitOff =
+    process.env.DEMO_APPROVAL_SIMULATOR_ENABLED === 'false' ||
+    process.env.NEXT_PUBLIC_DEMO_APPROVAL_SIMULATOR_ENABLED === 'false';
+  if (explicitOff) return false;
+
+  const explicitOn =
+    process.env.DEMO_APPROVAL_SIMULATOR_ENABLED === 'true' ||
+    process.env.NEXT_PUBLIC_DEMO_APPROVAL_SIMULATOR_ENABLED === 'true' ||
+    isHackathonJourneyEnabled() ||
+    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED === 'true';
+
+  if (process.env.NODE_ENV === 'production') {
+    return explicitOn;
+  }
+
+  return explicitOn || process.env.NODE_ENV === 'development';
+}
+
+/** Dev/demo-only gate for simulating external Pinch payment confirmation without live debits. */
+export function isDevelopmentPaymentSimulatorEnabled(): boolean {
+  const explicitOff =
+    process.env.DEMO_PAYMENT_SIMULATOR_ENABLED === 'false' ||
+    process.env.NEXT_PUBLIC_DEMO_PAYMENT_SIMULATOR_ENABLED === 'false';
+  if (explicitOff) return false;
+
+  const explicitOn =
+    process.env.DEMO_PAYMENT_SIMULATOR_ENABLED === 'true' ||
+    process.env.NEXT_PUBLIC_DEMO_PAYMENT_SIMULATOR_ENABLED === 'true' ||
+    isHackathonJourneyEnabled() ||
+    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED === 'true';
+
+  if (process.env.NODE_ENV === 'production') {
+    return explicitOn;
+  }
+
+  return explicitOn || process.env.NODE_ENV === 'development';
+}
+
 export function journeyStepIndex(pathname: string): number {
   if (pathname.startsWith(JOURNEY_ROUTES.provisioningBuild)) return 6;
   if (pathname.startsWith(JOURNEY_ROUTES.provisioning)) return 5;

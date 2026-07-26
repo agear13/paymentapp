@@ -35,6 +35,10 @@ import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import { persistParticipantAgreementShare } from '@/lib/projects/participant-agreement-share';
 import { buildParticipantWorkspaceUrlForParticipant } from '@/lib/participant-portal/participant-portal-url';
 import {
+  isDevelopmentApprovalSimulatorEnabled,
+  simulateExternalParticipantApprovals,
+} from '@/lib/journey/development-approval-simulator.client';
+import {
   fetchPinchDevTestPayerId,
   formatPinchPayerLabel,
   formatPinchPaymentStatusLabel,
@@ -44,6 +48,10 @@ import {
   PINCH_CAPTUREJS_SRC,
   runPinchCollectionFlow,
 } from '@/lib/payments/pinch/collection-flow.client';
+import {
+  isDevelopmentPaymentSimulatorEnabled,
+  simulatePinchPaymentConfirmation,
+} from '@/lib/payments/pinch/development-payment-simulator.client';
 import type { PinchCreatePaymentResponse } from '@/lib/payments/pinch/payment-service';
 import type { PinchCreateSourceResponse } from '@/lib/payments/pinch/source-service';
 import {
@@ -1462,12 +1470,29 @@ function useWorkflowApprovals(dealId: string | undefined) {
       toast.success(
         sentCount > 0 ? "Participant workspace invitations sent" : "Approval requests are up to date"
       );
+
+      if (isDevelopmentApprovalSimulatorEnabled() && dealId) {
+        const snapshot = await fetchPilotSnapshot();
+        const dealParticipants = (snapshot?.participants ?? []).filter(
+          (participant) => participant.dealId === dealId,
+        );
+        void simulateExternalParticipantApprovals(dealParticipants)
+          .then((result) => {
+            if (result.errors.length > 0) {
+              console.warn("[development approval simulator]", result);
+            }
+            void reload();
+          })
+          .catch((error) => {
+            console.warn("[development approval simulator] failed", error);
+          });
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not send approval requests");
     } finally {
       setSending(false);
     }
-  }, [participants, reload]);
+  }, [dealId, participants, reload]);
 
   const copyInviteLink = useCallback(async (participant: DemoParticipant) => {
     const url = buildParticipantWorkspaceUrlForParticipant(participant);
@@ -1733,6 +1758,7 @@ function StageCollection({
 }) {
   const publishableKey = process.env.NEXT_PUBLIC_PINCH_PUBLISHABLE_KEY ?? "";
   const isProductionBuild = process.env.NODE_ENV === "production";
+  const paymentSimulatorEnabled = isDevelopmentPaymentSimulatorEnabled();
 
   const [captureReady, setCaptureReady] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
@@ -1763,16 +1789,29 @@ function StageCollection({
     step === "complete" &&
     payment !== null &&
     isPinchPaymentSuccessful(payment.status);
+  const sandboxReady = Boolean(publishableKey.trim() && payerId?.trim());
+  const simulatePaymentConfirmation =
+    paymentSimulatorEnabled && (isProductionBuild || !sandboxReady);
+  const canCollectFunds =
+    !busy &&
+    step !== "complete" &&
+    (simulatePaymentConfirmation || (captureReady && sandboxReady));
 
   const onNextRef = useRef(onNext);
   onNextRef.current = onNext;
 
   useEffect(() => {
-    if (isProductionBuild) return;
+    if (isProductionBuild && !paymentSimulatorEnabled) return;
     void fetchPinchDevTestPayerId().then((id) => {
       if (id) setPayerId(id);
     });
-  }, [isProductionBuild]);
+  }, [isProductionBuild, paymentSimulatorEnabled]);
+
+  useEffect(() => {
+    if (simulatePaymentConfirmation) {
+      setCaptureReady(true);
+    }
+  }, [simulatePaymentConfirmation]);
 
   useEffect(() => {
     if (!collectionComplete) return;
@@ -1781,7 +1820,7 @@ function StageCollection({
   }, [collectionComplete]);
 
   const handleCollect = async () => {
-    if (busy || !captureReady || !publishableKey || !payerId) return;
+    if (!canCollectFunds) return;
 
     setBusy(true);
     setFlowError(null);
@@ -1789,21 +1828,55 @@ function StageCollection({
     setPayment(null);
     setStep("capture");
 
+    const description = snapshot
+      ? `Provvy workflow collection · ${snapshot.dealName}`
+      : "Provvy workflow collection";
+
     try {
-      const result = await runPinchCollectionFlow({
-        payerId,
-        amountCents,
-        publishableKey,
-        description: snapshot
-          ? `Provvy workflow collection · ${snapshot.dealName}`
-          : "Provvy workflow collection",
-        onStep: (nextStep) => setStep(nextStep),
-      });
+      const result = simulatePaymentConfirmation
+        ? await simulatePinchPaymentConfirmation({
+            payerId,
+            amountCents,
+            description,
+            payerLabel,
+            onStep: (nextStep) => setStep(nextStep),
+          })
+        : await runPinchCollectionFlow({
+            payerId: payerId!,
+            amountCents,
+            publishableKey,
+            description,
+            onStep: (nextStep) => setStep(nextStep),
+          });
 
       setSource(result.source);
       setPayment(result.payment);
       setStep("complete");
     } catch (error) {
+      if (paymentSimulatorEnabled) {
+        try {
+          const result = await simulatePinchPaymentConfirmation({
+            payerId,
+            amountCents,
+            description,
+            payerLabel,
+            onStep: (nextStep) => setStep(nextStep),
+          });
+          setSource(result.source);
+          setPayment(result.payment);
+          setStep("complete");
+          return;
+        } catch (simulatedError) {
+          setStep("failed");
+          setFlowError(
+            simulatedError instanceof Error
+              ? simulatedError.message
+              : "Pinch collection failed",
+          );
+          return;
+        }
+      }
+
       setStep("failed");
       setFlowError(error instanceof Error ? error.message : "Pinch collection failed");
     } finally {
@@ -1829,7 +1902,7 @@ function StageCollection({
     );
   }
 
-  if (isProductionBuild) {
+  if (isProductionBuild && !paymentSimulatorEnabled) {
     return (
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -1855,14 +1928,16 @@ function StageCollection({
 
   return (
     <>
-      <Script
-        src={PINCH_CAPTUREJS_SRC}
-        integrity={PINCH_CAPTUREJS_INTEGRITY}
-        crossOrigin="anonymous"
-        strategy="afterInteractive"
-        onLoad={() => setCaptureReady(true)}
-        onError={() => setCaptureError("Failed to load Pinch CaptureJS")}
-      />
+      {!simulatePaymentConfirmation && (
+        <Script
+          src={PINCH_CAPTUREJS_SRC}
+          integrity={PINCH_CAPTUREJS_INTEGRITY}
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+          onLoad={() => setCaptureReady(true)}
+          onError={() => setCaptureError("Failed to load Pinch CaptureJS")}
+        />
+      )}
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -1907,7 +1982,8 @@ function StageCollection({
               </div>
             </div>
 
-            {(captureError || flowError || !publishableKey || !payerId) && (
+            {!simulatePaymentConfirmation &&
+              (captureError || flowError || !publishableKey || !payerId) && (
               <div className="mt-4 space-y-2">
                 {!publishableKey && (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-[12.5px] text-amber-900 dark:text-amber-200">
@@ -1930,6 +2006,13 @@ function StageCollection({
                     {flowError}
                   </div>
                 )}
+              </div>
+            )}
+            {simulatePaymentConfirmation && flowError && (
+              <div className="mt-4 space-y-2">
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[12.5px] text-destructive">
+                  {flowError}
+                </div>
               </div>
             )}
 
@@ -1972,17 +2055,15 @@ function StageCollection({
               ) : (
                 <PrimaryButton
                   onClick={() => void handleCollect()}
-                  disabled={
-                    busy ||
-                    !captureReady ||
-                    !publishableKey ||
-                    !payerId ||
-                    step === "complete"
-                  }
+                  disabled={!canCollectFunds}
                   icon={busy ? Loader2 : CreditCard}
                   spinIcon={busy}
                 >
-                  {busy ? "Collecting…" : captureReady ? "Collect Funds with Pinch" : "Loading Pinch…"}
+                  {busy
+                    ? "Collecting…"
+                    : simulatePaymentConfirmation || captureReady
+                    ? "Collect Funds with Pinch"
+                    : "Loading Pinch…"}
                 </PrimaryButton>
               )}
             </div>
