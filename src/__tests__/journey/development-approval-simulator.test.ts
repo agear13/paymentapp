@@ -1,3 +1,7 @@
+/**
+ * @jest-environment jsdom
+ */
+
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
   isDevelopmentApprovalSimulatorEnabled,
@@ -6,6 +10,9 @@ import {
   listParticipantsAwaitingExternalApproval,
   simulateExternalParticipantApprovals,
 } from '@/lib/journey/development-approval-simulator.client';
+import { resetClientCsrfStateForTests } from '@/lib/security/csrf-fetch.client';
+
+const SIGNED_CSRF_TOKEN = 'csrf-random-part.csrf-signature-part';
 
 function buildParticipant(overrides: Partial<DemoParticipant> = {}): DemoParticipant {
   return {
@@ -86,11 +93,13 @@ describe('simulateExternalParticipantApprovals', () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
+    resetClientCsrfStateForTests();
     process.env = { ...originalEnv, NODE_ENV: 'development' };
     jest.useFakeTimers();
   });
 
   afterEach(() => {
+    resetClientCsrfStateForTests();
     process.env = originalEnv;
     global.fetch = originalFetch;
     jest.useRealTimers();
@@ -115,7 +124,7 @@ describe('simulateExternalParticipantApprovals', () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ csrfToken: 'csrf-random-part.csrf-signature-part' }),
+        json: async () => ({ csrfToken: SIGNED_CSRF_TOKEN }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -131,7 +140,13 @@ describe('simulateExternalParticipantApprovals', () => {
     await jest.advanceTimersByTimeAsync(3000);
     const result = await promise;
 
+    expect(result.attempted).toBe(1);
     expect(result.approved).toBe(1);
+    expect(result.errors).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/security/csrf-token', {
+      credentials: 'include',
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/deal-network-pilot/invites/invite-token-1/approve',
       expect.objectContaining({
