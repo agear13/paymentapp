@@ -39,6 +39,12 @@ import {
   logHackathonDemoFlagsInDevelopment,
 } from '@/lib/journey/hackathon-journey';
 import {
+  formatWorkflowAgreementMoney,
+  resolveHackathonWorkflowCommercial,
+  resolveWorkflowAgreementCurrency,
+  toWorkflowProjectValueCurrency,
+} from '@/lib/journey/workflow-agreement-currency.client';
+import {
   simulateExternalParticipantApprovals,
 } from '@/lib/journey/development-approval-simulator.client';
 import {
@@ -73,6 +79,7 @@ import {
   type WorkflowFundingSummary,
   type WorkflowObligationRow,
 } from '@/lib/commercial/workflows/settlement-flow.client';
+import { resolveWorkflowSettlementCurrency } from '@/lib/commercial/workflows/development-settlement-simulator.client';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -169,6 +176,10 @@ export function WorkflowReconciliationScreen() {
   const [importSnapshot, setImportSnapshot] = useState<WorkflowImportSnapshot | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const stageIndex = WORKFLOW.stages.findIndex((s) => s.key === stage);
+  const hackathonCommercial = resolveHackathonWorkflowCommercial(importSnapshot?.result ?? null, {
+    currency: 'AUD',
+    amount: WORKFLOW.amount,
+  });
 
   useEffect(() => {
     logHackathonDemoFlagsInDevelopment();
@@ -252,8 +263,12 @@ export function WorkflowReconciliationScreen() {
           </MetaGroup>
           <MetaGroup icon={Coins} label="Commercial value">
             <div className="text-[15px] font-semibold tracking-tight">
-              {WORKFLOW.currency}
-              {WORKFLOW.amount.toLocaleString()}
+              {hackathonCommercial
+                ? formatWorkflowAgreementMoney(
+                    hackathonCommercial.amount,
+                    hackathonCommercial.currency,
+                  )
+                : `${WORKFLOW.currency}${WORKFLOW.amount.toLocaleString()}`}
             </div>
             <div className="text-[11.5px] text-ink-soft">
               across {WORKFLOW.participants.length - 1} allocations
@@ -309,6 +324,7 @@ export function WorkflowReconciliationScreen() {
         )}
         {stage === "complete" && (
           <StageComplete
+            snapshot={importSnapshot}
             onReset={() => {
               setImportSnapshot(null);
               setImportError(null);
@@ -936,7 +952,7 @@ function Confidence({ value }: { value: number }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function dealFromSnapshot(snapshot: WorkflowImportSnapshot): RecentDeal {
-  const currency = snapshot.result.currency.value;
+  const currency = resolveWorkflowAgreementCurrency(snapshot.result);
   return {
     id: snapshot.dealId,
     dealName: snapshot.dealName,
@@ -947,7 +963,7 @@ function dealFromSnapshot(snapshot: WorkflowImportSnapshot): RecentDeal {
     status: "Pending",
     lastUpdated: new Date().toISOString(),
     paymentStatus: "Not Paid",
-    projectValueCurrency: currency === "USD" ? "USD" : "AUD",
+    projectValueCurrency: toWorkflowProjectValueCurrency(currency),
   };
 }
 
@@ -1121,12 +1137,17 @@ function StageReview({
     }))
   );
   const reviewBlockers = collectReviewBlockers(insight);
+  const agreementCurrency = resolveWorkflowAgreementCurrency(result);
   const currencyPrefix =
     result.currency.value === "USD"
       ? "US$"
       : result.currency.value === "AUD"
         ? "A$"
         : `${result.currency.value ?? ""} `;
+  const formatReviewAmount = (amount: number) =>
+    isHackathonJourneyEnabled()
+      ? formatWorkflowAgreementMoney(amount, agreementCurrency)
+      : `${currencyPrefix}${amount.toLocaleString()}`;
   const projectValue = result.projectValue.value ?? 0;
   const revenueRows = insight.revenueShareSummary.map((row) => ({
     key: row.participantId,
@@ -1252,8 +1273,7 @@ function StageReview({
                       <span className="font-medium">{row.name}</span>
                       <span className="text-ink-soft">
                         <span className="font-semibold text-foreground">
-                          {currencyPrefix}
-                          {row.amount.toLocaleString()}
+                          {formatReviewAmount(row.amount)}
                         </span>{" "}
                         · {row.pct}%
                       </span>
@@ -1752,9 +1772,27 @@ function deriveWorkflowCollectionAmount(snapshot: WorkflowImportSnapshot | null)
 function deriveWorkflowCollectionCurrency(snapshot: WorkflowImportSnapshot | null): string {
   const extracted = snapshot?.result.currency.value?.trim();
   if (extracted) {
-    return extracted === "AUD" ? "A$" : extracted;
+    return extracted === "AUD" ? "A$" : extracted === "USD" ? "US$" : `${extracted} `;
   }
   return WORKFLOW.currency;
+}
+
+function deriveWorkflowCollectionDisplay(snapshot: WorkflowImportSnapshot | null): {
+  amount: number;
+  label: string;
+} {
+  const amount = deriveWorkflowCollectionAmount(snapshot);
+  if (isHackathonJourneyEnabled() && snapshot) {
+    return {
+      amount,
+      label: formatWorkflowAgreementMoney(
+        amount,
+        resolveWorkflowAgreementCurrency(snapshot.result),
+      ),
+    };
+  }
+  const prefix = deriveWorkflowCollectionCurrency(snapshot);
+  return { amount, label: `${prefix}${amount.toLocaleString()}` };
 }
 
 function deriveWorkflowCollectionPurpose(snapshot: WorkflowImportSnapshot): string {
@@ -1774,7 +1812,7 @@ function StageCollectionDemo({
   const [payment, setPayment] = useState<PinchCreatePaymentResponse | null>(null);
 
   const amount = deriveWorkflowCollectionAmount(snapshot);
-  const currencyPrefix = deriveWorkflowCollectionCurrency(snapshot);
+  const paymentAmountLabel = deriveWorkflowCollectionDisplay(snapshot).label;
   const amountCents = Math.max(1, Math.round(amount * 100));
   const clientLabel = snapshot.dealName?.trim() || "Project client";
   const paymentPurpose = deriveWorkflowCollectionPurpose(snapshot);
@@ -1839,8 +1877,7 @@ function StageCollectionDemo({
                   Client payment amount
                 </div>
                 <div className="mt-1 text-3xl font-semibold tracking-[-0.02em]">
-                  {currencyPrefix}
-                  {amount.toLocaleString()}
+                  {paymentAmountLabel}
                 </div>
                 <div className="mt-1 text-[12px] text-ink-soft">
                   From {clientLabel}
@@ -1949,7 +1986,7 @@ function StageCollectionSandbox({
   const [payment, setPayment] = useState<PinchCreatePaymentResponse | null>(null);
 
   const amount = deriveWorkflowCollectionAmount(snapshot);
-  const currencyPrefix = deriveWorkflowCollectionCurrency(snapshot);
+  const paymentAmountLabel = deriveWorkflowCollectionDisplay(snapshot).label;
   const amountCents = Math.max(1, Math.round(amount * 100));
   const payerLabel = payment
     ? formatPinchPayerLabel(payment.payer, snapshot.dealName ?? "Payer")
@@ -2047,8 +2084,7 @@ function StageCollectionSandbox({
                     Amount to collect
                   </div>
                   <div className="mt-1 text-3xl font-semibold tracking-[-0.02em]">
-                    {currencyPrefix}
-                    {amount.toLocaleString()}
+                    {paymentAmountLabel}
                   </div>
                   <div className="mt-1 text-[12px] text-ink-soft">
                     From {payerLabel}
@@ -2288,7 +2324,10 @@ const SETTLE_STEPS = [
 function useWorkflowSettlement(snapshot: WorkflowImportSnapshot | null) {
   const { organizationId, isLoading: orgLoading } = useOrganization();
   const dealId = snapshot?.dealId;
-  const currency = snapshot?.result.currency.value?.trim().toUpperCase() || "AUD";
+  const agreementCurrency = snapshot
+    ? resolveWorkflowAgreementCurrency(snapshot.result)
+    : 'AUD';
+  const hackathonCurrencyMode = isHackathonJourneyEnabled();
 
   const [participants, setParticipants] = useState<DemoParticipant[]>([]);
   const [obligations, setObligations] = useState<WorkflowObligationRow[]>([]);
@@ -2304,7 +2343,13 @@ function useWorkflowSettlement(snapshot: WorkflowImportSnapshot | null) {
     snapshot?.dealName,
   );
   const settlementComplete = dealId ? isWorkflowSettlementComplete(participants, dealId) : false;
-  const allocationCards = buildWorkflowAllocationCards(obligations);
+  const currency = hackathonCurrencyMode
+    ? agreementCurrency
+    : resolveWorkflowSettlementCurrency(obligations, agreementCurrency);
+  const allocationCards = buildWorkflowAllocationCards(
+    obligations,
+    hackathonCurrencyMode ? agreementCurrency : undefined,
+  );
   const payeeParticipants = dealId ? settlementParticipantsForDeal(participants, dealId) : [];
   const completedCount = payeeParticipants.filter(
     (participant) =>
@@ -2362,12 +2407,18 @@ function useWorkflowSettlement(snapshot: WorkflowImportSnapshot | null) {
         )
         .map((participant) => participant.id);
 
+      const releaseCurrency = hackathonCurrencyMode
+        ? agreementCurrency
+        : resolveWorkflowSettlementCurrency(data.obligations, agreementCurrency);
+      const fundingAmount = data.obligations.reduce((sum, row) => sum + row.amount_owed, 0);
+
       if (releasableIds.length > 0) {
         await executeWorkflowSettlementRelease({
           organizationId,
           dealId,
-          currency,
+          currency: releaseCurrency,
           participantIds: releasableIds,
+          fundingAmount,
         });
       }
 
@@ -2377,7 +2428,7 @@ function useWorkflowSettlement(snapshot: WorkflowImportSnapshot | null) {
     } finally {
       setExecuting(false);
     }
-  }, [currency, dealId, organizationId, reload, settlementComplete]);
+  }, [agreementCurrency, dealId, hackathonCurrencyMode, organizationId, reload, settlementComplete]);
 
   useEffect(() => {
     setLoading(true);
@@ -2535,7 +2586,10 @@ function StageSettlement({
             </div>
             {settlementAmount > 0 && (
               <div className="mt-2 text-[13px] text-ink-soft">
-                Total settlement · {formatWorkflowMoney(settlementAmount, currency)}
+                Total settlement ·{" "}
+                {isHackathonJourneyEnabled()
+                  ? formatWorkflowAgreementMoney(settlementAmount, currency)
+                  : formatWorkflowMoney(settlementAmount, currency)}
               </div>
             )}
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -2605,7 +2659,13 @@ const WORKFLOW_AUTOMATION_IMPACT = [
   { icon: TrendingUp, label: "Reduced payment administration", value: "High" },
 ] as const;
 
-function ProvvyWorkflowRecommendationCard({ onDismiss }: { onDismiss: () => void }) {
+function ProvvyWorkflowRecommendationCard({
+  onDismiss,
+  projectValueLabel,
+}: {
+  onDismiss: () => void;
+  projectValueLabel?: string;
+}) {
   return (
     <div className="overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-card">
       <div className="border-b border-border bg-gradient-to-br from-accent/50 to-transparent p-6 sm:p-8">
@@ -2632,8 +2692,8 @@ function ProvvyWorkflowRecommendationCard({ onDismiss }: { onDismiss: () => void
             I&apos;ve analysed this completed workflow and identified a repeatable commercial pattern.
           </p>
           <p>
-            The same client pays the same project value on the second Friday of each month before
-            settlement is distributed to the same participants.
+            The same client pays {projectValueLabel ?? "the same project value"} on the second Friday
+            of each month before settlement is distributed to the same participants.
           </p>
           <p className="rounded-xl border border-primary/20 bg-accent/70 px-4 py-3 text-foreground">
             This workflow is an excellent candidate for automation.
@@ -2719,8 +2779,24 @@ function ProvvyWorkflowRecommendationCard({ onDismiss }: { onDismiss: () => void
   );
 }
 
-function StageComplete({ onReset }: { onReset: () => void }) {
+function StageComplete({
+  snapshot,
+  onReset,
+}: {
+  snapshot: WorkflowImportSnapshot | null;
+  onReset: () => void;
+}) {
   const [recommendationDismissed, setRecommendationDismissed] = useState(false);
+  const hackathonCommercial = resolveHackathonWorkflowCommercial(snapshot?.result ?? null, {
+    currency: 'AUD',
+    amount: WORKFLOW.amount,
+  });
+  const valueMovedLabel = hackathonCommercial
+    ? formatWorkflowAgreementMoney(hackathonCommercial.amount, hackathonCommercial.currency)
+    : `A$${WORKFLOW.amount.toLocaleString()}`;
+  const recommendationValueLabel = hackathonCommercial
+    ? formatWorkflowAgreementMoney(hackathonCommercial.amount, hackathonCommercial.currency)
+    : undefined;
 
   return (
     <div className="space-y-5">
@@ -2747,12 +2823,15 @@ function StageComplete({ onReset }: { onReset: () => void }) {
           <ImpactCard icon={Clock} label="Time saved" value="6h 40m" />
           <ImpactCard icon={FileText} label="Manual work avoided" value="24 tasks" />
           <ImpactCard icon={TrendingUp} label="Commercial Health" value="+7 pts" />
-          <ImpactCard icon={Coins} label="Value moved" value={`A$${WORKFLOW.amount.toLocaleString()}`} />
+          <ImpactCard icon={Coins} label="Value moved" value={valueMovedLabel} />
         </div>
       </div>
 
       {!recommendationDismissed && (
-        <ProvvyWorkflowRecommendationCard onDismiss={() => setRecommendationDismissed(true)} />
+        <ProvvyWorkflowRecommendationCard
+          projectValueLabel={recommendationValueLabel}
+          onDismiss={() => setRecommendationDismissed(true)}
+        />
       )}
 
       <div className="grid gap-5 lg:grid-cols-3">

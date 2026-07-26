@@ -10,6 +10,8 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { fetchPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import { createParticipantReleaseBatch } from '@/lib/payouts/create-participant-release-batch';
+import { isHackathonJourneyEnabled } from '@/lib/journey/hackathon-journey';
+import { executeHackathonWorkflowSettlementRelease } from '@/lib/commercial/workflows/development-settlement-simulator.client';
 import {
   deriveSettlementState,
   type SettlementWorkflowResult,
@@ -137,15 +139,17 @@ export function countWorkflowSettlementsByState(
 
 export function buildWorkflowAllocationCards(
   obligations: WorkflowObligationRow[],
+  displayCurrency?: string,
 ): WorkflowAllocationCard[] {
   return obligations
     .filter((row) => row.amount_owed > 0)
     .map((row) => {
       const paid = row.status.toUpperCase() === 'PAID';
+      const currency = displayCurrency?.trim() || row.currency;
       return {
         key: row.id,
         label: row.participant?.name ?? row.obligation_type.replace(/_/g, ' '),
-        amountLabel: formatWorkflowMoney(row.amount_owed, row.currency),
+        amountLabel: formatWorkflowMoney(row.amount_owed, currency),
         statusLabel: formatWorkflowObligationStatus(row.status),
         tone: paid ? 'muted' : 'primary',
       };
@@ -162,6 +166,7 @@ export function deriveWorkflowTimelineStep(input: {
   if (
     input.fundingSummary &&
     (input.fundingSummary.projectFundingStatus === 'FULLY_FUNDED' ||
+      input.fundingSummary.projectFundingStatus === 'FUNDED' ||
       input.fundingSummary.fundedTotal >= input.fundingSummary.owedTotal)
   ) {
     return 3;
@@ -255,8 +260,18 @@ export async function executeWorkflowSettlementRelease(input: {
   dealId: string;
   currency: string;
   participantIds: string[];
+  fundingAmount?: number;
 }): Promise<number> {
   if (input.participantIds.length === 0) return 0;
+
+  if (isHackathonJourneyEnabled()) {
+    return executeHackathonWorkflowSettlementRelease({
+      dealId: input.dealId,
+      currency: input.currency,
+      participantIds: input.participantIds,
+      fundingAmount: input.fundingAmount ?? 0,
+    });
+  }
 
   let released = 0;
   for (const participantId of input.participantIds) {

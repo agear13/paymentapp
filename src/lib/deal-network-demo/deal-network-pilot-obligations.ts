@@ -30,6 +30,14 @@ import { sumConfirmedFundingForProject } from '@/lib/projects/funding-sources/co
 import { effectiveOnboardingStatus } from '@/lib/deal-network-demo/participant-onboarding';
 import { resolvePersistedObligationStatus } from '@/lib/operations/derivations/derive-obligation-allocation-status';
 import { usesProjectObligationSettlement } from '@/lib/operations/derivations/derive-compensation-settlement-basis';
+import { isHackathonJourneyEnabled } from '@/lib/journey/hackathon-journey';
+
+function obligationCurrencyForDeal(deal: RecentDeal): string {
+  if (isHackathonJourneyEnabled() && deal.projectValueCurrency) {
+    return deal.projectValueCurrency;
+  }
+  return 'USD';
+}
 
 function payoutLineToObligationStatus(
   participant: DemoParticipant,
@@ -94,7 +102,7 @@ export async function refreshDealNetworkPilotObligationsForDeal(
   const dealParticipants = participants.filter((p) => p.dealId === deal.id);
   const projectParticipants = dealParticipants.filter(usesProjectObligationSettlement);
   const roleAmounts = roleAmountsFromDeal(deal);
-  const currency = 'USD';
+  const currency = obligationCurrencyForDeal(deal);
 
   const rows: Prisma.deal_network_pilot_obligationsCreateManyInput[] = [];
 
