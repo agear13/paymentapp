@@ -102,6 +102,60 @@ export function buildSimulatedPinchCollectionResult(input: {
   return { source, payment };
 }
 
+export type DemoClientPaymentStep = 'request' | 'received' | 'reconciled';
+
+export function deriveDemoClientPaymentPurpose(dealName: string | undefined): string {
+  if (dealName?.trim()) {
+    return `Project funds · ${dealName.trim()}`;
+  }
+  return 'Agreed project funds';
+}
+
+export function deriveDemoClientPaymentStatus(options: {
+  busy: boolean;
+  demoStep: DemoClientPaymentStep | null;
+  complete: boolean;
+}): string {
+  if (options.complete) return 'Funds reconciled';
+  if (options.demoStep === 'reconciled') return 'Reconciling funds';
+  if (options.demoStep === 'received') return 'Client payment received';
+  if (options.demoStep === 'request') return 'Payment request created';
+  if (options.busy) return 'Simulating payment';
+  return 'Demo mode · Ready to simulate';
+}
+
+/**
+ * Demo-only client payment simulation with hackathon-friendly progress steps.
+ */
+export async function simulateDemoClientPayment(input: {
+  amountCents: number;
+  description: string;
+  payerLabel: string;
+  payerId?: string | null;
+  sourceType?: PinchSourceType;
+  onDemoStep?: (step: DemoClientPaymentStep) => void;
+  minDelayMs?: number;
+  maxDelayMs?: number;
+}): Promise<PinchCollectionFlowResult> {
+  if (!isDevelopmentPaymentSimulatorEnabled()) {
+    throw new Error('Payment simulator is disabled');
+  }
+
+  const minDelayMs = input.minDelayMs ?? DEFAULT_MIN_DELAY_MS;
+  const maxDelayMs = input.maxDelayMs ?? DEFAULT_MAX_DELAY_MS;
+  const totalDelayMs = randomDelayMs(minDelayMs, maxDelayMs);
+  const stepDelayMs = Math.max(500, Math.floor(totalDelayMs / 3));
+
+  input.onDemoStep?.('request');
+  await sleep(stepDelayMs);
+  input.onDemoStep?.('received');
+  await sleep(stepDelayMs);
+  input.onDemoStep?.('reconciled');
+  await sleep(Math.max(0, totalDelayMs - stepDelayMs * 2));
+
+  return buildSimulatedPinchCollectionResult(input);
+}
+
 /**
  * Walks through the same collection steps as the sandbox flow, then returns
  * typed Pinch source/payment responses for the existing Stage 5 completion path.

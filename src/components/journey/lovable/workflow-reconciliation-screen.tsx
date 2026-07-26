@@ -49,8 +49,11 @@ import {
   runPinchCollectionFlow,
 } from '@/lib/payments/pinch/collection-flow.client';
 import {
+  deriveDemoClientPaymentPurpose,
+  deriveDemoClientPaymentStatus,
   isDevelopmentPaymentSimulatorEnabled,
-  simulatePinchPaymentConfirmation,
+  simulateDemoClientPayment,
+  type DemoClientPaymentStep,
 } from '@/lib/payments/pinch/development-payment-simulator.client';
 import type { PinchCreatePaymentResponse } from '@/lib/payments/pinch/payment-service';
 import type { PinchCreateSourceResponse } from '@/lib/payments/pinch/source-service';
@@ -94,7 +97,6 @@ import {
   Circle,
   Clock,
   TrendingUp,
-  ChevronRight,
   Loader2,
   BadgeCheck,
   UserRoundCheck,
@@ -1749,16 +1751,187 @@ function deriveWorkflowCollectionCurrency(snapshot: WorkflowImportSnapshot | nul
   return WORKFLOW.currency;
 }
 
-function StageCollection({
+function deriveWorkflowCollectionPurpose(snapshot: WorkflowImportSnapshot): string {
+  return deriveDemoClientPaymentPurpose(snapshot.dealName);
+}
+
+function StageCollectionDemo({
   snapshot,
   onNext,
 }: {
-  snapshot: WorkflowImportSnapshot | null;
+  snapshot: WorkflowImportSnapshot;
+  onNext: () => void;
+}) {
+  const [demoStep, setDemoStep] = useState<DemoClientPaymentStep | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [flowError, setFlowError] = useState<string | null>(null);
+  const [payment, setPayment] = useState<PinchCreatePaymentResponse | null>(null);
+
+  const amount = deriveWorkflowCollectionAmount(snapshot);
+  const currencyPrefix = deriveWorkflowCollectionCurrency(snapshot);
+  const amountCents = Math.max(1, Math.round(amount * 100));
+  const clientLabel = snapshot.dealName?.trim() || "Project client";
+  const paymentPurpose = deriveWorkflowCollectionPurpose(snapshot);
+  const collectionComplete =
+    payment !== null && isPinchPaymentSuccessful(payment.status);
+  const demoStatus = deriveDemoClientPaymentStatus({
+    busy,
+    demoStep,
+    complete: collectionComplete,
+  });
+  const requestCreated = demoStep === "request" || demoStep === "received" || demoStep === "reconciled" || collectionComplete;
+  const paymentReceived =
+    demoStep === "received" || demoStep === "reconciled" || collectionComplete;
+  const fundsReconciled = demoStep === "reconciled" || collectionComplete;
+
+  const onNextRef = useRef(onNext);
+  onNextRef.current = onNext;
+
+  useEffect(() => {
+    if (!collectionComplete) return;
+    const timeout = window.setTimeout(() => onNextRef.current(), 2000);
+    return () => window.clearTimeout(timeout);
+  }, [collectionComplete]);
+
+  const handleSimulateClientPayment = async () => {
+    if (busy || collectionComplete) return;
+
+    setBusy(true);
+    setFlowError(null);
+    setDemoStep(null);
+    setPayment(null);
+
+    const description = `Provvy workflow collection · ${snapshot.dealName}`;
+
+    try {
+      const result = await simulateDemoClientPayment({
+        amountCents,
+        description,
+        payerLabel: clientLabel,
+        onDemoStep: setDemoStep,
+      });
+      setPayment(result.payment);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "Client payment simulation failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-3">
+      <div className="lg:col-span-2">
+        <SectionCard
+          eyebrow="Stage 5"
+          title="Collect Client Funds"
+          description="Pinch securely collects the agreed project funds from the client before settlement can begin."
+        >
+          <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-accent/60 to-transparent p-5 shadow-glow">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+                  Client payment amount
+                </div>
+                <div className="mt-1 text-3xl font-semibold tracking-[-0.02em]">
+                  {currencyPrefix}
+                  {amount.toLocaleString()}
+                </div>
+                <div className="mt-1 text-[12px] text-ink-soft">
+                  From {clientLabel}
+                  {snapshot.dealId ? ` · Ref ${snapshot.dealId.slice(0, 8).toUpperCase()}` : ""}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+                  Payment rail
+                </div>
+                <div className="mt-1 inline-flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5">
+                  <div className="grid h-6 w-6 place-items-center rounded-md bg-gradient-purple text-[10px] font-bold text-primary-foreground">
+                    P
+                  </div>
+                  <div className="text-[12.5px] font-semibold">Pinch Payments</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-3">
+              <MiniStat label="Client" value={clientLabel} />
+              <MiniStat label="Payment purpose" value={paymentPurpose} />
+              <MiniStat label="Demo status" value={demoStatus} />
+            </div>
+          </div>
+
+          {flowError && (
+            <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[12.5px] text-destructive">
+              {flowError}
+            </div>
+          )}
+
+          <div className="mt-5 space-y-2.5">
+            <FlowLine
+              icon={CreditCard}
+              label="Payment request created"
+              active={busy && demoStep === "request"}
+              done={requestCreated}
+            />
+            <FlowLine
+              icon={Check}
+              label="Client payment received"
+              active={busy && demoStep === "received"}
+              done={paymentReceived}
+            />
+            <FlowLine
+              icon={Activity}
+              label="Funds reconciled"
+              active={busy && demoStep === "reconciled"}
+              done={fundsReconciled}
+            />
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-1.5 text-[12px] text-ink-soft">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+              Demo mode · No live bank debits · Production Pinch routes unchanged
+            </div>
+            {collectionComplete ? (
+              <PrimaryButton onClick={onNext} icon={RefreshCw}>
+                Continue to Settlement
+              </PrimaryButton>
+            ) : (
+              <PrimaryButton
+                onClick={() => void handleSimulateClientPayment()}
+                disabled={busy}
+                icon={busy ? Loader2 : CreditCard}
+                spinIcon={busy}
+              >
+                {busy ? "Simulating payment…" : "Simulate Client Payment"}
+              </PrimaryButton>
+            )}
+          </div>
+        </SectionCard>
+      </div>
+
+      <AISidePanel
+        title="Why Pinch"
+        lines={[
+          "Native PayTo & Direct Debit for Australian businesses",
+          "Best-in-class for scheduled and recurring collections",
+          "Fits inside Provvy's commercial workflow — not a separate checkout",
+          "Reconciles directly to Xero via the same workflow",
+        ]}
+      />
+    </div>
+  );
+}
+
+function StageCollectionSandbox({
+  snapshot,
+  onNext,
+}: {
+  snapshot: WorkflowImportSnapshot;
   onNext: () => void;
 }) {
   const publishableKey = process.env.NEXT_PUBLIC_PINCH_PUBLISHABLE_KEY ?? "";
-  const isProductionBuild = process.env.NODE_ENV === "production";
-  const paymentSimulatorEnabled = isDevelopmentPaymentSimulatorEnabled();
 
   const [captureReady, setCaptureReady] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
@@ -1773,8 +1946,8 @@ function StageCollection({
   const currencyPrefix = deriveWorkflowCollectionCurrency(snapshot);
   const amountCents = Math.max(1, Math.round(amount * 100));
   const payerLabel = payment
-    ? formatPinchPayerLabel(payment.payer, snapshot?.dealName ?? "Payer")
-    : snapshot?.dealName ?? "Operator settlement account";
+    ? formatPinchPayerLabel(payment.payer, snapshot.dealName ?? "Payer")
+    : snapshot.dealName ?? "Operator settlement account";
   const paymentMethodLabel = formatPinchSourceTypeLabel(
     payment?.sourceType ?? source?.sourceType ?? "bank-account",
   );
@@ -1790,28 +1963,16 @@ function StageCollection({
     payment !== null &&
     isPinchPaymentSuccessful(payment.status);
   const sandboxReady = Boolean(publishableKey.trim() && payerId?.trim());
-  const simulatePaymentConfirmation =
-    paymentSimulatorEnabled && (isProductionBuild || !sandboxReady);
-  const canCollectFunds =
-    !busy &&
-    step !== "complete" &&
-    (simulatePaymentConfirmation || (captureReady && sandboxReady));
+  const canCollectFunds = !busy && step !== "complete" && captureReady && sandboxReady;
 
   const onNextRef = useRef(onNext);
   onNextRef.current = onNext;
 
   useEffect(() => {
-    if (isProductionBuild && !paymentSimulatorEnabled) return;
     void fetchPinchDevTestPayerId().then((id) => {
       if (id) setPayerId(id);
     });
-  }, [isProductionBuild, paymentSimulatorEnabled]);
-
-  useEffect(() => {
-    if (simulatePaymentConfirmation) {
-      setCaptureReady(true);
-    }
-  }, [simulatePaymentConfirmation]);
+  }, []);
 
   useEffect(() => {
     if (!collectionComplete) return;
@@ -1820,7 +1981,7 @@ function StageCollection({
   }, [collectionComplete]);
 
   const handleCollect = async () => {
-    if (!canCollectFunds) return;
+    if (!canCollectFunds || !payerId) return;
 
     setBusy(true);
     setFlowError(null);
@@ -1828,98 +1989,27 @@ function StageCollection({
     setPayment(null);
     setStep("capture");
 
-    const description = snapshot
-      ? `Provvy workflow collection · ${snapshot.dealName}`
-      : "Provvy workflow collection";
+    const description = `Provvy workflow collection · ${snapshot.dealName}`;
 
     try {
-      const result = simulatePaymentConfirmation
-        ? await simulatePinchPaymentConfirmation({
-            payerId,
-            amountCents,
-            description,
-            payerLabel,
-            onStep: (nextStep) => setStep(nextStep),
-          })
-        : await runPinchCollectionFlow({
-            payerId: payerId!,
-            amountCents,
-            publishableKey,
-            description,
-            onStep: (nextStep) => setStep(nextStep),
-          });
+      const result = await runPinchCollectionFlow({
+        payerId,
+        amountCents,
+        publishableKey,
+        description,
+        onStep: (nextStep) => setStep(nextStep),
+      });
 
       setSource(result.source);
       setPayment(result.payment);
       setStep("complete");
     } catch (error) {
-      if (paymentSimulatorEnabled) {
-        try {
-          const result = await simulatePinchPaymentConfirmation({
-            payerId,
-            amountCents,
-            description,
-            payerLabel,
-            onStep: (nextStep) => setStep(nextStep),
-          });
-          setSource(result.source);
-          setPayment(result.payment);
-          setStep("complete");
-          return;
-        } catch (simulatedError) {
-          setStep("failed");
-          setFlowError(
-            simulatedError instanceof Error
-              ? simulatedError.message
-              : "Pinch collection failed",
-          );
-          return;
-        }
-      }
-
       setStep("failed");
       setFlowError(error instanceof Error ? error.message : "Pinch collection failed");
     } finally {
       setBusy(false);
     }
   };
-
-  if (!snapshot) {
-    return (
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <SectionCard
-            eyebrow="Stage 5"
-            title="Collect funds via Pinch Payments"
-            description="Complete the earlier stages before collecting funds."
-          >
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-[13px] text-destructive">
-              No imported agreement is available for payment collection yet.
-            </div>
-          </SectionCard>
-        </div>
-      </div>
-    );
-  }
-
-  if (isProductionBuild && !paymentSimulatorEnabled) {
-    return (
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <SectionCard
-            eyebrow="Stage 5"
-            title="Collect funds via Pinch Payments"
-            description="Pinch collection uses the existing sandbox APIs, which are disabled in production builds."
-          >
-            <div className="rounded-xl border border-dashed border-border bg-background px-4 py-3 text-[13px] text-ink-soft">
-              Payment collection is not available in production until the existing Pinch routes are
-              enabled for live use.
-            </div>
-          </SectionCard>
-        </div>
-      </div>
-    );
-  }
 
   const flowActive = step !== "idle";
   const sourceVerified = step === "source" || step === "payment" || step === "complete";
@@ -1928,16 +2018,14 @@ function StageCollection({
 
   return (
     <>
-      {!simulatePaymentConfirmation && (
-        <Script
-          src={PINCH_CAPTUREJS_SRC}
-          integrity={PINCH_CAPTUREJS_INTEGRITY}
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-          onLoad={() => setCaptureReady(true)}
-          onError={() => setCaptureError("Failed to load Pinch CaptureJS")}
-        />
-      )}
+      <Script
+        src={PINCH_CAPTUREJS_SRC}
+        integrity={PINCH_CAPTUREJS_INTEGRITY}
+        crossOrigin="anonymous"
+        strategy="afterInteractive"
+        onLoad={() => setCaptureReady(true)}
+        onError={() => setCaptureError("Failed to load Pinch CaptureJS")}
+      />
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -1982,8 +2070,7 @@ function StageCollection({
               </div>
             </div>
 
-            {!simulatePaymentConfirmation &&
-              (captureError || flowError || !publishableKey || !payerId) && (
+            {(captureError || flowError || !publishableKey || !payerId) && (
               <div className="mt-4 space-y-2">
                 {!publishableKey && (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-[12.5px] text-amber-900 dark:text-amber-200">
@@ -2006,13 +2093,6 @@ function StageCollection({
                     {flowError}
                   </div>
                 )}
-              </div>
-            )}
-            {simulatePaymentConfirmation && flowError && (
-              <div className="mt-4 space-y-2">
-                <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[12.5px] text-destructive">
-                  {flowError}
-                </div>
               </div>
             )}
 
@@ -2059,11 +2139,7 @@ function StageCollection({
                   icon={busy ? Loader2 : CreditCard}
                   spinIcon={busy}
                 >
-                  {busy
-                    ? "Collecting…"
-                    : simulatePaymentConfirmation || captureReady
-                    ? "Collect Funds with Pinch"
-                    : "Loading Pinch…"}
+                  {busy ? "Collecting…" : captureReady ? "Collect Funds with Pinch" : "Loading Pinch…"}
                 </PrimaryButton>
               )}
             </div>
@@ -2082,6 +2158,73 @@ function StageCollection({
       </div>
     </>
   );
+}
+
+function StageCollection({
+  snapshot,
+  onNext,
+}: {
+  snapshot: WorkflowImportSnapshot | null;
+  onNext: () => void;
+}) {
+  const publishableKey = process.env.NEXT_PUBLIC_PINCH_PUBLISHABLE_KEY ?? "";
+  const isProductionBuild = process.env.NODE_ENV === "production";
+  const paymentSimulatorEnabled = isDevelopmentPaymentSimulatorEnabled();
+  const [payerId, setPayerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isProductionBuild && !paymentSimulatorEnabled) return;
+    void fetchPinchDevTestPayerId().then((id) => {
+      if (id) setPayerId(id);
+    });
+  }, [isProductionBuild, paymentSimulatorEnabled]);
+
+  if (!snapshot) {
+    return (
+      <div className="grid gap-5 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <SectionCard
+            eyebrow="Stage 5"
+            title="Collect funds via Pinch Payments"
+            description="Complete the earlier stages before collecting funds."
+          >
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-[13px] text-destructive">
+              No imported agreement is available for payment collection yet.
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+    );
+  }
+
+  if (isProductionBuild && !paymentSimulatorEnabled) {
+    return (
+      <div className="grid gap-5 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <SectionCard
+            eyebrow="Stage 5"
+            title="Collect funds via Pinch Payments"
+            description="Pinch collection uses the existing sandbox APIs, which are disabled in production builds."
+          >
+            <div className="rounded-xl border border-dashed border-border bg-background px-4 py-3 text-[13px] text-ink-soft">
+              Payment collection is not available in production until the existing Pinch routes are
+              enabled for live use.
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+    );
+  }
+
+  const sandboxReady = Boolean(publishableKey.trim() && payerId?.trim());
+  const useDemoExperience =
+    paymentSimulatorEnabled && (isProductionBuild || !sandboxReady);
+
+  if (useDemoExperience) {
+    return <StageCollectionDemo snapshot={snapshot} onNext={onNext} />;
+  }
+
+  return <StageCollectionSandbox snapshot={snapshot} onNext={onNext} />;
 }
 
 function MiniStat({ label, value }: { label: string; value: string }) {
@@ -2454,7 +2597,138 @@ function StageSettlement({
 // Stage 7 — Complete
 // ─────────────────────────────────────────────────────────────────────────────
 
+const WORKFLOW_AUTOMATION_CAPABILITIES = [
+  "Generate the recurring invoice.",
+  "Collect client funds through Pinch Payments.",
+  "Reconcile incoming payments.",
+  "Reuse the approved commercial structure.",
+  "Coordinate participant settlements automatically.",
+  "Notify participants only when commercial terms change.",
+] as const;
+
+const WORKFLOW_AUTOMATION_IMPACT = [
+  { icon: Clock, label: "Time saved each month", value: "6h 40m" },
+  { icon: FileText, label: "Manual tasks eliminated", value: "24 tasks" },
+  { icon: TrendingUp, label: "Reduced payment administration", value: "High" },
+] as const;
+
+function ProvvyWorkflowRecommendationCard({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-card">
+      <div className="border-b border-border bg-gradient-to-br from-accent/50 to-transparent p-6 sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-purple text-primary-foreground shadow-glow">
+              <Brain className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="inline-flex items-center gap-2 text-[12px] font-medium text-accent-foreground">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                Provvy AI
+              </div>
+              <h3 className="mt-1 text-xl font-semibold tracking-[-0.02em]">Workflow Insight</h3>
+            </div>
+          </div>
+          <div className="rounded-full border border-primary/20 bg-background/80 px-3 py-1.5 text-[11px] font-medium text-foreground">
+            High confidence · 94%
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3 text-[13.5px] leading-relaxed text-ink-soft">
+          <p>
+            I&apos;ve analysed this completed workflow and identified a repeatable commercial pattern.
+          </p>
+          <p>
+            The same client pays the same project value on the second Friday of each month before
+            settlement is distributed to the same participants.
+          </p>
+          <p className="rounded-xl border border-primary/20 bg-accent/70 px-4 py-3 text-foreground">
+            This workflow is an excellent candidate for automation.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-5">
+        <div className="space-y-4 lg:col-span-3">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+              Recommendation
+            </div>
+            <div className="mt-2 text-[16px] font-semibold text-foreground">
+              Create a recurring commercial workflow.
+            </div>
+            <p className="mt-1 text-[13px] text-ink-soft">Provvy can automatically:</p>
+          </div>
+
+          <ul className="space-y-2.5">
+            {WORKFLOW_AUTOMATION_CAPABILITIES.map((item) => (
+              <li key={item} className="flex items-start gap-2.5 text-[13px] text-foreground">
+                <div className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                  <Check className="h-2.5 w-2.5" />
+                </div>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="space-y-4 lg:col-span-2">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+              Estimated business impact
+            </div>
+            <div className="mt-3 space-y-2.5">
+              {WORKFLOW_AUTOMATION_IMPACT.map((metric) => (
+                <ImpactCard
+                  key={metric.label}
+                  icon={metric.icon}
+                  label={metric.label}
+                  value={metric.value}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-background/70 px-4 py-3.5">
+            <div className="flex items-center justify-between gap-3 text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+              <span>Confidence</span>
+              <span className="text-foreground">94%</span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary">
+              <div className="h-full w-[94%] rounded-full bg-gradient-purple" />
+            </div>
+            <p className="mt-2 text-[12px] text-ink-soft">
+              Based on payment cadence, participant structure, and settlement pattern observed in
+              this workflow.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-border bg-background/50 px-6 py-4 sm:px-8">
+        <PrimaryButton
+          icon={RefreshCw}
+          onClick={() =>
+            toast.success("Recurring commercial workflow blueprint queued for deployment")
+          }
+        >
+          Create Recurring Workflow
+        </PrimaryButton>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2.5 text-[13px] font-medium text-foreground transition-colors hover:bg-accent"
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StageComplete({ onReset }: { onReset: () => void }) {
+  const [recommendationDismissed, setRecommendationDismissed] = useState(false);
+
   return (
     <div className="space-y-5">
       <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-card p-8 shadow-glow sm:p-10">
@@ -2484,33 +2758,13 @@ function StageComplete({ onReset }: { onReset: () => void }) {
         </div>
       </div>
 
+      {!recommendationDismissed && (
+        <ProvvyWorkflowRecommendationCard onDismiss={() => setRecommendationDismissed(true)} />
+      )}
+
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-6 shadow-card">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-            Suggested next workflow
-          </div>
-          <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-accent-foreground">
-                <Sparkles className="h-4.5 w-4.5" />
-              </div>
-              <div>
-                <div className="text-[15px] font-semibold">Revenue Sharing Automation</div>
-                <p className="mt-1 max-w-md text-[12.5px] text-ink-soft">
-                  Automate ongoing splits with your top three revenue partners. Estimated saving: 12 hours per month.
-                </p>
-              </div>
-            </div>
-            <Link
-              href="/workspace/workflows"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2.5 text-[13px] font-medium text-foreground transition-colors hover:bg-accent"
-            >
-              Preview
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-
-          <div className="mt-6 flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Link
               href="/workspace"
               className="group inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-5 py-3 text-[14px] font-semibold text-primary-foreground shadow-glow transition-transform hover:-translate-y-0.5"

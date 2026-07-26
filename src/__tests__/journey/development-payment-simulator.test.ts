@@ -4,6 +4,7 @@ import {
 import {
   buildSimulatedPinchCollectionResult,
   shouldSimulatePinchPaymentConfirmation,
+  simulateDemoClientPayment,
   simulatePinchPaymentConfirmation,
 } from '@/lib/payments/pinch/development-payment-simulator.client';
 import { isPinchPaymentSuccessful } from '@/lib/payments/pinch/collection-flow.client';
@@ -90,6 +91,38 @@ describe('buildSimulatedPinchCollectionResult', () => {
     expect(result.payment.id).toMatch(/^pmt_demo_/);
     expect(result.payment.amount).toBe(125000);
     expect(result.payment.payer.companyName).toBe('Demo Client Pty Ltd');
+    expect(isPinchPaymentSuccessful(result.payment.status)).toBe(true);
+  });
+});
+
+describe('simulateDemoClientPayment', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, NODE_ENV: 'development' };
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    jest.useRealTimers();
+  });
+
+  it('progresses through request, received, and reconciled demo steps', async () => {
+    const steps: string[] = [];
+    const promise = simulateDemoClientPayment({
+      amountCents: 50000,
+      description: 'Demo collection',
+      payerLabel: 'Demo Client',
+      minDelayMs: 3000,
+      maxDelayMs: 3000,
+      onDemoStep: (step) => steps.push(step),
+    });
+
+    await jest.advanceTimersByTimeAsync(3000);
+    const result = await promise;
+
+    expect(steps).toEqual(['request', 'received', 'reconciled']);
     expect(isPinchPaymentSuccessful(result.payment.status)).toBe(true);
   });
 });
