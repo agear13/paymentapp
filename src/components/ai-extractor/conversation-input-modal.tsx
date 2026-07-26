@@ -38,6 +38,10 @@ interface ConversationInputModalProps {
   onOpenChange: (open: boolean) => void;
   entryPoint: ExtractorEntryPoint;
   onExtracted: (result: ExtractionResult, sourceType: SourceType, rawText: string) => void;
+  /** Pre-select source type when the dialog opens (e.g. workflow intake tiles). */
+  defaultSourceType?: SourceType;
+  /** Called when the extract API returns a client-visible failure. */
+  onExtractFailed?: (error: string) => void;
 }
 
 export function ConversationInputModal({
@@ -45,8 +49,10 @@ export function ConversationInputModal({
   onOpenChange,
   entryPoint,
   onExtracted,
+  defaultSourceType,
+  onExtractFailed,
 }: ConversationInputModalProps) {
-  const [sourceType, setSourceType] = React.useState<SourceType>('whatsapp');
+  const [sourceType, setSourceType] = React.useState<SourceType>(defaultSourceType ?? 'whatsapp');
   const [rawText, setRawText] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -54,6 +60,12 @@ export function ConversationInputModal({
 
   const charCount = rawText.length;
   const MAX_CHARS = 50_000;
+
+  React.useEffect(() => {
+    if (open && defaultSourceType) {
+      setSourceType(defaultSourceType);
+    }
+  }, [open, defaultSourceType]);
 
   const handleExtract = React.useCallback(async () => {
     if (!rawText.trim()) return;
@@ -68,18 +80,22 @@ export function ConversationInputModal({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError((body as { error?: string }).error ?? 'Extraction failed. Please try again.');
+        const message = (body as { error?: string }).error ?? 'Extraction failed. Please try again.';
+        setError(message);
+        onExtractFailed?.(message);
         return;
       }
       const result = await res.json() as ExtractionResult;
       onOpenChange(false);
       onExtracted(result, sourceType, rawText.trim());
     } catch {
-      setError('Could not reach the extraction service. Check your connection and try again.');
+      const message = 'Could not reach the extraction service. Check your connection and try again.';
+      setError(message);
+      onExtractFailed?.(message);
     } finally {
       setLoading(false);
     }
-  }, [rawText, sourceType, onExtracted, onOpenChange]);
+  }, [rawText, sourceType, onExtracted, onExtractFailed, onOpenChange]);
 
   const handleClose = () => {
     if (loading) return;
