@@ -1,7 +1,8 @@
 'use client';
 
+import './lovable-journey.css';
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 import {
   ArrowRight,
   Play,
@@ -32,16 +33,11 @@ import {
   MessageSquare,
   Clock,
 } from "lucide-react";
-import { Moon, Sun, Calendar, Menu, X } from "lucide-react";
-import provvyLogo from "@/assets/provvy-logo.png.asset.json";
-
-export const Route = createFileRoute("/")({
-  component: Home,
-});
+import { Moon, Sun, Calendar, Menu, X } from 'lucide-react';
 
 export function JourneyLandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden antialiased">
+    <div className="lovable-journey min-h-screen bg-background text-foreground overflow-x-hidden antialiased">
       <div className="pointer-events-none fixed inset-0 bg-mesh opacity-60" />
       <div className="relative">
         <Nav />
