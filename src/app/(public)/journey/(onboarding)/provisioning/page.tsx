@@ -1,5 +1,10 @@
-import { WorkspaceCreateScreen } from '@/components/journey/lovable';
+import { Suspense } from 'react';
+import { ProvisioningPageClient } from '@/components/journey/lovable/provisioning-page-client';
 
 export default function JourneyProvisioningPage() {
-  return <WorkspaceCreateScreen />;
+  return (
+    <Suspense fallback={null}>
+      <ProvisioningPageClient />
+    </Suspense>
+  );
 }

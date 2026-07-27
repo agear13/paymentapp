@@ -2,7 +2,7 @@
 
 import './lovable-journey.css';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Moon, Sun, ArrowLeft } from 'lucide-react';
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
@@ -15,6 +15,8 @@ import {
 
 export function AssessmentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '';
+  const searchParams = useSearchParams();
+  const search = searchParams?.toString() ?? '';
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
@@ -30,8 +32,8 @@ export function AssessmentLayout({ children }: { children: React.ReactNode }) {
     localStorage.setItem('theme', next ? 'dark' : 'light');
   };
 
-  const currentIndex = Math.max(0, journeyStepIndex(pathname));
-  const progress = journeyProgressPercent(pathname);
+  const currentIndex = Math.max(0, journeyStepIndex(pathname, search));
+  const progress = journeyProgressPercent(pathname, search);
 
   return (
     <div className={`lovable-journey min-h-screen ${dark ? 'dark' : ''}`}>

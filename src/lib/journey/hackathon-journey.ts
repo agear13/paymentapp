@@ -14,7 +14,7 @@ export const JOURNEY_ROUTES = {
   assessmentAnalysis: '/journey/assessment/analysis',
   recommendation: '/journey/recommendation',
   provisioning: '/journey/provisioning',
-  provisioningBuild: '/journey/provisioning/build',
+  provisioningBuild: '/journey/provisioning?build=1',
 } as const;
 
 export type JourneyStepId =
@@ -58,9 +58,10 @@ export function logHackathonDemoFlagsInDevelopment(): void {
   console.log(`Demo Payment Simulator Enabled: ${isDevelopmentPaymentSimulatorEnabled()}`);
 }
 
-export function journeyStepIndex(pathname: string): number {
-  if (pathname.startsWith(JOURNEY_ROUTES.provisioningBuild)) return 6;
-  if (pathname.startsWith(JOURNEY_ROUTES.provisioning)) return 5;
+export function journeyStepIndex(pathname: string, search = ''): number {
+  if (pathname.startsWith('/journey/provisioning')) {
+    return search.includes('build=1') ? 6 : 5;
+  }
   if (pathname.startsWith(JOURNEY_ROUTES.recommendation)) return 4;
   if (pathname.startsWith(JOURNEY_ROUTES.assessmentAnalysis)) return 3;
   if (pathname.startsWith(JOURNEY_ROUTES.assessmentConnect)) return 2;
@@ -69,8 +70,8 @@ export function journeyStepIndex(pathname: string): number {
   return -1;
 }
 
-export function journeyProgressPercent(pathname: string): number {
-  const index = journeyStepIndex(pathname);
+export function journeyProgressPercent(pathname: string, search = ''): number {
+  const index = journeyStepIndex(pathname, search);
   if (index < 0) return 0;
   return Math.round(((index + 1) / JOURNEY_STEPS.length) * 100);
 }

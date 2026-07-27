@@ -4,9 +4,20 @@
  */
 
 export const COMMERCIAL_OS_ROUTES = {
-  provisioningBuild: '/journey/provisioning/build',
+  provisioningBuild: '/journey/provisioning?build=1',
   workspace: '/workspace',
+  workflows: '/workspace/workflows',
+  workflowLibrary: '/workspace/workflows',
+  workflowDetail: (slug: string) => `/workspace/workflows/${slug}`,
+  publicWorkflowDetail: (slug: string) => `/journey/workflows/${slug}`,
   workflowReconciliation: '/workspace/workflow/reconciliation',
+  workflowReconciliationTour: '/workspace/workflow/reconciliation?tour=1',
+  timeline: '/workspace/timeline',
+  connected: '/workspace/connected',
+  advisor: '/workspace/advisor',
+  settings: '/workspace/settings',
+  assessment: '/journey/assessment',
+  loginWithTourRedirect: `/auth/login?redirectedFrom=${encodeURIComponent('/workspace/workflow/reconciliation?tour=1')}`,
 } as const;
 
 /** Default destination immediately after a successful sign-in. */

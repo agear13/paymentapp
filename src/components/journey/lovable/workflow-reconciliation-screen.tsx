@@ -4,6 +4,7 @@ import '@/components/journey/lovable/lovable-journey.css';
 import Link from 'next/link';
 import Script from 'next/script';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ConversationInputModal } from '@/components/ai-extractor/conversation-input-modal';
 import { ExtractionReviewModal } from '@/components/ai-extractor/extraction-review-modal';
 import { StarterLimitAlert } from '@/components/entitlements/starter-limit-alert';
@@ -80,6 +81,11 @@ import {
   type WorkflowObligationRow,
 } from '@/lib/commercial/workflows/settlement-flow.client';
 import { resolveWorkflowSettlementCurrency } from '@/lib/commercial/workflows/development-settlement-simulator.client';
+import {
+  CommercialWalkthrough,
+  dismissCommercialWalkthrough,
+} from '@/components/journey/lovable/commercial-walkthrough';
+import { COMMERCIAL_WALKTHROUGH_STEPS, type CommercialWalkthroughPhase } from '@/lib/journey/commercial-walkthrough-steps';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -172,7 +178,16 @@ type WorkflowImportSnapshot = {
 };
 
 export function WorkflowReconciliationScreen() {
-  const [stage, setStage] = useState<StageKey>("agreement");
+  return <WorkflowReconciliationScreenInner />;
+}
+
+function WorkflowReconciliationScreenInner() {
+  const searchParams = useSearchParams();
+  const tourRequested = searchParams.get('tour') === '1';
+  const [tourActive, setTourActive] = useState(false);
+  const [tourPhase, setTourPhase] = useState<CommercialWalkthroughPhase>('welcome');
+  const [tourStepIndex, setTourStepIndex] = useState(0);
+  const [stage, setStage] = useState<StageKey>('agreement');
   const [importSnapshot, setImportSnapshot] = useState<WorkflowImportSnapshot | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const stageIndex = WORKFLOW.stages.findIndex((s) => s.key === stage);
@@ -184,6 +199,51 @@ export function WorkflowReconciliationScreen() {
   useEffect(() => {
     logHackathonDemoFlagsInDevelopment();
   }, []);
+
+  useEffect(() => {
+    if (!tourRequested) return;
+    setTourActive(true);
+    setTourPhase('welcome');
+    setTourStepIndex(0);
+  }, [tourRequested]);
+
+  const endTour = useCallback(() => {
+    dismissCommercialWalkthrough();
+    setTourActive(false);
+    setTourPhase('welcome');
+  }, []);
+
+  const startTour = useCallback(() => {
+    setTourPhase('active');
+    setTourStepIndex(0);
+    setStage('agreement');
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  const handleTourContinue = useCallback(
+    (stepIndex: number) => {
+      const step = COMMERCIAL_WALKTHROUGH_STEPS[stepIndex];
+      if (!step) return;
+      setStage(step.stage);
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      if (stepIndex >= COMMERCIAL_WALKTHROUGH_STEPS.length - 1) {
+        setTourPhase('complete');
+        return;
+      }
+      setTourStepIndex(stepIndex + 1);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!tourActive || tourPhase !== 'active') return;
+    const step = COMMERCIAL_WALKTHROUGH_STEPS[tourStepIndex];
+    if (step) setStage(step.stage);
+  }, [tourActive, tourPhase, tourStepIndex]);
 
   const go = (key: StageKey) => {
     setStage(key);
@@ -197,7 +257,9 @@ export function WorkflowReconciliationScreen() {
   };
 
   return (
-    <div className="animate-fade-up space-y-8 pb-16">
+    <div
+      className={`animate-fade-up space-y-8 ${tourActive && tourPhase === 'active' ? 'pb-52' : 'pb-16'}`}
+    >
       <Link
         href="/workspace"
         className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink-soft transition-colors hover:text-foreground"
@@ -277,13 +339,32 @@ export function WorkflowReconciliationScreen() {
         </div>
 
         {/* Stage tracker */}
-        <div className="mt-6 border-t border-border pt-5">
+        <div className="mt-6 border-t border-border pt-5" data-tour="stage-tracker">
           <StageTracker stage={stage} onSelect={go} />
         </div>
       </header>
 
+      {tourActive ? (
+        <CommercialWalkthrough
+          phase={tourPhase}
+          stepIndex={tourStepIndex}
+          onStartTour={startTour}
+          onStepChange={(index) => {
+            setTourStepIndex(index);
+            const step = COMMERCIAL_WALKTHROUGH_STEPS[index];
+            if (step) go(step.stage);
+          }}
+          onSkip={endTour}
+          onContinue={(step) => {
+            const index = COMMERCIAL_WALKTHROUGH_STEPS.findIndex((entry) => entry.id === step.id);
+            handleTourContinue(index >= 0 ? index : tourStepIndex);
+          }}
+          onCompleteAction={endTour}
+        />
+      ) : null}
+
       {/* Stage body */}
-      <div key={stage} className="animate-fade-up">
+      <div key={stage} className="animate-fade-up" data-tour={`stage-${stage}`}>
         {stage === "agreement" && (
           <StageAgreement
             onImportComplete={(snapshot) => {
@@ -317,7 +398,11 @@ export function WorkflowReconciliationScreen() {
           />
         )}
         {stage === "collection" && (
-          <StageCollection snapshot={importSnapshot} onNext={next} />
+          <StageCollection
+            snapshot={importSnapshot}
+            onNext={next}
+            guidedTourActive={tourActive && tourPhase === 'active'}
+          />
         )}
         {stage === "settlement" && (
           <StageSettlement snapshot={importSnapshot} onNext={next} />
@@ -1802,9 +1887,11 @@ function deriveWorkflowCollectionPurpose(snapshot: WorkflowImportSnapshot): stri
 function StageCollectionDemo({
   snapshot,
   onNext,
+  guidedTourActive = false,
 }: {
   snapshot: WorkflowImportSnapshot;
   onNext: () => void;
+  guidedTourActive?: boolean;
 }) {
   const [demoStep, setDemoStep] = useState<DemoClientPaymentStep | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1856,7 +1943,13 @@ function StageCollectionDemo({
       });
       setPayment(result.payment);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "Client payment simulation failed");
+      setFlowError(
+        error instanceof Error
+          ? error.message
+          : guidedTourActive
+            ? "Client payment could not be completed"
+            : "Client payment simulation failed",
+      );
     } finally {
       setBusy(false);
     }
@@ -1900,7 +1993,10 @@ function StageCollectionDemo({
             <div className="mt-5 grid gap-2 sm:grid-cols-3">
               <MiniStat label="Client" value={clientLabel} />
               <MiniStat label="Payment purpose" value={paymentPurpose} />
-              <MiniStat label="Demo status" value={demoStatus} />
+              <MiniStat
+                label={guidedTourActive ? "Collection status" : "Demo status"}
+                value={demoStatus}
+              />
             </div>
           </div>
 
@@ -1934,7 +2030,9 @@ function StageCollectionDemo({
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <div className="inline-flex items-center gap-1.5 text-[12px] text-ink-soft">
               <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-              Demo mode · No live bank debits · Production Pinch routes unchanged
+              {guidedTourActive
+                ? "Secure collection · Pinch Payments · Reconciles to your ledger"
+                : "Demo mode · No live bank debits · Production Pinch routes unchanged"}
             </div>
             {collectionComplete ? (
               <PrimaryButton onClick={onNext} icon={RefreshCw}>
@@ -1947,7 +2045,13 @@ function StageCollectionDemo({
                 icon={busy ? Loader2 : CreditCard}
                 spinIcon={busy}
               >
-                {busy ? "Simulating payment…" : "Simulate Client Payment"}
+                {busy
+                  ? guidedTourActive
+                    ? "Collecting funds…"
+                    : "Simulating payment…"
+                  : guidedTourActive
+                    ? "Collect Client Funds"
+                    : "Simulate Client Payment"}
               </PrimaryButton>
             )}
           </div>
@@ -2205,9 +2309,11 @@ function StageCollectionSandbox({
 function StageCollection({
   snapshot,
   onNext,
+  guidedTourActive = false,
 }: {
   snapshot: WorkflowImportSnapshot | null;
   onNext: () => void;
+  guidedTourActive?: boolean;
 }) {
   const isProductionBuild = process.env.NODE_ENV === "production";
   const hackathonJourneyEnabled = isHackathonJourneyEnabled();
@@ -2250,7 +2356,13 @@ function StageCollection({
   }
 
   if (hackathonJourneyEnabled) {
-    return <StageCollectionDemo snapshot={snapshot} onNext={onNext} />;
+    return (
+      <StageCollectionDemo
+        snapshot={snapshot}
+        onNext={onNext}
+        guidedTourActive={guidedTourActive}
+      />
+    );
   }
 
   return <StageCollectionSandbox snapshot={snapshot} onNext={onNext} />;

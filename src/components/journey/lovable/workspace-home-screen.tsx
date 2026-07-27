@@ -293,12 +293,13 @@ export function WorkspaceHomeScreen() {
               placeholder="Ask Provvy AI…"
               className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-ink-soft"
             />
-            <button
+            <Link
+              href="/workspace/advisor"
               className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-purple text-primary-foreground"
-              aria-label="Send"
+              aria-label="Open AI Advisor"
             >
               <Send className="h-3.5 w-3.5" />
-            </button>
+            </Link>
           </div>
         </div>
       </div>

@@ -5,7 +5,6 @@ import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark'
 import { useEffect, useState } from 'react';
 import {
   ArrowRight,
-  Play,
   Sparkles,
   Receipt,
   FileText,
@@ -34,6 +33,29 @@ import {
   Clock,
 } from "lucide-react";
 import { Moon, Sun, Calendar, Menu, X } from 'lucide-react';
+import Link from 'next/link';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import { WORKFLOW_LIBRARY } from '@/lib/journey/workflow-library-catalog';
+
+const LANDING_NAV = [
+  { label: 'Commercial OS', href: '#commercial-os' },
+  { label: 'Workflow Library', href: '#workflow-library' },
+  { label: 'Solutions', href: '#solutions' },
+  { label: 'Provvy Labs', href: '#labs' },
+  { label: 'Commercial Academy', href: '#academy' },
+  { label: 'Pricing', href: '#pricing' },
+] as const;
+
+const LANDING_WORKFLOWS = WORKFLOW_LIBRARY.filter((entry) =>
+  [
+    'autonomous-reconciliation',
+    'payment-collection',
+    'cashflow-forecasting',
+    'revenue-sharing',
+    'supplier-payments',
+    'commercial-operations',
+  ].includes(entry.slug),
+);
 
 export function JourneyLandingPage() {
   return (
@@ -58,14 +80,6 @@ export function JourneyLandingPage() {
 
 /* ---------------- NAV ---------------- */
 function Nav() {
-  const items = [
-    "Commercial AI OS",
-    "Workflow Library",
-    "Solutions",
-    "Provvy Labs",
-    "Commercial Academy",
-    "Pricing",
-  ];
   const [dark, setDark] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
@@ -87,13 +101,13 @@ function Nav() {
       <div className="flex items-center justify-between">
         <ProvvyBrandMark href="/journey" />
         <nav className="hidden items-center gap-1 md:flex">
-          {items.map((i) => (
+          {LANDING_NAV.map((item) => (
             <a
-              key={i}
-              href="#"
+              key={item.label}
+              href={item.href}
               className="rounded-lg px-3 py-1.5 text-[13px] text-ink-soft transition-colors hover:bg-accent hover:text-foreground"
             >
-              {i}
+              {item.label}
             </a>
           ))}
         </nav>
@@ -137,13 +151,13 @@ function Nav() {
       </div>
       {menuOpen && (
         <div className="mt-3 flex flex-col gap-1 border-t border-border pt-3 md:hidden">
-          {items.map((i) => (
+          {LANDING_NAV.map((item) => (
             <a
-              key={i}
-              href="#"
+              key={item.label}
+              href={item.href}
               className="rounded-lg px-3 py-2 text-[14px] text-ink-soft transition-colors hover:bg-accent hover:text-foreground"
             >
-              {i}
+              {item.label}
             </a>
           ))}
           <div className="my-2 h-px bg-border" />
@@ -171,7 +185,7 @@ function Nav() {
 /* ---------------- HERO ---------------- */
 function Hero() {
   return (
-    <section className="relative px-6 pt-24 pb-28">
+    <section id="commercial-os" className="relative px-6 pt-24 pb-28">
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-[600px]"
         style={{ background: "var(--gradient-hero)" }}
@@ -185,31 +199,33 @@ function Hero() {
           Introducing the Commercial Operating System
         </div>
         <h1 className="text-balance text-5xl font-semibold tracking-[-0.03em] sm:text-6xl md:text-7xl">
-          <span className="text-gradient">Your Commercial</span>
+          <span className="text-gradient">Run your business</span>
           <br />
-          <span className="text-gradient">Operating System.</span>
+          <span className="text-gradient">before it reaches accounting.</span>
         </h1>
-        <p className="mx-auto mt-8 max-w-2xl text-balance text-lg text-ink-soft sm:text-xl">
-          Connect your business. Understand how it operates. Deploy the right commercial workflow.
+        <p className="mx-auto mt-8 max-w-3xl text-balance text-lg text-ink-soft sm:text-xl">
+          Provvy helps businesses coordinate agreements, supplier terms, approvals, and payments in
+          one workspace—giving you a real-time view of your commercial position before anything
+          reaches the books.
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-          <a
-            href="/journey/assessment"
+          <Link
+            href={COMMERCIAL_OS_ROUTES.loginWithTourRedirect}
             className="group inline-flex items-center gap-2 rounded-2xl bg-gradient-purple px-6 py-3.5 text-[15px] font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]"
           >
-            Start Assessment
+            Experience with Provvy AI
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-          </a>
+          </Link>
           <a
-            href="#walkthrough"
+            href="#solutions"
             className="inline-flex items-center gap-2 rounded-2xl border border-border bg-background px-6 py-3.5 text-[15px] font-medium text-foreground transition-colors hover:bg-accent"
           >
-            <Play className="h-4 w-4" />
-            Watch Interactive Walkthrough
+            <ChevronRight className="h-4 w-4 rotate-90" />
+            See how it works
           </a>
         </div>
         <p className="mt-6 text-[13px] text-ink-soft/70">
-          Takes under two minutes · No credit card · One improvement at a time
+          Coordinate commercial work before it reaches accounting · No credit card required
         </p>
       </div>
 
@@ -235,14 +251,14 @@ function ProductPreview() {
         <div className="grid gap-4 md:grid-cols-[1fr_260px]">
           <div className="rounded-xl border border-border/60 bg-background p-5">
             <div className="flex items-center gap-2 text-[13px] text-ink-soft">
-              <Brain className="h-3.5 w-3.5 text-primary" /> Analysing your business
+              <Brain className="h-3.5 w-3.5 text-primary" /> Reading your commercial position
             </div>
             <div className="mt-4 space-y-3">
               {[
                 ["Connected Xero", 100],
-                ["Read 128 invoices", 100],
-                ["Mapped 6 recurring workflows", 82],
-                ["Detected 3 improvement areas", 54],
+                ["Agreements & obligations mapped", 100],
+                ["Supplier approvals in progress", 82],
+                ["Payments reconciled before ledger", 54],
               ].map(([label, pct]) => (
                 <div key={label as string} className="space-y-1.5">
                   <div className="flex justify-between text-[12px]">
@@ -261,16 +277,16 @@ function ProductPreview() {
           </div>
           <div className="rounded-xl border border-border/60 bg-background p-5">
             <div className="text-[12px] uppercase tracking-wider text-ink-soft">
-              Recommendation
+              Commercial insight
             </div>
-            <div className="mt-2 text-[15px] font-medium">Autonomous Reconciliation</div>
+            <div className="mt-2 text-[15px] font-medium">Position before the ledger</div>
             <div className="mt-3 space-y-1.5 text-[12px] text-ink-soft">
-              <div className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> Payment Links</div>
-              <div className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> Invoice Automation</div>
-              <div className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> Xero Sync</div>
+              <div className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> Agreements</div>
+              <div className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> Approvals</div>
+              <div className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> Payments</div>
             </div>
             <div className="mt-4 rounded-lg bg-accent px-3 py-2 text-[12px] text-accent-foreground">
-              ~ 8 hours saved / month
+              Real-time commercial view
             </div>
           </div>
         </div>
@@ -290,20 +306,21 @@ function Problem() {
     { icon: Mail, label: "Email" },
   ];
   return (
-    <section className="px-6 py-32">
+    <section id="solutions" className="px-6 py-32">
       <div className="mx-auto max-w-4xl text-center">
         <div className="mb-3 text-[12px] uppercase tracking-[0.2em] text-ink-soft">
-          The Problem
+          Why Provvy exists
         </div>
         <h2 className="text-balance text-4xl font-semibold tracking-[-0.03em] sm:text-6xl">
-          Businesses don't have a payments problem.
+          Accounting records what happened.
           <br />
-          <span className="text-gradient">They have an operations problem.</span>
+          <span className="text-gradient">Provvy coordinates what&apos;s happening now.</span>
         </h2>
         <p className="mx-auto mt-6 max-w-2xl text-[15px] text-ink-soft">
-          The signals of how a business operates are scattered across accounting, payments,
-          agreements, conversations, projects and email. Provvy AI unifies them into commercial
-          understanding — and recommends the workflows that make the business run better.
+          Agreements, supplier terms, approvals and payments unfold across email, spreadsheets and
+          disconnected tools—long before they become journal entries. Provvy unifies that
+          commercial work so you can see obligations, cash and commitments while they are still in
+          motion.
         </p>
       </div>
       <div className="mx-auto mt-20 max-w-4xl">
@@ -327,10 +344,10 @@ function Problem() {
         <Arrow />
         <div className="mx-auto grid max-w-2xl gap-3 sm:grid-cols-2">
           <div className="rounded-2xl border border-border/60 bg-card p-4 text-center text-[14px] font-medium shadow-soft">
-            Commercial Understanding
+            Real-time commercial position
           </div>
           <div className="rounded-2xl border border-border/60 bg-card p-4 text-center text-[14px] font-medium shadow-soft">
-            Workflow Recommendations
+            Coordinated execution
           </div>
         </div>
         <Arrow />
@@ -372,7 +389,9 @@ function Infrastructure() {
             Works with the tools you already use.
           </h2>
           <p className="mt-4 text-[15px] text-ink-soft">
-            Provvy unifies your existing systems. It doesn't replace them.
+            Connect the systems where commercial work already happens—and see agreements,
+            approvals, and payments before they reach accounting. Provvy unifies your stack; it
+            doesn&apos;t replace it.
           </p>
         </div>
         <div className="relative rounded-3xl glass p-10 shadow-card">
@@ -400,46 +419,8 @@ function Infrastructure() {
 
 /* ---------------- WORKFLOW LIBRARY ---------------- */
 function WorkflowLibrary() {
-  const workflows = [
-    {
-      icon: Receipt,
-      name: "Autonomous Reconciliation",
-      outcome: "Every payment matched to the right invoice, automatically.",
-      saved: "~ 8 hours / month",
-    },
-    {
-      icon: CreditCard,
-      name: "Payment Collection",
-      outcome: "Get paid faster with smart links, reminders and payment plans.",
-      saved: "~ 12 days off DSO",
-    },
-    {
-      icon: TrendingUp,
-      name: "Cashflow Forecasting",
-      outcome: "A live, 13-week view of cash grounded in your real business data.",
-      saved: "~ 6 hours / month",
-    },
-    {
-      icon: Split,
-      name: "Revenue Sharing",
-      outcome: "Automate splits, referrals and partner payouts on every transaction.",
-      saved: "~ 4 hours / month",
-    },
-    {
-      icon: Coins,
-      name: "Supplier Payments",
-      outcome: "Approve, batch and pay suppliers on the right cash cycle.",
-      saved: "~ 5 hours / month",
-    },
-    {
-      icon: Workflow,
-      name: "Commercial Operations",
-      outcome: "Route agreements, approvals and onboarding through one system.",
-      saved: "~ 10 hours / month",
-    },
-  ];
   return (
-    <section className="px-6 py-28">
+    <section id="workflow-library" className="px-6 py-28">
       <div className="mx-auto max-w-6xl">
         <div className="mb-14 max-w-2xl">
           <div className="mb-3 text-[12px] uppercase tracking-[0.2em] text-ink-soft">
@@ -454,34 +435,40 @@ function WorkflowLibrary() {
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {workflows.map(({ icon: Icon, name, outcome, saved }) => (
+          {LANDING_WORKFLOWS.map((workflow) => {
+            const Icon = workflow.icon;
+            return (
             <div
-              key={name}
+              key={workflow.slug}
               className="group flex flex-col rounded-2xl border border-border/60 bg-card p-6 shadow-soft transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-glow"
             >
               <div className="flex items-center gap-3">
                 <div className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-primary transition-colors group-hover:bg-gradient-purple group-hover:text-primary-foreground">
                   <Icon className="h-4 w-4" />
                 </div>
-                <div className="text-[15px] font-semibold tracking-tight">{name}</div>
+                <div className="text-[15px] font-semibold tracking-tight">{workflow.name}</div>
               </div>
               <div className="mt-5 flex-1 text-[14px] leading-relaxed text-ink-soft">
                 <div className="text-[11px] uppercase tracking-wider text-foreground/60">
                   Expected outcome
                 </div>
-                <div className="mt-1.5 text-foreground/90">{outcome}</div>
+                <div className="mt-1.5 text-foreground/90">{workflow.outcome}</div>
               </div>
               <div className="mt-5 flex items-center justify-between border-t border-border/60 pt-4">
                 <div className="flex items-center gap-1.5 text-[12px] text-ink-soft">
                   <Clock className="h-3.5 w-3.5 text-primary" />
-                  {saved}
+                  {workflow.saved}
                 </div>
-                <button className="inline-flex items-center gap-1 text-[13px] font-medium text-primary">
+                <Link
+                  href={COMMERCIAL_OS_ROUTES.publicWorkflowDetail(workflow.slug)}
+                  className="inline-flex items-center gap-1 text-[13px] font-medium text-primary"
+                >
                   Preview Workflow <ArrowUpRight className="h-3.5 w-3.5" />
-                </button>
+                </Link>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       </div>
     </section>
@@ -524,7 +511,7 @@ function AIAdvisor() {
   const a = answers[active];
 
   return (
-    <section className="px-6 py-28">
+    <section id="ai-advisor" className="px-6 py-28">
       <div className="mx-auto max-w-5xl">
         <div className="mb-14 max-w-2xl">
           <div className="mb-3 text-[12px] uppercase tracking-[0.2em] text-ink-soft">
@@ -603,7 +590,7 @@ function BusinessTimeline() {
   }, [events.length]);
 
   return (
-    <section className="px-6 py-28">
+    <section id="timeline" className="px-6 py-28">
       <div className="mx-auto max-w-4xl">
         <div className="mb-14 max-w-2xl">
           <div className="mb-3 text-[12px] uppercase tracking-[0.2em] text-ink-soft">
@@ -672,7 +659,7 @@ function Academy() {
     { icon: Brain, label: "AI Implementation" },
   ];
   return (
-    <section className="px-6 py-28">
+    <section id="academy" className="px-6 py-28">
       <div className="mx-auto max-w-5xl">
         <div className="mb-14 max-w-2xl">
           <div className="mb-3 inline-flex items-center gap-2 text-[12px] uppercase tracking-[0.2em] text-ink-soft">
@@ -690,7 +677,7 @@ function Academy() {
           {topics.map(({ icon: Icon, label }) => (
             <a
               key={label}
-              href="#"
+              href="/journey/assessment"
               className="group relative flex flex-col justify-between rounded-3xl border border-border/60 bg-card p-6 shadow-soft transition-all hover:-translate-y-1 hover:shadow-glow"
             >
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-accent text-primary transition-colors group-hover:bg-gradient-purple group-hover:text-primary-foreground">
@@ -714,7 +701,7 @@ function Academy() {
 /* ---------------- LABS ---------------- */
 function Labs() {
   return (
-    <section className="px-6 py-28">
+    <section id="labs" className="px-6 py-28">
       <div className="mx-auto max-w-4xl">
         <div className="rounded-3xl border border-border/60 bg-card p-10 shadow-card sm:p-14">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-[12px] font-medium text-accent-foreground">
@@ -747,7 +734,7 @@ function Labs() {
 /* ---------------- FINAL CTA ---------------- */
 function FinalCTA() {
   return (
-    <section className="px-6 py-32">
+    <section id="pricing" className="px-6 py-32">
       <div className="mx-auto max-w-4xl">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-purple p-[1px] shadow-glow">
           <div className="rounded-[calc(1.5rem-1px)] bg-card p-10 text-center sm:p-16">
@@ -755,13 +742,13 @@ function FinalCTA() {
               <CheckCircle2 className="h-7 w-7 text-primary-foreground" />
             </div>
             <h2 className="text-balance text-4xl font-semibold tracking-[-0.02em] sm:text-5xl">
-              Ready to build your
+              Run your business
               <br />
-              <span className="text-gradient">Commercial Operating System?</span>
+              <span className="text-gradient">before it reaches accounting.</span>
             </h2>
             <p className="mx-auto mt-6 max-w-xl text-[15px] text-ink-soft">
-              Start with a two-minute assessment. Provvy will connect your business, understand how
-              it operates and recommend the first workflow to deploy.
+              Start with a two-minute assessment. Provvy maps how your commercial operations work
+              today—and shows where to coordinate before anything hits the books.
             </p>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
               <a
@@ -789,9 +776,25 @@ function FinalCTA() {
 }
 
 /* ---------------- FOOTER ---------------- */
+const FOOTER_LINKS: Record<string, string> = {
+  'Commercial OS': '#commercial-os',
+  'Workflow Library': '#workflow-library',
+  'AI Advisor': '#ai-advisor',
+  'Live Timeline': '#timeline',
+  'Cash Flow': '#solutions',
+  Payments: '#solutions',
+  Forecasting: '#workflow-library',
+  Operations: '#workflow-library',
+  'Commercial Academy': '#academy',
+  Documentation: '/journey/assessment',
+  'Provvy Labs': '#labs',
+  Contact: 'https://calendly.com/provvy/consultation',
+  Privacy: '#pricing',
+};
+
 function Footer() {
   const cols = [
-    { h: "Products", l: ["Commercial AI OS", "Workflow Library", "AI Advisor", "Live Timeline"] },
+    { h: "Products", l: ["Commercial OS", "Workflow Library", "AI Advisor", "Live Timeline"] },
     { h: "Solutions", l: ["Cash Flow", "Payments", "Forecasting", "Operations"] },
     { h: "Resources", l: ["Commercial Academy", "Workflow Library", "Documentation"] },
     { h: "Company", l: ["Provvy Labs", "Contact", "Privacy"] },
@@ -818,8 +821,9 @@ function Footer() {
                 {c.l.map((i) => (
                   <li key={i}>
                     <a
-                      href="#"
+                      href={FOOTER_LINKS[i] ?? '/journey/assessment'}
                       className="text-[13px] text-ink-soft transition-colors hover:text-foreground"
+                      {...(FOOTER_LINKS[i]?.startsWith('http') ? { target: '_blank', rel: 'noreferrer' } : {})}
                     >
                       {i}
                     </a>
