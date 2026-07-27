@@ -32,7 +32,6 @@ import {
 } from '@/lib/operations/payouts/scope-release-batch-participants';
 import { markScopedPilotParticipantsPaid } from '@/lib/deal-network-demo/pilot-settlement-release.server';
 import { syncCantonSettlementReady } from '@/lib/commercial-network/server/canton-workflow-sync.server';
-import { log } from '@/lib/logger';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
