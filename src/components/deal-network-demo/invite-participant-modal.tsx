@@ -183,6 +183,8 @@ export interface DemoParticipant {
   /** First time the participant opened their portal (analytics). */
   portalOpenedAt?: string;
   portalLastOpenedAt?: string;
+  /** Canton ledger party id — persisted in participant_payload when Canton sync runs. */
+  cantonParty?: string;
 }
 
 export interface InviteParticipantModalProps {

@@ -132,7 +132,7 @@ async function persistProjection(
   const workflow = cantonWorkflowFromProjection({
     projection,
     ledgerMode: resolveCantonLedgerMode(),
-    commandId,
+    lastCommandId: commandId,
   });
   await persistCantonWorkflowState(dealId, workflow);
   return workflow;

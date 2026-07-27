@@ -26,7 +26,7 @@ export function resolveCantonPartyForParticipant(
   participant: DemoParticipant,
   env: NodeJS.ProcessEnv = process.env
 ): string {
-  const stored = (participant as Record<string, unknown>).cantonParty;
+  const stored = participant.cantonParty;
   if (typeof stored === 'string' && stored.trim()) {
     return stored.trim();
   }

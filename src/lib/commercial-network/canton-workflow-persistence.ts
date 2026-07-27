@@ -32,10 +32,13 @@ export type CantonWorkflowPersistedState = {
 
 export const CANTON_WORKFLOW_DEAL_PAYLOAD_KEY = 'cantonWorkflow' as const;
 
+type RecentDealWithCantonPayload = RecentDeal &
+  Partial<Record<typeof CANTON_WORKFLOW_DEAL_PAYLOAD_KEY, unknown>>;
+
 export function readCantonWorkflowFromDeal(
   deal: RecentDeal
 ): CantonWorkflowPersistedState | null {
-  const raw = (deal as Record<string, unknown>)[CANTON_WORKFLOW_DEAL_PAYLOAD_KEY];
+  const raw = (deal as RecentDealWithCantonPayload)[CANTON_WORKFLOW_DEAL_PAYLOAD_KEY];
   if (!raw || typeof raw !== 'object') return null;
   const state = raw as Partial<CantonWorkflowPersistedState>;
   if (!state.provvypayAgreementId || !state.stage || !state.platformParty) {
