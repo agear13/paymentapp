@@ -80,6 +80,24 @@ export function formatHackathonMilestoneDisplayLabel(
   return '40% milestone payment when 2,000 validated ticket sales are reached';
 }
 
+/** Past-tense condition copy for "Contractual condition satisfied" in Stage 5. */
+export function formatMilestoneConditionSatisfiedLabel(
+  label: string | null | undefined,
+): string {
+  let text = normalizeWhitespace(label ?? '');
+  if (!text) return 'Agreement milestone criteria met.';
+
+  text = text.replace(/^\s*once\s+/i, '');
+  text = text.replace(/^\s*when\s+/i, '');
+  text = text.replace(/\s+have been reached\.?$/i, ' reached');
+  text = text.replace(/\s+are reached\.?$/i, ' reached');
+  if (!/\breached\.?$/i.test(text)) {
+    text = `${text} reached`;
+  }
+  text = text.replace(/\breached\.?$/i, 'reached.');
+  return text;
+}
+
 function milestoneLabelsFromTerm(term: {
   description: { value: string | null };
   dueCondition: { value: string | null };
@@ -87,9 +105,10 @@ function milestoneLabelsFromTerm(term: {
   const description = term.description.value;
   const due = term.dueCondition.value;
   const milestoneLabel = formatHackathonMilestoneDisplayLabel(description, due);
-  const milestoneConditionLabel = due?.trim()
+  const rawCondition = due?.trim()
     ? dedupeRepeatedPhrases(due.replace(/\binstalment\b/gi, 'milestone payment'))
     : milestoneLabel;
+  const milestoneConditionLabel = formatMilestoneConditionSatisfiedLabel(rawCondition);
   return { milestoneLabel, milestoneConditionLabel };
 }
 
@@ -239,7 +258,7 @@ export function deriveHackathonMilestoneCollection(
     amount: fallbackAmount,
     amountLabel: formatWorkflowAgreementMoney(fallbackAmount, agreementCurrency),
     milestoneLabel: fallbackLabel,
-    milestoneConditionLabel: '2,000 validated ticket sales reached',
+    milestoneConditionLabel: '2,000 paid and validated ticket sales reached.',
     source: 'fixed_fallback',
   };
 }

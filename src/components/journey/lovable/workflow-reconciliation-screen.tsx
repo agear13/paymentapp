@@ -73,6 +73,7 @@ import {
   deriveDemoClientPaymentPurpose,
   deriveDemoClientPaymentStatus,
   simulateDemoClientPayment,
+  simulatePinchPaymentConfirmation,
   type DemoClientPaymentStep,
 } from '@/lib/payments/pinch/development-payment-simulator.client';
 import type { PinchCreatePaymentResponse } from '@/lib/payments/pinch/payment-service';
@@ -800,6 +801,7 @@ function StageExtraction({
     : null;
   const [revealedCount, setRevealedCount] = useState(0);
   const [autoAdvanceSeconds, setAutoAdvanceSeconds] = useState(2);
+  const manualStageAdvance = isHackathonJourneyEnabled();
   const onNextRef = useRef(onNext);
   onNextRef.current = onNext;
 
@@ -809,7 +811,7 @@ function StageExtraction({
   }, [snapshot, rows.length]);
 
   useEffect(() => {
-    if (!snapshot || revealedCount < rows.length) return;
+    if (!snapshot || revealedCount < rows.length || manualStageAdvance) return;
     setAutoAdvanceSeconds(2);
     const interval = setInterval(() => {
       setAutoAdvanceSeconds((seconds) => Math.max(0, seconds - 1));
@@ -819,7 +821,7 @@ function StageExtraction({
       clearInterval(interval);
       clearTimeout(timeout);
     };
-  }, [snapshot, revealedCount, rows.length]);
+  }, [snapshot, revealedCount, rows.length, manualStageAdvance]);
 
   if (!snapshot) {
     return (
@@ -1013,7 +1015,9 @@ function StageExtraction({
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <div className="text-[12px] text-ink-soft">
               {done
-                ? `All commercial data extracted. Continuing to review in ${autoAdvanceSeconds}s…`
+                ? manualStageAdvance
+                  ? "All commercial data extracted. Continue when you're ready to review."
+                  : `All commercial data extracted. Continuing to review in ${autoAdvanceSeconds}s…`
                 : "Extracting commercial data — this typically takes seconds."}
             </div>
             <PrimaryButton onClick={onNext} disabled={!done} icon={Eye}>
@@ -1046,11 +1050,13 @@ function WorkflowSettlementReadinessPanel({
 }: {
   display: WorkflowReadinessDisplay;
 }) {
+  const showScore = display.showProgressScore !== false;
+
   return (
     <div className="rounded-xl border border-border bg-background/70 p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="text-[12.5px] font-semibold">{display.label}</div>
-        <Confidence value={display.score} />
+        {showScore ? <Confidence value={display.score} /> : null}
       </div>
       <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
         <div
@@ -1789,12 +1795,13 @@ function StageApprovals({
 
   const onNextRef = useRef(onNext);
   onNextRef.current = onNext;
+  const manualStageAdvance = isHackathonJourneyEnabled();
 
   useEffect(() => {
-    if (!approvalsComplete) return;
+    if (!approvalsComplete || manualStageAdvance) return;
     const timeout = window.setTimeout(() => onNextRef.current(), 1500);
     return () => window.clearTimeout(timeout);
-  }, [approvalsComplete]);
+  }, [approvalsComplete, manualStageAdvance]);
 
   if (!snapshot) {
     return (
@@ -1919,12 +1926,14 @@ function StageApprovals({
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <div className="text-[12px] text-ink-soft">
               {approvalsComplete
-                ? "All parties have approved. Continuing to payment…"
+                ? manualStageAdvance
+                  ? "All parties have approved. Continue when you're ready to collect payment."
+                  : "All parties have approved. Continuing to payment…"
                 : guidance}
             </div>
             {approvalsComplete ? (
               <PrimaryButton onClick={onNext} icon={CreditCard}>
-                Continue to Payment
+                {manualStageAdvance ? "Continue to Payment Collection" : "Continue to Payment"}
               </PrimaryButton>
             ) : (
               <SecondaryButton
@@ -2240,11 +2249,12 @@ function StageCollectionSandbox({
     sectionDescription?: string;
   };
 }) {
+  const usePinchSimulator = isHackathonPinchSimulatorFallback();
   const publishableKey = process.env.NEXT_PUBLIC_PINCH_PUBLISHABLE_KEY ?? "";
 
-  const [captureReady, setCaptureReady] = useState(false);
+  const [captureReady, setCaptureReady] = useState(usePinchSimulator);
   const [captureError, setCaptureError] = useState<string | null>(null);
-  const [payerId, setPayerId] = useState<string | null>(null);
+  const [payerId, setPayerId] = useState<string | null>(usePinchSimulator ? 'pyr_demo_simulated' : null);
   const [step, setStep] = useState<PinchCollectionStep>("idle");
   const [busy, setBusy] = useState(false);
   const [flowError, setFlowError] = useState<string | null>(null);
@@ -2276,6 +2286,8 @@ function StageCollectionSandbox({
     payment !== null &&
     isPinchPaymentSuccessful(payment.status);
   const sandboxReady = Boolean(publishableKey.trim() && payerId?.trim());
+  const paymentRailReady = usePinchSimulator || sandboxReady;
+  const pinchCaptureReady = usePinchSimulator || captureReady;
   const milestoneTriggered = pinchGate ? pinchGate.milestoneAchieved : true;
   const milestoneReady = pinchGate ? collectionReady : true;
   const canCollectFunds =
@@ -2283,14 +2295,21 @@ function StageCollectionSandbox({
     milestoneReady &&
     !busy &&
     step !== "complete" &&
-    captureReady &&
-    sandboxReady;
+    pinchCaptureReady &&
+    paymentRailReady;
 
   useEffect(() => {
     if (!pinchGate?.milestoneAchieved) {
       setCollectionReady(false);
     }
   }, [pinchGate?.milestoneAchieved]);
+
+  useEffect(() => {
+    if (usePinchSimulator) return;
+    void fetchPinchDevTestPayerId().then((id) => {
+      if (id) setPayerId(id);
+    });
+  }, [usePinchSimulator]);
   const collectButtonLabel =
     pinchGate?.collectButtonLabel ??
     (guidedTourActive ? "Collect Client Funds" : "Collect Funds with Pinch");
@@ -2305,21 +2324,16 @@ function StageCollectionSandbox({
 
   const onNextRef = useRef(onNext);
   onNextRef.current = onNext;
+  const manualStageAdvance = isHackathonJourneyEnabled();
 
   useEffect(() => {
-    void fetchPinchDevTestPayerId().then((id) => {
-      if (id) setPayerId(id);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!collectionComplete) return;
+    if (!collectionComplete || manualStageAdvance) return;
     const timeout = window.setTimeout(() => onNextRef.current(), 2000);
     return () => window.clearTimeout(timeout);
-  }, [collectionComplete]);
+  }, [collectionComplete, manualStageAdvance]);
 
   const handleCollect = async () => {
-    if (!canCollectFunds || !payerId) return;
+    if (!canCollectFunds) return;
 
     setBusy(true);
     setFlowError(null);
@@ -2328,15 +2342,24 @@ function StageCollectionSandbox({
     setStep("capture");
 
     const description = `Provvy workflow collection · ${snapshot.dealName}`;
+    const effectivePayerId = payerId ?? 'pyr_demo_simulated';
 
     try {
-      const result = await runPinchCollectionFlow({
-        payerId,
-        amountCents,
-        publishableKey,
-        description,
-        onStep: (nextStep) => setStep(nextStep),
-      });
+      const result = usePinchSimulator
+        ? await simulatePinchPaymentConfirmation({
+            amountCents,
+            description,
+            payerLabel: snapshot.dealName ?? 'Demo payer',
+            payerId: effectivePayerId,
+            onStep: (nextStep) => setStep(nextStep),
+          })
+        : await runPinchCollectionFlow({
+            payerId: effectivePayerId,
+            amountCents,
+            publishableKey,
+            description,
+            onStep: (nextStep) => setStep(nextStep),
+          });
 
       setSource(result.source);
       setPayment(result.payment);
@@ -2354,7 +2377,7 @@ function StageCollectionSandbox({
   const paymentRecorded = step === "complete";
   const settlementUnlocked = collectionComplete;
   const paymentSetupComplete =
-    milestoneTriggered && collectionReady && sandboxReady && captureReady;
+    milestoneTriggered && collectionReady && paymentRailReady && pinchCaptureReady;
   const readinessDisplay = deriveWorkflowSettlementReadinessDisplay({
     result: snapshot.result,
     stage: 'collection',
@@ -2405,7 +2428,7 @@ function StageCollectionSandbox({
               </div>
             </div>
 
-            {(captureError || flowError || !publishableKey || !payerId) && (
+            {(captureError || flowError || (!usePinchSimulator && (!publishableKey || !payerId))) && (
               <div className="mt-4 space-y-2">
                 {pinchGate && !milestoneTriggered && (
                   <div className="rounded-xl border border-border bg-background px-4 py-3 text-[12.5px] text-ink-soft">
@@ -2414,7 +2437,7 @@ function StageCollectionSandbox({
                     and Provvy confirms the contractual condition is satisfied.
                   </div>
                 )}
-                {!publishableKey && (
+                {!usePinchSimulator && !publishableKey && (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-[12.5px] text-amber-900 dark:text-amber-200">
                     Set <code className="font-mono">NEXT_PUBLIC_PINCH_PUBLISHABLE_KEY</code> in{" "}
                     <code className="font-mono">.env.local</code>, or enable{" "}
@@ -2422,7 +2445,7 @@ function StageCollectionSandbox({
                     for the simulated fallback.
                   </div>
                 )}
-                {!payerId && (
+                {!usePinchSimulator && !payerId && (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-[12.5px] text-amber-900 dark:text-amber-200">
                     Set <code className="font-mono">PINCH_TEST_PAYER_ID</code> for the sandbox payer.
                   </div>
@@ -2508,7 +2531,7 @@ function StageCollectionSandbox({
                   >
                     {busy
                       ? "Collecting…"
-                      : captureReady
+                      : pinchCaptureReady
                         ? collectButtonLabel
                         : "Loading Pinch…"}
                   </PrimaryButton>
@@ -2520,14 +2543,16 @@ function StageCollectionSandbox({
 
   return (
     <>
-      <Script
-        src={PINCH_CAPTUREJS_SRC}
-        integrity={PINCH_CAPTUREJS_INTEGRITY}
-        crossOrigin="anonymous"
-        strategy="afterInteractive"
-        onLoad={() => setCaptureReady(true)}
-        onError={() => setCaptureError("Failed to load Pinch CaptureJS")}
-      />
+      {!usePinchSimulator ? (
+        <Script
+          src={PINCH_CAPTUREJS_SRC}
+          integrity={PINCH_CAPTUREJS_INTEGRITY}
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+          onLoad={() => setCaptureReady(true)}
+          onError={() => setCaptureError("Failed to load Pinch CaptureJS")}
+        />
+      ) : null}
 
       {embedded ? (
         collectionCard
@@ -2663,16 +2688,6 @@ function StageCollection({
   }
 
   if (hackathonJourneyEnabled) {
-    if (isHackathonPinchSimulatorFallback()) {
-      return (
-        <StageCollectionDemo
-          snapshot={snapshot}
-          onNext={onNext}
-          guidedTourActive={guidedTourActive}
-        />
-      );
-    }
-
     return (
       <StageCollectionHackathon
         snapshot={snapshot}

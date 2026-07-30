@@ -3,6 +3,7 @@ import {
   deriveHackathonMilestoneCollection,
   deriveHackathonMilestonePaymentDueLabel,
   formatHackathonMilestoneDisplayLabel,
+  formatMilestoneConditionSatisfiedLabel,
 } from '@/lib/journey/hackathon-milestone-collection.client';
 
 function field<T>(value: T) {
@@ -57,6 +58,14 @@ describe('deriveHackathonMilestoneCollection', () => {
     expect(label).not.toMatch(/2,000.*2,000/);
   });
 
+  it('formats contractual condition copy in past tense', () => {
+    expect(
+      formatMilestoneConditionSatisfiedLabel(
+        'Once 2,000 paid and validated ticket sales have been reached',
+      ),
+    ).toBe('2,000 paid and validated ticket sales reached.');
+  });
+
   it('derives milestone amount from percentage payment terms', () => {
     const result = {
       projectValue: field(3300),
@@ -74,6 +83,9 @@ describe('deriveHackathonMilestoneCollection', () => {
     expect(milestone.amount).toBe(1320);
     expect(milestone.milestoneLabel).toBe(
       '40% milestone payment when 2,000 validated ticket sales are reached',
+    );
+    expect(milestone.milestoneConditionLabel).toBe(
+      '2,000 paid and validated ticket sales reached.',
     );
   });
 });

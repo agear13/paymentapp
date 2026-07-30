@@ -5,7 +5,12 @@ import {
   type ExtractionReadinessAssessment,
   type ReadinessDimension,
 } from '@/lib/ai-extractor/extraction-readiness';
-import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
+import type { ExtractedParty, ExtractionResult } from '@/lib/ai-extractor/extraction-types';
+import {
+  hasFixedFeeAmount,
+  hasRevenueSharePct,
+  isHybridExtractedParty,
+} from '@/lib/ai-extractor/party-obligation-metrics';
 import {
   buildSettlementSchedule,
   type SettlementScheduleLine,
@@ -49,6 +54,8 @@ export type WorkflowReadinessDisplay = {
   score: number;
   label: string;
   summary: string;
+  /** When false, UI shows the label as status text instead of a percentage badge. */
+  showProgressScore?: boolean;
 };
 
 function termText(term: {
@@ -577,23 +584,26 @@ export function deriveWorkflowSettlementReadinessDisplay(input: {
     if (milestoneUnlocked && paymentSetupComplete) {
       return {
         score: 100,
-        label: 'Ready for settlement',
-        summary: 'Contractual conditions are satisfied and payment collection is configured — ready to collect with Pinch.',
+        label: 'Ready for Collection',
+        summary: 'Contractual conditions are satisfied and Pinch is ready — collect the milestone payment now.',
+        showProgressScore: false,
       };
     }
 
     if (milestoneUnlocked) {
       return {
-        score: Math.min(100, Math.max(confirmedScore, 90)),
-        label: 'Milestone condition met',
-        summary: 'The contractual milestone is satisfied. Complete payment setup to reach full settlement readiness.',
+        score: Math.min(100, Math.max(confirmedScore, 95)),
+        label: 'Awaiting Payment Collection',
+        summary: 'The contractual milestone is satisfied — payment collection unlocks once Pinch is ready.',
+        showProgressScore: false,
       };
     }
 
     return {
       score: Math.max(readiness.score, confirmedScore),
-      label: 'Payment collection',
+      label: 'Awaiting Payment Collection',
       summary: 'Settlement readiness advances once milestone conditions are met and payment collection is configured.',
+      showProgressScore: false,
     };
   }
 
@@ -618,4 +628,150 @@ export function formatWorkflowReadinessHeadline(display: WorkflowReadinessDispla
 
 export function resolveWorkflowPaymentScheduleCurrency(result: ExtractionResult): string {
   return resolveWorkflowAgreementCurrency(result);
+}
+
+export type ExtractionReviewRevenueShareDisplay = {
+  headline: string;
+  trigger: string | null;
+  settlement: string | null;
+};
+
+export type ExtractionReviewSettlementGroup = {
+  key: string;
+  partyName: string;
+  kind: 'payment_schedule' | 'revenue_share';
+  rows?: WorkflowPaymentScheduleRow[];
+  revenueShare?: ExtractionReviewRevenueShareDisplay;
+};
+
+function partyIsRevenueShareOnly(party: ExtractedParty): boolean {
+  const terms = party.compensationTerms ?? [];
+  if (terms.length > 0) {
+    const hasRevShare = terms.some((term) => term.type === 'revenue_share');
+    const hasFixedLike = terms.some((term) =>
+      ['fixed_fee', 'instalment', 'milestone'].includes(term.type),
+    );
+    if (hasRevShare && !hasFixedLike) return true;
+    if (hasFixedLike) return false;
+  }
+  if (isHybridExtractedParty(party)) return false;
+  if (hasFixedFeeAmount(party)) return false;
+  return (
+    hasRevenueSharePct(party) || party.participationModel.value === 'revenue_share'
+  );
+}
+
+function partyUsesSharedSupplierSchedule(party: ExtractedParty): boolean {
+  if (partyIsRevenueShareOnly(party)) return false;
+  if (party.participationModel.value === 'customer_attribution') return false;
+  if (party.participationModel.value === 'revenue_share') return false;
+  return true;
+}
+
+function pickSettlementRuleText(
+  result: ExtractionResult,
+  pattern: RegExp,
+): string | null {
+  for (const rule of result.settlementRules ?? []) {
+    const trigger = rule.trigger.value?.trim();
+    const basis = rule.basis.value?.trim();
+    if (trigger && pattern.test(trigger)) return trigger;
+    if (basis && pattern.test(basis)) return basis;
+  }
+  return null;
+}
+
+function buildRevenueShareSettlementDisplay(
+  party: ExtractedParty,
+  result: ExtractionResult,
+): ExtractionReviewRevenueShareDisplay {
+  const terms = party.compensationTerms ?? [];
+  const revTerm = terms.find((term) => term.type === 'revenue_share');
+  const pct = revTerm?.percentage.value ?? party.revenueSharePct.value;
+  const basis = revTerm?.revenueBasis.value?.trim();
+
+  let headline = 'Revenue share';
+  if (pct != null && basis) {
+    headline = `${pct}% of ${basis}`;
+  } else if (pct != null) {
+    headline = `${pct}% revenue share`;
+  } else if (basis) {
+    headline = basis;
+  }
+
+  const trigger =
+    revTerm?.trigger.value?.trim() ||
+    pickSettlementRuleText(result, /after.*event|event concludes|post.?event/i);
+
+  const settlement =
+    pickSettlementRuleText(result, /separat|calculated after|commission/i) ||
+    revTerm?.label.value?.trim() ||
+    null;
+
+  return { headline, trigger: trigger ?? null, settlement };
+}
+
+function buildPartySettlementScheduleRows(
+  party: ExtractedParty,
+  result: ExtractionResult,
+  formatMoney: (amount: number) => string,
+): WorkflowPaymentScheduleRow[] {
+  const partyEvents = (result.settlementEvents ?? []).filter(
+    (event) => event.partyId.value === party.id,
+  );
+  if (partyEvents.length === 0) return [];
+
+  return buildWorkflowPaymentScheduleRows(
+    { ...result, paymentTerms: [], settlementEvents: partyEvents },
+    formatMoney,
+  );
+}
+
+/** Extraction review modal — reuse journey payment schedule formatting per participant. */
+export function buildExtractionReviewSettlementGroups(
+  result: ExtractionResult,
+  formatMoney: (amount: number) => string,
+): ExtractionReviewSettlementGroup[] {
+  const hasProjectPaymentTerms = (result.paymentTerms?.length ?? 0) > 0;
+  const sharedScheduleRows = hasProjectPaymentTerms
+    ? buildWorkflowPaymentScheduleRows(result, formatMoney)
+    : [];
+
+  const groups: ExtractionReviewSettlementGroup[] = [];
+
+  for (const party of result.parties) {
+    const partyName = party.name.value?.trim() || 'Unnamed participant';
+
+    if (partyIsRevenueShareOnly(party)) {
+      groups.push({
+        key: party.id,
+        partyName,
+        kind: 'revenue_share',
+        revenueShare: buildRevenueShareSettlementDisplay(party, result),
+      });
+      continue;
+    }
+
+    if (hasProjectPaymentTerms && partyUsesSharedSupplierSchedule(party) && sharedScheduleRows.length > 0) {
+      groups.push({
+        key: party.id,
+        partyName,
+        kind: 'payment_schedule',
+        rows: sharedScheduleRows,
+      });
+      continue;
+    }
+
+    const partyRows = buildPartySettlementScheduleRows(party, result, formatMoney);
+    if (partyRows.length > 0) {
+      groups.push({
+        key: party.id,
+        partyName,
+        kind: 'payment_schedule',
+        rows: partyRows,
+      });
+    }
+  }
+
+  return groups;
 }

@@ -394,20 +394,24 @@ export function ReviewPartyCard({
         </div>
       ) : null}
 
-      {/* Notes */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <Label className="text-xs">Notes</Label>
-          {originalParty && <ConfidenceBadge confidence={originalParty.notes.confidence} />}
+      {/* Notes — hide when extraction found no optional context */}
+      {party.notes.trim() ? (
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Label className="text-xs">Notes</Label>
+            {originalParty && originalParty.notes.confidence !== 'absent' ? (
+              <ConfidenceBadge confidence={originalParty.notes.confidence} />
+            ) : null}
+          </div>
+          <Textarea
+            value={party.notes}
+            onChange={(e) => onChange({ ...party, notes: e.target.value })}
+            placeholder="Optional context"
+            rows={2}
+            className="text-sm resize-none"
+          />
         </div>
-        <Textarea
-          value={party.notes}
-          onChange={(e) => onChange({ ...party, notes: e.target.value })}
-          placeholder="Optional context"
-          rows={2}
-          className="text-sm resize-none"
-        />
-      </div>
+      ) : null}
     </div>
   );
 }

@@ -47,7 +47,13 @@ import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { toast } from 'sonner';
 import { ConfidenceBadge, CurrencyConfidenceBadge } from './confidence-badge';
 import { resolveCurrencyDisplayState } from '@/lib/ai-extractor/currency-display-state';
-import { buildSettlementSchedule } from '@/lib/ai-extractor/settlement-schedule';
+import {
+  buildExtractionReviewSettlementGroups,
+} from '@/lib/journey/workflow-extraction-display.client';
+import {
+  formatWorkflowAgreementMoney,
+  resolveWorkflowAgreementCurrency,
+} from '@/lib/journey/workflow-agreement-currency.client';
 import { SettlementSchedulePanel } from './settlement-schedule-panel';
 import { ReviewPartyCard } from './review-party-card';
 import { PostExtractionPrompt } from './post-extraction-prompt';
@@ -162,7 +168,12 @@ export function ExtractionReviewModal({
   ]);
 
   const summary = React.useMemo(() => buildExtractionSummary(result), [result]);
-  const settlementSchedule = React.useMemo(() => buildSettlementSchedule(result), [result]);
+  const settlementSchedule = React.useMemo(() => {
+    const currency = resolveWorkflowAgreementCurrency(result);
+    return buildExtractionReviewSettlementGroups(result, (amount) =>
+      formatWorkflowAgreementMoney(amount, currency),
+    );
+  }, [result]);
   const currencyDisplay = React.useMemo(
     () =>
       resolveCurrencyDisplayState({
