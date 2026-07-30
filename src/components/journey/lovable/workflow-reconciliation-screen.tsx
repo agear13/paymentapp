@@ -2298,6 +2298,75 @@ function StageCollectionSandbox({
     pinchCaptureReady &&
     paymentRailReady;
 
+  // TEMP: remove after Stage 5 simulator/sandbox discrepancy is resolved
+  const stage5DebugEnabled = process.env.NODE_ENV === 'development';
+  const hackathonJourneyEnabled = isHackathonJourneyEnabled();
+  const publishableKeyPresent = Boolean(publishableKey.trim());
+  const paymentPathBranch = usePinchSimulator ? 'simulator' : 'sandbox';
+  const captureJsBranch = usePinchSimulator
+    ? 'simulator (CaptureJS skipped)'
+    : 'sandbox (CaptureJS loaded)';
+  const warningConditions = {
+    showWarningContainer: Boolean(
+      captureError ||
+        flowError ||
+        (!usePinchSimulator && (!publishableKey || !payerId)),
+    ),
+    milestoneUnlockMessage: Boolean(pinchGate && !milestoneTriggered),
+    publishableKeyWarning: Boolean(!usePinchSimulator && !publishableKey),
+    payerIdWarning: Boolean(!usePinchSimulator && !payerId),
+    captureErrorWarning: Boolean(captureError),
+    flowErrorWarning: Boolean(flowError),
+  };
+
+  useEffect(() => {
+    if (!stage5DebugEnabled) return;
+
+    console.log('[StageCollectionSandbox debug]', {
+      component: 'StageCollectionSandbox',
+      paymentPathBranch,
+      captureJsBranch,
+      usePinchSimulator,
+      hackathonJourneyEnabled,
+      publishableKeyPresent,
+      publishableKeyLength: publishableKey.length,
+      publishableKeyPrefix: publishableKey ? `${publishableKey.slice(0, 12)}…` : null,
+      rawEnvPinchSimulator: process.env.NEXT_PUBLIC_HACKATHON_PINCH_SIMULATOR ?? null,
+      payerId,
+      captureReady,
+      sandboxReady,
+      paymentRailReady,
+      pinchCaptureReady,
+      canCollectFunds,
+      milestoneTriggered,
+      milestoneReady,
+      collectionReady,
+      captureError,
+      flowError,
+      warningConditions,
+    });
+  }, [
+    stage5DebugEnabled,
+    paymentPathBranch,
+    captureJsBranch,
+    usePinchSimulator,
+    hackathonJourneyEnabled,
+    publishableKeyPresent,
+    publishableKey,
+    payerId,
+    captureReady,
+    sandboxReady,
+    paymentRailReady,
+    pinchCaptureReady,
+    canCollectFunds,
+    milestoneTriggered,
+    milestoneReady,
+    collectionReady,
+    captureError,
+    flowError,
+    warningConditions,
+  ]);
+
   useEffect(() => {
     if (!pinchGate?.milestoneAchieved) {
       setCollectionReady(false);
@@ -2324,7 +2393,7 @@ function StageCollectionSandbox({
 
   const onNextRef = useRef(onNext);
   onNextRef.current = onNext;
-  const manualStageAdvance = isHackathonJourneyEnabled();
+  const manualStageAdvance = hackathonJourneyEnabled;
 
   useEffect(() => {
     if (!collectionComplete || manualStageAdvance) return;
@@ -2392,6 +2461,41 @@ function StageCollectionSandbox({
       title={sectionTitle}
       description={sectionDescription}
     >
+            {stage5DebugEnabled ? (
+              <div
+                data-component="StageCollectionSandbox"
+                data-payment-path={paymentPathBranch}
+                className="mb-4 rounded-xl border border-dashed border-violet-500/50 bg-violet-500/5 px-4 py-3 font-mono text-[11px] leading-relaxed text-violet-950 dark:text-violet-100"
+              >
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-300">
+                  TEMP Stage 5 debug — remove after discrepancy resolved
+                </div>
+                <div>component: StageCollectionSandbox</div>
+                <div>payment path: {paymentPathBranch}</div>
+                <div>CaptureJS branch: {captureJsBranch}</div>
+                <div>usePinchSimulator: {String(usePinchSimulator)}</div>
+                <div>isHackathonJourneyEnabled(): {String(hackathonJourneyEnabled)}</div>
+                <div>
+                  publishableKey: {publishableKeyPresent ? 'present' : 'absent'}
+                  {publishableKeyPresent ? ` (${publishableKey.slice(0, 12)}…)` : ''}
+                </div>
+                <div>raw NEXT_PUBLIC_HACKATHON_PINCH_SIMULATOR: {String(process.env.NEXT_PUBLIC_HACKATHON_PINCH_SIMULATOR ?? 'undefined')}</div>
+                <div>payerId: {payerId ?? 'null'}</div>
+                <div>captureReady: {String(captureReady)}</div>
+                <div>sandboxReady: {String(sandboxReady)}</div>
+                <div>paymentRailReady: {String(paymentRailReady)}</div>
+                <div>pinchCaptureReady: {String(pinchCaptureReady)}</div>
+                <div>canCollectFunds: {String(canCollectFunds)}</div>
+                <div className="mt-2 border-t border-violet-500/30 pt-2">
+                  warningConditions.showWarningContainer: {String(warningConditions.showWarningContainer)}
+                </div>
+                <div>milestoneUnlockMessage: {String(warningConditions.milestoneUnlockMessage)}</div>
+                <div>publishableKeyWarning: {String(warningConditions.publishableKeyWarning)}</div>
+                <div>payerIdWarning: {String(warningConditions.payerIdWarning)}</div>
+                <div>captureErrorWarning: {String(warningConditions.captureErrorWarning)}</div>
+                <div>flowErrorWarning: {String(warningConditions.flowErrorWarning)}</div>
+              </div>
+            ) : null}
             <WorkflowSettlementReadinessPanel display={readinessDisplay} />
             <div className="mt-5 rounded-2xl border border-primary/20 bg-gradient-to-br from-accent/60 to-transparent p-5 shadow-glow">
               <div className="flex flex-wrap items-start justify-between gap-4">
