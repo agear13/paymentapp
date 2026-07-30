@@ -66,8 +66,8 @@ export const COMMERCIAL_WALKTHROUGH_STEPS: CommercialWalkthroughStep[] = [
     stageNumber: 5,
     stageLabel: 'Payment Collection',
     guidance:
-      "Every participant has approved. I'll now collect the agreed project value from the client.",
-    aiActivity: 'Collecting client payment…',
+      "Ticket sales just crossed 2,000 — the milestone payment is now due. I'll collect it with Pinch.",
+    aiActivity: 'Unlocking milestone collection…',
   },
   {
     id: 'settlement',

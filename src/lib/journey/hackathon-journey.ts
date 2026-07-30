@@ -52,10 +52,16 @@ export function isDevelopmentPaymentSimulatorEnabled(): boolean {
   return isHackathonJourneyEnabled();
 }
 
+/** When true, hackathon Stage 5 uses simulated Pinch instead of live sandbox (recording fallback). */
+export function isHackathonPinchSimulatorFallback(): boolean {
+  return process.env.NEXT_PUBLIC_HACKATHON_PINCH_SIMULATOR === 'true';
+}
+
 export function logHackathonDemoFlagsInDevelopment(): void {
   if (process.env.NODE_ENV !== 'development') return;
   console.log(`Hackathon Journey Enabled: ${isHackathonJourneyEnabled()}`);
   console.log(`Demo Payment Simulator Enabled: ${isDevelopmentPaymentSimulatorEnabled()}`);
+  console.log(`Hackathon Pinch Simulator Fallback: ${isHackathonPinchSimulatorFallback()}`);
 }
 
 export function journeyStepIndex(pathname: string, search = ''): number {

@@ -52,7 +52,10 @@ function pinchErrorResponse(error: PinchApiError): NextResponse {
 }
 
 export async function POST(request: NextRequest) {
-  if (process.env.NODE_ENV === 'production') {
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.NEXT_PUBLIC_HACKATHON_JOURNEY_ENABLED !== 'true'
+  ) {
     return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
   }
 

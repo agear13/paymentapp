@@ -37,8 +37,15 @@ import { persistParticipantAgreementShare } from '@/lib/projects/participant-agr
 import { buildParticipantWorkspaceUrlForParticipant } from '@/lib/participant-portal/participant-portal-url';
 import {
   isHackathonJourneyEnabled,
+  isHackathonPinchSimulatorFallback,
   logHackathonDemoFlagsInDevelopment,
 } from '@/lib/journey/hackathon-journey';
+import {
+  deriveHackathonMilestoneCollection,
+  deriveHackathonMilestonePaymentDueLabel,
+} from '@/lib/journey/hackathon-milestone-collection.client';
+import { HackathonMilestoneTicketPanel } from '@/components/journey/lovable/hackathon-milestone-ticket-panel';
+import { HackathonMilestoneCollectionStatus } from '@/components/journey/lovable/hackathon-milestone-collection-status';
 import {
   formatWorkflowAgreementMoney,
   resolveHackathonWorkflowCommercial,
@@ -2074,9 +2081,23 @@ function StageCollectionDemo({
 function StageCollectionSandbox({
   snapshot,
   onNext,
+  guidedTourActive = false,
+  pinchGate,
+  embedded = false,
 }: {
   snapshot: WorkflowImportSnapshot;
   onNext: () => void;
+  guidedTourActive?: boolean;
+  embedded?: boolean;
+  pinchGate?: {
+    milestoneAchieved: boolean;
+    collectionAmount: number;
+    collectionAmountLabel: string;
+    collectButtonLabel: string;
+    paymentDueLabel: string;
+    sectionTitle?: string;
+    sectionDescription?: string;
+  };
 }) {
   const publishableKey = process.env.NEXT_PUBLIC_PINCH_PUBLISHABLE_KEY ?? "";
 
@@ -2088,9 +2109,13 @@ function StageCollectionSandbox({
   const [flowError, setFlowError] = useState<string | null>(null);
   const [source, setSource] = useState<PinchCreateSourceResponse | null>(null);
   const [payment, setPayment] = useState<PinchCreatePaymentResponse | null>(null);
+  const [collectionReady, setCollectionReady] = useState(false);
+  const handleCollectionReady = useCallback(() => setCollectionReady(true), []);
 
-  const amount = deriveWorkflowCollectionAmount(snapshot);
-  const paymentAmountLabel = deriveWorkflowCollectionDisplay(snapshot).label;
+  const defaultAmount = deriveWorkflowCollectionAmount(snapshot);
+  const amount = pinchGate?.collectionAmount ?? defaultAmount;
+  const paymentAmountLabel =
+    pinchGate?.collectionAmountLabel ?? deriveWorkflowCollectionDisplay(snapshot).label;
   const amountCents = Math.max(1, Math.round(amount * 100));
   const payerLabel = payment
     ? formatPinchPayerLabel(payment.payer, snapshot.dealName ?? "Payer")
@@ -2110,7 +2135,32 @@ function StageCollectionSandbox({
     payment !== null &&
     isPinchPaymentSuccessful(payment.status);
   const sandboxReady = Boolean(publishableKey.trim() && payerId?.trim());
-  const canCollectFunds = !busy && step !== "complete" && captureReady && sandboxReady;
+  const milestoneTriggered = pinchGate ? pinchGate.milestoneAchieved : true;
+  const milestoneReady = pinchGate ? collectionReady : true;
+  const canCollectFunds =
+    milestoneTriggered &&
+    milestoneReady &&
+    !busy &&
+    step !== "complete" &&
+    captureReady &&
+    sandboxReady;
+
+  useEffect(() => {
+    if (!pinchGate?.milestoneAchieved) {
+      setCollectionReady(false);
+    }
+  }, [pinchGate?.milestoneAchieved]);
+  const collectButtonLabel =
+    pinchGate?.collectButtonLabel ??
+    (guidedTourActive ? "Collect Client Funds" : "Collect Funds with Pinch");
+  const sectionTitle =
+    pinchGate?.sectionTitle ??
+    (pinchGate ? "Collect milestone payment with Pinch" : "Collect funds via Pinch Payments");
+  const sectionDescription =
+    pinchGate?.sectionDescription ??
+    (pinchGate
+      ? "Pinch collects the milestone tranche once contractual conditions are satisfied — inside your workflow, not as a separate checkout."
+      : "Pinch is Provvy's execution layer for money movement. This step runs inside the workflow — not as a separate checkout.");
 
   const onNextRef = useRef(onNext);
   onNextRef.current = onNext;
@@ -2163,24 +2213,12 @@ function StageCollectionSandbox({
   const paymentRecorded = step === "complete";
   const settlementUnlocked = collectionComplete;
 
-  return (
-    <>
-      <Script
-        src={PINCH_CAPTUREJS_SRC}
-        integrity={PINCH_CAPTUREJS_INTEGRITY}
-        crossOrigin="anonymous"
-        strategy="afterInteractive"
-        onLoad={() => setCaptureReady(true)}
-        onError={() => setCaptureError("Failed to load Pinch CaptureJS")}
-      />
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <SectionCard
-            eyebrow="Stage 5"
-            title="Collect funds via Pinch Payments"
-            description="Pinch is Provvy's execution layer for money movement. This step runs inside the workflow — not as a separate checkout."
-          >
+  const collectionCard = (
+    <SectionCard
+      eyebrow="Stage 5"
+      title={sectionTitle}
+      description={sectionDescription}
+    >
             <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-accent/60 to-transparent p-5 shadow-glow">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -2218,10 +2256,18 @@ function StageCollectionSandbox({
 
             {(captureError || flowError || !publishableKey || !payerId) && (
               <div className="mt-4 space-y-2">
+                {pinchGate && !milestoneTriggered && (
+                  <div className="rounded-xl border border-border bg-background px-4 py-3 text-[12.5px] text-ink-soft">
+                    Milestone collection unlocks once validated ticket sales reach 2,000 and
+                    Provvy confirms the agreement condition is satisfied.
+                  </div>
+                )}
                 {!publishableKey && (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-[12.5px] text-amber-900 dark:text-amber-200">
                     Set <code className="font-mono">NEXT_PUBLIC_PINCH_PUBLISHABLE_KEY</code> in{" "}
-                    <code className="font-mono">.env.local</code>.
+                    <code className="font-mono">.env.local</code>, or enable{" "}
+                    <code className="font-mono">NEXT_PUBLIC_HACKATHON_PINCH_SIMULATOR=true</code>{" "}
+                    for the simulated fallback.
                   </div>
                 )}
                 {!payerId && (
@@ -2269,40 +2315,147 @@ function StageCollectionSandbox({
               />
             </div>
 
+            {pinchGate && (
+              <HackathonMilestoneCollectionStatus
+                active={pinchGate.milestoneAchieved}
+                paymentDueLabel={pinchGate.paymentDueLabel}
+                fastMode={guidedTourActive}
+                onCollectionReady={handleCollectionReady}
+              />
+            )}
+
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
               <div className="inline-flex items-center gap-1.5 text-[12px] text-ink-soft">
                 <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                Funds move under your operating rules · Provvy never holds money
+                {pinchGate && pinchGate.milestoneAchieved
+                  ? 'Agreement determined this payment is due · Pinch executes collection'
+                  : 'Funds move under your operating rules · Provvy never holds money'}
               </div>
               {collectionComplete ? (
                 <PrimaryButton onClick={onNext} icon={RefreshCw}>
                   Continue to Settlement
                 </PrimaryButton>
-              ) : (
-                <PrimaryButton
-                  onClick={() => void handleCollect()}
-                  disabled={!canCollectFunds}
-                  icon={busy ? Loader2 : CreditCard}
-                  spinIcon={busy}
-                >
-                  {busy ? "Collecting…" : captureReady ? "Collect Funds with Pinch" : "Loading Pinch…"}
+              ) : pinchGate && !milestoneTriggered ? (
+                <PrimaryButton disabled icon={CreditCard}>
+                  Awaiting agreement milestone…
                 </PrimaryButton>
+              ) : (
+                <div
+                  className={
+                    pinchGate && !collectionReady
+                      ? 'max-h-0 overflow-hidden opacity-0'
+                      : 'animate-fade-up opacity-100 transition-all duration-700'
+                  }
+                >
+                  <PrimaryButton
+                    onClick={() => void handleCollect()}
+                    disabled={!canCollectFunds}
+                    icon={busy ? Loader2 : CreditCard}
+                    spinIcon={busy}
+                  >
+                    {busy
+                      ? "Collecting…"
+                      : captureReady
+                        ? collectButtonLabel
+                        : "Loading Pinch…"}
+                  </PrimaryButton>
+                </div>
               )}
             </div>
           </SectionCard>
-        </div>
+  );
 
-        <AISidePanel
-          title="Why Pinch"
-          lines={[
-            "Native PayTo & Direct Debit for Australian businesses",
-            "Best-in-class for scheduled and recurring collections",
-            "Fits inside Provvy's commercial workflow — not a separate checkout",
-            "Reconciles directly to Xero via the same workflow",
-          ]}
+  return (
+    <>
+      <Script
+        src={PINCH_CAPTUREJS_SRC}
+        integrity={PINCH_CAPTUREJS_INTEGRITY}
+        crossOrigin="anonymous"
+        strategy="afterInteractive"
+        onLoad={() => setCaptureReady(true)}
+        onError={() => setCaptureError("Failed to load Pinch CaptureJS")}
+      />
+
+      {embedded ? (
+        collectionCard
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-3">
+          <div className="lg:col-span-2">{collectionCard}</div>
+
+          <AISidePanel
+            title="Why Pinch"
+            lines={[
+              "Native PayTo & Direct Debit for Australian businesses",
+              "Best-in-class for scheduled and recurring collections",
+              "Fits inside Provvy's commercial workflow — not a separate checkout",
+              "Reconciles directly to Xero via the same workflow",
+            ]}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+function StageCollectionHackathon({
+  snapshot,
+  onNext,
+  guidedTourActive = false,
+}: {
+  snapshot: WorkflowImportSnapshot;
+  onNext: () => void;
+  guidedTourActive?: boolean;
+}) {
+  const [milestoneAchieved, setMilestoneAchieved] = useState(false);
+  const agreementCurrency = resolveWorkflowAgreementCurrency(snapshot.result);
+  const fallbackAmount = deriveWorkflowCollectionAmount(snapshot);
+  const milestone = deriveHackathonMilestoneCollection(
+    snapshot.result,
+    fallbackAmount,
+    agreementCurrency,
+  );
+  const paymentDueLabel = deriveHackathonMilestonePaymentDueLabel(
+    milestone,
+    snapshot.result.projectValue.value ?? fallbackAmount,
+  );
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-3">
+      <div className="lg:col-span-2 space-y-5">
+        <HackathonMilestoneTicketPanel
+          milestoneLabel={milestone.milestoneLabel}
+          autoPlay
+          fastMode={guidedTourActive}
+          onMilestoneAchieved={() => setMilestoneAchieved(true)}
+        />
+        <StageCollectionSandbox
+          snapshot={snapshot}
+          onNext={onNext}
+          guidedTourActive={guidedTourActive}
+          embedded
+          pinchGate={{
+            milestoneAchieved,
+            collectionAmount: milestone.amount,
+            collectionAmountLabel: milestone.amountLabel,
+            paymentDueLabel,
+            collectButtonLabel: "Collect Milestone Payment with Pinch",
+            sectionTitle: "Collect milestone payment with Pinch",
+            sectionDescription:
+              "Provvy unlocks collection when contractual conditions are met. This milestone tranche is collected via Pinch sandbox — inside the workflow.",
+          }}
         />
       </div>
-    </>
+
+      <AISidePanel
+        title="Why this matters"
+        lines={[
+          "Commercial agreements define when money moves — not just how much",
+          "Validated ticket sales trigger the 40% milestone automatically",
+          "Pinch executes the collection once Provvy confirms the condition",
+          "Settlement continues through the same workflow you already use",
+        ]}
+      />
+    </div>
   );
 }
 
@@ -2356,8 +2509,18 @@ function StageCollection({
   }
 
   if (hackathonJourneyEnabled) {
+    if (isHackathonPinchSimulatorFallback()) {
+      return (
+        <StageCollectionDemo
+          snapshot={snapshot}
+          onNext={onNext}
+          guidedTourActive={guidedTourActive}
+        />
+      );
+    }
+
     return (
-      <StageCollectionDemo
+      <StageCollectionHackathon
         snapshot={snapshot}
         onNext={onNext}
         guidedTourActive={guidedTourActive}
