@@ -8,6 +8,7 @@ type RevealStep = 'hidden' | 'headline' | 'condition' | 'due' | 'ready';
 type Props = {
   active: boolean;
   paymentDueLabel: string;
+  conditionLabel?: string;
   fastMode?: boolean;
   onCollectionReady: () => void;
 };
@@ -40,6 +41,7 @@ function stepDelayMs(fastMode: boolean, step: Exclude<RevealStep, 'hidden'>): nu
 export function HackathonMilestoneCollectionStatus({
   active,
   paymentDueLabel,
+  conditionLabel = 'Agreement milestone criteria met',
   fastMode = false,
   onCollectionReady,
 }: Props) {
@@ -113,9 +115,7 @@ export function HackathonMilestoneCollectionStatus({
             <Check className="h-4 w-4 shrink-0" />
             Contractual condition satisfied
           </div>
-          <p className="mt-1 pl-6 text-[12px] text-ink-soft">
-            2,000 validated ticket sales reached · agreement milestone criteria met
-          </p>
+          <p className="mt-1 pl-6 text-[12px] text-ink-soft">{conditionLabel}</p>
         </div>
 
         <div

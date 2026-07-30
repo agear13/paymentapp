@@ -1,5 +1,9 @@
 import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
-import { deriveHackathonMilestoneCollection, deriveHackathonMilestonePaymentDueLabel } from '@/lib/journey/hackathon-milestone-collection.client';
+import {
+  deriveHackathonMilestoneCollection,
+  deriveHackathonMilestonePaymentDueLabel,
+  formatHackathonMilestoneDisplayLabel,
+} from '@/lib/journey/hackathon-milestone-collection.client';
 
 function field<T>(value: T) {
   return { value, confidence: 'high' as const };
@@ -41,6 +45,35 @@ describe('deriveHackathonMilestoneCollection', () => {
     expect(milestone.source).toBe('fixed_fallback');
     expect(deriveHackathonMilestonePaymentDueLabel(milestone, 10000)).toBe(
       '40% Milestone Payment Now Due',
+    );
+  });
+
+  it('formats duplicated milestone copy into one concise sentence', () => {
+    const label = formatHackathonMilestoneDisplayLabel(
+      '40% instalment for all suppliers upon reaching 2,000 paid and validated ticket sales',
+      '2,000 paid and validated ticket sales reached',
+    );
+    expect(label).toBe('40% milestone payment when 2,000 validated ticket sales are reached');
+    expect(label).not.toMatch(/2,000.*2,000/);
+  });
+
+  it('derives milestone amount from percentage payment terms', () => {
+    const result = {
+      projectValue: field(3300),
+      paymentTerms: [
+        {
+          description: field('40% instalment for all suppliers upon reaching 2,000 paid and validated ticket sales'),
+          amount: field(40),
+          currency: field('AUD'),
+          dueCondition: field('2,000 paid and validated ticket sales reached'),
+        },
+      ],
+    } as unknown as ExtractionResult;
+
+    const milestone = deriveHackathonMilestoneCollection(result, 3300, 'AUD');
+    expect(milestone.amount).toBe(1320);
+    expect(milestone.milestoneLabel).toBe(
+      '40% milestone payment when 2,000 validated ticket sales are reached',
     );
   });
 });

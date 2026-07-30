@@ -12,12 +12,7 @@ import { useEntitlements } from '@/hooks/use-entitlements';
 import { useOrganization } from '@/hooks/use-organization';
 import type { ExtractionResult, SourceType } from '@/lib/ai-extractor/extraction-types';
 import { SOURCE_TYPE_LABELS } from '@/lib/ai-extractor/extraction-types';
-import {
-  buildExtractionReadiness,
-  type ReadinessDimension,
-} from '@/lib/ai-extractor/extraction-readiness';
-import { buildExtractionSummary } from '@/lib/ai-extractor/extraction-summary';
-import { buildSettlementSchedule } from '@/lib/ai-extractor/settlement-schedule';
+import { buildExtractionReadiness, type ReadinessDimension } from '@/lib/ai-extractor/extraction-readiness';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import { fetchPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import {
@@ -47,11 +42,20 @@ import {
 import { HackathonMilestoneTicketPanel } from '@/components/journey/lovable/hackathon-milestone-ticket-panel';
 import { HackathonMilestoneCollectionStatus } from '@/components/journey/lovable/hackathon-milestone-collection-status';
 import {
+  deriveWorkflowHeaderDisplay,
   formatWorkflowAgreementMoney,
-  resolveHackathonWorkflowCommercial,
   resolveWorkflowAgreementCurrency,
   toWorkflowProjectValueCurrency,
 } from '@/lib/journey/workflow-agreement-currency.client';
+import {
+  buildWorkflowPaymentScheduleRows,
+  buildWorkflowExecutiveSummary,
+  buildWorkflowExtractionInsightRows,
+  deriveWorkflowSettlementReadinessDisplay,
+  type PaymentSchedulePhase,
+  type WorkflowPaymentScheduleRow,
+  type WorkflowReadinessDisplay,
+} from '@/lib/journey/workflow-extraction-display.client';
 import {
   simulateExternalParticipantApprovals,
 } from '@/lib/journey/development-approval-simulator.client';
@@ -198,8 +202,11 @@ function WorkflowReconciliationScreenInner() {
   const [importSnapshot, setImportSnapshot] = useState<WorkflowImportSnapshot | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const stageIndex = WORKFLOW.stages.findIndex((s) => s.key === stage);
-  const hackathonCommercial = resolveHackathonWorkflowCommercial(importSnapshot?.result ?? null, {
-    currency: 'AUD',
+  const workflowHeader = deriveWorkflowHeaderDisplay(importSnapshot, {
+    name: WORKFLOW.name,
+    objective: WORKFLOW.objective,
+    participants: WORKFLOW.participants,
+    currency: WORKFLOW.currency,
     amount: WORKFLOW.amount,
   });
 
@@ -287,10 +294,10 @@ function WorkflowReconciliationScreenInner() {
               <StatusPill stage={stage} />
             </div>
             <h1 className="mt-3 text-balance text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
-              {WORKFLOW.name}
+              {workflowHeader.name}
             </h1>
             <p className="mt-1.5 max-w-2xl text-[13.5px] text-ink-soft">
-              {WORKFLOW.objective}
+              {workflowHeader.objective}
             </p>
           </div>
         </div>
@@ -298,12 +305,12 @@ function WorkflowReconciliationScreenInner() {
         <div className="mt-6 grid gap-4 border-t border-border pt-5 sm:grid-cols-2 lg:grid-cols-3">
           <MetaGroup icon={Users} label="Participants">
             <div className="flex -space-x-1.5">
-              {WORKFLOW.participants.map((p, i) => (
+              {workflowHeader.participants.map((p, i) => (
                 <div
-                  key={p.name}
+                  key={`${p.name}-${i}`}
                   title={`${p.name} · ${p.role}`}
                   className="grid h-7 w-7 place-items-center rounded-full border-2 border-card bg-secondary text-[10.5px] font-semibold text-foreground"
-                  style={{ zIndex: WORKFLOW.participants.length - i }}
+                  style={{ zIndex: workflowHeader.participants.length - i }}
                 >
                   {p.name
                     .split(" ")
@@ -313,7 +320,8 @@ function WorkflowReconciliationScreenInner() {
                 </div>
               ))}
               <span className="ml-3 self-center text-[12.5px] text-ink-soft">
-                {WORKFLOW.participants.length} parties
+                {workflowHeader.participants.length}{" "}
+                {workflowHeader.participants.length === 1 ? "party" : "parties"}
               </span>
             </div>
           </MetaGroup>
@@ -332,15 +340,10 @@ function WorkflowReconciliationScreenInner() {
           </MetaGroup>
           <MetaGroup icon={Coins} label="Commercial value">
             <div className="text-[15px] font-semibold tracking-tight">
-              {hackathonCommercial
-                ? formatWorkflowAgreementMoney(
-                    hackathonCommercial.amount,
-                    hackathonCommercial.currency,
-                  )
-                : `${WORKFLOW.currency}${WORKFLOW.amount.toLocaleString()}`}
+              {workflowHeader.commercialValueLabel}
             </div>
             <div className="text-[11.5px] text-ink-soft">
-              across {WORKFLOW.participants.length - 1} allocations
+              {workflowHeader.commercialValueDetail}
             </div>
           </MetaGroup>
         </div>
@@ -759,46 +762,6 @@ function StageAgreement({
 // Stage 2 — AI Extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
-const READINESS_DIMENSION_ICONS: Record<ReadinessDimension, LucideIcon> = {
-  identity: Users,
-  commercialTerms: Coins,
-  deliverables: Flag,
-  settlementLogic: CreditCard,
-  paymentInfrastructure: ShieldCheck,
-  taxInformation: Percent,
-  compliance: AlertTriangle,
-};
-
-type WorkflowExtractionRow = {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  confidenceScore: number;
-};
-
-function buildWorkflowExtractionRows(result: ExtractionResult): WorkflowExtractionRow[] {
-  const readiness = result.readinessAssessment ?? buildExtractionReadiness(result);
-  const rows: WorkflowExtractionRow[] = readiness.dimensions.map((dimension) => ({
-    icon: READINESS_DIMENSION_ICONS[dimension.dimension],
-    label: dimension.label,
-    value:
-      dimension.blockers.length > 0
-        ? `${dimension.score}% · ${dimension.blockers.length} gap${dimension.blockers.length === 1 ? "" : "s"}`
-        : `${dimension.score}% complete`,
-    confidenceScore: dimension.score,
-  }));
-
-  if (result.uncertainties.length > 0) {
-    rows.push({
-      icon: AlertTriangle,
-      label: "Ambiguities",
-      value: `${result.uncertainties.length} flagged for review`,
-      confidenceScore: Math.max(0, 100 - result.uncertainties.length * 8),
-    });
-  }
-
-  return rows;
-}
 
 function StageExtraction({
   snapshot,
@@ -811,11 +774,30 @@ function StageExtraction({
   onRetry: () => void;
   onNext: () => void;
 }) {
-  const rows = snapshot ? buildWorkflowExtractionRows(snapshot.result) : [];
-  const readiness =
-    snapshot?.result.readinessAssessment ??
-    (snapshot ? buildExtractionReadiness(snapshot.result) : null);
-  const summary = snapshot ? buildExtractionSummary(snapshot.result) : null;
+  const formatReviewAmount = (amount: number) =>
+    snapshot
+      ? isHackathonJourneyEnabled()
+        ? formatWorkflowAgreementMoney(amount, resolveWorkflowAgreementCurrency(snapshot.result))
+        : `${snapshot.result.currency.value === "USD" ? "US$" : snapshot.result.currency.value === "AUD" ? "A$" : `${snapshot.result.currency.value ?? ""} `}${amount.toLocaleString()}`
+      : `$${amount.toLocaleString()}`;
+
+  const insightRows = snapshot
+    ? buildWorkflowExtractionInsightRows(snapshot.result, formatReviewAmount)
+    : [];
+  const rows = insightRows;
+  const readinessDisplay = snapshot
+    ? deriveWorkflowSettlementReadinessDisplay({
+        result: snapshot.result,
+        stage: 'extraction',
+      })
+    : null;
+  const executiveSummary = snapshot
+    ? buildWorkflowExecutiveSummary({
+        result: snapshot.result,
+        dealName: snapshot.dealName,
+        formatMoney: formatReviewAmount,
+      })
+    : null;
   const [revealedCount, setRevealedCount] = useState(0);
   const [autoAdvanceSeconds, setAutoAdvanceSeconds] = useState(2);
   const onNextRef = useRef(onNext);
@@ -919,10 +901,10 @@ function StageExtraction({
               <span className="text-ink-soft">Source</span>
               <span className="font-medium">{SOURCE_TYPE_LABELS[snapshot.sourceType]}</span>
             </div>
-            {readiness && (
+            {readinessDisplay && (
               <div className="flex items-center justify-between gap-3">
                 <span className="text-ink-soft">Readiness</span>
-                <span className="font-medium">{readiness.score}%</span>
+                <span className="font-medium">{readinessDisplay.score}%</span>
               </div>
             )}
           </div>
@@ -938,8 +920,8 @@ function StageExtraction({
       <div className="lg:col-span-3">
         <SectionCard
           eyebrow="Stage 2"
-          title="Extracting commercial intelligence"
-          description="Provvy AI reads the agreement and turns unstructured text into structured commercial data."
+          title="Commercial intelligence extracted"
+          description="Provvy reads unstructured agreements and returns an executive-ready commercial summary — before anything reaches accounting."
           headerRight={
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-accent px-2.5 py-1 text-[11px] font-medium text-accent-foreground">
               {done ? (
@@ -954,53 +936,73 @@ function StageExtraction({
             </span>
           }
         >
-          {readiness && (
-            <div className="mb-4 rounded-xl border border-border bg-background/70 p-4">
-              <div className="text-[12.5px] font-semibold">
-                Settlement readiness: {readiness.score}%
-              </div>
-              <div className="mt-1 text-[12px] text-ink-soft">{readiness.summary}</div>
-              {summary?.oneLiner && (
-                <div className="mt-2 text-[12px] italic text-foreground/80">
-                  &ldquo;{summary.oneLiner}&rdquo;
+          {executiveSummary && (
+            <div className="mb-5 space-y-4">
+              <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-accent/70 via-background to-background p-5 shadow-glow">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-background/80 px-2.5 py-1 text-[10.5px] font-medium uppercase tracking-wider text-primary">
+                  <Sparkles className="h-3 w-3" />
+                  AI commercial summary
                 </div>
-              )}
+                <p className="mt-3 text-[15px] font-semibold leading-snug tracking-[-0.02em] text-foreground">
+                  {executiveSummary.tagline}
+                </p>
+                <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">
+                  {executiveSummary.narrative}
+                </p>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                {executiveSummary.highlights.map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-xl border border-border bg-background px-3.5 py-3"
+                  >
+                    <div className="text-[10.5px] font-medium uppercase tracking-wider text-ink-soft">
+                      {item.label}
+                    </div>
+                    <div className="mt-1 text-[12.5px] leading-relaxed text-foreground">
+                      {item.detail}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {readinessDisplay ? (
+                <WorkflowSettlementReadinessPanel display={readinessDisplay} />
+              ) : null}
             </div>
           )}
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+            What Provvy understood
+          </div>
+          <div className="grid gap-2">
             {rows.map((row, index) => {
               const revealed = index < revealedCount;
-              const Icon = row.icon;
               return (
                 <div
                   key={row.label}
-                  className={`flex items-start gap-3 rounded-xl border p-3 transition-all ${
+                  className={`rounded-xl border px-4 py-3 transition-all ${
                     revealed
                       ? "border-border bg-background"
                       : "border-dashed border-border bg-secondary/40 opacity-60"
                   }`}
                 >
-                  <div
-                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
-                      revealed
-                        ? "bg-accent text-accent-foreground"
-                        : "bg-secondary text-ink-soft"
-                    }`}
-                  >
-                    {revealed ? (
-                      <Icon className="h-3.5 w-3.5" />
-                    ) : (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-[12.5px] font-semibold">{row.label}</div>
-                      {revealed && <Confidence value={row.confidenceScore} />}
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
+                        revealed
+                          ? "bg-accent text-accent-foreground"
+                          : "bg-secondary text-ink-soft"
+                      }`}
+                    >
+                      {revealed ? index + 1 : <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     </div>
-                    <div className="mt-0.5 text-[11.5px] text-ink-soft">
-                      {revealed ? row.value : "Analysing…"}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12.5px] font-semibold">{row.label}</div>
+                      <div className="mt-0.5 text-[12px] leading-relaxed text-ink-soft">
+                        {revealed ? row.detail : "Analysing agreement language…"}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1036,6 +1038,136 @@ function Confidence({ value }: { value: number }) {
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {value}%
     </span>
+  );
+}
+
+function WorkflowSettlementReadinessPanel({
+  display,
+}: {
+  display: WorkflowReadinessDisplay;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-background/70 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[12.5px] font-semibold">{display.label}</div>
+        <Confidence value={display.score} />
+      </div>
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+        <div
+          className="h-full bg-gradient-purple transition-all duration-500"
+          style={{ width: `${display.score}%` }}
+        />
+      </div>
+      <div className="mt-1.5 text-[12px] text-ink-soft">{display.summary}</div>
+    </div>
+  );
+}
+
+function PaymentScheduleList({ rows }: { rows: WorkflowPaymentScheduleRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-background px-3 py-2 text-[13px] text-ink-soft">
+        No settlement events were extracted.
+      </div>
+    );
+  }
+
+  const showFlow =
+    rows.length >= 2 &&
+    rows.some((row) => row.phase === 'deposit') &&
+    rows.some((row) => row.phase === 'milestone');
+
+  const phaseStyles: Record<
+    PaymentSchedulePhase,
+    { badge: string; ring: string; accent: string }
+  > = {
+    deposit: {
+      badge: 'bg-primary/10 text-primary border-primary/20',
+      ring: 'border-primary/30',
+      accent: 'from-primary/10 to-transparent',
+    },
+    milestone: {
+      badge: 'bg-purple-500/10 text-purple-700 border-purple-500/20 dark:text-purple-300',
+      ring: 'border-purple-500/30',
+      accent: 'from-purple-500/10 to-transparent',
+    },
+    final: {
+      badge: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:text-emerald-300',
+      ring: 'border-emerald-500/30',
+      accent: 'from-emerald-500/10 to-transparent',
+    },
+    other: {
+      badge: 'bg-secondary text-foreground border-border',
+      ring: 'border-border',
+      accent: 'from-secondary/60 to-transparent',
+    },
+  };
+
+  return (
+    <div className="space-y-4">
+      {showFlow ? (
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+          <span>Payment flow</span>
+          <span className="text-foreground/70">Deposit</span>
+          <ArrowRight className="h-3 w-3 text-ink-soft" />
+          <span className="text-foreground/70">Milestone Payment</span>
+          <ArrowRight className="h-3 w-3 text-ink-soft" />
+          <span className="text-foreground/70">Final Settlement</span>
+        </div>
+      ) : null}
+
+      <div className="space-y-0">
+        {rows.map((row, index) => {
+          const styles = phaseStyles[row.phase];
+          const isLast = index === rows.length - 1;
+          return (
+            <div key={row.key} className="relative flex gap-4">
+              <div className="flex w-8 shrink-0 flex-col items-center">
+                <div
+                  className={`grid h-8 w-8 place-items-center rounded-full border text-[11px] font-semibold ${styles.badge}`}
+                >
+                  {row.stepNumber}
+                </div>
+                {!isLast ? (
+                  <div className="my-1 w-px flex-1 bg-gradient-to-b from-border via-border to-transparent" />
+                ) : null}
+              </div>
+
+              <div className={`mb-3 min-w-0 flex-1 rounded-xl border bg-gradient-to-br p-4 shadow-card ${styles.ring} ${styles.accent}`}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${styles.badge}`}>
+                      {row.stepLabel}
+                    </div>
+                    <div className="mt-2 text-[15px] font-semibold tracking-[-0.02em] text-foreground">
+                      {row.title}
+                    </div>
+                  </div>
+                  {row.amountLabel ? (
+                    <div className="text-right">
+                      <div className="text-[10.5px] font-medium uppercase tracking-wider text-ink-soft">
+                        Amount
+                      </div>
+                      <div className="mt-0.5 text-[18px] font-semibold tracking-[-0.02em]">
+                        {row.amountLabel}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                {row.trigger ? (
+                  <div className="mt-3 border-t border-border/70 pt-3 text-[12.5px] leading-relaxed text-ink-soft">
+                    {row.trigger}
+                  </div>
+                ) : null}
+                {row.participant ? (
+                  <div className="mt-2 text-[11px] text-ink-soft">{row.participant}</div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -1218,16 +1350,10 @@ function StageReview({
   }
 
   const result = snapshot.result;
-  const readiness = result.readinessAssessment ?? buildExtractionReadiness(result);
-  const scheduleGroups = buildSettlementSchedule(result);
-  const scheduleRows = scheduleGroups.flatMap((group) =>
-    group.lines.map((line) => ({
-      key: `${group.partyId}-${line.label}-${line.value}`,
-      date: line.status === "conditional" ? "Conditional" : "Scheduled",
-      milestone: `${group.partyName} · ${line.label}`,
-      amount: line.value,
-    }))
-  );
+  const readinessDisplay = deriveWorkflowSettlementReadinessDisplay({
+    result,
+    stage: 'review',
+  });
   const reviewBlockers = collectReviewBlockers(insight);
   const agreementCurrency = resolveWorkflowAgreementCurrency(result);
   const currencyPrefix =
@@ -1240,6 +1366,7 @@ function StageReview({
     isHackathonJourneyEnabled()
       ? formatWorkflowAgreementMoney(amount, agreementCurrency)
       : `${currencyPrefix}${amount.toLocaleString()}`;
+  const paymentScheduleRows = buildWorkflowPaymentScheduleRows(result, formatReviewAmount);
   const projectValue = result.projectValue.value ?? 0;
   const revenueRows = insight.revenueShareSummary.map((row) => ({
     key: row.participantId,
@@ -1250,7 +1377,6 @@ function StageReview({
   }));
   const aiNotes = [
     insight.readinessExplanation,
-    ...result.uncertainties.slice(0, 3).map((item) => item.issue),
     ...insight.potentialGaps.slice(0, 2),
   ].filter(Boolean);
 
@@ -1320,37 +1446,30 @@ function StageReview({
             confidence={readinessScoreForDimension(result, "settlementLogic")}
             icon={Calendar}
           >
-            <div className="overflow-hidden rounded-lg border border-border">
-              <table className="w-full text-[12.5px]">
-                <thead className="bg-secondary/60 text-ink-soft">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">Date</th>
-                    <th className="px-3 py-2 text-left font-medium">Milestone</th>
-                    <th className="px-3 py-2 text-right font-medium">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scheduleRows.length > 0 ? (
-                    scheduleRows.map((row) => (
-                      <tr key={row.key} className="border-t border-border">
-                        <td className="px-3 py-2">{row.date}</td>
-                        <td className="px-3 py-2">
-                          <ReviewText value={row.milestone} />
-                        </td>
-                        <td className="px-3 py-2 text-right font-medium">{row.amount}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr className="border-t border-border">
-                      <td colSpan={3} className="px-3 py-3 text-ink-soft">
-                        No settlement events were extracted.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <PaymentScheduleList rows={paymentScheduleRows} />
           </ReviewBlock>
+
+          {result.uncertainties.length > 0 ? (
+            <ReviewBlock
+              title="Ambiguities flagged by AI"
+              confidence={Math.max(0, 100 - result.uncertainties.length * 8)}
+              icon={AlertTriangle}
+            >
+              <ul className="space-y-2">
+                {result.uncertainties.map((item, index) => (
+                  <li
+                    key={`${item.field}-${index}`}
+                    className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-[13px]"
+                  >
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                      {item.field.replace(/_/g, " ")}
+                    </div>
+                    <ReviewText value={item.issue} className="mt-1 text-foreground/90" />
+                  </li>
+                ))}
+              </ul>
+            </ReviewBlock>
+          ) : null}
 
           <ReviewBlock
             title="Revenue allocation"
@@ -1412,14 +1531,17 @@ function StageReview({
             </div>
           </ReviewBlock>
 
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
+          <div className="mt-2 space-y-4 border-t border-border pt-5">
+            <WorkflowSettlementReadinessPanel display={readinessDisplay} />
+            <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="inline-flex items-center gap-1.5 text-[12px] text-ink-soft">
               <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-              Settlement readiness {readiness.score}% · {insight.agreementName}
+              {insight.agreementName}
             </div>
             <PrimaryButton onClick={onNext} icon={UserRoundCheck}>
               Approve Workflow
             </PrimaryButton>
+            </div>
           </div>
         </SectionCard>
       </div>
@@ -1726,6 +1848,12 @@ function StageApprovals({
 
   const guidance = deriveApprovalGuidance(participants);
   const progressPct = stats.percentage;
+  const readinessDisplay = deriveWorkflowSettlementReadinessDisplay({
+    result: snapshot.result,
+    stage: 'approvals',
+    approvalsComplete,
+    approvalProgressPct: progressPct,
+  });
 
   return (
     <div className="grid gap-5 lg:grid-cols-3">
@@ -1740,7 +1868,8 @@ function StageApprovals({
             </span>
           }
         >
-          <div className="space-y-2.5">
+          <WorkflowSettlementReadinessPanel display={readinessDisplay} />
+          <div className="mt-5 space-y-2.5">
             {participants.map((participant) => {
               const status = mapLovableApprovalStatus(participant);
               const lastActivity = deriveParticipantLastActivity(participant);
@@ -1874,7 +2003,7 @@ function deriveWorkflowCollectionDisplay(snapshot: WorkflowImportSnapshot | null
   label: string;
 } {
   const amount = deriveWorkflowCollectionAmount(snapshot);
-  if (isHackathonJourneyEnabled() && snapshot) {
+  if (snapshot) {
     return {
       amount,
       label: formatWorkflowAgreementMoney(
@@ -1905,8 +2034,15 @@ function StageCollectionDemo({
   const [flowError, setFlowError] = useState<string | null>(null);
   const [payment, setPayment] = useState<PinchCreatePaymentResponse | null>(null);
 
-  const amount = deriveWorkflowCollectionAmount(snapshot);
-  const paymentAmountLabel = deriveWorkflowCollectionDisplay(snapshot).label;
+  const agreementCurrency = resolveWorkflowAgreementCurrency(snapshot.result);
+  const fallbackAmount = deriveWorkflowCollectionAmount(snapshot);
+  const milestone = isHackathonJourneyEnabled()
+    ? deriveHackathonMilestoneCollection(snapshot.result, fallbackAmount, agreementCurrency)
+    : null;
+  const amount = milestone?.amount ?? fallbackAmount;
+  const paymentAmountLabel =
+    milestone?.amountLabel ??
+    formatWorkflowAgreementMoney(amount, agreementCurrency);
   const amountCents = Math.max(1, Math.round(amount * 100));
   const clientLabel = snapshot.dealName?.trim() || "Project client";
   const paymentPurpose = deriveWorkflowCollectionPurpose(snapshot);
@@ -1967,14 +2103,18 @@ function StageCollectionDemo({
       <div className="lg:col-span-2">
         <SectionCard
           eyebrow="Stage 5"
-          title="Collect Client Funds"
-          description="Pinch securely collects the agreed project funds from the client before settlement can begin."
+          title={milestone ? "Collect milestone payment with Pinch" : "Collect Client Funds"}
+          description={
+            milestone
+              ? "Provvy collects the milestone tranche once contractual conditions are satisfied — inside the workflow, not as a separate checkout."
+              : "Pinch securely collects the agreed project funds from the client before settlement can begin."
+          }
         >
           <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-accent/60 to-transparent p-5 shadow-glow">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                  Client payment amount
+                  {milestone ? "Milestone amount to collect" : "Client payment amount"}
                 </div>
                 <div className="mt-1 text-3xl font-semibold tracking-[-0.02em]">
                   {paymentAmountLabel}
@@ -2095,6 +2235,7 @@ function StageCollectionSandbox({
     collectionAmountLabel: string;
     collectButtonLabel: string;
     paymentDueLabel: string;
+    milestoneConditionLabel?: string;
     sectionTitle?: string;
     sectionDescription?: string;
   };
@@ -2212,6 +2353,15 @@ function StageCollectionSandbox({
   const sourceVerified = step === "source" || step === "payment" || step === "complete";
   const paymentRecorded = step === "complete";
   const settlementUnlocked = collectionComplete;
+  const paymentSetupComplete =
+    milestoneTriggered && collectionReady && sandboxReady && captureReady;
+  const readinessDisplay = deriveWorkflowSettlementReadinessDisplay({
+    result: snapshot.result,
+    stage: 'collection',
+    approvalsComplete: true,
+    milestoneUnlocked: milestoneTriggered,
+    paymentSetupComplete,
+  });
 
   const collectionCard = (
     <SectionCard
@@ -2219,7 +2369,8 @@ function StageCollectionSandbox({
       title={sectionTitle}
       description={sectionDescription}
     >
-            <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-accent/60 to-transparent p-5 shadow-glow">
+            <WorkflowSettlementReadinessPanel display={readinessDisplay} />
+            <div className="mt-5 rounded-2xl border border-primary/20 bg-gradient-to-br from-accent/60 to-transparent p-5 shadow-glow">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
@@ -2258,8 +2409,9 @@ function StageCollectionSandbox({
               <div className="mt-4 space-y-2">
                 {pinchGate && !milestoneTriggered && (
                   <div className="rounded-xl border border-border bg-background px-4 py-3 text-[12.5px] text-ink-soft">
-                    Milestone collection unlocks once validated ticket sales reach 2,000 and
-                    Provvy confirms the agreement condition is satisfied.
+                    Milestone collection unlocks once{' '}
+                    {pinchGate.milestoneConditionLabel ?? 'the agreement milestone criteria are met'}{' '}
+                    and Provvy confirms the contractual condition is satisfied.
                   </div>
                 )}
                 {!publishableKey && (
@@ -2319,6 +2471,7 @@ function StageCollectionSandbox({
               <HackathonMilestoneCollectionStatus
                 active={pinchGate.milestoneAchieved}
                 paymentDueLabel={pinchGate.paymentDueLabel}
+                conditionLabel={pinchGate.milestoneConditionLabel}
                 fastMode={guidedTourActive}
                 onCollectionReady={handleCollectionReady}
               />
@@ -2438,6 +2591,7 @@ function StageCollectionHackathon({
             collectionAmount: milestone.amount,
             collectionAmountLabel: milestone.amountLabel,
             paymentDueLabel,
+            milestoneConditionLabel: milestone.milestoneConditionLabel,
             collectButtonLabel: "Collect Milestone Payment with Pinch",
             sectionTitle: "Collect milestone payment with Pinch",
             sectionDescription:
@@ -2450,7 +2604,7 @@ function StageCollectionHackathon({
         title="Why this matters"
         lines={[
           "Commercial agreements define when money moves — not just how much",
-          "Validated ticket sales trigger the 40% milestone automatically",
+          milestone.milestoneLabel,
           "Pinch executes the collection once Provvy confirms the condition",
           "Settlement continues through the same workflow you already use",
         ]}
@@ -2812,15 +2966,15 @@ function StageSettlement({
   const summaryCards =
     allocationCards.length > 0
       ? allocationCards
-      : buildSettlementSchedule(snapshot.result).flatMap((group) =>
-          group.lines.slice(0, 1).map((line) => ({
-            key: group.partyId,
-            label: group.partyName,
-            amountLabel: line.value,
-            statusLabel: line.status ?? "Scheduled",
-            tone: "primary" as const,
-          })),
-        );
+      : buildWorkflowPaymentScheduleRows(snapshot.result, (value) =>
+          formatWorkflowAgreementMoney(value, currency),
+        ).map((row) => ({
+          key: row.key,
+          label: row.title,
+          amountLabel: row.amountLabel ?? row.title,
+          statusLabel: row.trigger ?? "Scheduled",
+          tone: "primary" as const,
+        }));
 
   return (
     <div className="grid gap-5 lg:grid-cols-3">
@@ -2929,17 +3083,52 @@ const WORKFLOW_AUTOMATION_CAPABILITIES = [
 ] as const;
 
 const WORKFLOW_AUTOMATION_IMPACT = [
-  { icon: Clock, label: "Time saved each month", value: "6h 40m" },
-  { icon: FileText, label: "Manual tasks eliminated", value: "24 tasks" },
-  { icon: TrendingUp, label: "Reduced payment administration", value: "High" },
+  { icon: TrendingUp, label: "Repeatable pattern", value: "Identified" },
+  { icon: RefreshCw, label: "Settlement automation", value: "Ready" },
 ] as const;
+
+function buildWorkflowCompletionSummary(snapshot: WorkflowImportSnapshot | null): {
+  agreementName: string;
+  valueMovedLabel: string;
+  participantCount: number;
+  steps: string[];
+} {
+  const header = deriveWorkflowHeaderDisplay(snapshot, {
+    name: WORKFLOW.name,
+    objective: WORKFLOW.objective,
+    participants: WORKFLOW.participants,
+    currency: WORKFLOW.currency,
+    amount: WORKFLOW.amount,
+  });
+  const participantCount = snapshot?.result.parties.length ?? WORKFLOW.participants.length;
+
+  return {
+    agreementName: header.name,
+    valueMovedLabel: header.commercialValueLabel,
+    participantCount,
+    steps: [
+      "Agreement parsed and understood",
+      participantCount > 0
+        ? `${participantCount} participant approval${participantCount === 1 ? "" : "s"} coordinated`
+        : "Participant approvals coordinated",
+      "Milestone payment collected via Pinch",
+      participantCount > 0
+        ? `Settlement coordinated across ${participantCount} participant${participantCount === 1 ? "" : "s"}`
+        : "Revenue allocated to participants",
+      "Xero fully reconciled",
+      "Timeline event created",
+    ],
+  };
+}
 
 function ProvvyWorkflowRecommendationCard({
   onDismiss,
   projectValueLabel,
+  agreementName,
 }: {
   onDismiss: () => void;
   projectValueLabel?: string;
+  agreementName?: string;
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-card">
@@ -2967,8 +3156,9 @@ function ProvvyWorkflowRecommendationCard({
             I&apos;ve analysed this completed workflow and identified a repeatable commercial pattern.
           </p>
           <p>
-            The same client pays {projectValueLabel ?? "the same project value"} on the second Friday
-            of each month before settlement is distributed to the same participants.
+            The commercial structure behind {agreementName ?? "this agreement"} can be reused when
+            similar milestone-based payments apply
+            {projectValueLabel ? ` — including the ${projectValueLabel} contracted value` : ""}.
           </p>
           <p className="rounded-xl border border-primary/20 bg-accent/70 px-4 py-3 text-foreground">
             This workflow is an excellent candidate for automation.
@@ -3062,16 +3252,7 @@ function StageComplete({
   onReset: () => void;
 }) {
   const [recommendationDismissed, setRecommendationDismissed] = useState(false);
-  const hackathonCommercial = resolveHackathonWorkflowCommercial(snapshot?.result ?? null, {
-    currency: 'AUD',
-    amount: WORKFLOW.amount,
-  });
-  const valueMovedLabel = hackathonCommercial
-    ? formatWorkflowAgreementMoney(hackathonCommercial.amount, hackathonCommercial.currency)
-    : `A$${WORKFLOW.amount.toLocaleString()}`;
-  const recommendationValueLabel = hackathonCommercial
-    ? formatWorkflowAgreementMoney(hackathonCommercial.amount, hackathonCommercial.currency)
-    : undefined;
+  const completion = buildWorkflowCompletionSummary(snapshot);
 
   return (
     <div className="space-y-5">
@@ -3086,7 +3267,7 @@ function StageComplete({
               <Check className="h-3 w-3" /> Workflow complete
             </div>
             <h2 className="mt-3 text-balance text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
-              {WORKFLOW.name} — done.
+              {completion.agreementName} — done.
             </h2>
             <p className="mt-1.5 max-w-2xl text-[13.5px] text-ink-soft">
               Agreement to settlement, run end-to-end by Provvy. Everything is reconciled and captured in your Commercial Timeline.
@@ -3094,17 +3275,20 @@ function StageComplete({
           </div>
         </div>
 
-        <div className="relative mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <ImpactCard icon={Clock} label="Time saved" value="6h 40m" />
-          <ImpactCard icon={FileText} label="Manual work avoided" value="24 tasks" />
-          <ImpactCard icon={TrendingUp} label="Commercial Health" value="+7 pts" />
-          <ImpactCard icon={Coins} label="Value moved" value={valueMovedLabel} />
+        <div className="relative mt-7 grid gap-3 sm:grid-cols-2">
+          <ImpactCard icon={Coins} label="Contracted value processed" value={completion.valueMovedLabel} />
+          <ImpactCard
+            icon={Users}
+            label="Participants coordinated"
+            value={String(completion.participantCount)}
+          />
         </div>
       </div>
 
       {!recommendationDismissed && (
         <ProvvyWorkflowRecommendationCard
-          projectValueLabel={recommendationValueLabel}
+          agreementName={completion.agreementName}
+          projectValueLabel={completion.valueMovedLabel}
           onDismiss={() => setRecommendationDismissed(true)}
         />
       )}
@@ -3134,17 +3318,10 @@ function StageComplete({
             What ran automatically
           </div>
           <ul className="mt-3 space-y-2 text-[12.5px]">
-            {[
-              "Agreement parsed and understood",
-              "4 approvals collected",
-              "Funds collected via Pinch",
-              "Revenue allocated to 3 parties",
-              "Xero fully reconciled",
-              "Timeline event created",
-            ].map((l) => (
-              <li key={l} className="flex items-start gap-2">
+            {completion.steps.map((line) => (
+              <li key={line} className="flex items-start gap-2">
                 <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                <span>{l}</span>
+                <span>{line}</span>
               </li>
             ))}
           </ul>

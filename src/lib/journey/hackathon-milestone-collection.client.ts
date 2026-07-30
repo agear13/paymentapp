@@ -11,8 +11,87 @@ export type HackathonMilestoneCollection = {
   amount: number;
   amountLabel: string;
   milestoneLabel: string;
+  milestoneConditionLabel: string;
   source: 'payment_term' | 'percentage' | 'fixed_fallback';
 };
+
+function normalizeWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function dedupeRepeatedPhrases(text: string): string {
+  let normalized = normalizeWhitespace(text);
+  const ticketPattern =
+    /2,?000\s+(?:paid\s+and\s+)?validated\s+ticket\s+sales(?:\s+reached)?/gi;
+  const ticketMatches = normalized.match(ticketPattern) ?? [];
+  if (ticketMatches.length > 1) {
+    let seen = false;
+    normalized = normalized.replace(ticketPattern, (match) => {
+      if (seen) return '';
+      seen = true;
+      return match.replace(/\s+reached$/i, '');
+    });
+  }
+  return normalizeWhitespace(normalized.replace(/\breached\s+reached\b/gi, 'reached'));
+}
+
+/** Concise milestone copy for Stage 5 panels — display layer only. */
+export function formatHackathonMilestoneDisplayLabel(
+  description: string | null | undefined,
+  dueCondition: string | null | undefined,
+): string {
+  const descriptionText = normalizeWhitespace(description ?? '');
+  const dueText = normalizeWhitespace(dueCondition ?? '');
+  const combined = dedupeRepeatedPhrases(`${descriptionText} ${dueText}`.trim());
+
+  const pctMatch =
+    combined.match(/(\d{1,3})\s*%/) ??
+    descriptionText.match(/(\d{1,3})\s*%/) ??
+    dueText.match(/(\d{1,3})\s*%/);
+  const pct = pctMatch?.[1];
+
+  const ticketMatch = combined.match(/2,?000\s+(?:paid\s+and\s+)?validated\s+ticket\s+sales/i);
+  const hasTicketTrigger = Boolean(ticketMatch);
+
+  if (pct && hasTicketTrigger) {
+    return `${pct}% milestone payment when 2,000 validated ticket sales are reached`;
+  }
+
+  if (pct) {
+    const trigger = dueText
+      .replace(/^\s*when\s+/i, '')
+      .replace(/^\s*upon\s+/i, '')
+      .replace(/\s+reached$/i, '')
+      .trim();
+    if (trigger && !descriptionText.toLowerCase().includes(trigger.toLowerCase())) {
+      return `${pct}% milestone payment when ${trigger}`;
+    }
+    const cleaned = dedupeRepeatedPhrases(
+      descriptionText.replace(/\binstalment\b/gi, 'milestone payment'),
+    );
+    if (cleaned) return cleaned;
+    return `${pct}% milestone payment`;
+  }
+
+  if (combined) {
+    return dedupeRepeatedPhrases(combined.replace(/\binstalment\b/gi, 'milestone payment'));
+  }
+
+  return '40% milestone payment when 2,000 validated ticket sales are reached';
+}
+
+function milestoneLabelsFromTerm(term: {
+  description: { value: string | null };
+  dueCondition: { value: string | null };
+}): { milestoneLabel: string; milestoneConditionLabel: string } {
+  const description = term.description.value;
+  const due = term.dueCondition.value;
+  const milestoneLabel = formatHackathonMilestoneDisplayLabel(description, due);
+  const milestoneConditionLabel = due?.trim()
+    ? dedupeRepeatedPhrases(due.replace(/\binstalment\b/gi, 'milestone payment'))
+    : milestoneLabel;
+  return { milestoneLabel, milestoneConditionLabel };
+}
 
 export function deriveHackathonMilestonePaymentDueLabel(
   milestone: HackathonMilestoneCollection,
@@ -69,13 +148,34 @@ export function deriveHackathonMilestoneCollection(
 
   for (const term of paymentTerms) {
     const text = termText(term);
+    const labels = milestoneLabelsFromTerm(term);
     if (!looksLikeTicketMilestoneTerm(text)) continue;
     const amount = term.amount.value;
+    const pctInText = text.match(/(\d{1,3})\s*%/);
+    const amountLooksLikePct =
+      typeof amount === 'number' &&
+      amount > 0 &&
+      amount <= 100 &&
+      pctInText != null &&
+      Number(pctInText[1]) === amount;
+
+    if (amountLooksLikePct) {
+      const derived = Math.round(projectValue * (amount / 100));
+      return {
+        amount: derived,
+        amountLabel: formatWorkflowAgreementMoney(derived, agreementCurrency),
+        milestoneLabel: labels.milestoneLabel,
+        milestoneConditionLabel: labels.milestoneConditionLabel,
+        source: 'percentage',
+      };
+    }
+
     if (typeof amount === 'number' && amount > 0) {
       return {
         amount,
         amountLabel: formatWorkflowAgreementMoney(amount, agreementCurrency),
-        milestoneLabel: text || '40% milestone · 2,000 validated ticket sales',
+        milestoneLabel: labels.milestoneLabel,
+        milestoneConditionLabel: labels.milestoneConditionLabel,
         source: 'payment_term',
       };
     }
@@ -87,7 +187,8 @@ export function deriveHackathonMilestoneCollection(
         return {
           amount: derived,
           amountLabel: formatWorkflowAgreementMoney(derived, agreementCurrency),
-          milestoneLabel: text || `${pctMatch[1]}% milestone payment`,
+          milestoneLabel: labels.milestoneLabel,
+          milestoneConditionLabel: labels.milestoneConditionLabel,
           source: 'percentage',
         };
       }
@@ -97,22 +198,48 @@ export function deriveHackathonMilestoneCollection(
   if (paymentTerms.length >= 2) {
     const middle = paymentTerms[1];
     const middleAmount = middle?.amount.value;
+    const middleText = termText(middle);
+    const labels = milestoneLabelsFromTerm(middle);
+    const pctInText = middleText.match(/(\d{1,3})\s*%/);
+    const middleLooksLikePct =
+      typeof middleAmount === 'number' &&
+      middleAmount > 0 &&
+      middleAmount <= 100 &&
+      pctInText != null &&
+      Number(pctInText[1]) === middleAmount;
+
+    if (middleLooksLikePct) {
+      const derived = Math.round(projectValue * (middleAmount / 100));
+      return {
+        amount: derived,
+        amountLabel: formatWorkflowAgreementMoney(derived, agreementCurrency),
+        milestoneLabel: labels.milestoneLabel,
+        milestoneConditionLabel: labels.milestoneConditionLabel,
+        source: 'percentage',
+      };
+    }
+
     if (typeof middleAmount === 'number' && middleAmount > 0) {
-      const text = termText(middle);
       return {
         amount: middleAmount,
         amountLabel: formatWorkflowAgreementMoney(middleAmount, agreementCurrency),
-        milestoneLabel: text || 'Second milestone payment',
+        milestoneLabel: labels.milestoneLabel,
+        milestoneConditionLabel: labels.milestoneConditionLabel,
         source: 'payment_term',
       };
     }
   }
 
   const fallbackAmount = Math.round(projectValue * HACKATHON_MILESTONE_FALLBACK_PCT);
+  const fallbackLabel = formatHackathonMilestoneDisplayLabel(
+    '40% milestone payment',
+    '2,000 validated ticket sales reached',
+  );
   return {
     amount: fallbackAmount,
     amountLabel: formatWorkflowAgreementMoney(fallbackAmount, agreementCurrency),
-    milestoneLabel: '40% milestone · 2,000 validated ticket sales',
+    milestoneLabel: fallbackLabel,
+    milestoneConditionLabel: '2,000 validated ticket sales reached',
     source: 'fixed_fallback',
   };
 }
