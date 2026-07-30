@@ -91,14 +91,14 @@ const FILES = [
 ];
 
 const ROUTE_MAP = [
-  ['navigate({ to: "/assessment/provisioning" }', 'router.push("/journey/provisioning/build")'],
+  ['navigate({ to: "/assessment/provisioning" }', 'router.push("/journey/provisioning?build=1")'],
   ['navigate({ to: "/assessment/create-workspace" }', 'router.push("/journey/provisioning")'],
   ['navigate({ to: "/assessment/recommendation" }', 'router.push("/journey/recommendation")'],
   ['navigate({ to: "/assessment/analysis" }', 'router.push("/journey/assessment/analysis")'],
   ['navigate({ to: "/assessment/connect" }', 'router.push("/journey/assessment/connect")'],
   ['navigate({ to: "/assessment/business" }', 'router.push("/journey/assessment/business")'],
   ['navigate({ to: "/assessment" }', 'router.push("/journey/assessment")'],
-  ['to="/assessment/provisioning"', 'href="/journey/provisioning/build"'],
+  ['to="/assessment/provisioning"', 'href="/journey/provisioning?build=1"'],
   ['to="/assessment/create-workspace"', 'href="/journey/provisioning"'],
   ['to="/assessment/recommendation"', 'href="/journey/recommendation"'],
   ['to="/assessment/analysis"', 'href="/journey/assessment/analysis"'],
