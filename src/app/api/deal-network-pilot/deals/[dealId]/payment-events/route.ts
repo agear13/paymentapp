@@ -11,6 +11,7 @@ import {
   orchestrateOperationalMutation,
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+import { isHackathonJourneyEnabled } from '@/lib/journey/hackathon-journey';
 
 const LOG_PREFIX = '[deal-network-pilot/payment-events POST]';
 
@@ -30,6 +31,26 @@ function logPaymentEventsError(step: string, error: unknown, context: Record<str
       stack: err.stack,
     }),
   );
+}
+
+function shouldExposePaymentEventsDebugError(): boolean {
+  return process.env.NODE_ENV !== 'production' || isHackathonJourneyEnabled();
+}
+
+function paymentEvents500Response(error: unknown): NextResponse {
+  // TEMP: revert after hackathon payment-events 500 is diagnosed
+  if (shouldExposePaymentEventsDebugError()) {
+    return NextResponse.json(
+      {
+        error: String(error),
+        message: error instanceof Error ? error.message : undefined,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ error: 'Failed' }, { status: 500 });
 }
 
 async function respondWithFundingSync(
@@ -408,6 +429,6 @@ export async function POST(
       fundingAmount: requestBody?.amount ?? null,
     });
 
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    return paymentEvents500Response(e);
   }
 }
