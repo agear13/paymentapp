@@ -29,10 +29,44 @@ export async function createManualPilotDealPaymentEvent(params: {
   rawPayloadJson?: unknown;
   receivedAt?: Date | null;
 }) {
+  const logPrefix = '[deal-network-pilot/payment-events POST]';
+
+  console.error(
+    logPrefix,
+    'createManualPilotDealPaymentEvent start',
+    JSON.stringify({
+      userId: params.userId,
+      dealId: params.dealId,
+      amount: params.amount,
+      currency: params.currency,
+      sourceType: params.sourceType,
+      sourceReference: params.sourceReference ?? null,
+      receivedAt: params.receivedAt?.toISOString() ?? null,
+    }),
+  );
+
   const deal = await getPilotDealForUser(params.userId, params.dealId);
   if (!deal) {
+    console.error(
+      logPrefix,
+      'createManualPilotDealPaymentEvent deal lookup failed',
+      JSON.stringify({
+        userId: params.userId,
+        dealId: params.dealId,
+        validationResult: 'Deal not found',
+      }),
+    );
     return { ok: false as const, error: 'Deal not found' };
   }
+
+  console.error(
+    logPrefix,
+    'createManualPilotDealPaymentEvent deal lookup ok',
+    JSON.stringify({
+      dealId: deal.id,
+      dealUserId: deal.user_id,
+    }),
+  );
 
   const now = new Date();
   const receivedAt = params.receivedAt ?? now;
@@ -42,36 +76,86 @@ export async function createManualPilotDealPaymentEvent(params: {
       ? PaymentEventSourceType.CSV_IMPORT
       : PaymentEventSourceType.MANUAL;
 
-  // Settlement guard allowlist: Deal Network pilot demo rows (no payment_link settlement path).
-  // Live payment-link rails must use confirmPayment() for PAYMENT_CONFIRMED.
-  const row = await prisma.payment_events.create({
-    data: {
-      id: randomUUID(),
-      payment_link_id: null,
-      pilot_deal_id: params.dealId,
-      organization_id: null,
-      event_type: 'PAYMENT_CONFIRMED',
-      payment_method: null,
-      source_type: sourceType,
-      source_reference: params.sourceReference?.trim() || null,
-      gross_amount: amt,
-      net_amount: null,
-      amount_received: amt,
-      currency_received: params.currency.toUpperCase().slice(0, 10),
-      received_at: receivedAt,
-      record_status: PaymentEventRecordStatus.RECORDED,
-      raw_payload_json:
-        params.rawPayloadJson === undefined || params.rawPayloadJson === null
-          ? undefined
-          : (params.rawPayloadJson as Prisma.InputJsonValue),
-      metadata: {
-        pilotUserId: params.userId,
-        pilotDealId: params.dealId,
-        createdVia: 'deal_network_pilot_manual',
-      },
-      correlation_id: `pilot_manual:${params.dealId}:${now.getTime()}`,
+  const createData = {
+    id: randomUUID(),
+    payment_link_id: null,
+    pilot_deal_id: params.dealId,
+    organization_id: null,
+    event_type: 'PAYMENT_CONFIRMED' as const,
+    payment_method: null,
+    source_type: sourceType,
+    source_reference: params.sourceReference?.trim() || null,
+    gross_amount: amt,
+    net_amount: null,
+    amount_received: amt,
+    currency_received: params.currency.toUpperCase().slice(0, 10),
+    received_at: receivedAt,
+    record_status: PaymentEventRecordStatus.RECORDED,
+    raw_payload_json:
+      params.rawPayloadJson === undefined || params.rawPayloadJson === null
+        ? undefined
+        : (params.rawPayloadJson as Prisma.InputJsonValue),
+    metadata: {
+      pilotUserId: params.userId,
+      pilotDealId: params.dealId,
+      createdVia: 'deal_network_pilot_manual',
     },
-  });
+    correlation_id: `pilot_manual:${params.dealId}:${now.getTime()}`,
+  };
+
+  console.error(
+    logPrefix,
+    'before prisma.payment_events.create',
+    JSON.stringify({
+      dealId: params.dealId,
+      userId: params.userId,
+      prismaMutation: 'payment_events.create',
+      data: {
+        id: createData.id,
+        pilot_deal_id: createData.pilot_deal_id,
+        organization_id: createData.organization_id,
+        event_type: createData.event_type,
+        source_type: createData.source_type,
+        gross_amount: createData.gross_amount.toString(),
+        amount_received: createData.amount_received.toString(),
+        currency_received: createData.currency_received,
+        received_at: createData.received_at.toISOString(),
+        record_status: createData.record_status,
+        correlation_id: createData.correlation_id,
+      },
+    }),
+  );
+
+  let row;
+  try {
+    row = await prisma.payment_events.create({ data: createData });
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error(
+      logPrefix,
+      'prisma.payment_events.create threw',
+      JSON.stringify({
+        dealId: params.dealId,
+        userId: params.userId,
+        prismaMutation: 'payment_events.create',
+        errorMessage: err.message,
+        errorName: err.name,
+        stack: err.stack,
+      }),
+    );
+    throw error;
+  }
+
+  console.error(
+    logPrefix,
+    'after prisma.payment_events.create',
+    JSON.stringify({
+      dealId: params.dealId,
+      userId: params.userId,
+      paymentEventId: row.id,
+      pilot_deal_id: row.pilot_deal_id,
+    }),
+  );
 
   return { ok: true as const, paymentEvent: row };
 }

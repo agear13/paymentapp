@@ -235,11 +235,55 @@ export async function refreshDealNetworkPilotObligationsForDeal(
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.deal_network_pilot_obligations.deleteMany({
+    console.error(
+      '[deal-network-pilot/payment-events POST]',
+      'before prisma.deal_network_pilot_obligations.deleteMany',
+      JSON.stringify({
+        prismaMutation: 'deal_network_pilot_obligations.deleteMany',
+        userId,
+        dealId: deal.id,
+      }),
+    );
+
+    const deleted = await tx.deal_network_pilot_obligations.deleteMany({
       where: { user_id: userId, deal_id: deal.id },
     });
+
+    console.error(
+      '[deal-network-pilot/payment-events POST]',
+      'after prisma.deal_network_pilot_obligations.deleteMany',
+      JSON.stringify({
+        prismaMutation: 'deal_network_pilot_obligations.deleteMany',
+        userId,
+        dealId: deal.id,
+        deletedCount: deleted.count,
+      }),
+    );
+
     if (rows.length > 0) {
-      await tx.deal_network_pilot_obligations.createMany({ data: rows });
+      console.error(
+        '[deal-network-pilot/payment-events POST]',
+        'before prisma.deal_network_pilot_obligations.createMany',
+        JSON.stringify({
+          prismaMutation: 'deal_network_pilot_obligations.createMany',
+          userId,
+          dealId: deal.id,
+          rowCount: rows.length,
+        }),
+      );
+
+      const created = await tx.deal_network_pilot_obligations.createMany({ data: rows });
+
+      console.error(
+        '[deal-network-pilot/payment-events POST]',
+        'after prisma.deal_network_pilot_obligations.createMany',
+        JSON.stringify({
+          prismaMutation: 'deal_network_pilot_obligations.createMany',
+          userId,
+          dealId: deal.id,
+          insertedCount: created.count,
+        }),
+      );
     }
   });
 }
