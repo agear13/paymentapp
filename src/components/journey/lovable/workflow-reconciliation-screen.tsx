@@ -93,6 +93,7 @@ import {
   type WorkflowObligationRow,
 } from '@/lib/commercial/workflows/settlement-flow.client';
 import { resolveWorkflowSettlementCurrency } from '@/lib/commercial/workflows/development-settlement-simulator.client';
+import { bridgeHackathonPinchPaymentToPilotFunding } from '@/lib/commercial/workflows/hackathon-pinch-funding-bridge.client';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { isParticipantCompensationExempt } from '@/lib/operations/primitives/participant-earnings-primitives';
 import {
@@ -2431,6 +2432,13 @@ function StageCollectionSandbox({
             description,
             onStep: (nextStep) => setStep(nextStep),
           });
+
+      if (hackathonJourneyEnabled && !usePinchSimulator) {
+        await bridgeHackathonPinchPaymentToPilotFunding({
+          dealId: snapshot.dealId,
+          payment: result.payment,
+        });
+      }
 
       setSource(result.source);
       setPayment(result.payment);
