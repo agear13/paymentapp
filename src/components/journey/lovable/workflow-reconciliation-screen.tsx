@@ -93,6 +93,8 @@ import {
   type WorkflowObligationRow,
 } from '@/lib/commercial/workflows/settlement-flow.client';
 import { resolveWorkflowSettlementCurrency } from '@/lib/commercial/workflows/development-settlement-simulator.client';
+import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import { isParticipantCompensationExempt } from '@/lib/operations/primitives/participant-earnings-primitives';
 import {
   CommercialWalkthrough,
   dismissCommercialWalkthrough,
@@ -2869,6 +2871,113 @@ const SETTLE_STEPS = [
   { icon: Flag, label: "Workflow marked complete", detail: "Payouts released" },
 ];
 
+function logSettlementReleasableDiagnostics(input: {
+  dealId: string;
+  snapshotParticipants: DemoParticipant[];
+  obligations: WorkflowObligationRow[];
+}): string[] {
+  const { dealId, snapshotParticipants, obligations } = input;
+  const payeeParticipants = settlementParticipantsForDeal(snapshotParticipants, dealId);
+
+  const participantDiagnostics = snapshotParticipants.map((participant) => {
+    const compensationExempt = isParticipantCompensationExempt(participant);
+    const inPayeeScope = payeeParticipants.some((payee) => payee.id === participant.id);
+    const alreadyPaid =
+      participant.payoutSettlementStatus === "Paid" || Boolean(participant.payoutPaidAt);
+    const releasable = inPayeeScope && !alreadyPaid;
+
+    let excludeFromReleasableReason: string | null = null;
+    if (!inPayeeScope) {
+      if (participant.dealId !== dealId) {
+        excludeFromReleasableReason = "excluded: dealId !== snapshot dealId";
+      } else if (compensationExempt) {
+        excludeFromReleasableReason = "excluded: compensation exempt (not in payee scope)";
+      } else {
+        excludeFromReleasableReason = "excluded: not in settlementParticipantsForDeal result";
+      }
+    } else if (alreadyPaid) {
+      excludeFromReleasableReason = "excluded: payoutSettlementStatus Paid or payoutPaidAt set";
+    }
+
+    return {
+      id: participant.id,
+      role: participant.role,
+      dealId: participant.dealId,
+      payoutSettlementStatus: participant.payoutSettlementStatus ?? null,
+      payoutPaidAt: participant.payoutPaidAt ?? null,
+      compensationExempt,
+      compensationExemptDetail: compensationExempt
+        ? {
+            exemptFromPayout: participant.compensationProfile?.exemptFromPayout ?? null,
+            compensationType: participant.compensationProfile?.compensationType ?? null,
+          }
+        : null,
+      inPayeeScope,
+      releasable,
+      excludeFromReleasableReason,
+    };
+  });
+
+  const releasableIds = payeeParticipants
+    .filter(
+      (participant) =>
+        participant.payoutSettlementStatus !== "Paid" && !participant.payoutPaidAt,
+    )
+    .map((participant) => participant.id);
+
+  console.log("[Stage6 runSettlement] loadWorkflowSettlementSnapshot participants", {
+    dealId,
+    count: snapshotParticipants.length,
+    participants: snapshotParticipants.map((participant) => ({
+      id: participant.id,
+      role: participant.role,
+      dealId: participant.dealId,
+      payoutSettlementStatus: participant.payoutSettlementStatus ?? null,
+      payoutPaidAt: participant.payoutPaidAt ?? null,
+      compensationExempt: isParticipantCompensationExempt(participant),
+    })),
+  });
+
+  console.log("[Stage6 runSettlement] settlementParticipantsForDeal result", {
+    dealId,
+    count: payeeParticipants.length,
+    participantIds: payeeParticipants.map((participant) => participant.id),
+    participants: payeeParticipants.map((participant) => ({
+      id: participant.id,
+      role: participant.role,
+      payoutSettlementStatus: participant.payoutSettlementStatus ?? null,
+      payoutPaidAt: participant.payoutPaidAt ?? null,
+      compensationExempt: isParticipantCompensationExempt(participant),
+    })),
+  });
+
+  console.log("[Stage6 runSettlement] releasableIds computation", {
+    dealId,
+    obligationCount: obligations.length,
+    snapshotParticipantCount: snapshotParticipants.length,
+    payeeParticipantCount: payeeParticipants.length,
+    releasableIdsCount: releasableIds.length,
+    releasableIds,
+    willCallExecuteWorkflowSettlementRelease: releasableIds.length > 0,
+    participantDiagnostics,
+    emptyBecause:
+      releasableIds.length === 0
+        ? payeeParticipants.length === 0
+          ? snapshotParticipants.length === 0
+            ? "no participants returned for dealId"
+            : "all snapshot participants are compensation-exempt (payee scope empty)"
+          : payeeParticipants.every(
+                (participant) =>
+                  participant.payoutSettlementStatus === "Paid" || Boolean(participant.payoutPaidAt),
+              )
+            ? "all payee-scoped participants already Paid"
+            : "payee scope non-empty but filter produced no ids (unexpected)"
+        : null,
+  });
+
+  return releasableIds;
+}
+
 function useWorkflowSettlement(snapshot: WorkflowImportSnapshot | null) {
   const { organizationId, isLoading: orgLoading } = useOrganization();
   const dealId = snapshot?.dealId;
@@ -2937,7 +3046,19 @@ function useWorkflowSettlement(snapshot: WorkflowImportSnapshot | null) {
   }, [dealId]);
 
   const runSettlement = useCallback(async () => {
-    if (!dealId || !organizationId || settlementComplete) return;
+    if (!dealId || !organizationId || settlementComplete) {
+      console.log("[Stage6 runSettlement] aborted before execution", {
+        dealId: dealId ?? null,
+        organizationId: organizationId ?? null,
+        settlementComplete,
+        abortReason: !dealId
+          ? "missing dealId"
+          : !organizationId
+          ? "missing organizationId"
+          : "settlementComplete",
+      });
+      return;
+    }
 
     setExecuting(true);
     setError(null);
@@ -2948,12 +3069,11 @@ function useWorkflowSettlement(snapshot: WorkflowImportSnapshot | null) {
       setObligations(data.obligations);
       setFundingSummary(data.fundingSummary);
 
-      const releasableIds = settlementParticipantsForDeal(data.participants, dealId)
-        .filter(
-          (participant) =>
-            participant.payoutSettlementStatus !== "Paid" && !participant.payoutPaidAt,
-        )
-        .map((participant) => participant.id);
+      const releasableIds = logSettlementReleasableDiagnostics({
+        dealId,
+        snapshotParticipants: data.participants,
+        obligations: data.obligations,
+      });
 
       const releaseCurrency = hackathonCurrencyMode
         ? agreementCurrency
@@ -2961,12 +3081,23 @@ function useWorkflowSettlement(snapshot: WorkflowImportSnapshot | null) {
       const fundingAmount = data.obligations.reduce((sum, row) => sum + row.amount_owed, 0);
 
       if (releasableIds.length > 0) {
+        console.log("[Stage6 runSettlement] calling executeWorkflowSettlementRelease", {
+          dealId,
+          releasableIds,
+          fundingAmount,
+          releaseCurrency,
+        });
         await executeWorkflowSettlementRelease({
           organizationId,
           dealId,
           currency: releaseCurrency,
           participantIds: releasableIds,
           fundingAmount,
+        });
+      } else {
+        console.log("[Stage6 runSettlement] skipping executeWorkflowSettlementRelease", {
+          dealId,
+          reason: "releasableIds.length === 0",
         });
       }
 
