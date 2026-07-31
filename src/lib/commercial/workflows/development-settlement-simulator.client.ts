@@ -11,6 +11,7 @@ import {
   refreshWorkflowObligations,
   type WorkflowObligationRow,
 } from '@/lib/commercial/workflows/settlement-flow.client';
+import { hackathonDemoFundingSourceReference } from '@/lib/payments/settlement-provider-refs';
 
 export { isHackathonJourneyEnabled };
 
@@ -42,7 +43,7 @@ async function ensureHackathonDealFunding(input: {
         mode: 'manual',
         amount: input.amount,
         currency: input.currency,
-        sourceReference: 'Hackathon demo · simulated Stage 5 collection',
+        sourceReference: hackathonDemoFundingSourceReference(input.dealId),
       }),
     },
   );

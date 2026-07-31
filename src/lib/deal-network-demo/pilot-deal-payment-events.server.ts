@@ -10,12 +10,44 @@ import {
   PaymentEventSourceType,
   Prisma,
 } from '@prisma/client';
+import { log } from '@/lib/logger';
+import {
+  isHackathonDemoFundingSourceReference,
+  LEGACY_HACKATHON_DEMO_FUNDING_SOURCE_REFERENCE,
+} from '@/lib/payments/settlement-provider-refs';
 import { prisma } from '@/lib/server/prisma';
 
 export async function getPilotDealForUser(userId: string, dealId: string) {
   return prisma.deal_network_pilot_deals.findFirst({
     where: { id: dealId, user_id: userId },
     select: { id: true, user_id: true },
+  });
+}
+
+async function findExistingConfirmedPaymentEventBySourceReference(params: {
+  dealId: string;
+  sourceReference: string;
+}) {
+  const existing = await prisma.payment_events.findFirst({
+    where: {
+      source_reference: params.sourceReference,
+      event_type: 'PAYMENT_CONFIRMED',
+    },
+  });
+  if (existing) {
+    return existing;
+  }
+
+  if (!isHackathonDemoFundingSourceReference(params.sourceReference, params.dealId)) {
+    return null;
+  }
+
+  return prisma.payment_events.findFirst({
+    where: {
+      source_reference: LEGACY_HACKATHON_DEMO_FUNDING_SOURCE_REFERENCE,
+      pilot_deal_id: params.dealId,
+      event_type: 'PAYMENT_CONFIRMED',
+    },
   });
 }
 
@@ -75,6 +107,27 @@ export async function createManualPilotDealPaymentEvent(params: {
     params.sourceType === 'CSV_IMPORT'
       ? PaymentEventSourceType.CSV_IMPORT
       : PaymentEventSourceType.MANUAL;
+  const sourceReference = params.sourceReference?.trim() || null;
+
+  if (sourceReference) {
+    const existing = await findExistingConfirmedPaymentEventBySourceReference({
+      dealId: params.dealId,
+      sourceReference,
+    });
+
+    if (existing) {
+      log.info('Idempotent skip: PAYMENT_CONFIRMED already exists for source_reference', {
+        dealId: params.dealId,
+        userId: params.userId,
+        sourceReference,
+        matchedSourceReference: existing.source_reference,
+        existingPaymentEventId: existing.id,
+        legacyFallback:
+          existing.source_reference === LEGACY_HACKATHON_DEMO_FUNDING_SOURCE_REFERENCE,
+      });
+      return { ok: true as const, paymentEvent: existing };
+    }
+  }
 
   const createData = {
     id: randomUUID(),
@@ -84,7 +137,7 @@ export async function createManualPilotDealPaymentEvent(params: {
     event_type: 'PAYMENT_CONFIRMED' as const,
     payment_method: null,
     source_type: sourceType,
-    source_reference: params.sourceReference?.trim() || null,
+    source_reference: sourceReference,
     gross_amount: amt,
     net_amount: null,
     amount_received: amt,
