@@ -7,6 +7,14 @@ export const COMMERCIAL_OS_ROUTES = {
   provisioningBuild: '/journey/provisioning?build=1',
   workspace: '/workspace',
   receivables: '/workspace/receivables',
+  invoiceDetail: (reference: string, options?: { id?: string }) => {
+    const encoded = encodeURIComponent(reference.trim());
+    const base = `/workspace/invoice/${encoded}`;
+    if (options?.id?.trim()) {
+      return `${base}?id=${encodeURIComponent(options.id.trim())}`;
+    }
+    return base;
+  },
   workflows: '/workspace/workflows',
   workflowLibrary: '/workspace/workflows',
   workflowDetail: (slug: string) => `/workspace/workflows/${slug}`,

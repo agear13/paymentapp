@@ -43,7 +43,13 @@ import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/formatters/format-currency';
 import { getPaymentLinkUrl } from '@/lib/runtime/customer-facing-url';
 import { CustomerFacingDomainWarning, useCustomerFacingOrigin } from '@/components/operational/customer-facing-origin-provider';
-import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
+import {
+  deletePaymentLink,
+  fetchPaymentLinkDetail,
+  postPaymentLinkManualSettlement,
+  resendPaymentLinkInvoice,
+  sendPaymentLinkInvoice,
+} from '@/lib/payment-links/payment-link-merchant-actions';
 
 function safeCommercialReturnTo(value: string | null): string | null {
   if (!value || !value.startsWith('/workspace')) return null;
@@ -294,19 +300,13 @@ export default function PaymentLinksPage() {
 
   const handleViewDetails = async (paymentLink: PaymentLink) => {
     try {
-      const response = await fetch(`/api/payment-links/${paymentLink.id}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch payment link details');
-      }
-
-      const result = await response.json();
-      setSelectedPaymentLink(result.data);
+      const data = await fetchPaymentLinkDetail(paymentLink.id);
+      setSelectedPaymentLink(data);
       setDetailDialogOpen(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to load payment link details',
+        description: error instanceof Error ? error.message : 'Failed to load payment link details',
         variant: 'destructive',
       });
     }
@@ -317,11 +317,8 @@ export default function PaymentLinksPage() {
     const id = selectedPaymentLink?.id;
     if (!id) return;
     try {
-      const res = await fetch(`/api/payment-links/${id}`);
-      if (res.ok) {
-        const result = await res.json();
-        setSelectedPaymentLink(result.data);
-      }
+      const data = await fetchPaymentLinkDetail(id);
+      setSelectedPaymentLink(data);
     } catch {
       /* ignore refresh errors */
     }
@@ -330,20 +327,7 @@ export default function PaymentLinksPage() {
   const markInvoicePaid = React.useCallback(
     async (paymentLink: { id: string }) => {
       try {
-        const res = await csrfAwareFetch(`/api/payment-links/${paymentLink.id}/manual-settlement`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'mark_paid' }),
-        });
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        if (!res.ok) {
-          throw new Error(
-            typeof body.error === 'string' && body.error.trim()
-              ? body.error.trim()
-              : 'Could not mark invoice as paid'
-          );
-        }
-
+        await postPaymentLinkManualSettlement(paymentLink.id, 'mark_paid');
         toast({
           title: 'Invoice marked as paid',
           description: 'Manual payment has been recorded successfully.',
@@ -367,26 +351,16 @@ export default function PaymentLinksPage() {
 
   const handleSendInvoice = async (paymentLink: PaymentLinkDetailPayload, email: string) => {
     try {
-      const response = await fetch(`/api/payment-links/${paymentLink.id}/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || 'Could not send invoice');
-      }
-
+      await sendPaymentLinkInvoice(paymentLink.id, email);
       toast({
         title: 'Invoice sent',
         description: `Invoice sent to ${email}.`,
       });
       await handleManualSettlementComplete();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Could not send invoice',
-        description: error.message || 'Could not send invoice',
+        description: error instanceof Error ? error.message : 'Could not send invoice',
         variant: 'destructive',
       });
       throw error;
@@ -395,24 +369,16 @@ export default function PaymentLinksPage() {
 
   const handleResend = async (paymentLink: PaymentLinkDetailPayload) => {
     try {
-      const response = await fetch(`/api/payment-links/${paymentLink.id}/resend`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Could not resend invoice');
-      }
-
+      await resendPaymentLinkInvoice(paymentLink.id);
       toast({
         title: 'Invoice resent',
         description: 'Invoice sent to the last recipient email.',
       });
       await handleManualSettlementComplete();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Could not send invoice',
-        description: error.message || 'Could not send invoice',
+        description: error instanceof Error ? error.message : 'Could not send invoice',
         variant: 'destructive',
       });
       throw error;
@@ -441,11 +407,8 @@ export default function PaymentLinksPage() {
     await fetchPaymentLinks({ silent: true });
     if (shouldRefreshDetail && editedId) {
       try {
-        const res = await fetch(`/api/payment-links/${editedId}`);
-        if (res.ok) {
-          const result = await res.json();
-          setSelectedPaymentLink(result.data);
-        }
+        const data = await fetchPaymentLinkDetail(editedId);
+        setSelectedPaymentLink(data);
       } catch {
         /* ignore */
       }
@@ -539,24 +502,7 @@ export default function PaymentLinksPage() {
     const deletedId = linkToDelete.id;
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/payment-links/${deletedId}/delete`, {
-        method: 'POST',
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        if (response.status === 403) {
-          throw new Error(
-            'You do not have permission to delete invoices for this organization. Ask an admin to grant invoice delete access.'
-          );
-        }
-        throw new Error(
-          typeof payload.error === 'string' && payload.error.trim()
-            ? payload.error.trim()
-            : 'Failed to delete invoice'
-        );
-      }
-
+      await deletePaymentLink(deletedId);
       toast({
         title: 'Invoice deleted',
         description: 'The invoice was removed from your workspace.',

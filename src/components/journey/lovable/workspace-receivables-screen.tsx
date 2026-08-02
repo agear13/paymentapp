@@ -4,7 +4,7 @@ import '@/components/journey/lovable/lovable-journey.css';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { format, formatDistanceToNow, isPast, startOfMonth } from 'date-fns';
+import { format, formatDistanceToNow, startOfMonth } from 'date-fns';
 import {
   Sparkles,
   Plus,
@@ -26,24 +26,24 @@ import { useOrganization } from '@/hooks/use-organization';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/formatters/format-currency';
 import { exportToCSV, type ExportColumn } from '@/lib/export-csv';
-import { invoiceCreationLabelForPaymentMethod } from '@/lib/payments/payment-rail-registry';
 import {
   COMMERCIAL_OS_ROUTES,
   legacyPaymentLinksHandoffUrl,
 } from '@/lib/journey/commercial-os-routes';
 import {
+  formatInvoiceDueLabel,
+  invoicePaymentMethodLabel,
+  invoicePublicReference,
+  INVOICE_DISPLAY_STATUS_CLS,
+  toInvoiceDisplayStatus,
+} from '@/lib/payment-links/invoice-display-status';
+import {
   receivablesInvoiceXeroColumn,
   type XeroSyncRecordLike,
 } from '@/lib/xero/xero-sync-display';
 
-type InvStatus = 'Paid' | 'Sent' | 'Overdue' | 'Draft';
 
-const STATUS_CLS: Record<InvStatus, string> = {
-  Paid: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
-  Sent: 'bg-primary/10 text-primary',
-  Overdue: 'bg-destructive/10 text-destructive',
-  Draft: 'bg-secondary text-ink-soft',
-};
+const STATUS_CLS = INVOICE_DISPLAY_STATUS_CLS;
 
 const ACT_ICON = {
   paid: { icon: Check, cls: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
@@ -74,46 +74,9 @@ const QUICK = [
   { label: 'Reports', icon: BarChart3, href: '/dashboard/reports' },
 ];
 
-function toDisplayStatus(link: PaymentLink): InvStatus {
-  if (link.status === 'PAID') return 'Paid';
-  if (link.status === 'DRAFT') return 'Draft';
-  if (link.dueDate) {
-    const due = new Date(link.dueDate);
-    if (!Number.isNaN(due.getTime()) && isPast(due)) return 'Overdue';
-  }
-  return 'Sent';
-}
-
-function formatDueLabel(link: PaymentLink): string {
-  if (link.status === 'PAID') {
-    if (link.paidAt) {
-      const paid = new Date(link.paidAt);
-      if (!Number.isNaN(paid.getTime())) return `Paid ${formatDistanceToNow(paid, { addSuffix: true })}`;
-    }
-    return 'Paid';
-  }
-  if (link.status === 'DRAFT') return 'Not sent';
-  if (!link.dueDate) return '—';
-  const due = new Date(link.dueDate);
-  if (Number.isNaN(due.getTime())) return '—';
-  return formatDistanceToNow(due, { addSuffix: true });
-}
-
-function paymentMethodLabel(link: PaymentLink): string {
-  if (link.invoiceOnlyMode) return 'Invoice only';
-  if (!link.paymentMethod) return '—';
-  try {
-    return invoiceCreationLabelForPaymentMethod(link.paymentMethod as Parameters<
-      typeof invoiceCreationLabelForPaymentMethod
-    >[0]);
-  } catch {
-    return link.paymentMethod;
-  }
-}
-
 function sortedRelevantInvoiceIds(links: PaymentLink[]): string[] {
-  const priority = (link: PaymentLink) => {
-    const status = toDisplayStatus(link);
+    const priority = (link: PaymentLink) => {
+      const status = toInvoiceDisplayStatus(link);
     if (status === 'Overdue') return 0;
     if (status === 'Sent') return 1;
     if (status === 'Draft') return 2;
@@ -369,7 +332,7 @@ export function WorkspaceReceivablesScreen() {
   }, [paymentLinks, monthStart]);
 
   const liveLines = useMemo(() => {
-    const overdue = paymentLinks.filter((l) => toDisplayStatus(l) === 'Overdue').length;
+    const overdue = paymentLinks.filter((l) => toInvoiceDisplayStatus(l) === 'Overdue').length;
     const drafts = paymentLinks.filter((l) => l.status === 'DRAFT').length;
     const paidRecent = paymentLinks.filter((l) => {
       if (l.status !== 'PAID' || !l.paidAt) return false;
@@ -404,8 +367,8 @@ export function WorkspaceReceivablesScreen() {
   const tableRows = useMemo(() => {
     return [...paymentLinks]
       .sort((a, b) => {
-        const priority = (link: PaymentLink) => {
-          const status = toDisplayStatus(link);
+    const priority = (link: PaymentLink) => {
+      const status = toInvoiceDisplayStatus(link);
           if (status === 'Overdue') return 0;
           if (status === 'Sent') return 1;
           if (status === 'Draft') return 2;
@@ -416,11 +379,12 @@ export function WorkspaceReceivablesScreen() {
       .slice(0, 5)
       .map((link) => ({
         id: link.id,
-        status: toDisplayStatus(link),
+        status: toInvoiceDisplayStatus(link),
         customer: link.customerName || link.customerEmail || '—',
         amount: formatCurrency(Number(link.amount), link.currency),
-        due: formatDueLabel(link),
-        method: paymentMethodLabel(link),
+        due: formatInvoiceDueLabel(link),
+        method: invoicePaymentMethodLabel(link),
+        invoiceRef: invoicePublicReference(link),
       }));
   }, [paymentLinks]);
 
@@ -433,7 +397,7 @@ export function WorkspaceReceivablesScreen() {
     }[] = [];
 
     for (const link of paymentLinks) {
-      const ref = link.invoiceReference || link.shortCode;
+      const ref = invoicePublicReference(link);
       const amount = formatCurrency(Number(link.amount), link.currency);
       const customer = link.customerName || link.customerEmail || 'Customer';
 
@@ -441,7 +405,7 @@ export function WorkspaceReceivablesScreen() {
         const paid = new Date(link.paidAt);
         items.push({
           title: `Invoice ${ref} paid`,
-          detail: `${amount} · ${paymentMethodLabel(link)}`,
+          detail: `${amount} · ${invoicePaymentMethodLabel(link)}`,
           time: formatDistanceToNow(paid, { addSuffix: true }),
           kind: link.paymentMethod === 'HEDERA' || link.paymentMethod === 'EVM_WALLET' ? 'crypto' : 'paid',
         });
@@ -460,7 +424,7 @@ export function WorkspaceReceivablesScreen() {
         if (event.eventType === 'PAYMENT_CONFIRMED' && link.status !== 'PAID') {
           items.push({
             title: 'Payment received',
-            detail: `${amount} · ${paymentMethodLabel(link)}`,
+            detail: `${amount} · ${invoicePaymentMethodLabel(link)}`,
             time: formatDistanceToNow(new Date(event.createdAt), { addSuffix: true }),
             kind: 'paid',
           });
@@ -749,10 +713,7 @@ export function WorkspaceReceivablesScreen() {
                         type="button"
                         onClick={() =>
                           router.push(
-                            legacyPaymentLinksHandoffUrl({
-                              invoiceId: inv.id,
-                              returnTo: returnToReceivables,
-                            })
+                            COMMERCIAL_OS_ROUTES.invoiceDetail(inv.invoiceRef, { id: inv.id })
                           )
                         }
                         className="rounded-lg px-2.5 py-1 text-[12.5px] font-medium text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
