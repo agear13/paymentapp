@@ -10,6 +10,8 @@ export { WorkspaceProvisioningScreen } from '@/components/journey/lovable/worksp
 export { ProvisioningPageClient } from '@/components/journey/lovable/provisioning-page-client';
 export { WorkspaceLayout } from '@/components/journey/lovable/workspace-layout';
 export { WorkspaceHomeScreen } from '@/components/journey/lovable/workspace-home-screen';
+export { WorkspaceStartScreen } from '@/components/journey/lovable/workspace-start-screen';
+export { WorkspaceReceivablesScreen } from '@/components/journey/lovable/workspace-receivables-screen';
 export { WorkspaceWorkflowsScreen } from '@/components/journey/lovable/workspace-workflows-screen';
 export { WorkspaceTimelineScreen } from '@/components/journey/lovable/workspace-timeline-screen';
 export { WorkspaceConnectedScreen } from '@/components/journey/lovable/workspace-connected-screen';

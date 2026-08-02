@@ -1,5 +1,5 @@
-import { WorkspaceHomeScreen } from '@/components/journey/lovable/workspace-home-screen';
+import { WorkspaceStartScreen } from '@/components/journey/lovable/workspace-start-screen';
 
 export default function CommercialWorkspacePage() {
-  return <WorkspaceHomeScreen />;
+  return <WorkspaceStartScreen />;
 }

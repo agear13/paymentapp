@@ -100,3 +100,28 @@ export function getXeroSyncDisplayStatus(
     isProgress: sync.status === 'PENDING',
   };
 }
+
+/** Compact Xero column for receivables list — null when sync data is unavailable. */
+export function receivablesInvoiceXeroColumn(
+  syncs: XeroSyncRecordLike[] | undefined
+): { label: string; dotClass: string } | null {
+  if (!syncs || syncs.length === 0) return null;
+  const invoiceSync = syncs.find((s) => s.syncType === 'INVOICE');
+  if (!invoiceSync) return null;
+  const display = getXeroSyncDisplayStatus(invoiceSync, syncs);
+  const label =
+    display.label === 'SUCCESS'
+      ? 'Synced'
+      : display.label === 'FAILED'
+        ? 'Failed'
+        : display.label;
+  const dotClass =
+    display.variant === 'success'
+      ? 'bg-emerald-500'
+      : display.variant === 'destructive'
+        ? 'bg-destructive'
+        : display.isProgress
+          ? 'bg-amber-500'
+          : 'bg-muted-foreground';
+  return { label, dotClass };
+}

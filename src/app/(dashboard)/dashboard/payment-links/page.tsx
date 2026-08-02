@@ -6,7 +6,7 @@
 'use client';
 
 import * as React from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, RefreshCw, Download } from 'lucide-react';
 import { useOrganization } from '@/hooks/use-organization';
 
@@ -45,9 +45,16 @@ import { getPaymentLinkUrl } from '@/lib/runtime/customer-facing-url';
 import { CustomerFacingDomainWarning, useCustomerFacingOrigin } from '@/components/operational/customer-facing-origin-provider';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 
+function safeCommercialReturnTo(value: string | null): string | null {
+  if (!value || !value.startsWith('/workspace')) return null;
+  return value;
+}
+
 export default function PaymentLinksPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const deepLinkInvoiceOpenedRef = React.useRef(false);
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
   const [paymentLinks, setPaymentLinks] = React.useState<PaymentLink[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -93,7 +100,7 @@ export default function PaymentLinksPage() {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
 
   React.useEffect(() => {
-    if (searchParams.get('action') === 'create') {
+    if (searchParams?.get('action') === 'create') {
       setCreateDialogOpen(true);
     }
   }, [searchParams]);
@@ -160,6 +167,33 @@ export default function PaymentLinksPage() {
       fetchPaymentLinks();
     }
   }, [fetchPaymentLinks, isOrgLoading, organizationId]);
+
+  React.useEffect(() => {
+    const invoiceId = searchParams?.get('invoiceId');
+    if (!invoiceId || !organizationId || isLoading || deepLinkInvoiceOpenedRef.current) {
+      return;
+    }
+    deepLinkInvoiceOpenedRef.current = true;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/payment-links/${invoiceId}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch payment link details');
+        }
+        const result = await response.json();
+        setSelectedPaymentLink(result.data);
+        setDetailDialogOpen(true);
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : 'Failed to load payment link details';
+        toast({
+          title: 'Error',
+          description: message,
+          variant: 'destructive',
+        });
+      }
+    })();
+  }, [searchParams, organizationId, isLoading, toast]);
 
   // Enable real-time polling when there are OPEN or DRAFT payment links
   const hasActiveLinks = React.useMemo(() => {
@@ -243,6 +277,12 @@ export default function PaymentLinksPage() {
       title: 'Invoice created',
       description: 'Invoice is ready. Share manually, or send by email when selected.',
     });
+    const returnTo = safeCommercialReturnTo(searchParams?.get('returnTo') ?? null);
+    if (returnTo) {
+      void fetchPaymentLinks({ silent: true });
+      router.push(returnTo);
+      return;
+    }
     setNewlyCreatedLink({
       id: String(newPaymentLink?.id ?? ''),
       shortCode: String(newPaymentLink?.shortCode ?? ''),
