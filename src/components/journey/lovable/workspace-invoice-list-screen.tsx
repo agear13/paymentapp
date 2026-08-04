@@ -3,7 +3,6 @@
 import '@/components/journey/lovable/lovable-journey.css';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { format } from 'date-fns';
 import {
   ArrowLeft,
   ArrowRight,
@@ -76,6 +75,7 @@ export function WorkspaceInvoiceListScreen() {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTER)[number]>('All');
   const [xeroSyncById, setXeroSyncById] = useState<Record<string, XeroSyncRecordLike[] | null>>({});
@@ -87,13 +87,16 @@ export function WorkspaceInvoiceListScreen() {
       return;
     }
     setIsLoading(true);
+    setLoadError(null);
     try {
       const data = await fetchAllPaymentLinks<PaymentLink>({ organizationId });
       setPaymentLinks(data);
     } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Request failed';
+      setLoadError(message);
       toast({
         title: 'Could not load invoices',
-        description: error instanceof Error ? error.message : 'Request failed',
+        description: message,
         variant: 'destructive',
       });
     } finally {
@@ -119,6 +122,11 @@ export function WorkspaceInvoiceListScreen() {
       return ref.includes(q) || customer.includes(q) || desc.includes(q);
     });
   }, [paymentLinks, search, statusFilter]);
+
+  const hasActiveFilters = search.trim().length > 0 || statusFilter !== 'All';
+  const isEmptyList = !isLoading && !loadError && paymentLinks.length === 0;
+  const isFilteredEmpty =
+    !isLoading && !loadError && paymentLinks.length > 0 && filteredLinks.length === 0;
 
   useEffect(() => {
     if (!organizationId || filteredLinks.length === 0) {
@@ -229,7 +237,38 @@ export function WorkspaceInvoiceListScreen() {
                   <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                 </td>
               </tr>
-            ) : filteredLinks.length === 0 ? (
+            ) : loadError ? (
+              <tr>
+                <td colSpan={8} className="px-5 py-12 text-center">
+                  <p className="text-[14px] font-medium text-foreground">Unable to load invoices</p>
+                  <p className="mt-2 text-[13px] text-ink-soft">{loadError}</p>
+                  <button
+                    type="button"
+                    onClick={() => void fetchPaymentLinks()}
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium transition-colors hover:bg-secondary"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Try again
+                  </button>
+                </td>
+              </tr>
+            ) : isEmptyList ? (
+              <tr>
+                <td colSpan={8} className="px-5 py-12 text-center">
+                  <p className="text-[14px] font-medium text-foreground">No invoices yet</p>
+                  <p className="mt-2 text-[13px] text-ink-soft">
+                    Create your first invoice to start collecting payments.
+                  </p>
+                  <Link
+                    href={COMMERCIAL_OS_ROUTES.createInvoice}
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2 text-[13px] font-semibold text-primary-foreground shadow-glow"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create invoice
+                  </Link>
+                </td>
+              </tr>
+            ) : isFilteredEmpty ? (
               <tr>
                 <td colSpan={8} className="px-5 py-12 text-center text-ink-soft">
                   No invoices match your filters.

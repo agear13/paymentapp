@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { deriveCalendarEvents } from '@/lib/calendar/derive-calendar-events';
 import { fetchAllPaymentLinks } from '@/lib/payment-links/fetch-payment-links-list.client';
 import { filterCalendarEvents } from '@/lib/calendar/calendar-utils';
 import type {

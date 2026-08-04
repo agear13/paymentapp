@@ -2,13 +2,12 @@
 
 import '@/components/journey/lovable/lovable-journey.css';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import {
   Sparkles,
   ArrowLeft,
-  ArrowRight,
   Check,
   ChevronDown,
   Copy,
@@ -71,6 +70,7 @@ import {
 import { buildExplorerUrl } from '@/lib/payments/crypto-confirmation-verification';
 import { getXeroSyncDisplayStatus, receivablesInvoiceXeroColumn } from '@/lib/xero/xero-sync-display';
 import { isValidShortCode } from '@/lib/short-code';
+import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
 
 type WorkspaceInvoiceDetailScreenProps = {
   invoiceNumber: string;
@@ -226,11 +226,73 @@ function hasXeroData(detail: PaymentLinkDetails): boolean {
   );
 }
 
+function xeroAccountingSummary(detail: PaymentLinkDetails): {
+  tone: 'default' | 'success' | 'info';
+  title: string;
+  message: React.ReactNode;
+} {
+  const syncs = detail.xeroSyncs ?? [];
+  const invoiceSync = syncs.find((s) => s.syncType === 'INVOICE');
+  const paymentSync = syncs.find((s) => s.syncType === 'PAYMENT');
+  const isPaid = detail.status === 'PAID' || detail.status === 'PAID_UNVERIFIED';
+
+  if (syncs.length === 0) {
+    return {
+      tone: 'info',
+      title: 'Xero synchronisation',
+      message: isPaid
+        ? 'Provvy will automatically queue this invoice and payment for synchronisation with Xero. No action is required — check back here for status updates.'
+        : 'This invoice has not been synchronised yet. Once payment is received, Provvy will automatically queue it for synchronisation with Xero. No action is required.',
+    };
+  }
+
+  const anyFailed = syncs.some((s) => s.status === 'FAILED');
+  const anyPending = syncs.some((s) => s.status === 'PENDING' || s.status === 'RETRYING');
+  const invoiceSuccess = invoiceSync?.status === 'SUCCESS';
+  const paymentSuccess = paymentSync?.status === 'SUCCESS';
+
+  if (anyFailed) {
+    return {
+      tone: 'default',
+      title: 'Xero sync needs attention',
+      message:
+        'Something went wrong while syncing to Xero. Review the sync history below and check your account mappings on the Xero setup page.',
+    };
+  }
+
+  if (anyPending) {
+    return {
+      tone: 'info',
+      title: 'Sync in progress',
+      message:
+        'Provvy is processing this invoice for Xero. This usually completes within a few minutes — no action is required.',
+    };
+  }
+
+  if (invoiceSuccess && (paymentSuccess || !isPaid)) {
+    return {
+      tone: 'success',
+      title: 'Synced with Xero',
+      message: paymentSuccess
+        ? 'This invoice and payment are in Xero. Your ledger stays aligned automatically.'
+        : 'This invoice is in Xero. When payment is received, Provvy will sync the payment too.',
+    };
+  }
+
+  return {
+    tone: 'info',
+    title: 'Xero synchronisation',
+    message: 'Provvy keeps your invoices and payments aligned with Xero automatically.',
+  };
+}
+
 export function WorkspaceInvoiceDetailScreen({
   invoiceNumber,
   paymentLinkId,
 }: WorkspaceInvoiceDetailScreenProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sendSectionRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const { state, refresh } = usePaymentLinkDetail({
@@ -253,6 +315,19 @@ export function WorkspaceInvoiceDetailScreen({
   const [editOpen, setEditOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [aiDismissed, setAiDismissed] = useState<number[]>([]);
+
+  const goToSendSection = useCallback(() => {
+    setActiveTab('payment');
+    window.requestAnimationFrame(() => {
+      sendSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (searchParams?.get('send') === '1' && state.status === 'ready') {
+      goToSendSection();
+    }
+  }, [searchParams, state.status, goToSendSection]);
 
   useEffect(() => {
     if (state.status === 'ready') {
@@ -466,6 +541,12 @@ export function WorkspaceInvoiceDetailScreen({
     : detail.amount;
   const payStatus = toPaymentDisplayStatus(detail, amountOutstanding, invoiceAmount);
   const xeroDisplay = receivablesInvoiceXeroColumn(detail.xeroSyncs);
+  const xeroGuidance = xeroAccountingSummary(detail);
+  const canSend = canResendPaymentLink(detail.status);
+  const isPaidInvoice =
+    detail.status === 'PAID' ||
+    detail.status === 'PAID_UNVERIFIED' ||
+    displayStatus === 'Paid';
   const hero = invoiceHeroState(detail);
   const timeline = buildTimelineEntries(detail, lifecycle);
   const showCrypto = isCryptoRail(detail) || Boolean(ready.cryptoConfirmation);
@@ -569,6 +650,40 @@ export function WorkspaceInvoiceDetailScreen({
           <ActionButton label="Delete" icon={Trash2} danger onClick={() => setConfirmDeleteOpen(true)} />
         </div>
       </header>
+
+      {canSend ? (
+        <CommercialOsNextStepBanner
+          message="Send this invoice to your customer so they can view details and pay online."
+          action={
+            <button
+              type="button"
+              onClick={goToSendSection}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-purple px-4 text-[13px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110"
+            >
+              <Send className="h-4 w-4" />
+              Send invoice
+            </button>
+          }
+        />
+      ) : null}
+
+      {isPaidInvoice ? (
+        <CommercialOsNextStepBanner
+          tone="success"
+          title="Payment received"
+          message="Provvy will now automatically reconcile this payment with Xero. Check the Accounting tab for sync status."
+          action={
+            <button
+              type="button"
+              onClick={() => setActiveTab('accounting')}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-[13px] font-medium transition-colors hover:bg-secondary"
+            >
+              View Xero sync
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          }
+        />
+      ) : null}
 
       <nav aria-label="Invoice sections" className="flex flex-wrap gap-2 border-b border-border pb-1">
         {DETAIL_TABS.map((tab) => (
@@ -727,7 +842,11 @@ export function WorkspaceInvoiceDetailScreen({
               </div>
 
               {canResendPaymentLink(detail.status) ? (
-                <div className="space-y-3 rounded-2xl border border-border bg-background p-5">
+                <div
+                  id="send-invoice-section"
+                  ref={sendSectionRef}
+                  className="space-y-3 rounded-2xl border border-border bg-background p-5"
+                >
                   <label className="text-[11px] font-medium uppercase tracking-wider text-ink-soft" htmlFor="send-email">
                     Send invoice
                   </label>
@@ -882,6 +1001,12 @@ export function WorkspaceInvoiceDetailScreen({
 
           {activeTab === 'accounting' ? (
             <>
+              <CommercialOsNextStepBanner
+                tone={xeroGuidance.tone}
+                title={xeroGuidance.title}
+                message={xeroGuidance.message}
+              />
+
               {showXero ? (
                 <ExpandableCard title="Xero sync" summary={xeroDisplay?.label ?? 'Xero'} defaultOpen>
                   <div className="space-y-6">
@@ -919,11 +1044,7 @@ export function WorkspaceInvoiceDetailScreen({
                     ) : null}
                   </div>
                 </ExpandableCard>
-              ) : (
-                <section className="rounded-2xl border border-border bg-card p-6 text-[13px] text-ink-soft shadow-card">
-                  No Xero sync data for this invoice yet.
-                </section>
-              )}
+              ) : null}
 
               <ExpandableCard
                 title="Ledger entries"

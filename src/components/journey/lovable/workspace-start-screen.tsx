@@ -30,7 +30,7 @@ const CARDS: {
     title: 'Create Invoice',
     desc: 'Create an invoice or payment link and accept fiat or crypto payments.',
     icon: FilePlus2,
-    to: COMMERCIAL_OS_ROUTES.receivables,
+    to: COMMERCIAL_OS_ROUTES.createInvoice,
   },
   {
     id: 'manage-invoices',

@@ -37,6 +37,10 @@ import {
   toInvoiceDisplayStatus,
 } from '@/lib/payment-links/invoice-display-status';
 import { fetchAllPaymentLinks } from '@/lib/payment-links/fetch-payment-links-list.client';
+import {
+  receivablesInvoiceXeroColumn,
+  type XeroSyncRecordLike,
+} from '@/lib/xero/xero-sync-display';
 
 
 const STATUS_CLS = INVOICE_DISPLAY_STATUS_CLS;
@@ -56,7 +60,10 @@ type ConnectedSystemCard = {
   detail: string;
 };
 
-const QUICK = [
+const QUICK: Array<
+  | { label: string; icon: typeof Plus; href: string; comingSoon?: false }
+  | { label: string; icon: typeof Plus; comingSoon: true; description: string }
+> = [
   {
     label: 'Create Invoice',
     icon: Plus,
@@ -64,7 +71,12 @@ const QUICK = [
   },
   { label: 'Recurring Invoices', icon: Repeat, href: '/dashboard/recurring-templates' },
   { label: 'Collections', icon: PhoneCall, href: COMMERCIAL_OS_ROUTES.timeline },
-  { label: 'Reports', icon: BarChart3, href: '/dashboard/reports' },
+  {
+    label: 'Reports',
+    icon: BarChart3,
+    comingSoon: true,
+    description: 'Revenue and reconciliation reports are on the way.',
+  },
 ];
 
 function sortedRelevantInvoiceIds(links: PaymentLink[]): string[] {
@@ -585,17 +597,39 @@ export function WorkspaceReceivablesScreen() {
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
             <h2 className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">Quick actions</h2>
             <div className="mt-3 space-y-1">
-              {QUICK.map(({ label, icon: Icon, href }) => (
-                <Link
-                  key={label}
-                  href={href}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Icon className="h-4 w-4 text-ink-soft" />
-                  {label}
-                  <ArrowRight className="ml-auto h-3.5 w-3.5 text-ink-soft" />
-                </Link>
-              ))}
+              {QUICK.map((item) => {
+                const Icon = item.icon;
+                if (item.comingSoon) {
+                  return (
+                    <div
+                      key={item.label}
+                      className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px]"
+                    >
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-ink-soft" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 font-medium">
+                          {item.label}
+                          <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-soft">
+                            Coming soon
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[12px] text-ink-soft">{item.description}</p>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Icon className="h-4 w-4 text-ink-soft" />
+                    {item.label}
+                    <ArrowRight className="ml-auto h-3.5 w-3.5 text-ink-soft" />
+                  </Link>
+                );
+              })}
             </div>
           </div>
 

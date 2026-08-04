@@ -14,6 +14,11 @@ export default function PaymentLinksPage() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    if (!searchParams) {
+      router.replace(COMMERCIAL_OS_ROUTES.invoiceList);
+      return;
+    }
+
     const action = searchParams.get('action');
     const invoiceId = searchParams.get('invoiceId') || searchParams.get('open');
 

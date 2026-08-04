@@ -11,10 +11,10 @@ import {
   Check,
   Copy,
   CreditCard,
-  ExternalLink,
   FileText,
   Landmark,
   Loader2,
+  Send,
   Sparkles,
   User,
 } from 'lucide-react';
@@ -42,6 +42,7 @@ import {
   toPaymentLinkRailSnapshot,
 } from '@/lib/payment-links/setup-status';
 import { isValidShortCode } from '@/lib/short-code';
+import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
 
 type MerchantSettingsSnapshot = {
   stripeAccountId?: string | null;
@@ -119,14 +120,15 @@ function CreateInvoiceSuccess({
 }) {
   const reference = invoicePublicReference(created);
   const detailHref = COMMERCIAL_OS_ROUTES.invoiceDetail(reference, { id: created.id });
+  const sendHref = `${detailHref}?send=1`;
 
   return (
-    <div className="animate-fade-up mx-auto max-w-2xl space-y-8 pb-24 pt-4 text-center">
-      <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-        <Check className="h-8 w-8" />
-      </div>
-      <div>
-        <h1 className="text-3xl font-semibold tracking-[-0.03em]">Invoice created</h1>
+    <div className="animate-fade-up mx-auto max-w-2xl space-y-8 pb-24 pt-4">
+      <div className="text-center">
+        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+          <Check className="h-8 w-8" />
+        </div>
+        <h1 className="mt-6 text-3xl font-semibold tracking-[-0.03em]">Invoice created</h1>
         <p className="mt-3 text-[15px] text-ink-soft">
           {reference} is ready to send
           {created.amount != null && created.currency
@@ -136,13 +138,27 @@ function CreateInvoiceSuccess({
         </p>
       </div>
 
+      <CommercialOsNextStepBanner
+        title="Next recommended action"
+        message="Send this invoice to your customer so they can view details and pay."
+        action={
+          <Link
+            href={sendHref}
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-purple px-5 text-[13.5px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110"
+          >
+            <Send className="h-4 w-4" />
+            Send invoice
+          </Link>
+        }
+      />
+
       <div className="grid gap-3 sm:grid-cols-3">
         <Link
           href={detailHref}
-          className="inline-flex h-12 flex-col items-center justify-center gap-1 rounded-2xl border border-primary/25 bg-accent/30 px-4 text-[13px] font-semibold transition-colors hover:bg-accent/50"
+          className="inline-flex h-12 flex-col items-center justify-center gap-1 rounded-2xl border border-border bg-card px-4 text-[13px] font-semibold transition-colors hover:bg-secondary"
         >
-          <FileText className="h-4 w-4 text-primary" />
-          View invoice
+          <FileText className="h-4 w-4" />
+          Open invoice
         </Link>
         <button
           type="button"
@@ -153,21 +169,13 @@ function CreateInvoiceSuccess({
           {copied ? 'Copied' : 'Copy payment link'}
         </button>
         <Link
-          href={COMMERCIAL_OS_ROUTES.receivables}
+          href={COMMERCIAL_OS_ROUTES.workspace}
           className="inline-flex h-12 flex-col items-center justify-center gap-1 rounded-2xl border border-border bg-card px-4 text-[13px] font-semibold transition-colors hover:bg-secondary"
         >
           <ArrowRight className="h-4 w-4" />
-          Back to receivables
+          Return to workspace
         </Link>
       </div>
-
-      <Link
-        href={detailHref}
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium text-primary hover:underline"
-      >
-        Open invoice workspace
-        <ExternalLink className="h-3.5 w-3.5" />
-      </Link>
     </div>
   );
 }
@@ -386,6 +394,14 @@ export function WorkspaceCreateInvoiceScreen() {
     return 'Review the preview, then create your invoice.';
   }, [draft, railSetup.anyRailConfigured]);
 
+  const hasXeroConnected = useMemo(
+    () => (connectedSystems ?? []).some((s) => s.name === 'Xero'),
+    [connectedSystems]
+  );
+
+  const showPaymentRailGuidance =
+    hasXeroConnected && !railSetup.anyRailConfigured && merchantSettingsLoaded;
+
   const previewAmount =
     draft.amount && draft.amount > 0
       ? formatCurrency(draft.amount, draft.currency)
@@ -433,7 +449,9 @@ export function WorkspaceCreateInvoiceScreen() {
     const pm = draft.paymentMethod;
     if (pm && pm !== 'CRYPTO' && pm !== 'MANUAL_BANK') {
       if (!railSetup.anyRailConfigured) {
-        setSubmitError('Connect Stripe, Wise, or another payment method before creating invoices.');
+        setSubmitError(
+          'Connect Stripe or Wise in Connected Systems, or choose Manual Bank Transfer or Crypto to create this invoice.'
+        );
         return;
       }
       const guardrailKind = guardrailKindForUnconfiguredPaymentMethod(pm, railSetup);
@@ -516,6 +534,25 @@ export function WorkspaceCreateInvoiceScreen() {
           ))}
         </nav>
       </header>
+
+      {showPaymentRailGuidance ? (
+        <CommercialOsNextStepBanner
+          tone="info"
+          title="Payment options"
+          message={
+            <>
+              You can still create invoices today using{' '}
+              <strong className="font-medium text-foreground">Manual Bank Transfer</strong> or{' '}
+              <strong className="font-medium text-foreground">Crypto</strong>. Connect Stripe later
+              in{' '}
+              <Link href={COMMERCIAL_OS_ROUTES.connected} className="font-medium text-primary hover:underline">
+                Connected Systems
+              </Link>{' '}
+              if you want to accept card payments.
+            </>
+          }
+        />
+      ) : null}
 
       <section className="mt-8 rounded-2xl border border-primary/25 bg-gradient-to-br from-accent/40 to-card p-6 shadow-card">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -700,12 +737,14 @@ export function WorkspaceCreateInvoiceScreen() {
               ))}
             </fieldset>
             {!railSetup.anyRailConfigured ? (
-              <p className="mt-4 text-[12.5px] text-ink-soft">
-                No payment rails connected yet.{' '}
+              <p className="mt-4 text-[12.5px] leading-relaxed text-ink-soft">
+                Card and Wise payments need a connected rail. Choose{' '}
+                <strong className="font-medium text-foreground">Manual Bank Transfer</strong> or{' '}
+                <strong className="font-medium text-foreground">Crypto</strong> to invoice today, or{' '}
                 <Link href={COMMERCIAL_OS_ROUTES.connected} className="font-medium text-primary hover:underline">
-                  Set up in Connected Systems
-                </Link>
-                .
+                  set up payments
+                </Link>{' '}
+                in Connected Systems.
               </p>
             ) : null}
           </FormCard>

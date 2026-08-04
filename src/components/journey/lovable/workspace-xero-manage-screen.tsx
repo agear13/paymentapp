@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { XeroIntegrationPanel } from '@/components/dashboard/settings/xero-integration-panel';
 import { XeroOAuthSuccessBanner } from '@/components/xero/xero-oauth-success-banner';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
+import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
 
 type WorkspaceXeroManageScreenProps = {
   organizationId: string;
@@ -47,6 +48,20 @@ export function WorkspaceXeroManageScreen({
           in the right accounts. This usually takes about a minute.
         </p>
       </header>
+
+      <CommercialOsNextStepBanner
+        title="Complete your setup"
+        message="Confirm your account mappings below, then create your first invoice. Provvy will sync invoices and payments to Xero automatically."
+        action={
+          <Link
+            href={COMMERCIAL_OS_ROUTES.createInvoice}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
+          >
+            Create your first invoice
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        }
+      />
 
       {showOAuthSuccess ? (
         <XeroOAuthSuccessBanner
