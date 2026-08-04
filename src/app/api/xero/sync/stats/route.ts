@@ -8,9 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
+  getOrganizationSyncQueueSnapshot,
   getSyncStatistics,
-  getFailedSyncs,
-  getSyncStatus,
 } from '@/lib/xero/queue-service';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
@@ -60,12 +59,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get statistics
-    const stats = await getSyncStatistics(organizationId);
+    const [stats, queueSnapshot] = await Promise.all([
+      getSyncStatistics(organizationId),
+      getOrganizationSyncQueueSnapshot(organizationId, 10),
+    ]);
 
     return NextResponse.json({
       success: true,
       data: stats,
+      pendingCount: queueSnapshot.pendingCount,
+      recentSyncs: queueSnapshot.recentSyncs.map((sync) => ({
+        id: sync.id,
+        payment_link_id: sync.payment_link_id,
+        sync_type: sync.sync_type,
+        status: sync.status,
+        retry_count: sync.retry_count,
+        error_message: sync.error_message,
+        created_at: sync.created_at.toISOString(),
+        updated_at: sync.updated_at.toISOString(),
+      })),
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

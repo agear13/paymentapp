@@ -12,7 +12,8 @@ import {
 } from '@/lib/journey/commercial-os-routes';
 import { XeroConnectConfirmDialog } from '@/components/xero/xero-connect-confirm-dialog';
 import { XeroOAuthSuccessBanner } from '@/components/xero/xero-oauth-success-banner';
-import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
+import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
+import { CommercialOsXeroReadinessBanner } from '@/components/journey/lovable/commercial-os-xero-readiness-banner';
 
 type ConnectedSystem = {
   name: string;
@@ -68,6 +69,7 @@ export function WorkspaceConnectedScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { organizationId } = useOrganization();
+  const readiness = useCommercialReadinessOptional();
   const [connecting, setConnecting] = useState(false);
   const [connectedSystems, setConnectedSystems] = useState<ConnectedSystem[] | null>(null);
   const [xeroConnected, setXeroConnected] = useState<boolean | null>(null);
@@ -102,6 +104,7 @@ export function WorkspaceConnectedScreen() {
           });
         }
         refreshSystems();
+        void readiness?.refresh();
         router.replace(COMMERCIAL_OS_ROUTES.connected);
       }
 
@@ -120,7 +123,7 @@ export function WorkspaceConnectedScreen() {
     };
 
     void run();
-  }, [searchParams, router, refreshSystems]);
+  }, [searchParams, router, refreshSystems, readiness]);
 
   useEffect(() => {
     if (!organizationId) {
@@ -273,21 +276,7 @@ export function WorkspaceConnectedScreen() {
         />
       ) : null}
 
-      {xeroConnected && !systemsLoading ? (
-        <CommercialOsNextStepBanner
-          title="You're ready"
-          message="Xero is connected. Complete account mapping on the Xero setup page, then create your first invoice."
-          action={
-            <Link
-              href={COMMERCIAL_OS_ROUTES.createInvoice}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
-            >
-              Create your first invoice
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          }
-        />
-      ) : null}
+      {organizationId ? <CommercialOsXeroReadinessBanner surface="connected-systems" /> : null}
 
       <XeroConnectConfirmDialog
         open={xeroConnectDialogOpen}
@@ -420,9 +409,9 @@ export function WorkspaceConnectedScreen() {
         </div>
         <div className="mt-2 text-[14px] text-foreground">
           {xeroConnected
-            ? 'Your accounting is linked. Head to your workspace to create and send invoices.'
+            ? 'Open Xero setup to choose accounts and check your setup status.'
             : wantsXero
-              ? 'Connect Xero to sync invoices and payments automatically.'
+              ? 'Connect Xero to send invoices and payments automatically.'
               : 'Continue into your Commercial Operating System.'}
         </div>
         <Link

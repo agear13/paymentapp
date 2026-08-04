@@ -56,11 +56,11 @@ export const ADVANCED_SETTLEMENT_SECTION_COPY =
   'Digital asset payments are first recorded in temporary clearing accounts before settlement into your bank account. These defaults follow accounting best practice and can be customised by your accountant if required.';
 
 export const RECOMMENDED_SETUP_BANNER = {
-  title: 'Recommended Setup',
+  title: 'Suggested setup',
   description:
-    'Provvypay recommends using separate clearing accounts for each payment rail. This makes reconciliation significantly easier and follows accounting best practice.',
-  applyButtonLabel: 'Apply Recommended Mapping',
-  createButtonLabel: 'Create Recommended Clearing Accounts',
+    'Provvypay recommends separate temporary holding accounts for each payment method. This makes reconciliation easier.',
+  applyButtonLabel: 'Use suggested accounts',
+  createButtonLabel: 'Add holding accounts in Xero',
 };
 
 /** Clearing accounts — add future rails (Wise, Circle, PayTo, etc.) here. */
@@ -149,27 +149,27 @@ export const RECOMMENDED_CLEARING_ACCOUNTS: readonly RecommendedClearingAccountC
 export const RECOMMENDED_STANDARD_MAPPINGS: readonly RecommendedStandardMappingConfig[] = [
   {
     mappingField: 'xero_revenue_account_id',
-    summaryLabel: 'Revenue',
-    label: 'Revenue Account',
-    description: 'Sales revenue from invoices',
+    summaryLabel: 'Sales',
+    label: 'Sales from invoices',
+    description: 'Where sales from paid invoices are recorded',
     preferredNames: ['Sales', 'Revenue', 'Income'],
     preferredCodes: ['200'],
     preferredAccountTypes: ['SALES', 'REVENUE'],
   },
   {
     mappingField: 'xero_receivable_account_id',
-    summaryLabel: 'Receivables',
-    label: 'Accounts Receivable',
-    description: 'Customer invoices pending payment',
+    summaryLabel: 'Unpaid invoices',
+    label: 'Unpaid invoices',
+    description: 'Where unpaid customer invoices are tracked',
     preferredNames: ['Accounts Receivable', 'Trade Debtors', 'Debtors'],
     preferredCodes: ['610', '110', '1200'],
     preferredAccountTypes: ['CURRENT', 'CURRLIAB'],
   },
   {
     mappingField: 'xero_fee_expense_account_id',
-    summaryLabel: 'Fees',
-    label: 'Processor Fee Expense',
-    description: 'Payment processing fees',
+    summaryLabel: 'Card fees',
+    label: 'Card processing fees',
+    description: 'Where Stripe processing fees are recorded',
     preferredNames: ['Bank Fees', 'Merchant Fees', 'Payment Processing Fees', 'Stripe Fees'],
     preferredCodes: ['404', '6100'],
     preferredAccountTypes: ['EXPENSE', 'OVERHEADS'],

@@ -29,6 +29,7 @@ import { exportToCSV, type ExportColumn } from '@/lib/export-csv';
 import {
   COMMERCIAL_OS_ROUTES,
 } from '@/lib/journey/commercial-os-routes';
+import { CommercialOsCreateInvoiceLink } from '@/components/journey/lovable/commercial-os-create-invoice-gate';
 import {
   formatInvoiceDueLabel,
   invoicePaymentMethodLabel,
@@ -528,13 +529,12 @@ export function WorkspaceReceivablesScreen() {
       </section>
 
       <section className="flex flex-wrap items-center gap-3">
-        <Link
-          href={COMMERCIAL_OS_ROUTES.createInvoice}
+        <CommercialOsCreateInvoiceLink
           className="inline-flex h-12 items-center gap-2 rounded-xl bg-gradient-purple px-6 text-[14.5px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <Plus className="h-4 w-4" />
           Create Invoice
-        </Link>
+        </CommercialOsCreateInvoiceLink>
         <Link
           href={COMMERCIAL_OS_ROUTES.invoiceList}
           className="inline-flex h-12 items-center gap-2 rounded-xl px-4 text-[13.5px] font-medium text-ink-soft transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -616,6 +616,18 @@ export function WorkspaceReceivablesScreen() {
                         <p className="mt-0.5 text-[12px] text-ink-soft">{item.description}</p>
                       </div>
                     </div>
+                  );
+                }
+                if (item.label === 'Create Invoice') {
+                  return (
+                    <CommercialOsCreateInvoiceLink
+                      key={item.label}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Icon className="h-4 w-4 text-ink-soft" />
+                      {item.label}
+                      <ArrowRight className="ml-auto h-3.5 w-3.5 text-ink-soft" />
+                    </CommercialOsCreateInvoiceLink>
                   );
                 }
                 return (

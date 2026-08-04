@@ -39,7 +39,7 @@ import {
 import {
   buildRecommendedMappings,
   getMissingRecommendedClearingAccounts,
-  hasAnyRecommendedMappingAvailable,
+  hasStandardRecommendedMappingAvailable,
   mergeRecommendedMappingsIntoEmptyFields,
   type RecommendedMappings,
 } from '@/lib/accounting/recommended-clearing-accounts-service';
@@ -55,6 +55,7 @@ import {
   XERO_CONTEXTUAL_HELP,
   XERO_GUIDED_SECTION_IDS,
 } from '@/lib/xero/xero-guided-setup-config';
+import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
 
 interface XeroAccountMappingProps {
   organizationId: string;
@@ -62,6 +63,7 @@ interface XeroAccountMappingProps {
   merchantRails?: MerchantPaymentRails;
   showContextualHelp?: boolean;
   showGuidedSectionIds?: boolean;
+  commercialOs?: boolean;
 }
 
 interface XeroAccount {
@@ -94,10 +96,13 @@ export function XeroAccountMapping({
   merchantRails,
   showContextualHelp = false,
   showGuidedSectionIds = false,
+  commercialOs = false,
 }: XeroAccountMappingProps) {
+  const readiness = useCommercialReadinessOptional();
   const searchParams = useSearchParams();
   const [accounts, setAccounts] = React.useState<XeroAccount[]>([]);
   const [mappings, setMappings] = React.useState<Partial<AccountMappings>>({});
+  const [persistedMappings, setPersistedMappings] = React.useState<Partial<AccountMappings>>({});
   const [dirty, setDirty] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -107,7 +112,6 @@ export function XeroAccountMapping({
   const [connectionReady, setConnectionReady] = React.useState(false);
   const [accountsLoaded, setAccountsLoaded] = React.useState(false);
   const [mappingsLoaded, setMappingsLoaded] = React.useState(false);
-  const autoAppliedRef = React.useRef(false);
 
   const rails: MerchantPaymentRails = merchantRails ?? {
     stripeEnabled: true,
@@ -141,14 +145,15 @@ export function XeroAccountMapping({
     [accounts, clearingAccountsForUi]
   );
 
-  const showRecommendedBanner = React.useMemo(
+  const missingClearingAccountFields = React.useMemo(
+    () => new Set(missingClearingAccounts.map((config) => config.mappingField)),
+    [missingClearingAccounts]
+  );
+
+  const showStandardRecommendedBanner = React.useMemo(
     () =>
-      hasAnyRecommendedMappingAvailable(
-        accounts,
-        mappings as RecommendedMappings,
-        rails.stablecoinSettlementsEnabled
-      ) || missingClearingAccounts.length > 0,
-    [accounts, mappings, rails.stablecoinSettlementsEnabled, missingClearingAccounts.length]
+      hasStandardRecommendedMappingAvailable(accounts, persistedMappings as RecommendedMappings),
+    [accounts, persistedMappings]
   );
 
   const checkConnectionAndLoad = React.useCallback(async () => {
@@ -182,32 +187,17 @@ export function XeroAccountMapping({
   React.useEffect(() => {
     checkConnectionAndLoad();
     fetchMappings();
+    setPersistedMappings({});
+    setMappings({});
+    setDirty(false);
   }, [organizationId, checkConnectionAndLoad]);
 
   React.useEffect(() => {
     if (searchParams?.get('xero_success') === 'connected') {
-      autoAppliedRef.current = false;
       checkConnectionAndLoad();
       fetchMappings();
     }
   }, [searchParams, checkConnectionAndLoad]);
-
-  React.useEffect(() => {
-    if (!accountsLoaded || !mappingsLoaded || autoAppliedRef.current) return;
-    autoAppliedRef.current = true;
-
-    const recommended = buildRecommendedMappings(accounts, mappings as RecommendedMappings, {
-      includeStablecoinRails: rails.stablecoinSettlementsEnabled,
-    });
-    const merged = mergeRecommendedMappingsIntoEmptyFields(
-      mappings as RecommendedMappings,
-      recommended
-    );
-
-    if (JSON.stringify(merged) !== JSON.stringify(mappings)) {
-      setMappings(merged);
-    }
-  }, [accountsLoaded, mappingsLoaded, accounts, mappings, rails.stablecoinSettlementsEnabled]);
 
   async function fetchAccounts() {
     try {
@@ -245,10 +235,10 @@ export function XeroAccountMapping({
       }
 
       const { data } = await response.json();
-      if (data) {
-        setMappings(data);
-        setDirty(false);
-      }
+      const next = data ?? {};
+      setMappings(next);
+      setPersistedMappings(next);
+      setDirty(false);
       setMappingsLoaded(true);
     } catch (err) {
       console.error('Error fetching mappings:', err);
@@ -279,7 +269,10 @@ export function XeroAccountMapping({
     }
 
     toast.success(successMessage);
+    setPersistedMappings(nextMappings);
+    setMappings(nextMappings);
     setDirty(false);
+    void readiness?.refresh();
     return true;
   }
 
@@ -349,7 +342,11 @@ export function XeroAccountMapping({
 
       const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload.error || 'Failed to create clearing accounts');
+        const detail =
+          typeof payload.details === 'string' && payload.details.trim()
+            ? payload.details
+            : payload.error;
+        throw new Error(detail || 'Failed to create clearing accounts');
       }
 
       const { created, existing, failed, accounts: refreshedAccounts } = payload.data;
@@ -372,14 +369,31 @@ export function XeroAccountMapping({
         );
         if (!saved) setDirty(true);
       } else if (existing.length > 0) {
-        toast.info('Recommended clearing accounts already exist in Xero');
+        const saved = await persistMappings(
+          nextMappings,
+          'Linked existing clearing accounts from your Xero chart'
+        );
+        if (!saved) {
+          setDirty(true);
+          toast.info('Clearing accounts exist in Xero — save mappings to finish linking them');
+        }
       }
 
       if (failed?.length) {
+        const summary = failed
+          .map(
+            (item: { config: { accountName: string }; error: string }) =>
+              `${item.config.accountName}: ${item.error}`
+          )
+          .join(' · ');
         toast.error(
-          `${failed.length} account${failed.length === 1 ? '' : 's'} could not be created. Check Xero permissions and try again.`
+          `${failed.length} holding account${failed.length === 1 ? '' : 's'} could not be created in Xero`,
+          { description: summary }
         );
+        setError(summary);
       }
+
+      void readiness?.refresh();
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to create clearing accounts';
@@ -403,6 +417,11 @@ export function XeroAccountMapping({
     setMappings((current) => ({ ...current, [field]: value }));
     setDirty(true);
   }
+
+  const hasPersistedCoreMappings = Boolean(
+    persistedMappings.xero_revenue_account_id?.trim() &&
+      persistedMappings.xero_receivable_account_id?.trim()
+  );
 
   if (loading) {
     return (
@@ -438,21 +457,29 @@ export function XeroAccountMapping({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-medium">Advanced Accounting Settings</h3>
+        <h3 className="text-lg font-medium">
+          {commercialOs ? 'Choose which Xero accounts to use' : 'Advanced Accounting Settings'}
+        </h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Provvypay has already configured recommended accounting settings for your business.
-          Most businesses never need to modify these. Only change these settings if your
-          accountant has instructed you to, your chart of accounts changes, or you enable
-          stablecoin settlements.
+          {hasPersistedCoreMappings
+            ? commercialOs
+              ? 'Review the accounts Provvy uses when sending invoices and payments to Xero.'
+              : 'Review the accounts Provvy uses when syncing invoices and payments to Xero. Change these only if your accountant advises, your chart of accounts changes, or you enable stablecoin settlements.'
+            : commercialOs
+              ? 'Choose which Xero accounts Provvy should use. Use suggested accounts or pick from your Xero accounts, then save.'
+              : 'Choose which Xero accounts Provvy should use for invoices and payments. Apply recommended mappings or select accounts manually, then save.'}
         </p>
       </div>
 
-      {showRecommendedBanner ? (
+      {showStandardRecommendedBanner ? (
         <Alert className="border-emerald-200 bg-emerald-50/80">
           <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          <AlertTitle className="text-emerald-900">{RECOMMENDED_SETUP_BANNER.title}</AlertTitle>
+          <AlertTitle className="text-emerald-900">Suggested accounts</AlertTitle>
           <AlertDescription className="space-y-3 text-emerald-900/90">
-            <p>{RECOMMENDED_SETUP_BANNER.description}</p>
+            <p>
+              Match sales, unpaid invoices, and card fees to common names in your Xero accounts.
+              This saves your choices in Provvy — it does not create new accounts in Xero.
+            </p>
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -489,7 +516,6 @@ export function XeroAccountMapping({
               {missingClearingAccounts.map((config) => (
                 <li key={config.mappingField}>
                   <span className="font-medium">{config.accountName}</span>
-                  <span className="text-amber-800/80"> — Current Asset</span>
                 </li>
               ))}
             </ul>
@@ -523,9 +549,9 @@ export function XeroAccountMapping({
 
       <div className="space-y-4">
         <div className="space-y-1">
-          <h4 className="text-sm font-medium">Core accounts</h4>
+          <h4 className="text-sm font-medium">Required for invoices</h4>
           <p className="text-xs text-muted-foreground">
-            These accounts are used for every invoice Provvy sends to Xero.
+            Provvy needs these accounts before invoices can sync to Xero.
           </p>
         </div>
 
@@ -619,7 +645,7 @@ export function XeroAccountMapping({
         {showCryptoMappings ? (
           <details className="rounded-lg border bg-muted/20 p-4">
             <summary className="cursor-pointer text-sm font-medium">
-              Advanced Payment Rails
+              Other payment methods
             </summary>
             <p className="mt-3 text-sm text-muted-foreground">{ADVANCED_SETTLEMENT_SECTION_COPY}</p>
             <div className="mt-4 space-y-4">
@@ -677,10 +703,13 @@ export function XeroAccountMapping({
       </div>
 
       <MappingSummary
-        mappings={mappings}
+        mappings={persistedMappings}
         accounts={accounts}
+        accountsLoaded={accountsLoaded}
         stablecoinSettlementsEnabled={rails.stablecoinSettlementsEnabled}
         stripeEnabled={rails.stripeEnabled}
+        missingClearingAccountFields={missingClearingAccountFields}
+        hasUnsavedChanges={dirty}
       />
     </div>
   );
@@ -753,8 +782,8 @@ function ClearingMappingField({
       />
       {!existsInXero ? (
         <p className="text-xs text-amber-700">
-          Recommended account <span className="font-medium">{config.accountName}</span> is not in
-          your Xero chart yet. Use &ldquo;{RECOMMENDED_SETUP_BANNER.createButtonLabel}&rdquo; above
+          Suggested account <span className="font-medium">{config.accountName}</span> is not in
+          your Xero accounts yet. Use &ldquo;{RECOMMENDED_SETUP_BANNER.createButtonLabel}&rdquo; above
           to add it.
         </p>
       ) : null}
@@ -785,6 +814,22 @@ function AccountMappingField({
   placeholder: string;
   badge?: string;
 }) {
+  const accountOptions = React.useMemo(() => {
+    if (value && !accounts.some((account) => account.code === value)) {
+      return [
+        {
+          accountID: `orphan-${value}`,
+          code: value,
+          name: `Saved code ${value} (not in current chart)`,
+          type: '',
+          status: 'ACTIVE',
+        },
+        ...accounts,
+      ];
+    }
+    return accounts;
+  }, [accounts, value]);
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -802,17 +847,17 @@ function AccountMappingField({
         <p className="text-sm text-foreground/90 leading-relaxed">{guidance}</p>
       ) : null}
       <p className="text-xs text-muted-foreground">{description}</p>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-full">
+      <Select value={value || undefined} onValueChange={onChange}>
+        <SelectTrigger className="w-full bg-background text-foreground">
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
-        <SelectContent>
-          {accounts.length === 0 ? (
+        <SelectContent className="bg-popover text-popover-foreground">
+          {accountOptions.length === 0 ? (
             <SelectItem value="_none" disabled>
               No accounts available
             </SelectItem>
           ) : (
-            accounts.map((account) => (
+            accountOptions.map((account) => (
               <SelectItem key={account.accountID} value={account.code}>
                 {account.code} - {account.name}
               </SelectItem>
@@ -827,13 +872,19 @@ function AccountMappingField({
 function MappingSummary({
   mappings,
   accounts,
+  accountsLoaded,
   stablecoinSettlementsEnabled,
   stripeEnabled = true,
+  missingClearingAccountFields,
+  hasUnsavedChanges = false,
 }: {
   mappings: Partial<AccountMappings>;
   accounts: XeroAccount[];
+  accountsLoaded: boolean;
   stablecoinSettlementsEnabled: boolean;
   stripeEnabled?: boolean;
+  missingClearingAccountFields: Set<XeroMappingField>;
+  hasUnsavedChanges?: boolean;
 }) {
   const summaryItems = [
     ...RECOMMENDED_STANDARD_MAPPINGS.map((config) => ({
@@ -862,6 +913,14 @@ function MappingSummary({
 
   if (summaryItems.length === 0) return null;
 
+  if (!accountsLoaded) {
+    return (
+      <div className="bg-muted/50 p-4 rounded-lg mt-6">
+        <p className="text-sm text-muted-foreground">Loading saved mapping status…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-muted/50 p-4 rounded-lg mt-6 space-y-3">
       <h4 className="font-medium text-sm">{MAPPING_SUMMARY_INTRO.title}</h4>
@@ -888,11 +947,17 @@ function MappingSummary({
               }
               accountId={mappings[config.mappingField]}
               accounts={accounts}
+              isClearingAccount={kind === 'clearing'}
+              clearingMissingFromChart={missingClearingAccountFields.has(config.mappingField)}
             />
           );
         })}
       </div>
-      <p className="text-xs text-muted-foreground pt-1">{MAPPING_SUMMARY_INTRO.footer}</p>
+      <p className="text-xs text-muted-foreground pt-1">
+        {hasUnsavedChanges
+          ? 'Summary shows saved choices. Save your changes above before Provvy uses them.'
+          : MAPPING_SUMMARY_INTRO.footer}
+      </p>
     </div>
   );
 }
@@ -902,25 +967,56 @@ function MappingSummaryRow({
   recommendedTargetName,
   accountId,
   accounts,
+  isClearingAccount = false,
+  clearingMissingFromChart = false,
 }: {
   friendlyLabel: string;
   recommendedTargetName?: string;
   accountId?: string;
   accounts: XeroAccount[];
+  isClearingAccount?: boolean;
+  clearingMissingFromChart?: boolean;
 }) {
-  const account = accountId ? accounts.find((item) => item.code === accountId) : undefined;
-  const isMapped = Boolean(account);
-  const targetLabel = account
-    ? account.name
-    : (recommendedTargetName ?? 'Not configured');
+  const savedCode = accountId?.trim();
+  const account = savedCode ? accounts.find((item) => item.code === savedCode) : undefined;
+
+  if (!savedCode) {
+    const suffix =
+      isClearingAccount && clearingMissingFromChart ? ' (account not in Xero chart yet)' : '';
+    const recommendationHint =
+      !isClearingAccount && recommendedTargetName ? ` — recommended: ${recommendedTargetName}` : '';
+    return (
+      <div className="flex items-start gap-2 text-sm">
+        <span className="text-amber-600" aria-hidden>
+          ○
+        </span>
+        <span className="text-amber-900">
+          {friendlyLabel} → Not configured{suffix}{recommendationHint}
+        </span>
+      </div>
+    );
+  }
+
+  if (!account) {
+    return (
+      <div className="flex items-start gap-2 text-sm">
+        <span className="text-amber-600" aria-hidden>
+          ○
+        </span>
+        <span className="text-amber-900">
+          {friendlyLabel} → Saved code {savedCode} is not in your current Xero chart
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-start gap-2 text-sm">
-      <span className={isMapped ? 'text-emerald-600' : 'text-amber-600'} aria-hidden>
-        {isMapped ? '✓' : '○'}
+      <span className="text-emerald-600" aria-hidden>
+        ✓
       </span>
-      <span className={isMapped ? 'text-foreground' : 'text-amber-900'}>
-        {friendlyLabel} → {targetLabel}
+      <span className="text-foreground">
+        {friendlyLabel} → {account.name}
       </span>
     </div>
   );

@@ -18,6 +18,8 @@ type XeroIntegrationPanelProps = {
   guidedSetup?: boolean;
   /** When true, shows the Setup Assistant orchestration layer (ENABLE_GUIDED_SETUP). */
   guidedSetupAssistant?: boolean;
+  /** Commercial OS styling and copy. */
+  commercialOs?: boolean;
 };
 
 /**
@@ -30,6 +32,7 @@ export function XeroIntegrationPanel({
   returnTo,
   guidedSetup = false,
   guidedSetupAssistant = false,
+  commercialOs = false,
 }: XeroIntegrationPanelProps) {
   const rails: MerchantPaymentRails = merchantRails ?? {
     stripeEnabled: true,
@@ -59,6 +62,7 @@ export function XeroIntegrationPanel({
           organizationId={organizationId}
           returnTo={returnTo}
           suppressOAuthSuccessBanner={guidedSetup || showAssistant}
+          variant={commercialOs ? 'commercial' : 'default'}
         />
 
         {!showAssistant ? <XeroAccountingHealth organizationId={organizationId} /> : null}
@@ -69,14 +73,15 @@ export function XeroIntegrationPanel({
           open={guidedSetup || showAssistant}
         >
           <summary className="cursor-pointer px-6 py-4 text-sm font-medium">
-            {guidedSetup || showAssistant ? 'Account mappings' : 'Advanced Accounting Settings'}
+            {commercialOs || guidedSetup || showAssistant
+              ? 'Choose which Xero accounts to use'
+              : 'Advanced Accounting Settings'}
           </summary>
           <div className="border-t p-6">
-            {guidedSetup || showAssistant ? (
+            {commercialOs || guidedSetup || showAssistant ? (
               <p className="mb-6 text-sm text-muted-foreground leading-relaxed">
-                Provvy needs to know which Xero accounts to use when syncing invoices and payments.
-                We&apos;ve pre-filled recommended options — you can adjust these if your accountant
-                prefers different accounts.
+                Pick the Xero accounts Provvy uses for invoices and payments. Saved choices appear
+                in the summary at the bottom.
               </p>
             ) : null}
             <XeroAccountMapping
@@ -85,6 +90,7 @@ export function XeroIntegrationPanel({
               merchantRails={rails}
               showContextualHelp={showAssistant}
               showGuidedSectionIds={showAssistant}
+              commercialOs={commercialOs}
             />
           </div>
         </details>

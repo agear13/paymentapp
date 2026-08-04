@@ -69,6 +69,7 @@ function toAccountingProfile(
 export function XeroAccountingHealth({ organizationId }: XeroAccountingHealthProps) {
   const [loading, setLoading] = React.useState(true);
   const [profile, setProfile] = React.useState<AccountingProfile | null>(null);
+  const [chartCodes, setChartCodes] = React.useState<Set<string> | undefined>();
 
   React.useEffect(() => {
     let cancelled = false;
@@ -90,8 +91,25 @@ export function XeroAccountingHealth({ organizationId }: XeroAccountingHealthPro
           ? ((await mappingsResponse.json()) as { data: XeroMappings | null })
           : { data: null };
 
+        let validAccountCodes: Set<string> | undefined;
+        if (status.connected) {
+          const accountsResponse = await fetch(
+            `/api/xero/accounts?organization_id=${encodeURIComponent(organizationId)}`,
+            { cache: 'no-store' }
+          );
+          if (accountsResponse.ok) {
+            const accountsPayload = (await accountsResponse.json()) as {
+              data?: Array<{ code: string }>;
+            };
+            validAccountCodes = new Set(
+              (accountsPayload.data ?? []).map((account) => account.code).filter(Boolean)
+            );
+          }
+        }
+
         if (!cancelled) {
           setProfile(toAccountingProfile(status, mappingsPayload.data));
+          setChartCodes(validAccountCodes);
         }
       } catch {
         if (!cancelled) {
@@ -133,7 +151,8 @@ export function XeroAccountingHealth({ organizationId }: XeroAccountingHealthPro
       toAccountingProfile(
         { connected: false, operatorMessage: 'Could not load Xero accounting readiness.' },
         null
-      )
+      ),
+    { validAccountCodes: chartCodes }
   );
 
   return (

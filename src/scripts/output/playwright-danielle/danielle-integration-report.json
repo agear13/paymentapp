@@ -1,0 +1,10 @@
+{
+  "blockers": [
+    {
+      "kind": "test-blocker",
+      "message": "Danielle E2E auth failed: set E2E_PASSWORD or SUPABASE_SERVICE_ROLE_KEY (JWT) in the environment.",
+      "url": "about:blank"
+    }
+  ],
+  "issues": []
+}

@@ -591,6 +591,61 @@ export async function getSyncStatistics(organizationId?: string) {
   };
 }
 
+export type OrganizationSyncQueueSnapshot = {
+  pendingCount: number;
+  recentSyncs: Array<{
+    id: string;
+    payment_link_id: string;
+    sync_type: string;
+    status: string;
+    retry_count: number;
+    error_message: string | null;
+    created_at: Date;
+    updated_at: Date;
+  }>;
+};
+
+/**
+ * Org-scoped queue snapshot for merchant Xero setup UI (not admin-global process-now).
+ */
+export async function getOrganizationSyncQueueSnapshot(
+  organizationId: string,
+  recentLimit = 10
+): Promise<OrganizationSyncQueueSnapshot> {
+  const now = new Date();
+  const orgScope = {
+    payment_links: {
+      organization_id: organizationId,
+    },
+  };
+
+  const pendingCount = await prisma.xero_syncs.count({
+    where: {
+      ...orgScope,
+      status: { in: ['PENDING', 'RETRYING'] },
+      OR: [{ next_retry_at: null }, { next_retry_at: { lte: now } }],
+    },
+  });
+
+  const recentSyncs = await prisma.xero_syncs.findMany({
+    where: orgScope,
+    orderBy: { updated_at: 'desc' },
+    take: recentLimit,
+    select: {
+      id: true,
+      payment_link_id: true,
+      sync_type: true,
+      status: true,
+      retry_count: true,
+      error_message: true,
+      created_at: true,
+      updated_at: true,
+    },
+  });
+
+  return { pendingCount, recentSyncs };
+}
+
 
 
 

@@ -16,6 +16,7 @@ import { getXeroClient } from './client';
 import { getActiveConnection } from './connection-service';
 import { applyConnectionToXeroClient } from './apply-connection-token-set';
 import { fetchXeroAccounts, type XeroAccount } from './accounts-service';
+import { formatClearingAccountCreationError } from './xero-sync-errors';
 
 export type CreatedClearingAccountResult = {
   config: RecommendedClearingAccountConfig;
@@ -127,8 +128,8 @@ export async function createRecommendedClearingAccounts(
         accountName: account.name,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      failed.push({ config, error: message });
+      const raw = error instanceof Error ? error.message : String(error);
+      failed.push({ config, error: formatClearingAccountCreationError(raw) });
       loggers.xero.error('xero_clearing_account_create_failed', error, {
         organizationId,
         rail: config.rail,

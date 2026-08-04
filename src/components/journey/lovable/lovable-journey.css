@@ -13,6 +13,13 @@
   --accent-foreground: oklch(0.42 0.2 293);
   --border: oklch(0.925 0.005 260);
   --ink-soft: oklch(0.46 0.012 270);
+  --input: oklch(0.975 0.003 260);
+  --ring: oklch(0.52 0.22 292);
+  --muted: oklch(0.965 0.008 260);
+  --muted-foreground: oklch(0.46 0.012 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.015 275);
+  --destructive: oklch(0.55 0.22 25);
   --gradient-purple: linear-gradient(135deg, oklch(0.55 0.22 292), oklch(0.62 0.2 275));
   --gradient-hero: radial-gradient(ellipse 70% 45% at 50% 0%, oklch(0.94 0.04 295 / 0.5), transparent 70%);
   --shadow-soft: 0 1px 2px oklch(0.2 0.02 275 / 0.04);
@@ -39,6 +46,13 @@
   --accent-foreground: oklch(0.9 0.05 293);
   --border: oklch(1 0 0 / 0.08);
   --ink-soft: oklch(0.72 0.015 270);
+  --input: oklch(0.24 0.02 275);
+  --ring: oklch(0.68 0.2 293);
+  --muted: oklch(0.24 0.02 275);
+  --muted-foreground: oklch(0.72 0.015 270);
+  --popover: oklch(0.2 0.018 275);
+  --popover-foreground: oklch(0.97 0.005 275);
+  --destructive: oklch(0.62 0.2 25);
   --gradient-hero: radial-gradient(ellipse 70% 45% at 50% 0%, oklch(0.4 0.15 295 / 0.35), transparent 70%);
   --shadow-soft: 0 1px 2px oklch(0 0 0 / 0.4);
   --shadow-glow: 0 1px 2px oklch(0 0 0 / 0.4), 0 8px 24px -12px oklch(0.68 0.2 293 / 0.35);
@@ -58,6 +72,16 @@
 .lovable-journey .text-accent-foreground { color: var(--accent-foreground); }
 .lovable-journey .border-border { border-color: var(--border); }
 .lovable-journey .text-ink-soft { color: var(--ink-soft); }
+.lovable-journey .text-muted-foreground { color: var(--muted-foreground); }
+.lovable-journey .bg-muted { background-color: var(--muted); }
+.lovable-journey .bg-muted\/10 { background-color: color-mix(in oklch, var(--muted) 10%, transparent); }
+.lovable-journey .bg-muted\/40 { background-color: color-mix(in oklch, var(--muted) 40%, transparent); }
+.lovable-journey .bg-muted\/50 { background-color: color-mix(in oklch, var(--muted) 50%, transparent); }
+.lovable-journey .bg-popover { background-color: var(--popover); }
+.lovable-journey .text-popover-foreground { color: var(--popover-foreground); }
+.lovable-journey .bg-background { background-color: var(--background); }
+.lovable-journey .border-input { border-color: var(--border); }
+.lovable-journey .text-destructive { color: var(--destructive); }
 .lovable-journey .glass {
   background: var(--card);
   border: 1px solid var(--border);

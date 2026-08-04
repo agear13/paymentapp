@@ -19,36 +19,36 @@ export const XERO_CONNECT_MODAL = {
 } as const;
 
 export const XERO_OAUTH_SUCCESS = {
-  title: 'Xero Connected',
-  body: 'Your business has been successfully connected.',
+  title: 'Xero connected',
+  body: 'Your Xero business is linked to Provvy.',
   nextStep:
-    "Next we'll make sure invoices and payments are mapped correctly inside Xero. This only takes a minute.",
-  continueLabel: 'Continue Setup',
+    'Next, choose which Xero accounts Provvy should use for invoices and payments.',
+  continueLabel: 'Continue setup',
 } as const;
 
 /** Friendly labels for mapping summary (left side of arrow). */
 export const MAPPING_SUMMARY_FRIENDLY_LABELS: Partial<Record<XeroMappingField, string>> = {
-  xero_revenue_account_id: 'Invoice Revenue',
-  xero_receivable_account_id: 'Customer Invoices',
-  xero_fee_expense_account_id: 'Processing Fees',
-  xero_stripe_clearing_account_id: 'Stripe Payments',
-  xero_hbar_clearing_account_id: 'HBAR Payments',
-  xero_usdc_clearing_account_id: 'USDC Payments',
-  xero_usdt_clearing_account_id: 'USDT Payments',
-  xero_audd_clearing_account_id: 'AUDD Payments',
-  xero_wise_clearing_account_id: 'Wise Payments',
+  xero_revenue_account_id: 'Sales from invoices',
+  xero_receivable_account_id: 'Unpaid invoices',
+  xero_fee_expense_account_id: 'Card processing fees',
+  xero_stripe_clearing_account_id: 'Stripe payments',
+  xero_hbar_clearing_account_id: 'HBAR payments',
+  xero_usdc_clearing_account_id: 'USDC payments',
+  xero_usdt_clearing_account_id: 'USDT payments',
+  xero_audd_clearing_account_id: 'AUDD payments',
+  xero_wise_clearing_account_id: 'Wise payments',
 };
 
 /** Plain-English explanations shown above each mapping field. */
 export const XERO_MAPPING_GUIDANCE: Partial<Record<XeroMappingField, string>> = {
   xero_revenue_account_id:
-    'When customers pay invoices, Provvy records revenue into this Xero account.',
+    'When customers pay invoices, Provvy records sales in this Xero account.',
   xero_receivable_account_id:
-    'Before invoices are paid they are stored here.',
+    'Unpaid invoices are tracked here until customers pay.',
   xero_fee_expense_account_id:
-    'Payment processing fees from Stripe are recorded here.',
+    'Stripe card processing fees are recorded here.',
   xero_stripe_clearing_account_id:
-    'Stripe temporarily holds funds before paying your bank account. Provvy uses this account to reconcile those settlements automatically.',
+    'Stripe temporarily holds funds before paying your bank. Provvy uses this holding account to match settlements automatically.',
   xero_hbar_clearing_account_id:
     'HBAR payments are held here briefly before settling to your bank account.',
   xero_usdc_clearing_account_id:
@@ -59,25 +59,31 @@ export const XERO_MAPPING_GUIDANCE: Partial<Record<XeroMappingField, string>> = 
     'AUDD stablecoin payments are held here briefly before settling to your bank account.',
 };
 
+export const CLEARING_ACCOUNT_HELPER_TEXT =
+  'Temporary holding account used until funds reach your bank account.';
+
+export const ADVANCED_SETTLEMENT_SECTION_COPY =
+  'Digital asset payments are recorded in temporary holding accounts before settling to your bank. Your accountant can adjust these if needed.';
+
 export const CLEARING_ACCOUNTS_EXPLANATION = {
-  title: 'Why do I need these?',
-  body: 'Stripe and blockchain payments settle differently from bank transfers. Provvy recommends temporary clearing accounts to keep reconciliation accurate.',
-  action: "We'll create these automatically inside Xero.",
-  reassurance: 'Nothing in your existing chart of accounts will be deleted.',
+  title: 'Why add holding accounts?',
+  body: 'Stripe and other payment methods settle differently from bank transfers. Temporary holding accounts keep reconciliation accurate.',
+  action: 'Provvy can add these in Xero for you.',
+  reassurance: 'Nothing in your existing Xero accounts will be deleted.',
 } as const;
 
 export const MAPPING_SUMMARY_INTRO = {
-  title: 'Your accounting setup',
+  title: 'Saved account choices',
   footer:
-    'Provvy will automatically use these accounts whenever invoices or payments sync to Xero.',
+    'Provvy uses these saved accounts whenever invoices or payments sync to Xero.',
 } as const;
 
 export const QUEUE_GUIDANCE = {
-  title: 'Payments Waiting to Sync',
+  title: 'Past payments sent to Xero',
   intro: (count: number) =>
     `Provvy has found ${count} historical payment${count === 1 ? '' : 's'} ready to send to Xero.`,
   context:
-    "This commonly happens immediately after connecting Xero. Processing the queue will safely sync any payments that haven't already been exported.",
+    'This commonly happens immediately after connecting Xero. Provvy will sync these automatically — use Find missed payments if anything was paid before you connected.',
   empty: 'No payments are waiting to sync right now. New payments will sync automatically.',
   queueMissedLabel: 'Find missed payments',
   processQueueLabel: 'Sync payments to Xero',

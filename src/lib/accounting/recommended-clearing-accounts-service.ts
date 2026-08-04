@@ -211,3 +211,24 @@ export function hasAnyRecommendedMappingAvailable(
   });
   return Object.keys(recommended).length > 0;
 }
+
+/** Standard revenue / receivable / fee mappings only — excludes clearing rails. */
+export function buildStandardRecommendedMappings(
+  accounts: AccountingChartAccount[],
+  currentMappings: RecommendedMappings
+): RecommendedMappings {
+  const result: RecommendedMappings = {};
+  for (const config of RECOMMENDED_STANDARD_MAPPINGS) {
+    if (currentMappings[config.mappingField]) continue;
+    const code = resolveStandardMapping(accounts, config);
+    if (code) result[config.mappingField] = code;
+  }
+  return result;
+}
+
+export function hasStandardRecommendedMappingAvailable(
+  accounts: AccountingChartAccount[],
+  currentMappings: RecommendedMappings
+): boolean {
+  return Object.keys(buildStandardRecommendedMappings(accounts, currentMappings)).length > 0;
+}

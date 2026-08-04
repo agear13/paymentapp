@@ -44,8 +44,36 @@ function hasValue(value: string | null | undefined): boolean {
   return Boolean(value?.trim());
 }
 
-export function evaluateAccountingProfile(profile: AccountingProfile): AccountingHealthProfile {
+export function evaluateAccountingProfile(
+  profile: AccountingProfile,
+  options?: { validAccountCodes?: Set<string> }
+): AccountingHealthProfile {
   const items: AccountingHealthItem[] = [];
+  const validCodes = options?.validAccountCodes;
+
+  function pushAccountItem(
+    label: string,
+    value: string | null | undefined,
+    missing: { status: 'attention' | 'recommendation'; message: string },
+    configuredLabel?: string
+  ) {
+    if (!hasValue(value)) {
+      items.push({ label, status: missing.status, message: missing.message });
+      return;
+    }
+
+    const code = value!.trim();
+    if (validCodes && !validCodes.has(code)) {
+      items.push({
+        label,
+        status: 'attention',
+        message: `Saved account code "${code}" is not in your current Xero chart. Re-select the account or refresh your chart.`,
+      });
+      return;
+    }
+
+    items.push({ label: configuredLabel ?? `${label} configured`, status: 'ok' });
+  }
 
   if (!profile.connection.connected) {
     items.push({
@@ -65,38 +93,31 @@ export function evaluateAccountingProfile(profile: AccountingProfile): Accountin
     items.push({ label: 'Xero Connected', status: 'ok' });
   }
 
-  if (hasValue(profile.accounts.revenue)) {
-    items.push({ label: 'Revenue account configured', status: 'ok' });
-  } else {
-    items.push({
-      label: 'Revenue account',
-      status: 'attention',
-      message: 'Invoice exports require a revenue account.',
-    });
-  }
+  pushAccountItem('Revenue account', profile.accounts.revenue, {
+    status: 'attention',
+    message: 'Invoice exports require a revenue account.',
+  }, 'Revenue account configured');
 
-  if (hasValue(profile.accounts.accountsReceivable)) {
-    items.push({ label: 'Accounts Receivable configured', status: 'ok' });
-  } else {
-    items.push({
-      label: 'Accounts Receivable',
-      status: 'attention',
-      message: 'Invoice exports require Accounts Receivable to be configured.',
-    });
-  }
+  pushAccountItem('Accounts Receivable', profile.accounts.accountsReceivable, {
+    status: 'attention',
+    message: 'Invoice exports require Accounts Receivable to be configured.',
+  }, 'Accounts Receivable configured');
 
-  if (hasValue(profile.accounts.processorFees)) {
-    items.push({ label: 'Processor Fee account configured', status: 'ok' });
-  } else {
-    items.push({
-      label: 'Processor Fee account',
-      status: 'recommendation',
-      message: 'This can be configured later by your accountant.',
-    });
-  }
+  pushAccountItem('Processor Fee account', profile.accounts.processorFees, {
+    status: 'recommendation',
+    message: 'This can be configured later by your accountant.',
+  }, 'Processor Fee account configured');
 
   if (hasValue(profile.accounts.stripeClearing)) {
-    items.push({ label: 'Stripe Clearing configured', status: 'ok' });
+    pushAccountItem(
+      'Stripe Clearing account',
+      profile.accounts.stripeClearing,
+      {
+        status: 'recommendation',
+        message: "This won't prevent invoice exports. You may configure this later.",
+      },
+      'Stripe Clearing configured'
+    );
   } else {
     items.push({
       label: 'Stripe Clearing account not found',

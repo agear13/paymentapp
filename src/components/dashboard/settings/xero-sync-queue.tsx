@@ -20,6 +20,7 @@ import {
   SYNC_STATUS_GUIDANCE,
   type SyncStatusKey,
 } from '@/lib/xero/xero-setup-guidance';
+import { formatHistoricalSyncErrorMessage } from '@/lib/xero/xero-sync-errors';
 import { XERO_GUIDED_SECTION_IDS } from '@/lib/xero/xero-guided-setup-config';
 
 interface QueueStatus {
@@ -27,6 +28,7 @@ interface QueueStatus {
   recentSyncs: Array<{
     id: string;
     payment_link_id: string;
+    sync_type: string;
     status: string;
     retry_count: number;
     error_message: string | null;
@@ -85,52 +87,47 @@ function getStatusBadge(status: string) {
 export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: XeroSyncQueueProps) {
   const [loading, setLoading] = React.useState(true);
   const [loadFailed, setLoadFailed] = React.useState(false);
-  const [processing, setProcessing] = React.useState(false);
   const [backfilling, setBackfilling] = React.useState(false);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [queueStatus, setQueueStatus] = React.useState<QueueStatus | null>(null);
+  const [xeroConnected, setXeroConnected] = React.useState(false);
 
   const fetchStatus = React.useCallback(async () => {
     setLoadFailed(false);
     try {
-      const response = await fetch('/api/xero/queue/process-now');
+      const [statsResponse, statusResponse] = await Promise.all([
+        fetch(
+          `/api/xero/sync/stats?organization_id=${encodeURIComponent(organizationId)}`,
+          { cache: 'no-store' }
+        ),
+        fetch(`/api/xero/status?organization_id=${encodeURIComponent(organizationId)}`, {
+          cache: 'no-store',
+        }),
+      ]);
 
-      if (!response.ok) {
+      if (!statsResponse.ok) {
         setLoadFailed(true);
         setQueueStatus(null);
         return;
       }
 
-      const data = await response.json();
-      setQueueStatus(data);
+      const statsPayload = await statsResponse.json();
+      const statusPayload = statusResponse.ok
+        ? ((await statusResponse.json()) as { connected?: boolean })
+        : { connected: false };
+
+      setXeroConnected(Boolean(statusPayload.connected));
+      setQueueStatus({
+        pendingCount: statsPayload.pendingCount ?? 0,
+        recentSyncs: statsPayload.recentSyncs ?? [],
+      });
     } catch {
       setLoadFailed(true);
       setQueueStatus(null);
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const processQueue = async () => {
-    setProcessing(true);
-    try {
-      const response = await fetch('/api/xero/queue/process-now', {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to process queue');
-      }
-
-      const result = await response.json();
-      toast.success(result.message || 'Sync started');
-      setTimeout(() => void fetchStatus(), 2000);
-    } catch {
-      toast.error('Could not run sync');
-    } finally {
-      setProcessing(false);
-    }
-  };
+  }, [organizationId]);
 
   const backfillSyncs = async () => {
     setBackfilling(true);
@@ -223,28 +220,19 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
               </p>
             ) : null}
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={() => void processQueue()}
-                disabled={processing || loadFailed || pending === 0}
-                size="sm"
-              >
-                {processing ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    Syncing…
-                  </>
-                ) : (
-                  `${QUEUE_GUIDANCE.processQueueLabel}${pending > 0 ? ` (${pending})` : ''}`
-                )}
-              </Button>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Payments sync automatically in the background. Failed items retry on their own — you
+              do not need to run a manual sync.
+            </p>
 
             {queueStatus && queueStatus.recentSyncs.length > 0 ? (
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">Recent activity</h4>
                 {queueStatus.recentSyncs.slice(0, 5).map((sync) => {
                   const display = getStatusDisplay(sync.status);
+                  const errorMessage = formatHistoricalSyncErrorMessage(sync.error_message, {
+                    xeroCurrentlyConnected: xeroConnected,
+                  });
                   return (
                     <div
                       key={sync.id}
@@ -260,8 +248,8 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
                         {display.explanation ? (
                           <p className="text-xs text-muted-foreground">{display.explanation}</p>
                         ) : null}
-                        {sync.error_message ? (
-                          <p className="text-xs text-red-600 line-clamp-2">{sync.error_message}</p>
+                        {errorMessage ? (
+                          <p className="text-xs text-red-600 line-clamp-3">{errorMessage}</p>
                         ) : null}
                       </div>
                       <span className="text-xs text-muted-foreground shrink-0">
@@ -304,6 +292,15 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
                 ) : (
                   QUEUE_GUIDANCE.queueMissedLabel
                 )}
+              </Button>
+              <Button
+                onClick={() => void fetchStatus()}
+                disabled={loadFailed}
+                size="sm"
+                variant="ghost"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh status
               </Button>
             </div>
           </CollapsibleContent>

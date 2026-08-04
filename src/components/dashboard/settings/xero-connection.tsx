@@ -34,6 +34,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
 import { XeroConnectConfirmDialog } from '@/components/xero/xero-connect-confirm-dialog';
 import { XeroOAuthSuccessBanner } from '@/components/xero/xero-oauth-success-banner';
+import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
 
 interface XeroConnectionProps {
   organizationId: string;
@@ -41,6 +42,7 @@ interface XeroConnectionProps {
   returnTo?: string;
   /** When true, parent handles OAuth success UI (e.g. Commercial OS manage page). */
   suppressOAuthSuccessBanner?: boolean;
+  variant?: 'default' | 'commercial';
 }
 
 interface ConnectionStatus {
@@ -61,9 +63,11 @@ export function XeroConnection({
   organizationId,
   returnTo,
   suppressOAuthSuccessBanner = false,
+  variant = 'default',
 }: XeroConnectionProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const readiness = useCommercialReadinessOptional();
 
   React.useEffect(() => {
     if (!isValidOrganizationUuid(organizationId)) {
@@ -146,6 +150,7 @@ export function XeroConnection({
           setShowOAuthSuccess(true);
         }
         await fetchStatus();
+        void readiness?.refresh();
 
         router.replace(window.location.pathname);
       }
@@ -165,7 +170,7 @@ export function XeroConnection({
     };
 
     run();
-  }, [searchParams, router, fetchStatus, suppressOAuthSuccessBanner]);
+  }, [searchParams, router, fetchStatus, suppressOAuthSuccessBanner, readiness]);
 
   // Fetch status on mount
   React.useEffect(() => {
@@ -212,6 +217,7 @@ export function XeroConnection({
 
       toast.success('Disconnected from Xero');
       await fetchStatus();
+      void readiness?.refresh();
     } catch (error) {
       console.error('Error disconnecting from Xero:', error);
       toast.error('Failed to disconnect from Xero');
@@ -238,6 +244,7 @@ export function XeroConnection({
 
       toast.success('Xero organization updated');
       await fetchStatus();
+      void readiness?.refresh();
     } catch (error) {
       console.error('Error updating tenant:', error);
       toast.error('Failed to update Xero organization');
@@ -268,7 +275,7 @@ export function XeroConnection({
   }
 
   return (
-    <div className="space-y-4">
+    <div id="xero-connection" className="space-y-4">
       {status?.operatorMessage ? (
         <Alert>
           <AlertTitle>Xero</AlertTitle>
@@ -381,7 +388,7 @@ export function XeroConnection({
       {/* Tenant Selector (when connected) */}
       {status?.connected && status.tenants && status.tenants.length > 0 && (
         <div className="space-y-2">
-          <label className="text-sm font-medium">Xero Organization</label>
+          <label className="text-sm font-medium">Xero business</label>
           <div className="flex items-center gap-2">
             <Select
               value={status.tenantId}
@@ -404,7 +411,7 @@ export function XeroConnection({
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Select which Xero organization to sync with
+            Choose which Xero business Provvy syncs with
           </p>
         </div>
       )}
@@ -440,12 +447,20 @@ export function XeroConnection({
         </div>
       )}
 
-      {/* Help Text */}
-      <p className="text-xs text-muted-foreground">
-        {status?.connected
-          ? 'Your Xero account is connected. Invoices and payments will be automatically synced.'
-          : 'Connect your Xero account to automatically sync invoices and payments.'}
-      </p>
+      {/* Help Text — operational only; readiness lives in Setup status (Commercial OS). */}
+      {variant !== 'commercial' ? (
+        <p className="text-xs text-muted-foreground">
+          {status?.connected
+            ? 'Your Xero account is connected. Invoices and payments will be automatically synced.'
+            : 'Connect your Xero account to automatically sync invoices and payments.'}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {status?.connected
+            ? 'Manage your Xero connection and business selection here.'
+            : 'Connect Xero to send invoices from Provvy.'}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,10 +1,12 @@
 'use client';
 
+import { useMemo } from 'react';
 import { SetupAssistant } from '@/components/commercial-os/setup-assistant';
-import { XeroHealthCheckCard } from '@/components/xero/xero-health-check-card';
-import { useXeroGuidedSetupState } from '@/hooks/use-xero-guided-setup-state';
+import { XeroSetupStatusCard } from '@/components/xero/xero-setup-status-card';
+import { useCommercialReadiness } from '@/hooks/use-commercial-readiness';
 import {
   XERO_GUIDED_SETUP_CONFIG,
+  buildXeroGuidedTourSteps,
 } from '@/lib/xero/xero-guided-setup-config';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 
@@ -14,29 +16,26 @@ type XeroGuidedSetupOrchestratorProps = {
   variant?: 'default' | 'commercial';
 };
 
-/** Wires the generic SetupAssistant to live Xero page sections. */
+/** Setup status + optional walkthrough — readiness is the single source of truth. */
 export function XeroGuidedSetupOrchestrator({
-  organizationId,
   merchantRails,
   variant = 'commercial',
 }: XeroGuidedSetupOrchestratorProps) {
-  const { loading, steps, healthChecks, refresh } = useXeroGuidedSetupState(
-    organizationId,
-    merchantRails
+  const readiness = useCommercialReadiness();
+
+  const steps = useMemo(
+    () => (readiness.loading ? [] : buildXeroGuidedTourSteps(readiness, merchantRails)),
+    [readiness, merchantRails]
   );
 
   return (
     <div className="space-y-4">
+      <XeroSetupStatusCard variant={variant} />
       <SetupAssistant
         config={XERO_GUIDED_SETUP_CONFIG}
-        steps={loading ? [] : steps}
+        steps={steps}
         variant={variant}
-      />
-      <XeroHealthCheckCard
-        checks={healthChecks}
-        loading={loading}
-        onRefresh={refresh}
-        variant={variant}
+        tourOnly
       />
     </div>
   );

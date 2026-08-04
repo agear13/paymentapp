@@ -1,38 +1,23 @@
 import type { GuidedSetupConfig, GuidedSetupStep } from '@/lib/commercial-os/guided-setup';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
-import { CLEARING_ACCOUNTS_EXPLANATION, QUEUE_GUIDANCE } from '@/lib/xero/xero-setup-guidance';
+import { CLEARING_ACCOUNTS_EXPLANATION } from '@/lib/xero/xero-setup-guidance';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
+import type { XeroReadinessResult } from '@/lib/commercial-os/xero-readiness';
 
 export const XERO_GUIDED_SETUP_CONFIG: GuidedSetupConfig = {
   id: 'xero',
-  introTitle: "Let's finish your Xero setup",
-  introSubtitle: "We'll guide you through a few quick steps on this page.",
+  introTitle: 'Optional walkthrough',
+  introSubtitle: 'We can highlight each section on this page. Setup status above is always the source of truth.',
   estimatedTime: '2–3 minutes',
   completion: {
-    title: 'Xero is Ready',
-    body: 'Everything is configured.',
-    bullets: [
-      'Push invoices',
-      'Push payments',
-      'Reconcile Stripe settlements',
-      'Sync future activity',
-    ],
+    title: 'Walkthrough complete',
+    body: 'Continue with the sections below.',
+    bullets: [],
     primaryAction: {
       label: 'Return to Workspace',
       href: COMMERCIAL_OS_ROUTES.workspace,
     },
-    secondaryAction: {
-      label: 'Create your first invoice',
-      href: COMMERCIAL_OS_ROUTES.receivables,
-    },
   },
-};
-
-export type XeroGuidedSetupContext = {
-  merchantRails: MerchantPaymentRails;
-  missingClearingCount: number;
-  pendingPaymentCount: number;
-  hasPaymentRails: boolean;
 };
 
 export const XERO_GUIDED_SECTION_IDS = {
@@ -45,91 +30,103 @@ export const XERO_GUIDED_SECTION_IDS = {
 } as const;
 
 export const XERO_CONTEXTUAL_HELP = {
-  revenue: 'This is where sales from invoices are recorded inside Xero.',
-  receivable: "Tracks invoices that haven't yet been paid.",
-  processorFees: 'Payment processor fees from card payments are recorded here.',
+  revenue: 'This is where sales from invoices are recorded in Xero.',
+  receivable: "Tracks invoices that haven't been paid yet.",
+  processorFees: 'Card processing fees from Stripe payments are recorded here.',
   stripeClearing:
-    'Stripe temporarily holds funds before paying your bank account. This account allows Provvy to reconcile deposits automatically.',
+    'Stripe temporarily holds funds before paying your bank. This holding account helps Provvy match deposits automatically.',
   paymentRails:
-    'Provvy uses temporary clearing accounts so deposits reconcile automatically.',
+    'Provvy uses temporary holding accounts so deposits reconcile automatically.',
   clearingAccounts:
-    'Recommended accounts are created inside Xero — nothing is deleted and duplicates are avoided.',
+    'Suggested accounts are added in Xero — nothing is deleted and duplicates are avoided.',
 } as const;
-
-export function buildXeroGuidedSetupSteps(ctx: XeroGuidedSetupContext): GuidedSetupStep[] {
-  const steps: GuidedSetupStep[] = [
-    {
-      id: 'revenue',
-      title: 'Revenue Account',
-      explanation:
-        'When customers pay invoices, Provvy records revenue into this account.',
-      targetId: XERO_GUIDED_SECTION_IDS.revenue,
-      continueLabel: 'Looks good · Continue',
-    },
-    {
-      id: 'receivable',
-      title: 'Accounts Receivable',
-      explanation: 'This is where unpaid invoices live until customers pay.',
-      targetId: XERO_GUIDED_SECTION_IDS.receivable,
-    },
-  ];
-
-  if (ctx.merchantRails.stripeEnabled) {
-    steps.push({
-      id: 'processor-fees',
-      title: 'Processor Fees',
-      explanation: 'Payment processor fees are automatically recorded here.',
-      targetId: XERO_GUIDED_SECTION_IDS.processorFees,
-    });
-  }
-
-  if (ctx.hasPaymentRails) {
-    const railNames: string[] = [];
-    if (ctx.merchantRails.stripeEnabled) railNames.push('Stripe');
-    if (ctx.merchantRails.wiseEnabled) railNames.push('Wise');
-    if (ctx.merchantRails.stablecoinSettlementsEnabled) {
-      railNames.push('HBAR', 'USDC', 'USDT', 'AUDD');
-    }
-
-    steps.push({
-      id: 'payment-rails',
-      title: 'Payment Rail Mappings',
-      explanation: `Provvy uses temporary clearing accounts so ${railNames.join(', ')} deposits reconcile automatically.`,
-      targetId: XERO_GUIDED_SECTION_IDS.paymentRails,
-    });
-  }
-
-  if (ctx.missingClearingCount > 0) {
-    steps.push({
-      id: 'clearing-accounts',
-      title: 'Recommended Clearing Accounts',
-      explanation: `${CLEARING_ACCOUNTS_EXPLANATION.body} ${CLEARING_ACCOUNTS_EXPLANATION.action} ${CLEARING_ACCOUNTS_EXPLANATION.reassurance}`,
-      targetId: XERO_GUIDED_SECTION_IDS.clearingAccounts,
-      continueLabel: 'Continue',
-    });
-  }
-
-  if (ctx.pendingPaymentCount > 0) {
-    steps.push({
-      id: 'historical-payments',
-      title: 'Historical Payments',
-      explanation: `We found ${ctx.pendingPaymentCount} historical payment${ctx.pendingPaymentCount === 1 ? '' : 's'} waiting to sync. This is normal after connecting Xero for the first time. Use Sync payments to Xero when you're ready.`,
-      targetId: XERO_GUIDED_SECTION_IDS.syncQueue,
-      continueLabel: QUEUE_GUIDANCE.processQueueLabel,
-    });
-  }
-
-  steps.push({
-    id: 'finished',
-    title: 'All set',
-    explanation: "You're done! Provvy will keep invoices and payments in sync automatically.",
-    targetId: XERO_GUIDED_SECTION_IDS.revenue,
-    continueLabel: 'Finish setup',
-  });
-
-  return steps;
-}
 
 export function xeroHasPaymentRails(rails: MerchantPaymentRails): boolean {
   return rails.stripeEnabled || rails.wiseEnabled || rails.stablecoinSettlementsEnabled;
+}
+
+/** Tour steps only — never imply setup is complete. */
+export function buildXeroGuidedTourSteps(
+  readiness: XeroReadinessResult,
+  rails: MerchantPaymentRails
+): GuidedSetupStep[] {
+  const steps: GuidedSetupStep[] = [];
+
+  if (!readiness.connection.connected) {
+    steps.push({
+      id: 'connect',
+      title: 'Connect Xero',
+      explanation: 'Sign in to Xero and approve access so Provvy can send invoices and payments.',
+      targetId: 'xero-connection',
+      continueLabel: 'Next',
+    });
+    return steps;
+  }
+
+  steps.push({
+    id: 'revenue',
+    title: 'Sales from invoices',
+    explanation: 'Choose which Xero account records sales when customers pay.',
+    targetId: XERO_GUIDED_SECTION_IDS.revenue,
+    continueLabel: 'Next',
+  });
+
+  steps.push({
+    id: 'receivable',
+    title: 'Unpaid invoices',
+    explanation: 'Choose where unpaid invoices live in Xero until customers pay.',
+    targetId: XERO_GUIDED_SECTION_IDS.receivable,
+    continueLabel: 'Next',
+  });
+
+  if (rails.stripeEnabled) {
+    steps.push({
+      id: 'processor-fees',
+      title: 'Card processing fees',
+      explanation: 'Optional — where Stripe fees are recorded.',
+      targetId: XERO_GUIDED_SECTION_IDS.processorFees,
+      continueLabel: 'Next',
+    });
+  }
+
+  if (xeroHasPaymentRails(rails)) {
+    steps.push({
+      id: 'payment-rails',
+      title: 'Payment methods',
+      explanation:
+        'Optional holding accounts help Provvy match Stripe and other payments to your bank deposits.',
+      targetId: XERO_GUIDED_SECTION_IDS.paymentRails,
+      continueLabel: 'Next',
+    });
+  }
+
+  if (rails.stripeEnabled && !readiness.paymentMappings.stripeClearing.saved) {
+    steps.push({
+      id: 'clearing-accounts',
+      title: 'Temporary holding accounts',
+      explanation: `${CLEARING_ACCOUNTS_EXPLANATION.body} ${CLEARING_ACCOUNTS_EXPLANATION.reassurance}`,
+      targetId: XERO_GUIDED_SECTION_IDS.clearingAccounts,
+      continueLabel: 'Next',
+    });
+  }
+
+  if (readiness.queue.pendingCount > 0) {
+    steps.push({
+      id: 'historical-payments',
+      title: 'Past payments',
+      explanation: `${readiness.queue.pendingCount} past payment${readiness.queue.pendingCount === 1 ? '' : 's'} will sync automatically — no action needed.`,
+      targetId: XERO_GUIDED_SECTION_IDS.syncQueue,
+      continueLabel: 'Finish walkthrough',
+    });
+  } else {
+    steps.push({
+      id: 'finished',
+      title: 'Review setup status',
+      explanation: 'Check Setup status above for anything required or optional.',
+      targetId: 'guided-xero-health-check',
+      continueLabel: 'Finish walkthrough',
+    });
+  }
+
+  return steps;
 }

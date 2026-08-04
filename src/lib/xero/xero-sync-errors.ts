@@ -127,3 +127,45 @@ export function formatXeroSyncError(error: unknown): string {
 
   return 'Unknown error occurred during Xero sync';
 }
+
+const CONNECTION_ERROR_PATTERNS = [
+  /no active xero connection/i,
+  /connect xero first/i,
+  /invalid connection state/i,
+];
+
+/** Whether a persisted sync error likely reflects a past disconnect, not current health. */
+export function isHistoricalXeroConnectionError(errorMessage: string | null | undefined): boolean {
+  if (!errorMessage?.trim()) return false;
+  return CONNECTION_ERROR_PATTERNS.some((pattern) => pattern.test(errorMessage));
+}
+
+/**
+ * Clarify queue history when Xero is connected now but the row failed earlier.
+ */
+export function formatHistoricalSyncErrorMessage(
+  errorMessage: string | null | undefined,
+  options: { xeroCurrentlyConnected: boolean }
+): string | null {
+  if (!errorMessage?.trim()) return null;
+  if (options.xeroCurrentlyConnected && isHistoricalXeroConnectionError(errorMessage)) {
+    return 'This sync failed when Xero was disconnected or the session had expired. Xero is connected now — use Find missed payments or wait for the next automatic retry.';
+  }
+  return errorMessage;
+}
+
+/** Operator-facing explanation when creating clearing accounts in Xero fails. */
+export function formatClearingAccountCreationError(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower.includes('forbidden') || lower.includes('403') || lower.includes('not authorized')) {
+    return 'Xero rejected account creation — your Xero user may not have permission to add accounts. Ask an Xero admin to create the clearing accounts or grant Standard + Accounts access.';
+  }
+  if (lower.includes('no active xero connection')) {
+    return 'Xero connection is not active. Reconnect Xero above, then try again.';
+  }
+  if (lower.includes('no available account codes')) {
+    return 'Could not find an available account code in your chart. Add a clearing account manually in Xero or contact support.';
+  }
+  const fromApi = friendlyHint(raw);
+  return fromApi ? `Xero: ${fromApi}` : raw;
+}

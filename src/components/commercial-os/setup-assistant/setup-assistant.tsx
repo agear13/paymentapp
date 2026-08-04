@@ -20,6 +20,8 @@ type SetupAssistantProps = {
   config: GuidedSetupConfig;
   steps: GuidedSetupStep[];
   variant?: 'default' | 'commercial';
+  /** When true, finishing the last step dismisses the guide — no completion card. */
+  tourOnly?: boolean;
 };
 
 function readPhase(storageKey: string): GuidedSetupPhase | null {
@@ -61,7 +63,7 @@ function highlightTarget(targetId: string) {
  * Generic Commercial OS setup assistant — orchestrates existing page sections
  * without locking navigation or duplicating production components.
  */
-export function SetupAssistant({ config, steps, variant = 'default' }: SetupAssistantProps) {
+export function SetupAssistant({ config, steps, variant = 'default', tourOnly = false }: SetupAssistantProps) {
   const phaseKey = guidedSetupStorageKey(config.id, 'phase');
   const stepKey = guidedSetupStorageKey(config.id, 'step');
 
@@ -121,8 +123,12 @@ export function SetupAssistant({ config, steps, variant = 'default' }: SetupAssi
 
   const continueStep = () => {
     if (stepIndex >= totalSteps - 1) {
-      persistPhase('complete');
       clearHighlight();
+      if (tourOnly) {
+        persistPhase('dismissed');
+        return;
+      }
+      persistPhase('complete');
       return;
     }
     persistStep(stepIndex + 1);
@@ -159,7 +165,7 @@ export function SetupAssistant({ config, steps, variant = 'default' }: SetupAssi
     );
   }
 
-  if (phase === 'complete') {
+  if (phase === 'complete' && !tourOnly) {
     const { completion } = config;
     return (
       <div className={`${cardClass} space-y-5`}>
@@ -273,7 +279,7 @@ export function SetupAssistant({ config, steps, variant = 'default' }: SetupAssi
         </div>
       </div>
       <Button onClick={startSetup} className={isCommercial ? 'rounded-xl' : undefined}>
-        Start Setup
+        {tourOnly ? 'Start walkthrough' : 'Start Setup'}
         <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
       </Button>
     </div>

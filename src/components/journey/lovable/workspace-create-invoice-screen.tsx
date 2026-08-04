@@ -43,6 +43,14 @@ import {
 } from '@/lib/payment-links/setup-status';
 import { isValidShortCode } from '@/lib/short-code';
 import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
+import { CommercialOsCreateInvoiceGate } from '@/components/journey/lovable/commercial-os-create-invoice-gate';
+import {
+  CRYPTO_UNAVAILABLE_REASON,
+  fetchMerchantDedicatedRailDefaults,
+  MANUAL_BANK_UNAVAILABLE_REASON,
+  PAYMENT_SETTINGS_PATH,
+  type MerchantDedicatedRailDefaults,
+} from '@/lib/payment-links/merchant-dedicated-rail-defaults';
 
 type MerchantSettingsSnapshot = {
   stripeAccountId?: string | null;
@@ -194,6 +202,11 @@ export function WorkspaceCreateInvoiceScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [created, setCreated] = useState<CreatePaymentLinkResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [railDefaults, setRailDefaults] = useState<MerchantDedicatedRailDefaults>({
+    manualBank: null,
+    crypto: null,
+  });
+  const [railDefaultsLoaded, setRailDefaultsLoaded] = useState(false);
 
   const payCode = created?.shortCode?.trim() ?? '';
   const paymentUrl = usePaymentLinkUrl(isValidShortCode(payCode) ? payCode : null);
@@ -261,6 +274,32 @@ export function WorkspaceCreateInvoiceScreen() {
       setDraft((prev) => (prev.currency === 'AUD' ? { ...prev, currency: acct } : prev));
     }
   }, [organizationId, merchantSettingsLoaded, merchantSettings?.defaultCurrency]);
+
+  useEffect(() => {
+    if (!organizationId) {
+      setRailDefaults({ manualBank: null, crypto: null });
+      setRailDefaultsLoaded(false);
+      return;
+    }
+
+    let cancelled = false;
+    setRailDefaultsLoaded(false);
+
+    void (async () => {
+      try {
+        const defaults = await fetchMerchantDedicatedRailDefaults(organizationId);
+        if (!cancelled) setRailDefaults(defaults);
+      } catch {
+        if (!cancelled) setRailDefaults({ manualBank: null, crypto: null });
+      } finally {
+        if (!cancelled) setRailDefaultsLoaded(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId]);
 
   useEffect(() => {
     if (!organizationId) return;
@@ -356,24 +395,55 @@ export function WorkspaceCreateInvoiceScreen() {
     [merchantSettings, platformFeatures]
   );
 
-  const paymentMethodOptions = useMemo(
-    () =>
-      buildInvoicePaymentMethodOptions({
-        setup: railSetup,
-        features: platformFeatures,
-      }),
-    [railSetup, platformFeatures]
-  );
+  const paymentMethodOptions = useMemo(() => {
+    const base = buildInvoicePaymentMethodOptions({
+      setup: railSetup,
+      features: platformFeatures,
+    });
+
+    return base.map((opt) => {
+      if (opt.value === 'MANUAL_BANK') {
+        const ready = Boolean(railDefaults.manualBank);
+        return {
+          ...opt,
+          available: ready,
+          unavailableReason: ready ? undefined : MANUAL_BANK_UNAVAILABLE_REASON,
+        };
+      }
+      if (opt.value === 'CRYPTO') {
+        const ready = Boolean(railDefaults.crypto);
+        return {
+          ...opt,
+          available: ready,
+          unavailableReason: ready ? undefined : CRYPTO_UNAVAILABLE_REASON,
+        };
+      }
+      return opt;
+    });
+  }, [railSetup, platformFeatures, railDefaults]);
 
   useEffect(() => {
-    if (!merchantSettingsLoaded || draft.paymentMethod) return;
-    const firstAvailable =
-      paymentMethodOptions.find((opt) => opt.available)?.value ??
-      paymentMethodOptions[0]?.value;
+    if (!merchantSettingsLoaded || !railDefaultsLoaded || draft.paymentMethod) return;
+    const firstAvailable = paymentMethodOptions.find((opt) => opt.available)?.value;
     if (firstAvailable) {
       patchDraft({ paymentMethod: firstAvailable });
     }
-  }, [merchantSettingsLoaded, draft.paymentMethod, paymentMethodOptions, patchDraft]);
+  }, [
+    merchantSettingsLoaded,
+    railDefaultsLoaded,
+    draft.paymentMethod,
+    paymentMethodOptions,
+    patchDraft,
+  ]);
+
+  useEffect(() => {
+    if (!railDefaultsLoaded || !draft.paymentMethod) return;
+    const selected = paymentMethodOptions.find((opt) => opt.value === draft.paymentMethod);
+    if (selected && !selected.available) {
+      const fallback = paymentMethodOptions.find((opt) => opt.available)?.value;
+      patchDraft({ paymentMethod: fallback });
+    }
+  }, [railDefaultsLoaded, draft.paymentMethod, paymentMethodOptions, patchDraft]);
 
   const guidance = useMemo(() => {
     if (!draft.customerName.trim() && !draft.customerEmail.trim()) {
@@ -391,8 +461,14 @@ export function WorkspaceCreateInvoiceScreen() {
     if (!railSetup.anyRailConfigured && draft.paymentMethod !== 'CRYPTO' && draft.paymentMethod !== 'MANUAL_BANK') {
       return 'Connect a payment method in Connected Systems before sending.';
     }
+    if (draft.paymentMethod === 'MANUAL_BANK' && !railDefaults.manualBank) {
+      return 'Add your business bank account in Payment Settings before using manual bank transfer.';
+    }
+    if (draft.paymentMethod === 'CRYPTO' && !railDefaults.crypto) {
+      return 'Add your crypto wallet in Payment Settings before using crypto payments.';
+    }
     return 'Review the preview, then create your invoice.';
-  }, [draft, railSetup.anyRailConfigured]);
+  }, [draft, railSetup.anyRailConfigured, railDefaults]);
 
   const hasXeroConnected = useMemo(
     () => (connectedSystems ?? []).some((s) => s.name === 'Xero'),
@@ -400,7 +476,11 @@ export function WorkspaceCreateInvoiceScreen() {
   );
 
   const showPaymentRailGuidance =
-    hasXeroConnected && !railSetup.anyRailConfigured && merchantSettingsLoaded;
+    hasXeroConnected &&
+    !railSetup.anyRailConfigured &&
+    merchantSettingsLoaded &&
+    railDefaultsLoaded &&
+    (Boolean(railDefaults.manualBank) || Boolean(railDefaults.crypto));
 
   const previewAmount =
     draft.amount && draft.amount > 0
@@ -447,6 +527,16 @@ export function WorkspaceCreateInvoiceScreen() {
     }
 
     const pm = draft.paymentMethod;
+    if (pm === 'MANUAL_BANK' && !railDefaults.manualBank) {
+      setSubmitError(
+        'Manual Bank Transfer is not set up yet. Add your business bank account in Payment Settings.'
+      );
+      return;
+    }
+    if (pm === 'CRYPTO' && !railDefaults.crypto) {
+      setSubmitError('Crypto payments are not set up yet. Add your wallet in Payment Settings.');
+      return;
+    }
     if (pm && pm !== 'CRYPTO' && pm !== 'MANUAL_BANK') {
       if (!railSetup.anyRailConfigured) {
         setSubmitError(
@@ -463,7 +553,10 @@ export function WorkspaceCreateInvoiceScreen() {
 
     setIsSubmitting(true);
     try {
-      const result = await createPaymentLinkFromDraft(organizationId, draft);
+      const result = await createPaymentLinkFromDraft(organizationId, draft, {
+        manualBank: railDefaults.manualBank,
+        crypto: railDefaults.crypto,
+      });
       setCreated(result);
     } catch (error) {
       const message =
@@ -496,6 +589,68 @@ export function WorkspaceCreateInvoiceScreen() {
     );
   }
 
+  return (
+    <CommercialOsCreateInvoiceGate fullPage>
+      <CreateInvoiceForm
+        draft={draft}
+        patchDraft={patchDraft}
+        guidance={guidance}
+        submitError={submitError}
+        isSubmitting={isSubmitting}
+        handleSubmit={handleSubmit}
+        router={router}
+        showPaymentRailGuidance={showPaymentRailGuidance}
+        paymentMethodOptions={paymentMethodOptions}
+        railDefaults={railDefaults}
+        railDefaultsLoaded={railDefaultsLoaded}
+        anyRailConfigured={railSetup.anyRailConfigured}
+        previewAmount={previewAmount}
+        connectedSystems={connectedSystems}
+        aiPrompt={aiPrompt}
+        setAiPrompt={setAiPrompt}
+        handleAiGenerate={handleAiGenerate}
+      />
+    </CommercialOsCreateInvoiceGate>
+  );
+}
+
+function CreateInvoiceForm({
+  draft,
+  patchDraft,
+  guidance,
+  submitError,
+  isSubmitting,
+  handleSubmit,
+  router,
+  showPaymentRailGuidance,
+  paymentMethodOptions,
+  railDefaults,
+  railDefaultsLoaded,
+  anyRailConfigured,
+  previewAmount,
+  connectedSystems,
+  aiPrompt,
+  setAiPrompt,
+  handleAiGenerate,
+}: {
+  draft: CommercialDealDraft;
+  patchDraft: (patch: Partial<CommercialDealDraft>) => void;
+  guidance: string;
+  submitError: string | null;
+  isSubmitting: boolean;
+  handleSubmit: () => void;
+  router: ReturnType<typeof useRouter>;
+  showPaymentRailGuidance: boolean;
+  paymentMethodOptions: ReturnType<typeof buildInvoicePaymentMethodOptions>;
+  railDefaults: MerchantDedicatedRailDefaults;
+  railDefaultsLoaded: boolean;
+  anyRailConfigured: boolean;
+  previewAmount: string;
+  connectedSystems: ConnectedSystemCard[] | null;
+  aiPrompt: string;
+  setAiPrompt: (value: string) => void;
+  handleAiGenerate: () => void;
+}) {
   return (
     <div className="animate-fade-up pb-32">
       <Link
@@ -541,14 +696,17 @@ export function WorkspaceCreateInvoiceScreen() {
           title="Payment options"
           message={
             <>
-              You can still create invoices today using{' '}
-              <strong className="font-medium text-foreground">Manual Bank Transfer</strong> or{' '}
-              <strong className="font-medium text-foreground">Crypto</strong>. Connect Stripe later
-              in{' '}
+              You can invoice today using your saved{' '}
+              {railDefaults.manualBank && railDefaults.crypto
+                ? 'bank transfer and crypto wallet details'
+                : railDefaults.manualBank
+                  ? 'bank transfer details'
+                  : 'crypto wallet details'}
+              . Connect Stripe in{' '}
               <Link href={COMMERCIAL_OS_ROUTES.connected} className="font-medium text-primary hover:underline">
                 Connected Systems
               </Link>{' '}
-              if you want to accept card payments.
+              if you want to accept card payments too.
             </>
           }
         />
@@ -736,15 +894,39 @@ export function WorkspaceCreateInvoiceScreen() {
                 </label>
               ))}
             </fieldset>
-            {!railSetup.anyRailConfigured ? (
+            {!anyRailConfigured ? (
               <p className="mt-4 text-[12.5px] leading-relaxed text-ink-soft">
-                Card and Wise payments need a connected rail. Choose{' '}
-                <strong className="font-medium text-foreground">Manual Bank Transfer</strong> or{' '}
-                <strong className="font-medium text-foreground">Crypto</strong> to invoice today, or{' '}
+                Connect Stripe or Wise in{' '}
                 <Link href={COMMERCIAL_OS_ROUTES.connected} className="font-medium text-primary hover:underline">
-                  set up payments
+                  Connected Systems
                 </Link>{' '}
-                in Connected Systems.
+                for card and international bank payments.
+              </p>
+            ) : null}
+            {railDefaultsLoaded && !railDefaults.manualBank ? (
+              <p className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">
+                {MANUAL_BANK_UNAVAILABLE_REASON}{' '}
+                <Link href={PAYMENT_SETTINGS_PATH} className="font-medium text-primary hover:underline">
+                  Open Payment Settings
+                </Link>
+              </p>
+            ) : null}
+            {railDefaultsLoaded && !railDefaults.crypto ? (
+              <p className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">
+                {CRYPTO_UNAVAILABLE_REASON}{' '}
+                <Link href={PAYMENT_SETTINGS_PATH} className="font-medium text-primary hover:underline">
+                  Open Payment Settings
+                </Link>
+              </p>
+            ) : null}
+            {railDefaults.manualBank ? (
+              <p className="mt-4 text-[12.5px] text-ink-soft">
+                Bank transfer details from your Payment Settings will appear on this invoice automatically.
+              </p>
+            ) : null}
+            {railDefaults.crypto ? (
+              <p className="mt-2 text-[12.5px] text-ink-soft">
+                Crypto wallet details from your Payment Settings will appear on this invoice automatically.
               </p>
             ) : null}
           </FormCard>

@@ -47,6 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useWorkspaceInvoiceActions } from '@/hooks/use-workspace-invoice-actions';
 import { formatCurrency } from '@/lib/formatters/format-currency';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import { CommercialOsCreateInvoiceLink } from '@/components/journey/lovable/commercial-os-create-invoice-gate';
 import {
   formatInvoiceDueLabel,
   invoicePaymentMethodLabel,
@@ -172,13 +173,12 @@ export function WorkspaceInvoiceListScreen() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Link
-            href={COMMERCIAL_OS_ROUTES.createInvoice}
+          <CommercialOsCreateInvoiceLink
             className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-purple px-5 text-[14px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110"
           >
             <Plus className="h-4 w-4" />
             Create Invoice
-          </Link>
+          </CommercialOsCreateInvoiceLink>
           <button
             type="button"
             onClick={() => void fetchPaymentLinks()}
@@ -259,13 +259,12 @@ export function WorkspaceInvoiceListScreen() {
                   <p className="mt-2 text-[13px] text-ink-soft">
                     Create your first invoice to start collecting payments.
                   </p>
-                  <Link
-                    href={COMMERCIAL_OS_ROUTES.createInvoice}
+                  <CommercialOsCreateInvoiceLink
                     className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2 text-[13px] font-semibold text-primary-foreground shadow-glow"
                   >
                     <Plus className="h-4 w-4" />
                     Create invoice
-                  </Link>
+                  </CommercialOsCreateInvoiceLink>
                 </td>
               </tr>
             ) : isFilteredEmpty ? (

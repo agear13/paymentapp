@@ -1,4 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
+import { config as loadEnv } from 'dotenv';
+import { resolve } from 'node:path';
+
+loadEnv({ path: resolve(__dirname, '.env.local') });
+loadEnv({ path: resolve(__dirname, '.env') });
+loadEnv({ path: resolve(__dirname, '..', '.env.local') });
 
 /** Dedicated port avoids clashing with a dev server already on 3000. */
 const e2ePort = process.env.E2E_PORT || '3333';

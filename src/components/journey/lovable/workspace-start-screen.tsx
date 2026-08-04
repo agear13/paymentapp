@@ -15,6 +15,7 @@ import {
   Star,
 } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
 
 type CardId = 'create-invoice' | 'manage-invoices' | 'sync-xero' | 'collections' | 'workspace';
 
@@ -110,7 +111,9 @@ type Business = {
 
 export function WorkspaceStartScreen() {
   const router = useRouter();
+  const readiness = useCommercialReadinessOptional();
   const [selected, setSelected] = useState<CardId | null>(null);
+  const [pendingLaunch, setPendingLaunch] = useState<(typeof CARDS)[number] | null>(null);
   const [objective, setObjective] = useState('reconcile');
   const [business, setBusiness] = useState<Business>({});
   const [revealed, setRevealed] = useState(0);
@@ -163,6 +166,23 @@ export function WorkspaceStartScreen() {
     return `We've detected ${list} in your workflow. Your first workspace will be preconfigured to accept and reconcile payments across these channels.`;
   }, [detected]);
 
+  useEffect(() => {
+    if (!pendingLaunch) return;
+    if (pendingLaunch.id === 'create-invoice' && (!readiness || readiness.loading)) return;
+
+    const destination =
+      pendingLaunch.id === 'create-invoice' && readiness && !readiness.canCreateInvoice
+        ? COMMERCIAL_OS_ROUTES.connectedXero
+        : pendingLaunch.to;
+
+    const t = setTimeout(() => {
+      router.push(destination);
+      setPendingLaunch(null);
+    }, 480);
+
+    return () => clearTimeout(t);
+  }, [pendingLaunch, readiness, router]);
+
   const launch = (card: (typeof CARDS)[number]) => {
     setSelected(card.id);
     try {
@@ -170,7 +190,15 @@ export function WorkspaceStartScreen() {
     } catch {
       /* ignore */
     }
-    setTimeout(() => router.push(card.to), 480);
+    if (card.id === 'create-invoice' && (!readiness || readiness.loading)) {
+      setPendingLaunch(card);
+      return;
+    }
+    const destination =
+      card.id === 'create-invoice' && readiness && !readiness.canCreateInvoice
+        ? COMMERCIAL_OS_ROUTES.connectedXero
+        : card.to;
+    setTimeout(() => router.push(destination), 480);
   };
 
   return (

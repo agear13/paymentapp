@@ -41,7 +41,10 @@ export function XeroSetupProgress({
           fetch(`/api/settings/xero-mappings?organization_id=${encodeURIComponent(organizationId)}`, {
             cache: 'no-store',
           }),
-          fetch('/api/xero/queue/process-now', { cache: 'no-store' }),
+          fetch(
+            `/api/xero/sync/stats?organization_id=${encodeURIComponent(organizationId)}`,
+            { cache: 'no-store' }
+          ),
         ]);
 
         const status = statusRes.ok

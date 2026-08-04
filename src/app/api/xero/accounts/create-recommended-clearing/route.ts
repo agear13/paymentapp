@@ -34,15 +34,23 @@ export async function POST(request: NextRequest) {
     );
     if (!canManageSettings) {
       return NextResponse.json(
-        { error: 'Forbidden - insufficient organization permissions' },
+        {
+          error: 'You need organization settings permission to create accounts in Xero.',
+          details:
+            'Ask an organization admin to grant you settings access, or create the clearing accounts manually in Xero.',
+          code: 'FORBIDDEN',
+        },
         { status: 403 }
       );
     }
 
     const connectionResolved = await resolveXeroConnectionForApi(organizationId);
     if (!connectionResolved.persisted || connectionResolved.stale || !connectionResolved.connection) {
+      const reason = connectionResolved.stale
+        ? 'Your Xero session has expired. Reconnect Xero above, then try again.'
+        : 'Connect Xero above before creating clearing accounts.';
       return NextResponse.json(
-        { error: 'No active Xero connection found. Please connect to Xero first.' },
+        { error: 'No active Xero connection found. Please connect to Xero first.', details: reason },
         { status: 404 }
       );
     }
