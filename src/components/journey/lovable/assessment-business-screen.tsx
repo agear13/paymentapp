@@ -38,7 +38,7 @@ export function AssessmentBusinessScreen() {
     try {
       sessionStorage.setItem("provvy.business", JSON.stringify(s));
     } catch {}
-    router.push('/journey/assessment/connect');
+    router.push('/journey/assessment/analysis');
   };
 
   return (

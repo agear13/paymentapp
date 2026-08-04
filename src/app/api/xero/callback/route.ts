@@ -20,8 +20,16 @@ import { traceConnectionVsTokenSet } from '@/lib/xero/apply-connection-token-set
 import { logTokenSetTrace } from '@/lib/xero/token-set-trace';
 import { hashOAuthState } from '@/lib/xero/oauth-state-trace';
 import { applyXeroDefaultAccountingMappingsIfEmpty } from '@/lib/xero/default-accounting-mappings';
+import { normalizeXeroOAuthReturnPath } from '@/lib/xero/oauth-return-path';
+
+type XeroOAuthState = {
+  organizationId: string;
+  userId: string;
+  returnTo?: string;
+};
 
 export async function GET(request: NextRequest) {
+  let oauthReturnPath: string | undefined;
   const organizationIdHint = 'unknown';
   try {
     loggers.xero.info('xero_callback_start', { step: 'parse_callback_params' });
@@ -55,7 +63,7 @@ export async function GET(request: NextRequest) {
       stateHash: hashOAuthState(state),
       stateLength: state.length,
     });
-    const stateData = verifyOAuthState<{ organizationId: string; userId: string }>(state);
+    const stateData = verifyOAuthState<XeroOAuthState>(state);
     if (!stateData?.organizationId || !stateData?.userId) {
       loggers.xero.error('xero_callback_invalid_state', undefined, { step: 'verify_oauth_state' });
       return NextResponse.redirect(
@@ -63,12 +71,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    oauthReturnPath = normalizeXeroOAuthReturnPath(stateData.returnTo);
+
     const { organizationId, userId } = stateData;
 
     if (!isValidOrganizationUuid(organizationId)) {
       warnInvalidOrganizationId(organizationId, 'xero/callback oauth state');
       return NextResponse.redirect(
-        xeroIntegrationsRedirectUrl(request, { xero_error: 'invalid_state' })
+        xeroIntegrationsRedirectUrl(request, { xero_error: 'invalid_state' }, oauthReturnPath)
       );
     }
 
@@ -88,7 +98,7 @@ export async function GET(request: NextRequest) {
         stateUserId: userId,
       });
       return NextResponse.redirect(
-        xeroIntegrationsRedirectUrl(request, { xero_error: 'unauthorized' })
+        xeroIntegrationsRedirectUrl(request, { xero_error: 'unauthorized' }, oauthReturnPath)
       );
     }
 
@@ -125,7 +135,7 @@ export async function GET(request: NextRequest) {
         userId,
       });
       return NextResponse.redirect(
-        xeroIntegrationsRedirectUrl(request, { xero_error: 'no_tenants' })
+        xeroIntegrationsRedirectUrl(request, { xero_error: 'no_tenants' }, oauthReturnPath)
       );
     }
 
@@ -180,15 +190,23 @@ export async function GET(request: NextRequest) {
 
     const redirectUrl =
       tenants.length > 1
-        ? xeroIntegrationsRedirectUrl(request, {
-            xero_success: 'connected',
-            xero_accounting: accountingParam,
-            select_tenant: 'true',
-          })
-        : xeroIntegrationsRedirectUrl(request, {
-            xero_success: 'connected',
-            xero_accounting: accountingParam,
-          });
+        ? xeroIntegrationsRedirectUrl(
+            request,
+            {
+              xero_success: 'connected',
+              xero_accounting: accountingParam,
+              select_tenant: 'true',
+            },
+            oauthReturnPath
+          )
+        : xeroIntegrationsRedirectUrl(
+            request,
+            {
+              xero_success: 'connected',
+              xero_accounting: accountingParam,
+            },
+            oauthReturnPath
+          );
 
     return NextResponse.redirect(redirectUrl);
   } catch (error) {
@@ -199,12 +217,12 @@ export async function GET(request: NextRequest) {
 
     if (error instanceof XeroConfigurationError) {
       return NextResponse.redirect(
-        xeroIntegrationsRedirectUrl(request, { xero_error: 'not_configured' })
+        xeroIntegrationsRedirectUrl(request, { xero_error: 'not_configured' }, oauthReturnPath)
       );
     }
 
     return NextResponse.redirect(
-      xeroIntegrationsRedirectUrl(request, { xero_error: 'connection_failed' })
+      xeroIntegrationsRedirectUrl(request, { xero_error: 'connection_failed' }, oauthReturnPath)
     );
   }
 }

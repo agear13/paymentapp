@@ -16,6 +16,7 @@ export { WorkspaceInvoiceDetailScreen } from '@/components/journey/lovable/works
 export { WorkspaceWorkflowsScreen } from '@/components/journey/lovable/workspace-workflows-screen';
 export { WorkspaceTimelineScreen } from '@/components/journey/lovable/workspace-timeline-screen';
 export { WorkspaceConnectedScreen } from '@/components/journey/lovable/workspace-connected-screen';
+export { WorkspaceXeroManageScreen } from '@/components/journey/lovable/workspace-xero-manage-screen';
 export { WorkspaceAdvisorScreen } from '@/components/journey/lovable/workspace-advisor-screen';
 export { WorkspaceSettingsScreen } from '@/components/journey/lovable/workspace-settings-screen';
 export { WorkflowDetailScreen } from '@/components/journey/lovable/workflow-detail-screen';

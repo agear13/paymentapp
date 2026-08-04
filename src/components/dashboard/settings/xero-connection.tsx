@@ -35,6 +35,8 @@ import Link from 'next/link';
 
 interface XeroConnectionProps {
   organizationId: string;
+  /** Post-OAuth redirect target (stored in signed state). */
+  returnTo?: string;
 }
 
 interface ConnectionStatus {
@@ -51,7 +53,7 @@ interface ConnectionStatus {
   }>;
 }
 
-export function XeroConnection({ organizationId }: XeroConnectionProps) {
+export function XeroConnection({ organizationId, returnTo }: XeroConnectionProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -163,7 +165,12 @@ export function XeroConnection({ organizationId }: XeroConnectionProps) {
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      window.location.href = '/api/xero/connect';
+      const params = new URLSearchParams();
+      params.set('organization_id', organizationId);
+      if (returnTo) {
+        params.set('return_to', returnTo);
+      }
+      window.location.href = `/api/xero/connect?${params.toString()}`;
     } catch (error) {
       console.error('Error connecting to Xero:', error);
       toast.error('Failed to initiate Xero connection');

@@ -93,10 +93,10 @@ export function WorkspaceProvisioningScreen() {
               Step into your personalised Commercial Operating System.
             </div>
             <Link
-              href={COMMERCIAL_OS_ROUTES.workspace}
+              href={COMMERCIAL_OS_ROUTES.connected}
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
             >
-              Enter workspace
+              Connect your systems
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>

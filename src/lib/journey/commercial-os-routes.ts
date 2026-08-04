@@ -23,6 +23,7 @@ export const COMMERCIAL_OS_ROUTES = {
   workflowReconciliationTour: '/workspace/workflow/reconciliation?tour=1',
   timeline: '/workspace/timeline',
   connected: '/workspace/connected',
+  connectedXero: '/workspace/connected/xero',
   advisor: '/workspace/advisor',
   settings: '/workspace/settings',
   assessment: '/journey/assessment',
@@ -56,4 +57,12 @@ export function legacyPaymentLinksHandoffUrl(options?: {
   }
   const query = params.toString();
   return query ? `${LEGACY_PAYMENT_LINKS_PATH}?${query}` : LEGACY_PAYMENT_LINKS_PATH;
+}
+
+/** Initiate production Xero OAuth from Commercial OS (return path stored in signed state). */
+export function xeroConnectUrl(organizationId: string, returnTo: string): string {
+  const params = new URLSearchParams();
+  params.set('organization_id', organizationId);
+  params.set('return_to', returnTo);
+  return `/api/xero/connect?${params.toString()}`;
 }

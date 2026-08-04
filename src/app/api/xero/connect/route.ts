@@ -7,6 +7,8 @@ import { hashOAuthState } from '@/lib/xero/oauth-state-trace';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
+import { normalizeXeroOAuthReturnPath } from '@/lib/xero/oauth-return-path';
+
 export async function GET(request: NextRequest) {
   try {
     if (!isXeroConfigured()) {
@@ -57,9 +59,12 @@ export async function GET(request: NextRequest) {
     });
     if (entitlementBlock) return entitlementBlock;
 
+    const returnTo = normalizeXeroOAuthReturnPath(searchParams.get('return_to'));
+
     const stateParam = signOAuthState({
       organizationId,
       userId: user.id,
+      ...(returnTo ? { returnTo } : {}),
     });
 
     loggers.xero.debug('xero_connect_state_signed', {
