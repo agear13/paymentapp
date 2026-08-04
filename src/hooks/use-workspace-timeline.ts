@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useAgreementHealthPortfolio } from '@/hooks/use-agreement-health-portfolio';
 import { useBusinessFinancialSnapshot } from '@/hooks/use-business-financial-snapshot';
+import { fetchAllPaymentLinks } from '@/lib/payment-links/fetch-payment-links-list.client';
 import {
   deriveWorkspaceTimeline,
 } from '@/lib/workspace-timeline/workspace-timeline-service';
@@ -65,9 +66,12 @@ export function useWorkspaceTimeline(): UseWorkspaceTimelineResult {
     setLoading(true);
     setError(null);
     try {
-      const [snapshotRes, linksRes, oblRes] = await Promise.all([
+      const [snapshotRes, linksData, oblRes] = await Promise.all([
         fetch('/api/deal-network-pilot/snapshot', { credentials: 'include', cache: 'no-store' }),
-        fetch('/api/payment-links?limit=200&page=1', { credentials: 'include', cache: 'no-store' }),
+        fetchAllPaymentLinks<Record<string, unknown>>({}, {
+          credentials: 'include',
+          cache: 'no-store',
+        }),
         fetch('/api/deal-network-pilot/obligations', { credentials: 'include', cache: 'no-store' }),
       ]);
 
@@ -85,36 +89,31 @@ export function useWorkspaceTimeline(): UseWorkspaceTimelineResult {
         setParticipants(Array.isArray(snapshot.participants) ? snapshot.participants : []);
       }
 
-      if (linksRes.ok) {
-        const json = (await linksRes.json()) as { data?: Record<string, unknown>[] };
-        setPaymentLinks(
-          Array.isArray(json.data)
-            ? json.data.map((raw) => ({
-                id: String(raw.id),
-                shortCode: String(raw.shortCode ?? ''),
-                status: String(raw.status ?? 'OPEN'),
-                amount: Number(raw.amount ?? 0),
-                currency: String(raw.currency ?? 'AUD'),
-                commercialCurrency: raw.commercialCurrency ? String(raw.commercialCurrency) : null,
-                commercialAmount: raw.commercialAmount != null ? Number(raw.commercialAmount) : null,
-                accountingCurrency: raw.accountingCurrency ? String(raw.accountingCurrency) : null,
-                accountingAmount: raw.accountingAmount != null ? Number(raw.accountingAmount) : null,
-                settlementCurrency: raw.settlementCurrency ? String(raw.settlementCurrency) : null,
-                settlementAmount: raw.settlementAmount != null ? Number(raw.settlementAmount) : null,
-                description: String(raw.description ?? ''),
-                invoiceReference: raw.invoiceReference ? String(raw.invoiceReference) : null,
-                customerName: raw.customerName ? String(raw.customerName) : null,
-                dueDate: raw.dueDate ? String(raw.dueDate) : null,
-                invoiceDate: raw.invoiceDate ? String(raw.invoiceDate) : null,
-                paidAt: raw.paidAt ? String(raw.paidAt) : null,
-                createdAt: String(raw.createdAt ?? new Date().toISOString()),
-                pilotDealId: raw.pilotDealId ? String(raw.pilotDealId) : null,
-                xeroInvoiceNumber: raw.xeroInvoiceNumber ? String(raw.xeroInvoiceNumber) : null,
-                paymentMethod: raw.paymentMethod ? String(raw.paymentMethod) : null,
-              }))
-            : []
-        );
-      }
+      setPaymentLinks(
+        linksData.map((raw) => ({
+          id: String(raw.id),
+          shortCode: String(raw.shortCode ?? ''),
+          status: String(raw.status ?? 'OPEN'),
+          amount: Number(raw.amount ?? 0),
+          currency: String(raw.currency ?? 'AUD'),
+          commercialCurrency: raw.commercialCurrency ? String(raw.commercialCurrency) : null,
+          commercialAmount: raw.commercialAmount != null ? Number(raw.commercialAmount) : null,
+          accountingCurrency: raw.accountingCurrency ? String(raw.accountingCurrency) : null,
+          accountingAmount: raw.accountingAmount != null ? Number(raw.accountingAmount) : null,
+          settlementCurrency: raw.settlementCurrency ? String(raw.settlementCurrency) : null,
+          settlementAmount: raw.settlementAmount != null ? Number(raw.settlementAmount) : null,
+          description: String(raw.description ?? ''),
+          invoiceReference: raw.invoiceReference ? String(raw.invoiceReference) : null,
+          customerName: raw.customerName ? String(raw.customerName) : null,
+          dueDate: raw.dueDate ? String(raw.dueDate) : null,
+          invoiceDate: raw.invoiceDate ? String(raw.invoiceDate) : null,
+          paidAt: raw.paidAt ? String(raw.paidAt) : null,
+          createdAt: String(raw.createdAt ?? new Date().toISOString()),
+          pilotDealId: raw.pilotDealId ? String(raw.pilotDealId) : null,
+          xeroInvoiceNumber: raw.xeroInvoiceNumber ? String(raw.xeroInvoiceNumber) : null,
+          paymentMethod: raw.paymentMethod ? String(raw.paymentMethod) : null,
+        }))
+      );
 
       if (oblRes.ok) {
         const json = (await oblRes.json()) as { data?: Record<string, unknown>[] };

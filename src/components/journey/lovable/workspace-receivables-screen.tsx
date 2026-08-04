@@ -36,10 +36,7 @@ import {
   INVOICE_DISPLAY_STATUS_CLS,
   toInvoiceDisplayStatus,
 } from '@/lib/payment-links/invoice-display-status';
-import {
-  receivablesInvoiceXeroColumn,
-  type XeroSyncRecordLike,
-} from '@/lib/xero/xero-sync-display';
+import { fetchAllPaymentLinks } from '@/lib/payment-links/fetch-payment-links-list.client';
 
 
 const STATUS_CLS = INVOICE_DISPLAY_STATUS_CLS;
@@ -103,16 +100,8 @@ export function WorkspaceReceivablesScreen() {
       }
       if (!silent) setIsLoading(true);
       try {
-        const params = new URLSearchParams({
-          organizationId,
-          limit: '100',
-        });
-        const response = await fetch(`/api/payment-links?${params}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch invoices');
-        }
-        const result = await response.json();
-        setPaymentLinks(result.data || []);
+        const data = await fetchAllPaymentLinks<PaymentLink>({ organizationId });
+        setPaymentLinks(data);
       } catch (error: unknown) {
         if (!silent) {
           const message = error instanceof Error ? error.message : 'Failed to load invoices';

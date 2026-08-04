@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { deriveCalendarEvents } from '@/lib/calendar/derive-calendar-events';
+import { fetchAllPaymentLinks } from '@/lib/payment-links/fetch-payment-links-list.client';
 import { filterCalendarEvents } from '@/lib/calendar/calendar-utils';
 import type {
   CalendarDerivationInput,
@@ -87,9 +87,9 @@ export function useCalendarEvents(): UseCalendarEventsResult {
     setLoading(true);
     setError(null);
     try {
-      const [snapshotRes, linksRes, oblRes] = await Promise.all([
+      const [snapshotRes, linksData, oblRes] = await Promise.all([
         fetch('/api/deal-network-pilot/snapshot', { credentials: 'include', cache: 'no-store' }),
-        fetch('/api/payment-links?limit=200&page=1', {
+        fetchAllPaymentLinks<Record<string, unknown>>({}, {
           credentials: 'include',
           cache: 'no-store',
         }),
@@ -115,14 +115,7 @@ export function useCalendarEvents(): UseCalendarEventsResult {
         setParticipants(loadedParticipants);
       }
 
-      if (linksRes.ok) {
-        const json = (await linksRes.json()) as { data?: Record<string, unknown>[] };
-        setPaymentLinks(
-          Array.isArray(json.data) ? json.data.map(normalizePaymentLink) : []
-        );
-      } else {
-        setPaymentLinks([]);
-      }
+      setPaymentLinks(linksData.map(normalizePaymentLink));
 
       if (oblRes.ok) {
         const json = (await oblRes.json()) as { data?: Record<string, unknown>[] };
