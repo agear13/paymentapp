@@ -32,11 +32,15 @@ import { Loader2, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
+import { XeroConnectConfirmDialog } from '@/components/xero/xero-connect-confirm-dialog';
+import { XeroOAuthSuccessBanner } from '@/components/xero/xero-oauth-success-banner';
 
 interface XeroConnectionProps {
   organizationId: string;
   /** Post-OAuth redirect target (stored in signed state). */
   returnTo?: string;
+  /** When true, parent handles OAuth success UI (e.g. Commercial OS manage page). */
+  suppressOAuthSuccessBanner?: boolean;
 }
 
 interface ConnectionStatus {
@@ -53,7 +57,11 @@ interface ConnectionStatus {
   }>;
 }
 
-export function XeroConnection({ organizationId, returnTo }: XeroConnectionProps) {
+export function XeroConnection({
+  organizationId,
+  returnTo,
+  suppressOAuthSuccessBanner = false,
+}: XeroConnectionProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -67,6 +75,8 @@ export function XeroConnection({ organizationId, returnTo }: XeroConnectionProps
   const [connecting, setConnecting] = React.useState(false);
   const [disconnecting, setDisconnecting] = React.useState(false);
   const [changingTenant, setChangingTenant] = React.useState(false);
+  const [connectDialogOpen, setConnectDialogOpen] = React.useState(false);
+  const [showOAuthSuccess, setShowOAuthSuccess] = React.useState(false);
   const [connectionSuccessMessage, setConnectionSuccessMessage] = React.useState<string | null>(null);
 
   // Fetch connection status
@@ -117,9 +127,9 @@ export function XeroConnection({ organizationId, returnTo }: XeroConnectionProps
 
   // Handle OAuth callback results
   React.useEffect(() => {
-    const success = searchParams.get('xero_success');
-    const accounting = searchParams.get('xero_accounting');
-    const error = searchParams.get('xero_error');
+    const success = searchParams?.get('xero_success');
+    const accounting = searchParams?.get('xero_accounting');
+    const error = searchParams?.get('xero_error');
 
     if (!success && !error) return;
 
@@ -132,10 +142,11 @@ export function XeroConnection({ organizationId, returnTo }: XeroConnectionProps
               ? 'Provvypay has configured your required accounting settings. One optional account could not be matched and can be reviewed later.'
               : 'Successfully connected to Xero!';
         setConnectionSuccessMessage(message);
-        toast.success(message);
+        if (!suppressOAuthSuccessBanner) {
+          setShowOAuthSuccess(true);
+        }
         await fetchStatus();
 
-        // Clean up URL after status refresh so account mapping can load accounts
         router.replace(window.location.pathname);
       }
 
@@ -154,7 +165,7 @@ export function XeroConnection({ organizationId, returnTo }: XeroConnectionProps
     };
 
     run();
-  }, [searchParams, router, fetchStatus]);
+  }, [searchParams, router, fetchStatus, suppressOAuthSuccessBanner]);
 
   // Fetch status on mount
   React.useEffect(() => {
@@ -175,7 +186,12 @@ export function XeroConnection({ organizationId, returnTo }: XeroConnectionProps
       console.error('Error connecting to Xero:', error);
       toast.error('Failed to initiate Xero connection');
       setConnecting(false);
+      setConnectDialogOpen(false);
     }
+  };
+
+  const openConnectDialog = () => {
+    setConnectDialogOpen(true);
   };
 
   // Handle disconnect
@@ -232,7 +248,7 @@ export function XeroConnection({ organizationId, returnTo }: XeroConnectionProps
 
   // Handle reconnect
   const handleReconnect = async () => {
-    await handleConnect();
+    openConnectDialog();
   };
 
   const handleOpenAdvancedAccounting = () => {
@@ -260,7 +276,15 @@ export function XeroConnection({ organizationId, returnTo }: XeroConnectionProps
         </Alert>
       ) : null}
 
-      {connectionSuccessMessage ? (
+      {showOAuthSuccess ? (
+        <XeroOAuthSuccessBanner
+          onContinue={handleOpenAdvancedAccounting}
+          onDismiss={() => {
+            setShowOAuthSuccess(false);
+            setConnectionSuccessMessage(null);
+          }}
+        />
+      ) : connectionSuccessMessage ? (
         <Alert>
           <CheckCircle className="h-4 w-4" />
           <AlertTitle>Xero Connected</AlertTitle>
@@ -277,6 +301,13 @@ export function XeroConnection({ organizationId, returnTo }: XeroConnectionProps
           </AlertDescription>
         </Alert>
       ) : null}
+
+      <XeroConnectConfirmDialog
+        open={connectDialogOpen}
+        onOpenChange={setConnectDialogOpen}
+        onConfirm={() => void handleConnect()}
+        confirming={connecting}
+      />
 
       {/* Connection Status */}
       <div className="flex items-center justify-between">
@@ -332,7 +363,7 @@ export function XeroConnection({ organizationId, returnTo }: XeroConnectionProps
         ) : (
           <Button
             size="sm"
-            onClick={handleConnect}
+            onClick={openConnectDialog}
             disabled={connecting}
           >
             {connecting ? (

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getUserOrganization } from '@/lib/auth/get-org';
 import { prisma } from '@/lib/server/prisma';
@@ -33,10 +34,19 @@ export default async function WorkspaceXeroManagePage() {
     evmWalletPayments: config.features.evmWalletPayments,
   });
 
+  const stablecoinSettlementsEnabled = isMultiCheckoutRailConfigured(railSetup, 'hedera');
+
   return (
-    <WorkspaceXeroManageScreen
-      organizationId={org.id}
-      stablecoinSettlementsEnabled={isMultiCheckoutRailConfigured(railSetup, 'hedera')}
-    />
+    <Suspense fallback={null}>
+      <WorkspaceXeroManageScreen
+        organizationId={org.id}
+        merchantRails={{
+          stripeEnabled: isMultiCheckoutRailConfigured(railSetup, 'stripe'),
+          wiseEnabled: isMultiCheckoutRailConfigured(railSetup, 'wise'),
+          stablecoinSettlementsEnabled,
+        }}
+        guidedSetupAssistant={config.features.guidedSetup}
+      />
+    </Suspense>
   );
 }

@@ -28,7 +28,6 @@ import { formatCurrency } from '@/lib/formatters/format-currency';
 import { exportToCSV, type ExportColumn } from '@/lib/export-csv';
 import {
   COMMERCIAL_OS_ROUTES,
-  legacyPaymentLinksHandoffUrl,
 } from '@/lib/journey/commercial-os-routes';
 import {
   formatInvoiceDueLabel,
@@ -64,10 +63,7 @@ const QUICK = [
   {
     label: 'Create Invoice',
     icon: Plus,
-    href: legacyPaymentLinksHandoffUrl({
-      action: 'create',
-      returnTo: COMMERCIAL_OS_ROUTES.receivables,
-    }),
+    href: COMMERCIAL_OS_ROUTES.createInvoice,
   },
   { label: 'Recurring Invoices', icon: Repeat, href: '/dashboard/recurring-templates' },
   { label: 'Collections', icon: PhoneCall, href: COMMERCIAL_OS_ROUTES.timeline },
@@ -97,8 +93,6 @@ export function WorkspaceReceivablesScreen() {
   const [liveIndex, setLiveIndex] = useState(0);
   const [xeroSyncById, setXeroSyncById] = useState<Record<string, XeroSyncRecordLike[] | null>>({});
   const [connectedSystems, setConnectedSystems] = useState<ConnectedSystemCard[] | null>(null);
-
-  const returnToReceivables = COMMERCIAL_OS_ROUTES.receivables;
 
   const fetchPaymentLinks = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -534,17 +528,14 @@ export function WorkspaceReceivablesScreen() {
 
       <section className="flex flex-wrap items-center gap-3">
         <Link
-          href={legacyPaymentLinksHandoffUrl({
-            action: 'create',
-            returnTo: returnToReceivables,
-          })}
+          href={COMMERCIAL_OS_ROUTES.createInvoice}
           className="inline-flex h-12 items-center gap-2 rounded-xl bg-gradient-purple px-6 text-[14.5px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <Plus className="h-4 w-4" />
           Create Invoice
         </Link>
         <Link
-          href={legacyPaymentLinksHandoffUrl({ returnTo: returnToReceivables })}
+          href={COMMERCIAL_OS_ROUTES.invoiceList}
           className="inline-flex h-12 items-center gap-2 rounded-xl px-4 text-[13.5px] font-medium text-ink-soft transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowRight className="h-4 w-4" />
@@ -630,7 +621,7 @@ export function WorkspaceReceivablesScreen() {
                 : 'Create or send your next invoice to start collecting payments.'}
             </p>
             <Link
-              href={legacyPaymentLinksHandoffUrl({ returnTo: returnToReceivables })}
+              href={COMMERCIAL_OS_ROUTES.invoiceList}
               className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-[12.5px] font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Manage invoices
@@ -728,7 +719,7 @@ export function WorkspaceReceivablesScreen() {
           </table>
         </div>
         <Link
-          href={legacyPaymentLinksHandoffUrl({ returnTo: returnToReceivables })}
+          href={COMMERCIAL_OS_ROUTES.invoiceList}
           className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border text-[13.5px] font-semibold transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           View All Invoices

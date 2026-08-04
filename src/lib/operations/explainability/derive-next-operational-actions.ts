@@ -55,7 +55,7 @@ export function deriveNextOperationalActions(
       reason: 'No invoices or collection method configured',
       impact: 'Obligations may lack funding backing',
       urgency: 'high',
-      destination: '/dashboard/payment-links',
+      destination: '/workspace/receivables/invoices',
       ctaLabel: 'Add revenue',
     });
   }

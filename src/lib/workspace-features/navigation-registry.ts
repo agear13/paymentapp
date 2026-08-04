@@ -76,7 +76,7 @@ export const WORKSPACE_NAVIGATION_REGISTRY = [
       {
         id: 'invoices',
         title: 'Invoices',
-        href: '/dashboard/payment-links',
+        href: '/workspace/receivables/invoices',
         icon: LinkIcon,
         requiredFeature: WorkspaceFeature.Invoices,
       },
@@ -330,7 +330,7 @@ export const RABBIT_HOLE_PILOT_NAVIGATION_REGISTRY = [
   {
     id: 'pilot-invoices',
     title: 'Invoices',
-    href: '/dashboard/payment-links',
+    href: '/workspace/receivables/invoices',
     icon: LinkIcon,
     requiredFeature: WorkspaceFeature.Invoices,
   },

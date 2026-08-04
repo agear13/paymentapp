@@ -15,6 +15,12 @@ import {
 } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { RefreshCw, Clock, CheckCircle, XCircle, ChevronDown } from 'lucide-react';
+import {
+  QUEUE_GUIDANCE,
+  SYNC_STATUS_GUIDANCE,
+  type SyncStatusKey,
+} from '@/lib/xero/xero-setup-guidance';
+import { XERO_GUIDED_SECTION_IDS } from '@/lib/xero/xero-guided-setup-config';
 
 interface QueueStatus {
   pendingCount: number;
@@ -31,9 +37,52 @@ interface QueueStatus {
 
 interface XeroSyncQueueProps {
   organizationId: string;
+  showGuidedSectionId?: boolean;
 }
 
-export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
+function getStatusDisplay(status: string) {
+  const key = status as SyncStatusKey;
+  const guidance = SYNC_STATUS_GUIDANCE[key];
+  if (!guidance) {
+    return { label: status, explanation: null, icon: null };
+  }
+
+  switch (status) {
+    case 'PENDING':
+      return { ...guidance, icon: <Clock className="w-3 h-3 mr-1" /> };
+    case 'RETRYING':
+      return { ...guidance, icon: <RefreshCw className="w-3 h-3 mr-1" /> };
+    case 'SUCCESS':
+      return { ...guidance, icon: <CheckCircle className="w-3 h-3 mr-1" /> };
+    case 'FAILED':
+      return { ...guidance, icon: <XCircle className="w-3 h-3 mr-1" /> };
+    default:
+      return { ...guidance, icon: null };
+  }
+}
+
+function getStatusBadge(status: string) {
+  const display = getStatusDisplay(status);
+  const className =
+    status === 'PENDING'
+      ? 'bg-yellow-50'
+      : status === 'RETRYING'
+        ? 'bg-blue-50'
+        : status === 'SUCCESS'
+          ? 'bg-green-50'
+          : status === 'FAILED'
+            ? 'bg-red-50'
+            : '';
+
+  return (
+    <Badge variant="outline" className={className}>
+      {display.icon}
+      {display.label}
+    </Badge>
+  );
+}
+
+export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: XeroSyncQueueProps) {
   const [loading, setLoading] = React.useState(true);
   const [loadFailed, setLoadFailed] = React.useState(false);
   const [processing, setProcessing] = React.useState(false);
@@ -128,42 +177,11 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
     return () => clearInterval(interval);
   }, [fetchStatus, loadFailed]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return (
-          <Badge variant="outline" className="bg-yellow-50">
-            <Clock className="w-3 h-3 mr-1" /> Pending
-          </Badge>
-        );
-      case 'RETRYING':
-        return (
-          <Badge variant="outline" className="bg-blue-50">
-            <RefreshCw className="w-3 h-3 mr-1" /> Retrying
-          </Badge>
-        );
-      case 'SUCCESS':
-        return (
-          <Badge variant="outline" className="bg-green-50">
-            <CheckCircle className="w-3 h-3 mr-1" /> Success
-          </Badge>
-        );
-      case 'FAILED':
-        return (
-          <Badge variant="outline" className="bg-red-50">
-            <XCircle className="w-3 h-3 mr-1" /> Failed
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
   if (loading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Xero payment sync</CardTitle>
+          <CardTitle>{QUEUE_GUIDANCE.title}</CardTitle>
           <CardDescription>Loading sync status…</CardDescription>
         </CardHeader>
       </Card>
@@ -173,11 +191,13 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
   const pending = queueStatus?.pendingCount ?? 0;
 
   return (
-    <Card>
+    <Card id={showGuidedSectionId ? XERO_GUIDED_SECTION_IDS.syncQueue : undefined}>
       <CardHeader>
-        <CardTitle>Xero payment sync</CardTitle>
+        <CardTitle>{QUEUE_GUIDANCE.title}</CardTitle>
         <CardDescription>
-          Payment syncs are processed automatically once Xero is connected.
+          {pending > 0
+            ? QUEUE_GUIDANCE.intro(pending)
+            : QUEUE_GUIDANCE.empty}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -198,40 +218,58 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
         ) : (
           <>
             {pending > 0 ? (
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{pending}</span> payment
-                {pending === 1 ? '' : 's'} waiting to sync to Xero.
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {QUEUE_GUIDANCE.context}
               </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No payments are waiting to sync right now.
-              </p>
-            )}
+            ) : null}
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => void processQueue()}
+                disabled={processing || loadFailed || pending === 0}
+                size="sm"
+              >
+                {processing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Syncing…
+                  </>
+                ) : (
+                  `${QUEUE_GUIDANCE.processQueueLabel}${pending > 0 ? ` (${pending})` : ''}`
+                )}
+              </Button>
+            </div>
 
             {queueStatus && queueStatus.recentSyncs.length > 0 ? (
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">Recent activity</h4>
-                {queueStatus.recentSyncs.slice(0, 5).map((sync) => (
-                  <div
-                    key={sync.id}
-                    className="flex items-center justify-between p-3 border rounded-lg text-sm"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {getStatusBadge(sync.status)}
-                        <span className="text-muted-foreground font-mono text-xs truncate">
-                          {sync.payment_link_id.substring(0, 8)}…
-                        </span>
+                {queueStatus.recentSyncs.slice(0, 5).map((sync) => {
+                  const display = getStatusDisplay(sync.status);
+                  return (
+                    <div
+                      key={sync.id}
+                      className="flex items-start justify-between gap-3 p-3 border rounded-lg text-sm"
+                    >
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {getStatusBadge(sync.status)}
+                          <span className="text-muted-foreground font-mono text-xs truncate">
+                            {sync.payment_link_id.substring(0, 8)}…
+                          </span>
+                        </div>
+                        {display.explanation ? (
+                          <p className="text-xs text-muted-foreground">{display.explanation}</p>
+                        ) : null}
+                        {sync.error_message ? (
+                          <p className="text-xs text-red-600 line-clamp-2">{sync.error_message}</p>
+                        ) : null}
                       </div>
-                      {sync.error_message ? (
-                        <p className="text-xs text-red-600 mt-1 line-clamp-1">{sync.error_message}</p>
-                      ) : null}
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {new Date(sync.updated_at).toLocaleDateString()}
+                      </span>
                     </div>
-                    <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                      {new Date(sync.updated_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : null}
           </>
@@ -243,10 +281,14 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
               <ChevronDown
                 className={`h-4 w-4 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
               />
-              Advanced
+              Advanced options
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-3 pt-3">
+            <p className="text-xs text-muted-foreground">
+              If payments were made before Xero was connected, use find missed payments to add them
+              to the sync queue.
+            </p>
             <div className="flex flex-wrap gap-2">
               <Button
                 onClick={() => void backfillSyncs()}
@@ -257,25 +299,10 @@ export function XeroSyncQueue({ organizationId }: XeroSyncQueueProps) {
                 {backfilling ? (
                   <>
                     <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    Queueing…
+                    Searching…
                   </>
                 ) : (
-                  'Queue missed payments'
-                )}
-              </Button>
-              <Button
-                onClick={() => void processQueue()}
-                disabled={processing || loadFailed || pending === 0}
-                size="sm"
-                variant="outline"
-              >
-                {processing ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    Processing…
-                  </>
-                ) : (
-                  `Process queue (${pending})`
+                  QUEUE_GUIDANCE.queueMissedLabel
                 )}
               </Button>
             </div>

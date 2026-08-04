@@ -11,7 +11,7 @@ export default function PaymentsPage() {
         {
           title: 'Invoices',
           description: 'Create and manage invoices for your customers.',
-          href: '/dashboard/payment-links',
+          href: '/workspace/receivables/invoices',
           icon: LinkIcon,
         },
         {

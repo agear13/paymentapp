@@ -38,7 +38,7 @@ export function AppHeader({ productProfile }: AppHeaderProps) {
         {isMinimalDealNetworkShell && (
           <>
             <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
-              <Link href="/dashboard/payment-links">Invoice dashboard</Link>
+              <Link href="/workspace/receivables/invoices">Invoice dashboard</Link>
             </Button>
             <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
               <Link href="/dashboard/recurring-templates">Recurring</Link>

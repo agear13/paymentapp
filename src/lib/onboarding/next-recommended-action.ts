@@ -1,5 +1,6 @@
 import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
 import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { PAYOUTS_OBLIGATIONS_HREF, PAYOUTS_SETTLEMENTS_HREF } from '@/lib/navigation/operator-nav';
 import { projectParticipantsPath } from '@/lib/projects/project-routes';
 
@@ -83,7 +84,7 @@ export function deriveNextRecommendedAction(
       id: 'revenue',
       title: 'Create your first revenue entry',
       description: 'Issue an invoice or payment link to start collecting customer payments.',
-      href: '/dashboard/payment-links',
+      href: COMMERCIAL_OS_ROUTES.invoiceList,
       ctaLabel: 'Create revenue entry',
     };
   }

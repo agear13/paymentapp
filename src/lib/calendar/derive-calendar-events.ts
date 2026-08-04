@@ -1,3 +1,4 @@
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import type { CommercialLayer, AccountingLayer, SettlementLayer } from '@/lib/payments/payment-layers';
 import { projectOverviewPath, projectParticipantsPath, projectPlanningPath } from '@/lib/projects/project-routes';
 import { formatCommercialRoleBudget } from '@/lib/projects/commercial-roles/format-commercial-role';
@@ -82,7 +83,7 @@ function paymentLinkEvents(
     const invoiceLabel = link.xeroInvoiceNumber ?? link.invoiceReference ?? link.shortCode;
 
     const actions: CalendarEventAction[] = [
-      { label: 'View invoice', href: `/dashboard/payment-links?open=${link.id}` },
+      { label: 'View invoice', href: COMMERCIAL_OS_ROUTES.invoiceHrefFromLink(link) },
     ];
     if (projectId) {
       actions.push({ label: 'Open project', href: projectOverviewPath(projectId) });
@@ -113,7 +114,7 @@ function paymentLinkEvents(
       commercialLayer: layers.commercial,
       accountingLayer: layers.accounting,
       settlementLayer: layers.settlement,
-      actionHref: `/dashboard/payment-links?open=${link.id}`,
+      actionHref: COMMERCIAL_OS_ROUTES.invoiceHrefFromLink(link),
       actions,
       tags: ['revenue', link.currency, link.status.toLowerCase()],
     });

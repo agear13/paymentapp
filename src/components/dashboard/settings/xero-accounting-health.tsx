@@ -143,7 +143,7 @@ export function XeroAccountingHealth({ organizationId }: XeroAccountingHealthPro
           <div>
             <CardTitle>Accounting Health</CardTitle>
             <CardDescription>
-              Provvypay is ready when it can send invoices, supplier bills, and settlement data to Xero.
+              A quick check that Provvy can send invoices and payments to Xero correctly.
             </CardDescription>
           </div>
           <AccountingReadinessBadge status={health.status} />

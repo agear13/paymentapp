@@ -33,10 +33,10 @@ export function TimelineEmptyDayMenu({ dateKey, projectId }: TimelineEmptyDayMen
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">
         <DropdownMenuItem asChild>
-          <Link href="/dashboard/payment-links">Add payment link</Link>
+          <Link href="/workspace/receivables/create">Add payment link</Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/dashboard/payment-links">Create invoice</Link>
+          <Link href="/workspace/receivables/create">Create invoice</Link>
         </DropdownMenuItem>
         {projectId && (
           <DropdownMenuItem asChild>

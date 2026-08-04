@@ -88,6 +88,10 @@ const envSchema = z.object({
   ENABLE_BETA_OPS: z.string().optional().default('false'),
   ENABLE_WISE_PAYMENTS: z.string().optional().default('false'),
   ENABLE_EVM_WALLET_PAYMENTS: z.string().optional().default('false'),
+  /** Guided setup assistant for Commercial OS onboarding (server). */
+  ENABLE_GUIDED_SETUP: z.string().optional().default('false'),
+  /** Client-visible guided setup flag — set alongside ENABLE_GUIDED_SETUP for UI. */
+  NEXT_PUBLIC_ENABLE_GUIDED_SETUP: z.string().optional().default('false'),
   /** Alchemy API key for EVM RPC + Notify */
   ALCHEMY_API_KEY: z.string().optional(),
   /** Alchemy Notify webhook HMAC signing key */
@@ -162,6 +166,8 @@ function buildTimePlaceholderRecord(): Record<string, string | undefined> {
     ENABLE_XERO_SYNC: process.env.ENABLE_XERO_SYNC || 'true',
     ENABLE_BETA_OPS: process.env.ENABLE_BETA_OPS || 'false',
     ENABLE_WISE_PAYMENTS: process.env.ENABLE_WISE_PAYMENTS || 'false',
+    ENABLE_GUIDED_SETUP: process.env.ENABLE_GUIDED_SETUP || 'false',
+    NEXT_PUBLIC_ENABLE_GUIDED_SETUP: process.env.NEXT_PUBLIC_ENABLE_GUIDED_SETUP || 'false',
     NEXT_PUBLIC_SHOW_WISE_DEMO: process.env.NEXT_PUBLIC_SHOW_WISE_DEMO || 'true',
     BETA_LOCKDOWN_MODE: process.env.BETA_LOCKDOWN_MODE || 'true',
     WISE_API_TOKEN: process.env.WISE_API_TOKEN,
@@ -350,6 +356,9 @@ export const config = {
       !!env.ALCHEMY_API_KEY,
     // Beta lockdown: restrict Revenue Share and Platform Preview to admin emails only
     betaLockdown: ['true', '1'].includes((env.BETA_LOCKDOWN_MODE || 'true').toLowerCase()),
+    guidedSetup:
+      ['true', '1'].includes((env.ENABLE_GUIDED_SETUP || '').toLowerCase()) ||
+      ['true', '1'].includes((env.NEXT_PUBLIC_ENABLE_GUIDED_SETUP || '').toLowerCase()),
   },
   
   // Admin (B5 C4: resolved from ADMIN_EMAIL_ALLOWLIST + deprecated ADMIN_EMAILS)

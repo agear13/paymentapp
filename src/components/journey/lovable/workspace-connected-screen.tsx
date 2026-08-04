@@ -10,6 +10,8 @@ import {
   COMMERCIAL_OS_ROUTES,
   xeroConnectUrl,
 } from '@/lib/journey/commercial-os-routes';
+import { XeroConnectConfirmDialog } from '@/components/xero/xero-connect-confirm-dialog';
+import { XeroOAuthSuccessBanner } from '@/components/xero/xero-oauth-success-banner';
 
 type ConnectedSystem = {
   name: string;
@@ -53,6 +55,8 @@ export function WorkspaceConnectedScreen() {
   const [xeroConnected, setXeroConnected] = useState<boolean | null>(null);
   const [wantsXero, setWantsXero] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [xeroConnectDialogOpen, setXeroConnectDialogOpen] = useState(false);
+  const [showXeroSuccess, setShowXeroSuccess] = useState(false);
 
   const refreshSystems = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -64,7 +68,6 @@ export function WorkspaceConnectedScreen() {
 
   useEffect(() => {
     const success = searchParams?.get('xero_success');
-    const accounting = searchParams?.get('xero_accounting');
     const error = searchParams?.get('xero_error');
     const selectTenant = searchParams?.get('select_tenant');
 
@@ -72,13 +75,7 @@ export function WorkspaceConnectedScreen() {
 
     const run = async () => {
       if (success === 'connected') {
-        const message =
-          accounting === 'configured'
-            ? 'Xero connected. Your accounting settings have been configured automatically.'
-            : accounting === 'recommendation'
-              ? 'Xero connected. Review optional account mappings in Manage when ready.'
-              : 'Successfully connected to Xero.';
-        toast.success(message);
+        setShowXeroSuccess(true);
         if (selectTenant === 'true') {
           toast.message('Multiple Xero organisations found', {
             description: 'Open Manage to select the correct organisation.',
@@ -199,14 +196,23 @@ export function WorkspaceConnectedScreen() {
     return AVAILABLE.filter((system) => !connectedNames.has(system.name));
   }, [connectedSystems]);
 
+  const beginXeroConnect = () => {
+    if (!organizationId) {
+      toast.error('Workspace not ready yet. Complete workspace setup first.');
+      return;
+    }
+    setXeroConnectDialogOpen(true);
+  };
+
+  const confirmXeroConnect = () => {
+    if (!organizationId) return;
+    setConnecting('Xero');
+    window.location.href = xeroConnectUrl(organizationId, COMMERCIAL_OS_ROUTES.connected);
+  };
+
   const handleConnect = (name: string) => {
     if (name === 'Xero') {
-      if (!organizationId) {
-        toast.error('Workspace not ready yet. Complete workspace setup first.');
-        return;
-      }
-      setConnecting(name);
-      window.location.href = xeroConnectUrl(organizationId, COMMERCIAL_OS_ROUTES.connected);
+      beginXeroConnect();
       return;
     }
 
@@ -233,6 +239,21 @@ export function WorkspaceConnectedScreen() {
           Every system Provvy is connected to feeds directly into your Commercial Operating System.
         </p>
       </header>
+
+      {showXeroSuccess ? (
+        <XeroOAuthSuccessBanner
+          variant="commercial"
+          continueHref={COMMERCIAL_OS_ROUTES.connectedXero}
+          onDismiss={() => setShowXeroSuccess(false)}
+        />
+      ) : null}
+
+      <XeroConnectConfirmDialog
+        open={xeroConnectDialogOpen}
+        onOpenChange={setXeroConnectDialogOpen}
+        onConfirm={confirmXeroConnect}
+        confirming={connecting === 'Xero'}
+      />
 
       {connectedSystems && connectedSystems.length > 0 ? (
         <section>

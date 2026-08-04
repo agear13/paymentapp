@@ -7,6 +7,8 @@ export const COMMERCIAL_OS_ROUTES = {
   provisioningBuild: '/journey/provisioning?build=1',
   workspace: '/workspace',
   receivables: '/workspace/receivables',
+  createInvoice: '/workspace/receivables/create',
+  invoiceList: '/workspace/receivables/invoices',
   invoiceDetail: (reference: string, options?: { id?: string }) => {
     const encoded = encodeURIComponent(reference.trim());
     const base = `/workspace/invoice/${encoded}`;
@@ -14,6 +16,15 @@ export const COMMERCIAL_OS_ROUTES = {
       return `${base}?id=${encodeURIComponent(options.id.trim())}`;
     }
     return base;
+  },
+  invoiceHrefFromLink: (link: {
+    id: string;
+    invoiceReference?: string | null;
+    shortCode?: string | null;
+  }) => {
+    const reference =
+      link.invoiceReference?.trim() || link.shortCode?.trim() || link.id;
+    return COMMERCIAL_OS_ROUTES.invoiceDetail(reference, { id: link.id });
   },
   workflows: '/workspace/workflows',
   workflowLibrary: '/workspace/workflows',
@@ -40,23 +51,21 @@ export function authenticatedHomeDestination(): string {
   return COMMERCIAL_OS_ROUTES.workspace;
 }
 
-const LEGACY_PAYMENT_LINKS_PATH = '/dashboard/payment-links';
-
-/** Safe return path for handoffs from Commercial OS back to legacy invoice UI. */
+/** @deprecated Use COMMERCIAL_OS_ROUTES.invoiceList or createInvoice instead. */
 export function legacyPaymentLinksHandoffUrl(options?: {
   action?: 'create';
   invoiceId?: string;
   returnTo?: string;
 }): string {
-  const params = new URLSearchParams();
-  if (options?.action === 'create') params.set('action', 'create');
-  if (options?.invoiceId) params.set('invoiceId', options.invoiceId);
-  const returnTo = options?.returnTo;
-  if (returnTo && returnTo.startsWith('/workspace')) {
-    params.set('returnTo', returnTo);
+  if (options?.action === 'create') {
+    return COMMERCIAL_OS_ROUTES.createInvoice;
   }
-  const query = params.toString();
-  return query ? `${LEGACY_PAYMENT_LINKS_PATH}?${query}` : LEGACY_PAYMENT_LINKS_PATH;
+  if (options?.invoiceId?.trim()) {
+    return COMMERCIAL_OS_ROUTES.invoiceDetail(options.invoiceId, {
+      id: options.invoiceId,
+    });
+  }
+  return COMMERCIAL_OS_ROUTES.invoiceList;
 }
 
 /** Initiate production Xero OAuth from Commercial OS (return path stored in signed state). */

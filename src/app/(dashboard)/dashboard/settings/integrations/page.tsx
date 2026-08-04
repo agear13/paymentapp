@@ -209,6 +209,11 @@ export default async function IntegrationsPage() {
               <XeroAccountMapping
                 organizationId={organizationId}
                 stablecoinSettlementsEnabled={isMultiCheckoutRailConfigured(railSetup, 'hedera')}
+                merchantRails={{
+                  stripeEnabled: isMultiCheckoutRailConfigured(railSetup, 'stripe'),
+                  wiseEnabled: isMultiCheckoutRailConfigured(railSetup, 'wise'),
+                  stablecoinSettlementsEnabled: isMultiCheckoutRailConfigured(railSetup, 'hedera'),
+                }}
               />
             </div>
           </details>

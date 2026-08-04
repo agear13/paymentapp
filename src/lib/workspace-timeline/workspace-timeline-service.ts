@@ -3,6 +3,7 @@ import type {
   CommercialLayer,
   SettlementLayer,
 } from '@/lib/payments/payment-layers';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { projectOverviewPath, projectParticipantsPath, projectPlanningPath } from '@/lib/projects/project-routes';
 import { formatCommercialRoleBudget } from '@/lib/projects/commercial-roles/format-commercial-role';
 import { buildTimelineExplanation } from '@/lib/workspace-timeline/timeline-explanations';
@@ -151,7 +152,7 @@ function paymentLinkEvents(links: WorkspaceTimelineInput['paymentLinks'], ctx: C
           kind: 'payment_link',
           id: link.id,
           label: `Invoice #${invoiceLabel}`,
-          href: `/dashboard/payment-links?open=${link.id}`,
+          href: COMMERCIAL_OS_ROUTES.invoiceHrefFromLink(link),
         },
         status: mapped.status,
         importance: mapped.importance,
@@ -172,14 +173,14 @@ function paymentLinkEvents(links: WorkspaceTimelineInput['paymentLinks'], ctx: C
         accountingLayer: layers.accounting,
         settlementLayer: layers.settlement,
         linkedEntities: [
-          { kind: 'invoice', id: link.id, label: invoiceLabel, href: `/dashboard/payment-links?open=${link.id}` },
-          { kind: 'payment_link', id: link.id, label: link.shortCode, href: `/dashboard/payment-links?open=${link.id}` },
+          { kind: 'invoice', id: link.id, label: invoiceLabel, href: COMMERCIAL_OS_ROUTES.invoiceHrefFromLink(link) },
+          { kind: 'payment_link', id: link.id, label: link.shortCode, href: COMMERCIAL_OS_ROUTES.invoiceHrefFromLink(link) },
           ...(link.customerName
             ? [{ kind: 'customer', id: link.id, label: link.customerName }]
             : []),
         ],
         actions: [
-          { label: 'View invoice', href: `/dashboard/payment-links?open=${link.id}` },
+          { label: 'View invoice', href: COMMERCIAL_OS_ROUTES.invoiceHrefFromLink(link) },
           ...(projectId ? [{ label: 'Open project', href: projectOverviewPath(projectId) }] : []),
         ],
         tags: ['revenue', link.currency, mapped.layer, link.paymentMethod?.toLowerCase() ?? 'invoice'],

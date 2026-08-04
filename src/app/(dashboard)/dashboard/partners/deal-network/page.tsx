@@ -905,7 +905,7 @@ export default function DealNetworkPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Button type="button" variant="outline" size="sm" asChild>
-              <Link href="/dashboard/payment-links">Invoice dashboard</Link>
+              <Link href="/workspace/receivables/invoices">Invoice dashboard</Link>
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => setResetWorkspaceOpen(true)}>
               {isProjectMode ? 'Reset workspace' : 'Reset pilot data'}

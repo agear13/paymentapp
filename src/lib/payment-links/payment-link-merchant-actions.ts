@@ -125,6 +125,36 @@ export async function postPaymentLinkManualSettlement(
   }
 }
 
+export async function cancelPaymentLink(id: string): Promise<void> {
+  const response = await csrfAwareFetch(`/api/payment-links/${id}`, {
+    method: 'DELETE',
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      typeof payload.error === 'string' && payload.error.trim()
+        ? payload.error.trim()
+        : 'Failed to cancel invoice'
+    );
+  }
+}
+
+export async function downloadPaymentLinkQrCode(id: string, shortCode: string): Promise<void> {
+  const response = await fetch(`/api/payment-links/${id}/qr-code?format=png&download=true`);
+  if (!response.ok) {
+    throw new Error('Failed to download QR code');
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `qr-${shortCode}.png`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(url);
+}
+
 export async function deletePaymentLink(id: string): Promise<void> {
   const response = await fetch(`/api/payment-links/${id}/delete`, {
     method: 'POST',
@@ -158,4 +188,12 @@ export function canMarkAsPaid(status: string): boolean {
 
 export function canReopenPaymentLink(status: string): boolean {
   return status === 'PAID' || status === 'PAID_UNVERIFIED' || status === 'REQUIRES_REVIEW';
+}
+
+export function canCancelPaymentLink(status: string): boolean {
+  return status !== 'PAID' && status !== 'EXPIRED' && status !== 'CANCELED';
+}
+
+export function canDeletePaymentLink(status: string): boolean {
+  return status === 'DRAFT' || status === 'OPEN' || status === 'CANCELED';
 }
