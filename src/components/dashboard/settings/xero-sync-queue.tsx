@@ -20,7 +20,7 @@ import {
   SYNC_STATUS_GUIDANCE,
   type SyncStatusKey,
 } from '@/lib/xero/xero-setup-guidance';
-import { formatHistoricalSyncErrorMessage } from '@/lib/xero/xero-sync-errors';
+import { formatSyncIssueForCustomer } from '@/lib/xero/xero-customer-messages';
 import { XERO_GUIDED_SECTION_IDS } from '@/lib/xero/xero-guided-setup-config';
 
 interface QueueStatus {
@@ -228,9 +228,9 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
             {queueStatus && queueStatus.recentSyncs.length > 0 ? (
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">Recent activity</h4>
-                {queueStatus.recentSyncs.slice(0, 5).map((sync) => {
+                {queueStatus.recentSyncs.slice(0, 5).map((sync, index) => {
                   const display = getStatusDisplay(sync.status);
-                  const errorMessage = formatHistoricalSyncErrorMessage(sync.error_message, {
+                  const syncIssue = formatSyncIssueForCustomer(sync.error_message, {
                     xeroCurrentlyConnected: xeroConnected,
                   });
                   return (
@@ -241,15 +241,18 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           {getStatusBadge(sync.status)}
-                          <span className="text-muted-foreground font-mono text-xs truncate">
-                            {sync.payment_link_id.substring(0, 8)}…
+                          <span className="text-muted-foreground text-xs">
+                            Payment {index + 1}
                           </span>
                         </div>
                         {display.explanation ? (
                           <p className="text-xs text-muted-foreground">{display.explanation}</p>
                         ) : null}
-                        {errorMessage ? (
-                          <p className="text-xs text-red-600 line-clamp-3">{errorMessage}</p>
+                        {syncIssue ? (
+                          <div className="text-xs text-red-600 line-clamp-4 space-y-1">
+                            <p>{syncIssue.message}</p>
+                            <p className="text-muted-foreground">{syncIssue.action}</p>
+                          </div>
                         ) : null}
                       </div>
                       <span className="text-xs text-muted-foreground shrink-0">

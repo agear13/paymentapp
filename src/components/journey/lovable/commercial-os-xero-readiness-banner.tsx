@@ -18,9 +18,8 @@ export function CommercialOsXeroReadinessBanner({
 
   if (readiness.loading) return null;
 
-  if (surface === 'xero-setup' && readiness.overallStatus === 'fully_set_up') {
-    return null;
-  }
+  // Xero setup page uses the setup status card as the single summary.
+  if (surface === 'xero-setup') return null;
 
   if (surface === 'connected-systems') {
     if (!readiness.connection.connected) return null;
@@ -58,53 +57,6 @@ export function CommercialOsXeroReadinessBanner({
               <ArrowRight className="h-4 w-4" />
             </Link>
           ) : undefined
-        }
-      />
-    );
-  }
-
-  // xero-setup surface
-  if (readiness.overallStatus === 'setup_incomplete') {
-    return (
-      <CommercialOsNextStepBanner
-        title={readiness.statusLabel}
-        message="Finish choosing your Xero accounts before creating invoices."
-        action={
-          readiness.nextAction?.sectionId ? (
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
-              onClick={() => {
-                const el = document.getElementById(readiness.nextAction!.sectionId!);
-                if (el instanceof HTMLDetailsElement) {
-                  el.open = true;
-                }
-                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-            >
-              {readiness.nextAction.label}
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          ) : undefined
-        }
-      />
-    );
-  }
-
-  if (readiness.overallStatus === 'ready_to_invoice') {
-    return (
-      <CommercialOsNextStepBanner
-        title="You're ready to create invoices"
-        message={readiness.statusDetail}
-        tone="success"
-        action={
-          <Link
-            href={COMMERCIAL_OS_ROUTES.createInvoice}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
-          >
-            Create your first invoice
-            <ArrowRight className="h-4 w-4" />
-          </Link>
         }
       />
     );

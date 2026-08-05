@@ -9,7 +9,6 @@ import { XeroOAuthSuccessBanner } from '@/components/xero/xero-oauth-success-ban
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
-import { CommercialOsXeroReadinessBanner } from '@/components/journey/lovable/commercial-os-xero-readiness-banner';
 
 type WorkspaceXeroManageScreenProps = {
   organizationId: string;
@@ -31,8 +30,6 @@ function WorkspaceXeroManageContent({
 }) {
   return (
     <>
-      <CommercialOsXeroReadinessBanner surface="xero-setup" />
-
       {showOAuthSuccess ? (
         <XeroOAuthSuccessBanner
           variant="commercial"
@@ -93,8 +90,8 @@ export function WorkspaceXeroManageScreen({
         </Link>
         <h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Set up Xero</h1>
         <p className="mt-2 max-w-2xl text-[15px] text-ink-soft">
-          Connect Xero and choose which accounts Provvy should use. Setup status on this page shows
-          what is required and what is optional.
+          Connect Xero, choose your accounts, and check whether past payments have synced. Your
+          setup summary at the top shows what is required and what is optional.
         </p>
       </header>
 

@@ -17,6 +17,13 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
+import { formatMappingIssue } from '@/lib/xero/xero-customer-messages';
+
+function applyMappingError(raw: string, setError: (value: string | null) => void) {
+  const customer = formatMappingIssue(raw);
+  setError(`${customer.message} ${customer.action}`);
+  toast.error(customer.message, { description: customer.action });
+}
 import {
   Loader2,
   CheckCircle,
@@ -177,8 +184,10 @@ export function XeroAccountMapping({
       setConnectionReady(true);
       await fetchAccounts();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
+      applyMappingError(
+        err instanceof Error ? err.message : 'Could not check Xero connection',
+        setError
+      );
     } finally {
       setLoading(false);
     }
@@ -217,9 +226,10 @@ export function XeroAccountMapping({
       setAccounts(data);
       setAccountsLoaded(true);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      applyMappingError(
+        err instanceof Error ? err.message : 'Could not load Xero accounts',
+        setError
+      );
       setAccountsLoaded(false);
     }
   }
@@ -282,9 +292,10 @@ export function XeroAccountMapping({
       setError(null);
       await persistMappings(mappings, 'Xero account mappings saved successfully');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save mappings';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      applyMappingError(
+        err instanceof Error ? err.message : 'Failed to save mappings',
+        setError
+      );
     } finally {
       setSaving(false);
     }
@@ -320,10 +331,10 @@ export function XeroAccountMapping({
         setDirty(true);
       }
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to apply recommended mappings';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      applyMappingError(
+        err instanceof Error ? err.message : 'Failed to apply recommended mappings',
+        setError
+      );
     } finally {
       setApplyingRecommended(false);
     }
@@ -380,25 +391,22 @@ export function XeroAccountMapping({
       }
 
       if (failed?.length) {
-        const summary = failed
-          .map(
-            (item: { config: { accountName: string }; error: string }) =>
-              `${item.config.accountName}: ${item.error}`
-          )
-          .join(' · ');
-        toast.error(
-          `${failed.length} holding account${failed.length === 1 ? '' : 's'} could not be created in Xero`,
-          { description: summary }
+        const customer = formatMappingIssue(
+          failed[0]?.error ?? 'Could not create holding accounts in Xero'
         );
-        setError(summary);
+        toast.error(
+          `${failed.length} holding account${failed.length === 1 ? '' : 's'} could not be added in Xero`,
+          { description: customer.action }
+        );
+        setError(`${customer.message} ${customer.action}`);
       }
 
       void readiness?.refresh();
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to create clearing accounts';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      applyMappingError(
+        err instanceof Error ? err.message : 'Failed to create holding accounts',
+        setError
+      );
     } finally {
       setCreatingAccounts(false);
     }
@@ -441,14 +449,13 @@ export function XeroAccountMapping({
   }
 
   if (error && accounts.length === 0) {
+    const customer = formatMappingIssue(error);
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          {error}
-          {error.includes('No active Xero connection') && (
-            <span className="block mt-2">Connect to Xero using the button above.</span>
-          )}
+          <p>{customer.message}</p>
+          <p className="mt-2">{customer.action}</p>
         </AlertDescription>
       </Alert>
     );
@@ -543,7 +550,17 @@ export function XeroAccountMapping({
       {error ? (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>
+            {(() => {
+              const customer = formatMappingIssue(error);
+              return (
+                <>
+                  <p>{customer.message}</p>
+                  <p className="mt-2">{customer.action}</p>
+                </>
+              );
+            })()}
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -820,7 +837,7 @@ function AccountMappingField({
         {
           accountID: `orphan-${value}`,
           code: value,
-          name: `Saved code ${value} (not in current chart)`,
+          name: `Previously saved (${value}) — pick again from your chart`,
           type: '',
           status: 'ACTIVE',
         },
@@ -938,7 +955,7 @@ function MappingSummary({
           return (
             <MappingSummaryRow
               key={config.mappingField}
-              friendlyLabel={friendlyLabel ?? config.mappingField}
+              friendlyLabel={friendlyLabel ?? 'Account choice'}
               recommendedTargetName={
                 clearingConfig?.accountName ??
                 (standardConfig?.preferredCodes[0] && standardConfig.preferredNames[0]

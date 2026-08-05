@@ -12,6 +12,7 @@ import {
 } from '@/lib/journey/commercial-os-routes';
 import { XeroConnectConfirmDialog } from '@/components/xero/xero-connect-confirm-dialog';
 import { XeroOAuthSuccessBanner } from '@/components/xero/xero-oauth-success-banner';
+import { formatXeroOAuthError } from '@/lib/xero/xero-customer-messages';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
 import { CommercialOsXeroReadinessBanner } from '@/components/journey/lovable/commercial-os-xero-readiness-banner';
 
@@ -109,15 +110,8 @@ export function WorkspaceConnectedScreen() {
       }
 
       if (error) {
-        const errorMessages: Record<string, string> = {
-          missing_parameters: 'Missing required parameters',
-          invalid_state: 'Invalid connection state',
-          unauthorized: 'Session mismatch. Sign in again and retry.',
-          no_tenants: 'No Xero organisations found',
-          connection_failed: 'Failed to establish connection',
-          not_configured: 'Xero integration is not configured on this environment',
-        };
-        toast.error(errorMessages[error] || 'Failed to connect to Xero');
+        const customer = formatXeroOAuthError(error);
+        toast.error(customer.message, { description: customer.action });
         router.replace(COMMERCIAL_OS_ROUTES.connected);
       }
     };
@@ -298,7 +292,9 @@ export function WorkspaceConnectedScreen() {
       ) : systemsError ? (
         <section className="rounded-2xl border border-destructive/30 bg-destructive/[0.06] p-5">
           <p className="text-[14px] font-medium text-foreground">Could not load connected systems</p>
-          <p className="mt-1 text-[13px] text-ink-soft">{systemsError}</p>
+          <p className="mt-1 text-[13px] text-ink-soft">
+            Check your internet connection, then try again.
+          </p>
           <button
             type="button"
             onClick={refreshSystems}

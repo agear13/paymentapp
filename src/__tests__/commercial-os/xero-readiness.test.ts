@@ -19,7 +19,7 @@ describe('computeXeroReadiness', () => {
 
     expect(result.overallStatus).toBe('setup_incomplete');
     expect(result.canCreateInvoice).toBe(false);
-    expect(result.statusLabel).toBe('Setup incomplete');
+    expect(result.statusLabel).toBe('Not ready yet');
   });
 
   it('is ready_to_invoice when core accounts are saved and valid', () => {
@@ -55,6 +55,6 @@ describe('computeXeroReadiness', () => {
     });
 
     expect(result.overallStatus).toBe('fully_set_up');
-    expect(result.statusLabel).toBe('Fully set up');
+    expect(result.statusLabel).toBe('All set');
   });
 });

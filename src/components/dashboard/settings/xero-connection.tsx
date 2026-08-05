@@ -35,6 +35,11 @@ import Link from 'next/link';
 import { XeroConnectConfirmDialog } from '@/components/xero/xero-connect-confirm-dialog';
 import { XeroOAuthSuccessBanner } from '@/components/xero/xero-oauth-success-banner';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
+import {
+  formatTenantDisplayName,
+  formatXeroConnectionIssue,
+  formatXeroOAuthError,
+} from '@/lib/xero/xero-customer-messages';
 
 interface XeroConnectionProps {
   organizationId: string;
@@ -94,25 +99,25 @@ export function XeroConnection({
       try {
         data = await response.json();
       } catch {
-        toast.error('Could not read Xero status from the server.');
+        toast.error('Provvy could not load your Xero connection.');
         setStatus({
           connected: false,
-          operatorMessage:
-            'Xero connection needs to be refreshed, or the server returned an invalid response.',
+          operatorMessage: 'Provvy could not load your Xero connection.',
         });
         return;
       }
 
       if (!response.ok) {
-        const message =
+        const raw =
           (typeof data.operatorMessage === 'string' && data.operatorMessage) ||
           (typeof data.error === 'string' && data.error) ||
           'Failed to load Xero connection status';
-        console.error('Error fetching Xero status:', response.status, message);
-        toast.error(message);
+        const customer = formatXeroConnectionIssue(raw);
+        console.error('Error fetching Xero status:', response.status, raw);
+        toast.error(customer?.message ?? 'Provvy could not load your Xero connection.');
         setStatus({
           connected: false,
-          operatorMessage: message,
+          operatorMessage: customer?.message ?? 'Provvy could not load your Xero connection.',
         });
         return;
       }
@@ -120,10 +125,11 @@ export function XeroConnection({
       setStatus(data);
     } catch (error) {
       console.error('Error fetching Xero status:', error);
-      const message =
-        'Could not reach Xero status. Check your network, or reconnect Xero from Integrations.';
-      toast.error(message);
-      setStatus({ connected: false, operatorMessage: message });
+      toast.error('Provvy could not reach Xero. Check your connection and try again.');
+      setStatus({
+        connected: false,
+        operatorMessage: 'Provvy could not reach Xero. Check your connection and try again.',
+      });
     } finally {
       setLoading(false);
     }
@@ -140,11 +146,17 @@ export function XeroConnection({
     const run = async () => {
       if (success === 'connected') {
         const message =
-          accounting === 'configured'
-            ? 'Provvypay has automatically configured your accounting settings. Your workspace is ready to export customer invoices and supplier bills to Xero.'
-            : accounting === 'recommendation'
-              ? 'Provvypay has configured your required accounting settings. One optional account could not be matched and can be reviewed later.'
-              : 'Successfully connected to Xero!';
+          variant === 'commercial'
+            ? accounting === 'configured'
+              ? 'Xero is connected and your account choices are ready.'
+              : accounting === 'recommendation'
+                ? 'Xero is connected. Most account choices are set — you can review optional ones below.'
+                : 'Xero is connected.'
+            : accounting === 'configured'
+              ? 'Provvy has automatically configured your accounting settings. Your workspace is ready to export customer invoices and supplier bills to Xero.'
+              : accounting === 'recommendation'
+                ? 'Provvy has configured your required accounting settings. One optional account could not be matched and can be reviewed later.'
+                : 'Successfully connected to Xero!';
         setConnectionSuccessMessage(message);
         if (!suppressOAuthSuccessBanner) {
           setShowOAuthSuccess(true);
@@ -156,21 +168,14 @@ export function XeroConnection({
       }
 
       if (error) {
-        const errorMessages: Record<string, string> = {
-          missing_parameters: 'Missing required parameters',
-          invalid_state: 'Invalid connection state',
-          unauthorized: 'Session mismatch. Sign in again and retry.',
-          no_tenants: 'No Xero organizations found',
-          connection_failed: 'Failed to establish connection',
-        };
-
-        toast.error(errorMessages[error] || 'Failed to connect to Xero');
+        const customer = formatXeroOAuthError(error);
+        toast.error(customer.message, { description: customer.action });
         router.replace(window.location.pathname);
       }
     };
 
     run();
-  }, [searchParams, router, fetchStatus, suppressOAuthSuccessBanner, readiness]);
+  }, [searchParams, router, fetchStatus, suppressOAuthSuccessBanner, readiness, variant]);
 
   // Fetch status on mount
   React.useEffect(() => {
@@ -274,12 +279,18 @@ export function XeroConnection({
     );
   }
 
+  const isCommercial = variant === 'commercial';
+  const connectionIssue = formatXeroConnectionIssue(status?.operatorMessage);
+
   return (
     <div id="xero-connection" className="space-y-4">
-      {status?.operatorMessage ? (
+      {connectionIssue ? (
         <Alert>
           <AlertTitle>Xero</AlertTitle>
-          <AlertDescription>{status.operatorMessage}</AlertDescription>
+          <AlertDescription>
+            <p>{connectionIssue.message}</p>
+            <p className="mt-2 text-muted-foreground">{connectionIssue.action}</p>
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -302,7 +313,7 @@ export function XeroConnection({
                 <Link href="/dashboard">Continue</Link>
               </Button>
               <Button variant="outline" size="sm" onClick={handleOpenAdvancedAccounting}>
-                Advanced Accounting Settings
+                {isCommercial ? 'Choose Xero accounts' : 'Advanced Accounting Settings'}
               </Button>
             </div>
           </AlertDescription>
@@ -318,20 +329,26 @@ export function XeroConnection({
 
       {/* Connection Status */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Status:</span>
-          {status?.connected ? (
-            <Badge variant="default" className="gap-1">
-              <CheckCircle className="h-3 w-3" />
-              Connected
-            </Badge>
-          ) : (
-            <Badge variant="secondary" className="gap-1">
-              <XCircle className="h-3 w-3" />
-              Not Connected
-            </Badge>
-          )}
-        </div>
+        {!isCommercial ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Status:</span>
+            {status?.connected ? (
+              <Badge variant="default" className="gap-1">
+                <CheckCircle className="h-3 w-3" />
+                Connected
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="gap-1">
+                <XCircle className="h-3 w-3" />
+                Not Connected
+              </Badge>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm font-medium text-foreground">
+            {status?.connected ? 'Your Xero account' : 'Connect your Xero account'}
+          </p>
+        )}
 
         {status?.connected ? (
           <AlertDialog>
@@ -401,7 +418,7 @@ export function XeroConnection({
               <SelectContent>
                 {status.tenants.map((tenant) => (
                   <SelectItem key={tenant.tenantId} value={tenant.tenantId}>
-                    {tenant.tenantName} ({tenant.tenantType})
+                    {formatTenantDisplayName(tenant.tenantName, tenant.tenantType)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -416,22 +433,14 @@ export function XeroConnection({
         </div>
       )}
 
-      {/* Connection Details */}
-      {status?.connected && (
+      {/* Reconnect (commercial keeps this minimal — no token expiry details) */}
+      {status?.connected && !isCommercial ? (
         <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Connected</span>
-            <span className="font-mono text-xs">
+            <span className="text-muted-foreground">Connected since</span>
+            <span className="text-xs">
               {status.connectedAt
                 ? new Date(status.connectedAt).toLocaleDateString()
-                : 'Unknown'}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Token Expires</span>
-            <span className="font-mono text-xs">
-              {status.expiresAt
-                ? new Date(status.expiresAt).toLocaleString()
                 : 'Unknown'}
             </span>
           </div>
@@ -445,7 +454,12 @@ export function XeroConnection({
             Reconnect
           </Button>
         </div>
-      )}
+      ) : status?.connected && isCommercial ? (
+        <Button variant="outline" size="sm" onClick={handleReconnect} className="w-full sm:w-auto">
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Reconnect to Xero
+        </Button>
+      ) : null}
 
       {/* Help Text — operational only; readiness lives in Setup status (Commercial OS). */}
       {variant !== 'commercial' ? (

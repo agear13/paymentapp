@@ -7,7 +7,7 @@ import type { XeroReadinessResult } from '@/lib/commercial-os/xero-readiness';
 export const XERO_GUIDED_SETUP_CONFIG: GuidedSetupConfig = {
   id: 'xero',
   introTitle: 'Optional walkthrough',
-  introSubtitle: 'We can highlight each section on this page. Setup status above is always the source of truth.',
+  introSubtitle: 'We can highlight each section on this page. Your setup summary above shows what matters.',
   estimatedTime: '2–3 minutes',
   completion: {
     title: 'Walkthrough complete',

@@ -78,9 +78,9 @@ export type XeroReadinessInput = {
 };
 
 const STATUS_LABELS: Record<XeroOverallStatus, string> = {
-  setup_incomplete: 'Setup incomplete',
+  setup_incomplete: 'Not ready yet',
   ready_to_invoice: 'Ready to send invoices',
-  fully_set_up: 'Fully set up',
+  fully_set_up: 'All set',
 };
 
 function fieldState(
@@ -177,11 +177,11 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
   if (input.merchantRails.stripeEnabled) {
     if (!paymentMappings.stripeClearing.saved) {
       recommendations.push(
-        'Add a temporary holding account in Xero for Stripe — optional, but makes payment reconciliation easier.'
+        'Add a temporary holding account in Xero for card payments — optional, but makes reconciliation easier.'
       );
     } else if (!paymentMappings.stripeClearing.validInChart) {
       recommendations.push(
-        'Your saved Stripe holding account is no longer in Xero — choose it again (optional for invoices).'
+        'Your saved card-payment holding account is no longer in Xero — choose it again (optional).'
       );
     }
   }
@@ -190,17 +190,7 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     recommendations.push('Card processing fees can be set up later if you prefer.');
   }
 
-  if (queue.pendingCount > 0) {
-    recommendations.push(
-      `${queue.pendingCount} past payment${queue.pendingCount === 1 ? '' : 's'} will sync automatically — no action needed.`
-    );
-  }
-
-  if (queue.hasRecentFailures) {
-    recommendations.push(
-      'Some past payments did not sync — new invoices are not affected. Check past payments below if needed.'
-    );
-  }
+  // Historical sync counts live on the Past payments section — not duplicated here.
 
   let overallStatus: XeroOverallStatus = 'setup_incomplete';
 
