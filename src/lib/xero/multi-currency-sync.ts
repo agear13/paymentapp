@@ -394,31 +394,28 @@ async function syncPaymentToXero(
 ): Promise<string> {
   log.info('Syncing payment to Xero', { xeroInvoiceId, paymentCurrency });
 
-  // Determine clearing account based on payment method
-  let clearingAccountCode: string;
+  const {
+    paymentMethodAndTokenToSettlementContext,
+    resolveSettlementAccount,
+  } = await import('@/lib/accounting/settlement-account-resolver');
 
-  if (paymentEvent.payment_method === 'STRIPE') {
-    clearingAccountCode = merchantSettings.xero_stripe_clearing_account_id || '1200';
-  } else {
-    // Hedera payment - determine by currency
-    const currencyUpper = paymentCurrency.toUpperCase();
-    switch (currencyUpper) {
-      case 'HBAR':
-        clearingAccountCode = merchantSettings.xero_hbar_clearing_account_id || '1210';
-        break;
-      case 'USDC':
-        clearingAccountCode = merchantSettings.xero_usdc_clearing_account_id || '1211';
-        break;
-      case 'USDT':
-        clearingAccountCode = merchantSettings.xero_usdt_clearing_account_id || '1212';
-        break;
-      case 'AUDD':
-        clearingAccountCode = merchantSettings.xero_audd_clearing_account_id || '1213';
-        break;
-      default:
-        clearingAccountCode = '1200';
-    }
-  }
+  const settlementContext = paymentMethodAndTokenToSettlementContext(
+    paymentEvent.payment_method,
+    paymentCurrency,
+    paymentCurrency
+  );
+  const resolution = resolveSettlementAccount({
+    paymentRail: settlementContext.paymentRail,
+    paymentAsset: settlementContext.paymentAsset,
+    settings: merchantSettings,
+  });
+
+  const clearingAccountCode =
+    resolution.status === 'resolved'
+      ? resolution.xeroAccountCode
+      : paymentEvent.payment_method === 'STRIPE'
+        ? merchantSettings.xero_stripe_clearing_account_id || '1200'
+        : merchantSettings.xero_hbar_clearing_account_id || '1200';
 
   // Build Xero payment
   const xeroPayment: XeroMultiCurrencyPayment = {

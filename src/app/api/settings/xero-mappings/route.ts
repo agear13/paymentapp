@@ -9,7 +9,7 @@ import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { AuditEventType, createAuditLog, AuditSeverity } from '@/lib/audit/audit-log';
 import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { prisma } from '@/lib/server/prisma';
-import { logger } from '@/lib/logger';
+import { log } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { validateMappedAccountCodes } from '@/lib/xero/accounts-service';
 import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
@@ -64,13 +64,14 @@ export async function GET(request: NextRequest) {
         xero_usdc_clearing_account_id: true,
         xero_usdt_clearing_account_id: true,
         xero_audd_clearing_account_id: true,
+        xero_wise_clearing_account_id: true,
         xero_fee_expense_account_id: true,
       },
     });
 
     return NextResponse.json({ data: settings });
   } catch (error) {
-    logger.error('Error fetching Xero mappings', { error });
+    log.error('Error fetching Xero mappings', error);
     return NextResponse.json(
       { error: 'Failed to fetch mappings' },
       { status: 500 }
@@ -122,6 +123,7 @@ export async function PUT(request: NextRequest) {
       'xero_usdc_clearing_account_id',
       'xero_usdt_clearing_account_id',
       'xero_audd_clearing_account_id',
+      'xero_wise_clearing_account_id',
       'xero_fee_expense_account_id',
     ];
 
@@ -177,6 +179,7 @@ export async function PUT(request: NextRequest) {
         xero_usdc_clearing_account_id: mappings.xero_usdc_clearing_account_id,
         xero_usdt_clearing_account_id: mappings.xero_usdt_clearing_account_id,
         xero_audd_clearing_account_id: mappings.xero_audd_clearing_account_id,
+        xero_wise_clearing_account_id: mappings.xero_wise_clearing_account_id,
         xero_fee_expense_account_id: mappings.xero_fee_expense_account_id,
         updated_at: new Date(),
       },
@@ -189,7 +192,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    logger.info('Updated Xero account mappings', {
+    log.info('Updated Xero account mappings', {
       organizationId,
       mappingsCount: mappedCodes.length,
     });
@@ -214,7 +217,7 @@ export async function PUT(request: NextRequest) {
       data: { success: true, message: 'Mappings updated successfully' },
     });
   } catch (error) {
-    logger.error('Error saving Xero mappings', { error });
+    log.error('Error saving Xero mappings', error);
     return NextResponse.json(
       { error: 'Failed to save mappings' },
       { status: 500 }

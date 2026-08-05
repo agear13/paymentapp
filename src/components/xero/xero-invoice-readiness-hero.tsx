@@ -27,7 +27,7 @@ export function XeroInvoiceReadinessHero({ variant = 'commercial' }: XeroInvoice
       {readiness.loading ? (
         <div className="mt-3 flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">Checking…</span>
+          <span className="text-sm">{XERO_INVOICE_READINESS_COPY.checking}</span>
         </div>
       ) : (
         <>

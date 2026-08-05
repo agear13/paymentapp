@@ -11,6 +11,11 @@ import { loggers } from '@/lib/logger';
 import { Payment } from 'xero-node';
 import type { TokenType } from '@/lib/hedera/constants';
 import { fetchXeroAccounts } from './accounts-service';
+import {
+  paymentMethodAndTokenToSettlementContext,
+  resolveSettlementAccount,
+} from '@/lib/accounting/settlement-account-resolver';
+import { provisionSettlementAccount } from '@/lib/accounting/settlement-account-provisioning.server';
 
 import type { XeroExportContext } from './xero-layer-export';
 import {
@@ -25,8 +30,8 @@ export interface PaymentRecordingParams {
   amount: string;
   currency: string;
   paymentDate: Date;
-  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET';
-  paymentToken?: TokenType;
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET' | 'CRYPTO';
+  paymentToken?: TokenType | string;
   transactionId: string;
   fxRate?: number;
   cryptoAmount?: string;
@@ -71,7 +76,7 @@ export async function recordXeroPayment(
   }
 
   // Get account mappings
-  const settings = await prisma.merchant_settings.findFirst({
+  let settings = await prisma.merchant_settings.findFirst({
     where: { organization_id: organizationId },
   });
 
@@ -79,14 +84,40 @@ export async function recordXeroPayment(
     throw new Error('Merchant settings not found');
   }
 
-  // Get the correct clearing account ID based on payment method/token
-  const clearingAccountId = getClearingAccountId(settings, paymentMethod, paymentToken);
+  const settlementContext = paymentMethodAndTokenToSettlementContext(
+    paymentMethod,
+    paymentToken,
+    currency
+  );
+
+  let clearingAccountId = resolveSettlementAccountCode(settings, settlementContext);
+
+  if (!clearingAccountId) {
+    const provisioned = await provisionSettlementAccount({
+      organizationId,
+      paymentRail: settlementContext.paymentRail,
+      collectionMethod: settlementContext.collectionMethod,
+      paymentAsset: settlementContext.paymentAsset,
+    });
+
+    if (provisioned.status === 'linked') {
+      clearingAccountId = provisioned.xeroAccountCode;
+      if (provisioned.resolution.status === 'resolved' && provisioned.resolution.mappingField) {
+        settings = {
+          ...settings,
+          [provisioned.resolution.mappingField]: provisioned.xeroAccountCode,
+        };
+      }
+    } else {
+      throw new Error(provisioned.customerMessage);
+    }
+  }
 
   if (!clearingAccountId) {
     throw new Error(
-      `Clearing account not mapped for ${paymentMethod}${
-        paymentToken ? ` - ${paymentToken}` : ''
-      }. Please configure Xero account mappings.`
+      `Holding account not set up for ${settlementContext.paymentRail}${
+        settlementContext.paymentAsset ? ` (${settlementContext.paymentAsset})` : ''
+      }. Open Xero setup and link the required holding account.`
     );
   }
 
@@ -202,40 +233,46 @@ export async function recordXeroPayment(
 }
 
 /**
- * Get clearing account ID based on payment method and token
+ * Resolve holding account code from merchant settings via settlement resolver.
+ */
+function resolveSettlementAccountCode(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  settings: any,
+  context: ReturnType<typeof paymentMethodAndTokenToSettlementContext>
+): string | null {
+  const resolution = resolveSettlementAccount({
+    paymentRail: context.paymentRail,
+    collectionMethod: context.collectionMethod,
+    paymentAsset: context.paymentAsset,
+    settings,
+  });
+  return resolution.status === 'resolved' ? resolution.xeroAccountCode : null;
+}
+
+/**
+ * @deprecated Use resolveSettlementAccount from settlement-account-resolver.
  */
 function getClearingAccountId(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   settings: any,
-  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET',
-  paymentToken?: TokenType
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET' | 'CRYPTO',
+  paymentToken?: TokenType | string,
+  currency?: string
 ): string | null {
-  if (paymentMethod === 'STRIPE') {
-    return settings.xero_stripe_clearing_account_id;
-  }
-  if (paymentMethod === 'WISE') {
-    return settings.xero_wise_clearing_account_id;
-  }
-  switch (paymentToken) {
-    case 'HBAR':
-      return settings.xero_hbar_clearing_account_id;
-    case 'USDC':
-      return settings.xero_usdc_clearing_account_id;
-    case 'USDT':
-      return settings.xero_usdt_clearing_account_id;
-    case 'AUDD':
-      return settings.xero_audd_clearing_account_id;
-    default:
-      return settings.xero_hbar_clearing_account_id;
-  }
+  const context = paymentMethodAndTokenToSettlementContext(
+    paymentMethod,
+    paymentToken,
+    currency
+  );
+  return resolveSettlementAccountCode(settings, context);
 }
 
 /**
  * Build payment reference for Xero
  */
 function buildPaymentReference(
-  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET',
-  paymentToken: TokenType | undefined,
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET' | 'CRYPTO',
+  paymentToken: TokenType | string | undefined,
   transactionId: string
 ): string {
   if (paymentMethod === 'STRIPE') {
@@ -247,6 +284,9 @@ function buildPaymentReference(
   if (paymentMethod === 'EVM_WALLET') {
     return `EVM: ${transactionId.substring(0, 30)}`;
   }
+  if (paymentMethod === 'CRYPTO') {
+    return `${paymentToken ?? 'WALLET'}: ${transactionId.substring(0, 30)}`;
+  }
   return `${paymentToken}: ${transactionId.substring(0, 30)}`;
 }
 
@@ -254,8 +294,8 @@ function buildPaymentReference(
  * Build payment narration per specification
  */
 function buildPaymentNarration(
-  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET',
-  paymentToken: TokenType | undefined,
+  paymentMethod: 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET' | 'CRYPTO',
+  paymentToken: TokenType | string | undefined,
   transactionId: string,
   fxRate: number | undefined,
   cryptoAmount: string | undefined,
@@ -267,6 +307,22 @@ function buildPaymentNarration(
   }
   if (paymentMethod === 'WISE') {
     return `Payment via WISE\nTransfer: ${transactionId}\nAmount: ${fiatAmount} ${fiatCurrency}`;
+  }
+  if (paymentMethod === 'CRYPTO') {
+    const parts = [
+      `Payment via MANUAL_WALLET_${paymentToken ?? 'CRYPTO'}`,
+      `Transaction: ${transactionId}`,
+      `Token: ${paymentToken ?? 'CRYPTO'}`,
+    ];
+    if (fxRate && cryptoAmount) {
+      parts.push(
+        `FX Rate: ${fxRate.toFixed(8)} ${paymentToken}/${fiatCurrency} @ ${new Date().toISOString()}`
+      );
+      parts.push(`Amount: ${cryptoAmount} ${paymentToken} = ${fiatAmount} ${fiatCurrency}`);
+    } else {
+      parts.push(`Amount: ${fiatAmount} ${fiatCurrency}`);
+    }
+    return parts.join('\n');
   }
   if (paymentMethod === 'EVM_WALLET') {
     const parts = [

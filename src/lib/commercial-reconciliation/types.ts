@@ -41,6 +41,10 @@ export type CommercialPaymentEvent = {
   currency: string;
   receivedAt: string;
   paymentRail: PaymentRailId;
+  /** Asset received (BTC, USDC, AUD, …) — distinct from rail. */
+  paymentAsset?: string | null;
+  /** How the customer paid within the rail (hashpack, metamask, manual_wallet, …). */
+  collectionMethod?: string | null;
   providerReference: string | null;
   agreementId?: string | null;
   organizationId?: string | null;
@@ -71,6 +75,10 @@ export type ClearingAccountMapping = {
   label: string;
   /** Resolved account code from merchant settings — optional override. */
   configuredAccountCode?: string | null;
+  /** Payment asset when clearing is asset-scoped (e.g. USDC, BTC). */
+  paymentAsset?: string | null;
+  /** Collection method within the rail (e.g. hashpack, metamask, manual_wallet). */
+  collectionMethod?: string | null;
 };
 
 export type PaymentAllocationType = 'full' | 'partial' | 'overpayment' | 'unallocated';

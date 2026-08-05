@@ -47,18 +47,22 @@ export function derivePaymentMethod(
     source_type: string | null;
   },
   fallback: string | null
-): 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET' {
+): 'STRIPE' | 'HEDERA' | 'WISE' | 'EVM_WALLET' | 'CRYPTO' {
   const candidate = paymentEvent.payment_method || fallback || '';
   if (
     candidate === 'STRIPE' ||
     candidate === 'HEDERA' ||
     candidate === 'WISE' ||
-    candidate === 'EVM_WALLET'
+    candidate === 'EVM_WALLET' ||
+    candidate === 'CRYPTO'
   ) {
     return candidate;
   }
   if (candidate === 'MANUAL_BANK' || candidate === 'MANUAL') {
     return 'WISE';
+  }
+  if (paymentEvent.source_type === 'CRYPTO') {
+    return 'CRYPTO';
   }
   if (paymentEvent.source_type === 'WISE' || paymentEvent.source_type === 'MANUAL') {
     return 'WISE';
@@ -410,7 +414,12 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
       const settlementSnapshots = await prisma.fx_snapshots.findMany({
         where: { payment_link_id: paymentLinkId, snapshot_type: 'SETTLEMENT' },
       });
-      if ((paymentMethod === 'HEDERA' || paymentMethod === 'EVM_WALLET') && paymentToken) {
+      if (
+        (paymentMethod === 'HEDERA' ||
+          paymentMethod === 'EVM_WALLET' ||
+          paymentMethod === 'CRYPTO') &&
+        paymentToken
+      ) {
         const fxSnapshot = settlementSnapshots.find((s) => s.token_type === paymentToken);
         if (fxSnapshot) {
           fxRate = fxSnapshot.rate.toNumber();

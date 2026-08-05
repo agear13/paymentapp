@@ -185,6 +185,7 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
         <CardTitle>{QUEUE_GUIDANCE.title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">{QUEUE_GUIDANCE.context}</p>
         {loadFailed ? (
           <p className="text-sm text-muted-foreground rounded-lg border bg-muted/40 p-3">
             Sync status temporarily unavailable.{' '}
@@ -215,7 +216,7 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
                     <div className="flex items-center gap-2 flex-wrap">
                       {getStatusBadge(sync.status)}
                       <span className="text-muted-foreground text-xs">
-                        Payment {index + 1}
+                        {QUEUE_GUIDANCE.paymentLabel(index)}
                       </span>
                     </div>
                     {display.explanation ? (
@@ -243,7 +244,7 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
               <ChevronDown
                 className={`h-4 w-4 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
               />
-              Advanced options
+              {QUEUE_GUIDANCE.advancedOptions}
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-3 pt-3">

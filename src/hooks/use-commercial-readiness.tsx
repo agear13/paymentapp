@@ -18,6 +18,7 @@ const DEFAULT_RAILS: MerchantPaymentRails = {
   stripeEnabled: false,
   wiseEnabled: false,
   stablecoinSettlementsEnabled: false,
+  manualBankEnabled: true,
 };
 
 type MerchantSettingsRow = {

@@ -81,7 +81,12 @@ export function deriveCommercialReconciliation(
   const paymentRail: PaymentRailId | null = primaryEvent?.paymentRail ?? null;
 
   const clearingAccount = paymentRail
-    ? deriveClearingAccount(paymentRail, input.clearingAccountOverrides)
+    ? deriveClearingAccount(
+        paymentRail,
+        input.clearingAccountOverrides,
+        primaryEvent?.paymentAsset ?? null,
+        primaryEvent?.collectionMethod ?? null
+      )
     : null;
 
   const settlementEligible = isSettlementEligibleAfterReconciliation(status);

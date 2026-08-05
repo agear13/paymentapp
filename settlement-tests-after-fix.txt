@@ -1,0 +1,425 @@
+﻿node.exe : PASS __tests__/accounting/settlement-account-resolver.test.ts (42.616 s)
+At C:\Users\alish\AppData\Roaming\npm\npx.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/npm/bin/npx-cli.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS __tests__/...t.ts (42.616 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  resolveCryptoSettlementStrategy
+    ΓêÜ defaults to shared when no crypto columns are configured (267 ms)
+    ΓêÜ infers per_asset when legacy token columns are configured (3 ms)
+    ΓêÜ infers per_asset when multiple distinct codes are configured (2 ms)
+    ΓêÜ infers shared when multiple legacy columns share one code (4 ms)
+    ΓêÜ respects explicit cryptoSettlementStrategy override (2 ms)
+  resolveSettlementAccount
+    ΓêÜ resolves Stripe holding from rail only (4 ms)
+    ΓêÜ uses configured slot for any asset with a binding (7 ms)
+    ΓêÜ treats BTC like any unbound asset under shared strategy (3 ms)
+    ΓêÜ treats BTC like any unbound asset under per_asset strategy (3 ms)
+  paymentMethodAndTokenToSettlementContext
+    ΓêÜ uses crypto rail with manual_wallet collection method (10 ms)
+    ΓêÜ uses crypto rail with hashpack for Hedera (1 ms)
+    ΓêÜ uses crypto rail with metamask for EVM (1 ms)
+
+PASS __tests__/accounting/recommended-clearing-accounts-service.test.ts
+  recommended-clearing-accounts-service
+    ΓêÜ detects clearing accounts by exact name (9 ms)
+    ΓêÜ lists missing recommended clearing accounts (2 ms)
+    ΓêÜ builds recommended mappings without overwriting existing values (5 ms)
+    ΓêÜ merges recommended mappings only into empty fields (5 ms)
+    ΓêÜ resolves standard mappings by preferred code then name (5 ms)
+    ΓêÜ finds accounts by exact name only (1 ms)
+    ΓêÜ picks the next available account code when the preferred code is taken (9 ms)
+
+PASS __tests__/commercial-os/xero-readiness.test.ts (48.39 s)
+  computeXeroReadiness
+    ΓêÜ is setup_incomplete when not connected (137 ms)
+    ΓêÜ is ready_to_invoice when core accounts and enabled rail holdings are configured (5 ms)
+    ΓêÜ is fully_set_up when stripe holding account is configured (3 ms)
+
+PASS __tests__/commercial-os/xero-invoice-readiness.test.ts (49.362 s)
+  resolveMappingDisplayState
+    ΓêÜ returns required when empty and required (122 ms)
+    ΓêÜ returns recommended when empty and optional (4 ms)
+    ΓêÜ returns needs_review when code missing from chart (4 ms)
+    ΓêÜ returns configured when code exists in chart (3 ms)
+  filterPostConnectSyncs
+    ΓêÜ returns only active syncs after connect (56 ms)
+    ΓêÜ returns empty when connectedAt is missing (5 ms)
+  shouldShowPastPayments
+    ΓêÜ is true when post-connect active syncs exist (1 ms)
+  computeHeroSubline
+    ΓêÜ prompts to connect when disconnected (2 ms)
+    ΓêÜ prompts to choose accounts when connected but not ready (4 ms)
+
+PASS __tests__/commercial-reconciliation/commercial-reconciliation.test.ts (50.01 s)
+  clearing account mapping
+    ΓêÜ maps Stripe to Stripe Holding config (90 ms)
+    ΓêÜ maps Wise to Wise Holding config (4 ms)
+    ΓêÜ maps manual bank to Bank Holding config (4 ms)
+    ΓêÜ maps digital rails to Digital Asset Holding config (20 ms)
+    ΓêÜ applies asset-specific overrides for known tokens (3 ms)
+  rail adapters
+    ΓêÜ StripeReconciliationAdapter normalizes Stripe events (12 ms)
+    ΓêÜ WiseReconciliationAdapter normalizes Wise events (2 ms)
+    ΓêÜ ManualBankReconciliationAdapter normalizes manual bank events (4 ms)
+    ΓêÜ CryptoReconciliationAdapter normalizes crypto payments with rail + collection method + asset (7 ms)
+  payment allocation
+    ΓêÜ allocates full payment (4 ms)
+    ΓêÜ supports partial payment allocation (2 ms)
+    ΓêÜ supports multiple payment allocation (4 ms)
+    ΓêÜ detects overpayment (2 ms)
+  deriveCommercialReconciliation
+    ΓêÜ automatically matches invoice to payment by commercial identity (7 ms)
+    ΓêÜ preserves invoice identity ΓÇö same paymentLinkId throughout (3 ms)
+    ΓêÜ settlement becomes eligible after commercial match (2 ms)
+    ΓêÜ remains pending when no payment events (3 ms)
+    ΓêÜ marks RequiresReview for PAID_UNVERIFIED links (1 ms)
+    ΓêÜ clears when bank settlement completes (4 ms)
+  backwards compatibility
+    ΓêÜ open invoice without payments stays Pending (1 ms)
+
+  console.log
+    TEST_MODE ACTIVE: true
+
+      at Object.log (lib/config/env.ts:245:9)
+
+  console.log
+    ≡ƒº¬ BETA MODE ACTIVE
+
+      at Object.log (lib/config/env.ts:425:11)
+
+  console.warn
+    ΓÜá∩╕Å  WARNING: Beta mode detected but Hedera is not on testnet!
+
+      432 |   // Ensure Hedera is testnet
+      433 |   if (!config.hedera.isTestnet) {
+    > 434 |     console.warn('ΓÜá∩╕Å  WARNING: Beta mode detected but Hedera is not on testnet!');
+          |             ^
+      435 |   }
+      436 | }
+      437 |
+
+      at Object.warn (lib/config/env.ts:434:13)
+      at Object.require (lib/services/payment-confirmation.ts:22:1)
+      at Object.require (lib/payments/assisted-review-settlement.server.ts:12:1)
+      at Object.require (__tests__/payments/assisted-review-settlement.test.ts:9:5)
+
+PASS __tests__/commercial/settlement-readiness.test.ts (5.182 s)
+  Invoice Lifecycle
+    INVOICE_LIFECYCLE_STATES
+      ΓêÜ contains 8 states in order (8 ms)
+      ΓêÜ has no duplicates (1 ms)
+      ΓêÜ has a label for every state (5 ms)
+    deriveInvoiceState
+      ΓêÜ returns not_required when invoiceNotRequired is true (2 ms)
+      ΓêÜ returns required when nothing is set (1 ms)
+      ΓêÜ returns requested when invoiceRequested is true (1 ms)
+      ΓêÜ returns received when invoice has been received (1 ms)
+      ΓêÜ returns verified when invoice has been verified but not cleared for Xero (12 ms)
+      ΓêÜ returns ready_for_xero when verified and cleared for Xero export (1 ms)
+      ΓêÜ returns exported when exported but payment not ready (1 ms)
+      ΓêÜ returns ready_for_settlement when exported and payment ready (2 ms)
+      ΓêÜ not_required takes precedence over everything else (2 ms)
+    invoiceStateIndex
+      ΓêÜ first state has index 0 (1 ms)
+      ΓêÜ last state has the highest index (1 ms)
+      ΓêÜ returns sequential indices (4 ms)
+    isInvoiceAtOrAfter
+      ΓêÜ returns true when at the same state (1 ms)
+      ΓêÜ returns true when past the target state (1 ms)
+      ΓêÜ returns false when before the target state (2 ms)
+    invoiceStateProgress
+      ΓêÜ first state is 0% (2 ms)
+      ΓêÜ last state is 100% (3 ms)
+      ΓêÜ progress is monotonically increasing (4 ms)
+    nextInvoiceState
+      ΓêÜ returns the next state (1 ms)
+      ΓêÜ returns null for the last state (2 ms)
+  ABN Validation
+    validateAbn
+      ΓêÜ accepts valid ABNs (4 ms)
+      ΓêÜ rejects ABNs with wrong length (4 ms)
+      ΓêÜ rejects ABNs with non-numeric characters (1 ms)
+      ΓêÜ strips spaces before validation (1 ms)
+      ΓêÜ rejects empty string (1 ms)
+      ΓêÜ rejects all-zeros (1 ms)
+    formatAbn
+      ΓêÜ formats a valid ABN
+      ΓêÜ strips spaces before formatting (1 ms)
+      ΓêÜ returns input unchanged for wrong length (1 ms)
+  deriveSettlementReadiness
+    fully ready participant
+      ΓêÜ reports readyToSettle = true (1 ms)
+      ΓêÜ reports readinessScore = 100 (1 ms)
+      ΓêÜ has no blockers (2 ms)
+      ΓêÜ has no missingRequirements (1 ms)
+      ΓêÜ nextAction is null (1 ms)
+      ΓêÜ checklist has 8 items (1 ms)
+      ΓêÜ all checklist items are complete (5 ms)
+      ΓêÜ contains participant identity (1 ms)
+    checklist item ordering
+      ΓêÜ checklist items are in canonical order (5 ms)
+    commercial agreement check
+      ΓêÜ missing when agreementGenerated is false (4 ms)
+      ΓêÜ complete when agreementGenerated is true (3 ms)
+    participant approval check
+      ΓêÜ missing when agreement not generated and not approved (2 ms)
+      ΓêÜ in_progress when agreement generated but not approved (4 ms)
+      ΓêÜ complete when approved (2 ms)
+    payment details check
+      ΓêÜ missing when no bank details provided (3 ms)
+      ΓêÜ in_progress when BSB is invalid (partial details entered) (4 ms)
+      ΓêÜ in_progress when account number is too short (2 ms)
+      ΓêÜ in_progress when account number is too long (10 digits) (2 ms)
+      ΓêÜ in_progress when accountName is blank but BSB and account provided (2 ms)
+      ΓêÜ complete with valid BSB + 6-digit account number (1 ms)
+      ΓêÜ complete with valid BSB + 9-digit account number (11 ms)
+    tax information check
+      ΓêÜ missing when ABN not provided (2 ms)
+      ΓêÜ in_progress when ABN is invalid (number entered but fails check digit) (19 ms)
+      ΓêÜ in_progress when GST status is undefined but ABN is valid (2 ms)
+      ΓêÜ complete when valid ABN and GST status confirmed (3 ms)
+      ΓêÜ complete when GST registered = false (not required to be true) (3 ms)
+    GST consistency validation
+      ΓêÜ gstConsistent is false when GST registered but ABN invalid (1 ms)
+      ΓêÜ gstConsistent is true when not GST registered regardless of ABN (1 ms)
+    invoice check
+      ΓêÜ missing when invoice not yet requested (2 ms)
+      ΓêÜ in_progress when invoice requested but not received (3 ms)
+      ΓêÜ in_progress when received but not verified (2 ms)
+      ΓêÜ complete when verified (5 ms)
+      ΓêÜ complete when not_required (unpaid_internal obligation) (2 ms)
+    funding confirmed check
+      ΓêÜ missing when unfunded (4 ms)
+      ΓêÜ in_progress when partially funded (3 ms)
+      ΓêÜ complete when funded (7 ms)
+      ΓêÜ complete when cleared (2 ms)
+      ΓêÜ complete when paid (3 ms)
+    accounting export check
+      ΓêÜ in_progress when xeroStatus is pending (export initiated but not complete) (4 ms)
+      ΓêÜ complete when exported (2 ms)
+      ΓêÜ complete when not_required (2 ms)
+    ready_for_settlement sentinel
+      ΓêÜ complete when all other items are complete (3 ms)
+      ΓêÜ missing when any item is incomplete (2 ms)
+    readiness score calculation
+      ΓêÜ returns 100 for a fully ready participant (2 ms)
+      ΓêÜ returns a very low score for a participant with nothing set up (3 ms)
+      ΓêÜ increases as items are completed (6 ms)
+      ΓêÜ is between 0 and 100 inclusive (3 ms)
+    blockers
+      ΓêÜ returns no blockers for a ready participant (1 ms)
+      ΓêÜ returns a blocker for missing participant approval (2 ms)
+      ΓêÜ returns a blocker for missing bank details (1 ms)
+      ΓêÜ returns a blocker for unfunded obligation (3 ms)
+      ΓêÜ returns a blocker for partially funded (2 ms)
+      ΓêÜ every blocker has title, explanation, consequence, action, severity (50 ms)
+    nextAction
+      ΓêÜ is null when ready to settle (2 ms)
+      ΓêÜ is non-null when blocked (2 ms)
+      ΓêÜ is a string (not an object) (4 ms)
+    invoiceAmountMatchesObligation validation
+      ΓêÜ is true when amounts match exactly (3 ms)
+      ΓêÜ is true within 1% tolerance (2 ms)
+      ΓêÜ is false when amounts differ significantly (2 ms)
+      ΓêÜ is null when invoice amount not provided (1 ms)
+    determinism ΓÇö same inputs produce same output
+      ΓêÜ produces identical output on repeated calls (11 ms)
+      ΓêÜ does not mutate the input (2 ms)
+  deriveWorkspaceSettlementReadiness
+    ΓêÜ returns empty state for empty input (4 ms)
+    ΓêÜ readyCount and blockedCount sum to total participants (7 ms)
+    ΓêÜ canReleaseBatch is true only when ALL are ready (4 ms)
+    ΓêÜ averageScore is between 0 and 100 (6 ms)
+    ΓêÜ identifies a primaryBottleneck (7 ms)
+    ΓêÜ primaryBottleneck is null when all ready (3 ms)
+    ΓêÜ each participant result is individually correct (16 ms)
+    ΓêÜ does not perform independent readiness calculations (all use engine) (3 ms)
+  buildSettlementReadinessNarrative
+    ΓêÜ returns a message for empty participant list (1 ms)
+    ΓêÜ lists ready participants (3 ms)
+    ΓêÜ explains blockers for blocked participants (2 ms)
+    ΓêÜ ends with exactly one recommended next action when there are blockers (2 ms)
+    ΓêÜ does not include "next action" text when all are ready (2 ms)
+    ΓêÜ handles mixed ready/blocked participants (3 ms)
+  James Tourism Scenario
+    Stage 1: Agreement created, participants added
+      ΓêÜ both participants are not ready to settle (5 ms)
+    Stage 2: Agreements generated, approvals sent
+      ΓêÜ approval checklist item moves to in_progress after agreement generated (3 ms)
+    Stage 3: Both participants have approved
+      ΓêÜ approval item becomes complete (2 ms)
+    Stage 4: Invoice requested
+      ΓêÜ invoice item moves to in_progress (2 ms)
+    Stage 5: Invoice received
+      ΓêÜ invoice state is received (2 ms)
+    Stage 6: Tax details verified (ABN + GST confirmed)
+      ΓêÜ tax information item becomes complete (2 ms)
+    Stage 7: Funding confirmed
+      ΓêÜ funding item becomes complete when status is funded (2 ms)
+    Stage 8: Ready for Xero (invoice verified)
+      ΓêÜ invoice state is verified after invoiceVerifiedAt is set (3 ms)
+      ΓêÜ invoice state is ready_for_xero when explicitly marked (2 ms)
+    Stage 9: Exported to Xero
+      ΓêÜ accounting item becomes complete after export (2 ms)
+    Stage 10: Ready for Settlement (all items complete)
+      ΓêÜ Sarah is fully ready for settlement (4 ms)
+      ΓêÜ Ben is fully ready for settlement (3 ms)
+      ΓêÜ workspace readiness is 100% when both ready (4 ms)
+      ΓêÜ provvy narrative says all are ready (4 ms)
+    Journey continuity ΓÇö readiness increases monotonically through lifecycle
+      ΓêÜ each stage has a higher or equal readiness score than the previous (11 ms)
+  No duplicate calculations
+    ΓêÜ deriveWorkspaceSettlementReadiness averageScore matches manual per-participant calculation (6 ms)
+    ΓêÜ workspace results and individually derived results are identical (4 ms)
+
+  console.log
+    TEST_MODE ACTIVE: true
+
+      at Object.log (lib/config/env.ts:245:9)
+
+  console.log
+    ≡ƒº¬ BETA MODE ACTIVE
+
+      at Object.log (lib/config/env.ts:425:11)
+
+  console.warn
+    ΓÜá∩╕Å  WARNING: Beta mode detected but Hedera is not on testnet!
+
+      432 |   // Ensure Hedera is testnet
+      433 |   if (!config.hedera.isTestnet) {
+    > 434 |     console.warn('ΓÜá∩╕Å  WARNING: Beta mode detected but Hedera is not on testnet!');
+          |             ^
+      435 |   }
+      436 | }
+      437 |
+
+      at Object.warn (lib/config/env.ts:434:13)
+      at Object.require (lib/services/payment-confirmation.ts:22:1)
+      at Object.require (__tests__/payments/payment-method-resolution.test.ts:1:1)
+
+PASS __tests__/payments/settlement-concurrency.test.ts
+  Settlement concurrency and replay safety
+    ΓêÜ A) duplicate webhook replay: second settlement no-ops safely (13 ms)
+    ΓêÜ B) webhook + reconciliation race: only one settlement write survives (12 ms)
+    ΓêÜ C) concurrent confirmPayment() calls converge via guard + uniqueness (26 ms)
+    ΓêÜ D) Hedera duplicate verification replay converges via confirmPayment (24 ms)
+    ΓêÜ E) duplicate Xero enqueue prevention remains idempotent on replay (6 ms)
+    ΓêÜ Invariant check: one PAYMENT_CONFIRMED, one transition, one ledger posting, balanced ledger (4 ms)
+
+  console.log
+    TEST_MODE ACTIVE: true
+
+      at Object.log (lib/config/env.ts:245:9)
+
+  console.log
+    ≡ƒº¬ BETA MODE ACTIVE
+
+      at Object.log (lib/config/env.ts:425:11)
+
+  console.warn
+    ΓÜá∩╕Å  WARNING: Beta mode detected but Hedera is not on testnet!
+
+      432 |   // Ensure Hedera is testnet
+      433 |   if (!config.hedera.isTestnet) {
+    > 434 |     console.warn('ΓÜá∩╕Å  WARNING: Beta mode detected but Hedera is not on testnet!');
+          |             ^
+      435 |   }
+      436 | }
+      437 |
+
+      at Object.warn (lib/config/env.ts:434:13)
+      at Object.require (lib/services/payment-confirmation.ts:22:1)
+      at Object.require (lib/payments/manual-invoice-settlement.server.ts:7:1)
+      at Object.require (__tests__/payments/manual-settlement-canonical.test.ts:6:5)
+
+PASS __tests__/payments/settlement-integrity-guards.test.ts
+  Settlement integrity guardrails
+    ΓêÜ enforces DB-level duplicate PAYMENT_CONFIRMED prevention (23 ms)
+    ΓêÜ invalid transitions are explicitly guarded in state machine (37 ms)
+    ΓêÜ replayed settlement no-ops when PAYMENT_CONFIRMED already exists (3 ms)
+    ΓêÜ duplicate ledger posting is prevented by idempotent guard before settlement posting (4 ms)
+    ΓêÜ reconciliation replay remains idempotent by pre-checking before confirmPayment (16 ms)
+
+PASS __tests__/pilot/pilot-settlement-pipeline.test.ts
+  pilot settlement pipeline (invoice ΓåÆ Xero payment)
+    ΓêÜ stage 1: invoice / payment link creation persists link row (14 ms)
+    ΓêÜ stage 2: post-create queues Xero INVOICE sync (8 ms)
+    ΓêÜ stage 3: Stripe webhook verifies signature before processing (19 ms)
+    ΓêÜ stage 4: confirmPayment creates PAYMENT_CONFIRMED and Stripe ledger posting (19 ms)
+    ΓêÜ stage 5: confirmPayment upserts Xero PAYMENT sync queue row (6 ms)
+    ΓêÜ stage 6: queue processor invokes Xero invoice + payment orchestration (17 ms)
+    ΓêÜ stage 7: Xero services exist for invoice and payment recording (8 ms)
+    ΓêÜ fails contract if any spine handler is removed (18 ms)
+
+PASS __tests__/payments/assisted-review-settlement.test.ts (62.336 s)
+  assisted review settlement provider refs (R3)
+    ΓêÜ uses stable bank-review:{confirmationId} format (153 ms)
+    ΓêÜ uses stable crypto-review:{confirmationId} format (4 ms)
+    ΓêÜ routes rail to correct prefix (5 ms)
+  executeAssistedReviewSettlement adapter (R3 contract)
+    ΓêÜ converges through confirmPayment only (no inline settlement) (5 ms)
+    ΓêÜ uses manual provider with assisted_review metadata (6 ms)
+    ΓêÜ documents entry statuses for review (not OPEN) (7 ms)
+    ΓêÜ emits bank and crypto settlement trace stages (4 ms)
+    ΓêÜ allows PAID backfill when PAYMENT_CONFIRMED missing (1 ms)
+  manual bank review route (R3)
+    ΓêÜ mark_valid uses executeAssistedReviewSettlement not direct PAID transition (5 ms)
+    ΓêÜ does not duplicate referral conversion in route (2 ms)
+    ΓêÜ surfaces settlement failure to merchant (2 ms)
+    ΓêÜ flag_investigate still uses REQUIRES_REVIEW transition (2 ms)
+  crypto review route (R3)
+    ΓêÜ mark_valid uses executeAssistedReviewSettlement not direct PAID transition (3 ms)
+    ΓêÜ does not duplicate referral conversion in route (2 ms)
+    ΓêÜ surfaces settlement failure to merchant (3 ms)
+  confirmPayment entry states (R3)
+    ΓêÜ documents OPEN, PAID_UNVERIFIED, REQUIRES_REVIEW as settlement entry statuses (2 ms)
+    ΓêÜ backfills settlement when PAID without PAYMENT_CONFIRMED (legacy review) (2 ms)
+    ΓêÜ transitions PAID_UNVERIFIED and REQUIRES_REVIEW via state machine (1 ms)
+  R1 manual settlement unchanged (R3 regression)
+    ΓêÜ still uses executeOperatorManualInvoiceSettlement (1 ms)
+  Stripe webhook unchanged (R3 regression)
+    ΓêÜ still calls confirmPayment with stripe provider (1 ms)
+  idempotent duplicate review approval (R3 contract)
+    ΓêÜ adapter returns alreadyProcessed when confirmation not SUBMITTED but event exists (2 ms)
+    ΓêÜ confirmPayment guards duplicate PAYMENT_CONFIRMED per link (2 ms)
+
+PASS __tests__/payments/manual-settlement-canonical.test.ts (65.298 s)
+  manual invoice settlement (R1)
+    ΓêÜ uses stable provider ref per payment link (86 ms)
+  manual-settlement route (R1 contract)
+    ΓêÜ mark_paid does not directly transition to PAID (3 ms)
+    ΓêÜ mark_paid does not queue Xero or manual funding bridge separately (2 ms)
+    ΓêÜ mark_paid surfaces confirmPayment failure to operator (10 ms)
+    ΓêÜ reopen still uses transitionPaymentLinkState to OPEN (6 ms)
+  confirmPayment manual provider (R1)
+    ΓêÜ supports manual provider with MANUAL source type and ledger branch (13 ms)
+    ΓêÜ invokes commission and funding after manual settlement (3 ms)
+  Stripe webhook path unaffected (R1)
+    ΓêÜ still calls confirmPayment with stripe provider (13 ms)
+
+PASS __tests__/payments/payment-method-resolution.test.ts (75.457 s)
+  resolvePaymentMethodForEvent
+    ΓêÜ maps operator mark-paid to MANUAL (128 ms)
+    ΓêÜ maps assisted bank review to MANUAL_BANK (8 ms)
+    ΓêÜ maps assisted crypto review to CRYPTO (6 ms)
+    ΓêÜ maps automated providers to their enum values (8 ms)
+  derivePaymentMethod (Xero)
+    ΓêÜ maps MANUAL event payment_method to WISE clearing (5 ms)
+    ΓêÜ maps MANUAL_BANK to WISE (7 ms)
+    ΓêÜ maps source_type MANUAL without payment_method to WISE (4 ms)
+    ΓêÜ preserves CRYPTO manual wallet payments (2 ms)
+    ΓêÜ maps source_type CRYPTO without payment_method to CRYPTO (2 ms)
+    ΓêÜ keeps EVM wallet payments on the EVM rail (2 ms)
+
+A worker process has failed to exit gracefully and has been force exited. This is likely caused by tests leaking due 
+to improper teardown. Try running with --detectOpenHandles to find leaks. Active timers can also cause this, ensure 
+that .unref() was called on them.
+Test Suites: 12 passed, 12 total
+Tests:       235 passed, 235 total
+Snapshots:   0 total
+Time:        80.618 s
+Ran all test suites matching /settlement-account-resolver|recommended-clearing-accounts-service|commercial-reconciliati
+on|payment-method-resolution|xero-invoice-readiness|xero-readiness|manual-settlement-canonical|assisted-review-settleme
+nt|pilot-settlement-pipeline|settlement-concurrency|settlement-integrity-guards|commercial\\settlement-readiness/i.

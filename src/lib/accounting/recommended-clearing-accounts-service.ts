@@ -34,11 +34,23 @@ export function findAccountByExactName(
   );
 }
 
+const LEGACY_CLEARING_ACCOUNT_NAMES: Partial<Record<string, readonly string[]>> = {
+  'Stripe Holding': ['Stripe Clearing'],
+};
+
 export function findClearingAccount(
   accounts: AccountingChartAccount[],
   config: RecommendedClearingAccountConfig
 ): AccountingChartAccount | undefined {
-  return findAccountByExactName(accounts, config.accountName);
+  const direct = findAccountByExactName(accounts, config.accountName);
+  if (direct) return direct;
+
+  for (const legacyName of LEGACY_CLEARING_ACCOUNT_NAMES[config.accountName] ?? []) {
+    const legacyMatch = findAccountByExactName(accounts, legacyName);
+    if (legacyMatch) return legacyMatch;
+  }
+
+  return undefined;
 }
 
 function findByPreferredCode(

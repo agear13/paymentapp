@@ -3,10 +3,12 @@
  */
 
 import type { XeroMappingField } from '@/lib/accounting/recommended-accounting-config';
+import { RECOMMENDED_STANDARD_MAPPINGS } from '@/lib/accounting/recommended-accounting-config';
 import {
-  getClearingAccountsForUi,
-  RECOMMENDED_STANDARD_MAPPINGS,
-} from '@/lib/accounting/recommended-accounting-config';
+  canResolveSettlementAccount,
+  getSettlementAccountsForUi,
+} from '@/lib/accounting/settlement-account-ui';
+import type { MerchantSettlementSettings } from '@/lib/accounting/settlement-account-types';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 import type { XeroReadinessMappingsPayload } from '@/lib/commercial-os/xero-readiness';
 
@@ -35,6 +37,19 @@ function trimmed(code: string | null | undefined): string | null {
   return value ? value : null;
 }
 
+function railsWithDefaults(rails: MerchantPaymentRails): MerchantPaymentRails {
+  return {
+    ...rails,
+    manualBankEnabled: rails.manualBankEnabled ?? true,
+  };
+}
+
+function asSettlementSettings(
+  mappings: XeroReadinessMappingsPayload | null
+): MerchantSettlementSettings {
+  return mappings ?? {};
+}
+
 export function resolveMappingDisplayState(
   code: string | null | undefined,
   chartLoaded: boolean,
@@ -58,6 +73,8 @@ export function buildMappingFieldStates(
   rails: MerchantPaymentRails
 ): Partial<Record<XeroMappingField, MappingDisplayState>> {
   const states: Partial<Record<XeroMappingField, MappingDisplayState>> = {};
+  const normalizedRails = railsWithDefaults(rails);
+  const settings = asSettlementSettings(mappings);
 
   for (const field of INVOICE_REQUIRED_FIELDS) {
     states[field] = resolveMappingDisplayState(
@@ -68,13 +85,16 @@ export function buildMappingFieldStates(
     );
   }
 
-  if (rails.stripeEnabled) {
-    states.xero_stripe_clearing_account_id = resolveMappingDisplayState(
-      mappings?.xero_stripe_clearing_account_id,
+  for (const definition of getSettlementAccountsForUi(settings, normalizedRails)) {
+    states[definition.mappingField] = resolveMappingDisplayState(
+      mappings?.[definition.mappingField as keyof XeroReadinessMappingsPayload],
       chartLoaded,
       chartAccountCodes,
-      false
+      true
     );
+  }
+
+  if (normalizedRails.stripeEnabled) {
     states.xero_fee_expense_account_id = resolveMappingDisplayState(
       mappings?.xero_fee_expense_account_id,
       chartLoaded,
@@ -83,19 +103,30 @@ export function buildMappingFieldStates(
     );
   }
 
-  if (rails.stablecoinSettlementsEnabled) {
-    for (const config of getClearingAccountsForUi(true)) {
-      if (!config.requiresStablecoinRail) continue;
-      states[config.mappingField] = resolveMappingDisplayState(
-        mappings?.[config.mappingField as keyof XeroReadinessMappingsPayload],
-        chartLoaded,
-        chartAccountCodes,
-        false
-      );
-    }
+  return states;
+}
+
+/** True when every enabled payment rail can resolve a holding account. */
+export function settlementAccountsReady(
+  mappings: XeroReadinessMappingsPayload | null,
+  rails: MerchantPaymentRails
+): boolean {
+  const normalizedRails = railsWithDefaults(rails);
+  const settings = asSettlementSettings(mappings);
+  const definitions = getSettlementAccountsForUi(settings, normalizedRails);
+
+  if (definitions.length === 0) {
+    return true;
   }
 
-  return states;
+  return definitions.every((definition) =>
+    canResolveSettlementAccount(
+      settings,
+      definition.paymentRail ?? 'crypto',
+      definition.paymentAsset,
+      definition.paymentAsset ? null : null
+    )
+  );
 }
 
 export function filterPostConnectSyncs(
@@ -123,21 +154,35 @@ export function countOptionalRecommended(
   fieldStates: Partial<Record<XeroMappingField, MappingDisplayState>>,
   rails: MerchantPaymentRails
 ): number {
-  const optionalFields: XeroMappingField[] = [];
-  if (rails.stripeEnabled) {
-    optionalFields.push('xero_stripe_clearing_account_id', 'xero_fee_expense_account_id');
-  }
-  if (rails.stablecoinSettlementsEnabled) {
-    for (const config of getClearingAccountsForUi(true)) {
-      if (config.requiresStablecoinRail) {
-        optionalFields.push(config.mappingField);
-      }
-    }
+  if (!rails.stripeEnabled) {
+    return 0;
   }
 
-  return optionalFields.filter((field) => {
-    const state = fieldStates[field];
-    return state === 'recommended' || state === 'needs_review';
+  const state = fieldStates.xero_fee_expense_account_id;
+  return state === 'recommended' || state === 'needs_review' ? 1 : 0;
+}
+
+export function settlementAccountsNeedAction(
+  fieldStates: Partial<Record<XeroMappingField, MappingDisplayState>>,
+  rails: MerchantPaymentRails
+): boolean {
+  const normalizedRails = railsWithDefaults(rails);
+
+  return getSettlementAccountsForUi({}, normalizedRails).some((definition) => {
+    const state = fieldStates[definition.mappingField];
+    return state === 'required' || state === 'needs_review';
+  });
+}
+
+export function countSettlementAccountActions(
+  fieldStates: Partial<Record<XeroMappingField, MappingDisplayState>>,
+  rails: MerchantPaymentRails
+): number {
+  const normalizedRails = railsWithDefaults(rails);
+
+  return getSettlementAccountsForUi({}, normalizedRails).filter((definition) => {
+    const state = fieldStates[definition.mappingField];
+    return state === 'required' || state === 'needs_review';
   }).length;
 }
 
@@ -171,28 +216,33 @@ export function computeHeroSubline(params: {
   connected: boolean;
   tenantSelected: boolean;
   canSendInvoices: boolean;
+  settlementReady: boolean;
   fieldStates: Partial<Record<XeroMappingField, MappingDisplayState>>;
 }): string {
-  const { connected, tenantSelected, canSendInvoices, fieldStates } = params;
+  const { connected, tenantSelected, canSendInvoices, settlementReady, fieldStates } = params;
 
   if (!connected) {
-    return 'Connect Xero below.';
+    return 'Connect Xero first — use the section below.';
   }
   if (!tenantSelected) {
-    return 'Select your Xero business below.';
+    return 'Choose which Xero business Provvy should use.';
   }
   if (canSendInvoices) {
-    return 'Invoices you create in Provvy will sync to Xero.';
+    return "You're set. Invoices you create in Provvy will appear in Xero automatically.";
   }
 
   const needsReview = INVOICE_REQUIRED_FIELDS.some(
     (field) => fieldStates[field] === 'needs_review'
   );
   if (needsReview) {
-    return 'Fix invoice accounts marked Needs review below.';
+    return 'Update the invoice accounts marked "Needs fixing" below.';
   }
 
-  return 'Choose invoice accounts below.';
+  if (!settlementReady) {
+    return 'Choose where payments are recorded in Xero — open "Where payments go" below.';
+  }
+
+  return 'Choose where invoices are recorded in Xero — open "Where invoices go" below.';
 }
 
 export function mappingStateBadgeLabel(state: MappingDisplayState): string {
@@ -200,11 +250,11 @@ export function mappingStateBadgeLabel(state: MappingDisplayState): string {
     case 'required':
       return 'Required';
     case 'configured':
-      return 'Configured';
+      return 'Done';
     case 'recommended':
-      return 'Recommended';
+      return 'Optional';
     case 'needs_review':
-      return 'Needs review';
+      return 'Needs fixing';
   }
 }
 

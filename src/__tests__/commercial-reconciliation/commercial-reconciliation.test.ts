@@ -30,6 +30,7 @@ function confirmedEvent(
     stripe_payment_intent_id: string | null;
     wise_transfer_id: string | null;
     hedera_transaction_id: string | null;
+    metadata: Record<string, unknown>;
   }> = {}
 ) {
   return {
@@ -50,42 +51,45 @@ function confirmedEvent(
     correlation_id: null,
     received_at: '2026-03-01T10:00:00.000Z',
     created_at: '2026-03-01T10:00:00.000Z',
-    metadata: {},
+    metadata: overrides.metadata ?? {},
     pilot_deal_id: BASE_CONTEXT.agreementId,
   };
 }
 
 describe('clearing account mapping', () => {
-  it('maps Stripe to Stripe Clearing config', () => {
+  it('maps Stripe to Stripe Holding config', () => {
     const account = deriveClearingAccount('stripe');
     expect(account.configKey).toBe('stripe_clearing');
-    expect(account.defaultAccountName).toBe('Stripe Clearing');
+    expect(account.defaultAccountName).toBe('Stripe Holding');
     expect(account.mappingField).toBe('xero_stripe_clearing_account_id');
   });
 
-  it('maps Wise to Wise Clearing config', () => {
+  it('maps Wise to Wise Holding config', () => {
     const account = deriveClearingAccount('wise');
     expect(account.configKey).toBe('wise_clearing');
-    expect(account.defaultAccountName).toBe('Wise Clearing');
+    expect(account.defaultAccountName).toBe('Wise Holding');
   });
 
-  it('maps manual bank to Bank Clearing config', () => {
+  it('maps manual bank to Bank Holding config', () => {
     const account = deriveClearingAccount('manual_bank');
     expect(account.configKey).toBe('bank_clearing');
-    expect(account.defaultAccountName).toBe('Bank Clearing');
+    expect(account.defaultAccountName).toBe('Bank Holding');
   });
 
-  it('maps crypto rails to Crypto Clearing config', () => {
-    expect(deriveClearingAccount('hedera').label).toBe('HBAR');
-    expect(deriveClearingAccount('evm_wallet').configKey).toBe('crypto_clearing');
-    expect(deriveClearingAccount('crypto').defaultAccountName).toBe('Crypto Clearing');
+  it('maps digital rails to Digital Asset Holding config', () => {
+    expect(deriveClearingAccount('crypto').defaultAccountName).toBe('Digital Asset Holding');
+    expect(deriveClearingAccount('hedera').defaultAccountName).toBe('Digital Asset Holding');
+    expect(deriveClearingAccount('evm_wallet').configKey).toBe('digital_asset_clearing');
   });
 
-  it('applies merchant-configured account code overrides', () => {
-    const account = deriveClearingAccount('stripe', {
-      xero_stripe_clearing_account_id: '1050',
-    });
-    expect(account.configuredAccountCode).toBe('1050');
+  it('applies asset-specific overrides for known tokens', () => {
+    const account = deriveClearingAccount(
+      'hedera',
+      { xero_usdc_clearing_account_id: '1052' },
+      'USDC'
+    );
+    expect(account.configuredAccountCode).toBe('1052');
+    expect(account.paymentAsset).toBe('USDC');
   });
 });
 
@@ -120,23 +124,37 @@ describe('rail adapters', () => {
     expect(normalized?.paymentRail).toBe('manual_bank');
   });
 
-  it('CryptoReconciliationAdapter normalizes Hedera and EVM events', () => {
+  it('CryptoReconciliationAdapter normalizes crypto payments with rail + collection method + asset', () => {
     const hedera = confirmedEvent({
       payment_method: 'HEDERA',
       hedera_transaction_id: '0.0.123@123',
       stripe_payment_intent_id: null,
+      metadata: { token_type: 'USDC' },
     });
-    expect(CryptoReconciliationAdapter.normalize(hedera, BASE_CONTEXT)?.paymentRail).toBe(
-      'hedera'
-    );
+    const hederaNormalized = CryptoReconciliationAdapter.normalize(hedera, BASE_CONTEXT);
+    expect(hederaNormalized?.paymentRail).toBe('crypto');
+    expect(hederaNormalized?.collectionMethod).toBe('hashpack');
+    expect(hederaNormalized?.paymentAsset).toBe('USDC');
 
     const evm = confirmedEvent({
       payment_method: 'EVM_WALLET',
       stripe_payment_intent_id: null,
+      metadata: { token_type: 'ETH' },
     });
-    expect(CryptoReconciliationAdapter.normalize(evm, BASE_CONTEXT)?.paymentRail).toBe(
-      'evm_wallet'
-    );
+    const evmNormalized = CryptoReconciliationAdapter.normalize(evm, BASE_CONTEXT);
+    expect(evmNormalized?.paymentRail).toBe('crypto');
+    expect(evmNormalized?.collectionMethod).toBe('metamask');
+    expect(evmNormalized?.paymentAsset).toBe('ETH');
+
+    const manual = confirmedEvent({
+      payment_method: 'CRYPTO',
+      stripe_payment_intent_id: null,
+      metadata: { token_type: 'BTC' },
+    });
+    const manualNormalized = CryptoReconciliationAdapter.normalize(manual, BASE_CONTEXT);
+    expect(manualNormalized?.paymentRail).toBe('crypto');
+    expect(manualNormalized?.collectionMethod).toBe('manual_wallet');
+    expect(manualNormalized?.paymentAsset).toBe('BTC');
   });
 });
 

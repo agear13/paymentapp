@@ -62,6 +62,21 @@ describe('derivePaymentMethod (Xero)', () => {
     ).toBe('WISE');
   });
 
+  it('preserves CRYPTO manual wallet payments', () => {
+    expect(
+      derivePaymentMethod(
+        { payment_method: 'CRYPTO', source_type: 'MANUAL' },
+        null
+      )
+    ).toBe('CRYPTO');
+  });
+
+  it('maps source_type CRYPTO without payment_method to CRYPTO', () => {
+    expect(
+      derivePaymentMethod({ payment_method: null, source_type: 'CRYPTO' }, null)
+    ).toBe('CRYPTO');
+  });
+
   it('keeps EVM wallet payments on the EVM rail', () => {
     expect(
       derivePaymentMethod({ payment_method: 'EVM_WALLET', source_type: 'EVM_WALLET' }, null)

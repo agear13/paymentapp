@@ -57,12 +57,13 @@ export type PaymentRailId =
 /** Multi-checkout rails (collection & settlement / integrations cards). */
 
 export type MultiCheckoutRailId = Extract<
-
   PaymentRailId,
-
   'stripe' | 'hedera' | 'wise' | 'evm_wallet'
-
 >;
+
+export type MultiCheckoutRailDefinition = Omit<PaymentRailDefinition, 'id'> & {
+  id: MultiCheckoutRailId;
+};
 
 
 
@@ -364,15 +365,15 @@ export const PAYMENT_RAIL_REGISTRY: readonly PaymentRailDefinition[] = [
 
     settlementProvider: 'manual',
 
-    displayLabel: 'Manual Crypto',
+    displayLabel: 'Manual Wallet',
 
-    merchantSettingsLabel: 'Manual Crypto',
+    merchantSettingsLabel: 'Manual Wallet',
 
-    invoiceCreationLabel: 'Crypto (manual wallet instructions)',
+    invoiceCreationLabel: 'Manual wallet (crypto payment instructions)',
 
     integrationsIcon: '🔗',
 
-    integrationsDescription: 'Manual crypto payment instructions on invoices.',
+    integrationsDescription: 'Manual wallet payment instructions on invoices.',
 
     checkoutSurface: 'dedicated',
 
@@ -512,10 +513,8 @@ export type DedicatedCheckoutRail = Extract<PaymentMethod, 'CRYPTO' | 'MANUAL_BA
 
 
 
-export function getMultiCheckoutRails(): PaymentRailDefinition[] {
-
-  return getPaymentRailsBySurface('multi');
-
+export function getMultiCheckoutRails(): MultiCheckoutRailDefinition[] {
+  return getPaymentRailsBySurface('multi') as MultiCheckoutRailDefinition[];
 }
 
 

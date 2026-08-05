@@ -17,6 +17,118 @@ import { getActiveConnection } from './connection-service';
 import { applyConnectionToXeroClient } from './apply-connection-token-set';
 import { fetchXeroAccounts, type XeroAccount } from './accounts-service';
 import { formatClearingAccountCreationError } from './xero-sync-errors';
+import { prisma } from '@/lib/server/prisma';
+import { provisionSettlementAccount } from '@/lib/accounting/settlement-account-provisioning.server';
+import {
+  DIGITAL_ASSET_MAPPING_FIELDS,
+  STRIPE_HOLDING,
+  SHARED_DIGITAL_HOLDING,
+} from '@/lib/accounting/settlement-account-resolver';
+
+function settlementConfigFromTarget(
+  rail: string,
+  accountName: string,
+  mappingField: RecommendedClearingAccountConfig['mappingField'],
+  suggestedCode: string
+): RecommendedClearingAccountConfig {
+  return {
+    rail,
+    accountName,
+    accountType: 'CURRENT',
+    xeroClass: 'ASSET',
+    mappingField,
+    suggestedCode,
+    description: `Temporary holding account for ${accountName}.`,
+    summaryLabel: rail,
+  };
+}
+
+async function shouldUseSettlementProvisioning(organizationId: string): Promise<boolean> {
+  const settings = await prisma.merchant_settings.findFirst({
+    where: { organization_id: organizationId },
+    select: {
+      xero_hbar_clearing_account_id: true,
+      xero_usdc_clearing_account_id: true,
+      xero_usdt_clearing_account_id: true,
+      xero_audd_clearing_account_id: true,
+    },
+  });
+
+  if (!settings) return true;
+
+  const configured = DIGITAL_ASSET_MAPPING_FIELDS.map((field) =>
+    String(settings[field as keyof typeof settings] ?? '').trim()
+  ).filter(Boolean);
+  const unique = new Set(configured);
+  return unique.size <= 1;
+}
+
+async function createViaSettlementProvisioning(
+  organizationId: string
+): Promise<CreateRecommendedClearingAccountsResult> {
+  const { accounts } = await fetchXeroAccounts(organizationId);
+  const created: CreatedClearingAccountResult[] = [];
+  const existing: CreatedClearingAccountResult[] = [];
+  const failed: CreateRecommendedClearingAccountsResult['failed'] = [];
+
+  const targets = [
+    {
+      paymentRail: 'stripe',
+      paymentAsset: null,
+      config: settlementConfigFromTarget(
+        'Stripe',
+        STRIPE_HOLDING.accountName,
+        STRIPE_HOLDING.mappingField,
+        STRIPE_HOLDING.suggestedCode
+      ),
+    },
+    {
+      paymentRail: 'crypto',
+      paymentAsset: null,
+      config: settlementConfigFromTarget(
+        'Digital Asset',
+        SHARED_DIGITAL_HOLDING.accountName,
+        SHARED_DIGITAL_HOLDING.mappingField,
+        SHARED_DIGITAL_HOLDING.suggestedCode
+      ),
+    },
+  ] as const;
+
+  for (const target of targets) {
+    const result = await provisionSettlementAccount({
+      organizationId,
+      paymentRail: target.paymentRail,
+      paymentAsset: target.paymentAsset,
+    });
+
+    if (result.status === 'linked') {
+      const account =
+        accounts.find((item) => item.code === result.xeroAccountCode) ??
+        ({
+          accountID: result.xeroAccountCode,
+          code: result.xeroAccountCode,
+          name: target.config.accountName,
+          type: 'CURRENT',
+          status: 'ACTIVE',
+        } satisfies XeroAccount);
+
+      const bucket = result.created ? created : existing;
+      bucket.push({
+        config: target.config,
+        account,
+        created: result.created,
+      });
+      continue;
+    }
+
+    failed.push({
+      config: target.config,
+      error: result.customerMessage,
+    });
+  }
+
+  return { created, existing, failed };
+}
 
 export type CreatedClearingAccountResult = {
   config: RecommendedClearingAccountConfig;
@@ -77,7 +189,7 @@ async function createXeroClearingAccount(
     accountID: created.accountID,
     code: created.code,
     name: created.name,
-    type: created.type != null ? String(created.type) : AccountType.CURRENT,
+    type: created.type != null ? String(created.type) : String(AccountType.CURRENT),
     taxType: created.taxType,
     status: created.status != null ? String(created.status) : 'ACTIVE',
     class: created._class != null ? String(created._class) : 'ASSET',
@@ -88,6 +200,13 @@ export async function createRecommendedClearingAccounts(
   organizationId: string,
   configs: readonly RecommendedClearingAccountConfig[] = RECOMMENDED_CLEARING_ACCOUNTS
 ): Promise<CreateRecommendedClearingAccountsResult> {
+  if (
+    configs === RECOMMENDED_CLEARING_ACCOUNTS &&
+    (await shouldUseSettlementProvisioning(organizationId))
+  ) {
+    return createViaSettlementProvisioning(organizationId);
+  }
+
   const { accounts } = await fetchXeroAccounts(organizationId);
   const chartAccounts = toChartAccounts(accounts);
   const missing = getMissingRecommendedClearingAccounts(chartAccounts, configs);

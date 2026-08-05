@@ -7,11 +7,12 @@ import type { XeroReadinessResult } from '@/lib/commercial-os/xero-readiness';
 export const XERO_GUIDED_SETUP_CONFIG: GuidedSetupConfig = {
   id: 'xero',
   introTitle: 'Optional walkthrough',
-  introSubtitle: 'We can highlight each section on this page. Your setup summary above shows what matters.',
+  introSubtitle:
+    'We can highlight each section on this page. The checklist at the top shows what you still need to do.',
   estimatedTime: '2–3 minutes',
   completion: {
     title: 'Walkthrough complete',
-    body: 'Continue with the sections below.',
+    body: 'Use the checklist at the top when you are ready to create an invoice.',
     bullets: [],
     primaryAction: {
       label: 'Return to Workspace',
@@ -30,15 +31,16 @@ export const XERO_GUIDED_SECTION_IDS = {
 } as const;
 
 export const XERO_CONTEXTUAL_HELP = {
-  revenue: 'This is where sales from invoices are recorded in Xero.',
-  receivable: "Tracks invoices that haven't been paid yet.",
-  processorFees: 'Card processing fees from Stripe payments are recorded here.',
+  revenue:
+    'Provvy posts customer payments to this Xero account when an invoice is paid.',
+  receivable: 'Provvy creates each invoice here until your customer pays.',
+  processorFees: 'Optional — Provvy can record Stripe card fees here.',
   stripeClearing:
-    'Stripe temporarily holds funds before paying your bank. This holding account helps Provvy match deposits automatically.',
+    'Provvy records Stripe card payments here before they reach your bank account.',
   paymentRails:
-    'Provvy uses temporary holding accounts so deposits reconcile automatically.',
+    'Provvy records each payment in Xero first, then matches it when money reaches your bank.',
   clearingAccounts:
-    'Suggested accounts are added in Xero — nothing is deleted and duplicates are avoided.',
+    'Provvy can add these accounts in Xero for you — nothing is deleted.',
 } as const;
 
 export function xeroHasPaymentRails(rails: MerchantPaymentRails): boolean {
@@ -56,7 +58,8 @@ export function buildXeroGuidedTourSteps(
     steps.push({
       id: 'connect',
       title: 'Connect Xero',
-      explanation: 'Sign in to Xero and approve access so Provvy can send invoices and payments.',
+      explanation:
+        'Sign in to Xero and approve access so Provvy can create invoices and record payments.',
       targetId: 'xero-connection',
       continueLabel: 'Next',
     });
@@ -65,16 +68,16 @@ export function buildXeroGuidedTourSteps(
 
   steps.push({
     id: 'revenue',
-    title: 'Sales from invoices',
-    explanation: 'Choose which Xero account records sales when customers pay.',
+    title: 'Where your sales are recorded',
+    explanation: 'Choose the Xero account Provvy uses when a customer pays an invoice.',
     targetId: XERO_GUIDED_SECTION_IDS.revenue,
     continueLabel: 'Next',
   });
 
   steps.push({
     id: 'receivable',
-    title: 'Unpaid invoices',
-    explanation: 'Choose where unpaid invoices live in Xero until customers pay.',
+    title: 'Where unpaid invoices are tracked',
+    explanation: 'Choose where Provvy creates invoices until customers pay.',
     targetId: XERO_GUIDED_SECTION_IDS.receivable,
     continueLabel: 'Next',
   });
@@ -82,8 +85,8 @@ export function buildXeroGuidedTourSteps(
   if (rails.stripeEnabled) {
     steps.push({
       id: 'processor-fees',
-      title: 'Card processing fees',
-      explanation: 'Optional — where Stripe fees are recorded.',
+      title: 'Card fees (optional)',
+      explanation: 'Optional — Provvy can record Stripe card fees here.',
       targetId: XERO_GUIDED_SECTION_IDS.processorFees,
       continueLabel: 'Next',
     });
@@ -92,9 +95,9 @@ export function buildXeroGuidedTourSteps(
   if (xeroHasPaymentRails(rails)) {
     steps.push({
       id: 'payment-rails',
-      title: 'Payment methods',
+      title: 'Where payments go',
       explanation:
-        'Optional holding accounts help Provvy match Stripe and other payments to your bank deposits.',
+        'Provvy records each payment in Xero first, then matches it when money reaches your bank.',
       targetId: 'payment-reconciliation',
       continueLabel: 'Next',
     });
@@ -103,7 +106,7 @@ export function buildXeroGuidedTourSteps(
   if (rails.stripeEnabled && !readiness.paymentMappings.stripeClearing.saved) {
     steps.push({
       id: 'clearing-accounts',
-      title: 'Temporary holding accounts',
+      title: 'Payment accounts in Xero',
       explanation: `${CLEARING_ACCOUNTS_EXPLANATION.body} ${CLEARING_ACCOUNTS_EXPLANATION.reassurance}`,
       targetId: XERO_GUIDED_SECTION_IDS.clearingAccounts,
       continueLabel: 'Next',
@@ -114,8 +117,8 @@ export function buildXeroGuidedTourSteps(
     const count = readiness.queue.postConnectSyncs.length;
     steps.push({
       id: 'historical-payments',
-      title: 'Past payments',
-      explanation: `${count} payment${count === 1 ? '' : 's'} from after you connected will sync automatically — no action needed.`,
+      title: 'Payments syncing to Xero',
+      explanation: `${count} payment${count === 1 ? '' : 's'} will sync automatically — you can still create invoices.`,
       targetId: XERO_GUIDED_SECTION_IDS.syncQueue,
       continueLabel: 'Finish walkthrough',
     });
@@ -123,7 +126,7 @@ export function buildXeroGuidedTourSteps(
     steps.push({
       id: 'finished',
       title: 'You are set',
-      explanation: 'Use the summary at the top when you are ready to create an invoice.',
+      explanation: 'Use the checklist at the top when you are ready to create an invoice.',
       targetId: 'guided-xero-health-check',
       continueLabel: 'Finish walkthrough',
     });

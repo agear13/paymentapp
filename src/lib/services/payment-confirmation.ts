@@ -17,6 +17,7 @@ import { postStripeSettlement } from '@/lib/ledger/posting-rules/stripe';
 import { postHederaSettlement } from '@/lib/ledger/posting-rules/hedera';
 import { postWiseSettlement } from '@/lib/ledger/posting-rules/wise';
 import { postEvmWalletSettlement } from '@/lib/ledger/posting-rules/evm-wallet';
+import { postResolverCryptoSettlement } from '@/lib/ledger/posting-rules/resolver-crypto-settlement';
 import { validatePostingBalance } from '@/lib/ledger/balance-validation';
 import config from '@/lib/config/env';
 import { normalizeHederaTransactionId } from '@/lib/hedera/txid';
@@ -581,24 +582,59 @@ export async function confirmPayment(
 
         log.info('Wise ledger entries posted (atomic)', { correlationId, paymentLinkId });
       } else if (provider === 'manual') {
-        // Reuse Wise clearing posting rule (DR 1055 / CR 1200) — no fee; operator off-rail settlement.
-        await postWiseSettlement(
-          {
-            paymentLinkId,
-            organizationId: paymentLink.organization_id,
-            wiseTransferId: `manual-${normalizedProviderRef}`,
-            grossAmount: amountReceived.toString(),
-            currency: currencyReceived,
+        const manualRail =
+          typeof metadata?.rail === 'string' ? metadata.rail.trim().toUpperCase() : '';
+        if (manualRail === 'CRYPTO') {
+          const paymentAsset = String(
+            tokenType ??
+              metadata?.token_type ??
+              metadata?.tokenType ??
+              metadata?.cryptoCurrency ??
+              currencyReceived
+          )
+            .trim()
+            .toUpperCase();
+          if (!paymentAsset) {
+            throw new Error('payment asset is required for manual wallet crypto settlement');
+          }
+          await postResolverCryptoSettlement(
+            {
+              paymentLinkId,
+              organizationId: paymentLink.organization_id,
+              paymentAsset,
+              grossAmount: amountReceived.toString(),
+              currency: currencyReceived,
+              transactionId: transactionId || normalizedProviderRef,
+              correlationId,
+            },
+            tx
+          );
+          log.info('Manual wallet crypto ledger posted (atomic, resolver-aligned)', {
             correlationId,
-          },
-          tx,
-        );
+            paymentLinkId,
+            paymentAsset,
+            providerRef: normalizedProviderRef,
+          });
+        } else {
+          // Manual bank and operator off-rail settlement share Wise holding.
+          await postWiseSettlement(
+            {
+              paymentLinkId,
+              organizationId: paymentLink.organization_id,
+              wiseTransferId: `manual-${normalizedProviderRef}`,
+              grossAmount: amountReceived.toString(),
+              currency: currencyReceived,
+              correlationId,
+            },
+            tx
+          );
 
-        log.info('Manual operator settlement ledger posted (atomic, via Wise clearing)', {
-          correlationId,
-          paymentLinkId,
-          providerRef: normalizedProviderRef,
-        });
+          log.info('Manual operator settlement ledger posted (atomic, via Wise clearing)', {
+            correlationId,
+            paymentLinkId,
+            providerRef: normalizedProviderRef,
+          });
+        }
       }
 
       // 5. Queue Xero sync if enabled (idempotent upsert)

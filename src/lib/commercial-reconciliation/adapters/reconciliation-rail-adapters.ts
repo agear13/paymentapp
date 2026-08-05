@@ -5,6 +5,8 @@
  * The reconciliation engine operates only on normalized events.
  */
 
+import { collectionMethodFromPaymentMethod } from '@/lib/accounting/collection-method';
+import type { CollectionMethod } from '@/lib/accounting/collection-method';
 import type { CommercialPaymentEvent } from '@/lib/commercial-reconciliation/types';
 import type { PaymentRailId } from '@/lib/payments/payment-rail-registry';
 
@@ -36,9 +38,7 @@ export type NormalizePaymentEventContext = {
 
 export interface ReconciliationRailAdapter {
   readonly railId: PaymentRailId;
-  /** Whether this adapter handles the raw payment method / event. */
   supports(raw: RawPaymentEventInput): boolean;
-  /** Normalize provider-specific event into CommercialPaymentEvent. */
   normalize(
     raw: RawPaymentEventInput,
     context: NormalizePaymentEventContext
@@ -67,10 +67,28 @@ function providerReference(raw: RawPaymentEventInput): string | null {
   );
 }
 
+function extractPaymentAsset(raw: RawPaymentEventInput): string | null {
+  const meta =
+    raw.metadata && typeof raw.metadata === 'object'
+      ? (raw.metadata as Record<string, unknown>)
+      : null;
+  const token = meta?.token_type ?? meta?.tokenType;
+  if (typeof token === 'string') {
+    const value = token.trim().toUpperCase();
+    if (value) return value;
+  }
+  if (typeof raw.currency_received === 'string') {
+    const value = raw.currency_received.trim().toUpperCase();
+    if (value) return value;
+  }
+  return null;
+}
+
 function baseNormalize(
   raw: RawPaymentEventInput,
   context: NormalizePaymentEventContext,
-  railId: PaymentRailId
+  railId: PaymentRailId,
+  collectionMethod: CollectionMethod | null = null
 ): CommercialPaymentEvent | null {
   if (raw.event_type !== 'PAYMENT_CONFIRMED') return null;
 
@@ -85,6 +103,8 @@ function baseNormalize(
     currency: (raw.currency_received ?? 'AUD').toUpperCase(),
     receivedAt: toIsoDate(raw.received_at ?? raw.created_at),
     paymentRail: railId,
+    paymentAsset: extractPaymentAsset(raw),
+    collectionMethod,
     providerReference: providerReference(raw),
     agreementId: context.agreementId ?? raw.pilot_deal_id ?? null,
     organizationId: context.organizationId,
@@ -139,11 +159,12 @@ export const CryptoReconciliationAdapter: ReconciliationRailAdapter = {
     );
   },
   normalize(raw, context) {
-    const method = raw.payment_method;
-    let railId: PaymentRailId = 'crypto';
-    if (method === 'HEDERA') railId = 'hedera';
-    if (method === 'EVM_WALLET') railId = 'evm_wallet';
-    return baseNormalize(raw, context, railId);
+    return baseNormalize(
+      raw,
+      context,
+      'crypto',
+      collectionMethodFromPaymentMethod(raw.payment_method)
+    );
   },
 };
 
@@ -154,7 +175,6 @@ export const RECONCILIATION_RAIL_ADAPTERS: readonly ReconciliationRailAdapter[] 
   CryptoReconciliationAdapter,
 ] as const;
 
-/** Normalize raw payment events using the appropriate rail adapter. */
 export function normalizeCommercialPaymentEvents(
   rawEvents: RawPaymentEventInput[],
   context: NormalizePaymentEventContext
@@ -174,7 +194,6 @@ export function normalizeCommercialPaymentEvents(
   return results;
 }
 
-/** Resolve adapter for a payment rail id (for extension / testing). */
 export function getReconciliationAdapter(
   railId: PaymentRailId
 ): ReconciliationRailAdapter | undefined {

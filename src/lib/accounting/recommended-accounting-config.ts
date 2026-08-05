@@ -50,24 +50,24 @@ export type RecommendedStandardMappingConfig = {
 };
 
 export const CLEARING_ACCOUNT_HELPER_TEXT =
-  'Temporary clearing account used until funds are settled or converted.';
+  'Provvy records the payment here first, then matches it when the money reaches your bank.';
 
 export const ADVANCED_SETTLEMENT_SECTION_COPY =
-  'Digital asset payments are first recorded in temporary clearing accounts before settlement into your bank account. These defaults follow accounting best practice and can be customised by your accountant if required.';
+  'Provvy records crypto payments in Xero first, then matches them when funds settle. Your accountant can adjust these later if needed.';
 
 export const RECOMMENDED_SETUP_BANNER = {
   title: 'Suggested setup',
   description:
-    'Provvypay recommends separate temporary holding accounts for each payment method. This makes reconciliation easier.',
-  applyButtonLabel: 'Use suggested accounts',
-  createButtonLabel: 'Add holding accounts in Xero',
+    'Provvy can add separate accounts in Xero for each way customers pay you. This makes it easier to track payments.',
+  applyButtonLabel: "Use Provvy's suggestions",
+  createButtonLabel: 'Add payment accounts in Xero',
 };
 
 /** Clearing accounts — add future rails (Wise, Circle, PayTo, etc.) here. */
 export const RECOMMENDED_CLEARING_ACCOUNTS: readonly RecommendedClearingAccountConfig[] = [
   {
     rail: 'Stripe',
-    accountName: 'Stripe Clearing',
+    accountName: 'Stripe Holding',
     accountType: 'CURRENT',
     xeroClass: 'ASSET',
     mappingField: 'xero_stripe_clearing_account_id',
@@ -150,8 +150,8 @@ export const RECOMMENDED_STANDARD_MAPPINGS: readonly RecommendedStandardMappingC
   {
     mappingField: 'xero_revenue_account_id',
     summaryLabel: 'Sales',
-    label: 'Sales from invoices',
-    description: 'Where sales from paid invoices are recorded',
+    label: 'Where your sales are recorded',
+    description: 'Provvy posts customer payments to this Xero account when an invoice is paid.',
     preferredNames: ['Sales', 'Revenue', 'Income'],
     preferredCodes: ['200'],
     preferredAccountTypes: ['SALES', 'REVENUE'],
@@ -159,8 +159,8 @@ export const RECOMMENDED_STANDARD_MAPPINGS: readonly RecommendedStandardMappingC
   {
     mappingField: 'xero_receivable_account_id',
     summaryLabel: 'Unpaid invoices',
-    label: 'Unpaid invoices',
-    description: 'Where unpaid customer invoices are tracked',
+    label: 'Where unpaid invoices are tracked',
+    description: 'Provvy creates each invoice here until your customer pays.',
     preferredNames: ['Accounts Receivable', 'Trade Debtors', 'Debtors'],
     preferredCodes: ['610', '110', '1200'],
     preferredAccountTypes: ['CURRENT', 'CURRLIAB'],
@@ -168,8 +168,8 @@ export const RECOMMENDED_STANDARD_MAPPINGS: readonly RecommendedStandardMappingC
   {
     mappingField: 'xero_fee_expense_account_id',
     summaryLabel: 'Card fees',
-    label: 'Card processing fees',
-    description: 'Where Stripe processing fees are recorded',
+    label: 'Card fees (optional)',
+    description: 'Provvy can record Stripe processing fees here if you want them tracked separately.',
     preferredNames: ['Bank Fees', 'Merchant Fees', 'Payment Processing Fees', 'Stripe Fees'],
     preferredCodes: ['404', '6100'],
     preferredAccountTypes: ['EXPENSE', 'OVERHEADS'],

@@ -5,6 +5,7 @@ import { Check, Circle } from 'lucide-react';
 import {
   computeXeroSetupSteps,
   xeroSetupProgressPercent,
+  XERO_SETUP_PROGRESS_COPY,
   type XeroSetupStep,
 } from '@/lib/xero/xero-setup-guidance';
 
@@ -107,7 +108,7 @@ export function XeroSetupProgress({
             : 'rounded-lg border bg-card p-4'
         }
       >
-        <p className="text-sm text-muted-foreground">Loading setup progress…</p>
+        <p className="text-sm text-muted-foreground">{XERO_SETUP_PROGRESS_COPY.loading}</p>
       </div>
     );
   }
@@ -129,10 +130,10 @@ export function XeroSetupProgress({
                 : 'text-sm font-semibold'
             }
           >
-            Xero Setup
+            {XERO_SETUP_PROGRESS_COPY.title}
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Progress: {percent}% complete
+            {XERO_SETUP_PROGRESS_COPY.percentComplete(percent)}
           </p>
         </div>
         <div className="h-2 w-32 overflow-hidden rounded-full bg-secondary">

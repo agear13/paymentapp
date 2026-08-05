@@ -9,8 +9,11 @@ import {
   computeHeroSubline,
   countInvoiceAccountActions,
   countOptionalRecommended,
+  countSettlementAccountActions,
   filterPostConnectSyncs,
   invoiceAccountsNeedAction,
+  settlementAccountsNeedAction,
+  settlementAccountsReady,
   shouldShowPastPayments,
   type HeroAnswer,
   type MappingDisplayState,
@@ -78,6 +81,8 @@ export type XeroReadinessResult = {
   invoiceAccountsNeedAction: boolean;
   invoiceAccountActionCount: number;
   allInvoiceAccountsConfigured: boolean;
+  settlementAccountsNeedAction: boolean;
+  settlementAccountActionCount: number;
   optionalRecommendedCount: number;
 };
 
@@ -90,6 +95,7 @@ export type XeroReadinessMappingsPayload = {
   xero_usdc_clearing_account_id?: string | null;
   xero_usdt_clearing_account_id?: string | null;
   xero_audd_clearing_account_id?: string | null;
+  xero_wise_clearing_account_id?: string | null;
 };
 
 export type XeroReadinessInput = {
@@ -111,8 +117,8 @@ export type XeroReadinessInput = {
 };
 
 const STATUS_LABELS: Record<XeroOverallStatus, string> = {
-  setup_incomplete: 'Not ready yet',
-  ready_to_invoice: 'Ready to send invoices',
+  setup_incomplete: 'Setup incomplete',
+  ready_to_invoice: 'Ready to invoice',
   fully_set_up: 'All set',
 };
 
@@ -192,13 +198,17 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
   const blockers: string[] = [];
   const recommendations: string[] = [];
 
-  const coreInvoiceReady =
+  const coreInvoiceAccountsReady =
     connected &&
     tenantSelected &&
     invoiceMappings.revenue.saved &&
     invoiceMappings.revenue.validInChart &&
     invoiceMappings.receivable.saved &&
     invoiceMappings.receivable.validInChart;
+
+  const settlementReady = settlementAccountsReady(input.mappings, input.merchantRails);
+
+  const coreInvoiceReady = coreInvoiceAccountsReady && settlementReady;
 
   const fieldStates = buildMappingFieldStates(
     input.mappings,
@@ -219,26 +229,27 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     }
   }
 
-  const canCreateInvoice = overallStatus !== 'setup_incomplete';
+  const canCreateInvoice = coreInvoiceReady;
   const heroAnswer: HeroAnswer = canCreateInvoice ? 'Yes' : 'Not yet';
   const heroSubline = computeHeroSubline({
     connected,
     tenantSelected,
     canSendInvoices: canCreateInvoice,
+    settlementReady,
     fieldStates,
   });
 
-  let statusDetail: string = heroSubline;
+  const statusDetail = heroSubline;
 
   let nextAction: XeroReadinessNextAction | null = null;
   if (!connected) {
     nextAction = { label: 'Connect Xero', sectionId: 'xero-connection' };
   } else if (!tenantSelected) {
-    nextAction = { label: 'Select Xero business', sectionId: 'xero-connection' };
+    nextAction = { label: 'Choose Xero business', sectionId: 'xero-connection' };
   } else if (!canCreateInvoice) {
     nextAction = {
-      label: 'Choose Xero accounts',
-      sectionId: 'advanced-accounting-settings',
+      label: 'Complete Xero setup',
+      sectionId: 'invoice-accounts',
     };
   } else if (overallStatus === 'ready_to_invoice') {
     nextAction = {
@@ -265,6 +276,14 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     invoiceAccountsNeedAction: invoiceAccountsNeedAction(fieldStates),
     invoiceAccountActionCount: countInvoiceAccountActions(fieldStates),
     allInvoiceAccountsConfigured: allInvoiceAccountsConfigured(fieldStates),
+    settlementAccountsNeedAction: settlementAccountsNeedAction(
+      fieldStates,
+      input.merchantRails
+    ),
+    settlementAccountActionCount: countSettlementAccountActions(
+      fieldStates,
+      input.merchantRails
+    ),
     optionalRecommendedCount: countOptionalRecommended(fieldStates, input.merchantRails),
   };
 }
@@ -287,16 +306,18 @@ export const EMPTY_XERO_READINESS: Omit<XeroReadinessResult, 'loading'> = {
   },
   overallStatus: 'setup_incomplete',
   statusLabel: STATUS_LABELS.setup_incomplete,
-  statusDetail: 'Connect Xero below.',
+  statusDetail: 'Connect Xero first — use the section below.',
   blockers: [],
   recommendations: [],
   nextAction: { label: 'Connect Xero', sectionId: 'xero-connection' },
   canCreateInvoice: false,
   heroAnswer: 'Not yet',
-  heroSubline: 'Connect Xero below.',
+  heroSubline: 'Connect Xero first — use the section below.',
   fieldStates: {},
   invoiceAccountsNeedAction: true,
   invoiceAccountActionCount: 2,
   allInvoiceAccountsConfigured: false,
+  settlementAccountsNeedAction: false,
+  settlementAccountActionCount: 0,
   optionalRecommendedCount: 0,
 };

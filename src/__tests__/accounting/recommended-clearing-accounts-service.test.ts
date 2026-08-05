@@ -14,7 +14,7 @@ describe('recommended-clearing-accounts-service', () => {
     { code: '200', name: 'Sales', type: 'REVENUE', status: 'ACTIVE' },
     { code: '610', name: 'Accounts Receivable', type: 'CURRENT', status: 'ACTIVE' },
     { code: '404', name: 'Bank Fees', type: 'EXPENSE', status: 'ACTIVE' },
-    { code: '1050', name: 'Stripe Clearing', type: 'CURRENT', status: 'ACTIVE' },
+    { code: '1050', name: 'Stripe Holding', type: 'CURRENT', status: 'ACTIVE' },
     { code: '1051', name: 'HBAR Clearing', type: 'CURRENT', status: 'ACTIVE' },
     { code: '1052', name: 'USDC Clearing', type: 'CURRENT', status: 'ACTIVE' },
     { code: '1053', name: 'USDT Clearing', type: 'CURRENT', status: 'ACTIVE' },
@@ -33,7 +33,7 @@ describe('recommended-clearing-accounts-service', () => {
 
   it('lists missing recommended clearing accounts', () => {
     const missing = getMissingRecommendedClearingAccounts([
-      { code: '1050', name: 'Stripe Clearing', type: 'CURRENT', status: 'ACTIVE' },
+      { code: '1050', name: 'Stripe Holding', type: 'CURRENT', status: 'ACTIVE' },
     ]);
 
     expect(missing.map((item) => item.accountName)).toEqual([
@@ -91,7 +91,7 @@ describe('recommended-clearing-accounts-service', () => {
   });
 
   it('finds accounts by exact name only', () => {
-    expect(findAccountByExactName(sampleAccounts, 'Stripe Clearing')?.code).toBe('1050');
+    expect(findAccountByExactName(sampleAccounts, 'Stripe Holding')?.code).toBe('1050');
     expect(findAccountByExactName(sampleAccounts, 'Stripe')).toBeUndefined();
   });
 

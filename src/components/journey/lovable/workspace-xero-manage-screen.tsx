@@ -7,7 +7,7 @@ import { ArrowLeft } from 'lucide-react';
 import { XeroIntegrationPanel } from '@/components/dashboard/settings/xero-integration-panel';
 import { XeroOAuthSuccessBanner } from '@/components/xero/xero-oauth-success-banner';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
-import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
+import { XERO_SETUP_PAGE, type MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
 
 type WorkspaceXeroManageScreenProps = {
@@ -88,10 +88,8 @@ export function WorkspaceXeroManageScreen({
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to Connected Systems
         </Link>
-        <h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Set up Xero</h1>
-        <p className="mt-2 max-w-2xl text-[15px] text-ink-soft">
-          Connect Xero, choose invoice accounts, and create your first invoice.
-        </p>
+        <h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">{XERO_SETUP_PAGE.title}</h1>
+        <p className="mt-2 max-w-2xl text-[15px] text-ink-soft">{XERO_SETUP_PAGE.subtitle}</p>
       </header>
 
       <WorkspaceXeroManageContent

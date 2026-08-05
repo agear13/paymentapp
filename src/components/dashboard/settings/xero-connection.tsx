@@ -40,6 +40,7 @@ import {
   formatXeroConnectionIssue,
   formatXeroOAuthError,
 } from '@/lib/xero/xero-customer-messages';
+import { XERO_CONNECTION_COPY } from '@/lib/xero/xero-setup-guidance';
 
 interface XeroConnectionProps {
   organizationId: string;
@@ -346,7 +347,9 @@ export function XeroConnection({
           </div>
         ) : (
           <p className="text-sm font-medium text-foreground">
-            {status?.connected ? 'Your Xero account' : 'Connect your Xero account'}
+            {status?.connected
+              ? XERO_CONNECTION_COPY.connectedHeading
+              : XERO_CONNECTION_COPY.disconnectedHeading}
           </p>
         )}
 
@@ -396,7 +399,7 @@ export function XeroConnection({
                 Connecting...
               </>
             ) : (
-              'Connect to Xero'
+              XERO_CONNECTION_COPY.connectButton
             )}
           </Button>
         )}
@@ -405,7 +408,7 @@ export function XeroConnection({
       {/* Tenant Selector (when connected) */}
       {status?.connected && status.tenants && status.tenants.length > 0 && (
         <div className="space-y-2">
-          <label className="text-sm font-medium">Xero business</label>
+          <label className="text-sm font-medium">{XERO_CONNECTION_COPY.businessLabel}</label>
           <div className="flex items-center gap-2">
             <Select
               value={status.tenantId}
@@ -427,9 +430,7 @@ export function XeroConnection({
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Choose which Xero business Provvy syncs with
-          </p>
+          <p className="text-xs text-muted-foreground">{XERO_CONNECTION_COPY.businessHelper}</p>
         </div>
       )}
 
@@ -457,7 +458,7 @@ export function XeroConnection({
       ) : status?.connected && isCommercial ? (
         <Button variant="outline" size="sm" onClick={handleReconnect} className="w-full sm:w-auto">
           <RefreshCw className="mr-2 h-4 w-4" />
-          Reconnect to Xero
+          {XERO_CONNECTION_COPY.reconnectButton}
         </Button>
       ) : null}
 
@@ -471,8 +472,8 @@ export function XeroConnection({
       ) : (
         <p className="text-xs text-muted-foreground">
           {status?.connected
-            ? 'Manage your Xero connection and business selection here.'
-            : 'Connect Xero to send invoices from Provvy.'}
+            ? XERO_CONNECTION_COPY.connectedHelper
+            : XERO_CONNECTION_COPY.disconnectedHelper}
         </p>
       )}
     </div>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
+import { XERO_CREATE_INVOICE_GATE_COPY } from '@/lib/xero/xero-setup-guidance';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 
 type CommercialOsCreateInvoiceBlockedProps = {
@@ -20,11 +21,10 @@ export function CommercialOsCreateInvoiceBlocked({
       role="status"
     >
       <p className={`font-semibold text-foreground ${compact ? 'text-[14px]' : 'text-[15px]'}`}>
-        Finish your Xero setup before creating invoices.
+        {XERO_CREATE_INVOICE_GATE_COPY.title}
       </p>
       <p className={`mt-1.5 text-ink-soft ${compact ? 'text-[12.5px]' : 'text-[13.5px]'}`}>
-        Choose which Xero accounts Provvy should use, then you can send invoices that sync
-        automatically.
+        {XERO_CREATE_INVOICE_GATE_COPY.body}
       </p>
       <Link
         href={COMMERCIAL_OS_ROUTES.connectedXero}
@@ -32,7 +32,7 @@ export function CommercialOsCreateInvoiceBlocked({
           compact ? 'text-[12.5px]' : 'text-[13px]'
         }`}
       >
-        Continue Xero setup
+        {XERO_CREATE_INVOICE_GATE_COPY.cta}
         <ArrowRight className="h-4 w-4" />
       </Link>
     </div>

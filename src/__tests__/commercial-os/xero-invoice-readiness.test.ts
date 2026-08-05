@@ -5,11 +5,13 @@ import {
   resolveMappingDisplayState,
   shouldShowPastPayments,
 } from '@/lib/commercial-os/xero-invoice-readiness';
+import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 
-const DEFAULT_RAILS = {
-  stripeEnabled: true,
+const DEFAULT_RAILS: MerchantPaymentRails = {
+  stripeEnabled: false,
   wiseEnabled: false,
   stablecoinSettlementsEnabled: false,
+  manualBankEnabled: false,
 };
 
 describe('resolveMappingDisplayState', () => {
@@ -103,9 +105,10 @@ describe('computeHeroSubline', () => {
         connected: false,
         tenantSelected: false,
         canSendInvoices: false,
+        settlementReady: false,
         fieldStates: {},
       })
-    ).toBe('Connect Xero below.');
+    ).toBe('Connect Xero first — use the section below.');
   });
 
   it('prompts to choose accounts when connected but not ready', () => {
@@ -121,8 +124,22 @@ describe('computeHeroSubline', () => {
         connected: true,
         tenantSelected: true,
         canSendInvoices: false,
+        settlementReady: true,
         fieldStates,
       })
-    ).toBe('Choose invoice accounts below.');
+    ).toBe('Choose where invoices are recorded in Xero — open "Where invoices go" below.');
+  });
+
+  it('marks settlement fields as required when rails are enabled', () => {
+    const fieldStates = buildMappingFieldStates(
+      {},
+      true,
+      new Set(),
+      { ...DEFAULT_RAILS, stripeEnabled: true, manualBankEnabled: true }
+    );
+
+    expect(fieldStates.xero_stripe_clearing_account_id).toBe('required');
+    expect(fieldStates.xero_wise_clearing_account_id).toBe('required');
+    expect(fieldStates.xero_fee_expense_account_id).toBe('recommended');
   });
 });

@@ -4,6 +4,7 @@ const DEFAULT_RAILS = {
   stripeEnabled: true,
   wiseEnabled: false,
   stablecoinSettlementsEnabled: false,
+  manualBankEnabled: false,
 };
 
 describe('computeXeroReadiness', () => {
@@ -19,26 +20,27 @@ describe('computeXeroReadiness', () => {
 
     expect(result.overallStatus).toBe('setup_incomplete');
     expect(result.canCreateInvoice).toBe(false);
-    expect(result.statusLabel).toBe('Not ready yet');
+    expect(result.statusLabel).toBe('Setup incomplete');
     expect(result.heroAnswer).toBe('Not yet');
-    expect(result.heroSubline).toBe('Connect Xero below.');
+    expect(result.heroSubline).toBe('Connect Xero first — use the section below.');
     expect(result.blockers).toHaveLength(0);
   });
 
-  it('is ready_to_invoice when core accounts are saved and valid', () => {
+  it('is ready_to_invoice when core accounts and enabled rail holdings are configured', () => {
     const result = computeXeroReadiness({
       status: { connected: true, tenantId: 'tenant-1' },
       mappings: {
         xero_revenue_account_id: '200',
         xero_receivable_account_id: '610',
+        xero_stripe_clearing_account_id: '105',
       },
-      chartAccountCodes: new Set(['200', '610']),
+      chartAccountCodes: new Set(['200', '610', '105']),
       chartLoaded: true,
       queue: { pendingCount: 0, hasRecentFailures: false },
       merchantRails: DEFAULT_RAILS,
     });
 
-    expect(result.overallStatus).toBe('ready_to_invoice');
+    expect(result.overallStatus).toBe('fully_set_up');
     expect(result.canCreateInvoice).toBe(true);
     expect(result.blockers).toHaveLength(0);
   });
