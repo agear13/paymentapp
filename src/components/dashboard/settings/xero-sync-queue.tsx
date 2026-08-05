@@ -1,12 +1,12 @@
 /**
- * Xero payment sync status for operators.
+ * Xero payment sync status — only shown when post-connect payments need attention.
  */
 
 'use client';
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Collapsible,
@@ -22,20 +22,11 @@ import {
 } from '@/lib/xero/xero-setup-guidance';
 import { formatSyncIssueForCustomer } from '@/lib/xero/xero-customer-messages';
 import { XERO_GUIDED_SECTION_IDS } from '@/lib/xero/xero-guided-setup-config';
-
-interface QueueStatus {
-  pendingCount: number;
-  recentSyncs: Array<{
-    id: string;
-    payment_link_id: string;
-    sync_type: string;
-    status: string;
-    retry_count: number;
-    error_message: string | null;
-    created_at: string;
-    updated_at: string;
-  }>;
-}
+import {
+  filterPostConnectSyncs,
+  type XeroRecentSync,
+} from '@/lib/commercial-os/xero-invoice-readiness';
+import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
 
 interface XeroSyncQueueProps {
   organizationId: string;
@@ -85,14 +76,17 @@ function getStatusBadge(status: string) {
 }
 
 export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: XeroSyncQueueProps) {
-  const [loading, setLoading] = React.useState(true);
+  const readiness = useCommercialReadinessOptional();
+  const [loading, setLoading] = React.useState(!readiness);
   const [loadFailed, setLoadFailed] = React.useState(false);
   const [backfilling, setBackfilling] = React.useState(false);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
-  const [queueStatus, setQueueStatus] = React.useState<QueueStatus | null>(null);
+  const [localSyncs, setLocalSyncs] = React.useState<XeroRecentSync[]>([]);
   const [xeroConnected, setXeroConnected] = React.useState(false);
 
   const fetchStatus = React.useCallback(async () => {
+    if (readiness) return;
+
     setLoadFailed(false);
     try {
       const [statsResponse, statusResponse] = await Promise.all([
@@ -107,27 +101,27 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
 
       if (!statsResponse.ok) {
         setLoadFailed(true);
-        setQueueStatus(null);
+        setLocalSyncs([]);
         return;
       }
 
       const statsPayload = await statsResponse.json();
       const statusPayload = statusResponse.ok
-        ? ((await statusResponse.json()) as { connected?: boolean })
+        ? ((await statusResponse.json()) as { connected?: boolean; connectedAt?: string | null })
         : { connected: false };
 
       setXeroConnected(Boolean(statusPayload.connected));
-      setQueueStatus({
-        pendingCount: statsPayload.pendingCount ?? 0,
-        recentSyncs: statsPayload.recentSyncs ?? [],
-      });
+      const recentSyncs = (statsPayload.recentSyncs ?? []) as XeroRecentSync[];
+      setLocalSyncs(filterPostConnectSyncs(recentSyncs, statusPayload.connectedAt ?? null));
     } catch {
       setLoadFailed(true);
-      setQueueStatus(null);
+      setLocalSyncs([]);
     } finally {
       setLoading(false);
     }
-  }, [organizationId]);
+  }, [organizationId, readiness]);
+
+  const syncs = readiness?.queue.postConnectSyncs ?? localSyncs;
 
   const backfillSyncs = async () => {
     setBackfilling(true);
@@ -157,6 +151,7 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
       }
 
       await fetchStatus();
+      void readiness?.refresh();
     } catch {
       toast.error('Could not queue missed payments');
     } finally {
@@ -169,33 +164,25 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
   }, [fetchStatus]);
 
   React.useEffect(() => {
-    if (loadFailed) return;
+    if (readiness || loadFailed) return;
     const interval = setInterval(() => void fetchStatus(), 30000);
     return () => clearInterval(interval);
-  }, [fetchStatus, loadFailed]);
+  }, [fetchStatus, loadFailed, readiness]);
 
   if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>{QUEUE_GUIDANCE.title}</CardTitle>
-          <CardDescription>Loading sync status…</CardDescription>
-        </CardHeader>
-      </Card>
-    );
+    return null;
   }
 
-  const pending = queueStatus?.pendingCount ?? 0;
+  if (syncs.length === 0) {
+    return null;
+  }
+
+  const connected = readiness?.connection.connected ?? xeroConnected;
 
   return (
     <Card id={showGuidedSectionId ? XERO_GUIDED_SECTION_IDS.syncQueue : undefined}>
       <CardHeader>
         <CardTitle>{QUEUE_GUIDANCE.title}</CardTitle>
-        <CardDescription>
-          {pending > 0
-            ? QUEUE_GUIDANCE.intro(pending)
-            : QUEUE_GUIDANCE.empty}
-        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {loadFailed ? (
@@ -213,57 +200,41 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
             </button>
           </p>
         ) : (
-          <>
-            {pending > 0 ? (
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {QUEUE_GUIDANCE.context}
-              </p>
-            ) : null}
-
-            <p className="text-xs text-muted-foreground">
-              Payments sync automatically in the background. Failed items retry on their own — you
-              do not need to run a manual sync.
-            </p>
-
-            {queueStatus && queueStatus.recentSyncs.length > 0 ? (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium">Recent activity</h4>
-                {queueStatus.recentSyncs.slice(0, 5).map((sync, index) => {
-                  const display = getStatusDisplay(sync.status);
-                  const syncIssue = formatSyncIssueForCustomer(sync.error_message, {
-                    xeroCurrentlyConnected: xeroConnected,
-                  });
-                  return (
-                    <div
-                      key={sync.id}
-                      className="flex items-start justify-between gap-3 p-3 border rounded-lg text-sm"
-                    >
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {getStatusBadge(sync.status)}
-                          <span className="text-muted-foreground text-xs">
-                            Payment {index + 1}
-                          </span>
-                        </div>
-                        {display.explanation ? (
-                          <p className="text-xs text-muted-foreground">{display.explanation}</p>
-                        ) : null}
-                        {syncIssue ? (
-                          <div className="text-xs text-red-600 line-clamp-4 space-y-1">
-                            <p>{syncIssue.message}</p>
-                            <p className="text-muted-foreground">{syncIssue.action}</p>
-                          </div>
-                        ) : null}
-                      </div>
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {new Date(sync.updated_at).toLocaleDateString()}
+          <div className="space-y-2">
+            {syncs.slice(0, 5).map((sync, index) => {
+              const display = getStatusDisplay(sync.status);
+              const syncIssue = formatSyncIssueForCustomer(sync.error_message, {
+                xeroCurrentlyConnected: connected,
+              });
+              return (
+                <div
+                  key={sync.id}
+                  className="flex items-start justify-between gap-3 p-3 border rounded-lg text-sm"
+                >
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {getStatusBadge(sync.status)}
+                      <span className="text-muted-foreground text-xs">
+                        Payment {index + 1}
                       </span>
                     </div>
-                  );
-                })}
-              </div>
-            ) : null}
-          </>
+                    {display.explanation ? (
+                      <p className="text-xs text-muted-foreground">{display.explanation}</p>
+                    ) : null}
+                    {syncIssue ? (
+                      <div className="text-xs text-red-600 line-clamp-4 space-y-1">
+                        <p>{syncIssue.message}</p>
+                        <p className="text-muted-foreground">{syncIssue.action}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {new Date(sync.updated_at).toLocaleDateString()}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         )}
 
         <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
@@ -276,10 +247,6 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-3 pt-3">
-            <p className="text-xs text-muted-foreground">
-              If payments were made before Xero was connected, use find missed payments to add them
-              to the sync queue.
-            </p>
             <div className="flex flex-wrap gap-2">
               <Button
                 onClick={() => void backfillSyncs()}
@@ -296,15 +263,17 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
                   QUEUE_GUIDANCE.queueMissedLabel
                 )}
               </Button>
-              <Button
-                onClick={() => void fetchStatus()}
-                disabled={loadFailed}
-                size="sm"
-                variant="ghost"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Refresh status
-              </Button>
+              {!readiness ? (
+                <Button
+                  onClick={() => void fetchStatus()}
+                  disabled={loadFailed}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Refresh status
+                </Button>
+              ) : null}
             </div>
           </CollapsibleContent>
         </Collapsible>

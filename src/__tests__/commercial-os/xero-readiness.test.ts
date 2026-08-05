@@ -20,6 +20,9 @@ describe('computeXeroReadiness', () => {
     expect(result.overallStatus).toBe('setup_incomplete');
     expect(result.canCreateInvoice).toBe(false);
     expect(result.statusLabel).toBe('Not ready yet');
+    expect(result.heroAnswer).toBe('Not yet');
+    expect(result.heroSubline).toBe('Connect Xero below.');
+    expect(result.blockers).toHaveLength(0);
   });
 
   it('is ready_to_invoice when core accounts are saved and valid', () => {

@@ -71,10 +71,10 @@ export function WorkspaceXeroManageScreen({
 
   const handleContinueOAuthSuccess = () => {
     setShowOAuthSuccess(false);
-    const mappings = document.getElementById('advanced-accounting-settings') as HTMLDetailsElement | null;
-    if (mappings) {
-      mappings.open = true;
-      mappings.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const invoiceAccounts = document.getElementById('invoice-accounts') as HTMLDetailsElement | null;
+    if (invoiceAccounts) {
+      invoiceAccounts.open = true;
+      invoiceAccounts.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
@@ -90,8 +90,7 @@ export function WorkspaceXeroManageScreen({
         </Link>
         <h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Set up Xero</h1>
         <p className="mt-2 max-w-2xl text-[15px] text-ink-soft">
-          Connect Xero, choose your accounts, and check whether past payments have synced. Your
-          setup summary at the top shows what is required and what is optional.
+          Connect Xero, choose invoice accounts, and create your first invoice.
         </p>
       </header>
 

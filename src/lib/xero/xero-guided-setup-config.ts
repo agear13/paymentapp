@@ -95,7 +95,7 @@ export function buildXeroGuidedTourSteps(
       title: 'Payment methods',
       explanation:
         'Optional holding accounts help Provvy match Stripe and other payments to your bank deposits.',
-      targetId: XERO_GUIDED_SECTION_IDS.paymentRails,
+      targetId: 'payment-reconciliation',
       continueLabel: 'Next',
     });
   }
@@ -110,19 +110,20 @@ export function buildXeroGuidedTourSteps(
     });
   }
 
-  if (readiness.queue.pendingCount > 0) {
+  if (readiness.queue.showPastPayments) {
+    const count = readiness.queue.postConnectSyncs.length;
     steps.push({
       id: 'historical-payments',
       title: 'Past payments',
-      explanation: `${readiness.queue.pendingCount} past payment${readiness.queue.pendingCount === 1 ? '' : 's'} will sync automatically — no action needed.`,
+      explanation: `${count} payment${count === 1 ? '' : 's'} from after you connected will sync automatically — no action needed.`,
       targetId: XERO_GUIDED_SECTION_IDS.syncQueue,
       continueLabel: 'Finish walkthrough',
     });
   } else {
     steps.push({
       id: 'finished',
-      title: 'Review setup status',
-      explanation: 'Check Setup status above for anything required or optional.',
+      title: 'You are set',
+      explanation: 'Use the summary at the top when you are ready to create an invoice.',
       targetId: 'guided-xero-health-check',
       continueLabel: 'Finish walkthrough',
     });

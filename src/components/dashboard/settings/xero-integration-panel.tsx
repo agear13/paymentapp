@@ -3,10 +3,13 @@
 import { XeroConnection } from '@/components/dashboard/settings/xero-connection';
 import { XeroSyncQueue } from '@/components/dashboard/settings/xero-sync-queue';
 import { XeroAccountMapping } from '@/components/dashboard/settings/xero-account-mapping';
+import { XeroAccountMappingPanel } from '@/components/dashboard/settings/xero-account-mapping-panel';
 import { XeroAccountingHealth } from '@/components/dashboard/settings/xero-accounting-health';
 import { XeroIntegrationsGate } from '@/components/entitlements/xero-integrations-gate';
 import { XeroSetupProgress } from '@/components/xero/xero-setup-progress';
 import { XeroGuidedSetupOrchestrator } from '@/components/xero/xero-guided-setup-orchestrator';
+import { XeroInvoiceReadinessHero } from '@/components/xero/xero-invoice-readiness-hero';
+import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 
 type XeroIntegrationPanelProps = {
@@ -34,6 +37,7 @@ export function XeroIntegrationPanel({
   guidedSetupAssistant = false,
   commercialOs = false,
 }: XeroIntegrationPanelProps) {
+  const readiness = useCommercialReadinessOptional();
   const rails: MerchantPaymentRails = merchantRails ?? {
     stripeEnabled: true,
     wiseEnabled: false,
@@ -42,6 +46,7 @@ export function XeroIntegrationPanel({
 
   const showAssistant = guidedSetupAssistant;
   const showLegacyProgress = guidedSetup && !showAssistant;
+  const showCommercialLayout = commercialOs || guidedSetup || showAssistant;
 
   return (
     <XeroIntegrationsGate>
@@ -58,6 +63,10 @@ export function XeroIntegrationPanel({
           <XeroSetupProgress organizationId={organizationId} variant="commercial" />
         ) : null}
 
+        {!showAssistant && showCommercialLayout ? (
+          <XeroInvoiceReadinessHero variant="commercial" />
+        ) : null}
+
         <XeroConnection
           organizationId={organizationId}
           returnTo={returnTo}
@@ -65,37 +74,38 @@ export function XeroIntegrationPanel({
           variant={commercialOs ? 'commercial' : 'default'}
         />
 
-        {!showAssistant ? <XeroAccountingHealth organizationId={organizationId} /> : null}
+        {!showCommercialLayout ? <XeroAccountingHealth organizationId={organizationId} /> : null}
 
-        <details
-          id="advanced-accounting-settings"
-          className="rounded-lg border border-border bg-card"
-          open={guidedSetup || showAssistant}
-        >
-          <summary className="cursor-pointer px-6 py-4 text-sm font-medium">
-            {commercialOs || guidedSetup || showAssistant
-              ? 'Choose which Xero accounts to use'
-              : 'Advanced Accounting Settings'}
-          </summary>
-          <div className="border-t p-6">
-            {commercialOs || guidedSetup || showAssistant ? (
-              <p className="mb-6 text-sm text-muted-foreground leading-relaxed">
-                Pick the Xero accounts Provvy uses for invoices and payments. Saved choices appear
-                in the summary at the bottom.
-              </p>
-            ) : null}
-            <XeroAccountMapping
-              organizationId={organizationId}
-              stablecoinSettlementsEnabled={rails.stablecoinSettlementsEnabled}
-              merchantRails={rails}
-              showContextualHelp={showAssistant}
-              showGuidedSectionIds={showAssistant}
-              commercialOs={commercialOs}
-            />
-          </div>
-        </details>
+        {showCommercialLayout ? (
+          <XeroAccountMappingPanel
+            organizationId={organizationId}
+            merchantRails={rails}
+            showContextualHelp={showAssistant}
+            showGuidedSectionIds={showAssistant}
+            commercialOs={commercialOs}
+          />
+        ) : (
+          <details
+            id="advanced-accounting-settings"
+            className="rounded-lg border border-border bg-card"
+            open={guidedSetup || showAssistant}
+          >
+            <summary className="cursor-pointer px-6 py-4 text-sm font-medium">
+              Advanced Accounting Settings
+            </summary>
+            <div className="border-t p-6">
+              <XeroAccountMapping
+                organizationId={organizationId}
+                stablecoinSettlementsEnabled={rails.stablecoinSettlementsEnabled}
+                merchantRails={rails}
+              />
+            </div>
+          </details>
+        )}
 
-        <XeroSyncQueue organizationId={organizationId} showGuidedSectionId={showAssistant} />
+        {readiness?.queue.showPastPayments ? (
+          <XeroSyncQueue organizationId={organizationId} showGuidedSectionId={showAssistant} />
+        ) : null}
       </div>
     </XeroIntegrationsGate>
   );

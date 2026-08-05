@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { SetupAssistant } from '@/components/commercial-os/setup-assistant';
-import { XeroSetupStatusCard } from '@/components/xero/xero-setup-status-card';
+import { XeroInvoiceReadinessHero } from '@/components/xero/xero-invoice-readiness-hero';
 import { useCommercialReadiness } from '@/hooks/use-commercial-readiness';
 import {
   XERO_GUIDED_SETUP_CONFIG,
@@ -30,7 +30,7 @@ export function XeroGuidedSetupOrchestrator({
 
   return (
     <div className="space-y-4">
-      <XeroSetupStatusCard variant={variant} />
+      <XeroInvoiceReadinessHero variant={variant} />
       <SetupAssistant
         config={XERO_GUIDED_SETUP_CONFIG}
         steps={steps}

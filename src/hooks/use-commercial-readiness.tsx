@@ -4,6 +4,7 @@ import * as React from 'react';
 import {
   computeXeroReadiness,
   EMPTY_XERO_READINESS,
+  type XeroReadinessInput,
   type XeroReadinessMappingsPayload,
   type XeroReadinessResult,
 } from '@/lib/commercial-os/xero-readiness';
@@ -102,6 +103,7 @@ async function fetchCommercialReadiness(
     ? ((await statusRes.json()) as {
         connected?: boolean;
         tenantId?: string | null;
+        connectedAt?: string | null;
         operatorMessage?: string | null;
       })
     : { connected: false };
@@ -122,13 +124,15 @@ async function fetchCommercialReadiness(
 
   let pendingCount = 0;
   let hasRecentFailures = false;
+  let recentSyncs: XeroReadinessInput['queue']['recentSyncs'] = [];
   if (queueRes.ok) {
     const queueBody = (await queueRes.json()) as {
       pendingCount?: number;
-      recentSyncs?: Array<{ status: string }>;
+      recentSyncs?: XeroReadinessInput['queue']['recentSyncs'];
     };
     pendingCount = queueBody.pendingCount ?? 0;
-    hasRecentFailures = (queueBody.recentSyncs ?? []).some((sync) => sync.status === 'FAILED');
+    recentSyncs = queueBody.recentSyncs ?? [];
+    hasRecentFailures = recentSyncs.some((sync) => sync.status === 'FAILED');
   }
 
   return computeXeroReadiness({
@@ -136,7 +140,7 @@ async function fetchCommercialReadiness(
     mappings: mappingsPayload.data ?? null,
     chartAccountCodes,
     chartLoaded,
-    queue: { pendingCount, hasRecentFailures },
+    queue: { pendingCount, hasRecentFailures, recentSyncs },
     merchantRails,
   });
 }

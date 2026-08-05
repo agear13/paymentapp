@@ -3,6 +3,20 @@
  * Consumes existing API payloads — no backend logic.
  */
 
+import {
+  allInvoiceAccountsConfigured,
+  buildMappingFieldStates,
+  computeHeroSubline,
+  countInvoiceAccountActions,
+  countOptionalRecommended,
+  filterPostConnectSyncs,
+  invoiceAccountsNeedAction,
+  shouldShowPastPayments,
+  type HeroAnswer,
+  type MappingDisplayState,
+  type XeroRecentSync,
+} from '@/lib/commercial-os/xero-invoice-readiness';
+import type { XeroMappingField } from '@/lib/accounting/recommended-accounting-config';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 
 export type XeroOverallStatus = 'setup_incomplete' | 'ready_to_invoice' | 'fully_set_up';
@@ -10,6 +24,7 @@ export type XeroOverallStatus = 'setup_incomplete' | 'ready_to_invoice' | 'fully
 export type XeroReadinessConnection = {
   connected: boolean;
   tenantSelected: boolean;
+  connectedAt?: string | null;
   operatorMessage?: string | null;
 };
 
@@ -34,6 +49,8 @@ export type XeroReadinessPaymentMappings = {
 export type XeroReadinessQueue = {
   pendingCount: number;
   hasRecentFailures: boolean;
+  showPastPayments: boolean;
+  postConnectSyncs: XeroRecentSync[];
 };
 
 export type XeroReadinessNextAction = {
@@ -55,6 +72,13 @@ export type XeroReadinessResult = {
   recommendations: string[];
   nextAction: XeroReadinessNextAction | null;
   canCreateInvoice: boolean;
+  heroAnswer: HeroAnswer;
+  heroSubline: string;
+  fieldStates: Partial<Record<XeroMappingField, MappingDisplayState>>;
+  invoiceAccountsNeedAction: boolean;
+  invoiceAccountActionCount: number;
+  allInvoiceAccountsConfigured: boolean;
+  optionalRecommendedCount: number;
 };
 
 export type XeroReadinessMappingsPayload = {
@@ -62,18 +86,27 @@ export type XeroReadinessMappingsPayload = {
   xero_receivable_account_id?: string | null;
   xero_stripe_clearing_account_id?: string | null;
   xero_fee_expense_account_id?: string | null;
+  xero_hbar_clearing_account_id?: string | null;
+  xero_usdc_clearing_account_id?: string | null;
+  xero_usdt_clearing_account_id?: string | null;
+  xero_audd_clearing_account_id?: string | null;
 };
 
 export type XeroReadinessInput = {
   status: {
     connected?: boolean;
     tenantId?: string | null;
+    connectedAt?: string | Date | null;
     operatorMessage?: string | null;
   };
   mappings: XeroReadinessMappingsPayload | null;
   chartAccountCodes: Set<string> | null;
   chartLoaded: boolean;
-  queue: { pendingCount: number; hasRecentFailures: boolean };
+  queue: {
+    pendingCount: number;
+    hasRecentFailures: boolean;
+    recentSyncs?: XeroRecentSync[];
+  };
   merchantRails: MerchantPaymentRails;
 };
 
@@ -102,21 +135,21 @@ function fieldState(
   };
 }
 
-function invalidFieldMessage(label: string, state: XeroReadinessFieldState): string | null {
-  if (!state.saved) return `Choose a Xero account for ${label}.`;
-  if (!state.validInChart) {
-    return `The saved ${label} account is no longer in your Xero accounts — pick it again.`;
-  }
-  return null;
+function normalizeConnectedAt(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  return value;
 }
 
 export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadinessResult, 'loading'> {
   const connected = Boolean(input.status.connected);
   const tenantSelected = connected && Boolean(input.status.tenantId?.trim());
+  const connectedAt = normalizeConnectedAt(input.status.connectedAt ?? null);
 
   const connection: XeroReadinessConnection = {
     connected,
     tenantSelected,
+    connectedAt,
     operatorMessage: input.status.operatorMessage,
   };
 
@@ -146,25 +179,18 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     ),
   };
 
+  const recentSyncs = input.queue.recentSyncs ?? [];
+  const postConnectSyncs = filterPostConnectSyncs(recentSyncs, connectedAt);
+
   const queue: XeroReadinessQueue = {
     pendingCount: input.queue.pendingCount,
-    hasRecentFailures: input.queue.hasRecentFailures,
+    hasRecentFailures: postConnectSyncs.some((sync) => sync.status === 'FAILED'),
+    showPastPayments: shouldShowPastPayments(recentSyncs, connectedAt),
+    postConnectSyncs,
   };
 
   const blockers: string[] = [];
   const recommendations: string[] = [];
-
-  if (!connected) {
-    blockers.push('Connect Xero to send invoices from Provvy.');
-  } else if (!tenantSelected) {
-    blockers.push('Select your Xero business.');
-  }
-
-  const revenueIssue = invalidFieldMessage('sales from invoices', invoiceMappings.revenue);
-  if (revenueIssue) blockers.push(revenueIssue);
-
-  const receivableIssue = invalidFieldMessage('unpaid invoices', invoiceMappings.receivable);
-  if (receivableIssue) blockers.push(receivableIssue);
 
   const coreInvoiceReady =
     connected &&
@@ -174,23 +200,12 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     invoiceMappings.receivable.saved &&
     invoiceMappings.receivable.validInChart;
 
-  if (input.merchantRails.stripeEnabled) {
-    if (!paymentMappings.stripeClearing.saved) {
-      recommendations.push(
-        'Add a temporary holding account in Xero for card payments — optional, but makes reconciliation easier.'
-      );
-    } else if (!paymentMappings.stripeClearing.validInChart) {
-      recommendations.push(
-        'Your saved card-payment holding account is no longer in Xero — choose it again (optional).'
-      );
-    }
-  }
-
-  if (!paymentMappings.processorFees.saved && input.merchantRails.stripeEnabled) {
-    recommendations.push('Card processing fees can be set up later if you prefer.');
-  }
-
-  // Historical sync counts live on the Past payments section — not duplicated here.
+  const fieldStates = buildMappingFieldStates(
+    input.mappings,
+    input.chartLoaded,
+    input.chartAccountCodes,
+    input.merchantRails
+  );
 
   let overallStatus: XeroOverallStatus = 'setup_incomplete';
 
@@ -205,16 +220,15 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
   }
 
   const canCreateInvoice = overallStatus !== 'setup_incomplete';
+  const heroAnswer: HeroAnswer = canCreateInvoice ? 'Yes' : 'Not yet';
+  const heroSubline = computeHeroSubline({
+    connected,
+    tenantSelected,
+    canSendInvoices: canCreateInvoice,
+    fieldStates,
+  });
 
-  let statusDetail: string;
-  if (overallStatus === 'setup_incomplete') {
-    statusDetail =
-      blockers[0] ?? 'Finish choosing your Xero accounts before sending invoices.';
-  } else if (overallStatus === 'ready_to_invoice') {
-    statusDetail = 'Invoices created in Provvy will automatically sync to Xero.';
-  } else {
-    statusDetail = 'Invoices and payments will sync to Xero automatically.';
-  }
+  let statusDetail: string = heroSubline;
 
   let nextAction: XeroReadinessNextAction | null = null;
   if (!connected) {
@@ -245,6 +259,13 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     recommendations,
     nextAction,
     canCreateInvoice,
+    heroAnswer,
+    heroSubline,
+    fieldStates,
+    invoiceAccountsNeedAction: invoiceAccountsNeedAction(fieldStates),
+    invoiceAccountActionCount: countInvoiceAccountActions(fieldStates),
+    allInvoiceAccountsConfigured: allInvoiceAccountsConfigured(fieldStates),
+    optionalRecommendedCount: countOptionalRecommended(fieldStates, input.merchantRails),
   };
 }
 
@@ -258,12 +279,24 @@ export const EMPTY_XERO_READINESS: Omit<XeroReadinessResult, 'loading'> = {
     stripeClearing: { saved: false, validInChart: false },
     processorFees: { saved: false, validInChart: false },
   },
-  queue: { pendingCount: 0, hasRecentFailures: false },
+  queue: {
+    pendingCount: 0,
+    hasRecentFailures: false,
+    showPastPayments: false,
+    postConnectSyncs: [],
+  },
   overallStatus: 'setup_incomplete',
   statusLabel: STATUS_LABELS.setup_incomplete,
-  statusDetail: 'Connect Xero to send invoices from Provvy.',
-  blockers: ['Connect Xero to send invoices from Provvy.'],
+  statusDetail: 'Connect Xero below.',
+  blockers: [],
   recommendations: [],
   nextAction: { label: 'Connect Xero', sectionId: 'xero-connection' },
   canCreateInvoice: false,
+  heroAnswer: 'Not yet',
+  heroSubline: 'Connect Xero below.',
+  fieldStates: {},
+  invoiceAccountsNeedAction: true,
+  invoiceAccountActionCount: 2,
+  allInvoiceAccountsConfigured: false,
+  optionalRecommendedCount: 0,
 };

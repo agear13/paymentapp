@@ -18,64 +18,33 @@ export const XERO_CONNECT_MODAL = {
   cancelLabel: 'Cancel',
 } as const;
 
-export const XERO_OAUTH_SUCCESS = {
-  title: 'Xero connected',
-  body: 'Your Xero business is linked to Provvy.',
-  nextStep:
-    'Next, choose which Xero accounts Provvy should use for invoices and payments.',
-  continueLabel: 'Continue setup',
-} as const;
-
-/** Friendly labels for mapping summary (left side of arrow). */
-export const MAPPING_SUMMARY_FRIENDLY_LABELS: Partial<Record<XeroMappingField, string>> = {
-  xero_revenue_account_id: 'Sales from invoices',
-  xero_receivable_account_id: 'Unpaid invoices',
-  xero_fee_expense_account_id: 'Card processing fees',
-  xero_stripe_clearing_account_id: 'Stripe payments',
-  xero_hbar_clearing_account_id: 'HBAR payments',
-  xero_usdc_clearing_account_id: 'USDC payments',
-  xero_usdt_clearing_account_id: 'USDT payments',
-  xero_audd_clearing_account_id: 'AUDD payments',
-  xero_wise_clearing_account_id: 'Wise payments',
-};
-
-/** Plain-English explanations shown above each mapping field. */
-export const XERO_MAPPING_GUIDANCE: Partial<Record<XeroMappingField, string>> = {
-  xero_revenue_account_id:
-    'When customers pay invoices, Provvy records sales in this Xero account.',
-  xero_receivable_account_id:
-    'Unpaid invoices are tracked here until customers pay.',
-  xero_fee_expense_account_id:
-    'Stripe card processing fees are recorded here.',
-  xero_stripe_clearing_account_id:
-    'Stripe temporarily holds funds before paying your bank. Provvy uses this holding account to match settlements automatically.',
-  xero_hbar_clearing_account_id:
-    'HBAR payments are held here briefly before settling to your bank account.',
-  xero_usdc_clearing_account_id:
-    'USDC stablecoin payments are held here briefly before settling to your bank account.',
-  xero_usdt_clearing_account_id:
-    'USDT stablecoin payments are held here briefly before settling to your bank account.',
-  xero_audd_clearing_account_id:
-    'AUDD stablecoin payments are held here briefly before settling to your bank account.',
-};
-
-export const CLEARING_ACCOUNT_HELPER_TEXT =
-  'Temporary holding account used until funds reach your bank account.';
-
-export const ADVANCED_SETTLEMENT_SECTION_COPY =
-  'Digital asset payments are recorded in temporary holding accounts before settling to your bank. Your accountant can adjust these if needed.';
-
 export const CLEARING_ACCOUNTS_EXPLANATION = {
-  title: 'Why add holding accounts?',
-  body: 'Stripe and other payment methods settle differently from bank transfers. Temporary holding accounts keep reconciliation accurate.',
-  action: 'Provvy can add these in Xero for you.',
+  body: 'Temporary holding accounts help match payments to bank deposits.',
   reassurance: 'Nothing in your existing Xero accounts will be deleted.',
 } as const;
 
-export const MAPPING_SUMMARY_INTRO = {
-  title: 'Saved account choices',
-  footer:
-    'Provvy uses these saved accounts whenever invoices or payments sync to Xero.',
+export const XERO_INVOICE_READINESS_COPY = {
+  heroQuestion: 'Can I send invoices to Xero yet?',
+  createInvoiceCta: 'Create your first invoice →',
+} as const;
+
+/** Short field labels — used once per mapping row. */
+export const XERO_MAPPING_FIELD_LABELS: Partial<Record<XeroMappingField, string>> = {
+  xero_revenue_account_id: 'Sales from invoices',
+  xero_receivable_account_id: 'Unpaid invoices',
+  xero_fee_expense_account_id: 'Card processing fees',
+  xero_stripe_clearing_account_id: 'Stripe holding account',
+  xero_hbar_clearing_account_id: 'HBAR holding account',
+  xero_usdc_clearing_account_id: 'USDC holding account',
+  xero_usdt_clearing_account_id: 'USDT holding account',
+  xero_audd_clearing_account_id: 'AUDD holding account',
+};
+
+export const XERO_OAUTH_SUCCESS = {
+  title: 'Xero connected',
+  body: 'Provvy matched accounts from your Xero chart.',
+  nextStep: 'Review invoice accounts below, then create your first invoice.',
+  continueLabel: 'Choose accounts',
 } as const;
 
 export const QUEUE_GUIDANCE = {
