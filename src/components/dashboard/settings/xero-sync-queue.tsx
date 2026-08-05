@@ -31,6 +31,12 @@ import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness
 interface XeroSyncQueueProps {
   organizationId: string;
   showGuidedSectionId?: boolean;
+  /** Commercial OS: collapsed by default unless failures need attention */
+  variant?: 'default' | 'commercial';
+}
+
+function hasActionableSyncFailures(syncs: XeroRecentSync[]): boolean {
+  return syncs.some((sync) => sync.status === 'FAILED' || sync.status === 'RETRYING');
 }
 
 function getStatusDisplay(status: string) {
@@ -75,7 +81,11 @@ function getStatusBadge(status: string) {
   );
 }
 
-export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: XeroSyncQueueProps) {
+export function XeroSyncQueue({
+  organizationId,
+  showGuidedSectionId = false,
+  variant = 'default',
+}: XeroSyncQueueProps) {
   const readiness = useCommercialReadinessOptional();
   const [loading, setLoading] = React.useState(!readiness);
   const [loadFailed, setLoadFailed] = React.useState(false);
@@ -83,6 +93,19 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [localSyncs, setLocalSyncs] = React.useState<XeroRecentSync[]>([]);
   const [xeroConnected, setXeroConnected] = React.useState(false);
+
+  const syncs = readiness?.queue.postConnectSyncs ?? localSyncs;
+  const needsAttention =
+    hasActionableSyncFailures(syncs) || Boolean(readiness?.queue.hasRecentFailures);
+  const [sectionOpen, setSectionOpen] = React.useState(
+    variant === 'default' ? true : needsAttention
+  );
+
+  React.useEffect(() => {
+    if (variant === 'commercial' && needsAttention) {
+      setSectionOpen(true);
+    }
+  }, [variant, needsAttention]);
 
   const fetchStatus = React.useCallback(async () => {
     if (readiness) return;
@@ -120,8 +143,6 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
       setLoading(false);
     }
   }, [organizationId, readiness]);
-
-  const syncs = readiness?.queue.postConnectSyncs ?? localSyncs;
 
   const backfillSyncs = async () => {
     setBackfilling(true);
@@ -179,106 +200,131 @@ export function XeroSyncQueue({ organizationId, showGuidedSectionId = false }: X
 
   const connected = readiness?.connection.connected ?? xeroConnected;
 
+  const queueBody = (
+    <>
+      <p className="text-sm text-muted-foreground">{QUEUE_GUIDANCE.context}</p>
+      {loadFailed ? (
+        <p className="text-sm text-muted-foreground rounded-lg border bg-muted/40 p-3">
+          Sync status temporarily unavailable.{' '}
+          <button
+            type="button"
+            className="text-primary hover:underline"
+            onClick={() => {
+              setLoading(true);
+              void fetchStatus();
+            }}
+          >
+            Try again
+          </button>
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {syncs.slice(0, 5).map((sync, index) => {
+            const display = getStatusDisplay(sync.status);
+            const syncIssue = formatSyncIssueForCustomer(sync.error_message, {
+              xeroCurrentlyConnected: connected,
+            });
+            return (
+              <div
+                key={sync.id}
+                className="flex items-start justify-between gap-3 p-3 border rounded-lg text-sm"
+              >
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {getStatusBadge(sync.status)}
+                    <span className="text-muted-foreground text-xs">
+                      {QUEUE_GUIDANCE.paymentLabel(index)}
+                    </span>
+                  </div>
+                  {display.explanation ? (
+                    <p className="text-xs text-muted-foreground">{display.explanation}</p>
+                  ) : null}
+                  {syncIssue ? (
+                    <div className="text-xs text-red-600 line-clamp-4 space-y-1">
+                      <p>{syncIssue.message}</p>
+                      <p className="text-muted-foreground">{syncIssue.action}</p>
+                    </div>
+                  ) : null}
+                </div>
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {new Date(sync.updated_at).toLocaleDateString()}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground px-0">
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+            />
+            {QUEUE_GUIDANCE.advancedOptions}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-3 pt-3">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => void backfillSyncs()}
+              disabled={backfilling || loadFailed}
+              size="sm"
+              variant="outline"
+            >
+              {backfilling ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Searching…
+                </>
+              ) : (
+                QUEUE_GUIDANCE.queueMissedLabel
+              )}
+            </Button>
+            {!readiness ? (
+              <Button
+                onClick={() => void fetchStatus()}
+                disabled={loadFailed}
+                size="sm"
+                variant="ghost"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh status
+              </Button>
+            ) : null}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </>
+  );
+
+  if (variant === 'commercial') {
+    return (
+      <details
+        open={sectionOpen}
+        onToggle={(event) => setSectionOpen((event.target as HTMLDetailsElement).open)}
+        className="rounded-lg border border-border bg-card/40"
+        id={showGuidedSectionId ? XERO_GUIDED_SECTION_IDS.syncQueue : undefined}
+      >
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+          Advanced — {QUEUE_GUIDANCE.title}
+          {needsAttention ? (
+            <span className="ml-2 text-xs font-normal text-amber-700 dark:text-amber-300">
+              Needs attention
+            </span>
+          ) : null}
+        </summary>
+        <div className="space-y-4 border-t px-4 pb-4 pt-4">{queueBody}</div>
+      </details>
+    );
+  }
+
   return (
     <Card id={showGuidedSectionId ? XERO_GUIDED_SECTION_IDS.syncQueue : undefined}>
       <CardHeader>
         <CardTitle>{QUEUE_GUIDANCE.title}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">{QUEUE_GUIDANCE.context}</p>
-        {loadFailed ? (
-          <p className="text-sm text-muted-foreground rounded-lg border bg-muted/40 p-3">
-            Sync status temporarily unavailable.{' '}
-            <button
-              type="button"
-              className="text-primary hover:underline"
-              onClick={() => {
-                setLoading(true);
-                void fetchStatus();
-              }}
-            >
-              Try again
-            </button>
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {syncs.slice(0, 5).map((sync, index) => {
-              const display = getStatusDisplay(sync.status);
-              const syncIssue = formatSyncIssueForCustomer(sync.error_message, {
-                xeroCurrentlyConnected: connected,
-              });
-              return (
-                <div
-                  key={sync.id}
-                  className="flex items-start justify-between gap-3 p-3 border rounded-lg text-sm"
-                >
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {getStatusBadge(sync.status)}
-                      <span className="text-muted-foreground text-xs">
-                        {QUEUE_GUIDANCE.paymentLabel(index)}
-                      </span>
-                    </div>
-                    {display.explanation ? (
-                      <p className="text-xs text-muted-foreground">{display.explanation}</p>
-                    ) : null}
-                    {syncIssue ? (
-                      <div className="text-xs text-red-600 line-clamp-4 space-y-1">
-                        <p>{syncIssue.message}</p>
-                        <p className="text-muted-foreground">{syncIssue.action}</p>
-                      </div>
-                    ) : null}
-                  </div>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {new Date(sync.updated_at).toLocaleDateString()}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground px-0">
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
-              />
-              {QUEUE_GUIDANCE.advancedOptions}
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-3 pt-3">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={() => void backfillSyncs()}
-                disabled={backfilling || loadFailed}
-                size="sm"
-                variant="outline"
-              >
-                {backfilling ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    Searching…
-                  </>
-                ) : (
-                  QUEUE_GUIDANCE.queueMissedLabel
-                )}
-              </Button>
-              {!readiness ? (
-                <Button
-                  onClick={() => void fetchStatus()}
-                  disabled={loadFailed}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh status
-                </Button>
-              ) : null}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      </CardContent>
+      <CardContent className="space-y-4">{queueBody}</CardContent>
     </Card>
   );
 }

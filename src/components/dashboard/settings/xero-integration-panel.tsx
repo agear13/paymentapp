@@ -104,7 +104,11 @@ export function XeroIntegrationPanel({
         )}
 
         {readiness?.queue.showPastPayments ? (
-          <XeroSyncQueue organizationId={organizationId} showGuidedSectionId={showAssistant} />
+          <XeroSyncQueue
+            organizationId={organizationId}
+            showGuidedSectionId={showAssistant}
+            variant={commercialOs ? 'commercial' : 'default'}
+          />
         ) : null}
       </div>
     </XeroIntegrationsGate>
