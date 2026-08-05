@@ -80,6 +80,69 @@ export async function fetchCryptoConfirmationsForOrg(
   return (result.data ?? []) as CryptoConfirmationRow[];
 }
 
+export type ManualBankConfirmationRow = {
+  id: string;
+  payerAmountSent: string;
+  payerCurrency: string | null;
+  payerDestination: string | null;
+  payerPaymentMethodUsed: string | null;
+  payerReference: string | null;
+  payerProofDetails: string | null;
+  payerNote: string | null;
+  verificationStatus: string | null;
+  matchConfidence: string | null;
+  verificationIssues: string[];
+  paymentLink: { id: string };
+};
+
+export async function fetchManualBankConfirmationsForOrg(
+  organizationId: string
+): Promise<ManualBankConfirmationRow[]> {
+  const response = await fetch(
+    `/api/payment-links/manual-bank-confirmations?organizationId=${encodeURIComponent(organizationId)}`
+  );
+  if (!response.ok) return [];
+  const result = await response.json();
+  return (result.data ?? []) as ManualBankConfirmationRow[];
+}
+
+export type PaymentConfirmationReviewAction = 'mark_valid' | 'flag_investigate' | 'acknowledge';
+
+export async function submitCryptoConfirmationReview(
+  confirmationId: string,
+  action: PaymentConfirmationReviewAction
+): Promise<{ message?: string }> {
+  const response = await fetch(`/api/payment-links/crypto-confirmations/${confirmationId}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action }),
+  });
+  const json = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+  if (!response.ok) {
+    throw new Error(json.error || 'Review request failed');
+  }
+  return json;
+}
+
+export async function submitManualBankConfirmationReview(
+  confirmationId: string,
+  action: PaymentConfirmationReviewAction
+): Promise<{ message?: string }> {
+  const response = await fetch(
+    `/api/payment-links/manual-bank-confirmations/${confirmationId}/review`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    }
+  );
+  const json = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+  if (!response.ok) {
+    throw new Error(json.error || 'Review request failed');
+  }
+  return json;
+}
+
 export async function sendPaymentLinkInvoice(id: string, email: string): Promise<void> {
   const response = await fetch(`/api/payment-links/${id}/send`, {
     method: 'POST',

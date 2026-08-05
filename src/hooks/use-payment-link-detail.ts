@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import type { PaymentLinkDetails } from '@/components/payment-links/payment-link-detail-dialog';
 import {
   fetchCryptoConfirmationsForOrg,
+  fetchManualBankConfirmationsForOrg,
   fetchPaymentLinkDetail,
   fetchPaymentLinkLifecycle,
   fetchPaymentLinkQrCodeDataUrl,
   type CryptoConfirmationRow,
   type LifecycleSnapshot,
+  type ManualBankConfirmationRow,
 } from '@/lib/payment-links/payment-link-merchant-actions';
 import { resolvePaymentLinkId } from '@/lib/payment-links/resolve-payment-link-by-reference';
 
@@ -23,6 +25,7 @@ export type PaymentLinkDetailLoadState =
       lifecycle: LifecycleSnapshot | null;
       qrCodeUrl: string | null;
       cryptoConfirmation: CryptoConfirmationRow | null;
+      manualBankConfirmation: ManualBankConfirmationRow | null;
     };
 
 export function usePaymentLinkDetail(options: {
@@ -53,15 +56,20 @@ export function usePaymentLinkDetail(options: {
         return;
       }
 
-      const [detail, lifecycleResult, qrResult, cryptoRows] = await Promise.all([
+      const [detail, lifecycleResult, qrResult, cryptoRows, manualBankRows] = await Promise.all([
         fetchPaymentLinkDetail(paymentLinkId),
         fetchPaymentLinkLifecycle(paymentLinkId).catch(() => null),
         fetchPaymentLinkQrCodeDataUrl(paymentLinkId).catch(() => null),
         fetchCryptoConfirmationsForOrg(organizationId).catch(() => [] as CryptoConfirmationRow[]),
+        fetchManualBankConfirmationsForOrg(organizationId).catch(
+          () => [] as ManualBankConfirmationRow[]
+        ),
       ]);
 
       const cryptoConfirmation =
         cryptoRows.find((row) => row.paymentLink.id === paymentLinkId) ?? null;
+      const manualBankConfirmation =
+        manualBankRows.find((row) => row.paymentLink.id === paymentLinkId) ?? null;
 
       setState({
         status: 'ready',
@@ -70,6 +78,7 @@ export function usePaymentLinkDetail(options: {
         lifecycle: lifecycleResult,
         qrCodeUrl: qrResult,
         cryptoConfirmation,
+        manualBankConfirmation,
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load invoice';
@@ -87,16 +96,23 @@ export function usePaymentLinkDetail(options: {
       return;
     }
     try {
-      const [detail, lifecycleResult, qrResult, cryptoRows] = await Promise.all([
+      const [detail, lifecycleResult, qrResult, cryptoRows, manualBankRows] = await Promise.all([
         fetchPaymentLinkDetail(state.paymentLinkId),
         fetchPaymentLinkLifecycle(state.paymentLinkId).catch(() => null),
         fetchPaymentLinkQrCodeDataUrl(state.paymentLinkId).catch(() => null),
         organizationId
           ? fetchCryptoConfirmationsForOrg(organizationId).catch(() => [] as CryptoConfirmationRow[])
           : Promise.resolve([] as CryptoConfirmationRow[]),
+        organizationId
+          ? fetchManualBankConfirmationsForOrg(organizationId).catch(
+              () => [] as ManualBankConfirmationRow[]
+            )
+          : Promise.resolve([] as ManualBankConfirmationRow[]),
       ]);
       const cryptoConfirmation =
         cryptoRows.find((row) => row.paymentLink.id === state.paymentLinkId) ?? null;
+      const manualBankConfirmation =
+        manualBankRows.find((row) => row.paymentLink.id === state.paymentLinkId) ?? null;
       setState({
         status: 'ready',
         paymentLinkId: state.paymentLinkId,
@@ -104,6 +120,7 @@ export function usePaymentLinkDetail(options: {
         lifecycle: lifecycleResult,
         qrCodeUrl: qrResult,
         cryptoConfirmation,
+        manualBankConfirmation,
       });
     } catch {
       await load();

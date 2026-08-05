@@ -45,6 +45,25 @@ describe('computeXeroReadiness', () => {
     expect(result.blockers).toHaveLength(0);
   });
 
+  it('does not allow invoicing when connected but chart failed to load', () => {
+    const result = computeXeroReadiness({
+      status: { connected: true, tenantId: 'tenant-1' },
+      mappings: {
+        xero_revenue_account_id: '200',
+        xero_receivable_account_id: '610',
+        xero_stripe_clearing_account_id: '105',
+      },
+      chartAccountCodes: null,
+      chartLoaded: false,
+      queue: { pendingCount: 0, hasRecentFailures: false },
+      merchantRails: DEFAULT_RAILS,
+    });
+
+    expect(result.canCreateInvoice).toBe(false);
+    expect(result.invoiceMappings.revenue.validInChart).toBe(false);
+    expect(result.invoiceMappings.receivable.validInChart).toBe(false);
+  });
+
   it('is fully_set_up when stripe holding account is configured', () => {
     const result = computeXeroReadiness({
       status: { connected: true, tenantId: 'tenant-1' },

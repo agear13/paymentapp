@@ -71,6 +71,7 @@ import { buildExplorerUrl } from '@/lib/payments/crypto-confirmation-verificatio
 import { getXeroSyncDisplayStatus, receivablesInvoiceXeroColumn } from '@/lib/xero/xero-sync-display';
 import { isValidShortCode } from '@/lib/short-code';
 import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
+import { InvoicePaymentReviewPanel } from '@/components/journey/lovable/invoice-payment-review-panel';
 
 type WorkspaceInvoiceDetailScreenProps = {
   invoiceNumber: string;
@@ -666,6 +667,14 @@ export function WorkspaceInvoiceDetailScreen({
           }
         />
       ) : null}
+
+      <InvoicePaymentReviewPanel
+        invoiceStatus={detail.status}
+        paymentMethod={detail.paymentMethod}
+        cryptoConfirmation={ready.cryptoConfirmation}
+        manualBankConfirmation={ready.manualBankConfirmation}
+        onReviewComplete={refresh}
+      />
 
       {isPaidInvoice ? (
         <CommercialOsNextStepBanner

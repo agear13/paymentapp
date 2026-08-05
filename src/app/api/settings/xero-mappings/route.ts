@@ -12,6 +12,7 @@ import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { validateMappedAccountCodes } from '@/lib/xero/accounts-service';
+import { validateXeroMappingDuplicates } from '@/lib/accounting/validate-xero-mapping-duplicates';
 import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 
 // GET /api/settings/xero-mappings?organization_id=xxx
@@ -136,21 +137,9 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Validate no duplicate crypto clearing accounts
-    const cryptoAccounts = [
-      mappings.xero_stripe_clearing_account_id,
-      mappings.xero_hbar_clearing_account_id,
-      mappings.xero_usdc_clearing_account_id,
-      mappings.xero_usdt_clearing_account_id,
-      mappings.xero_audd_clearing_account_id,
-    ].filter(Boolean);
-
-    const uniqueCryptoAccounts = new Set(cryptoAccounts);
-    if (uniqueCryptoAccounts.size !== cryptoAccounts.length) {
-      return NextResponse.json(
-        { error: 'Each clearing account must be mapped to a different Xero account' },
-        { status: 400 }
-      );
+    const duplicateValidation = validateXeroMappingDuplicates(mappings);
+    if (!duplicateValidation.valid) {
+      return NextResponse.json({ error: duplicateValidation.error }, { status: 400 });
     }
 
     const mappedCodes = mappingFields

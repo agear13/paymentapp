@@ -13,13 +13,10 @@ import {
   toPaymentLinkRailSnapshot,
 } from '@/lib/payment-links/setup-status';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
-
-const DEFAULT_RAILS: MerchantPaymentRails = {
-  stripeEnabled: false,
-  wiseEnabled: false,
-  stablecoinSettlementsEnabled: false,
-  manualBankEnabled: true,
-};
+import {
+  buildMerchantPaymentRailsFromSetup,
+} from '@/lib/commercial-os/merchant-payment-rails';
+import { fetchMerchantDedicatedRailDefaults } from '@/lib/payment-links/merchant-dedicated-rail-defaults';
 
 type MerchantSettingsRow = {
   stripe_account_id?: string | null;
@@ -36,8 +33,19 @@ type MerchantSettingsRow = {
   };
 };
 
-function merchantRailsFromSettings(settings: MerchantSettingsRow | null): MerchantPaymentRails {
-  if (!settings) return DEFAULT_RAILS;
+function merchantRailsFromSettings(
+  settings: MerchantSettingsRow | null,
+  dedicatedDefaults?: { manualBank: unknown | null; crypto: unknown | null } | null
+): MerchantPaymentRails {
+  if (!settings) {
+    return buildMerchantPaymentRailsFromSetup(
+      computePaymentLinkRailSetup(null, {
+        wisePayments: false,
+        evmWalletPayments: false,
+      }),
+      dedicatedDefaults
+    );
+  }
 
   const snapshot = toPaymentLinkRailSnapshot({
     stripeAccountId: settings.stripe_account_id,
@@ -55,11 +63,7 @@ function merchantRailsFromSettings(settings: MerchantSettingsRow | null): Mercha
     evmWalletPayments: settings._features?.evmGloballyEnabled ?? false,
   });
 
-  return {
-    stripeEnabled: railSetup.multiRails.stripe?.configured ?? false,
-    wiseEnabled: railSetup.multiRails.wise?.configured ?? false,
-    stablecoinSettlementsEnabled: railSetup.multiRails.hedera?.configured ?? false,
-  };
+  return buildMerchantPaymentRailsFromSetup(railSetup, dedicatedDefaults);
 }
 
 type CommercialReadinessContextValue = XeroReadinessResult & {
@@ -79,7 +83,8 @@ type CommercialReadinessProviderProps = {
 async function fetchCommercialReadiness(
   organizationId: string
 ): Promise<Omit<XeroReadinessResult, 'loading'>> {
-  const [merchantRes, statusRes, mappingsRes, accountsRes, queueRes] = await Promise.all([
+  const [merchantRes, statusRes, mappingsRes, accountsRes, queueRes, dedicatedDefaultsRes] =
+    await Promise.all([
     fetch(`/api/merchant-settings?organizationId=${encodeURIComponent(organizationId)}`, {
       cache: 'no-store',
     }),
@@ -95,10 +100,14 @@ async function fetchCommercialReadiness(
     fetch(`/api/xero/sync/stats?organization_id=${encodeURIComponent(organizationId)}`, {
       cache: 'no-store',
     }),
+    fetchMerchantDedicatedRailDefaults(organizationId).catch(() => ({
+      manualBank: null,
+      crypto: null,
+    })),
   ]);
 
   const merchantRows = merchantRes.ok ? ((await merchantRes.json()) as MerchantSettingsRow[]) : [];
-  const merchantRails = merchantRailsFromSettings(merchantRows[0] ?? null);
+  const merchantRails = merchantRailsFromSettings(merchantRows[0] ?? null, dedicatedDefaultsRes);
 
   const status = statusRes.ok
     ? ((await statusRes.json()) as {

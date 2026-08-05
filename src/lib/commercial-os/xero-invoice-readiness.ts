@@ -11,6 +11,7 @@ import {
 import type { MerchantSettlementSettings } from '@/lib/accounting/settlement-account-types';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 import type { XeroReadinessMappingsPayload } from '@/lib/commercial-os/xero-readiness';
+import { normalizeMerchantPaymentRails } from '@/lib/commercial-os/merchant-payment-rails';
 
 export type MappingDisplayState = 'required' | 'configured' | 'recommended' | 'needs_review';
 
@@ -38,10 +39,7 @@ function trimmed(code: string | null | undefined): string | null {
 }
 
 function railsWithDefaults(rails: MerchantPaymentRails): MerchantPaymentRails {
-  return {
-    ...rails,
-    manualBankEnabled: rails.manualBankEnabled ?? true,
-  };
+  return normalizeMerchantPaymentRails(rails);
 }
 
 function asSettlementSettings(

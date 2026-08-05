@@ -132,7 +132,7 @@ function fieldState(
     return { saved: false, validInChart: false, code: null };
   }
   if (!chartLoaded || !chartAccountCodes) {
-    return { saved: true, validInChart: true, code: trimmed };
+    return { saved: true, validInChart: false, code: trimmed };
   }
   return {
     saved: true,
