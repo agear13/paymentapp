@@ -2,8 +2,10 @@
  * @jest-environment jsdom
  */
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
+import type { ReactElement } from 'react';
 
+import { CustomerFacingOriginProvider } from '@/components/operational/customer-facing-origin-provider';
 import { PaymentProgressIndicator } from '@/components/public/payment-progress-indicator';
 import { MerchantBranding } from '@/components/public/merchant-branding';
 import {
@@ -12,8 +14,17 @@ import {
 } from '@/components/payment-links/payment-links-table';
 import { CryptoPublicPaymentContent } from '@/components/public/crypto-public-payment-content';
 import { ManualBankPublicPaymentContent } from '@/components/public/manual-bank-public-payment-content';
-import { CreatePaymentLinkDialog } from '@/components/payment-links/create-payment-link-dialog';
-import { PaymentLinkDetailDialog } from '@/components/payment-links/payment-link-detail-dialog';
+
+jest.mock('sonner', () => ({
+  toast: Object.assign(jest.fn(), {
+    error: jest.fn(),
+    success: jest.fn(),
+  }),
+}));
+
+jest.mock('@/hooks/use-toast', () => ({
+  useToast: () => ({ toast: jest.fn() }),
+}));
 
 const samplePaymentLink: PaymentLink = {
   id: 'pl_test_001',
@@ -52,12 +63,29 @@ const publicPaymentLink = {
   cryptoInstructions: 'Send exact amount with reference.',
 };
 
+function renderWithProviders(ui: ReactElement) {
+  return render(
+    <CustomerFacingOriginProvider
+      origin="https://pay.example.com"
+      configured
+      infrastructureOverride={false}
+    >
+      {ui}
+    </CustomerFacingOriginProvider>
+  );
+}
+
 beforeAll(() => {
   Object.assign(navigator, {
     clipboard: {
       writeText: jest.fn().mockResolvedValue(undefined),
     },
   });
+});
+
+afterEach(() => {
+  cleanup();
+  jest.clearAllMocks();
 });
 
 describe('operational settlement render smoke', () => {
@@ -74,7 +102,7 @@ describe('operational settlement render smoke', () => {
   });
 
   it('renders invoice table with formatted currency', () => {
-    render(<PaymentLinksTable paymentLinks={[samplePaymentLink]} />);
+    renderWithProviders(<PaymentLinksTable paymentLinks={[samplePaymentLink]} />);
     expect(screen.getByText(/125\.50|125\.5/)).toBeInTheDocument();
     expect(screen.getByText('Awaiting payment')).toBeInTheDocument();
   });
@@ -103,11 +131,6 @@ describe('operational settlement render smoke', () => {
     expect(screen.getByText(/Beach Club Operations/i)).toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });
-
-  it('exports critical invoice dialog components', () => {
-    expect(typeof CreatePaymentLinkDialog).toBe('function');
-    expect(typeof PaymentLinkDetailDialog).toBe('function');
-  });
 });
 
 describe('operational component module bindings', () => {
@@ -123,5 +146,12 @@ describe('operational component module bindings', () => {
   it.each(componentModules)('loads module %s', async (modulePath) => {
     const mod = await import(modulePath);
     expect(mod).toBeDefined();
+  });
+
+  it('exports critical invoice dialog components', async () => {
+    const createMod = await import('@/components/payment-links/create-payment-link-dialog');
+    const detailMod = await import('@/components/payment-links/payment-link-detail-dialog');
+    expect(typeof createMod.CreatePaymentLinkDialog).toBe('function');
+    expect(typeof detailMod.PaymentLinkDetailDialog).toBe('function');
   });
 });

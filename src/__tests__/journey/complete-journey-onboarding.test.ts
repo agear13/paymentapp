@@ -11,6 +11,7 @@ import {
 } from '@/lib/journey/journey-assessment-storage.client';
 
 describe('completeJourneyOnboarding idempotency', () => {
+  const originalFetch = global.fetch;
   const fetchMock = jest.fn();
 
   beforeEach(() => {
@@ -22,6 +23,10 @@ describe('completeJourneyOnboarding idempotency', () => {
 
     persistJourneyObjective('reconcile');
     persistJourneyBusiness({ industry: 'Professional services', size: '1–5' });
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
   it('skips bootstrap and patch when assessment is already saved', async () => {

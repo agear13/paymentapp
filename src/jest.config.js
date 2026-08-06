@@ -28,6 +28,7 @@ const customConfig = {
     '<rootDir>/__tests__/load/',
   ],
   setupFiles: ['<rootDir>/jest.setup-env.js'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup-after-env.js'],
   // Use babel-jest with inline config so Next.js keeps SWC (needed for next/font).
   transform: {
     '^.+\\.(js|jsx|ts|tsx|mjs)$': ['babel-jest', BABEL_CONFIG],
