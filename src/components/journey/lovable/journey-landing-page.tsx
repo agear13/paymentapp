@@ -210,7 +210,7 @@ function Hero() {
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
           <Link
-            href={COMMERCIAL_OS_ROUTES.loginWithTourRedirect}
+            href={COMMERCIAL_OS_ROUTES.assessment}
             className="group inline-flex items-center gap-2 rounded-2xl bg-gradient-purple px-6 py-3.5 text-[15px] font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]"
           >
             Experience with Provvy AI

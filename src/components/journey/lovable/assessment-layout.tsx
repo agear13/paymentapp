@@ -12,12 +12,17 @@ import {
   journeyProgressPercent,
   journeyStepIndex,
 } from '@/lib/journey/hackathon-journey';
+import { restoreJourneyAssessment } from '@/lib/journey/journey-assessment-storage.client';
 
 export function AssessmentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '';
   const searchParams = useSearchParams();
   const search = searchParams?.toString() ?? '';
   const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    restoreJourneyAssessment();
+  }, []);
 
   useEffect(() => {
     const stored = localStorage.getItem('theme');

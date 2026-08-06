@@ -5,6 +5,30 @@ import type { OperatorOnboardingState } from '@/lib/onboarding/operator-onboardi
 
 const ENTITY_TYPE = 'operator_onboarding';
 
+const EQUIVALENCE_KEYS: (keyof OperatorOnboardingState)[] = [
+  'step',
+  'workspace_name',
+  'workspace_industry',
+  'workspace_team_size',
+  'onboarding_use_case',
+  'onboarding_context',
+  'organizationId',
+  'merchantSettingsId',
+  'projectId',
+  'completed',
+  'completedAt',
+  'collection_preference',
+  'pending_billing_plan',
+];
+
+export function operatorOnboardingStatesEquivalent(
+  current: OperatorOnboardingState | null,
+  next: OperatorOnboardingState
+): boolean {
+  if (!current) return false;
+  return EQUIVALENCE_KEYS.every((key) => current[key] === next[key]);
+}
+
 export async function getOperatorOnboardingState(
   organizationId: string
 ): Promise<OperatorOnboardingState | null> {
@@ -27,8 +51,16 @@ export async function getOperatorOnboardingState(
 export async function saveOperatorOnboardingState(
   organizationId: string,
   userId: string,
-  state: OperatorOnboardingState
-): Promise<void> {
+  state: OperatorOnboardingState,
+  options?: { skipIfEquivalent?: boolean }
+): Promise<boolean> {
+  if (options?.skipIfEquivalent) {
+    const current = await getOperatorOnboardingState(organizationId);
+    if (operatorOnboardingStatesEquivalent(current, state)) {
+      return false;
+    }
+  }
+
   await prisma.audit_logs.create({
     data: {
       organization_id: organizationId,
@@ -39,4 +71,6 @@ export async function saveOperatorOnboardingState(
       new_values: state as object,
     },
   });
+
+  return true;
 }

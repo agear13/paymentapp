@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       workspace_team_size: body.teamSize,
       organizationId: existingOrg.id,
       merchantSettingsId: settings?.id,
-    });
+    }, { skipIfEquivalent: true });
 
     const convergence = await runOperationalInitializationConvergence({
       userId: user.id,
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     workspace_team_size: body.teamSize,
     organizationId: result.organization.id,
     merchantSettingsId: result.settings.id,
-  });
+  }, { skipIfEquivalent: true });
 
   const convergence = await runOperationalInitializationConvergence({
     userId: user.id,

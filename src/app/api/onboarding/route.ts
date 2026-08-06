@@ -75,7 +75,9 @@ export async function PATCH(request: NextRequest) {
     return apiError('Forbidden', 403);
   }
 
-  await saveOperatorOnboardingState(org.id, user.id, body.state as OperatorOnboardingState);
+  const persisted = await saveOperatorOnboardingState(org.id, user.id, body.state as OperatorOnboardingState, {
+    skipIfEquivalent: true,
+  });
 
   let operationalInitialization;
   if (body.state.step === 'complete' || body.state.completed) {
@@ -87,5 +89,5 @@ export async function PATCH(request: NextRequest) {
     operationalInitialization = convergence.snapshot;
   }
 
-  return apiResponse({ ok: true, operationalInitialization });
+  return apiResponse({ ok: true, persisted, operationalInitialization });
 }

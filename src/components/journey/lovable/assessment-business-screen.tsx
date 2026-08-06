@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { persistJourneyBusiness } from '@/lib/journey/journey-assessment-storage.client';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { ArrowRight, Brain, Check, Loader2, ArrowLeft } from "lucide-react";
@@ -35,9 +36,7 @@ export function AssessmentBusinessScreen() {
   const canContinue = filled >= 4;
 
   const handleContinue = () => {
-    try {
-      sessionStorage.setItem("provvy.business", JSON.stringify(s));
-    } catch {}
+    persistJourneyBusiness(s);
     router.push('/journey/assessment/analysis');
   };
 

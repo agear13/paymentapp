@@ -12,7 +12,8 @@ import {
   BarChart3,
   Sparkles,
   Check,
-} from "lucide-react";
+} from 'lucide-react';
+import { persistJourneyObjective } from '@/lib/journey/journey-assessment-storage.client';
 
 
 const OBJECTIVES = [
@@ -31,9 +32,7 @@ export function AssessmentObjectiveScreen() {
 
   const select = (id: string) => {
     setSelected(id);
-    try {
-      sessionStorage.setItem('provvy.objective', id);
-    } catch {}
+    persistJourneyObjective(id);
     setTimeout(() => router.push('/journey/assessment/business'), 500);
   };
 

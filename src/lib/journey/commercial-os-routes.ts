@@ -38,12 +38,25 @@ export const COMMERCIAL_OS_ROUTES = {
   advisor: '/workspace/advisor',
   settings: '/workspace/settings',
   assessment: '/journey/assessment',
-  loginWithTourRedirect: `/auth/login?redirectedFrom=${encodeURIComponent('/workspace/workflow/reconciliation?tour=1')}`,
+  provisioning: '/journey/provisioning',
+  /** Journey onboarding continues here after inline auth or OAuth. */
+  journeyPostAuth: '/journey/provisioning?build=1',
 } as const;
 
 /** Default destination immediately after a successful sign-in. */
 export function postLoginDestination(): string {
   return COMMERCIAL_OS_ROUTES.provisioningBuild;
+}
+
+/** Destination after journey assessment auth (workspace bootstrap + assessment save). */
+export function journeyPostAuthDestination(): string {
+  return COMMERCIAL_OS_ROUTES.journeyPostAuth;
+}
+
+/** OAuth/email callback redirect for journey onboarding (must stay on journey routes). */
+export function journeyAuthCallbackUrl(origin: string): string {
+  const redirectedFrom = encodeURIComponent(COMMERCIAL_OS_ROUTES.journeyPostAuth);
+  return `${origin}/auth/callback?redirectedFrom=${redirectedFrom}`;
 }
 
 /** Default destination for authenticated users returning to the app root. */

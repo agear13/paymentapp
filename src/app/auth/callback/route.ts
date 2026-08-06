@@ -11,7 +11,13 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code');
   const type = requestUrl.searchParams.get('type');
 
-  let redirectPath = '/onboarding';
+  const redirectedFrom = requestUrl.searchParams.get('redirectedFrom');
+  const safeRedirect =
+    redirectedFrom?.startsWith('/') && !redirectedFrom.startsWith('//')
+      ? redirectedFrom
+      : null;
+
+  let redirectPath = safeRedirect ?? '/onboarding';
 
   if (code) {
     const supabase = await createClient();
@@ -46,7 +52,7 @@ export async function GET(request: NextRequest) {
           metadata: { source: 'email_callback' },
         });
 
-        redirectPath = '/onboarding';
+        redirectPath = safeRedirect ?? '/onboarding';
       } else {
         redirectPath = '/auth/verify-email';
       }
