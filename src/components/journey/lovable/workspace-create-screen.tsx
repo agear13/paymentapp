@@ -95,7 +95,7 @@ export function WorkspaceCreateScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const startOAuth = async (provider: 'google' | 'azure') => {
+  const startGoogleOAuth = async () => {
     setError(null);
     setLoading(true);
     try {
@@ -103,7 +103,7 @@ export function WorkspaceCreateScreen() {
       markJourneyProvisioningPending();
       const redirectTo = journeyAuthCallbackUrl(window.location.origin);
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider,
+        provider: 'google',
         options: { redirectTo },
       });
       if (oauthError) throw oauthError;
@@ -303,17 +303,8 @@ export function WorkspaceCreateScreen() {
             </div>
           ) : (
             <>
-              <div className="mt-6 space-y-2.5">
-                <SsoButton
-                  provider="Google"
-                  onClick={() => void startOAuth('google')}
-                  disabled={busy}
-                />
-                <SsoButton
-                  provider="Microsoft"
-                  onClick={() => void startOAuth('azure')}
-                  disabled={busy}
-                />
+              <div className="mt-6">
+                <GoogleSsoButton onClick={() => void startGoogleOAuth()} disabled={busy} />
               </div>
 
               <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-wider text-ink-soft">
@@ -456,12 +447,10 @@ export function WorkspaceCreateScreen() {
   );
 }
 
-function SsoButton({
-  provider,
+function GoogleSsoButton({
   onClick,
   disabled,
 }: {
-  provider: 'Google' | 'Microsoft';
   onClick: () => void;
   disabled?: boolean;
 }) {
@@ -472,15 +461,6 @@ function SsoButton({
       disabled={disabled}
       className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-border bg-background px-4 py-2.5 text-[13.5px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
     >
-      <ProviderMark provider={provider} />
-      Continue with {provider}
-    </button>
-  );
-}
-
-function ProviderMark({ provider }: { provider: 'Google' | 'Microsoft' }) {
-  if (provider === 'Google') {
-    return (
       <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
         <path
           fill="#4285F4"
@@ -499,14 +479,7 @@ function ProviderMark({ provider }: { provider: 'Google' | 'Microsoft' }) {
           d="M12 5.7c1.5 0 2.9.5 4 1.5l3-3C17.2 2.4 14.8 1.4 12 1.4 8 1.4 4.4 3.6 2.7 6.9l3.5 2.7C7 7.5 9.3 5.7 12 5.7z"
         />
       </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-      <path fill="#F25022" d="M2 2h9.5v9.5H2z" />
-      <path fill="#7FBA00" d="M12.5 2H22v9.5h-9.5z" />
-      <path fill="#00A4EF" d="M2 12.5h9.5V22H2z" />
-      <path fill="#FFB900" d="M12.5 12.5H22V22h-9.5z" />
-    </svg>
+      Continue with Google
+    </button>
   );
 }
