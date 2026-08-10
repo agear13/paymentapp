@@ -6,10 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import {
-  Sparkles,
   ArrowLeft,
   Check,
-  ChevronDown,
   Copy,
   Download,
   Link2,
@@ -17,7 +15,6 @@ import {
   Trash2,
   Share2,
   QrCode,
-  Landmark,
   ExternalLink,
   FileText,
   ChevronRight,
@@ -70,114 +67,28 @@ import {
   toPaymentDisplayStatus,
 } from '@/lib/payment-links/invoice-display-status';
 import { buildExplorerUrl } from '@/lib/payments/crypto-confirmation-verification';
-import { getXeroSyncDisplayStatus, receivablesInvoiceXeroColumn } from '@/lib/xero/xero-sync-display';
+import { receivablesInvoiceXeroColumn } from '@/lib/xero/xero-sync-display';
 import { isValidShortCode } from '@/lib/short-code';
 import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
 import { InvoicePaymentReviewPanel } from '@/components/journey/lovable/invoice-payment-review-panel';
-import { AccountingIntegrationNotice } from '@/components/journey/lovable/accounting-integration-notice';
-import { AccountingPushAction } from '@/components/journey/lovable/accounting-push-action';
-import { AccountingSyncStatusBadge } from '@/components/journey/lovable/accounting-sync-status-badge';
 import { AccountingSyncedInvoiceRemovalDialog } from '@/components/journey/lovable/accounting-synced-invoice-removal-dialog';
-import { AccountingActivityTimeline } from '@/components/journey/lovable/accounting-activity-timeline';
+import { InvoiceDetailAccountingSection } from '@/components/journey/lovable/invoice-detail-accounting-section';
+import { InvoiceDetailCommercialPosition } from '@/components/journey/lovable/invoice-detail-commercial-position';
+import { InvoiceDetailSidebar } from '@/components/journey/lovable/invoice-detail-sidebar';
+import {
+  INVOICE_DETAIL_INVOICE_DETAIL_TONE_RING,
+  InvoiceDetailActionButton,
+  InvoiceDetailExpandableCard,
+  InvoiceDetailField,
+  InvoiceDetailSkeleton,
+} from '@/components/journey/lovable/invoice-detail-ui';
 import { resolveInvoiceRemovalOptions } from '@/lib/accounting/accounting-invoice-deletion-policy';
 import { ACCOUNTING_INTEGRATION_COPY } from '@/lib/accounting/accounting-integration-copy';
-import { shouldShowPaidVoidWarning } from '@/lib/accounting/accounting-removal-ux';
 
 type WorkspaceInvoiceDetailScreenProps = {
   invoiceNumber: string;
   paymentLinkId?: string | null;
 };
-
-type DetailTab = 'overview' | 'payment' | 'lifecycle' | 'accounting' | 'activity';
-
-const DETAIL_TABS: { id: DetailTab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'payment', label: 'Payment' },
-  { id: 'lifecycle', label: 'Lifecycle' },
-  { id: 'accounting', label: 'Accounting' },
-  { id: 'activity', label: 'Activity' },
-];
-
-const TONE_RING: Record<string, string> = {
-  good: 'border-emerald-500/30 bg-emerald-500/[0.06]',
-  warn: 'border-amber-500/30 bg-amber-500/[0.06]',
-  bad: 'border-destructive/30 bg-destructive/[0.06]',
-  info: 'border-primary/25 bg-accent/20',
-};
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">{label}</div>
-      <div className="mt-1 text-[13.5px] font-medium">{value}</div>
-    </div>
-  );
-}
-
-function ActionButton({
-  label,
-  icon: Icon,
-  danger,
-  primary,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  danger?: boolean;
-  primary?: boolean;
-  disabled?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
-        primary
-          ? 'bg-gradient-purple font-semibold text-primary-foreground shadow-glow hover:brightness-110'
-          : danger
-            ? 'border border-destructive/30 text-destructive hover:bg-destructive/10'
-            : 'border border-border hover:bg-secondary'
-      }`}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </button>
-  );
-}
-
-function ExpandableCard({
-  title,
-  summary,
-  defaultOpen,
-  children,
-}: {
-  title: string;
-  summary?: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(Boolean(defaultOpen));
-  return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-3 px-6 py-5 text-left transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span className="text-[13.5px] font-semibold">{title}</span>
-        {summary ? <span className="truncate text-[12.5px] text-ink-soft">{summary}</span> : null}
-        <ChevronDown
-          className={`ml-auto h-4 w-4 shrink-0 text-ink-soft transition-transform ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {open ? <div className="border-t border-border px-6 py-6">{children}</div> : null}
-    </section>
-  );
-}
 
 function buildTimelineEntries(
   detail: PaymentLinkDetails,
@@ -322,16 +233,21 @@ export function WorkspaceInvoiceDetailScreen({
   const [confirmSyncedRemovalOpen, setConfirmSyncedRemovalOpen] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [aiDismissed, setAiDismissed] = useState<number[]>([]);
 
   const goToSendSection = useCallback(() => {
-    setActiveTab('payment');
     window.requestAnimationFrame(() => {
-      sendSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('payment-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      sendSectionRef.current?.focus();
+    });
+  }, []);
+
+  const goToAccountingSection = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      document.getElementById('accounting-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }, []);
 
@@ -550,11 +466,7 @@ export function WorkspaceInvoiceDetailScreen({
   }, [state, toast, refresh]);
 
   if (state.status === 'loading' || isOrgLoading) {
-    return (
-      <div className="animate-fade-up rounded-2xl border border-border bg-card p-16 text-center shadow-card">
-        <p className="text-[13.5px] text-ink-soft">Loading invoice…</p>
-      </div>
-    );
+    return <InvoiceDetailSkeleton />;
   }
 
   if (state.status === 'error') {
@@ -707,23 +619,23 @@ export function WorkspaceInvoiceDetailScreen({
           </h1>
           <p className="mt-3 max-w-xl text-[15.5px] text-ink-soft">{detail.description}</p>
           <dl className="mt-6 flex flex-wrap gap-x-10 gap-y-4">
-            <Field label="Amount" value={formatCurrency(Number(detail.amount), detail.currency)} />
-            <Field label="Outstanding" value={outstandingDisplay} />
-            <Field label="Payment method" value={invoicePaymentMethodLabel(detail)} />
-            <Field label="Created" value={formatInvoiceCreatedLabel(detail.createdAt)} />
-            <Field label="Due" value={formatInvoiceDueLabel(detail)} />
+            <InvoiceDetailField label="Amount" value={formatCurrency(Number(detail.amount), detail.currency)} />
+            <InvoiceDetailField label="Outstanding" value={outstandingDisplay} />
+            <InvoiceDetailField label="Payment method" value={invoicePaymentMethodLabel(detail)} />
+            <InvoiceDetailField label="Created" value={formatInvoiceCreatedLabel(detail.createdAt)} />
+            <InvoiceDetailField label="Due" value={formatInvoiceDueLabel(detail)} />
           </dl>
         </div>
         <div className="flex flex-wrap gap-2">
           {canEditPaymentLink(detail.status) ? (
-            <ActionButton label="Edit" icon={Pencil} onClick={() => setEditOpen(true)} />
+            <InvoiceDetailActionButton label="Edit" icon={Pencil} onClick={() => setEditOpen(true)} />
           ) : null}
-          <ActionButton label="Duplicate" icon={Copy} onClick={() => setDuplicateOpen(true)} />
-          <ActionButton label="Copy payment link" icon={Link2} onClick={handleCopyUrl} />
+          <InvoiceDetailActionButton label="Duplicate" icon={Copy} onClick={() => setDuplicateOpen(true)} />
+          <InvoiceDetailActionButton label="Copy payment link" icon={Link2} onClick={handleCopyUrl} />
           {canCancelPaymentLink(detail.status) ? (
-            <ActionButton label="Cancel" icon={RefreshCw} onClick={() => setConfirmCancelOpen(true)} />
+            <InvoiceDetailActionButton label="Cancel" icon={RefreshCw} onClick={() => setConfirmCancelOpen(true)} />
           ) : null}
-          <ActionButton label="Delete" icon={Trash2} danger onClick={handleDeleteClick} />
+          <InvoiceDetailActionButton label="Delete" icon={Trash2} danger onClick={handleDeleteClick} />
         </div>
       </header>
 
@@ -755,11 +667,11 @@ export function WorkspaceInvoiceDetailScreen({
         <CommercialOsNextStepBanner
           tone="success"
           title="Payment received"
-          message="Provvy can sync this payment to your accounting software when connected. Check the Accounting tab for sync status."
+          message="Provvy can sync this payment to your accounting software when connected."
           action={
             <button
               type="button"
-              onClick={() => setActiveTab('accounting')}
+              onClick={goToAccountingSection}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-[13px] font-medium transition-colors hover:bg-secondary"
             >
               View accounting sync
@@ -769,28 +681,9 @@ export function WorkspaceInvoiceDetailScreen({
         />
       ) : null}
 
-      <nav aria-label="Invoice sections" className="flex flex-wrap gap-2 border-b border-border pb-1">
-        {DETAIL_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={`rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'bg-accent text-accent-foreground'
-                : 'text-ink-soft hover:bg-secondary hover:text-foreground'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
-
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
-          {activeTab === 'overview' ? (
-            <>
-          <section className={`rounded-2xl border p-8 shadow-card ${TONE_RING[hero.tone]}`}>
+        <div className="order-2 space-y-6 xl:order-1">
+          <section className={`rounded-2xl border p-8 shadow-card ${INVOICE_DETAIL_TONE_RING[hero.tone]}`}>
             <div className="flex flex-wrap items-end justify-between gap-6">
               <div>
                 <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
@@ -806,8 +699,8 @@ export function WorkspaceInvoiceDetailScreen({
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-x-10 gap-y-4 sm:grid-cols-3">
-                <Field label="Payment status" value={payStatus} />
-                <Field label="Preferred method" value={invoicePaymentMethodLabel(detail)} />
+                <InvoiceDetailField label="Payment status" value={payStatus} />
+                <InvoiceDetailField label="Preferred method" value={invoicePaymentMethodLabel(detail)} />
                 {xeroDisplay ? (
                   <div>
                     <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
@@ -823,20 +716,34 @@ export function WorkspaceInvoiceDetailScreen({
             </div>
           </section>
 
+          <InvoiceDetailCommercialPosition
+            currency={detail.currency}
+            invoiceAmount={invoiceAmount}
+            amountPaid={lifecycle?.invoiceLifecycle?.amountPaid ?? (detail.status === 'PAID' ? Number(detail.amount) : 0)}
+            amountOutstanding={
+              typeof amountOutstanding === 'number'
+                ? amountOutstanding
+                : detail.status === 'PAID'
+                  ? 0
+                  : Number(detail.amount)
+            }
+            settlementLabel={settlementLabel}
+          />
+
           <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
             <h2 className="text-[13.5px] font-semibold">Customer & invoice</h2>
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="Customer" value={detail.customerName || '—'} />
-              <Field label="Email" value={detail.customerEmail || '—'} />
-              <Field label="Phone" value={detail.customerPhone || '—'} />
-              <Field label="Invoice reference" value={displayRef} />
-              <Field label="Invoice date" value={detail.invoiceDate ? format(new Date(detail.invoiceDate), 'd MMM yyyy') : '—'} />
-              <Field label="Expires" value={detail.expiresAt ? format(new Date(detail.expiresAt), 'd MMM yyyy') : '—'} />
+              <InvoiceDetailField label="Customer" value={detail.customerName || '—'} />
+              <InvoiceDetailField label="Email" value={detail.customerEmail || '—'} />
+              <InvoiceDetailField label="Phone" value={detail.customerPhone || '—'} />
+              <InvoiceDetailField label="Invoice reference" value={displayRef} />
+              <InvoiceDetailField label="Invoice date" value={detail.invoiceDate ? format(new Date(detail.invoiceDate), 'd MMM yyyy') : '—'} />
+              <InvoiceDetailField label="Expires" value={detail.expiresAt ? format(new Date(detail.expiresAt), 'd MMM yyyy') : '—'} />
               {detail.paidAt ? (
-                <Field label="Paid" value={format(new Date(detail.paidAt), 'd MMM yyyy · HH:mm')} />
+                <InvoiceDetailField label="Paid" value={format(new Date(detail.paidAt), 'd MMM yyyy · HH:mm')} />
               ) : null}
               {detail.lastSentAt ? (
-                <Field
+                <InvoiceDetailField
                   label="Last sent"
                   value={`${format(new Date(detail.lastSentAt), 'd MMM yyyy')} · ${detail.lastSentToEmail || '—'}`}
                 />
@@ -845,7 +752,7 @@ export function WorkspaceInvoiceDetailScreen({
           </section>
 
           {showAttachment ? (
-            <ExpandableCard
+            <InvoiceDetailExpandableCard
               title="Attachments"
               summary={detail.attachmentFilename?.trim() || '1 file'}
               defaultOpen
@@ -874,14 +781,32 @@ export function WorkspaceInvoiceDetailScreen({
                   </a>
                 </li>
               </ul>
-            </ExpandableCard>
-          ) : null}
-            </>
+            </InvoiceDetailExpandableCard>
           ) : null}
 
-          {activeTab === 'payment' ? (
-            <>
-          <ExpandableCard
+          {timeline.length > 0 ? (
+            <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
+              <h2 className="text-[13.5px] font-semibold">Commercial activity</h2>
+              <ol className="relative mt-5 space-y-1 pl-1">
+                <div className="absolute bottom-3 left-[15px] top-3 w-px bg-border" aria-hidden />
+                {timeline.map((e) => (
+                  <li key={`${e.label}-${e.time}`} className="relative flex items-start gap-3 py-2">
+                    <span className="relative z-10 mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary text-ink-soft">
+                      <Check className="h-3 w-3" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13.5px] font-medium">{e.label}</div>
+                      {e.detail ? <div className="text-[12px] text-ink-soft">{e.detail}</div> : null}
+                    </div>
+                    <div className="whitespace-nowrap text-[11.5px] text-ink-soft">{e.time}</div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ) : null}
+
+          <InvoiceDetailExpandableCard
+            id="payment-section"
             title="Payment information"
             summary={`${invoicePaymentMethodLabel(detail)} · ${payStatus}`}
             defaultOpen
@@ -902,24 +827,24 @@ export function WorkspaceInvoiceDetailScreen({
                       {paymentUrl || 'Payment link unavailable'}
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <ActionButton label="Copy link" icon={Link2} primary onClick={handleCopyUrl} />
+                      <InvoiceDetailActionButton label="Copy link" icon={Link2} primary onClick={handleCopyUrl} />
                       {paymentUrl ? (
-                        <ActionButton
+                        <InvoiceDetailActionButton
                           label="Open link"
                           icon={Share2}
                           onClick={() => window.open(paymentUrl, '_blank')}
                         />
                       ) : null}
-                      <ActionButton label="Download QR" icon={Download} onClick={() => void handleDownloadQr()} />
+                      <InvoiceDetailActionButton label="Download QR" icon={Download} onClick={() => void handleDownloadQr()} />
                     </div>
                   </div>
                 </div>
               ) : null}
 
               <div className="grid gap-5 sm:grid-cols-3">
-                <Field label="Payment method" value={invoicePaymentMethodLabel(detail)} />
-                <Field label="Payment status" value={payStatus} />
-                <Field
+                <InvoiceDetailField label="Payment method" value={invoicePaymentMethodLabel(detail)} />
+                <InvoiceDetailField label="Payment status" value={payStatus} />
+                <InvoiceDetailField
                   label="Settlement"
                   value={settlementLabel ?? 'No settlement recorded yet'}
                 />
@@ -944,14 +869,14 @@ export function WorkspaceInvoiceDetailScreen({
                     disabled={sendLoading}
                   />
                   <div className="flex flex-wrap gap-2">
-                    <ActionButton
+                    <InvoiceDetailActionButton
                       label={sendLoading ? 'Sending…' : 'Send invoice'}
                       icon={Send}
                       primary
                       disabled={sendLoading}
                       onClick={() => void handleSend()}
                     />
-                    <ActionButton
+                    <InvoiceDetailActionButton
                       label={sendLoading ? 'Sending…' : 'Resend invoice'}
                       icon={Send}
                       disabled={sendLoading}
@@ -964,7 +889,7 @@ export function WorkspaceInvoiceDetailScreen({
               {canMarkAsPaid(detail.status) || canReopenPaymentLink(detail.status) ? (
                 <div className="flex flex-wrap gap-2">
                   {canMarkAsPaid(detail.status) ? (
-                    <ActionButton
+                    <InvoiceDetailActionButton
                       label="Mark as Paid"
                       icon={Check}
                       onClick={() => setConfirmMarkPaidOpen(true)}
@@ -972,7 +897,7 @@ export function WorkspaceInvoiceDetailScreen({
                     />
                   ) : null}
                   {canReopenPaymentLink(detail.status) ? (
-                    <ActionButton
+                    <InvoiceDetailActionButton
                       label="Reopen invoice"
                       icon={RefreshCw}
                       onClick={() => setConfirmReopenOpen(true)}
@@ -982,46 +907,46 @@ export function WorkspaceInvoiceDetailScreen({
                 </div>
               ) : null}
             </div>
-          </ExpandableCard>
+          </InvoiceDetailExpandableCard>
 
           {(detail.cryptoNetwork || detail.cryptoAddress) && !ready.cryptoConfirmation ? (
-            <ExpandableCard title="Crypto payment instructions" summary={detail.cryptoNetwork || 'Crypto'}>
+            <InvoiceDetailExpandableCard title="Crypto payment instructions" summary={detail.cryptoNetwork || 'Crypto'}>
               <dl className="grid gap-4 sm:grid-cols-2">
-                <Field label="Network" value={detail.cryptoNetwork || '—'} />
-                <Field label="Currency" value={detail.cryptoCurrency || detail.currency} />
-                <Field label="Address" value={detail.cryptoAddress || '—'} />
-                <Field label="Memo" value={detail.cryptoMemo || '—'} />
+                <InvoiceDetailField label="Network" value={detail.cryptoNetwork || '—'} />
+                <InvoiceDetailField label="Currency" value={detail.cryptoCurrency || detail.currency} />
+                <InvoiceDetailField label="Address" value={detail.cryptoAddress || '—'} />
+                <InvoiceDetailField label="Memo" value={detail.cryptoMemo || '—'} />
                 {detail.cryptoInstructions ? (
                   <div className="sm:col-span-2">
-                    <Field label="Instructions" value={detail.cryptoInstructions} />
+                    <InvoiceDetailField label="Instructions" value={detail.cryptoInstructions} />
                   </div>
                 ) : null}
               </dl>
-            </ExpandableCard>
+            </InvoiceDetailExpandableCard>
           ) : null}
 
           {hasManualBank ? (
-            <ExpandableCard title="Bank transfer instructions" summary={detail.manualBankCurrency || 'Bank'}>
+            <InvoiceDetailExpandableCard title="Bank transfer instructions" summary={detail.manualBankCurrency || 'Bank'}>
               <dl className="grid gap-4 sm:grid-cols-2">
-                <Field label="Recipient" value={detail.manualBankRecipientName || '—'} />
-                <Field label="Type" value={detail.manualBankDestinationType || '—'} />
-                <Field label="Currency" value={detail.manualBankCurrency || '—'} />
-                <Field label="Bank" value={detail.manualBankBankName || '—'} />
-                <Field label="Account" value={detail.manualBankAccountNumber || '—'} />
-                <Field label="IBAN" value={detail.manualBankIban || '—'} />
-                <Field label="SWIFT/BIC" value={detail.manualBankSwiftBic || '—'} />
-                <Field label="Sort/routing" value={detail.manualBankRoutingSortCode || '—'} />
+                <InvoiceDetailField label="Recipient" value={detail.manualBankRecipientName || '—'} />
+                <InvoiceDetailField label="Type" value={detail.manualBankDestinationType || '—'} />
+                <InvoiceDetailField label="Currency" value={detail.manualBankCurrency || '—'} />
+                <InvoiceDetailField label="Bank" value={detail.manualBankBankName || '—'} />
+                <InvoiceDetailField label="Account" value={detail.manualBankAccountNumber || '—'} />
+                <InvoiceDetailField label="IBAN" value={detail.manualBankIban || '—'} />
+                <InvoiceDetailField label="SWIFT/BIC" value={detail.manualBankSwiftBic || '—'} />
+                <InvoiceDetailField label="Sort/routing" value={detail.manualBankRoutingSortCode || '—'} />
                 {detail.manualBankInstructions ? (
                   <div className="sm:col-span-2">
-                    <Field label="Instructions" value={detail.manualBankInstructions} />
+                    <InvoiceDetailField label="Instructions" value={detail.manualBankInstructions} />
                   </div>
                 ) : null}
               </dl>
-            </ExpandableCard>
+            </InvoiceDetailExpandableCard>
           ) : null}
 
           {showCrypto ? (
-            <ExpandableCard
+            <InvoiceDetailExpandableCard
               title="Crypto settlement"
               summary={
                 detail.cryptoNetwork ||
@@ -1031,7 +956,7 @@ export function WorkspaceInvoiceDetailScreen({
             >
               <div className="space-y-6">
                 <div className="grid gap-5 sm:grid-cols-3">
-                  <Field
+                  <InvoiceDetailField
                     label="Network"
                     value={
                       ready.cryptoConfirmation?.payerNetwork ||
@@ -1039,7 +964,7 @@ export function WorkspaceInvoiceDetailScreen({
                       '—'
                     }
                   />
-                  <Field
+                  <InvoiceDetailField
                     label="Token"
                     value={
                       ready.cryptoConfirmation?.payerCurrency ||
@@ -1047,7 +972,7 @@ export function WorkspaceInvoiceDetailScreen({
                       detail.currency
                     }
                   />
-                  <Field
+                  <InvoiceDetailField
                     label="Wallet used"
                     value={
                       ready.cryptoConfirmation?.payerWalletAddress ||
@@ -1056,341 +981,115 @@ export function WorkspaceInvoiceDetailScreen({
                     }
                   />
                   {ready.cryptoConfirmation?.payerTxHash ? (
-                    <Field label="Transaction" value={ready.cryptoConfirmation.payerTxHash} />
+                    <InvoiceDetailField label="Transaction" value={ready.cryptoConfirmation.payerTxHash} />
                   ) : null}
-                  <Field
+                  <InvoiceDetailField
                     label="State"
                     value={ready.cryptoConfirmation?.verificationStatus || payStatus}
                   />
                 </div>
                 {explorerUrl ? (
-                  <ActionButton
+                  <InvoiceDetailActionButton
                     label="View on block explorer"
                     icon={ExternalLink}
                     onClick={() => window.open(explorerUrl, '_blank')}
                   />
                 ) : null}
               </div>
-            </ExpandableCard>
-          ) : null}
-            </>
+            </InvoiceDetailExpandableCard>
           ) : null}
 
-          {activeTab === 'lifecycle' ? (
-            <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
-              <h2 className="mb-4 text-[13.5px] font-semibold">Payment lifecycle</h2>
-              <PaymentLifecyclePanel paymentLinkId={detail.id} linkStatus={detail.status} />
-            </section>
+          <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
+            <h2 className="mb-4 text-[13.5px] font-semibold">Payment lifecycle</h2>
+            <PaymentLifecyclePanel paymentLinkId={detail.id} linkStatus={detail.status} />
+          </section>
+
+          <InvoiceDetailAccountingSection
+            detail={detail}
+            paymentLinkId={detail.id}
+            invoiceSync={invoiceSyncForRemoval}
+            linkSnapshot={{
+              amount: detail.amount,
+              currency: detail.currency,
+              invoiceCurrency: detail.invoiceCurrency,
+              description: detail.description,
+              customerEmail: detail.customerEmail,
+              customerName: detail.customerName,
+              invoiceReference: detail.invoiceReference,
+              invoiceDate: detail.invoiceDate,
+              dueDate: detail.dueDate,
+            }}
+            xeroGuidance={xeroGuidance}
+            xeroDisplay={xeroDisplay}
+            showXero={showXero}
+            showFx={showFx}
+            creationFx={creationFx}
+            settlementFx={settlementFx}
+            ledgerEntries={ledgerEntries}
+            onQueued={() => void refresh()}
+          />
+
+          {(detail.paymentEvents?.length ?? 0) > 0 ? (
+            <InvoiceDetailExpandableCard title="Payment events" summary={`${detail.paymentEvents!.length} events`} defaultOpen>
+              <ul className="space-y-2 text-[12.5px]">
+                {detail.paymentEvents!.map((e) => (
+                  <li key={e.id} className="flex justify-between gap-4 border-b border-border/60 pb-2 last:border-0">
+                    <span>{e.eventType.replace(/_/g, ' ')}</span>
+                    <span className="text-ink-soft">{format(new Date(e.createdAt), 'd MMM · HH:mm')}</span>
+                  </li>
+                ))}
+              </ul>
+            </InvoiceDetailExpandableCard>
           ) : null}
 
-          {activeTab === 'accounting' ? (
-            <>
-              <AccountingIntegrationNotice />
-
-              <AccountingSyncStatusBadge
-                invoiceSync={detail.xeroSyncs?.find((sync) => sync.syncType === 'INVOICE') ?? null}
-                linkUpdatedAt={detail.updatedAt}
-                link={{
-                  amount: detail.amount,
-                  currency: detail.currency,
-                  invoiceCurrency: detail.invoiceCurrency,
-                  description: detail.description,
-                  customerEmail: detail.customerEmail,
-                  customerName: detail.customerName,
-                  invoiceReference: detail.invoiceReference,
-                  invoiceDate: detail.invoiceDate,
-                  dueDate: detail.dueDate,
-                }}
-              />
-
-              <div className="flex flex-wrap items-center gap-3">
-                <AccountingPushAction
-                  paymentLinkId={detail.id}
-                  invoiceSync={detail.xeroSyncs?.find((sync) => sync.syncType === 'INVOICE') ?? null}
-                  linkUpdatedAt={detail.updatedAt}
-                  link={{
-                    amount: detail.amount,
-                    currency: detail.currency,
-                    invoiceCurrency: detail.invoiceCurrency,
-                    description: detail.description,
-                    customerEmail: detail.customerEmail,
-                    customerName: detail.customerName,
-                    invoiceReference: detail.invoiceReference,
-                    invoiceDate: detail.invoiceDate,
-                    dueDate: detail.dueDate,
-                  }}
-                  onQueued={() => void refresh()}
-                />
-              </div>
-
-              <CommercialOsNextStepBanner
-                tone={xeroGuidance.tone}
-                title={xeroGuidance.title}
-                message={xeroGuidance.message}
-              />
-
-              {shouldShowPaidVoidWarning({ status: detail.status, xeroSyncs: detail.xeroSyncs }) ? (
-                <CommercialOsNextStepBanner
-                  tone="info"
-                  title={ACCOUNTING_INTEGRATION_COPY.paidInvoiceFutureNoticeTitle}
-                  message={(() => {
-                    const [lead, ...rest] =
-                      ACCOUNTING_INTEGRATION_COPY.paidInvoiceFutureNoticeBody.split('\n\n');
-                    return (
-                      <>
-                        <p>{lead}</p>
-                        {rest.length > 0 ? (
-                          <p className="mt-2">{rest.join('\n\n')}</p>
-                        ) : null}
-                      </>
-                    );
-                  })()}
-                />
-              ) : null}
-
-              <AccountingActivityTimeline syncs={detail.xeroSyncs} />
-
-              {showXero ? (
-                <ExpandableCard title="Accounting sync" summary={xeroDisplay?.label ?? 'Sync status'} defaultOpen>
-                  <div className="space-y-6">
-                    {xeroDisplay ? (
-                      <div className="flex items-center gap-2 text-[13.5px] font-medium">
-                        <span className={`h-1.5 w-1.5 rounded-full ${xeroDisplay.dotClass}`} />
-                        {xeroDisplay.label}
-                      </div>
-                    ) : null}
-                    {detail.xeroInvoiceNumber ? (
-                      <Field label="Xero invoice" value={detail.xeroInvoiceNumber} />
-                    ) : null}
-                    {(detail.xeroSyncs?.length ?? 0) > 0 ? (
-                      <div>
-                        <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                          Sync history
-                        </div>
-                        <ul className="mt-3 space-y-2 text-[12.5px] text-ink-soft">
-                          {detail.xeroSyncs!.map((sync) => {
-                            const display = getXeroSyncDisplayStatus(sync, detail.xeroSyncs ?? []);
-                            return (
-                              <li key={sync.id} className="flex justify-between gap-4">
-                                <span>
-                                  {sync.syncType} · {display.label}
-                                  {sync.xeroInvoiceId ? ` · ${sync.xeroInvoiceId}` : ''}
-                                </span>
-                                <span>
-                                  {format(new Date(sync.updatedAt || sync.createdAt), 'd MMM · HH:mm')}
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    ) : null}
-                  </div>
-                </ExpandableCard>
-              ) : null}
-
-              <ExpandableCard
-                title="Ledger entries"
-                summary={ledgerEntries.length > 0 ? `${ledgerEntries.length} entries` : 'None yet'}
-                defaultOpen
-              >
-                {ledgerEntries.length > 0 ? (
-                  <ul className="space-y-3">
-                    {ledgerEntries.map((entry) => (
-                      <li
-                        key={entry.id}
-                        className="flex items-center justify-between gap-4 rounded-xl border border-border bg-background px-4 py-3"
-                      >
-                        <div>
-                          <div className="text-[13px] font-medium">
-                            {entry.ledgerAccount?.name ?? 'Account'} ({entry.ledgerAccount?.code ?? '—'})
-                          </div>
-                          <div className="text-[12px] text-ink-soft">{entry.description}</div>
-                        </div>
-                        <div className="text-right">
-                          <div
-                            className={`text-[13px] font-medium ${
-                              entry.entryType === 'DEBIT' ? 'text-destructive' : 'text-emerald-600'
-                            }`}
-                          >
-                            {entry.entryType === 'DEBIT' ? 'DR' : 'CR'}{' '}
-                            {formatCurrency(Number(entry.amount), entry.currency)}
-                          </div>
-                          <div className="text-[11px] text-ink-soft">
-                            {format(new Date(entry.createdAt), 'd MMM · HH:mm')}
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-[13px] text-ink-soft">No ledger entries yet — entries appear after payment reconciliation.</p>
-                )}
-              </ExpandableCard>
-
-              {showFx ? (
-                <ExpandableCard title="FX snapshots" summary="Creation & settlement rates" defaultOpen>
-                  <div className="space-y-6">
-                    {creationFx.length > 0 ? (
-                      <div>
-                        <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                          At creation
-                        </div>
-                        <ul className="mt-3 space-y-2 text-[12.5px]">
-                          {creationFx.map((snap) => (
-                            <li key={snap.id} className="flex justify-between gap-4">
-                              <span>
-                                1 {snap.baseCurrency} = {snap.rate.toFixed(6)} {snap.quoteCurrency}
-                              </span>
-                              <span className="text-ink-soft">
-                                {format(new Date(snap.capturedAt), 'd MMM · HH:mm')} · {snap.provider}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                    {settlementFx.length > 0 ? (
-                      <div>
-                        <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                          At settlement
-                        </div>
-                        <ul className="mt-3 space-y-2 text-[12.5px]">
-                          {settlementFx.map((snap) => (
-                            <li key={snap.id} className="flex justify-between gap-4">
-                              <span>
-                                1 {snap.baseCurrency} = {snap.rate.toFixed(6)} {snap.quoteCurrency}
-                              </span>
-                              <span className="text-ink-soft">
-                                {format(new Date(snap.capturedAt), 'd MMM · HH:mm')} · {snap.provider}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                  </div>
-                </ExpandableCard>
-              ) : null}
-            </>
-          ) : null}
-
-          {activeTab === 'activity' ? (
-            <>
-              {timeline.length > 0 ? (
-                <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
-                  <h2 className="text-[13.5px] font-semibold">Timeline</h2>
-                  <ol className="relative mt-5 space-y-1 pl-1">
-                    <div className="absolute bottom-3 left-[15px] top-3 w-px bg-border" aria-hidden />
-                    {timeline.map((e) => (
-                      <li key={`${e.label}-${e.time}`} className="relative flex items-start gap-3 py-2">
-                        <span className="relative z-10 mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary text-ink-soft">
-                          <Check className="h-3 w-3" />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[13.5px] font-medium">{e.label}</div>
-                          {e.detail ? <div className="text-[12px] text-ink-soft">{e.detail}</div> : null}
-                        </div>
-                        <div className="whitespace-nowrap text-[11.5px] text-ink-soft">{e.time}</div>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              ) : null}
-
-              {(detail.paymentEvents?.length ?? 0) > 0 ? (
-                <ExpandableCard title="Payment events" summary={`${detail.paymentEvents!.length} events`} defaultOpen>
-                  <ul className="space-y-2 text-[12.5px]">
-                    {detail.paymentEvents!.map((e) => (
-                      <li key={e.id} className="flex justify-between gap-4 border-b border-border/60 pb-2 last:border-0">
-                        <span>{e.eventType.replace(/_/g, ' ')}</span>
-                        <span className="text-ink-soft">{format(new Date(e.createdAt), 'd MMM · HH:mm')}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </ExpandableCard>
-              ) : null}
-
-              {showAudit ? (
-                <ExpandableCard title="Audit log" summary={`${auditEntries.length} entries`} defaultOpen>
-                  <ol className="space-y-2">
-                    {auditEntries.map((e) => (
-                      <li
-                        key={`audit-${e.label}-${e.time}`}
-                        className="flex items-start justify-between gap-4 border-b border-border/60 pb-2 text-[13px] last:border-0"
-                      >
-                        <div>
-                          <div className="font-medium">{e.label}</div>
-                          {e.detail ? <div className="text-[12px] text-ink-soft">{e.detail}</div> : null}
-                        </div>
-                        <span className="whitespace-nowrap text-[11.5px] text-ink-soft">{e.time}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </ExpandableCard>
-              ) : null}
-            </>
+          {showAudit ? (
+            <InvoiceDetailExpandableCard title="Audit log" summary={`${auditEntries.length} entries`}>
+              <ol className="space-y-2">
+                {auditEntries.map((e) => (
+                  <li
+                    key={`audit-${e.label}-${e.time}`}
+                    className="flex items-start justify-between gap-4 border-b border-border/60 pb-2 text-[13px] last:border-0"
+                  >
+                    <div>
+                      <div className="font-medium">{e.label}</div>
+                      {e.detail ? <div className="text-[12px] text-ink-soft">{e.detail}</div> : null}
+                    </div>
+                    <span className="whitespace-nowrap text-[11.5px] text-ink-soft">{e.time}</span>
+                  </li>
+                ))}
+              </ol>
+            </InvoiceDetailExpandableCard>
           ) : null}
         </div>
 
-        <aside className="space-y-6 xl:sticky xl:top-8 xl:self-start">
-          <section
-            aria-labelledby="ai-detail-heading"
-            className="rounded-2xl border border-primary/25 bg-accent/20 p-6 shadow-card"
-          >
-            <div className="flex items-center gap-2">
-              <div className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-purple text-primary-foreground">
-                <Sparkles className="h-3.5 w-3.5" />
-              </div>
-              <h2 id="ai-detail-heading" className="text-[13.5px] font-semibold">
-                Provvy AI
-              </h2>
-            </div>
-            <p className="mt-4 text-[12.5px] text-ink-soft">Analysis of {displayRef}</p>
-            <ul className="mt-4 space-y-3">
-              {aiDismissed.includes(0) ? null : (
-                <li className="rounded-xl border border-border bg-background/70 p-4">
-                  <p className="text-[13px] leading-relaxed text-ink-soft">
-                    Nothing needs your attention on this invoice.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setAiDismissed((d) => [...d, 0])}
-                    className="mt-3 text-[12px] text-ink-soft hover:text-foreground"
-                  >
-                    Dismiss
-                  </button>
-                </li>
-              )}
-            </ul>
-          </section>
-
-          <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
-            <h2 className="text-[13.5px] font-semibold">At a glance</h2>
-            <dl className="mt-4 space-y-2.5">
-              {[
-                { label: 'Amount', value: formatCurrency(Number(detail.amount), detail.currency) },
-                { label: 'Outstanding', value: outstandingDisplay },
-                { label: 'Due', value: formatInvoiceDueLabel(detail) },
-                { label: 'Payment', value: payStatus },
-                ...(xeroDisplay ? [{ label: 'Xero', value: xeroDisplay.label }] : []),
-                {
-                  label: 'Settlement',
-                  value: settlementLabel ?? 'Not settled',
-                },
-              ].map((r) => (
-                <div key={r.label} className="flex justify-between gap-4 text-[13px]">
-                  <dt className="text-ink-soft">{r.label}</dt>
-                  <dd className="max-w-[60%] text-right font-medium">{r.value}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="mt-5 flex items-center gap-2 text-[12px] text-ink-soft">
-              <Landmark className="h-3.5 w-3.5" />
-              Reconciles into your Commercial OS ledger
-            </div>
-          </section>
-        </aside>
+        <InvoiceDetailSidebar
+          displayRef={displayRef}
+          summaryRows={[
+            { label: 'Amount', value: formatCurrency(Number(detail.amount), detail.currency) },
+            { label: 'Outstanding', value: outstandingDisplay },
+            { label: 'Due', value: formatInvoiceDueLabel(detail) },
+            { label: 'Payment', value: payStatus },
+            ...(xeroDisplay ? [{ label: 'Xero', value: xeroDisplay.label }] : []),
+            { label: 'Settlement', value: settlementLabel ?? 'Not settled' },
+          ]}
+          paymentLinkId={detail.id}
+          invoiceSync={invoiceSyncForRemoval}
+          linkUpdatedAt={detail.updatedAt}
+          link={{
+            amount: detail.amount,
+            currency: detail.currency,
+            invoiceCurrency: detail.invoiceCurrency,
+            description: detail.description,
+            customerEmail: detail.customerEmail,
+            customerName: detail.customerName,
+            invoiceReference: detail.invoiceReference,
+            invoiceDate: detail.invoiceDate,
+            dueDate: detail.dueDate,
+          }}
+          onScrollToAccounting={goToAccountingSection}
+          aiDismissed={aiDismissed}
+          onDismissAi={() => setAiDismissed((d) => [...d, 0])}
+        />
       </div>
 
       {organizationId && editOpen ? (

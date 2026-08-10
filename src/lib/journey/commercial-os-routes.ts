@@ -38,6 +38,7 @@ export const COMMERCIAL_OS_ROUTES = {
   historicalAccountingSync: '/workspace/connected/xero/historical-sync',
   advisor: '/workspace/advisor',
   settings: '/workspace/settings',
+  payments: '/workspace/payments',
   assessment: '/journey/assessment',
   provisioning: '/journey/provisioning',
   /** Journey onboarding continues here after inline auth or OAuth. */

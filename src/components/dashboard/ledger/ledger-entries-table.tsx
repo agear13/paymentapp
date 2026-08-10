@@ -21,13 +21,14 @@ import { formatAmount } from '@/lib/utils/format-amount';
 import { formatReportDateTime } from '@/lib/format/format-report-datetime';
 import { getLedgerEntryExplanation } from '@/lib/ledger/ledger-entry-explanation';
 import { ChevronDown, ChevronRight, Info } from 'lucide-react';
+import type { Decimal } from '@prisma/client/runtime/library';
 
 type LedgerEntry = {
   id: string;
   payment_link_id: string;
   ledger_account_id: string;
   entry_type: 'DEBIT' | 'CREDIT';
-  amount: number | string;
+  amount: number | string | Decimal;
   currency: string;
   description: string;
   idempotency_key: string;

@@ -116,7 +116,7 @@ function WalkthroughCompletion({ onAction }: { onAction: () => void }) {
           <div className="text-[13px] font-semibold text-foreground">{completion.nextPrompt}</div>
           <div className="mt-3 flex flex-col gap-2.5">
             {completion.actions.map((action) =>
-              action.external ? (
+              'external' in action && action.external ? (
                 <a
                   key={action.label}
                   href={action.href}

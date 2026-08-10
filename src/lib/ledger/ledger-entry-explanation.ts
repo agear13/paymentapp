@@ -2,7 +2,7 @@ import { formatAmount } from '@/lib/utils/format-amount';
 
 type LedgerEntryForExplanation = {
   entry_type: 'DEBIT' | 'CREDIT';
-  amount: number | string;
+  amount: number | string | { toString(): string };
   currency: string;
   description: string;
   ledger_accounts: {

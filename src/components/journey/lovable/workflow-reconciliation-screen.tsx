@@ -94,7 +94,6 @@ import {
 } from '@/lib/commercial/workflows/settlement-flow.client';
 import { resolveWorkflowSettlementCurrency } from '@/lib/commercial/workflows/development-settlement-simulator.client';
 import { bridgeHackathonPinchPaymentToPilotFunding } from '@/lib/commercial/workflows/hackathon-pinch-funding-bridge.client';
-import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { isParticipantCompensationExempt } from '@/lib/operations/primitives/participant-earnings-primitives';
 import {
   CommercialWalkthrough,
@@ -198,7 +197,7 @@ export function WorkflowReconciliationScreen() {
 
 function WorkflowReconciliationScreenInner() {
   const searchParams = useSearchParams();
-  const tourRequested = searchParams.get('tour') === '1';
+  const tourRequested = searchParams?.get('tour') === '1';
   const [tourActive, setTourActive] = useState(false);
   const [tourPhase, setTourPhase] = useState<CommercialWalkthroughPhase>('welcome');
   const [tourStepIndex, setTourStepIndex] = useState(0);
@@ -1377,7 +1376,7 @@ function StageReview({
       : `${currencyPrefix}${amount.toLocaleString()}`;
   const paymentScheduleRows = buildWorkflowPaymentScheduleRows(result, formatReviewAmount);
   const projectValue = result.projectValue.value ?? 0;
-  const revenueRows = insight.revenueShareSummary.map((row) => ({
+  const revenueRows = (insight.revenueShareSummary ?? []).map((row) => ({
     key: row.participantId,
     name: row.participantName,
     pct: row.percentage,

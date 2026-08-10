@@ -25,7 +25,7 @@ export function AccountingIntegrationNotice({
   const { connected } = readiness.connection;
   const syncReady = readiness.canSyncToAccounting ?? readiness.canCreateInvoice;
 
-  let statusLabel = ACCOUNTING_INTEGRATION_COPY.notConnectedStatus;
+  let statusLabel: string = ACCOUNTING_INTEGRATION_COPY.notConnectedStatus;
   if (connected && syncReady) {
     statusLabel = ACCOUNTING_INTEGRATION_COPY.connectedStatus;
   } else if (connected) {

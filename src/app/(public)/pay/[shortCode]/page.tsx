@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { PaymentPageContent } from '@/components/public/payment-page-content';
@@ -72,16 +72,37 @@ interface PaymentLinkData {
   hederaWalletAddress?: string | null;
   availableFxSnapshots?: Array<{ tokenType: string; rate: number; capturedAt: string }>;
   fxSnapshot: unknown;
-  lastEvent: unknown;
+  lastEvent?: {
+    createdAt: string;
+    paymentMethod?: string;
+  } | null;
   paidAt?: string | null;
   submittedAt?: string | null;
 }
 
 type LoadingState = 'loading' | 'found' | 'not_found' | 'error';
 
+function toPaymentLinkPaidView(
+  link: PaymentLinkData
+): ComponentProps<typeof PaymentLinkPaid>['paymentLink'] {
+  return {
+    shortCode: link.shortCode,
+    description: link.description,
+    amount: link.amount,
+    currency: link.currency,
+    merchant: { name: link.merchant.name },
+    lastEvent: link.lastEvent ?? undefined,
+    paidAt: link.paidAt,
+    submittedAt: link.submittedAt,
+    attachmentUrl: link.attachmentUrl,
+    attachmentFilename: link.attachmentFilename,
+    attachmentMimeType: link.attachmentMimeType,
+  };
+}
+
 export default function PayPage() {
   const params = useParams();
-  const shortCode = params.shortCode as string;
+  const shortCode = (params?.shortCode as string | undefined) ?? '';
 
   const [loadingState, setLoadingState] = useState<LoadingState>('loading');
   const [paymentLink, setPaymentLink] = useState<PaymentLinkData | null>(null);
@@ -204,14 +225,14 @@ export default function PayPage() {
 
   // Paid state (final)
   if (paymentLink.status === 'PAID') {
-    return <PaymentLinkPaid paymentLink={paymentLink} />;
+    return <PaymentLinkPaid paymentLink={toPaymentLinkPaidView(paymentLink)} />;
   }
 
   // Manual transfer submit: recorded from payer submission (verify-after-send; no merchant approval gate)
   if (paymentLink.status === 'PAID_UNVERIFIED' || paymentLink.status === 'REQUIRES_REVIEW') {
     return (
       <PaymentLinkPaid
-        paymentLink={paymentLink}
+        paymentLink={toPaymentLinkPaidView(paymentLink)}
         variant={paymentLink.paymentMethod === 'MANUAL_BANK' ? 'manual_submitted' : 'crypto_submitted'}
       />
     );
@@ -231,7 +252,17 @@ export default function PayPage() {
   if (paymentLink.paymentMethod === 'CRYPTO') {
     return (
       <>
-        <CryptoPublicPaymentContent shortCode={shortCode} paymentLink={paymentLink} />
+        <CryptoPublicPaymentContent
+          shortCode={shortCode}
+          paymentLink={{
+            ...paymentLink,
+            cryptoNetwork: paymentLink.cryptoNetwork ?? null,
+            cryptoAddress: paymentLink.cryptoAddress ?? null,
+            cryptoCurrency: paymentLink.cryptoCurrency ?? null,
+            cryptoMemo: paymentLink.cryptoMemo ?? null,
+            cryptoInstructions: paymentLink.cryptoInstructions ?? null,
+          }}
+        />
         <PaymentStatusMonitor
           paymentLinkId={paymentLink.id}
           shortCode={shortCode}

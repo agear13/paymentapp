@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2, Sparkles } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import { createClient } from '@/lib/supabase/client';
 import { completeJourneyOnboarding } from '@/lib/journey/complete-journey-onboarding.client';
 import { restoreJourneyAssessment } from '@/lib/journey/journey-assessment-storage.client';
 

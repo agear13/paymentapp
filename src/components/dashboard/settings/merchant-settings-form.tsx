@@ -111,10 +111,27 @@ type MerchantSettingsFormValues = z.infer<typeof merchantSettingsSchema> & {
 
 interface MerchantSettingsFormProps {
   variant?: 'full' | 'pilot';
+  /** When set, only render these sections (Commercial OS payments page). */
+  sections?: Array<'branding' | 'providers'>;
+  /** Visual presentation — commercial-os uses tighter Lovable journey styling. */
+  presentation?: 'dashboard' | 'commercial-os';
+  /** Hide the form-level save button (parent provides section save). */
+  hideSubmit?: boolean;
+  onSaved?: () => void;
 }
 
-export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormProps) {
+export function MerchantSettingsForm({
+  variant = 'full',
+  sections,
+  presentation = 'dashboard',
+  hideSubmit = false,
+  onSaved,
+}: MerchantSettingsFormProps) {
   const isPilotVariant = variant === 'pilot';
+  const isCommercialOs = presentation === 'commercial-os';
+  const showBranding = !sections || sections.includes('branding');
+  const showProviders = !sections || sections.includes('providers');
+  const sectionSpacing = isCommercialOs ? 'space-y-5' : 'space-y-6';
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const [isLoading, setIsLoading] = React.useState(true);
   const [settingsId, setSettingsId] = React.useState<string | null>(null);
@@ -346,6 +363,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
 
         toast.success(isPilotVariant ? 'Settings saved' : 'Collection settings saved');
         notifyWorkspaceActivationRefresh();
+        onSaved?.();
       } else {
         // Create new settings
         const createPayload = isPilotVariant
@@ -394,6 +412,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
         }
         toast.success(isPilotVariant ? 'Settings saved' : 'Collection settings saved');
         notifyWorkspaceActivationRefresh();
+        onSaved?.();
       }
     } catch (error) {
       toast.error('Failed to save merchant settings');
@@ -487,8 +506,10 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-10">
-        <div className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className={isCommercialOs ? 'space-y-5' : 'space-y-10'}>
+        {showBranding ? (
+        <div className={`${sectionSpacing} ${showProviders && !isCommercialOs ? '' : ''}`}>
+          {!isCommercialOs ? (
           <div>
             <h3 className="text-lg font-semibold">Branding</h3>
             <p className="text-sm text-muted-foreground mt-1">
@@ -496,6 +517,7 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
               workflows.
             </p>
           </div>
+          ) : null}
 
         <FormField
           control={form.control}
@@ -632,21 +654,27 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
           )}
         />
         </div>
+        ) : null}
 
-        <div className="space-y-6 border-t pt-8">
+        {showProviders ? (
+        <div className={`${sectionSpacing} ${!isCommercialOs ? 'border-t pt-8' : ''}`}>
+          {!isCommercialOs ? (
           <div>
             <h3 className="text-lg font-semibold">Payment provider</h3>
             <p className="text-sm text-muted-foreground mt-1">
               Configure the financial accounts used to collect and settle payments.
             </p>
           </div>
+          ) : null}
 
+          {!isCommercialOs ? (
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>
               Changes to payment rail configuration can affect live payment processing.
             </AlertDescription>
           </Alert>
+          ) : null}
 
         <FormField
           control={form.control}
@@ -969,13 +997,20 @@ export function MerchantSettingsForm({ variant = 'full' }: MerchantSettingsFormP
           )}
         </div>
         </div>
+        ) : null}
 
-        <div className="flex justify-end border-t pt-6">
-          <Button type="submit" disabled={form.formState.isSubmitting || isLoading}>
+        {!hideSubmit ? (
+        <div className={`flex justify-end ${isCommercialOs ? '' : 'border-t pt-6'}`}>
+          <Button
+            type="submit"
+            disabled={form.formState.isSubmitting || isLoading}
+            className={isCommercialOs ? 'rounded-xl bg-gradient-purple text-primary-foreground shadow-glow hover:brightness-110' : undefined}
+          >
             {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save changes
+            {isCommercialOs ? 'Save' : 'Save changes'}
           </Button>
         </div>
+        ) : null}
       </form>
     </Form>
   );

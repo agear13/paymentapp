@@ -44,12 +44,23 @@ import {
 import { isValidShortCode } from '@/lib/short-code';
 import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
 import { AccountingFirstInvoiceBanner } from '@/components/journey/lovable/accounting-first-invoice-banner';
-import { AccountingIntegrationNotice } from '@/components/journey/lovable/accounting-integration-notice';
+import { CreateInvoicePreviewSidebar } from '@/components/journey/lovable/create-invoice-preview-sidebar';
+import {
+  CREATE_INVOICE_INPUT_CLS,
+  CreateInvoiceFieldLabel,
+  CreateInvoiceFormCard,
+  CreateInvoiceFormSkeleton,
+  CreateInvoicePaymentMethodOption,
+  CreateInvoiceWorkflowProgress,
+} from '@/components/journey/lovable/create-invoice-ui';
+import {
+  computeCreateInvoiceWorkflowProgress,
+  validateCreateInvoiceDraft,
+} from '@/lib/commercial-os/create-invoice-progress';
 import {
   CRYPTO_UNAVAILABLE_REASON,
   fetchMerchantDedicatedRailDefaults,
   MANUAL_BANK_UNAVAILABLE_REASON,
-  PAYMENT_SETTINGS_PATH,
   type MerchantDedicatedRailDefaults,
 } from '@/lib/payment-links/merchant-dedicated-rail-defaults';
 
@@ -71,7 +82,13 @@ type ConnectedSystemCard = {
   detail: string;
 };
 
-const WORKFLOW_STEPS = ['Invoice', 'Payment', 'Settlement', 'Ledger'] as const;
+const PAYMENTS_SETTINGS_HREF = `${COMMERCIAL_OS_ROUTES.payments}?from=invoice`;
+
+function paymentSettingsHref(method: string): string {
+  return `${PAYMENTS_SETTINGS_HREF}&method=${encodeURIComponent(method)}`;
+}
+
+const inputCls = CREATE_INVOICE_INPUT_CLS;
 
 function toDateInputValue(d: Date | undefined): string {
   if (!d || Number.isNaN(d.getTime())) return '';
@@ -83,40 +100,6 @@ function parseDateInput(value: string): Date | undefined {
   const d = new Date(`${value}T12:00:00`);
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
-
-function FormCard({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: React.ComponentType<{ className?: string }>;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
-      <div className="mb-5 flex items-center gap-2.5">
-        <div className="grid h-8 w-8 place-items-center rounded-xl bg-secondary text-foreground">
-          <Icon className="h-4 w-4" />
-        </div>
-        <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
-  return (
-    <label className="text-[12px] font-medium text-foreground">
-      {children}
-      {required ? <span className="text-destructive"> *</span> : null}
-    </label>
-  );
-}
-
-const inputCls =
-  'mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[14px] text-foreground outline-none transition-colors placeholder:text-ink-soft focus:border-primary focus:ring-2 focus:ring-primary/20';
 
 function CreateInvoiceSuccess({
   created,
@@ -605,6 +588,7 @@ export function WorkspaceCreateInvoiceScreen() {
       paymentMethodOptions={paymentMethodOptions}
       railDefaults={railDefaults}
       railDefaultsLoaded={railDefaultsLoaded}
+      merchantSettingsLoaded={merchantSettingsLoaded}
       anyRailConfigured={railSetup.anyRailConfigured}
       previewAmount={previewAmount}
       connectedSystems={connectedSystems}
@@ -627,6 +611,7 @@ function CreateInvoiceForm({
   paymentMethodOptions,
   railDefaults,
   railDefaultsLoaded,
+  merchantSettingsLoaded,
   anyRailConfigured,
   previewAmount,
   connectedSystems,
@@ -645,6 +630,7 @@ function CreateInvoiceForm({
   paymentMethodOptions: ReturnType<typeof buildInvoicePaymentMethodOptions>;
   railDefaults: MerchantDedicatedRailDefaults;
   railDefaultsLoaded: boolean;
+  merchantSettingsLoaded: boolean;
   anyRailConfigured: boolean;
   previewAmount: string;
   connectedSystems: ConnectedSystemCard[] | null;
@@ -652,6 +638,19 @@ function CreateInvoiceForm({
   setAiPrompt: (value: string) => void;
   handleAiGenerate: () => void;
 }) {
+  const [showValidation, setShowValidation] = useState(false);
+  const validation = useMemo(() => validateCreateInvoiceDraft(draft), [draft]);
+  const workflowSteps = useMemo(() => computeCreateInvoiceWorkflowProgress(draft), [draft]);
+  const formLoading = !merchantSettingsLoaded || !railDefaultsLoaded;
+
+  const onCreateClick = () => {
+    if (!validation.isSubmittable) {
+      setShowValidation(true);
+      return;
+    }
+    void handleSubmit();
+  };
+
   return (
     <div className="animate-fade-up pb-32">
       <Link
@@ -670,26 +669,10 @@ function CreateInvoiceForm({
           </p>
         </div>
 
-        <nav
-          aria-label="Commercial workflow"
-          className="flex flex-wrap items-center gap-2 text-[12px] text-ink-soft"
-        >
-          {WORKFLOW_STEPS.map((step, i) => (
-            <span key={step} className="inline-flex items-center gap-2">
-              {i > 0 ? <span className="text-border">→</span> : null}
-              <span
-                className={
-                  i === 0
-                    ? 'rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary'
-                    : 'rounded-full px-2.5 py-1'
-                }
-              >
-                {step}
-              </span>
-            </span>
-          ))}
-        </nav>
+        <CreateInvoiceWorkflowProgress steps={workflowSteps} />
       </header>
+
+      <AccountingFirstInvoiceBanner returnTo={COMMERCIAL_OS_ROUTES.createInvoice} />
 
       {showPaymentRailGuidance ? (
         <CommercialOsNextStepBanner
@@ -753,21 +736,35 @@ function CreateInvoiceForm({
       </section>
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_340px]">
-        <div className="space-y-6">
-          <FormCard title="Customer" icon={User}>
+        <div className="order-2 space-y-6 lg:order-1">
+          {formLoading ? (
+            <CreateInvoiceFormSkeleton />
+          ) : (
+            <>
+          <CreateInvoiceFormCard
+            title="Customer"
+            icon={User}
+            incomplete={showValidation && !validation.customer}
+          >
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <FieldLabel required>Name</FieldLabel>
+                <CreateInvoiceFieldLabel
+                  required
+                  invalid={showValidation && !validation.customer}
+                >
+                  Name
+                </CreateInvoiceFieldLabel>
                 <input
                   type="text"
                   value={draft.customerName}
                   onChange={(e) => patchDraft({ customerName: e.target.value })}
                   placeholder="Beth's Bakery"
                   className={inputCls}
+                  aria-invalid={showValidation && !validation.customer}
                 />
               </div>
               <div>
-                <FieldLabel>Email</FieldLabel>
+                <CreateInvoiceFieldLabel>Email</CreateInvoiceFieldLabel>
                 <input
                   type="email"
                   value={draft.customerEmail}
@@ -777,7 +774,7 @@ function CreateInvoiceForm({
                 />
               </div>
               <div>
-                <FieldLabel>Phone</FieldLabel>
+                <CreateInvoiceFieldLabel>Phone</CreateInvoiceFieldLabel>
                 <input
                   type="tel"
                   value={draft.customerPhone}
@@ -787,22 +784,37 @@ function CreateInvoiceForm({
                 />
               </div>
             </div>
-          </FormCard>
+            {showValidation && !validation.customer ? (
+              <p className="mt-3 text-[12.5px] text-amber-700 dark:text-amber-400">
+                Add a customer name or email address.
+              </p>
+            ) : null}
+          </CreateInvoiceFormCard>
 
-          <FormCard title="Invoice details" icon={FileText}>
+          <CreateInvoiceFormCard
+            title="Invoice details"
+            icon={FileText}
+            incomplete={showValidation && !validation.description}
+          >
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <FieldLabel required>Description</FieldLabel>
+                <CreateInvoiceFieldLabel
+                  required
+                  invalid={showValidation && !validation.description}
+                >
+                  Description
+                </CreateInvoiceFieldLabel>
                 <textarea
                   value={draft.description}
                   onChange={(e) => patchDraft({ description: e.target.value })}
                   placeholder="Marketing campaign — March 2026"
                   rows={2}
                   className={`${inputCls} resize-none`}
+                  aria-invalid={showValidation && !validation.description}
                 />
               </div>
               <div>
-                <FieldLabel>Invoice reference</FieldLabel>
+                <CreateInvoiceFieldLabel>Invoice reference</CreateInvoiceFieldLabel>
                 <input
                   type="text"
                   value={draft.invoiceReference}
@@ -812,7 +824,7 @@ function CreateInvoiceForm({
                 />
               </div>
               <div>
-                <FieldLabel>Issue date</FieldLabel>
+                <CreateInvoiceFieldLabel>Issue date</CreateInvoiceFieldLabel>
                 <input
                   type="date"
                   value={toDateInputValue(draft.invoiceDate)}
@@ -824,7 +836,7 @@ function CreateInvoiceForm({
                 />
               </div>
               <div>
-                <FieldLabel>Due date</FieldLabel>
+                <CreateInvoiceFieldLabel>Due date</CreateInvoiceFieldLabel>
                 <input
                   type="date"
                   value={toDateInputValue(draft.dueDate)}
@@ -833,12 +845,18 @@ function CreateInvoiceForm({
                 />
               </div>
             </div>
-          </FormCard>
+          </CreateInvoiceFormCard>
 
-          <FormCard title="Amount" icon={CreditCard}>
+          <CreateInvoiceFormCard
+            title="Amount"
+            icon={CreditCard}
+            incomplete={showValidation && !validation.amount}
+          >
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <FieldLabel required>Amount</FieldLabel>
+                <CreateInvoiceFieldLabel required invalid={showValidation && !validation.amount}>
+                  Amount
+                </CreateInvoiceFieldLabel>
                 <input
                   type="number"
                   min="0"
@@ -850,10 +868,11 @@ function CreateInvoiceForm({
                   }}
                   placeholder="0.00"
                   className={inputCls}
+                  aria-invalid={showValidation && !validation.amount}
                 />
               </div>
               <div>
-                <FieldLabel required>Currency</FieldLabel>
+                <CreateInvoiceFieldLabel required>Currency</CreateInvoiceFieldLabel>
                 <div className="mt-1.5">
                   <CurrencySelect
                     value={draft.currency}
@@ -863,36 +882,29 @@ function CreateInvoiceForm({
                 </div>
               </div>
             </div>
-          </FormCard>
+          </CreateInvoiceFormCard>
 
-          <FormCard title="Payment method" icon={Landmark}>
+          <CreateInvoiceFormCard
+            title="Payment method"
+            icon={Landmark}
+            incomplete={showValidation && !validation.paymentMethod}
+          >
             <fieldset className="space-y-2">
               <legend className="sr-only">Payment method</legend>
               {paymentMethodOptions.map((opt) => (
-                <label
+                <CreateInvoicePaymentMethodOption
                   key={opt.value}
-                  className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors ${
-                    draft.paymentMethod === opt.value
-                      ? 'border-primary/40 bg-accent/30'
-                      : 'border-border hover:bg-secondary/40'
-                  } ${!opt.available ? 'cursor-not-allowed opacity-60' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    value={opt.value}
-                    checked={draft.paymentMethod === opt.value}
-                    disabled={!opt.available}
-                    onChange={() => patchDraft({ paymentMethod: opt.value as CommercialDealDraft['paymentMethod'] })}
-                    className="mt-1"
-                  />
-                  <span>
-                    <span className="block text-[13.5px] font-medium">{opt.label}</span>
-                    {!opt.available && opt.unavailableReason ? (
-                      <span className="mt-0.5 block text-[12px] text-ink-soft">{opt.unavailableReason}</span>
-                    ) : null}
-                  </span>
-                </label>
+                  value={opt.value as NonNullable<CommercialDealDraft['paymentMethod']>}
+                  label={opt.label}
+                  selected={draft.paymentMethod === opt.value}
+                  available={opt.available}
+                  unavailableReason={opt.unavailableReason}
+                  onSelect={() =>
+                    patchDraft({
+                      paymentMethod: opt.value as CommercialDealDraft['paymentMethod'],
+                    })
+                  }
+                />
               ))}
             </fieldset>
             {!anyRailConfigured ? (
@@ -907,7 +919,7 @@ function CreateInvoiceForm({
             {railDefaultsLoaded && !railDefaults.manualBank ? (
               <p className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">
                 {MANUAL_BANK_UNAVAILABLE_REASON}{' '}
-                <Link href={PAYMENT_SETTINGS_PATH} className="font-medium text-primary hover:underline">
+                <Link href={paymentSettingsHref('Manual Bank Transfer')} className="font-medium text-primary hover:underline">
                   Open Payment Settings
                 </Link>
               </p>
@@ -915,7 +927,7 @@ function CreateInvoiceForm({
             {railDefaultsLoaded && !railDefaults.crypto ? (
               <p className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">
                 {CRYPTO_UNAVAILABLE_REASON}{' '}
-                <Link href={PAYMENT_SETTINGS_PATH} className="font-medium text-primary hover:underline">
+                <Link href={paymentSettingsHref('Crypto Payments')} className="font-medium text-primary hover:underline">
                   Open Payment Settings
                 </Link>
               </p>
@@ -930,72 +942,21 @@ function CreateInvoiceForm({
                 Crypto wallet details from your Payment Settings will appear on this invoice automatically.
               </p>
             ) : null}
-          </FormCard>
+          </CreateInvoiceFormCard>
+            </>
+          )}
         </div>
 
-        <aside className="space-y-6 lg:sticky lg:top-28 lg:self-start">
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-            <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">Live preview</div>
-            <div className="mt-4 space-y-3">
-              <div>
-                <div className="text-[11px] text-ink-soft">Customer</div>
-                <div className="text-[14px] font-medium">
-                  {draft.customerName.trim() || draft.customerEmail.trim() || '—'}
-                </div>
-              </div>
-              <div>
-                <div className="text-[11px] text-ink-soft">Description</div>
-                <div className="text-[14px]">{draft.description.trim() || '—'}</div>
-              </div>
-              <div className="flex items-end justify-between gap-3 border-t border-border pt-3">
-                <div>
-                  <div className="text-[11px] text-ink-soft">Total due</div>
-                  <div className="text-2xl font-semibold tracking-tight">{previewAmount}</div>
-                </div>
-                {draft.dueDate ? (
-                  <div className="text-right text-[12px] text-ink-soft">
-                    Due {format(draft.dueDate, 'd MMM yyyy')}
-                  </div>
-                ) : null}
-              </div>
-              {draft.paymentMethod ? (
-                <div className="text-[12px] text-ink-soft">
-                  Pay via{' '}
-                  {paymentMethodOptions.find((o) => o.value === draft.paymentMethod)?.label ??
-                    draft.paymentMethod}
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-primary/20 bg-card p-5 shadow-card">
-            <div className="flex items-center gap-2">
-              <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-purple text-primary-foreground shadow-glow">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <div className="text-[14px] font-semibold tracking-tight">Provvy AI</div>
-            </div>
-            <p className="mt-4 text-[13px] leading-relaxed text-foreground">{guidance}</p>
-          </div>
-
-          <AccountingIntegrationNotice returnTo={COMMERCIAL_OS_ROUTES.createInvoice} />
-
-          {connectedSystems && connectedSystems.length > 0 ? (
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-              <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                Connected systems
-              </div>
-              <ul className="mt-3 space-y-2">
-                {connectedSystems.map((sys) => (
-                  <li key={sys.name} className="flex items-center justify-between text-[13px]">
-                    <span className="font-medium">{sys.name}</span>
-                    <span className="text-ink-soft">{sys.detail}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </aside>
+        <div className="order-1 lg:order-2">
+          <CreateInvoicePreviewSidebar
+            draft={draft}
+            previewAmount={previewAmount}
+            guidance={guidance}
+            paymentMethodOptions={paymentMethodOptions}
+            connectedSystems={connectedSystems}
+            loading={formLoading}
+          />
+        </div>
       </div>
 
       <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 backdrop-blur-md">
@@ -1005,6 +966,12 @@ function CreateInvoiceForm({
               <p className="text-[13px] text-destructive" role="alert">
                 {submitError}
               </p>
+            ) : showValidation && !validation.isSubmittable ? (
+              <p className="text-[13px] text-amber-700 dark:text-amber-400" role="status">
+                Complete required fields: {validation.missingLabels.join(', ')}.
+              </p>
+            ) : formLoading ? (
+              <p className="truncate text-[13px] text-ink-soft">Loading payment settings…</p>
             ) : (
               <p className="truncate text-[13px] text-ink-soft">{guidance}</p>
             )}
@@ -1019,8 +986,8 @@ function CreateInvoiceForm({
             </button>
             <button
               type="button"
-              disabled={isSubmitting}
-              onClick={() => void handleSubmit()}
+              disabled={isSubmitting || formLoading}
+              onClick={onCreateClick}
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-purple px-6 text-[14px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110 disabled:opacity-60"
             >
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

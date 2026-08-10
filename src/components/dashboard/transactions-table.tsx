@@ -12,12 +12,14 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatAmount } from '@/lib/utils/format-amount';
 import { ExternalLink, ArrowRightLeft } from 'lucide-react';
+import type { Decimal } from '@prisma/client/runtime/library';
+import type { JsonValue } from '@prisma/client/runtime/library';
 
 type FxSnapshot = {
   id: string;
   snapshot_type: string;
   token_type: string | null;
-  rate: number | string;
+  rate: number | string | Decimal;
   base_currency: string;
   quote_currency: string;
   captured_at: Date;
@@ -25,24 +27,24 @@ type FxSnapshot = {
 
 type PaymentEvent = {
   id: string;
-  payment_link_id: string;
+  payment_link_id: string | null;
   event_type: string;
   payment_method: string | null;
   stripe_payment_intent_id: string | null;
   hedera_transaction_id: string | null;
-  amount_received: number | string | null;
+  amount_received: number | string | Decimal | null;
   currency_received: string | null;
   created_at: Date;
-  metadata: Record<string, unknown> | null;
+  metadata: JsonValue | null;
   payment_links: {
     id: string;
     short_code: string;
     description: string | null;
     invoice_reference: string | null;
-    amount: number | string;
+    amount: number | string | Decimal;
     currency: string;
     fx_snapshots?: FxSnapshot[];
-  };
+  } | null;
 };
 
 interface TransactionsTableProps {
@@ -66,6 +68,7 @@ export function TransactionsTable({ events, showPropagationTraceHints = false }:
 
   // Calculate fiat equivalent if FX snapshot exists and currencies differ
   const getFiatEquivalent = (event: PaymentEvent) => {
+    if (!event.payment_links) return null;
     const amountReceived = Number(event.amount_received);
     const currencyReceived = event.currency_received;
     const invoiceCurrency = event.payment_links.currency;
@@ -109,14 +112,21 @@ export function TransactionsTable({ events, showPropagationTraceHints = false }:
           </TableHeader>
           <TableBody>
             {events.map((event) => {
+              if (!event.payment_links) return null;
               const fiatEquivalent = getFiatEquivalent(event);
               const receivedAmount = Number(event.amount_received || event.payment_links.amount);
               const receivedCurrency = event.currency_received || event.payment_links.currency;
               const evmTransactionHash =
-                typeof event.metadata?.transaction_hash === 'string'
-                  ? event.metadata.transaction_hash
-                  : typeof event.metadata?.provider_ref === 'string'
-                    ? event.metadata.provider_ref
+                event.metadata &&
+                typeof event.metadata === 'object' &&
+                !Array.isArray(event.metadata) &&
+                typeof (event.metadata as Record<string, unknown>).transaction_hash === 'string'
+                  ? (event.metadata as Record<string, unknown>).transaction_hash as string
+                  : event.metadata &&
+                      typeof event.metadata === 'object' &&
+                      !Array.isArray(event.metadata) &&
+                      typeof (event.metadata as Record<string, unknown>).provider_ref === 'string'
+                    ? (event.metadata as Record<string, unknown>).provider_ref as string
                     : null;
 
               return (
@@ -134,7 +144,7 @@ export function TransactionsTable({ events, showPropagationTraceHints = false }:
                       )}
                       {showPropagationTraceHints && (
                         <span className="text-[10px] text-muted-foreground font-mono mt-1 leading-snug">
-                          pe:{event.id.slice(0, 8)}… pl:{event.payment_link_id.slice(0, 8)}…
+                          pe:{event.id.slice(0, 8)}… pl:{event.payment_link_id?.slice(0, 8) ?? '—'}…
                         </span>
                       )}
                     </div>

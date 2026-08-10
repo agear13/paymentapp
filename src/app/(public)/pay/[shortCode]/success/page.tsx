@@ -16,8 +16,8 @@ import { Spinner } from '@/components/ui/spinner';
 export default function PaymentSuccessPage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const shortCode = params.shortCode as string;
-  const sessionId = searchParams.get('session_id');
+  const shortCode = (params?.shortCode as string | undefined) ?? '';
+  const sessionId = searchParams?.get('session_id');
   
   const [paymentData, setPaymentData] = useState<any>(null);
   const [loading, setLoading] = useState(true);

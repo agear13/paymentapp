@@ -23,10 +23,11 @@ describe('commercial invoice accounting independence', () => {
       expect(gateSource).toContain('COMMERCIAL_OS_ROUTES.createInvoice');
     });
 
-    it('create-invoice screen does not wrap the form in a blocking gate', () => {
+    it('create-invoice screen surfaces accounting notice without blocking gate', () => {
       const screenSource = readSrc('components/journey/lovable/workspace-create-invoice-screen.tsx');
+      const sidebarSource = readSrc('components/journey/lovable/create-invoice-preview-sidebar.tsx');
       expect(screenSource).not.toMatch(/CommercialOsCreateInvoiceGate/);
-      expect(screenSource).toContain('AccountingIntegrationNotice');
+      expect(`${screenSource}\n${sidebarSource}`).toContain('AccountingIntegrationNotice');
     });
 
     it('workspace start screen routes create-invoice directly', () => {

@@ -88,11 +88,7 @@ export function HackathonMilestoneCollectionStatus({
 
   return (
     <div className="mt-6 space-y-4 border-t border-border/60 pt-6">
-      <div
-        className={`transition-all duration-500 ${
-          step !== 'hidden' ? 'animate-fade-up opacity-100' : 'opacity-0'
-        }`}
-      >
+      <div className="animate-fade-up opacity-100 transition-all duration-500">
         <div className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
           <PartyPopper className="h-4 w-4 text-primary" />
           Milestone achieved

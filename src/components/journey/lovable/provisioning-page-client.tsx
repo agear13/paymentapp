@@ -6,7 +6,7 @@ import { WorkspaceProvisioningScreen } from '@/components/journey/lovable/worksp
 
 export function ProvisioningPageClient() {
   const searchParams = useSearchParams();
-  const isBuildStep = searchParams.get('build') === '1';
+  const isBuildStep = searchParams?.get('build') === '1';
 
   if (isBuildStep) {
     return <WorkspaceProvisioningScreen />;

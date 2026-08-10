@@ -13,7 +13,7 @@ import { Card } from '@/components/ui/card';
 
 export default function PaymentCanceledPage() {
   const params = useParams();
-  const shortCode = params.shortCode as string;
+  const shortCode = (params?.shortCode as string | undefined) ?? '';
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 to-orange-50 p-4">

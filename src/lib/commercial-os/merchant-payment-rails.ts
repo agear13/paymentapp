@@ -40,6 +40,6 @@ export function merchantHasEnabledPaymentRails(rails: MerchantPaymentRails): boo
     normalized.stripeEnabled ||
     normalized.wiseEnabled ||
     normalized.stablecoinSettlementsEnabled ||
-    normalized.manualBankEnabled
+    Boolean(normalized.manualBankEnabled)
   );
 }

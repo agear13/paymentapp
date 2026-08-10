@@ -1,9 +1,15 @@
 'use client';
 
-import { Settings, User, Building2, Bell, Shield, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { Settings, User, Building2, Bell, Shield, ChevronRight, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 
-const GROUPS = [
+const GROUPS: Array<{
+  icon: typeof User;
+  title: string;
+  items: Array<string | { label: string; href: string }>;
+}> = [
   {
     icon: User,
     title: 'Account',
@@ -12,7 +18,12 @@ const GROUPS = [
   {
     icon: Building2,
     title: 'Workspace',
-    items: ['Business details', 'Team members', 'Roles & permissions'],
+    items: [
+      { label: 'Payments & Settlement', href: COMMERCIAL_OS_ROUTES.payments },
+      'Business details',
+      'Team members',
+      'Roles & permissions',
+    ],
   },
   {
     icon: Bell,
@@ -60,17 +71,33 @@ export function WorkspaceSettingsScreen() {
                 <div className="text-[15px] font-semibold">{group.title}</div>
               </div>
               <div className="mt-4 space-y-1">
-                {group.items.map((item) => (
+                {group.items.map((item) => {
+                  const label = typeof item === 'string' ? item : item.label;
+                  const href = typeof item === 'string' ? undefined : item.href;
+                  if (href) {
+                    return (
+                      <Link
+                        key={label}
+                        href={href}
+                        className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-[13px] font-medium text-foreground transition-colors hover:bg-secondary/70"
+                      >
+                        {label}
+                        <ChevronRight className="h-3.5 w-3.5 text-ink-soft" />
+                      </Link>
+                    );
+                  }
+                  return (
                   <button
-                    key={item}
+                    key={label}
                     type="button"
-                    onClick={() => openSetting(group.title, item)}
+                    onClick={() => openSetting(group.title, label)}
                     className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-[13px] font-medium text-foreground transition-colors hover:bg-secondary/70"
                   >
-                    {item}
+                    {label}
                     <ChevronRight className="h-3.5 w-3.5 text-ink-soft" />
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
