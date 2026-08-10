@@ -38,6 +38,8 @@ export function createAgreementR2Client(config: AgreementR2StorageConfig): S3Cli
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
     },
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   });
   cachedClientKey = key;
   return cachedClient;

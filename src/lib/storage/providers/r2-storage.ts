@@ -55,6 +55,8 @@ export function createR2Client(config: StorageConfig): S3Client {
       accessKeyId: config.r2.accessKeyId,
       secretAccessKey: config.r2.secretAccessKey,
     },
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   });
   cachedConfigKey = key;
   return cachedClient;
