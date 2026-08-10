@@ -35,6 +35,106 @@ function isAllowedLogoFile(file: File): { valid: boolean; extension: string | nu
   return { valid: false, extension: null };
 }
 
+export type SafeLogoUploadStorageErrorDiagnostics = {
+  storageErrorCode?: string;
+  errorName?: string;
+  errorMessage?: string;
+  awsErrorCode?: string;
+  httpStatus?: number;
+  requestId?: string;
+  causeName?: string;
+  causeMessage?: string;
+};
+
+const DIAGNOSTIC_MESSAGE_MAX_LENGTH = 500;
+
+function redactDiagnosticString(value: string): string {
+  let redacted = value
+    .replace(/authorization\s*:\s*[^\s,;]+(?:\s+[^\s,;]+)*/gi, 'Authorization: [redacted]')
+    .replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, 'Bearer [redacted]')
+    .replace(/AWS4-HMAC-SHA256\s+Credential=[^,\s]+/gi, 'AWS4-HMAC-SHA256 Credential=[redacted]')
+    .replace(/\b(AKIA[0-9A-Z]{16})\b/g, '[redacted-access-key]')
+    .replace(/\b(secret[_-]?access[_-]?key\s*[:=]\s*)\S+/gi, '$1[redacted]')
+    .replace(/\b(R2_SECRET_ACCESS_KEY\s*[:=]\s*)\S+/gi, '$1[redacted]');
+
+  if (redacted.length > DIAGNOSTIC_MESSAGE_MAX_LENGTH) {
+    redacted = `${redacted.slice(0, DIAGNOSTIC_MESSAGE_MAX_LENGTH)}…`;
+  }
+
+  return redacted;
+}
+
+function readAwsLikeErrorFields(error: unknown): {
+  errorName?: string;
+  errorMessage?: string;
+  awsErrorCode?: string;
+  httpStatus?: number;
+  requestId?: string;
+} {
+  if (!error || typeof error !== 'object') {
+    return {};
+  }
+
+  const record = error as Record<string, unknown>;
+  const metadata =
+    record.$metadata && typeof record.$metadata === 'object'
+      ? (record.$metadata as Record<string, unknown>)
+      : undefined;
+
+  const errorName = typeof record.name === 'string' ? redactDiagnosticString(record.name) : undefined;
+  const errorMessage =
+    typeof record.message === 'string' ? redactDiagnosticString(record.message) : undefined;
+
+  const awsErrorCode =
+    typeof record.Code === 'string'
+      ? redactDiagnosticString(record.Code)
+      : errorName && errorName !== 'StorageServiceError' && errorName !== 'Error'
+        ? errorName
+        : undefined;
+
+  const httpStatus =
+    typeof metadata?.httpStatusCode === 'number' ? metadata.httpStatusCode : undefined;
+  const requestId =
+    typeof metadata?.requestId === 'string' ? redactDiagnosticString(metadata.requestId) : undefined;
+
+  return {
+    errorName,
+    errorMessage,
+    awsErrorCode,
+    httpStatus,
+    requestId,
+  };
+}
+
+/** @internal Exported for focused diagnostics tests — do not expose to clients. */
+export function buildSafeLogoUploadStorageErrorDiagnostics(
+  error: unknown
+): SafeLogoUploadStorageErrorDiagnostics {
+  if (error instanceof StorageServiceError) {
+    const causeFields = error.cause ? readAwsLikeErrorFields(error.cause) : {};
+
+    return {
+      storageErrorCode: error.code,
+      errorName: error.name,
+      errorMessage: redactDiagnosticString(error.message),
+      awsErrorCode: causeFields.awsErrorCode,
+      httpStatus: causeFields.httpStatus,
+      requestId: causeFields.requestId,
+      causeName: causeFields.errorName,
+      causeMessage: causeFields.errorMessage,
+    };
+  }
+
+  const fields = readAwsLikeErrorFields(error);
+  return {
+    errorName: fields.errorName,
+    errorMessage: fields.errorMessage,
+    awsErrorCode: fields.awsErrorCode,
+    httpStatus: fields.httpStatus,
+    requestId: fields.requestId,
+  };
+}
+
 function mapStorageError(error: unknown): { status: number; message: string } {
   if (error instanceof StorageServiceError) {
     switch (error.code) {
@@ -151,8 +251,8 @@ export async function POST(request: NextRequest) {
     const mapped = mapStorageError(error);
     log.error(
       {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        code: error instanceof StorageServiceError ? error.code : undefined,
+        context: 'merchant-settings.upload-logo.storage_failure',
+        ...buildSafeLogoUploadStorageErrorDiagnostics(error),
       },
       'Failed to upload logo'
     );
