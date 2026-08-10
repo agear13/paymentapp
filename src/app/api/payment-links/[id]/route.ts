@@ -70,16 +70,40 @@ function transformPaymentLink(link: any) {
   })) || [];
 
   // Transform xero syncs to camelCase
-  const xeroSyncs = link.xero_syncs?.map((sync: any) => ({
-    id: sync.id,
-    syncType: sync.sync_type,
-    status: sync.status,
-    xeroInvoiceId: sync.xero_invoice_id ?? null,
-    xeroPaymentId: sync.xero_payment_id ?? null,
-    errorMessage: sync.error_message,
-    createdAt: sync.created_at,
-    updatedAt: sync.updated_at,
-  })) || [];
+  const xeroSyncs = link.xero_syncs?.map((sync: any) => {
+    const responsePayload = sync.response_payload ?? null;
+    const requestPayload = sync.request_payload ?? null;
+    let accountingSnapshot = null;
+    let voidedAt: string | null = null;
+    if (responsePayload && typeof responsePayload === 'object') {
+      const payload = responsePayload as Record<string, unknown>;
+      const snapshot = payload.accountingSnapshot;
+      if (snapshot && typeof snapshot === 'object') {
+        accountingSnapshot = snapshot;
+      }
+      if (typeof payload.voidedAt === 'string') {
+        voidedAt = payload.voidedAt;
+      }
+    }
+    let lastRequestWasUpdate = false;
+    if (requestPayload && typeof requestPayload === 'object') {
+      lastRequestWasUpdate =
+        (requestPayload as Record<string, unknown>).updateExisting === true;
+    }
+    return {
+      id: sync.id,
+      syncType: sync.sync_type,
+      status: sync.status,
+      xeroInvoiceId: sync.xero_invoice_id ?? null,
+      xeroPaymentId: sync.xero_payment_id ?? null,
+      errorMessage: sync.error_message,
+      createdAt: sync.created_at,
+      updatedAt: sync.updated_at,
+      accountingSnapshot,
+      voidedAt,
+      lastRequestWasUpdate,
+    };
+  }) || [];
 
   return {
     id: link.id,
@@ -165,6 +189,7 @@ import {
 import { tryDeletePaymentLinkAttachmentFile } from '@/lib/payment-links/payment-link-attachment';
 import { revalidatePath } from 'next/cache';
 import { assertPilotDealOwnedByUser } from '@/lib/deal-network-demo/pilot-deal-invoice-link.server';
+import { isAccountingInvoiceExported } from '@/lib/accounting/accounting-push-state';
 
 /**
  * GET /api/payment-links/[id]
@@ -749,12 +774,43 @@ export async function PATCH(
       'Payment link updated'
     );
 
+    const invoiceSync = await prisma.xero_syncs.findUnique({
+      where: {
+        xero_syncs_payment_link_sync_type_unique: {
+          payment_link_id: id,
+          sync_type: 'INVOICE',
+        },
+      },
+      select: {
+        sync_type: true,
+        status: true,
+        xero_invoice_id: true,
+      },
+    });
+
+    const accountingImpact = isAccountingInvoiceExported(
+      invoiceSync
+        ? {
+            syncType: invoiceSync.sync_type,
+            status: invoiceSync.status,
+            xeroInvoiceId: invoiceSync.xero_invoice_id,
+          }
+        : null
+    )
+      ? {
+          requiresResync: true,
+          message:
+            'Invoice saved in Provvy. Use Update Accounting on the invoice to sync changes — accounting is never updated automatically.',
+        }
+      : null;
+
     revalidatePath(`/pay/${updatedLink.short_code}`);
     revalidatePath('/dashboard/payment-links');
 
     return NextResponse.json({
       data: transformPaymentLink(updatedLink),
       message: 'Payment link updated successfully',
+      accountingImpact,
     });
   } catch (error: any) {
     loggers.api.error(

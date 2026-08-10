@@ -108,7 +108,7 @@ describe('computeHeroSubline', () => {
         settlementReady: false,
         fieldStates: {},
       })
-    ).toBe('Connect Xero first — use the section below.');
+    ).toBe('Connect accounting to sync invoices automatically.');
   });
 
   it('prompts to choose accounts when connected but not ready', () => {

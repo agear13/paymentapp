@@ -6,7 +6,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import { syncInvoiceToXero, syncPaymentToXero } from './sync-orchestration';
+import { syncInvoiceToXero, syncPaymentToXero, voidInvoiceInAccounting } from './sync-orchestration';
 import {
   getPendingSyncJobs,
   getProcessableSyncJobById,
@@ -88,9 +88,14 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
       stats.processed++;
 
       try {
+        const requestPayload = (job.request_payload || {}) as Record<string, unknown>;
+        const updateExisting = requestPayload.updateExisting === true;
+        const voidExisting = requestPayload.voidExisting === true;
         const requiresOpen = job.sync_type === 'INVOICE';
         const statusOk = requiresOpen
-          ? job.payment_links.status === 'OPEN' || job.payment_links.status === 'PAID'
+          ? voidExisting
+            ? ['OPEN', 'PAID', 'CANCELED'].includes(job.payment_links.status)
+            : job.payment_links.status === 'OPEN' || job.payment_links.status === 'PAID'
           : job.payment_links.status === 'PAID';
         if (!statusOk) {
           logger.warn(
@@ -138,10 +143,16 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
 
         const result =
           job.sync_type === 'INVOICE'
-            ? await syncInvoiceToXero({
-                paymentLinkId: job.payment_link_id,
-                organizationId,
-              })
+            ? voidExisting
+              ? await voidInvoiceInAccounting({
+                  paymentLinkId: job.payment_link_id,
+                  organizationId,
+                })
+              : await syncInvoiceToXero({
+                  paymentLinkId: job.payment_link_id,
+                  organizationId,
+                  updateExisting,
+                })
             : await syncPaymentToXero({
                 paymentLinkId: job.payment_link_id,
                 organizationId,
@@ -269,9 +280,14 @@ export async function processSyncById(syncId: string): Promise<{
     }
 
     // Validate payment link
+    const requestPayload = (job.request_payload || {}) as Record<string, unknown>;
+    const voidExisting = requestPayload.voidExisting === true;
+
     const requiresOpen = job.sync_type === 'INVOICE';
     const statusOk = requiresOpen
-      ? job.payment_links.status === 'OPEN' || job.payment_links.status === 'PAID'
+      ? voidExisting
+        ? ['OPEN', 'PAID', 'CANCELED'].includes(job.payment_links.status)
+        : job.payment_links.status === 'OPEN' || job.payment_links.status === 'PAID'
       : job.payment_links.status === 'PAID';
     if (!statusOk) {
       const error = requiresOpen
@@ -290,12 +306,22 @@ export async function processSyncById(syncId: string): Promise<{
       job.payment_links.organization_id;
 
     // Execute sync
+    const requestPayload = (job.request_payload || {}) as Record<string, unknown>;
+    const updateExisting = requestPayload.updateExisting === true;
+    const voidExisting = requestPayload.voidExisting === true;
+
     const result =
       job.sync_type === 'INVOICE'
-        ? await syncInvoiceToXero({
-            paymentLinkId: job.payment_link_id,
-            organizationId,
-          })
+        ? voidExisting
+          ? await voidInvoiceInAccounting({
+              paymentLinkId: job.payment_link_id,
+              organizationId,
+            })
+          : await syncInvoiceToXero({
+              paymentLinkId: job.payment_link_id,
+              organizationId,
+              updateExisting,
+            })
         : await syncPaymentToXero({
             paymentLinkId: job.payment_link_id,
             organizationId,

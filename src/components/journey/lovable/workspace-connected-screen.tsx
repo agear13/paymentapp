@@ -405,9 +405,9 @@ export function WorkspaceConnectedScreen() {
         </div>
         <div className="mt-2 text-[14px] text-foreground">
           {xeroConnected
-            ? 'Open Xero setup to choose accounts and check your setup status.'
+            ? 'Open accounting setup to choose accounts and check sync status.'
             : wantsXero
-              ? 'Connect Xero to send invoices and payments automatically.'
+              ? 'Connect accounting to sync invoices and payments automatically.'
               : 'Continue into your Commercial Operating System.'}
         </div>
         <Link

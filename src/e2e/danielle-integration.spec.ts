@@ -60,16 +60,18 @@ test.describe('Danielle Commercial OS integration (live browser)', () => {
     const xeroConnected =
       /Xero/i.test(bodyAfterConnected) &&
       (/connected/i.test(bodyAfterConnected) || /Manage/i.test(bodyAfterConnected));
-    const xeroSetupNeeded = /Continue setup|Finish choosing|setup before creating/i.test(bodyAfterConnected);
+    const xeroSetupNeeded = /Continue setup|Finish choosing|enable accounting sync/i.test(bodyAfterConnected);
 
-    if (!xeroConnected && /Connect to Xero|Connect Xero/i.test(bodyAfterConnected)) {
-      pushBlocker(blockers, 'Xero is not connected — OAuth required (cannot automate in this run)', page.url());
+    if (!xeroConnected && /Connect Accounting|Connect to Xero|Connect Xero/i.test(bodyAfterConnected)) {
+      // Passive connect prompts are OK — only block if invoice creation is gated
     }
 
     // --- Xero setup page (skip OAuth; verify readiness UI if already connected) ---
     if (xeroConnected || xeroSetupNeeded) {
       await page.goto(ROUTES.connectedXero, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-      await expect(page.getByRole('heading', { name: /Set up Xero/i })).toBeVisible({ timeout: 30_000 });
+      await expect(
+        page.getByRole('heading', { name: /Set up (Xero|accounting sync)/i })
+      ).toBeVisible({ timeout: 30_000 });
 
       const setupStatus = page.locator('#guided-xero-health-check, [id="guided-xero-health-check"]');
       if ((await setupStatus.count()) > 0) {
@@ -91,11 +93,13 @@ test.describe('Danielle Commercial OS integration (live browser)', () => {
     // --- Create Invoice (must not show blocker after setup) ---
     await page.goto(ROUTES.createInvoice, { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
-    const finishXeroBlocker = page.getByText(/Finish your Xero setup before creating invoices/i);
-    if ((await finishXeroBlocker.count()) > 0) {
+    const accountingCreateBlocker = page.getByText(
+      /Finish (your )?Xero setup before creating invoices|Finish Xero setup to create invoices|Finish accounting setup to create invoices/i
+    );
+    if ((await accountingCreateBlocker.count()) > 0) {
       pushBlocker(
         blockers,
-        'Create Invoice gate still blocking after Xero setup (stale readiness)',
+        'Create Invoice page still shows accounting setup blocker',
         page.url()
       );
     }
@@ -149,8 +153,8 @@ test.describe('Danielle Commercial OS integration (live browser)', () => {
     await expect(page.getByRole('heading', { name: /Receivables/i })).toBeVisible({ timeout: 30_000 });
 
     const receivablesBody = await page.locator('body').innerText();
-    if (/Finish your Xero setup/i.test(receivablesBody)) {
-      pushBlocker(blockers, 'Receivables still shows Xero setup blocker (stale readiness)', page.url());
+    if (/Finish (your )?Xero setup before creating|Finish Xero setup to create/i.test(receivablesBody)) {
+      pushBlocker(blockers, 'Receivables still shows accounting setup blocker on create flow', page.url());
     }
 
     await page.goto(ROUTES.invoiceList, { waitUntil: 'domcontentloaded' });

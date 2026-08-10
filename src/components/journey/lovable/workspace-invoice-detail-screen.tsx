@@ -50,6 +50,8 @@ import {
   canResendPaymentLink,
   cancelPaymentLink,
   deletePaymentLink,
+  archivePaymentLink,
+  voidPaymentLink,
   downloadPaymentLinkQrCode,
   postPaymentLinkManualSettlement,
   resendPaymentLinkInvoice,
@@ -72,6 +74,14 @@ import { getXeroSyncDisplayStatus, receivablesInvoiceXeroColumn } from '@/lib/xe
 import { isValidShortCode } from '@/lib/short-code';
 import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
 import { InvoicePaymentReviewPanel } from '@/components/journey/lovable/invoice-payment-review-panel';
+import { AccountingIntegrationNotice } from '@/components/journey/lovable/accounting-integration-notice';
+import { AccountingPushAction } from '@/components/journey/lovable/accounting-push-action';
+import { AccountingSyncStatusBadge } from '@/components/journey/lovable/accounting-sync-status-badge';
+import { AccountingSyncedInvoiceRemovalDialog } from '@/components/journey/lovable/accounting-synced-invoice-removal-dialog';
+import { AccountingActivityTimeline } from '@/components/journey/lovable/accounting-activity-timeline';
+import { resolveInvoiceRemovalOptions } from '@/lib/accounting/accounting-invoice-deletion-policy';
+import { ACCOUNTING_INTEGRATION_COPY } from '@/lib/accounting/accounting-integration-copy';
+import { shouldShowPaidVoidWarning } from '@/lib/accounting/accounting-removal-ux';
 
 type WorkspaceInvoiceDetailScreenProps = {
   invoiceNumber: string;
@@ -240,10 +250,10 @@ function xeroAccountingSummary(detail: PaymentLinkDetails): {
   if (syncs.length === 0) {
     return {
       tone: 'info',
-      title: 'Xero synchronisation',
+      title: 'Accounting sync',
       message: isPaid
-        ? 'Provvy will automatically queue this invoice and payment for synchronisation with Xero. No action is required — check back here for status updates.'
-        : 'This invoice has not been synchronised yet. Once payment is received, Provvy will automatically queue it for synchronisation with Xero. No action is required.',
+        ? 'Push this invoice and payment to your accounting software when you are ready — or connect accounting to sync automatically.'
+        : 'This invoice has not been pushed to accounting yet. Use Push to Accounting when you want to sync.',
     };
   }
 
@@ -255,9 +265,9 @@ function xeroAccountingSummary(detail: PaymentLinkDetails): {
   if (anyFailed) {
     return {
       tone: 'default',
-      title: 'Xero sync needs attention',
+      title: 'Accounting sync needs attention',
       message:
-        'Something went wrong while syncing to Xero. Review the sync history below and check your account mappings on the Xero setup page.',
+        'Something went wrong while syncing to accounting. Review the sync history below and check your account mappings.',
     };
   }
 
@@ -266,24 +276,24 @@ function xeroAccountingSummary(detail: PaymentLinkDetails): {
       tone: 'info',
       title: 'Sync in progress',
       message:
-        'Provvy is processing this invoice for Xero. This usually completes within a few minutes — no action is required.',
+        'Provvy is processing this invoice for your accounting software. This usually completes within a few minutes.',
     };
   }
 
   if (invoiceSuccess && (paymentSuccess || !isPaid)) {
     return {
       tone: 'success',
-      title: 'Synced with Xero',
+      title: 'Synced with accounting',
       message: paymentSuccess
-        ? 'This invoice and payment are in Xero. Your ledger stays aligned automatically.'
-        : 'This invoice is in Xero. When payment is received, Provvy will sync the payment too.',
+        ? 'This invoice and payment are in your accounting software.'
+        : 'This invoice is synced. When payment is received, Provvy can sync the payment too.',
     };
   }
 
   return {
     tone: 'info',
-    title: 'Xero synchronisation',
-    message: 'Provvy keeps your invoices and payments aligned with Xero automatically.',
+    title: 'Accounting sync',
+    message: 'Provvy keeps your invoices and payments aligned with your accounting software.',
   };
 }
 
@@ -309,6 +319,7 @@ export function WorkspaceInvoiceDetailScreen({
   const [confirmMarkPaidOpen, setConfirmMarkPaidOpen] = useState(false);
   const [confirmReopenOpen, setConfirmReopenOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmSyncedRemovalOpen, setConfirmSyncedRemovalOpen] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
@@ -477,6 +488,12 @@ export function WorkspaceInvoiceDetailScreen({
       toast({ title: 'Invoice deleted', description: 'The invoice was removed from your workspace.' });
       router.push(COMMERCIAL_OS_ROUTES.invoiceList);
     } catch (error: unknown) {
+      const err = error as Error & { requiresAccountingDialog?: boolean };
+      if (err.requiresAccountingDialog) {
+        setConfirmDeleteOpen(false);
+        setConfirmSyncedRemovalOpen(true);
+        return;
+      }
       toast({
         title: 'Could not delete invoice',
         description: error instanceof Error ? error.message : 'Failed to delete invoice',
@@ -487,6 +504,50 @@ export function WorkspaceInvoiceDetailScreen({
       setConfirmDeleteOpen(false);
     }
   }, [state, toast, router]);
+
+  const handleArchiveSyncedInvoice = useCallback(async () => {
+    if (state.status !== 'ready') return;
+    setDeleteLoading(true);
+    try {
+      const result = await archivePaymentLink(state.detail.id);
+      toast({
+        title: ACCOUNTING_INTEGRATION_COPY.archiveSuccessToastTitle,
+        description: ACCOUNTING_INTEGRATION_COPY.archiveSuccessToastBody,
+      });
+      setConfirmSyncedRemovalOpen(false);
+      await refresh();
+    } catch (error: unknown) {
+      toast({
+        title: 'Could not archive invoice',
+        description: error instanceof Error ? error.message : 'Failed to archive invoice',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [state, toast, refresh]);
+
+  const handleVoidSyncedInvoice = useCallback(async () => {
+    if (state.status !== 'ready') return;
+    setDeleteLoading(true);
+    try {
+      await voidPaymentLink(state.detail.id);
+      toast({
+        title: ACCOUNTING_INTEGRATION_COPY.voidSuccessToastTitle,
+        description: ACCOUNTING_INTEGRATION_COPY.voidSuccessToastBody.replace(/\n\n/g, ' '),
+      });
+      setConfirmSyncedRemovalOpen(false);
+      await refresh();
+    } catch (error: unknown) {
+      toast({
+        title: 'Could not void invoice',
+        description: error instanceof Error ? error.message : 'Failed to void invoice',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [state, toast, refresh]);
 
   if (state.status === 'loading' || isOrgLoading) {
     return (
@@ -562,6 +623,20 @@ export function WorkspaceInvoiceDetailScreen({
       detail.manualBankDestinationType
   );
   const ledgerEntries = detail.ledgerEntries ?? [];
+
+  const invoiceSyncForRemoval = detail.xeroSyncs?.find((s) => s.syncType === 'INVOICE') ?? null;
+  const removalOptions = resolveInvoiceRemovalOptions({
+    status: detail.status,
+    invoiceSync: invoiceSyncForRemoval,
+  });
+
+  const handleDeleteClick = () => {
+    if (removalOptions.requiresAccountingDialog) {
+      setConfirmSyncedRemovalOpen(true);
+      return;
+    }
+    setConfirmDeleteOpen(true);
+  };
 
   const outstandingDisplay =
     typeof amountOutstanding === 'number'
@@ -648,7 +723,7 @@ export function WorkspaceInvoiceDetailScreen({
           {canCancelPaymentLink(detail.status) ? (
             <ActionButton label="Cancel" icon={RefreshCw} onClick={() => setConfirmCancelOpen(true)} />
           ) : null}
-          <ActionButton label="Delete" icon={Trash2} danger onClick={() => setConfirmDeleteOpen(true)} />
+          <ActionButton label="Delete" icon={Trash2} danger onClick={handleDeleteClick} />
         </div>
       </header>
 
@@ -680,14 +755,14 @@ export function WorkspaceInvoiceDetailScreen({
         <CommercialOsNextStepBanner
           tone="success"
           title="Payment received"
-          message="Provvy will now automatically reconcile this payment with Xero. Check the Accounting tab for sync status."
+          message="Provvy can sync this payment to your accounting software when connected. Check the Accounting tab for sync status."
           action={
             <button
               type="button"
               onClick={() => setActiveTab('accounting')}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-[13px] font-medium transition-colors hover:bg-secondary"
             >
-              View Xero sync
+              View accounting sync
               <ChevronRight className="h-4 w-4" />
             </button>
           }
@@ -1010,14 +1085,73 @@ export function WorkspaceInvoiceDetailScreen({
 
           {activeTab === 'accounting' ? (
             <>
+              <AccountingIntegrationNotice />
+
+              <AccountingSyncStatusBadge
+                invoiceSync={detail.xeroSyncs?.find((sync) => sync.syncType === 'INVOICE') ?? null}
+                linkUpdatedAt={detail.updatedAt}
+                link={{
+                  amount: detail.amount,
+                  currency: detail.currency,
+                  invoiceCurrency: detail.invoiceCurrency,
+                  description: detail.description,
+                  customerEmail: detail.customerEmail,
+                  customerName: detail.customerName,
+                  invoiceReference: detail.invoiceReference,
+                  invoiceDate: detail.invoiceDate,
+                  dueDate: detail.dueDate,
+                }}
+              />
+
+              <div className="flex flex-wrap items-center gap-3">
+                <AccountingPushAction
+                  paymentLinkId={detail.id}
+                  invoiceSync={detail.xeroSyncs?.find((sync) => sync.syncType === 'INVOICE') ?? null}
+                  linkUpdatedAt={detail.updatedAt}
+                  link={{
+                    amount: detail.amount,
+                    currency: detail.currency,
+                    invoiceCurrency: detail.invoiceCurrency,
+                    description: detail.description,
+                    customerEmail: detail.customerEmail,
+                    customerName: detail.customerName,
+                    invoiceReference: detail.invoiceReference,
+                    invoiceDate: detail.invoiceDate,
+                    dueDate: detail.dueDate,
+                  }}
+                  onQueued={() => void refresh()}
+                />
+              </div>
+
               <CommercialOsNextStepBanner
                 tone={xeroGuidance.tone}
                 title={xeroGuidance.title}
                 message={xeroGuidance.message}
               />
 
+              {shouldShowPaidVoidWarning({ status: detail.status, xeroSyncs: detail.xeroSyncs }) ? (
+                <CommercialOsNextStepBanner
+                  tone="info"
+                  title={ACCOUNTING_INTEGRATION_COPY.paidInvoiceFutureNoticeTitle}
+                  message={(() => {
+                    const [lead, ...rest] =
+                      ACCOUNTING_INTEGRATION_COPY.paidInvoiceFutureNoticeBody.split('\n\n');
+                    return (
+                      <>
+                        <p>{lead}</p>
+                        {rest.length > 0 ? (
+                          <p className="mt-2">{rest.join('\n\n')}</p>
+                        ) : null}
+                      </>
+                    );
+                  })()}
+                />
+              ) : null}
+
+              <AccountingActivityTimeline syncs={detail.xeroSyncs} />
+
               {showXero ? (
-                <ExpandableCard title="Xero sync" summary={xeroDisplay?.label ?? 'Xero'} defaultOpen>
+                <ExpandableCard title="Accounting sync" summary={xeroDisplay?.label ?? 'Sync status'} defaultOpen>
                   <div className="space-y-6">
                     {xeroDisplay ? (
                       <div className="flex items-center gap-2 text-[13.5px] font-medium">
@@ -1265,6 +1399,14 @@ export function WorkspaceInvoiceDetailScreen({
           organizationId={organizationId}
           open={editOpen}
           onOpenChange={setEditOpen}
+          isAccountingSynced={Boolean(
+            detail.xeroSyncs?.some(
+              (sync) =>
+                sync.syncType === 'INVOICE' &&
+                sync.status === 'SUCCESS' &&
+                Boolean(sync.xeroInvoiceId)
+            )
+          )}
           editPaymentLink={{
             id: detail.id,
             amount: Number(detail.amount),
@@ -1428,6 +1570,17 @@ export function WorkspaceInvoiceDetailScreen({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AccountingSyncedInvoiceRemovalDialog
+        open={confirmSyncedRemovalOpen}
+        onOpenChange={setConfirmSyncedRemovalOpen}
+        status={detail.status}
+        invoiceSync={invoiceSyncForRemoval}
+        xeroSyncs={detail.xeroSyncs}
+        loading={deleteLoading}
+        onVoid={handleVoidSyncedInvoice}
+        onArchive={handleArchiveSyncedInvoice}
+      />
     </div>
   );
 }

@@ -5,7 +5,8 @@
  * - PAYMENT sync when invoice is PAID (against existing Xero invoice)
  */
 
-import { createXeroInvoice } from './invoice-service';
+import { createXeroInvoice, updateXeroInvoice, voidXeroInvoice } from './invoice-service';
+import { buildAccountingSyncSnapshot } from '@/lib/accounting/accounting-sync-snapshot';
 import { recordXeroPayment } from './payment-service';
 import { prisma } from '@/lib/server/prisma';
 import { Prisma } from '@prisma/client';
@@ -22,6 +23,8 @@ import {
 export interface SyncPaymentParams {
   paymentLinkId: string;
   organizationId: string;
+  /** When true, update the existing Xero invoice instead of creating a new one. */
+  updateExisting?: boolean;
 }
 
 export interface SyncResult {
@@ -138,7 +141,7 @@ async function upsertSyncStatus(args: {
 }
 
 export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<SyncResult> {
-  const { paymentLinkId, organizationId } = params;
+  const { paymentLinkId, organizationId, updateExisting = false } = params;
 
   try {
     const loaded = await loadXeroExportContext(prisma, {
@@ -165,6 +168,7 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
         xeroPostingAmount: posting.amount,
         xeroPostingCurrency: posting.currency,
         usesAccountingLayer: posting.usesAccountingLayer,
+        updateExisting,
       },
       exportContext.layers
     ) as Prisma.InputJsonValue;
@@ -184,7 +188,12 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
         response_payload: true,
       },
     });
-    if (existingInvoiceSync?.status === 'SUCCESS' && existingInvoiceSync.xero_invoice_id) {
+
+    if (
+      !updateExisting &&
+      existingInvoiceSync?.status === 'SUCCESS' &&
+      existingInvoiceSync.xero_invoice_id
+    ) {
       const payload = (existingInvoiceSync.response_payload || {}) as Record<string, unknown>;
       return {
         success: true,
@@ -195,7 +204,7 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
     }
 
     const legacyPosting = resolveXeroPostingValues(paymentLink);
-    const invoiceResult = await createXeroInvoice({
+    const invoiceParams = {
       paymentLinkId,
       organizationId,
       amount: legacyPosting.amount,
@@ -204,7 +213,15 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
       customerEmail: paymentLink.customer_email || undefined,
       invoiceReference: paymentLink.invoice_reference || undefined,
       exportContext,
-    });
+    };
+
+    const invoiceResult =
+      updateExisting && existingInvoiceSync?.xero_invoice_id
+        ? await updateXeroInvoice({
+            ...invoiceParams,
+            xeroInvoiceId: existingInvoiceSync.xero_invoice_id,
+          })
+        : await createXeroInvoice(invoiceParams);
     const invoiceId = invoiceResult.invoiceId?.trim();
     const invoiceNumber = invoiceResult.invoiceNumber?.trim();
     if (!invoiceId || !invoiceNumber) {
@@ -233,6 +250,18 @@ export async function syncInvoiceToXero(params: SyncPaymentParams): Promise<Sync
       requestPayload: enrichedRequestPayload,
       payload: {
         invoice: invoiceResult as unknown as Prisma.InputJsonValue,
+        invoiceNumber,
+        accountingSnapshot: buildAccountingSyncSnapshot({
+          amount: paymentLink.amount,
+          invoiceCurrency: paymentLink.invoice_currency,
+          currency: paymentLink.currency,
+          description: paymentLink.description,
+          customerEmail: paymentLink.customer_email,
+          customerName: paymentLink.customer_name,
+          invoiceReference: paymentLink.invoice_reference,
+          invoiceDate: paymentLink.invoice_date,
+          dueDate: paymentLink.due_date,
+        }),
         xeroRawInvoicesResponse: (invoiceResult as { xeroRawInvoicesResponse?: unknown })
           .xeroRawInvoicesResponse ?? null,
         paymentLayers: exportContext.metadata,
@@ -499,6 +528,79 @@ export async function syncPaymentToXero(params: SyncPaymentParams): Promise<Sync
 }
 
 /**
+ * Void an invoice in accounting software (explicit user action).
+ * Idempotent when already voided.
+ */
+export async function voidInvoiceInAccounting(params: SyncPaymentParams): Promise<SyncResult> {
+  const { paymentLinkId, organizationId } = params;
+
+  try {
+    const existingInvoiceSync = await prisma.xero_syncs.findUnique({
+      where: {
+        xero_syncs_payment_link_sync_type_unique: {
+          payment_link_id: paymentLinkId,
+          sync_type: 'INVOICE',
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        xero_invoice_id: true,
+        response_payload: true,
+      },
+    });
+
+    if (!existingInvoiceSync?.xero_invoice_id) {
+      return { success: false, error: 'No exported accounting invoice exists to void' };
+    }
+
+    const payload = (existingInvoiceSync.response_payload || {}) as Record<string, unknown>;
+    if (payload.voidedAt) {
+      return {
+        success: true,
+        invoiceId: existingInvoiceSync.xero_invoice_id,
+      };
+    }
+
+    const voidResult = await voidXeroInvoice({
+      paymentLinkId,
+      organizationId,
+      xeroInvoiceId: existingInvoiceSync.xero_invoice_id,
+    });
+
+    await prisma.xero_syncs.update({
+      where: { id: existingInvoiceSync.id },
+      data: {
+        status: 'SUCCESS',
+        response_payload: {
+          ...payload,
+          voidedAt: new Date().toISOString(),
+          voidStatus: voidResult.status,
+        } as Prisma.InputJsonValue,
+        next_retry_at: null,
+        error_message: null,
+        updated_at: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      invoiceId: voidResult.invoiceId,
+    };
+  } catch (error: unknown) {
+    const errorMessage = formatXeroSyncError(error);
+    await upsertSyncStatus({
+      paymentLinkId,
+      syncType: 'INVOICE',
+      organizationId,
+      status: 'FAILED',
+      errorMessage,
+    });
+    return { success: false, error: errorMessage };
+  }
+}
+
+/**
  * Retry failed sync
  */
 export async function retryFailedSync(syncRecordId: string): Promise<SyncResult> {
@@ -528,7 +630,9 @@ export async function retryFailedSync(syncRecordId: string): Promise<SyncResult>
   });
 
   return syncRecord.sync_type === 'INVOICE'
-    ? syncInvoiceToXero({ paymentLinkId, organizationId })
+    ? requestPayload.voidExisting === true
+      ? voidInvoiceInAccounting({ paymentLinkId, organizationId })
+      : syncInvoiceToXero({ paymentLinkId, organizationId })
     : syncPaymentToXero({ paymentLinkId, organizationId });
 }
 

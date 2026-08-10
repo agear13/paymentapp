@@ -31,21 +31,21 @@ export function XeroInvoiceReadinessHero({ variant = 'commercial' }: XeroInvoice
         </div>
       ) : (
         <>
-          <p className="mt-2 text-2xl font-semibold tracking-tight">{readiness.heroAnswer}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight">
+            {readiness.canSyncToAccounting ?? readiness.canCreateInvoice ? 'Yes' : readiness.heroAnswer}
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">{readiness.heroSubline}</p>
 
-          {readiness.canCreateInvoice ? (
-            <Link
-              href={COMMERCIAL_OS_ROUTES.createInvoice}
-              className={
-                isCommercial
-                  ? 'mt-4 inline-flex text-sm font-medium text-primary hover:underline'
-                  : 'mt-4 inline-flex text-sm font-medium text-primary hover:underline'
-              }
-            >
-              {XERO_INVOICE_READINESS_COPY.createInvoiceCta}
-            </Link>
-          ) : null}
+          <Link
+            href={COMMERCIAL_OS_ROUTES.createInvoice}
+            className={
+              isCommercial
+                ? 'mt-4 inline-flex text-sm font-medium text-primary hover:underline'
+                : 'mt-4 inline-flex text-sm font-medium text-primary hover:underline'
+            }
+          >
+            {XERO_INVOICE_READINESS_COPY.createInvoiceCta}
+          </Link>
         </>
       )}
     </div>

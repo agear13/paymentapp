@@ -158,6 +158,9 @@ export interface PaymentLinkDetails {
     errorMessage: string | null;
     createdAt: Date;
     updatedAt?: Date | string | null;
+    accountingSnapshot?: Record<string, unknown> | null;
+    voidedAt?: string | null;
+    lastRequestWasUpdate?: boolean;
   }>;
 }
 

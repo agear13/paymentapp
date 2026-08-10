@@ -27,8 +27,8 @@ export function CommercialOsXeroReadinessBanner({
     if (readiness.overallStatus === 'setup_incomplete') {
       return (
         <CommercialOsNextStepBanner
-          title="Xero connected"
-          message="One more step. Choose which Xero accounts you want Provvy to use before sending invoices."
+          title="Accounting connected"
+          message="One more step. Choose which accounts Provvy should use before pushing invoices."
           action={
             <Link
               href={COMMERCIAL_OS_ROUTES.connectedXero}
@@ -48,15 +48,13 @@ export function CommercialOsXeroReadinessBanner({
         message={readiness.statusDetail}
         tone="success"
         action={
-          readiness.canCreateInvoice ? (
-            <Link
-              href={COMMERCIAL_OS_ROUTES.createInvoice}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
-            >
-              Create your first invoice
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          ) : undefined
+          <Link
+            href={COMMERCIAL_OS_ROUTES.createInvoice}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
+          >
+            Create invoice
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         }
       />
     );

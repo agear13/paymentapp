@@ -22,7 +22,7 @@ describe('computeXeroReadiness', () => {
     expect(result.canCreateInvoice).toBe(false);
     expect(result.statusLabel).toBe('Setup incomplete');
     expect(result.heroAnswer).toBe('Not yet');
-    expect(result.heroSubline).toBe('Connect Xero first — use the section below.');
+    expect(result.heroSubline).toBe('Connect accounting to sync invoices automatically.');
     expect(result.blockers).toHaveLength(0);
   });
 

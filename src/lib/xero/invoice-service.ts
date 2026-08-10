@@ -143,6 +143,148 @@ async function resolveXeroCurrencyRate(params: {
 export async function createXeroInvoice(
   params: InvoiceCreationParams
 ): Promise<InvoiceCreationResult> {
+  const prepared = await prepareXeroAccrecInvoice(params);
+  const response = await prepared.xeroClient.accountingApi.createInvoices(
+    prepared.tenantId,
+    { invoices: [prepared.invoice] }
+  );
+
+  if (!response.body.invoices || response.body.invoices.length === 0) {
+    throw new Error('Failed to create invoice in Xero');
+  }
+
+  const createdInvoice = response.body.invoices[0];
+  const invoiceId = createdInvoice.invoiceID?.trim();
+  const invoiceNumber = createdInvoice.invoiceNumber?.trim();
+  if (!invoiceId || !invoiceNumber) {
+    loggers.xero.error(
+      {
+        paymentLinkId: params.paymentLinkId,
+        organizationId: params.organizationId,
+        xeroResponseInvoices: response.body.invoices,
+      },
+      'createInvoices: missing invoiceID or invoiceNumber in Xero response'
+    );
+    throw new Error('Xero did not return a valid invoice ID and number');
+  }
+
+  loggers.xero.info(
+    {
+      paymentLinkId: params.paymentLinkId,
+      organizationId: params.organizationId,
+      invoiceId,
+      invoiceNumber,
+      status: createdInvoice.status,
+    },
+    'Xero ACCREC created'
+  );
+
+  return {
+    invoiceId,
+    invoiceNumber,
+    status: String(createdInvoice.status!),
+    total: createdInvoice.total!,
+    xeroRawInvoicesResponse: response.body.invoices,
+  };
+}
+
+export async function updateXeroInvoice(
+  params: InvoiceCreationParams & { xeroInvoiceId: string }
+): Promise<InvoiceCreationResult> {
+  const prepared = await prepareXeroAccrecInvoice(params);
+  const invoiceId = params.xeroInvoiceId.trim();
+  const invoice: Invoice = {
+    ...prepared.invoice,
+    invoiceID: invoiceId,
+  };
+
+  const response = await prepared.xeroClient.accountingApi.updateInvoice(
+    prepared.tenantId,
+    invoiceId,
+    { invoices: [invoice] }
+  );
+
+  const updatedInvoice = response.body.invoices?.[0];
+  const invoiceNumber = updatedInvoice?.invoiceNumber?.trim();
+  if (!updatedInvoice?.invoiceID?.trim() || !invoiceNumber) {
+    throw new Error('Xero did not return a valid updated invoice');
+  }
+
+  loggers.xero.info(
+    {
+      paymentLinkId: params.paymentLinkId,
+      organizationId: params.organizationId,
+      invoiceId: updatedInvoice.invoiceID,
+      invoiceNumber,
+    },
+    'Xero ACCREC updated'
+  );
+
+  return {
+    invoiceId: updatedInvoice.invoiceID.trim(),
+    invoiceNumber,
+    status: String(updatedInvoice.status ?? 'AUTHORISED'),
+    total: updatedInvoice.total ?? 0,
+    xeroRawInvoicesResponse: response.body.invoices,
+  };
+}
+
+export async function voidXeroInvoice(params: {
+  paymentLinkId: string;
+  organizationId: string;
+  xeroInvoiceId: string;
+}): Promise<{ invoiceId: string; status: string }> {
+  const connection = await getActiveConnection(params.organizationId);
+  if (!connection) {
+    throw new Error('No active Xero connection');
+  }
+
+  const xeroClient = getXeroClient();
+  const { applyConnectionToXeroClient } = await import('./apply-connection-token-set');
+  await applyConnectionToXeroClient(xeroClient, connection, 'void_invoice');
+  await xeroClient.updateTenants();
+
+  const invoiceId = params.xeroInvoiceId.trim();
+  const response = await xeroClient.accountingApi.updateInvoice(
+    connection.tenantId,
+    invoiceId,
+    {
+      invoices: [
+        {
+          invoiceID: invoiceId,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          status: Invoice.StatusEnum.VOIDED as any,
+        },
+      ],
+    }
+  );
+
+  const voided = response.body.invoices?.[0];
+  if (!voided?.invoiceID?.trim()) {
+    throw new Error('Xero did not confirm invoice void');
+  }
+
+  loggers.xero.info(
+    {
+      paymentLinkId: params.paymentLinkId,
+      organizationId: params.organizationId,
+      invoiceId: voided.invoiceID,
+      status: voided.status,
+    },
+    'Xero ACCREC voided'
+  );
+
+  return {
+    invoiceId: voided.invoiceID.trim(),
+    status: String(voided.status ?? 'VOIDED'),
+  };
+}
+
+async function prepareXeroAccrecInvoice(params: InvoiceCreationParams): Promise<{
+  invoice: Invoice;
+  tenantId: string;
+  xeroClient: ReturnType<typeof getXeroClient>;
+}> {
   const {
     paymentLinkId,
     organizationId,
@@ -304,49 +446,10 @@ export async function createXeroInvoice(
     status: Invoice.StatusEnum.AUTHORISED as any, // Cast to match Xero SDK type
   };
 
-  // Create invoice in Xero
-  const response = await xeroClient.accountingApi.createInvoices(
-    connection.tenantId,
-    { invoices: [invoice] }
-  );
-
-  if (!response.body.invoices || response.body.invoices.length === 0) {
-    throw new Error('Failed to create invoice in Xero');
-  }
-
-  const createdInvoice = response.body.invoices[0];
-
-  const invoiceId = createdInvoice.invoiceID?.trim();
-  const invoiceNumber = createdInvoice.invoiceNumber?.trim();
-  if (!invoiceId || !invoiceNumber) {
-    loggers.xero.error(
-      {
-        paymentLinkId,
-        organizationId,
-        xeroResponseInvoices: response.body.invoices,
-      },
-      'createInvoices: missing invoiceID or invoiceNumber in Xero response'
-    );
-    throw new Error('Xero did not return a valid invoice ID and number');
-  }
-
-  loggers.xero.info(
-    {
-      paymentLinkId,
-      organizationId,
-      invoiceId,
-      invoiceNumber,
-      status: createdInvoice.status,
-    },
-    'Xero ACCREC created'
-  );
-
   return {
-    invoiceId,
-    invoiceNumber,
-    status: String(createdInvoice.status!),
-    total: createdInvoice.total!,
-    xeroRawInvoicesResponse: response.body.invoices,
+    invoice,
+    tenantId: connection.tenantId,
+    xeroClient,
   };
 }
 

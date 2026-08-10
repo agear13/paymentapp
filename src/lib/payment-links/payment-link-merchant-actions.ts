@@ -229,12 +229,37 @@ export async function deletePaymentLink(id: string): Promise<void> {
         'You do not have permission to delete invoices for this organization. Ask an admin to grant invoice delete access.'
       );
     }
-    throw new Error(
+    const err = new Error(
       typeof payload.error === 'string' && payload.error.trim()
         ? payload.error.trim()
         : 'Failed to delete invoice'
-    );
+    ) as Error & { code?: string; requiresAccountingDialog?: boolean };
+    err.code = payload.code;
+    err.requiresAccountingDialog = payload.requiresAccountingDialog;
+    throw err;
   }
+}
+
+export async function archivePaymentLink(id: string): Promise<{ message: string }> {
+  const response = await fetch(`/api/payment-links/${id}/archive`, { method: 'POST' });
+  const payload = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+  if (!response.ok) {
+    throw new Error(payload.error?.trim() || 'Failed to archive invoice');
+  }
+  return { message: payload.message ?? 'Invoice archived.' };
+}
+
+export async function voidPaymentLink(id: string): Promise<{ message: string; queued?: boolean }> {
+  const response = await fetch(`/api/payment-links/${id}/void`, { method: 'POST' });
+  const payload = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    message?: string;
+    queued?: boolean;
+  };
+  if (!response.ok) {
+    throw new Error(payload.error?.trim() || 'Failed to void invoice');
+  }
+  return { message: payload.message ?? 'Void queued.', queued: payload.queued };
 }
 
 export function canEditPaymentLink(status: string): boolean {

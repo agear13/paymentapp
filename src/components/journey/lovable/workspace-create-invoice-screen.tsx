@@ -43,7 +43,8 @@ import {
 } from '@/lib/payment-links/setup-status';
 import { isValidShortCode } from '@/lib/short-code';
 import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
-import { CommercialOsCreateInvoiceGate } from '@/components/journey/lovable/commercial-os-create-invoice-gate';
+import { AccountingFirstInvoiceBanner } from '@/components/journey/lovable/accounting-first-invoice-banner';
+import { AccountingIntegrationNotice } from '@/components/journey/lovable/accounting-integration-notice';
 import {
   CRYPTO_UNAVAILABLE_REASON,
   fetchMerchantDedicatedRailDefaults,
@@ -159,6 +160,8 @@ function CreateInvoiceSuccess({
           </Link>
         }
       />
+
+      <AccountingFirstInvoiceBanner returnTo={detailHref} />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Link
@@ -590,27 +593,25 @@ export function WorkspaceCreateInvoiceScreen() {
   }
 
   return (
-    <CommercialOsCreateInvoiceGate fullPage>
-      <CreateInvoiceForm
-        draft={draft}
-        patchDraft={patchDraft}
-        guidance={guidance}
-        submitError={submitError}
-        isSubmitting={isSubmitting}
-        handleSubmit={handleSubmit}
-        router={router}
-        showPaymentRailGuidance={showPaymentRailGuidance}
-        paymentMethodOptions={paymentMethodOptions}
-        railDefaults={railDefaults}
-        railDefaultsLoaded={railDefaultsLoaded}
-        anyRailConfigured={railSetup.anyRailConfigured}
-        previewAmount={previewAmount}
-        connectedSystems={connectedSystems}
-        aiPrompt={aiPrompt}
-        setAiPrompt={setAiPrompt}
-        handleAiGenerate={handleAiGenerate}
-      />
-    </CommercialOsCreateInvoiceGate>
+    <CreateInvoiceForm
+      draft={draft}
+      patchDraft={patchDraft}
+      guidance={guidance}
+      submitError={submitError}
+      isSubmitting={isSubmitting}
+      handleSubmit={handleSubmit}
+      router={router}
+      showPaymentRailGuidance={showPaymentRailGuidance}
+      paymentMethodOptions={paymentMethodOptions}
+      railDefaults={railDefaults}
+      railDefaultsLoaded={railDefaultsLoaded}
+      anyRailConfigured={railSetup.anyRailConfigured}
+      previewAmount={previewAmount}
+      connectedSystems={connectedSystems}
+      aiPrompt={aiPrompt}
+      setAiPrompt={setAiPrompt}
+      handleAiGenerate={handleAiGenerate}
+    />
   );
 }
 
@@ -976,6 +977,8 @@ function CreateInvoiceForm({
             </div>
             <p className="mt-4 text-[13px] leading-relaxed text-foreground">{guidance}</p>
           </div>
+
+          <AccountingIntegrationNotice returnTo={COMMERCIAL_OS_ROUTES.createInvoice} />
 
           {connectedSystems && connectedSystems.length > 0 ? (
             <div className="rounded-2xl border border-border bg-card p-5 shadow-card">

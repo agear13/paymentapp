@@ -12,6 +12,8 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { loggers } from '@/lib/logger';
 import { tryDeletePaymentLinkAttachmentFile } from '@/lib/payment-links/payment-link-attachment';
 import { paymentEventBlocksHardDelete } from '@/lib/payments/payment-link-external-evidence';
+import { isAccountingInvoiceExported } from '@/lib/accounting/accounting-push-state';
+import { resolveInvoiceRemovalOptions } from '@/lib/accounting/accounting-invoice-deletion-policy';
 
 export async function POST(
   request: NextRequest,
@@ -40,6 +42,16 @@ export async function POST(
         wise_received_amount: true,
         attachment_storage_key: true,
         attachment_bucket: true,
+        xero_syncs: {
+          where: { sync_type: 'INVOICE' },
+          select: {
+            sync_type: true,
+            status: true,
+            xero_invoice_id: true,
+            response_payload: true,
+          },
+          take: 1,
+        },
       },
     });
 
@@ -64,6 +76,45 @@ export async function POST(
           code: 'DELETE_PERMISSION_DENIED',
         },
         { status: 403 }
+      );
+    }
+
+    const invoiceSync = link.xero_syncs[0];
+    const removalOptions = resolveInvoiceRemovalOptions({
+      status: link.status,
+      invoiceSync: invoiceSync
+        ? {
+            syncType: invoiceSync.sync_type,
+            status: invoiceSync.status,
+            xeroInvoiceId: invoiceSync.xero_invoice_id,
+            responsePayload: invoiceSync.response_payload,
+          }
+        : null,
+      hasPaymentEvidence:
+        Boolean(link.wise_transfer_id) ||
+        Boolean(link.wise_received_amount),
+    });
+
+    if (!removalOptions.canHardDelete) {
+      return NextResponse.json(
+        {
+          error:
+            removalOptions.blockReason ??
+            'This invoice cannot be permanently deleted.',
+          code: isAccountingInvoiceExported(
+            invoiceSync
+              ? {
+                  syncType: invoiceSync.sync_type,
+                  status: invoiceSync.status,
+                  xeroInvoiceId: invoiceSync.xero_invoice_id,
+                }
+              : null
+          )
+            ? 'DELETE_BLOCKED_ACCOUNTING_SYNC'
+            : 'DELETE_NOT_ALLOWED',
+          requiresAccountingDialog: removalOptions.requiresAccountingDialog,
+        },
+        { status: 409 }
       );
     }
 

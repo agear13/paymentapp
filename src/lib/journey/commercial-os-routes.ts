@@ -35,6 +35,7 @@ export const COMMERCIAL_OS_ROUTES = {
   timeline: '/workspace/timeline',
   connected: '/workspace/connected',
   connectedXero: '/workspace/connected/xero',
+  historicalAccountingSync: '/workspace/connected/xero/historical-sync',
   advisor: '/workspace/advisor',
   settings: '/workspace/settings',
   assessment: '/journey/assessment',

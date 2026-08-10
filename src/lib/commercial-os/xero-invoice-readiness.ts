@@ -220,7 +220,7 @@ export function computeHeroSubline(params: {
   const { connected, tenantSelected, canSendInvoices, settlementReady, fieldStates } = params;
 
   if (!connected) {
-    return 'Connect Xero first — use the section below.';
+    return 'Connect accounting to sync invoices automatically.';
   }
   if (!tenantSelected) {
     return 'Choose which Xero business Provvy should use.';

@@ -15,6 +15,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
+import { WorkspaceAccountingBanners } from '@/components/journey/lovable/workspace-accounting-banners';
 
 type NavItem = {
   to: string;
@@ -121,7 +122,10 @@ export function WorkspaceLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
       </header>
-      <main className="relative mx-auto w-[min(1280px,calc(100%-2rem))] py-8">{children}</main>
+      <main className="relative mx-auto w-[min(1280px,calc(100%-2rem))] py-8">
+        <WorkspaceAccountingBanners />
+        {children}
+      </main>
     </div>
   );
 }

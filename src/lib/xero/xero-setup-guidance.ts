@@ -5,9 +5,9 @@
 import type { XeroMappingField } from '@/lib/accounting/recommended-accounting-config';
 
 export const XERO_SETUP_PAGE = {
-  title: 'Set up Xero',
+  title: 'Set up accounting sync',
   subtitle:
-    'Connect Xero, confirm where invoices and payments are recorded, then create your first invoice.',
+    'Connect accounting, confirm where invoices and payments are recorded, then push or auto-sync when ready.',
 } as const;
 
 export const XERO_CONNECT_MODAL = {
@@ -30,8 +30,8 @@ export const CLEARING_ACCOUNTS_EXPLANATION = {
 } as const;
 
 export const XERO_INVOICE_READINESS_COPY = {
-  heroQuestion: 'Ready to create invoices?',
-  createInvoiceCta: 'Create your first invoice →',
+  heroQuestion: 'Ready to sync invoices to accounting?',
+  createInvoiceCta: 'Create an invoice →',
   checking: 'Checking…',
 } as const;
 
@@ -154,7 +154,7 @@ export const XERO_CONNECTION_COPY = {
   reconnectButton: 'Reconnect to Xero',
   businessLabel: 'Which Xero business?',
   businessHelper: 'Provvy will send invoices and payments to this business.',
-  disconnectedHelper: 'Connect Xero so Provvy can create invoices and record payments for you.',
+  disconnectedHelper: 'Connect accounting so Provvy can sync invoices and record payments for you.',
   connectedHelper:
     'Your Xero connection is active. Choose your business below if you have more than one.',
 } as const;
@@ -283,9 +283,10 @@ export const XERO_ACCOUNTANT_MODE_SECTION = {
 /** @deprecated Use XERO_ACCOUNTANT_MODE_SECTION */
 export const XERO_ADVANCED_ACCOUNTING_SECTION = XERO_ACCOUNTANT_MODE_SECTION;
 
+/** @deprecated Invoice creation no longer requires Xero — gates accounting sync only. */
 export const XERO_CREATE_INVOICE_GATE_COPY = {
-  title: 'Finish Xero setup to create invoices',
-  body: 'Complete the required sections on your Xero setup page — the checklist at the top shows what is left.',
-  cta: 'Go to Xero setup',
+  title: 'Finish accounting setup to sync invoices',
+  body: 'Complete the required sections on your accounting setup page — the checklist at the top shows what is left.',
+  cta: 'Go to accounting setup',
 } as const;
 

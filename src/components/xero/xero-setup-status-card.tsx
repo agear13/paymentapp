@@ -38,7 +38,7 @@ export function XeroSetupStatusCard({ variant = 'commercial' }: XeroSetupStatusC
   const isCommercial = variant === 'commercial';
 
   const connected = readiness.connection.connected;
-  const canInvoice = readiness.canCreateInvoice;
+  const canSyncToAccounting = readiness.canSyncToAccounting ?? readiness.canCreateInvoice;
 
   const optionalItems = readiness.recommendations.filter(
     (item) =>
@@ -74,9 +74,9 @@ export function XeroSetupStatusCard({ variant = 'commercial' }: XeroSetupStatusC
           <p className="mt-1 text-sm text-muted-foreground">
             {readiness.loading
               ? 'Checking your setup…'
-              : canInvoice
-                ? 'You can send invoices from Provvy — they will sync to Xero.'
-                : 'Complete the steps below before sending invoices.'}
+              : canSyncToAccounting
+                ? 'Accounting sync is ready — invoices you push will sync automatically.'
+                : 'Complete the steps below to enable accounting sync.'}
           </p>
         </div>
         <Button
@@ -103,9 +103,9 @@ export function XeroSetupStatusCard({ variant = 'commercial' }: XeroSetupStatusC
             ok={connected}
           />
           <StatusRow
-            label="Send invoices from Provvy"
-            value={canInvoice ? 'Yes' : 'Not yet'}
-            ok={canInvoice}
+            label="Push invoices to accounting"
+            value={canSyncToAccounting ? 'Ready' : 'Not yet'}
+            ok={canSyncToAccounting}
           />
           <StatusRow label="Past payments to Xero" value={historicalSyncLine} />
         </div>
@@ -150,9 +150,9 @@ export function XeroSetupStatusCard({ variant = 'commercial' }: XeroSetupStatusC
       {!readiness.loading &&
       readiness.blockers.length === 0 &&
       optionalItems.length === 0 &&
-      canInvoice ? (
+      canSyncToAccounting ? (
         <p className="mt-4 text-sm text-muted-foreground">
-          Nothing else required — you can create invoices in Provvy.
+          Accounting sync is ready. Invoices and payments will sync when you push or receive payment.
         </p>
       ) : null}
     </div>

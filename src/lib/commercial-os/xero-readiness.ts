@@ -74,7 +74,10 @@ export type XeroReadinessResult = {
   blockers: string[];
   recommendations: string[];
   nextAction: XeroReadinessNextAction | null;
+  /** @deprecated Prefer canSyncToAccounting — no longer gates invoice creation in UI. */
   canCreateInvoice: boolean;
+  /** When true, Push to Accounting and auto-sync can run (requires connection + mappings). */
+  canSyncToAccounting: boolean;
   heroAnswer: HeroAnswer;
   heroSubline: string;
   fieldStates: Partial<Record<XeroMappingField, MappingDisplayState>>;
@@ -229,12 +232,13 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     }
   }
 
-  const canCreateInvoice = coreInvoiceReady;
+  const canSyncToAccounting = coreInvoiceReady;
+  const canCreateInvoice = canSyncToAccounting;
   const heroAnswer: HeroAnswer = canCreateInvoice ? 'Yes' : 'Not yet';
   const heroSubline = computeHeroSubline({
     connected,
     tenantSelected,
-    canSendInvoices: canCreateInvoice,
+    canSendInvoices: canSyncToAccounting,
     settlementReady,
     fieldStates,
   });
@@ -243,12 +247,12 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
 
   let nextAction: XeroReadinessNextAction | null = null;
   if (!connected) {
-    nextAction = { label: 'Connect Xero', sectionId: 'xero-connection' };
+    nextAction = { label: 'Connect Accounting', sectionId: 'xero-connection' };
   } else if (!tenantSelected) {
-    nextAction = { label: 'Choose Xero business', sectionId: 'xero-connection' };
-  } else if (!canCreateInvoice) {
+    nextAction = { label: 'Choose accounting business', sectionId: 'xero-connection' };
+  } else if (!canSyncToAccounting) {
     nextAction = {
-      label: 'Complete Xero setup',
+      label: 'Complete accounting setup',
       sectionId: 'invoice-accounts',
     };
   } else if (overallStatus === 'ready_to_invoice') {
@@ -270,6 +274,7 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     recommendations,
     nextAction,
     canCreateInvoice,
+    canSyncToAccounting,
     heroAnswer,
     heroSubline,
     fieldStates,
@@ -306,13 +311,14 @@ export const EMPTY_XERO_READINESS: Omit<XeroReadinessResult, 'loading'> = {
   },
   overallStatus: 'setup_incomplete',
   statusLabel: STATUS_LABELS.setup_incomplete,
-  statusDetail: 'Connect Xero first — use the section below.',
+  statusDetail: 'Connect accounting to sync invoices automatically.',
   blockers: [],
   recommendations: [],
-  nextAction: { label: 'Connect Xero', sectionId: 'xero-connection' },
+  nextAction: { label: 'Connect Accounting', sectionId: 'xero-connection' },
   canCreateInvoice: false,
+  canSyncToAccounting: false,
   heroAnswer: 'Not yet',
-  heroSubline: 'Connect Xero first — use the section below.',
+  heroSubline: 'Connect accounting to sync invoices automatically.',
   fieldStates: {},
   invoiceAccountsNeedAction: true,
   invoiceAccountActionCount: 2,

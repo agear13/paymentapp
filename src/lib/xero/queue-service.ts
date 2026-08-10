@@ -191,6 +191,128 @@ export async function queueXeroSync(params: QueueSyncJobParams): Promise<string>
 }
 
 /**
+ * Queue an update for an invoice already exported to Xero.
+ * Explicit user action only — resets SUCCESS → PENDING with updateExisting flag.
+ */
+export async function queueXeroInvoiceUpdate(params: {
+  paymentLinkId: string;
+  organizationId: string;
+}): Promise<string> {
+  const { paymentLinkId, organizationId } = params;
+
+  const existing = await prisma.xero_syncs.findUnique({
+    where: {
+      xero_syncs_payment_link_sync_type_unique: {
+        payment_link_id: paymentLinkId,
+        sync_type: 'INVOICE',
+      },
+    },
+    select: {
+      id: true,
+      status: true,
+      xero_invoice_id: true,
+    },
+  });
+
+  if (!existing?.xero_invoice_id) {
+    throw new Error('No exported accounting invoice exists to update');
+  }
+
+  const syncRecord = await prisma.xero_syncs.update({
+    where: { id: existing.id },
+    data: {
+      status: 'PENDING',
+      request_payload: {
+        paymentLinkId,
+        organizationId,
+        syncType: 'INVOICE',
+        updateExisting: true,
+        xeroInvoiceId: existing.xero_invoice_id,
+        requeuedAt: new Date().toISOString(),
+      },
+      next_retry_at: new Date(),
+      updated_at: new Date(),
+    },
+  });
+
+  logger.info(
+    {
+      syncId: syncRecord.id,
+      paymentLinkId,
+      organizationId,
+      xeroInvoiceId: existing.xero_invoice_id,
+    },
+    'Xero invoice update queued'
+  );
+
+  return syncRecord.id;
+}
+
+/**
+ * Queue void for an invoice already exported to Xero.
+ * Explicit user action only — does not create duplicate invoices.
+ */
+export async function queueXeroInvoiceVoid(params: {
+  paymentLinkId: string;
+  organizationId: string;
+}): Promise<string> {
+  const { paymentLinkId, organizationId } = params;
+
+  const existing = await prisma.xero_syncs.findUnique({
+    where: {
+      xero_syncs_payment_link_sync_type_unique: {
+        payment_link_id: paymentLinkId,
+        sync_type: 'INVOICE',
+      },
+    },
+    select: {
+      id: true,
+      status: true,
+      xero_invoice_id: true,
+      response_payload: true,
+    },
+  });
+
+  if (!existing?.xero_invoice_id) {
+    throw new Error('No exported accounting invoice exists to void');
+  }
+
+  const payload = (existing.response_payload || {}) as Record<string, unknown>;
+  if (payload.voidedAt) {
+    return existing.id;
+  }
+
+  const syncRecord = await prisma.xero_syncs.update({
+    where: { id: existing.id },
+    data: {
+      status: 'PENDING',
+      request_payload: {
+        paymentLinkId,
+        organizationId,
+        syncType: 'INVOICE',
+        voidExisting: true,
+        xeroInvoiceId: existing.xero_invoice_id,
+        requeuedAt: new Date().toISOString(),
+      },
+      next_retry_at: new Date(),
+      updated_at: new Date(),
+    },
+  });
+
+  logger.info(
+    {
+      syncId: syncRecord.id,
+      paymentLinkId,
+      organizationId,
+      xeroInvoiceId: existing.xero_invoice_id,
+    },
+    'Xero invoice void queued'
+  );
+
+  return syncRecord.id;
+}
+
+/**
  * Get pending sync jobs ready to process
  * 
  * @param batchSize - Maximum number of jobs to retrieve

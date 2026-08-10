@@ -59,6 +59,7 @@ import { PaymentLinkMethodSchema } from '@/lib/validations/schemas';
 import { PaymentLinksGuardrailModal } from '@/components/payment-links-onboarding/payment-links-guardrail-modal';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ACCOUNTING_INTEGRATION_COPY } from '@/lib/accounting/accounting-integration-copy';
 import {
   PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
   isAllowedPaymentLinkAttachmentMime,
@@ -289,6 +290,8 @@ export interface CreatePaymentLinkDialogProps {
   onOpenChange?: (open: boolean) => void;
   mode?: 'create' | 'edit';
   editPaymentLink?: EditPaymentLinkSeed | null;
+  /** When true, show warning that edits are Provvy-only until Update Accounting. */
+  isAccountingSynced?: boolean;
 }
 
 export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = ({
@@ -302,6 +305,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   onOpenChange: controlledOnOpenChange,
   mode = 'create',
   editPaymentLink = null,
+  isAccountingSynced = false,
 }) => {
   // useForm MUST run before any other hook or logic that references `form` (TDZ-safe: first hooks in this component).
   const form = useForm<CreatePaymentLinkFormValues>({
@@ -1154,6 +1158,13 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               are locked until that transfer completes or is cleared. You can still edit description and customer
               details.
             </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {mode === 'edit' && isAccountingSynced ? (
+          <Alert>
+            <AlertTitle>{ACCOUNTING_INTEGRATION_COPY.editSyncedInvoiceWarningTitle}</AlertTitle>
+            <AlertDescription>{ACCOUNTING_INTEGRATION_COPY.editSyncedInvoiceWarningBody}</AlertDescription>
           </Alert>
         ) : null}
 
