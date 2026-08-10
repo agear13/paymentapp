@@ -116,7 +116,7 @@ export async function processQueue(batchSize: number = 10): Promise<ProcessorSta
 
         // Extract organization ID from request payload or payment link
         const organizationId =
-          (job.request_payload as any)?.organizationId ||
+          (requestPayload.organizationId as string | undefined) ||
           job.payment_links.organization_id;
 
         // Execute sync
@@ -279,8 +279,9 @@ export async function processSyncById(syncId: string): Promise<{
       return { success: false, error };
     }
 
-    // Validate payment link
+    // Validate payment link — single parse of request_payload for all flags and IDs.
     const requestPayload = (job.request_payload || {}) as Record<string, unknown>;
+    const updateExisting = requestPayload.updateExisting === true;
     const voidExisting = requestPayload.voidExisting === true;
 
     const requiresOpen = job.sync_type === 'INVOICE';
@@ -302,14 +303,10 @@ export async function processSyncById(syncId: string): Promise<{
 
     // Extract organization ID
     const organizationId =
-      (job.request_payload as any)?.organizationId ||
+      (requestPayload.organizationId as string | undefined) ||
       job.payment_links.organization_id;
 
     // Execute sync
-    const requestPayload = (job.request_payload || {}) as Record<string, unknown>;
-    const updateExisting = requestPayload.updateExisting === true;
-    const voidExisting = requestPayload.voidExisting === true;
-
     const result =
       job.sync_type === 'INVOICE'
         ? voidExisting
