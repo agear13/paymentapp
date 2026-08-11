@@ -19,14 +19,15 @@ describe('commercial invoice accounting independence', () => {
       const gateSource = readSrc('components/journey/lovable/commercial-os-create-invoice-gate.tsx');
       expect(gateSource).not.toMatch(/canCreateInvoice|canSyncToAccounting|connectedXero/);
       expect(gateSource).not.toMatch(/CommercialOsCreateInvoiceBlocked/);
-      expect(gateSource).toContain('Pass-through wrapper');
+      expect(gateSource).toContain('payment_links');
       expect(gateSource).toContain('COMMERCIAL_OS_ROUTES.createInvoice');
     });
 
-    it('create-invoice screen surfaces accounting notice without blocking gate', () => {
+    it('create-invoice screen gates on payment_links entitlement not accounting', () => {
       const screenSource = readSrc('components/journey/lovable/workspace-create-invoice-screen.tsx');
       const sidebarSource = readSrc('components/journey/lovable/create-invoice-preview-sidebar.tsx');
-      expect(screenSource).not.toMatch(/CommercialOsCreateInvoiceGate/);
+      expect(screenSource).toContain("isAllowed('payment_links')");
+      expect(screenSource).toContain('EntitlementUpgradePanel');
       expect(`${screenSource}\n${sidebarSource}`).toContain('AccountingIntegrationNotice');
     });
 

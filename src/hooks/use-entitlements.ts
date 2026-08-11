@@ -66,12 +66,15 @@ export function useEntitlements() {
 
   const isAllowed = React.useCallback(
     (feature: EntitlementFeature): boolean => {
-      if (!data) return true;
+      if (loading || !data) return false;
       if (data.pilotBypass) return true;
-      return data.features[feature]?.allowed ?? true;
+      return data.features[feature]?.allowed ?? false;
     },
-    [data]
+    [data, loading]
   );
+
+  /** True while entitlement state is still loading (fail-closed for gates). */
+  const isEntitlementsReady = !loading && data !== null;
 
   const getDecision = React.useCallback(
     (feature: EntitlementFeature): EntitlementDecision | null => {
@@ -84,10 +87,12 @@ export function useEntitlements() {
   return {
     entitlements: data,
     loading,
+    isEntitlementsReady,
     refresh,
     isAllowed,
     getDecision,
     plan: (data?.plan ?? 'starter') as SubscriptionPlan,
+    effectivePlan: (data?.effectivePlan ?? 'starter') as SubscriptionPlan,
     pilotBypass: data?.pilotBypass ?? false,
     usage: data?.usage,
   };

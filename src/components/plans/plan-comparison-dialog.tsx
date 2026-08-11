@@ -1,0 +1,40 @@
+'use client';
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { PlanComparison } from '@/components/plans/plan-comparison';
+import type { PlanCatalogId } from '@/lib/plans/plan-catalog';
+import { useEntitlements } from '@/hooks/use-entitlements';
+
+type PlanComparisonDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  highlightPlan?: PlanCatalogId;
+};
+
+export function PlanComparisonDialog({
+  open,
+  onOpenChange,
+  highlightPlan,
+}: PlanComparisonDialogProps) {
+  const { plan } = useEntitlements();
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Compare plans</DialogTitle>
+          <DialogDescription>
+            Choose the plan that matches how your business coordinates commerce.
+          </DialogDescription>
+        </DialogHeader>
+        <PlanComparison highlightPlan={highlightPlan} currentPlan={plan} />
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -15,6 +15,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
+import { WorkspaceAccountMenu } from '@/components/commercial-os/workspace-account-menu';
 import { WorkspaceAccountingBanners } from '@/components/journey/lovable/workspace-accounting-banners';
 
 type NavItem = {
@@ -96,9 +97,7 @@ export function WorkspaceLayout({ children }: { children: React.ReactNode }) {
             >
               {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-purple text-[12px] font-semibold text-primary-foreground">
-              A
-            </div>
+            <WorkspaceAccountMenu />
           </div>
         </div>
         <nav className="mt-2 flex items-center gap-1 overflow-x-auto lg:hidden">

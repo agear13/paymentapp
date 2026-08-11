@@ -3,10 +3,16 @@
  */
 
 import type { CommercialDealDraft } from '@/lib/commercial-os/commercial-deal-draft';
+import {
+  EntitlementRequiredError,
+  parseEntitlementRequiredPayload,
+} from '@/lib/entitlements/entitlement-api-errors';
 import type {
   CryptoRailDefaults,
   ManualBankRailDefaults,
 } from '@/lib/payment-links/merchant-dedicated-rail-defaults';
+
+export { EntitlementRequiredError } from '@/lib/entitlements/entitlement-api-errors';
 
 export type CreatePaymentLinkResult = {
   id: string;
@@ -66,8 +72,15 @@ export async function createPaymentLinkFromDraft(
   });
 
   if (!response.ok) {
-    const error = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(error.error || 'Failed to create invoice. Please try again.');
+    const responseBody = await response.json().catch(() => ({}));
+    const entitlementPayload = parseEntitlementRequiredPayload(responseBody);
+    if (entitlementPayload) {
+      throw new EntitlementRequiredError(entitlementPayload);
+    }
+    const generic = responseBody as { error?: string; message?: string };
+    throw new Error(
+      generic.message || generic.error || 'Failed to create invoice. Please try again.'
+    );
   }
 
   const result = (await response.json()) as { data: CreatePaymentLinkResult };

@@ -11,6 +11,7 @@ import { isStripeEnabled } from '@/lib/stripe/client';
 const bodySchema = z.object({
   plan: z.enum(['professional', 'growth']),
   context: z.enum(['onboarding', 'upgrade']).optional().default('upgrade'),
+  returnTo: z.string().optional(),
 });
 
 /** POST /api/billing/create-checkout-session — Stripe Checkout for SaaS subscription. */
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
       plan: body.plan,
       stripeCustomerId: orgBilling?.stripe_customer_id ?? null,
       checkoutContext: body.context,
+      returnTo: body.returnTo,
     });
 
     return apiResponse({

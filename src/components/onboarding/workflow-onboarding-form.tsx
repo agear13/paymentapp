@@ -234,9 +234,9 @@ export function WorkflowOnboardingForm() {
   const [bootstrapMutation, setBootstrapMutation] =
     React.useState<OnboardingRecoveryMutation | null>(null);
   const bootstrapOperationIdRef = React.useRef<string>(createOperationId());
-  const { isAllowed, pilotBypass } = useEntitlements();
-  const agreementAtLimit = !pilotBypass && !isAllowed('create_agreement');
-  const aiImportAtLimit = !pilotBypass && !isAllowed('ai_import');
+  const { isAllowed, pilotBypass, loading: entitlementsLoading } = useEntitlements();
+  const agreementAtLimit = !entitlementsLoading && !pilotBypass && !isAllowed('create_agreement');
+  const aiImportAtLimit = !entitlementsLoading && !pilotBypass && !isAllowed('ai_import');
 
   const isStartMethodBlocked = React.useCallback(
     (method: OnboardingStartMethodId) => {

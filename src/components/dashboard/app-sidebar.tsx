@@ -33,6 +33,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { signOutClient } from '@/lib/auth/sign-out.client';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 interface AppSidebarProps {
@@ -88,41 +89,18 @@ export function AppSidebar({ productProfile }: AppSidebarProps) {
   }, [supabase]);
 
   const handleSignOut = async () => {
-    if (!confirm('Are you sure you want to sign out?')) {
-      return;
-    }
-    
     setLoading(true);
-    try {
-      // Clear localStorage
-      localStorage.clear();
-      
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData.session?.user.id;
-      const email = sessionData.session?.user.email ?? undefined;
-
-      await supabase.auth.signOut();
-
-      void fetch('/api/auth/audit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventType: 'auth.logout',
-          userId,
-          email,
-        }),
-        keepalive: true,
-      }).catch(() => undefined);
-      
-      // Redirect to login
-      router.push('/auth/login');
-      router.refresh();
-    } catch (error) {
-      console.error('Error signing out:', error);
-      alert('Failed to sign out. Please try again.');
-    } finally {
-      setLoading(false);
+    const result = await signOutClient({
+      supabase,
+      onBeforeRedirect: () => {
+        router.push('/auth/login');
+        router.refresh();
+      },
+    });
+    if (!result.ok && result.error !== 'cancelled') {
+      alert(result.error);
     }
+    setLoading(false);
   };
 
   const handleSignIn = () => {

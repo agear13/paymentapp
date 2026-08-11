@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ONBOARDING_PRICING_PLANS } from '@/lib/onboarding/operator-onboarding-types';
+import { getPlanCatalogEntry } from '@/lib/plans/plan-catalog';
 import type { SubscriptionPlan } from '@/lib/entitlements/types';
 import { upgradeCta } from '@/lib/entitlements/feature-labels';
 import { requiredPlanLabel } from '@/lib/entitlements/plans';
@@ -31,6 +32,7 @@ export type PlanUpgradeDialogProps = {
   headline?: string;
   body?: string;
   organizationId?: string;
+  onComparePlans?: () => void;
 };
 
 export function PlanUpgradeDialog({
@@ -42,12 +44,15 @@ export function PlanUpgradeDialog({
   headline,
   body,
   organizationId,
+  onComparePlans,
 }: PlanUpgradeDialogProps) {
   const { refresh } = useEntitlements();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const targetPlan = ONBOARDING_PRICING_PLANS.find((p) => p.id === requiredPlan);
+  const catalogPlan = getPlanCatalogEntry(requiredPlan);
+  const legacyPlan = ONBOARDING_PRICING_PLANS.find((p) => p.id === requiredPlan);
+  const featureList = catalogPlan.features.length ? catalogPlan.features : legacyPlan?.features ?? [];
 
   React.useEffect(() => {
     if (!open) return;
@@ -117,9 +122,9 @@ export function PlanUpgradeDialog({
             <span className="text-muted-foreground">Required plan</span>
             <Badge>{requiredPlanLabel(requiredPlan)}</Badge>
           </div>
-          {targetPlan ? (
+          {featureList.length ? (
             <ul className="text-xs text-muted-foreground space-y-1 pt-1">
-              {targetPlan.features.slice(0, 5).map((f) => (
+              {featureList.slice(0, 5).map((f) => (
                 <li key={f}>• {f}</li>
               ))}
             </ul>
@@ -128,6 +133,11 @@ export function PlanUpgradeDialog({
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
+          {onComparePlans ? (
+            <Button type="button" variant="ghost" className="sm:mr-auto" onClick={onComparePlans}>
+              Compare plans
+            </Button>
+          ) : null}
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Not now
           </Button>

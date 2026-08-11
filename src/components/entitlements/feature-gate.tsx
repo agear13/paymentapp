@@ -1,21 +1,18 @@
 'use client';
 
 import * as React from 'react';
-import { Lock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import type { EntitlementFeature, SubscriptionPlan } from '@/lib/entitlements/types';
-import {
-  FEATURE_DISPLAY_NAMES,
-  upgradeBody,
-  upgradeCta,
-  upgradeHeadline,
-} from '@/lib/entitlements/feature-labels';
-import { PlanUpgradeDialog } from '@/components/entitlements/plan-upgrade-dialog';
+import type { EntitlementFeature } from '@/lib/entitlements/types';
+import { EntitlementUpgradePanel } from '@/components/entitlements/entitlement-upgrade-panel';
+import { EntitlementLoading } from '@/components/entitlements/entitlement-loading';
 import {
   trackEntitlementAnalytics,
   useEntitlements,
 } from '@/hooks/use-entitlements';
+import { FEATURE_DISPLAY_NAMES } from '@/lib/entitlements/feature-labels';
+import { PlanUpgradeDialog } from '@/components/entitlements/plan-upgrade-dialog';
+import { upgradeBody, upgradeCta, upgradeHeadline } from '@/lib/entitlements/feature-labels';
+import type { SubscriptionPlan } from '@/lib/entitlements/types';
+import { Button } from '@/components/ui/button';
 
 type FeatureGateProps = {
   feature: EntitlementFeature;
@@ -23,6 +20,7 @@ type FeatureGateProps = {
   /** Replace children entirely when gated (page-level). */
   mode?: 'inline' | 'block';
   fallback?: React.ReactNode;
+  pageTitle?: string;
 };
 
 export function FeatureGate({
@@ -30,15 +28,16 @@ export function FeatureGate({
   children,
   mode = 'inline',
   fallback,
+  pageTitle,
 }: FeatureGateProps) {
-  const { entitlements, loading, isAllowed, getDecision } = useEntitlements();
+  const { entitlements, loading, isAllowed, getDecision, pilotBypass } = useEntitlements();
   const [dialogOpen, setDialogOpen] = React.useState(false);
 
-  const allowed = loading || isAllowed(feature);
+  const allowed = pilotBypass || isAllowed(feature);
   const decision = getDecision(feature);
 
   React.useEffect(() => {
-    if (loading || allowed || !entitlements) return;
+    if (loading || !entitlements || allowed) return;
     trackEntitlementAnalytics('feature_gate_viewed', {
       organizationId: entitlements.organizationId,
       currentPlan: entitlements.plan,
@@ -48,12 +47,20 @@ export function FeatureGate({
     });
   }, [loading, allowed, entitlements, decision, feature]);
 
-  if (loading || allowed) {
+  if (loading) {
+    return <EntitlementLoading />;
+  }
+
+  if (allowed) {
     return <>{children}</>;
   }
 
   if (fallback) {
     return <>{fallback}</>;
+  }
+
+  if (mode === 'block') {
+    return <EntitlementUpgradePanel feature={feature} pageTitle={pageTitle} />;
   }
 
   const requiredPlan = (decision?.requiredPlan ?? 'professional') as SubscriptionPlan;
@@ -65,46 +72,33 @@ export function FeatureGate({
         : false;
   const subscriptionInactive = decision?.reason === 'subscription_inactive';
 
-  const blocked = (
-    <Card className="p-6 border-dashed">
-      <div className="flex flex-col items-center text-center gap-3 max-w-md mx-auto">
-        <div className="rounded-full bg-muted p-3">
-          <Lock className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <h3 className="font-semibold">
-          {upgradeHeadline(feature, atLimit, subscriptionInactive)}
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          {upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive)}
-        </p>
-        <Button type="button" onClick={() => setDialogOpen(true)}>
-          {upgradeCta(requiredPlan)}
-        </Button>
-      </div>
-      <PlanUpgradeDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        requiredPlan={requiredPlan}
-        featureName={FEATURE_DISPLAY_NAMES[feature]}
-        currentPlan={entitlements?.plan ?? 'starter'}
-        headline={upgradeHeadline(feature, atLimit, subscriptionInactive)}
-        body={upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive)}
-        organizationId={entitlements?.organizationId}
-      />
-    </Card>
-  );
-
-  if (mode === 'block') {
-    return blocked;
-  }
-
   return (
     <div className="relative">
       <div className="pointer-events-none opacity-40 select-none" aria-hidden>
         {children}
       </div>
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="pointer-events-auto">{blocked}</div>
+        <div className="pointer-events-auto max-w-md w-full rounded-xl border bg-card p-4 shadow-lg text-center space-y-3">
+          <h3 className="font-semibold text-sm">
+            {upgradeHeadline(feature, atLimit, subscriptionInactive)}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive)}
+          </p>
+          <Button type="button" size="sm" onClick={() => setDialogOpen(true)}>
+            {upgradeCta(requiredPlan)}
+          </Button>
+          <PlanUpgradeDialog
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            requiredPlan={requiredPlan}
+            featureName={FEATURE_DISPLAY_NAMES[feature]}
+            currentPlan={entitlements?.plan ?? 'starter'}
+            headline={upgradeHeadline(feature, atLimit, subscriptionInactive)}
+            body={upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive)}
+            organizationId={entitlements?.organizationId}
+          />
+        </div>
       </div>
     </div>
   );
@@ -124,9 +118,9 @@ export function GatedButton({
   children,
   ...props
 }: GatedButtonProps) {
-  const { loading, isAllowed, getDecision, entitlements, plan } = useEntitlements();
+  const { loading, isAllowed, getDecision, entitlements, plan, pilotBypass } = useEntitlements();
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const allowed = loading || isAllowed(feature);
+  const allowed = pilotBypass || isAllowed(feature);
   const decision = getDecision(feature);
   const requiredPlan = (decision?.requiredPlan ?? 'professional') as SubscriptionPlan;
   const atLimit =
@@ -141,8 +135,9 @@ export function GatedButton({
     <>
       <Button
         {...props}
-        disabled={disabled || (!loading && !allowed)}
+        disabled={disabled || loading || !allowed}
         onClick={(e) => {
+          if (loading) return;
           if (!allowed) {
             setDialogOpen(true);
             return;

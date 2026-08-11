@@ -50,7 +50,7 @@ export function upgradeBody(
         ? starterLimitMessage('ai_import')
         : `Upgrade to ${requiredPlanLabel(requiredPlan)} for unlimited AI imports.`;
     case 'payment_links':
-      return 'Payment Links are available on Professional.';
+      return "You're currently on Starter. Upgrade to Professional to create Payment Links and automate settlement tracking.";
     case 'referral_management':
       return 'Referral & Affiliate Management is available on Professional.';
     case 'xero_integration':

@@ -7,6 +7,7 @@ export type SaasCheckoutPlan = 'professional' | 'growth';
 export async function startSaasCheckout(input: {
   plan: SaasCheckoutPlan;
   context?: SaasCheckoutContext;
+  returnTo?: string;
 }): Promise<{ url: string } | { error: string }> {
   const res = await csrfAwareFetch('/api/billing/create-checkout-session', {
     method: 'POST',
@@ -15,6 +16,7 @@ export async function startSaasCheckout(input: {
     body: JSON.stringify({
       plan: input.plan,
       context: input.context ?? 'upgrade',
+      returnTo: input.returnTo,
     }),
   });
 

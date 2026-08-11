@@ -58,11 +58,13 @@ function isWorkspaceFeatureVisible(
 function isEntitlementVisible(
   href: string,
   isAllowed: ReturnType<typeof useEntitlements>['isAllowed'],
-  pilotBypass: boolean
+  pilotBypass: boolean,
+  loading: boolean
 ): boolean {
   const feature = entitlementForNavHref(href);
   if (!feature || pilotBypass) return true;
   if (NAV_LOCKED_VISIBLE_HREFS.has(href)) return true;
+  if (loading) return true;
   return isAllowed(feature);
 }
 
@@ -72,22 +74,25 @@ function filterRegistrySections({
   hasFeature,
   isAllowed,
   pilotBypass,
+  loading,
 }: {
   sections: readonly WorkspaceNavigationRegistryItem[];
   productProfile: DashboardProductProfile;
   hasFeature: ReturnType<typeof useWorkspaceFeatures>['hasFeature'];
   isAllowed: ReturnType<typeof useEntitlements>['isAllowed'];
   pilotBypass: boolean;
+  loading: boolean;
 }): WorkspaceNavigationRegistryItem[] {
   return sections
     .filter((section) => isAdminVisible(section, productProfile))
     .filter((section) => isWorkspaceFeatureVisible(section, hasFeature))
+    .filter((section) => isEntitlementVisible(section.href, isAllowed, pilotBypass, loading))
     .map((section) => ({
       ...section,
       items: section.items
         ?.filter((item) => isAdminVisible(item, productProfile))
         .filter((item) => isWorkspaceFeatureVisible(item, hasFeature))
-        .filter((item) => isEntitlementVisible(item.href, isAllowed, pilotBypass)),
+        .filter((item) => isEntitlementVisible(item.href, isAllowed, pilotBypass, loading)),
     }));
 }
 
@@ -97,7 +102,7 @@ export function RegistrySidebarNavGroup({
   label,
   sections,
 }: RegistrySidebarNavGroupProps) {
-  const { isAllowed, pilotBypass } = useEntitlements();
+  const { isAllowed, pilotBypass, loading } = useEntitlements();
   const { hasFeature } = useWorkspaceFeatures();
   const visibleSections = filterRegistrySections({
     sections,
@@ -105,6 +110,7 @@ export function RegistrySidebarNavGroup({
     hasFeature,
     isAllowed,
     pilotBypass,
+    loading,
   });
 
   if (visibleSections.length === 0) {

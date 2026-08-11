@@ -600,8 +600,8 @@ function StageAgreement({
   onImportComplete: (snapshot: WorkflowImportSnapshot) => void;
   onExtractFailed: (error: string) => void;
 }) {
-  const { isAllowed, loading: entitlementsLoading } = useEntitlements();
-  const aiImportAllowed = entitlementsLoading || isAllowed("ai_import");
+  const { isAllowed, loading: entitlementsLoading, pilotBypass } = useEntitlements();
+  const aiImportAllowed = pilotBypass || (!entitlementsLoading && isAllowed('ai_import'));
 
   const [selected, setSelected] = useState<string | null>("Upload PDF");
   const [inputOpen, setInputOpen] = useState(false);

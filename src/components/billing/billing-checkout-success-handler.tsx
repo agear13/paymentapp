@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   invalidateEntitlementsCache,
@@ -20,12 +20,12 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Handles Stripe Checkout success return on /dashboard?billing=success.
- * Waits for webhook sync, completes onboarding, and refreshes entitlements.
+ * Handles Stripe Checkout success return on ?billing=success (dashboard or Commercial OS).
  */
 export function BillingCheckoutSuccessHandler() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
   const { refresh } = useEntitlements();
   const handledRef = React.useRef(false);
 
@@ -33,6 +33,8 @@ export function BillingCheckoutSuccessHandler() {
     if (searchParams?.get('billing') !== 'success') return;
     if (handledRef.current) return;
     handledRef.current = true;
+
+    const basePath = pathname?.split('?')[0] ?? '/dashboard';
 
     (async () => {
       invalidateEntitlementsCache();
@@ -48,7 +50,7 @@ export function BillingCheckoutSuccessHandler() {
         toast.error(
           'Payment received, but your subscription is still syncing. Please refresh in a moment.'
         );
-        router.replace('/dashboard');
+        router.replace(basePath);
         return;
       }
 
@@ -60,7 +62,7 @@ export function BillingCheckoutSuccessHandler() {
       if (!completeRes.ok) {
         const json = (await completeRes.json().catch(() => ({}))) as { error?: string };
         toast.error(json.error ?? 'Could not finalize onboarding after payment');
-        router.replace('/dashboard');
+        router.replace(basePath);
         return;
       }
 
@@ -78,10 +80,10 @@ export function BillingCheckoutSuccessHandler() {
       const planName = PLAN_LABELS[planId] ?? planId;
       toast.success(`Welcome to Provvypay ${planName}! Your subscription is active.`);
 
-      router.replace('/dashboard');
+      router.replace(basePath);
       router.refresh();
     })();
-  }, [refresh, router, searchParams]);
+  }, [refresh, router, searchParams, pathname]);
 
   return null;
 }

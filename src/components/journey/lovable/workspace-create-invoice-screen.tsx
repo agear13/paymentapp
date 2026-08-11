@@ -30,8 +30,13 @@ import { formatCurrency } from '@/lib/formatters/format-currency';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import {
   createPaymentLinkFromDraft,
+  EntitlementRequiredError,
   type CreatePaymentLinkResult,
 } from '@/lib/payment-links/create-payment-link-from-draft';
+import { useEntitlements } from '@/hooks/use-entitlements';
+import { EntitlementUpgradePanel } from '@/components/entitlements/entitlement-upgrade-panel';
+import { StripeConnectReadinessSummary } from '@/components/commercial-os/stripe-connect-readiness-summary';
+import { EntitlementLoading } from '@/components/entitlements/entitlement-loading';
 import {
   invoicePublicReference,
 } from '@/lib/payment-links/invoice-display-status';
@@ -195,6 +200,11 @@ export function WorkspaceCreateInvoiceScreen() {
   const router = useRouter();
   const { toast } = useToast();
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
+  const {
+    loading: entitlementsLoading,
+    isAllowed,
+    pilotBypass,
+  } = useEntitlements();
 
   const [draft, setDraft] = useState<CommercialDealDraft>(() => defaultCommercialDealDraft());
   const [merchantSettings, setMerchantSettings] = useState<MerchantSettingsSnapshot | null>(null);
@@ -553,8 +563,16 @@ export function WorkspaceCreateInvoiceScreen() {
       });
       setCreated(result);
     } catch (error) {
+      if (error instanceof EntitlementRequiredError) {
+        setSubmitError(error.userMessage);
+        return;
+      }
       const message =
         error instanceof Error ? error.message : 'Failed to create invoice. Please try again.';
+      if (message === 'feature_gated') {
+        setSubmitError('Payment Links are available on Professional. Upgrade your plan to create invoices.');
+        return;
+      }
       setSubmitError(message);
     } finally {
       setIsSubmitting(false);
@@ -580,6 +598,22 @@ export function WorkspaceCreateInvoiceScreen() {
   if (created) {
     return (
       <CreateInvoiceSuccess created={created} onCopyLink={() => void handleCopyLink()} copied={copied} />
+    );
+  }
+
+  if (entitlementsLoading) {
+    return <EntitlementLoading label="Checking plan access…" className="min-h-[40vh]" />;
+  }
+
+  const canCreatePaymentLinks = pilotBypass || isAllowed('payment_links');
+
+  if (!canCreatePaymentLinks) {
+    return (
+      <EntitlementUpgradePanel
+        feature="payment_links"
+        pageTitle="Create invoices and collect payments"
+        footer={<StripeConnectReadinessSummary className="mt-2" />}
+      />
     );
   }
 

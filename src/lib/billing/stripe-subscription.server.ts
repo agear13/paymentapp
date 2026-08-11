@@ -66,17 +66,26 @@ export async function ensureStripeCustomerForOrganization(input: {
 
 export type SaasCheckoutContext = 'onboarding' | 'upgrade';
 
-function resolveCheckoutReturnUrls(origin: string, context: SaasCheckoutContext) {
+function resolveCheckoutReturnUrls(
+  origin: string,
+  context: SaasCheckoutContext,
+  returnTo?: string
+) {
+  const successPath =
+    returnTo && returnTo.startsWith('/') ? `${returnTo}?billing=success` : undefined;
+
   if (context === 'onboarding') {
     return {
-      success_url: `${origin}/dashboard?billing=success`,
+      success_url: successPath ?? `${origin}/dashboard?billing=success`,
       cancel_url: `${origin}/onboarding?billing=canceled`,
     };
   }
 
   return {
-    success_url: `${origin}/dashboard?billing=success`,
-    cancel_url: `${origin}/dashboard?billing=canceled`,
+    success_url: successPath ?? `${origin}/dashboard?billing=success`,
+    cancel_url: returnTo
+      ? `${returnTo}?billing=canceled`
+      : `${origin}/dashboard?billing=canceled`,
   };
 }
 
@@ -88,6 +97,7 @@ export async function createSaasSubscriptionCheckoutSession(input: {
   plan: PaidStripePlan;
   stripeCustomerId?: string | null;
   checkoutContext?: SaasCheckoutContext;
+  returnTo?: string;
 }): Promise<{ url: string; sessionId: string }> {
   if (!isStripeEnabled) {
     throw new Error('Stripe billing is not configured');
@@ -106,7 +116,11 @@ export async function createSaasSubscriptionCheckoutSession(input: {
   });
 
   const origin = getBrandedAppOrigin();
-  const returnUrls = resolveCheckoutReturnUrls(origin, input.checkoutContext ?? 'upgrade');
+  const returnUrls = resolveCheckoutReturnUrls(
+    origin,
+    input.checkoutContext ?? 'upgrade',
+    input.returnTo
+  );
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     customer: customerId,
