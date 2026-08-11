@@ -36,6 +36,19 @@ import {
   maskWiseProfileId,
   maskEvmWalletAddress,
 } from '@/lib/settings/mask-credential';
+import {
+  buildMerchantSettingsCreatePayload,
+  buildMerchantSettingsUpdatePayload,
+  commercialOsSaveButtonLabel,
+  deriveStripeSetupDisplayStatus,
+  formValuesFromPersistedSnapshot,
+  merchantSettingsSchemaForSections,
+  parseMerchantSettingsSaveError,
+  snapshotFromMerchantSettingsRow,
+  type MerchantSettingsSaveValues,
+  type PersistedMerchantSettingsSnapshot,
+} from '@/lib/settings/merchant-settings-section-save';
+import { StripeConnectSetupStatusBadge } from '@/components/journey/lovable/payments-settlement-ui';
 
 import { WORKSPACE_CURRENCIES, DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
@@ -49,48 +62,6 @@ import {
 
 const evmRail = getPaymentRail('evm_wallet');
 
-const merchantSettingsSchema = z.object({
-  displayName: z.string().min(2, 'Display name must be at least 2 characters').max(255),
-  organizationLogoUrl: z
-    .string()
-    .optional()
-    .or(z.literal(''))
-    .refine(
-      (value) =>
-        !value ||
-        value.startsWith('/uploads/logos/') ||
-        value.startsWith('merchant-logos/') ||
-        /^https?:\/\//i.test(value),
-      'Must be a valid URL or uploaded logo path'
-    ),
-  defaultCurrency: z.string().length(3, 'Currency must be a 3-letter ISO code'),
-  stripeAccountId: z.string().optional().refine(
-    (val) => !val || val.startsWith('acct_'),
-    'Stripe account ID must start with "acct_"'
-  ),
-  hederaAccountId: z.string().optional().refine(
-    (val) => !val || /^0\.0\.\d+$/.test(val),
-    'Hedera account ID must be in format 0.0.xxxxx'
-  ),
-  // Wise settings
-  wiseProfileId: z.string().optional().refine(
-    (val) => !val || /^\d+$/.test(val),
-    'Wise Profile ID must be a numeric ID'
-  ),
-  wiseEnabled: z.boolean().optional(),
-  wiseCurrency: z.string().length(3, 'Currency must be a 3-letter ISO code').optional().or(z.literal('')),
-  evmWalletEnabled: z.boolean().optional(),
-  evmWalletAddress: z
-    .string()
-    .optional()
-    .or(z.literal(''))
-    .refine((val) => !val || /^0x[a-fA-F0-9]{40}$/.test(val.trim()), {
-      message: 'EVM wallet address must be a valid 0x address (42 characters)',
-    }),
-  evmSupportedNetworks: z.array(z.string()).optional(),
-  evmSupportedTokens: z.array(z.string()).optional(),
-});
-
 const pilotMerchantSettingsSchema = z.object({
   stripeAccountId: z.string().trim().min(1, 'Stripe account ID is required'),
   wiseProfileId: z.string().trim().min(1, 'Wise details are required'),
@@ -103,11 +74,7 @@ const pilotMerchantSettingsSchema = z.object({
     }),
 });
 
-type MerchantSettingsFormValues = z.infer<typeof merchantSettingsSchema> & {
-  stripeAccountId: string;
-  wiseProfileId: string;
-  hederaAccountId: string;
-};
+type MerchantSettingsFormValues = MerchantSettingsSaveValues;
 
 interface MerchantSettingsFormProps {
   variant?: 'full' | 'pilot';
@@ -132,9 +99,13 @@ export function MerchantSettingsForm({
   const showBranding = !sections || sections.includes('branding');
   const showProviders = !sections || sections.includes('providers');
   const sectionSpacing = isCommercialOs ? 'space-y-5' : 'space-y-6';
-  const { organizationId, isLoading: isOrgLoading } = useOrganization();
+  const { organizationId, organization, isLoading: isOrgLoading } = useOrganization();
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   const [settingsId, setSettingsId] = React.useState<string | null>(null);
+  const [persistedSnapshot, setPersistedSnapshot] =
+    React.useState<PersistedMerchantSettingsSnapshot | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = React.useState(false);
   const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
   const [logoPreviewError, setLogoPreviewError] = React.useState(false);
@@ -142,8 +113,13 @@ export function MerchantSettingsForm({
   const [evmGloballyEnabled, setEvmGloballyEnabled] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const activeSchema = React.useMemo(
+    () => (isPilotVariant ? pilotMerchantSettingsSchema : merchantSettingsSchemaForSections(sections)),
+    [isPilotVariant, sections]
+  );
+
   const form = useForm<MerchantSettingsFormValues>({
-    resolver: zodResolver(isPilotVariant ? pilotMerchantSettingsSchema : merchantSettingsSchema),
+    resolver: zodResolver(activeSchema),
     defaultValues: {
       displayName: '',
       organizationLogoUrl: '',
@@ -160,6 +136,56 @@ export function MerchantSettingsForm({
     },
   });
 
+  const applySettingsRow = React.useCallback(
+    (settings: Record<string, unknown>) => {
+      const snapshot = snapshotFromMerchantSettingsRow(settings);
+      setSettingsId((settings.id as string) ?? null);
+      setPersistedSnapshot(snapshot);
+      form.reset(formValuesFromPersistedSnapshot(snapshot));
+
+      if (settings.organization_logo_url) {
+        setLogoPreview(settings.organization_logo_url as string);
+        setLogoPreviewError(false);
+      }
+
+      if (settings._features && typeof settings._features === 'object') {
+        const features = settings._features as {
+          wiseGloballyEnabled?: boolean;
+          evmGloballyEnabled?: boolean;
+        };
+        if (features.wiseGloballyEnabled !== undefined) {
+          setWiseGloballyEnabled(features.wiseGloballyEnabled);
+        }
+        if (features.evmGloballyEnabled !== undefined) {
+          setEvmGloballyEnabled(features.evmGloballyEnabled);
+        }
+      }
+    },
+    [form]
+  );
+
+  const reloadSettings = React.useCallback(async (): Promise<boolean> => {
+    if (!organizationId) return false;
+
+    const settingsResponse = await fetch(
+      `/api/merchant-settings?organizationId=${organizationId}`,
+      { cache: 'no-store' }
+    );
+
+    if (!settingsResponse.ok) {
+      return false;
+    }
+
+    const settingsData = (await settingsResponse.json()) as Record<string, unknown>[];
+    if (settingsData?.length > 0) {
+      applySettingsRow(settingsData[0]);
+    }
+    return true;
+  }, [organizationId, applySettingsRow]);
+
+  const reloadSettingsRef = React.useRef(reloadSettings);
+  reloadSettingsRef.current = reloadSettings;
+
   // Fetch existing settings when organizationId is available
   React.useEffect(() => {
     async function fetchSettings() {
@@ -169,49 +195,7 @@ export function MerchantSettingsForm({
       }
 
       try {
-        // Get existing merchant settings
-        const settingsResponse = await fetch(`/api/merchant-settings?organizationId=${organizationId}`);
-        if (settingsResponse.ok) {
-          const settingsData = await settingsResponse.json();
-          if (settingsData && settingsData.length > 0) {
-            const settings = settingsData[0];
-            setSettingsId(settings.id);
-            form.reset({
-              displayName: settings.display_name || '',
-              organizationLogoUrl: settings.organization_logo_url || '',
-              defaultCurrency: settings.default_currency || DEFAULT_WORKSPACE_CURRENCY,
-              stripeAccountId: settings.stripe_account_id || '',
-              hederaAccountId: settings.hedera_account_id || '',
-              wiseProfileId: settings.wise_profile_id || '',
-              wiseEnabled: settings.wise_enabled || false,
-              wiseCurrency: settings.wise_currency || '',
-              evmWalletEnabled: settings.evm_wallet_enabled || false,
-              evmWalletAddress: settings.evm_wallet_address || '',
-              evmSupportedNetworks:
-                settings.evm_supported_networks?.length > 0
-                  ? settings.evm_supported_networks
-                  : [...EVM_RAIL_DEFAULT_NETWORKS],
-              evmSupportedTokens:
-                settings.evm_supported_tokens?.length > 0
-                  ? settings.evm_supported_tokens
-                  : [...EVM_RAIL_DEFAULT_TOKENS],
-            });
-            
-            // Set logo preview if URL exists
-            if (settings.organization_logo_url) {
-              setLogoPreview(settings.organization_logo_url);
-              setLogoPreviewError(false);
-            }
-            
-            // Update global Wise feature flag from API response
-            if (settings._features?.wiseGloballyEnabled !== undefined) {
-              setWiseGloballyEnabled(settings._features.wiseGloballyEnabled);
-            }
-            if (settings._features?.evmGloballyEnabled !== undefined) {
-              setEvmGloballyEnabled(settings._features.evmGloballyEnabled);
-            }
-          }
-        }
+        await reloadSettingsRef.current();
       } catch (error) {
         console.error('Failed to fetch settings:', error);
         toast.error('Failed to load settings');
@@ -221,9 +205,11 @@ export function MerchantSettingsForm({
     }
 
     if (!isOrgLoading) {
-      fetchSettings();
+      void fetchSettings();
+    } else {
+      setIsLoading(true);
     }
-  }, [organizationId, isOrgLoading, form]);
+  }, [organizationId, isOrgLoading]);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -315,7 +301,8 @@ export function MerchantSettingsForm({
       return;
     }
 
-    setIsLoading(true);
+    setSaveError(null);
+    setIsSaving(true);
     try {
       const evmWalletEnabled = data.evmWalletEnabled === true;
       const evmWalletAddress =
@@ -329,28 +316,18 @@ export function MerchantSettingsForm({
         ? data.evmSupportedTokens ?? [...EVM_RAIL_DEFAULT_TOKENS]
         : [...EVM_RAIL_DEFAULT_TOKENS];
 
+      const evmOptions = {
+        evmWalletEnabled,
+        evmWalletAddress,
+        evmSupportedNetworks,
+        evmSupportedTokens,
+      };
+
       if (settingsId) {
-        // Update existing settings
-        const updatePayload = isPilotVariant
-          ? {
-              stripeAccountId: data.stripeAccountId || undefined,
-              wiseProfileId: data.wiseProfileId || undefined,
-              hederaAccountId: data.hederaAccountId || undefined,
-            }
-          : {
-              displayName: data.displayName,
-              organizationLogoUrl: data.organizationLogoUrl || undefined,
-              defaultCurrency: data.defaultCurrency,
-              stripeAccountId: data.stripeAccountId || undefined,
-              hederaAccountId: data.hederaAccountId || undefined,
-              wiseProfileId: data.wiseProfileId || undefined,
-              wiseEnabled: data.wiseEnabled,
-              wiseCurrency: data.wiseCurrency || undefined,
-              evmWalletEnabled,
-              evmWalletAddress,
-              evmSupportedNetworks,
-              evmSupportedTokens,
-            };
+        const updatePayload = buildMerchantSettingsUpdatePayload(sections, data, {
+          isPilotVariant,
+          ...evmOptions,
+        });
         const response = await fetch(`/api/merchant-settings/${settingsId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -358,39 +335,34 @@ export function MerchantSettingsForm({
         });
 
         if (!response.ok) {
-          throw new Error('Failed to update settings');
+          const message = await parseMerchantSettingsSaveError(response);
+          throw new Error(message);
         }
 
-        toast.success(isPilotVariant ? 'Settings saved' : 'Collection settings saved');
+        const reloaded = await reloadSettings();
+        if (!reloaded) {
+          throw new Error('Settings saved but could not refresh saved status. Please reload the page.');
+        }
+
+        toast.success(
+          isPilotVariant
+            ? 'Settings saved'
+            : isCommercialOs
+              ? showProviders && !showBranding
+                ? 'Payment providers saved'
+                : showBranding && !showProviders
+                  ? 'Branding saved'
+                  : 'Collection settings saved'
+              : 'Collection settings saved'
+        );
         notifyWorkspaceActivationRefresh();
         onSaved?.();
       } else {
-        // Create new settings
-        const createPayload = isPilotVariant
-          ? {
-              organizationId,
-              displayName: 'Rabbit Hole Merchant',
-              defaultCurrency: DEFAULT_WORKSPACE_CURRENCY,
-              stripeAccountId: data.stripeAccountId || undefined,
-              wiseProfileId: data.wiseProfileId || undefined,
-              hederaAccountId: data.hederaAccountId || undefined,
-              wiseEnabled: true,
-            }
-          : {
-              organizationId,
-              displayName: data.displayName,
-              organizationLogoUrl: data.organizationLogoUrl || undefined,
-              defaultCurrency: data.defaultCurrency,
-              stripeAccountId: data.stripeAccountId || undefined,
-              hederaAccountId: data.hederaAccountId || undefined,
-              wiseProfileId: data.wiseProfileId || undefined,
-              wiseEnabled: data.wiseEnabled,
-              wiseCurrency: data.wiseCurrency || undefined,
-              evmWalletEnabled,
-              evmWalletAddress,
-              evmSupportedNetworks,
-              evmSupportedTokens,
-            };
+        const createPayload = buildMerchantSettingsCreatePayload(sections, data, organizationId, {
+          isPilotVariant,
+          organizationDisplayName: organization?.name,
+          ...evmOptions,
+        });
         const response = await fetch('/api/merchant-settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -398,27 +370,46 @@ export function MerchantSettingsForm({
         });
 
         if (!response.ok) {
-          throw new Error('Failed to create settings');
+          const message = await parseMerchantSettingsSaveError(response);
+          throw new Error(message);
         }
 
         const json = (await response.json()) as {
           settings?: { id?: string };
           id?: string;
-          operationalOnboarding?: unknown;
         };
         const settings = json.settings ?? json;
         if (settings?.id) {
           setSettingsId(settings.id);
         }
-        toast.success(isPilotVariant ? 'Settings saved' : 'Collection settings saved');
+
+        const reloaded = await reloadSettings();
+        if (!reloaded) {
+          throw new Error('Settings saved but could not refresh saved status. Please reload the page.');
+        }
+
+        toast.success(
+          isPilotVariant
+            ? 'Settings saved'
+            : isCommercialOs
+              ? showProviders && !showBranding
+                ? 'Payment providers saved'
+                : showBranding && !showProviders
+                  ? 'Branding saved'
+                  : 'Collection settings saved'
+              : 'Collection settings saved'
+        );
         notifyWorkspaceActivationRefresh();
         onSaved?.();
       }
     } catch (error) {
-      toast.error('Failed to save merchant settings');
+      const message =
+        error instanceof Error ? error.message : 'Failed to save merchant settings';
+      setSaveError(message);
+      toast.error(message);
       console.error(error);
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   }
 
@@ -503,6 +494,13 @@ export function MerchantSettingsForm({
 
   const stripeAccountId = form.watch('stripeAccountId');
   const stripeTestMode = isStripeTestAccountId(stripeAccountId);
+  const stripeSetupStatus = deriveStripeSetupDisplayStatus(
+    stripeAccountId,
+    persistedSnapshot?.stripeAccountId
+  );
+  const saveButtonLabel = isCommercialOs
+    ? commercialOsSaveButtonLabel(sections)
+    : 'Save changes';
 
   return (
     <Form {...form}>
@@ -517,7 +515,14 @@ export function MerchantSettingsForm({
               workflows.
             </p>
           </div>
-          ) : null}
+          ) : (
+          <div className="rounded-xl border border-border bg-secondary/30 px-4 py-3 text-[12.5px] text-ink-soft">
+            Update how your organization appears on invoices and payment pages. Changes here do
+            not affect payment provider account IDs — use{' '}
+            <span className="font-medium text-foreground">Save branding</span> below when you are
+            done.
+          </div>
+          )}
 
         <FormField
           control={form.control}
@@ -674,7 +679,14 @@ export function MerchantSettingsForm({
               Changes to payment rail configuration can affect live payment processing.
             </AlertDescription>
           </Alert>
-          ) : null}
+          ) : (
+          <div className="rounded-xl border border-border bg-secondary/30 px-4 py-3 text-[12.5px] text-ink-soft">
+            Enter account IDs for each payment provider you want to accept. Provvy does not run an
+            OAuth connection flow for these rails — paste the IDs from your provider dashboards,
+            then click <span className="font-medium text-foreground">Save payment providers</span>{' '}
+            below.
+          </div>
+          )}
 
         <FormField
           control={form.control}
@@ -682,7 +694,10 @@ export function MerchantSettingsForm({
           render={({ field }) => (
             <FormItem>
               <div className="flex flex-wrap items-center gap-2">
-                <FormLabel>Stripe account ID</FormLabel>
+                <FormLabel>Stripe Connect account ID</FormLabel>
+                {showProviders ? (
+                  <StripeConnectSetupStatusBadge status={stripeSetupStatus} />
+                ) : null}
                 {stripeTestMode ? (
                   <Badge
                     variant="outline"
@@ -702,7 +717,10 @@ export function MerchantSettingsForm({
                 />
               </FormControl>
               <FormDescription>
-                Your Stripe Connect account ID (starts with acct_).
+                Paste your existing Stripe Connect account ID (starts with{' '}
+                <span className="font-mono">acct_</span>). Find it in the Stripe Dashboard under
+                Connect → Accounts. Saving stores this ID in your workspace settings — Provvy does
+                not connect to Stripe automatically.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -1000,14 +1018,22 @@ export function MerchantSettingsForm({
         ) : null}
 
         {!hideSubmit ? (
-        <div className={`flex justify-end ${isCommercialOs ? '' : 'border-t pt-6'}`}>
+        <div className={`flex flex-col items-end gap-3 ${isCommercialOs ? '' : 'border-t pt-6'}`}>
+          {saveError ? (
+            <Alert variant="destructive" className="w-full">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{saveError}</AlertDescription>
+            </Alert>
+          ) : null}
           <Button
             type="submit"
-            disabled={form.formState.isSubmitting || isLoading}
+            disabled={form.formState.isSubmitting || isSaving || isLoading}
             className={isCommercialOs ? 'rounded-xl bg-gradient-purple text-primary-foreground shadow-glow hover:brightness-110' : undefined}
           >
-            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isCommercialOs ? 'Save' : 'Save changes'}
+            {(form.formState.isSubmitting || isSaving) && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            {saveButtonLabel}
           </Button>
         </div>
         ) : null}

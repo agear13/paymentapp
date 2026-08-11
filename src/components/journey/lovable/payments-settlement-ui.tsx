@@ -66,19 +66,50 @@ export function PaymentsCheckPill({ done, children }: { done: boolean; children:
 export function PaymentsProviderStatusBadge({
   connected,
   label,
+  tone = connected ? 'success' : 'neutral',
 }: {
   connected: boolean;
   label?: string;
+  tone?: 'success' | 'neutral' | 'warning';
 }) {
+  const toneClass =
+    tone === 'success'
+      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+      : tone === 'warning'
+        ? 'bg-amber-500/15 text-amber-800 dark:text-amber-400'
+        : 'bg-secondary text-ink-soft';
+
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide ${
-        connected
-          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-          : 'bg-secondary text-ink-soft'
-      }`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide ${toneClass}`}
     >
       {connected ? 'Connected' : label ?? 'Not configured'}
+    </span>
+  );
+}
+
+export function StripeConnectSetupStatusBadge({
+  status,
+}: {
+  status: 'connected' | 'setup_required' | 'unsaved_changes';
+}) {
+  if (status === 'connected') {
+    return (
+      <span data-testid="stripe-connect-setup-status">
+        <PaymentsProviderStatusBadge connected tone="success" />
+      </span>
+    );
+  }
+  if (status === 'unsaved_changes') {
+    return (
+      <span data-testid="stripe-connect-setup-status">
+        <PaymentsProviderStatusBadge connected={false} label="Unsaved changes" tone="warning" />
+      </span>
+    );
+  }
+  return (
+    <span data-testid="stripe-connect-setup-status">
+      <PaymentsProviderStatusBadge connected={false} label="Setup required" tone="neutral" />
     </span>
   );
 }

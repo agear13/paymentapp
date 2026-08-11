@@ -145,6 +145,7 @@ export function CreateInvoicePaymentMethodOption({
   label,
   selected,
   available,
+  configured,
   unavailableReason,
   onSelect,
 }: {
@@ -152,6 +153,8 @@ export function CreateInvoicePaymentMethodOption({
   label: string;
   selected: boolean;
   available: boolean;
+  /** Merchant rail readiness — drives CONNECTED badge, independent of selectability. */
+  configured: boolean;
   unavailableReason?: string;
   onSelect: () => void;
 }) {
@@ -178,7 +181,7 @@ export function CreateInvoicePaymentMethodOption({
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-2">
           <span className="text-[13.5px] font-medium">{label}</span>
-          <PaymentsProviderStatusBadge connected={available} label={available ? 'Ready' : 'Setup'} />
+          <PaymentsProviderStatusBadge connected={configured} label="Setup" />
         </span>
         {!available && unavailableReason ? (
           <span className="mt-0.5 block text-[12px] text-ink-soft">{unavailableReason}</span>

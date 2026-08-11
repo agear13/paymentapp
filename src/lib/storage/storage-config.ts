@@ -22,6 +22,19 @@ export type StorageConfig = {
 export const R2_PRODUCTION_ENV_MESSAGE =
   'Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, and R2_PUBLIC_URL.';
 
+export const R2_PUBLIC_URL_CUSTOM_DOMAIN_MESSAGE =
+  'R2_PUBLIC_URL must be a public custom domain (e.g. https://assets.provvypay.com), not the R2 S3 API endpoint (.r2.cloudflarestorage.com).';
+
+/** True when a URL points at the authenticated R2 S3 API host — not valid for public asset URLs. */
+export function isR2S3ApiEndpointUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    return new URL(url).hostname.endsWith('.r2.cloudflarestorage.com');
+  } catch {
+    return false;
+  }
+}
+
 function trimOrNull(value: string | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -123,6 +136,10 @@ export function evaluateStorageHealth(
 
   if (r2Ready && !config.r2.publicUrl?.startsWith('https://')) {
     warnings.push('R2_PUBLIC_URL should use HTTPS in production.');
+  }
+
+  if (r2Ready && isR2S3ApiEndpointUrl(config.r2.publicUrl)) {
+    warnings.push(R2_PUBLIC_URL_CUSTOM_DOMAIN_MESSAGE);
   }
 
   return {

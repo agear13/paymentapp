@@ -22,6 +22,21 @@ describe('resolveAssetUrl', () => {
     expect(result.resolvedFrom).toBe('absolute');
   });
 
+  it('resolves merchant logo storage keys to the production custom domain', () => {
+    process.env.R2_PUBLIC_URL = 'https://assets.provvypay.com';
+    process.env.R2_ACCOUNT_ID = '81ba3ac215bbde6352beec7e6ef28841';
+    process.env.R2_ACCESS_KEY_ID = 'access-key';
+    process.env.R2_SECRET_ACCESS_KEY = 'secret-key';
+    process.env.R2_BUCKET_NAME = 'provvypay-assets';
+
+    const result = resolveAssetUrl({
+      source: 'merchant-logos/org-123/abc.png',
+      category: 'merchant-logos',
+    });
+    expect(result.url).toBe('https://assets.provvypay.com/merchant-logos/org-123/abc.png');
+    expect(result.resolvedFrom).toBe('public_base');
+  });
+
   it('resolves R2 storage keys against public base URL', () => {
     const result = resolveAssetUrl({
       source: 'merchant-logos/org-123/abc.png',

@@ -44,7 +44,7 @@ services:
       - key: R2_BUCKET_NAME
         sync: false
       - key: R2_PUBLIC_URL
-        sync: false
+        value: https://assets.provvypay.com
       - key: ASSET_CDN_URL
         sync: false
       - key: STORAGE_PROVIDER

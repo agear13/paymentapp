@@ -126,6 +126,20 @@ describe('getPublicAssetUrl', () => {
     process.env = originalEnv;
   });
 
+  it('builds public logo URLs on the production custom domain when R2 is configured', () => {
+    process.env.R2_PUBLIC_URL = 'https://assets.provvypay.com';
+    process.env.R2_ACCOUNT_ID = '81ba3ac215bbde6352beec7e6ef28841';
+    process.env.R2_ACCESS_KEY_ID = 'access-key';
+    process.env.R2_SECRET_ACCESS_KEY = 'secret-key';
+    process.env.R2_BUCKET_NAME = 'provvypay-assets';
+
+    const url = getPublicAssetUrl(
+      'merchant-logos/org-1/logo.png',
+      'merchant-logos'
+    );
+    expect(url).toBe('https://assets.provvypay.com/merchant-logos/org-1/logo.png');
+  });
+
   it('builds public URLs for merchant logo keys when R2 is configured', () => {
     const url = getPublicAssetUrl('merchant-logos/org-1/logo.png', 'merchant-logos');
     expect(url).toBe('https://assets.example.com/merchant-logos/org-1/logo.png');

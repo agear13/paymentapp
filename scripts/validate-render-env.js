@@ -134,6 +134,21 @@ function validateVariable(varName, value) {
     }
   }
 
+  if (varName === 'R2_PUBLIC_URL') {
+    try {
+      const hostname = new URL(value).hostname;
+      if (hostname.endsWith('.r2.cloudflarestorage.com')) {
+        return {
+          valid: false,
+          error:
+            'Must be a public custom domain (e.g. https://assets.provvypay.com), not the R2 S3 API endpoint',
+        };
+      }
+    } catch {
+      /* validateUrl handles malformed URLs */
+    }
+  }
+
   return { valid: true };
 }
 

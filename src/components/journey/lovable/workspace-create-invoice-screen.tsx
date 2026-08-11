@@ -38,9 +38,11 @@ import {
 import {
   buildInvoicePaymentMethodOptions,
   computePaymentLinkRailSetup,
-  guardrailKindForUnconfiguredPaymentMethod,
+  isPaymentRailConfiguredForMerchant,
   toPaymentLinkRailSnapshot,
+  type PaymentLinkRailSetupStatus,
 } from '@/lib/payment-links/setup-status';
+import type { PaymentMethod } from '@prisma/client';
 import { isValidShortCode } from '@/lib/short-code';
 import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
 import { AccountingFirstInvoiceBanner } from '@/components/journey/lovable/accounting-first-invoice-banner';
@@ -55,7 +57,8 @@ import {
 } from '@/components/journey/lovable/create-invoice-ui';
 import {
   computeCreateInvoiceWorkflowProgress,
-  validateCreateInvoiceDraft,
+  validateCreateInvoiceSubmitReadiness,
+  validateCreateInvoicePaymentRailReadiness,
 } from '@/lib/commercial-os/create-invoice-progress';
 import {
   CRYPTO_UNAVAILABLE_REASON,
@@ -83,6 +86,20 @@ type ConnectedSystemCard = {
 };
 
 const PAYMENTS_SETTINGS_HREF = `${COMMERCIAL_OS_ROUTES.payments}?from=invoice`;
+
+type InvoicePaymentMethodOptionView = ReturnType<typeof buildInvoicePaymentMethodOptions>[number] & {
+  configured: boolean;
+};
+
+function isCreateInvoicePaymentMethodConfigured(
+  value: PaymentMethod,
+  railSetup: ReturnType<typeof computePaymentLinkRailSetup>,
+  railDefaults: MerchantDedicatedRailDefaults
+): boolean {
+  if (value === 'MANUAL_BANK') return Boolean(railDefaults.manualBank);
+  if (value === 'CRYPTO') return Boolean(railDefaults.crypto);
+  return isPaymentRailConfiguredForMerchant(value, railSetup);
+}
 
 function paymentSettingsHref(method: string): string {
   return `${PAYMENTS_SETTINGS_HREF}&method=${encodeURIComponent(method)}`;
@@ -381,7 +398,7 @@ export function WorkspaceCreateInvoiceScreen() {
     [merchantSettings, platformFeatures]
   );
 
-  const paymentMethodOptions = useMemo(() => {
+  const paymentMethodOptions = useMemo((): InvoicePaymentMethodOptionView[] => {
     const base = buildInvoicePaymentMethodOptions({
       setup: railSetup,
       features: platformFeatures,
@@ -393,6 +410,7 @@ export function WorkspaceCreateInvoiceScreen() {
         return {
           ...opt,
           available: ready,
+          configured: ready,
           unavailableReason: ready ? undefined : MANUAL_BANK_UNAVAILABLE_REASON,
         };
       }
@@ -401,10 +419,14 @@ export function WorkspaceCreateInvoiceScreen() {
         return {
           ...opt,
           available: ready,
+          configured: ready,
           unavailableReason: ready ? undefined : CRYPTO_UNAVAILABLE_REASON,
         };
       }
-      return opt;
+      return {
+        ...opt,
+        configured: isCreateInvoicePaymentMethodConfigured(opt.value, railSetup, railDefaults),
+      };
     });
   }, [railSetup, platformFeatures, railDefaults]);
 
@@ -513,28 +535,14 @@ export function WorkspaceCreateInvoiceScreen() {
     }
 
     const pm = draft.paymentMethod;
-    if (pm === 'MANUAL_BANK' && !railDefaults.manualBank) {
-      setSubmitError(
-        'Manual Bank Transfer is not set up yet. Add your business bank account in Payment Settings.'
-      );
+    const railReadiness = validateCreateInvoicePaymentRailReadiness(draft, {
+      railSetup,
+      manualBankReady: Boolean(railDefaults.manualBank),
+      cryptoReady: Boolean(railDefaults.crypto),
+    });
+    if (!railReadiness.ready && railReadiness.blockMessage) {
+      setSubmitError(railReadiness.blockMessage);
       return;
-    }
-    if (pm === 'CRYPTO' && !railDefaults.crypto) {
-      setSubmitError('Crypto payments are not set up yet. Add your wallet in Payment Settings.');
-      return;
-    }
-    if (pm && pm !== 'CRYPTO' && pm !== 'MANUAL_BANK') {
-      if (!railSetup.anyRailConfigured) {
-        setSubmitError(
-          'Connect Stripe or Wise in Connected Systems, or choose Manual Bank Transfer or Crypto to create this invoice.'
-        );
-        return;
-      }
-      const guardrailKind = guardrailKindForUnconfiguredPaymentMethod(pm, railSetup);
-      if (guardrailKind) {
-        setSubmitError('The selected payment method is not fully set up yet. Check Connected Systems.');
-        return;
-      }
     }
 
     setIsSubmitting(true);
@@ -589,6 +597,7 @@ export function WorkspaceCreateInvoiceScreen() {
       railDefaults={railDefaults}
       railDefaultsLoaded={railDefaultsLoaded}
       merchantSettingsLoaded={merchantSettingsLoaded}
+      railSetup={railSetup}
       anyRailConfigured={railSetup.anyRailConfigured}
       previewAmount={previewAmount}
       connectedSystems={connectedSystems}
@@ -612,6 +621,7 @@ function CreateInvoiceForm({
   railDefaults,
   railDefaultsLoaded,
   merchantSettingsLoaded,
+  railSetup,
   anyRailConfigured,
   previewAmount,
   connectedSystems,
@@ -627,10 +637,11 @@ function CreateInvoiceForm({
   handleSubmit: () => void;
   router: ReturnType<typeof useRouter>;
   showPaymentRailGuidance: boolean;
-  paymentMethodOptions: ReturnType<typeof buildInvoicePaymentMethodOptions>;
+  paymentMethodOptions: InvoicePaymentMethodOptionView[];
   railDefaults: MerchantDedicatedRailDefaults;
   railDefaultsLoaded: boolean;
   merchantSettingsLoaded: boolean;
+  railSetup: PaymentLinkRailSetupStatus;
   anyRailConfigured: boolean;
   previewAmount: string;
   connectedSystems: ConnectedSystemCard[] | null;
@@ -639,7 +650,15 @@ function CreateInvoiceForm({
   handleAiGenerate: () => void;
 }) {
   const [showValidation, setShowValidation] = useState(false);
-  const validation = useMemo(() => validateCreateInvoiceDraft(draft), [draft]);
+  const validation = useMemo(
+    () =>
+      validateCreateInvoiceSubmitReadiness(draft, {
+        railSetup,
+        manualBankReady: Boolean(railDefaults.manualBank),
+        cryptoReady: Boolean(railDefaults.crypto),
+      }),
+    [draft, railSetup, railDefaults.manualBank, railDefaults.crypto]
+  );
   const workflowSteps = useMemo(() => computeCreateInvoiceWorkflowProgress(draft), [draft]);
   const formLoading = !merchantSettingsLoaded || !railDefaultsLoaded;
 
@@ -898,6 +917,7 @@ function CreateInvoiceForm({
                   label={opt.label}
                   selected={draft.paymentMethod === opt.value}
                   available={opt.available}
+                  configured={opt.configured}
                   unavailableReason={opt.unavailableReason}
                   onSelect={() =>
                     patchDraft({
@@ -965,6 +985,10 @@ function CreateInvoiceForm({
             {submitError ? (
               <p className="text-[13px] text-destructive" role="alert">
                 {submitError}
+              </p>
+            ) : showValidation && validation.submitBlockMessage ? (
+              <p className="text-[13px] text-amber-700 dark:text-amber-400" role="status">
+                {validation.submitBlockMessage}
               </p>
             ) : showValidation && !validation.isSubmittable ? (
               <p className="text-[13px] text-amber-700 dark:text-amber-400" role="status">

@@ -3,6 +3,14 @@
  */
 
 import type { CommercialDealDraft } from '@/lib/commercial-os/commercial-deal-draft';
+import {
+  CRYPTO_UNAVAILABLE_REASON,
+  MANUAL_BANK_UNAVAILABLE_REASON,
+} from '@/lib/payment-links/merchant-dedicated-rail-defaults';
+import {
+  guardrailKindForUnconfiguredPaymentMethod,
+  type PaymentLinkRailSetupStatus,
+} from '@/lib/payment-links/setup-status';
 
 export const CREATE_INVOICE_WORKFLOW_STEPS = [
   'Invoice',
@@ -27,6 +35,22 @@ export type CreateInvoiceFieldValidation = {
   missingLabels: string[];
 };
 
+export const CREATE_INVOICE_PAYMENT_METHOD_NOT_READY_MESSAGE =
+  'The selected payment method is not fully set up yet. Check Connected Systems.';
+
+export const CREATE_INVOICE_NO_RAILS_MESSAGE =
+  'Connect Stripe or Wise in Connected Systems, or choose Manual Bank Transfer or Crypto to create this invoice.';
+
+export type CreateInvoiceRailReadiness = {
+  ready: boolean;
+  blockMessage?: string;
+};
+
+export type CreateInvoiceSubmitValidation = CreateInvoiceFieldValidation & {
+  railReady: boolean;
+  submitBlockMessage?: string;
+};
+
 export function validateCreateInvoiceDraft(draft: CommercialDealDraft): CreateInvoiceFieldValidation {
   const hasCustomer = Boolean(draft.customerName.trim() || draft.customerEmail.trim());
   const hasDescription = Boolean(draft.description.trim());
@@ -46,6 +70,60 @@ export function validateCreateInvoiceDraft(draft: CommercialDealDraft): CreateIn
     paymentMethod: hasPaymentMethod,
     isSubmittable: hasCustomer && hasDescription && hasAmount && hasPaymentMethod,
     missingLabels,
+  };
+}
+
+export function validateCreateInvoicePaymentRailReadiness(
+  draft: CommercialDealDraft,
+  input: {
+    railSetup: PaymentLinkRailSetupStatus;
+    manualBankReady: boolean;
+    cryptoReady: boolean;
+  }
+): CreateInvoiceRailReadiness {
+  const pm = draft.paymentMethod;
+
+  if (pm === 'MANUAL_BANK' && !input.manualBankReady) {
+    return { ready: false, blockMessage: MANUAL_BANK_UNAVAILABLE_REASON };
+  }
+
+  if (pm === 'CRYPTO' && !input.cryptoReady) {
+    return { ready: false, blockMessage: CRYPTO_UNAVAILABLE_REASON };
+  }
+
+  if (pm && pm !== 'CRYPTO' && pm !== 'MANUAL_BANK') {
+    const guardrailKind = guardrailKindForUnconfiguredPaymentMethod(pm, input.railSetup);
+    if (guardrailKind) {
+      return {
+        ready: false,
+        blockMessage: CREATE_INVOICE_PAYMENT_METHOD_NOT_READY_MESSAGE,
+      };
+    }
+
+    if (!input.railSetup.anyRailConfigured) {
+      return { ready: false, blockMessage: CREATE_INVOICE_NO_RAILS_MESSAGE };
+    }
+  }
+
+  return { ready: true };
+}
+
+export function validateCreateInvoiceSubmitReadiness(
+  draft: CommercialDealDraft,
+  input: {
+    railSetup: PaymentLinkRailSetupStatus;
+    manualBankReady: boolean;
+    cryptoReady: boolean;
+  }
+): CreateInvoiceSubmitValidation {
+  const fields = validateCreateInvoiceDraft(draft);
+  const rail = validateCreateInvoicePaymentRailReadiness(draft, input);
+
+  return {
+    ...fields,
+    railReady: rail.ready,
+    submitBlockMessage: rail.ready ? undefined : rail.blockMessage,
+    isSubmittable: fields.isSubmittable && rail.ready,
   };
 }
 

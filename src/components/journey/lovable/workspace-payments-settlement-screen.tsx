@@ -15,6 +15,7 @@ import { AccountingIntegrationNotice } from '@/components/journey/lovable/accoun
 import {
   PaymentsSectionCard,
   PaymentsProviderStatusBadge,
+  StripeConnectSetupStatusBadge,
 } from '@/components/journey/lovable/payments-settlement-ui';
 import {
   PaymentsSettlementCommercialReadiness,
@@ -56,7 +57,9 @@ export function WorkspacePaymentsSettlementScreen() {
           Payments &amp; Settlement
         </h1>
         <p className="mt-2 max-w-2xl text-[15px] text-ink-soft">
-          Connect payment providers and configure how customer payments are collected and settled.
+          Configure payment providers and settlement settings for customer collections. Payment
+          provider account IDs are entered manually — there is no OAuth connect flow for Stripe on
+          this page.
         </p>
       </header>
 
@@ -80,7 +83,7 @@ export function WorkspacePaymentsSettlementScreen() {
       <PaymentsSectionCard
         icon={Building2}
         title="Branding"
-        description="These details appear on your invoices, payment pages and customer receipts."
+        description="These details appear on your invoices, payment pages and customer receipts. Saved separately from payment providers."
       >
         <MerchantSettingsForm
           sections={['branding']}
@@ -92,18 +95,27 @@ export function WorkspacePaymentsSettlementScreen() {
       <PaymentsSectionCard
         icon={CreditCard}
         title="Payment Providers"
-        description="This is how Provvy collects customer payments. Enable the rails your customers actually use."
+        description="Paste provider account IDs to enable checkout rails. Each section has its own save button — saving branding does not save payment providers."
         aside={
-          <div className="rounded-full border border-border bg-secondary/50 px-3 py-1 text-[12px] text-ink-soft">
+          railSetup ? (
+            <StripeConnectSetupStatusBadge
+              status={
+                railSetup.multiRails.stripe?.configured ? 'connected' : 'setup_required'
+              }
+            />
+          ) : null
+        }
+      >
+        <div className="mb-4 space-y-3">
+          <div className="rounded-xl border border-border bg-secondary/30 px-4 py-3 text-[12.5px] text-ink-soft">
+            Manual bank transfer details are saved from your most recent invoice with bank instructions.
+            Configure bank fields when creating an invoice, or update them on an existing invoice with
+            manual bank payment method.
+          </div>
+          <div className="text-[12px] text-ink-soft">
             {enabledCheckoutRails} of 4 checkout rails enabled
             {manualBankConfigured ? ' · manual bank ready' : ''}
           </div>
-        }
-      >
-        <div className="mb-4 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-[12.5px] text-ink-soft">
-          Manual bank transfer details are saved from your most recent invoice with bank instructions.
-          Configure bank fields when creating an invoice, or update them on an existing invoice with
-          manual bank payment method.
         </div>
         <MerchantSettingsForm
           sections={['providers']}
