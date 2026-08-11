@@ -34,4 +34,18 @@ describe('PlanComparison', () => {
     render(<PlanComparison />);
     expect(screen.getAllByText('Payment Links').length).toBeGreaterThan(0);
   });
+
+  it('uses a scroll region and responsive card minimum widths', () => {
+    render(<PlanComparison currentPlan="starter" />);
+
+    expect(screen.getByTestId('plan-comparison-scroll-region')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-comparison-layout')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-comparison-card-growth')).toBeInTheDocument();
+  });
+
+  it('gives plan cards a readable minimum width class for scroll layout', () => {
+    render(<PlanComparison />);
+    const growthCard = screen.getByTestId('plan-comparison-card-growth');
+    expect(growthCard.className).toContain('min-w-[280px]');
+  });
 });

@@ -1,13 +1,14 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { EntitlementFeature, SubscriptionPlan } from '@/lib/entitlements/types';
 import { FEATURE_DISPLAY_NAMES } from '@/lib/entitlements/feature-labels';
 import { getPlanCatalogEntry, planDisplayName } from '@/lib/plans/plan-catalog';
-import { PlanUpgradeDialog } from '@/components/entitlements/plan-upgrade-dialog';
 import { PlanComparisonDialog } from '@/components/plans/plan-comparison-dialog';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import {
   trackEntitlementAnalytics,
   useEntitlements,
@@ -56,8 +57,8 @@ export function EntitlementUpgradePanel({
   footer,
   className,
 }: EntitlementUpgradePanelProps) {
+  const router = useRouter();
   const { entitlements, plan, getDecision } = useEntitlements();
-  const [dialogOpen, setDialogOpen] = React.useState(false);
   const [compareOpen, setCompareOpen] = React.useState(false);
   const [checkoutLoading, setCheckoutLoading] = React.useState(false);
   const [checkoutError, setCheckoutError] = React.useState<string | null>(null);
@@ -164,7 +165,7 @@ export function EntitlementUpgradePanel({
           <Button type="button" variant="outline" onClick={() => setCompareOpen(true)}>
             Compare plans
           </Button>
-          <Button type="button" variant="ghost" onClick={() => setDialogOpen(true)}>
+          <Button type="button" variant="ghost" onClick={() => router.push(COMMERCIAL_OS_ROUTES.planBilling)}>
             View plan details
           </Button>
         </div>
@@ -175,20 +176,6 @@ export function EntitlementUpgradePanel({
 
       {footer}
 
-      <PlanUpgradeDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        requiredPlan={requiredPlan}
-        featureName={FEATURE_DISPLAY_NAMES[feature]}
-        currentPlan={plan}
-        headline={headline}
-        body={body}
-        organizationId={entitlements?.organizationId}
-        onComparePlans={() => {
-          setDialogOpen(false);
-          setCompareOpen(true);
-        }}
-      />
       <PlanComparisonDialog open={compareOpen} onOpenChange={setCompareOpen} highlightPlan={requiredPlan} />
     </div>
   );

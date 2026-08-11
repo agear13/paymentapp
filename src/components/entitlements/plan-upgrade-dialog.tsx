@@ -33,6 +33,7 @@ export type PlanUpgradeDialogProps = {
   body?: string;
   organizationId?: string;
   onComparePlans?: () => void;
+  returnTo?: string;
 };
 
 export function PlanUpgradeDialog({
@@ -45,6 +46,7 @@ export function PlanUpgradeDialog({
   body,
   organizationId,
   onComparePlans,
+  returnTo,
 }: PlanUpgradeDialogProps) {
   const { refresh } = useEntitlements();
   const [loading, setLoading] = React.useState(false);
@@ -89,6 +91,9 @@ export function PlanUpgradeDialog({
       const result = await startSaasCheckout({
         plan: requiredPlan,
         context: 'upgrade',
+        returnTo:
+          returnTo ??
+          (typeof window !== 'undefined' ? window.location.pathname : undefined),
       });
       if ('error' in result) {
         throw new Error(result.error);

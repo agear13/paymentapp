@@ -26,7 +26,7 @@ export function PlanComparisonDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-6xl max-h-[min(90vh,960px)] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Compare plans</DialogTitle>
           <DialogDescription>

@@ -12,6 +12,11 @@ import {
   type PaidStripePlan,
 } from '@/lib/billing/stripe-subscription-plans';
 import { getBrandedAppOrigin } from '@/lib/runtime/customer-facing-url';
+import {
+  resolveBillingPortalReturnUrl,
+  resolveSaasCheckoutReturnUrls,
+  type SaasCheckoutContext,
+} from '@/lib/billing/saas-billing-return-urls';
 
 export function mapStripeSubscriptionStatus(status: Stripe.Subscription.Status): SubscriptionStatus {
   switch (status) {
@@ -64,30 +69,7 @@ export async function ensureStripeCustomerForOrganization(input: {
   return customer.id;
 }
 
-export type SaasCheckoutContext = 'onboarding' | 'upgrade';
-
-function resolveCheckoutReturnUrls(
-  origin: string,
-  context: SaasCheckoutContext,
-  returnTo?: string
-) {
-  const successPath =
-    returnTo && returnTo.startsWith('/') ? `${returnTo}?billing=success` : undefined;
-
-  if (context === 'onboarding') {
-    return {
-      success_url: successPath ?? `${origin}/dashboard?billing=success`,
-      cancel_url: `${origin}/onboarding?billing=canceled`,
-    };
-  }
-
-  return {
-    success_url: successPath ?? `${origin}/dashboard?billing=success`,
-    cancel_url: returnTo
-      ? `${returnTo}?billing=canceled`
-      : `${origin}/dashboard?billing=canceled`,
-  };
-}
+export type { SaasCheckoutContext };
 
 export async function createSaasSubscriptionCheckoutSession(input: {
   organizationId: string;
@@ -116,7 +98,7 @@ export async function createSaasSubscriptionCheckoutSession(input: {
   });
 
   const origin = getBrandedAppOrigin();
-  const returnUrls = resolveCheckoutReturnUrls(
+  const returnUrls = resolveSaasCheckoutReturnUrls(
     origin,
     input.checkoutContext ?? 'upgrade',
     input.returnTo
@@ -152,6 +134,7 @@ export async function createSaasSubscriptionCheckoutSession(input: {
 
 export async function createBillingPortalSession(input: {
   stripeCustomerId: string;
+  returnTo?: string;
 }): Promise<{ url: string }> {
   if (!isStripeEnabled) {
     throw new Error('Stripe billing is not configured');
@@ -160,7 +143,7 @@ export async function createBillingPortalSession(input: {
   const origin = getBrandedAppOrigin();
   const session = await stripe.billingPortal.sessions.create({
     customer: input.stripeCustomerId,
-    return_url: `${origin}/dashboard/settings/billing`,
+    return_url: resolveBillingPortalReturnUrl(origin, input.returnTo),
   });
 
   if (!session.url) {

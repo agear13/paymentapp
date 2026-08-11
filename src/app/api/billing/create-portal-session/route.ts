@@ -1,10 +1,15 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
-import { apiError, apiResponse } from '@/lib/api/middleware';
+import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { createBillingPortalSession } from '@/lib/billing/stripe-subscription.server';
 import { isStripeEnabled } from '@/lib/stripe/client';
+
+const bodySchema = z.object({
+  returnTo: z.string().optional(),
+});
 
 /** POST /api/billing/create-portal-session — Stripe Customer Billing Portal. */
 export async function POST(request: NextRequest) {
@@ -21,6 +26,8 @@ export async function POST(request: NextRequest) {
     return apiError('No organization found', 404);
   }
 
+  const { data: body } = await validateBody(request, bodySchema);
+
   const orgBilling = await prisma.organizations.findUnique({
     where: { id: org.id },
     select: { stripe_customer_id: true },
@@ -32,7 +39,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const session = await createBillingPortalSession({ stripeCustomerId });
+    const session = await createBillingPortalSession({
+      stripeCustomerId,
+      returnTo: body?.returnTo,
+    });
     return apiResponse({ url: session.url });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create billing portal session';

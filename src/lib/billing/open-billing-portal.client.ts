@@ -1,7 +1,11 @@
-export async function openBillingPortal(): Promise<{ url: string } | { error: string }> {
+export async function openBillingPortal(input?: {
+  returnTo?: string;
+}): Promise<{ url: string } | { error: string }> {
   const res = await fetch('/api/billing/create-portal-session', {
     method: 'POST',
     credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ returnTo: input?.returnTo }),
   });
 
   const json = (await res.json().catch(() => ({}))) as { url?: string; error?: string };

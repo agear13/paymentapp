@@ -76,7 +76,7 @@ export function BillingSettingsPanel() {
   async function handleManageSubscription() {
     setPortalLoading(true);
     try {
-      const result = await openBillingPortal();
+      const result = await openBillingPortal({ returnTo: '/dashboard/settings/billing' });
       if ('error' in result) {
         toast.error(result.error);
         return;

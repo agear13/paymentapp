@@ -61,61 +61,78 @@ export function PlanComparison({
   }
 
   return (
-    <div className={cn('space-y-4', className)}>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {PLAN_CATALOG_ORDER.map((planId) => {
-          const plan = PLAN_CATALOG[planId];
-          const isCurrent = currentPlan === planId;
-          const isHighlight = highlightPlan === planId;
+    <div className={cn('space-y-4 min-w-0', className)} data-testid="plan-comparison">
+      <div
+        className="overflow-x-auto overscroll-x-contain pb-2 -mx-1 px-1 2xl:overflow-visible 2xl:mx-0 2xl:px-0"
+        data-testid="plan-comparison-scroll-region"
+      >
+        <div
+          className={cn(
+            'grid grid-cols-1 gap-4',
+            'sm:flex sm:w-max sm:min-w-full sm:gap-4',
+            '2xl:grid 2xl:w-auto 2xl:min-w-0 2xl:grid-cols-4'
+          )}
+          data-testid="plan-comparison-layout"
+        >
+          {PLAN_CATALOG_ORDER.map((planId) => {
+            const plan = PLAN_CATALOG[planId];
+            const isCurrent = currentPlan === planId;
+            const isHighlight = highlightPlan === planId;
 
-          return (
-            <div
-              key={planId}
-              className={cn(
-                'rounded-2xl border bg-card p-5 shadow-card flex flex-col',
-                isHighlight && 'border-primary/40 ring-1 ring-primary/20',
-                isCurrent && 'border-emerald-500/30'
-              )}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold">{plan.name}</p>
-                  <p className="mt-1 text-lg font-semibold">{plan.price}</p>
+            return (
+              <div
+                key={planId}
+                data-testid={`plan-comparison-card-${planId}`}
+                className={cn(
+                  'rounded-2xl border bg-card p-5 shadow-card flex flex-col min-w-0 w-full',
+                  'sm:min-w-[280px] sm:max-w-[320px] sm:flex-shrink-0',
+                  '2xl:min-w-0 2xl:max-w-none',
+                  isHighlight && 'border-primary/40 ring-1 ring-primary/20',
+                  isCurrent && 'border-emerald-500/30'
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold">{plan.name}</p>
+                    <p className="mt-1 text-lg font-semibold">{plan.price}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    {isCurrent ? <Badge variant="secondary">Current</Badge> : null}
+                    {isHighlight && !isCurrent ? <Badge>Recommended</Badge> : null}
+                  </div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  {isCurrent ? <Badge variant="secondary">Current</Badge> : null}
-                  {isHighlight && !isCurrent ? <Badge>Recommended</Badge> : null}
-                </div>
+                <p className="mt-3 text-[13px] text-ink-soft leading-relaxed [overflow-wrap:anywhere]">
+                  {plan.positioning}
+                </p>
+                <ul className="mt-4 flex-1 space-y-2">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2 text-[13px]">
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                      <span className="[overflow-wrap:anywhere]">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                {!isCurrent ? (
+                  <Button
+                    type="button"
+                    className="mt-5 w-full shrink-0"
+                    variant={isHighlight ? 'default' : 'outline'}
+                    disabled={loadingPlan !== null}
+                    onClick={() => void handleSelect(planId)}
+                  >
+                    {loadingPlan === planId
+                      ? 'Redirecting…'
+                      : planId === 'enterprise'
+                        ? 'Contact Sales'
+                        : planId === 'starter'
+                          ? 'Current default'
+                          : `Choose ${plan.name}`}
+                  </Button>
+                ) : null}
               </div>
-              <p className="mt-3 text-[13px] text-ink-soft leading-relaxed">{plan.positioning}</p>
-              <ul className="mt-4 flex-1 space-y-2">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-[13px]">
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              {!isCurrent ? (
-                <Button
-                  type="button"
-                  className="mt-5 w-full"
-                  variant={isHighlight ? 'default' : 'outline'}
-                  disabled={loadingPlan !== null}
-                  onClick={() => void handleSelect(planId)}
-                >
-                  {loadingPlan === planId
-                    ? 'Redirecting…'
-                    : planId === 'enterprise'
-                      ? 'Contact Sales'
-                      : planId === 'starter'
-                        ? 'Current default'
-                        : `Choose ${plan.name}`}
-                </Button>
-              ) : null}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>

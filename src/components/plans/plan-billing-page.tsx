@@ -136,7 +136,7 @@ export function PlanBillingPage() {
   async function handlePortal() {
     setPortalLoading(true);
     try {
-      const result = await openBillingPortal();
+      const result = await openBillingPortal({ returnTo: '/workspace/settings/plan' });
       if ('error' in result) {
         toast.error(result.error);
         return;
