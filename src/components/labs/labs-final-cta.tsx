@@ -1,5 +1,5 @@
 import { ArrowRight, Brain, Calendar } from 'lucide-react';
-import { LABS_CALENDLY_URL } from '@/lib/labs/labs-constants';
+import { CALENDLY_CONSULTATION_URL } from '@/lib/config/calendly-consultation-url';
 
 export function LabsFinalCta() {
   return (
@@ -27,9 +27,9 @@ export function LabsFinalCta() {
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </a>
               <a
-                href={LABS_CALENDLY_URL}
+                href={CALENDLY_CONSULTATION_URL}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-2xl border border-border bg-background px-6 py-3.5 text-[15px] font-medium text-foreground transition-colors hover:bg-accent"
               >
                 <Calendar className="h-4 w-4" />

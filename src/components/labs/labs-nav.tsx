@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { Menu, Moon, Sun, X } from 'lucide-react';
 import { useState } from 'react';
 import { ProvvypayLogoMark } from '@/components/provvypay/provvypay-logo-mark';
-import { LABS_CALENDLY_URL, LABS_NAV_ITEMS } from '@/lib/labs/labs-constants';
+import { CALENDLY_CONSULTATION_URL } from '@/lib/config/calendly-consultation-url';
+import { LABS_NAV_ITEMS } from '@/lib/labs/labs-constants';
 
 type LabsNavProps = {
   dark: boolean;
@@ -45,9 +46,9 @@ export function LabsNav({ dark, onToggleDark }: LabsNavProps) {
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
           <a
-            href={LABS_CALENDLY_URL}
+            href={CALENDLY_CONSULTATION_URL}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="hidden rounded-lg border border-border px-3 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-accent sm:inline-flex"
           >
             Talk to Provvy Labs
@@ -81,9 +82,9 @@ export function LabsNav({ dark, onToggleDark }: LabsNavProps) {
             </a>
           ))}
           <a
-            href={LABS_CALENDLY_URL}
+            href={CALENDLY_CONSULTATION_URL}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="rounded-lg px-3 py-2 text-[13.5px] font-medium text-foreground"
           >
             Talk to Provvy Labs

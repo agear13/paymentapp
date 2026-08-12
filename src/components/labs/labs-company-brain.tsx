@@ -1,5 +1,6 @@
 import { ArrowRight, Brain, Sparkles } from 'lucide-react';
-import { LABS_BRAIN_CARDS, LABS_CALENDLY_URL } from '@/lib/labs/labs-constants';
+import { CALENDLY_CONSULTATION_URL } from '@/lib/config/calendly-consultation-url';
+import { LABS_BRAIN_CARDS } from '@/lib/labs/labs-constants';
 
 export function LabsCompanyBrain() {
   return (
@@ -35,9 +36,9 @@ export function LabsCompanyBrain() {
                 Delivered with you by the Provvy Labs implementation team.
               </p>
               <a
-                href={LABS_CALENDLY_URL}
+                href={CALENDLY_CONSULTATION_URL}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="group mt-6 inline-flex items-center gap-2 rounded-2xl bg-gradient-purple px-5 py-3 text-[14.5px] font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]"
               >
                 Build My Company Brain

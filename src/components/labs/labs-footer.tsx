@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ProvvypayLogoMark } from '@/components/provvypay/provvypay-logo-mark';
-import { LABS_CALENDLY_URL, LABS_WORKFLOWS_HREF } from '@/lib/labs/labs-constants';
+import { CALENDLY_CONSULTATION_URL } from '@/lib/config/calendly-consultation-url';
+import { LABS_WORKFLOWS_HREF } from '@/lib/labs/labs-constants';
 
 export function LabsFooter() {
   return (
@@ -18,9 +19,9 @@ export function LabsFooter() {
             Workflows
           </Link>
           <a
-            href={LABS_CALENDLY_URL}
+            href={CALENDLY_CONSULTATION_URL}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="transition-colors hover:text-foreground"
           >
             Talk to Provvy Labs

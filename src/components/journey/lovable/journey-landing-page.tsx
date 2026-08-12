@@ -2,6 +2,7 @@
 
 import './lovable-journey.css';
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
+import { CALENDLY_CONSULTATION_URL } from '@/lib/config/calendly-consultation-url';
 import { useEffect, useState } from 'react';
 import {
   ArrowRight,
@@ -95,7 +96,6 @@ function Nav() {
     document.documentElement.classList.toggle("dark", next);
     localStorage.setItem("theme", next ? "dark" : "light");
   };
-  const CALENDLY_URL = "https://calendly.com/provvy/consultation";
   return (
     <header className="sticky top-4 z-50 mx-auto w-[min(1200px,calc(100%-2rem))] rounded-2xl glass px-5 py-3 shadow-soft">
       <div className="flex items-center justify-between">
@@ -126,9 +126,9 @@ function Nav() {
             Log In
           </a>
           <a
-            href={CALENDLY_URL}
+            href={CALENDLY_CONSULTATION_URL}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="hidden items-center gap-1.5 rounded-xl border border-border bg-transparent px-3.5 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-accent sm:inline-flex"
           >
             <Calendar className="h-3.5 w-3.5" />
@@ -168,9 +168,9 @@ function Nav() {
             Log In
           </a>
           <a
-            href={CALENDLY_URL}
+            href={CALENDLY_CONSULTATION_URL}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[14px] font-medium text-foreground transition-colors hover:bg-accent"
           >
             <Calendar className="h-4 w-4" />
@@ -724,10 +724,9 @@ function Labs() {
               Explore Provvy Labs <ArrowRight className="h-4 w-4" />
             </Link>
             <a
-              href="https://calendly.com/provvy/consultation"
+              href={CALENDLY_CONSULTATION_URL}
               target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-2xl border border-border bg-background px-6 py-3.5 text-[15px] font-medium text-foreground transition-colors hover:bg-accent"
+              rel="noopener noreferrer"              className="inline-flex items-center gap-2 rounded-2xl border border-border bg-background px-6 py-3.5 text-[15px] font-medium text-foreground transition-colors hover:bg-accent"
             >
               <Calendar className="h-4 w-4" />
               Book a Consultation
@@ -767,9 +766,9 @@ function FinalCTA() {
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </a>
               <a
-                href="https://calendly.com/provvy/consultation"
+                href={CALENDLY_CONSULTATION_URL}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-2xl border border-border bg-background px-6 py-3.5 text-[15px] font-medium text-foreground transition-colors hover:bg-accent"
               >
                 <Calendar className="h-4 w-4" />
@@ -796,7 +795,7 @@ const FOOTER_LINKS: Record<string, string> = {
   'Commercial Academy': '#academy',
   Documentation: '/journey/assessment',
   'Provvy Labs': '/labs',
-  Contact: 'https://calendly.com/provvy/consultation',
+  Contact: CALENDLY_CONSULTATION_URL,
   Privacy: '#pricing',
 };
 
@@ -831,7 +830,7 @@ function Footer() {
                     <a
                       href={FOOTER_LINKS[i] ?? '/journey/assessment'}
                       className="text-[13px] text-ink-soft transition-colors hover:text-foreground"
-                      {...(FOOTER_LINKS[i]?.startsWith('http') ? { target: '_blank', rel: 'noreferrer' } : {})}
+                      {...(FOOTER_LINKS[i]?.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                     >
                       {i}
                     </a>

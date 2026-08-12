@@ -1,9 +1,6 @@
 import { Layers, Megaphone, Sparkles } from 'lucide-react';
-import {
-  LABS_CALENDLY_URL,
-  LABS_CREDIT_TIERS,
-  LABS_MARKETING_CAPABILITIES,
-} from '@/lib/labs/labs-constants';
+import { CALENDLY_CONSULTATION_URL } from '@/lib/config/calendly-consultation-url';
+import { LABS_CREDIT_TIERS, LABS_MARKETING_CAPABILITIES } from '@/lib/labs/labs-constants';
 
 export function LabsAiMarketingTeam() {
   return (
@@ -73,9 +70,9 @@ export function LabsAiMarketingTeam() {
                     {t.credits}
                   </div>
                   <a
-                    href={LABS_CALENDLY_URL}
+                    href={CALENDLY_CONSULTATION_URL}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className={
                       t.popular
                         ? 'mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13.5px] font-medium text-primary-foreground shadow-glow'

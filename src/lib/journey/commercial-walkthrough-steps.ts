@@ -1,3 +1,5 @@
+import { CALENDLY_CONSULTATION_URL } from '@/lib/config/calendly-consultation-url';
+
 export type CommercialWalkthroughStage =
   | 'agreement'
   | 'extraction'
@@ -105,7 +107,7 @@ export const COMMERCIAL_WALKTHROUGH_COMPLETION = {
     { label: 'Explore Workflow Library', href: '/workspace/workflows' },
     {
       label: 'Book a Consultation',
-      href: 'https://calendly.com/provvy/consultation',
+      href: CALENDLY_CONSULTATION_URL,
       external: true,
     },
   ] as const,

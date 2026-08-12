@@ -1,5 +1,5 @@
 import { ArrowRight, Beaker, Calendar } from 'lucide-react';
-import { LABS_CALENDLY_URL } from '@/lib/labs/labs-constants';
+import { CALENDLY_CONSULTATION_URL } from '@/lib/config/calendly-consultation-url';
 
 export function LabsHero() {
   return (
@@ -31,9 +31,9 @@ export function LabsHero() {
             Explore AI Teams
           </a>
           <a
-            href={LABS_CALENDLY_URL}
+            href={CALENDLY_CONSULTATION_URL}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-2 py-3.5 text-[14px] font-medium text-ink-soft transition-colors hover:text-foreground"
           >
             <Calendar className="h-4 w-4" />

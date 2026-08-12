@@ -121,7 +121,7 @@ function WalkthroughCompletion({ onAction }: { onAction: () => void }) {
                   key={action.label}
                   href={action.href}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   onClick={onAction}
                   className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-4 py-2.5 text-[13px] font-medium text-foreground transition-colors hover:bg-accent"
                 >

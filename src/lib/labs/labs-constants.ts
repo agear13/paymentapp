@@ -14,8 +14,6 @@ import {
   Workflow,
 } from 'lucide-react';
 
-export const LABS_CALENDLY_URL = 'https://calendly.com/provvy/consultation';
-
 export const LABS_WORKFLOWS_HREF = '/journey#workflow-library';
 
 export const LABS_NAV_ITEMS = [
