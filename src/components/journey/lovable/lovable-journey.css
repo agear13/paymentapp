@@ -92,12 +92,17 @@
 .lovable-journey .shadow-soft { box-shadow: var(--shadow-soft); }
 .lovable-journey .shadow-card { box-shadow: var(--shadow-card); }
 .lovable-journey .shadow-glow { box-shadow: var(--shadow-glow); }
+.lovable-journey .border-primary\/25 { border-color: color-mix(in oklch, var(--primary) 25%, transparent); }
 .lovable-journey .border-primary\/20 { border-color: color-mix(in oklch, var(--primary) 20%, transparent); }
 .lovable-journey .border-primary\/30 { border-color: color-mix(in oklch, var(--primary) 30%, transparent); }
 .lovable-journey .border-primary\/40 { border-color: color-mix(in oklch, var(--primary) 40%, transparent); }
 .lovable-journey .ring-primary\/20 { --tw-ring-color: color-mix(in oklch, var(--primary) 20%, transparent); }
 .lovable-journey .ring-primary\/30 { --tw-ring-color: color-mix(in oklch, var(--primary) 30%, transparent); }
 .lovable-journey .bg-primary\/10 { background-color: color-mix(in oklch, var(--primary) 10%, transparent); }
+.lovable-journey .bg-accent\/30 { background-color: color-mix(in oklch, var(--accent) 30%, transparent); }
+.lovable-journey .bg-accent\/40 { background-color: color-mix(in oklch, var(--accent) 40%, transparent); }
+.lovable-journey .border-border\/60 { border-color: color-mix(in oklch, var(--border) 60%, transparent); }
+.lovable-journey .text-foreground\/90 { color: color-mix(in oklch, var(--foreground) 90%, transparent); }
 
 @keyframes lovable-fade-up {
   from { opacity: 0; transform: translateY(12px); }

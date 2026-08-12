@@ -41,7 +41,7 @@ const LANDING_NAV = [
   { label: 'Commercial OS', href: '#commercial-os' },
   { label: 'Workflow Library', href: '#workflow-library' },
   { label: 'Solutions', href: '#solutions' },
-  { label: 'Provvy Labs', href: '#labs' },
+  { label: 'Provvy Labs', href: '/labs' },
   { label: 'Commercial Academy', href: '#academy' },
   { label: 'Pricing', href: '#pricing' },
 ] as const;
@@ -713,18 +713,26 @@ function Labs() {
             <span className="text-gradient">Commercial Operating System?</span>
           </h2>
           <p className="mt-6 max-w-2xl text-[16px] text-ink-soft">
-            Provvy Labs is our AI implementation team. We work directly with you to design,
-            connect and deploy the commercial workflows that matter most.
+            Provvy Labs is our productised AI implementation layer. Build your Company Brain
+            once, then deploy AI Teams and connect their work into your commercial workflows.
           </p>
-          <a
-            href="https://calendly.com/provvy/consultation"
-            target="_blank"
-            rel="noreferrer"
-            className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-foreground px-6 py-3.5 text-[15px] font-medium text-background transition-transform hover:scale-[1.02]"
-          >
-            <Calendar className="h-4 w-4" />
-            Book a Consultation <ArrowRight className="h-4 w-4" />
-          </a>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Link
+              href="/labs"
+              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-purple px-6 py-3.5 text-[15px] font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]"
+            >
+              Explore Provvy Labs <ArrowRight className="h-4 w-4" />
+            </Link>
+            <a
+              href="https://calendly.com/provvy/consultation"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-2xl border border-border bg-background px-6 py-3.5 text-[15px] font-medium text-foreground transition-colors hover:bg-accent"
+            >
+              <Calendar className="h-4 w-4" />
+              Book a Consultation
+            </a>
+          </div>
         </div>
       </div>
     </section>
@@ -787,7 +795,7 @@ const FOOTER_LINKS: Record<string, string> = {
   Operations: '#workflow-library',
   'Commercial Academy': '#academy',
   Documentation: '/journey/assessment',
-  'Provvy Labs': '#labs',
+  'Provvy Labs': '/labs',
   Contact: 'https://calendly.com/provvy/consultation',
   Privacy: '#pricing',
 };
