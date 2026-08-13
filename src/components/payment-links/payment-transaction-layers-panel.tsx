@@ -8,6 +8,7 @@ import type { PaymentTransactionLayers } from '@/lib/payments/payment-layers';
 type PaymentTransactionLayersPanelProps = {
   layers: PaymentTransactionLayers;
   xeroContext?: Record<string, unknown> | null;
+  showAuditDetails?: boolean;
 };
 
 function LayerRow({ label, value }: { label: string; value: string | null | undefined }) {
@@ -22,6 +23,7 @@ function LayerRow({ label, value }: { label: string; value: string | null | unde
 export function PaymentTransactionLayersPanel({
   layers,
   xeroContext,
+  showAuditDetails = false,
 }: PaymentTransactionLayersPanelProps) {
   return (
     <div className="space-y-5">
@@ -70,7 +72,7 @@ export function PaymentTransactionLayersPanel({
           <>
             <LayerRow label="Accounting Currency" value={layers.accounting.currency} />
             <LayerRow label="Accounting Amount" value={layers.accounting.amount} />
-            {layers.accounting.valuationMethod ? (
+            {showAuditDetails && layers.accounting.valuationMethod ? (
               <LayerRow label="Valuation Method" value={layers.accounting.valuationMethod} />
             ) : null}
           </>
@@ -79,7 +81,7 @@ export function PaymentTransactionLayersPanel({
         )}
       </section>
 
-      {layers.fxSnapshot ? (
+      {showAuditDetails && layers.fxSnapshot ? (
         <section className="rounded-lg border bg-muted/30 p-4 space-y-3">
           <h4 className="text-sm font-semibold">FX Snapshot</h4>
           <p className="text-xs text-muted-foreground">Immutable rate lock — never recalculated.</p>
@@ -102,7 +104,7 @@ export function PaymentTransactionLayersPanel({
         </section>
       ) : null}
 
-      {xeroContext ? (
+      {showAuditDetails && xeroContext ? (
         <>
           <Separator />
           <section className="rounded-lg border border-dashed p-4 space-y-2">

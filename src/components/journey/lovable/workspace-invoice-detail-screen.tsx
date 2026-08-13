@@ -35,6 +35,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { usePaymentLinkDetail } from '@/hooks/use-payment-link-detail';
+import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
 import { useOrganization } from '@/hooks/use-organization';
 import { useToast } from '@/hooks/use-toast';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
@@ -53,19 +54,16 @@ import {
   postPaymentLinkManualSettlement,
   resendPaymentLinkInvoice,
   sendPaymentLinkInvoice,
-  type LifecycleSnapshot,
 } from '@/lib/payment-links/payment-link-merchant-actions';
 import { PaymentLifecyclePanel } from '@/components/payment-links/payment-lifecycle-panel';
 import {
   formatInvoiceCreatedLabel,
   formatInvoiceDueLabel,
   INVOICE_DISPLAY_STATUS_CLS,
-  invoiceHeroState,
   invoicePaymentMethodLabel,
   invoicePublicReference,
-  toInvoiceDisplayStatus,
-  toPaymentDisplayStatus,
 } from '@/lib/payment-links/invoice-display-status';
+import { deriveInvoiceDetailViewModel, paymentEventMerchantLabel } from '@/lib/payment-links/invoice-detail-view-model';
 import { buildExplorerUrl } from '@/lib/payments/crypto-confirmation-verification';
 import { receivablesInvoiceXeroColumn } from '@/lib/xero/xero-sync-display';
 import { isValidShortCode } from '@/lib/short-code';
@@ -90,48 +88,6 @@ type WorkspaceInvoiceDetailScreenProps = {
   paymentLinkId?: string | null;
 };
 
-function buildTimelineEntries(
-  detail: PaymentLinkDetails,
-  lifecycle: LifecycleSnapshot | null
-): { label: string; detail: string; time: string }[] {
-  const entries: { label: string; detail: string; time: string; sortAt: number }[] = [];
-
-  for (const step of lifecycle?.invoiceLifecycle?.timeline ?? []) {
-    if (!step.reached || !step.occurredAt) continue;
-    const at = new Date(step.occurredAt);
-    entries.push({
-      label: step.label,
-      detail: step.state,
-      time: format(at, 'd MMM · HH:mm'),
-      sortAt: at.getTime(),
-    });
-  }
-
-  for (const event of detail.paymentEvents ?? []) {
-    const at = new Date(event.createdAt);
-    entries.push({
-      label: event.eventType.replace(/_/g, ' '),
-      detail: event.paymentMethod ? `via ${event.paymentMethod}` : '',
-      time: format(at, 'd MMM · HH:mm'),
-      sortAt: at.getTime(),
-    });
-  }
-
-  if (entries.length === 0 && detail.createdAt) {
-    const at = new Date(detail.createdAt);
-    entries.push({
-      label: 'Invoice created',
-      detail: detail.description || '',
-      time: format(at, 'd MMM · HH:mm'),
-      sortAt: at.getTime(),
-    });
-  }
-
-  return entries
-    .sort((a, b) => b.sortAt - a.sortAt)
-    .map(({ label, detail: d, time }) => ({ label, detail: d, time }));
-}
-
 function isCryptoRail(detail: PaymentLinkDetails): boolean {
   const method = detail.paymentMethod?.toUpperCase() ?? '';
   return (
@@ -140,72 +96,6 @@ function isCryptoRail(detail: PaymentLinkDetails): boolean {
     method === 'EVM_WALLET' ||
     Boolean(detail.cryptoNetwork || detail.cryptoAddress || detail.cryptoCurrency)
   );
-}
-
-function hasXeroData(detail: PaymentLinkDetails): boolean {
-  return Boolean(
-    (detail.xeroSyncs && detail.xeroSyncs.length > 0) || detail.xeroInvoiceNumber?.trim()
-  );
-}
-
-function xeroAccountingSummary(detail: PaymentLinkDetails): {
-  tone: 'default' | 'success' | 'info';
-  title: string;
-  message: React.ReactNode;
-} {
-  const syncs = detail.xeroSyncs ?? [];
-  const invoiceSync = syncs.find((s) => s.syncType === 'INVOICE');
-  const paymentSync = syncs.find((s) => s.syncType === 'PAYMENT');
-  const isPaid = detail.status === 'PAID' || detail.status === 'PAID_UNVERIFIED';
-
-  if (syncs.length === 0) {
-    return {
-      tone: 'info',
-      title: 'Accounting sync',
-      message: isPaid
-        ? 'Push this invoice and payment to your accounting software when you are ready — or connect accounting to sync automatically.'
-        : 'This invoice has not been pushed to accounting yet. Use Push to Accounting when you want to sync.',
-    };
-  }
-
-  const anyFailed = syncs.some((s) => s.status === 'FAILED');
-  const anyPending = syncs.some((s) => s.status === 'PENDING' || s.status === 'RETRYING');
-  const invoiceSuccess = invoiceSync?.status === 'SUCCESS';
-  const paymentSuccess = paymentSync?.status === 'SUCCESS';
-
-  if (anyFailed) {
-    return {
-      tone: 'default',
-      title: 'Accounting sync needs attention',
-      message:
-        'Something went wrong while syncing to accounting. Review the sync history below and check your account mappings.',
-    };
-  }
-
-  if (anyPending) {
-    return {
-      tone: 'info',
-      title: 'Sync in progress',
-      message:
-        'Provvy is processing this invoice for your accounting software. This usually completes within a few minutes.',
-    };
-  }
-
-  if (invoiceSuccess && (paymentSuccess || !isPaid)) {
-    return {
-      tone: 'success',
-      title: 'Synced with accounting',
-      message: paymentSuccess
-        ? 'This invoice and payment are in your accounting software.'
-        : 'This invoice is synced. When payment is received, Provvy can sync the payment too.',
-    };
-  }
-
-  return {
-    tone: 'info',
-    title: 'Accounting sync',
-    message: 'Provvy keeps your invoices and payments aligned with your accounting software.',
-  };
 }
 
 export function WorkspaceInvoiceDetailScreen({
@@ -217,6 +107,7 @@ export function WorkspaceInvoiceDetailScreen({
   const sendSectionRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
+  const readiness = useCommercialReadinessOptional();
   const { state, refresh } = usePaymentLinkDetail({
     organizationId,
     isOrgLoading,
@@ -507,25 +398,30 @@ export function WorkspaceInvoiceDetailScreen({
   const ready = state;
   const detail = ready.detail;
   const lifecycle = ready.lifecycle;
+
+  const accountingConnection = {
+    connected: readiness?.connection.connected ?? false,
+    syncReady: readiness
+      ? (readiness.canSyncToAccounting ?? readiness.canCreateInvoice)
+      : false,
+  };
+
+  const viewModel = deriveInvoiceDetailViewModel({
+    detail,
+    lifecycle,
+    accountingConnection,
+  });
+
   const displayRef = invoicePublicReference(detail);
-  const displayStatus = toInvoiceDisplayStatus(detail);
-  const amountOutstanding = lifecycle?.invoiceLifecycle?.amountOutstanding;
-  const invoiceAmount = lifecycle?.invoiceLifecycle
-    ? lifecycle.invoiceLifecycle.amountPaid + lifecycle.invoiceLifecycle.amountOutstanding
-    : detail.amount;
-  const payStatus = toPaymentDisplayStatus(detail, amountOutstanding, invoiceAmount);
-  const xeroDisplay = receivablesInvoiceXeroColumn(detail.xeroSyncs);
-  const xeroGuidance = xeroAccountingSummary(detail);
-  const canSend = canResendPaymentLink(detail.status);
-  const isPaidInvoice =
-    detail.status === 'PAID' ||
-    detail.status === 'PAID_UNVERIFIED' ||
-    displayStatus === 'Paid';
-  const hero = invoiceHeroState(detail);
-  const timeline = buildTimelineEntries(detail, lifecycle);
+  const displayStatus = viewModel.displayStatus;
+  const payStatus = viewModel.payStatus;
+  const xeroDisplay = viewModel.showAccountingSyncDetails
+    ? receivablesInvoiceXeroColumn(detail.xeroSyncs)
+    : null;
+  const hero = viewModel.hero;
+  const timeline = viewModel.timeline;
   const showCrypto = isCryptoRail(detail) || Boolean(ready.cryptoConfirmation);
   const showFx = Boolean(detail.fxSnapshots && detail.fxSnapshots.length > 0);
-  const showXero = hasXeroData(detail);
   const showAttachment = Boolean(detail.attachmentUrl);
   const auditEntries = timeline;
   const showAudit = auditEntries.length > 0;
@@ -550,6 +446,11 @@ export function WorkspaceInvoiceDetailScreen({
     setConfirmDeleteOpen(true);
   };
 
+  const amountOutstanding = lifecycle?.invoiceLifecycle?.amountOutstanding;
+  const invoiceAmount = lifecycle?.invoiceLifecycle
+    ? lifecycle.invoiceLifecycle.amountPaid + lifecycle.invoiceLifecycle.amountOutstanding
+    : detail.amount;
+
   const outstandingDisplay =
     typeof amountOutstanding === 'number'
       ? formatCurrency(amountOutstanding, detail.currency)
@@ -566,19 +467,7 @@ export function WorkspaceInvoiceDetailScreen({
     return buildExplorerUrl(network, crypto.payerTxHash);
   })();
 
-  const settlementLabel = (() => {
-    const settled = lifecycle?.settlements?.find(
-      (s) => s.status === 'SETTLED' || s.status === 'RECONCILED'
-    );
-    if (settled) {
-      return `Settled ${formatCurrency(Number(settled.amount), settled.currency)}`;
-    }
-    if (detail.settlementCurrency && detail.settlementAmount != null) {
-      return formatCurrency(detail.settlementAmount, detail.settlementCurrency);
-    }
-    if (detail.status === 'PAID') return 'Payment recorded';
-    return null;
-  })();
+  const settlementLabel = viewModel.settlementLabel;
 
   return (
     <div className="animate-fade-up space-y-10 pb-24">
@@ -639,18 +528,48 @@ export function WorkspaceInvoiceDetailScreen({
         </div>
       </header>
 
-      {canSend ? (
+      {viewModel.nextStep ? (
         <CommercialOsNextStepBanner
-          message="Send this invoice to your customer so they can view details and pay online."
+          tone={
+            viewModel.nextStep.kind === 'payment_received'
+              ? 'success'
+              : viewModel.nextStep.kind === 'accounting_connect' ||
+                  viewModel.nextStep.kind === 'accounting_action'
+                ? 'info'
+                : 'default'
+          }
+          title={viewModel.nextStep.title}
+          message={viewModel.nextStep.message}
           action={
-            <button
-              type="button"
-              onClick={goToSendSection}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-purple px-4 text-[13px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110"
-            >
-              <Send className="h-4 w-4" />
-              Send invoice
-            </button>
+            viewModel.nextStep.kind === 'send_invoice' ? (
+              <button
+                type="button"
+                onClick={goToSendSection}
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-purple px-4 text-[13px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110"
+              >
+                <Send className="h-4 w-4" />
+                Send invoice
+              </button>
+            ) : viewModel.nextStep.kind === 'payment_received' ||
+              viewModel.nextStep.kind === 'accounting_action' ? (
+              <button
+                type="button"
+                onClick={goToAccountingSection}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-[13px] font-medium transition-colors hover:bg-secondary"
+              >
+                View accounting sync
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            ) : viewModel.nextStep.kind === 'accounting_connect' ? (
+              <button
+                type="button"
+                onClick={goToAccountingSection}
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-purple px-4 text-[13px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110"
+              >
+                Connect accounting
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            ) : null
           }
         />
       ) : null}
@@ -662,24 +581,6 @@ export function WorkspaceInvoiceDetailScreen({
         manualBankConfirmation={ready.manualBankConfirmation}
         onReviewComplete={refresh}
       />
-
-      {isPaidInvoice ? (
-        <CommercialOsNextStepBanner
-          tone="success"
-          title="Payment received"
-          message="Provvy can sync this payment to your accounting software when connected."
-          action={
-            <button
-              type="button"
-              onClick={goToAccountingSection}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-[13px] font-medium transition-colors hover:bg-secondary"
-            >
-              View accounting sync
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          }
-        />
-      ) : null}
 
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="order-2 space-y-6 xl:order-1">
@@ -704,13 +605,19 @@ export function WorkspaceInvoiceDetailScreen({
                 {xeroDisplay ? (
                   <div>
                     <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                      Xero
+                      Accounting
                     </div>
                     <div className="mt-1 flex items-center gap-1.5 text-[13.5px] font-medium">
                       <span className={`h-1.5 w-1.5 rounded-full ${xeroDisplay.dotClass}`} />
                       {xeroDisplay.label}
                     </div>
                   </div>
+                ) : viewModel.accountingState === 'not_connected' ||
+                  viewModel.showAccountingSyncDetails ? (
+                  <InvoiceDetailField
+                    label="Accounting"
+                    value={viewModel.accountingStatusLabel}
+                  />
                 ) : null}
               </div>
             </div>
@@ -846,7 +753,7 @@ export function WorkspaceInvoiceDetailScreen({
                 <InvoiceDetailField label="Payment status" value={payStatus} />
                 <InvoiceDetailField
                   label="Settlement"
-                  value={settlementLabel ?? 'No settlement recorded yet'}
+                  value={viewModel.settlementSummaryLabel}
                 />
               </div>
 
@@ -890,7 +797,7 @@ export function WorkspaceInvoiceDetailScreen({
                 <div className="flex flex-wrap gap-2">
                   {canMarkAsPaid(detail.status) ? (
                     <InvoiceDetailActionButton
-                      label="Mark as Paid"
+                      label="Mark as paid manually"
                       icon={Check}
                       onClick={() => setConfirmMarkPaidOpen(true)}
                       disabled={settlementLoading}
@@ -1019,9 +926,10 @@ export function WorkspaceInvoiceDetailScreen({
               invoiceDate: detail.invoiceDate,
               dueDate: detail.dueDate,
             }}
-            xeroGuidance={xeroGuidance}
+            accountingState={viewModel.accountingState}
+            accountingGuidance={viewModel.accountingGuidance}
+            showAccountingSyncDetails={viewModel.showAccountingSyncDetails}
             xeroDisplay={xeroDisplay}
-            showXero={showXero}
             showFx={showFx}
             creationFx={creationFx}
             settlementFx={settlementFx}
@@ -1034,7 +942,7 @@ export function WorkspaceInvoiceDetailScreen({
               <ul className="space-y-2 text-[12.5px]">
                 {detail.paymentEvents!.map((e) => (
                   <li key={e.id} className="flex justify-between gap-4 border-b border-border/60 pb-2 last:border-0">
-                    <span>{e.eventType.replace(/_/g, ' ')}</span>
+                    <span>{paymentEventMerchantLabel(e.eventType, detail.status)}</span>
                     <span className="text-ink-soft">{format(new Date(e.createdAt), 'd MMM · HH:mm')}</span>
                   </li>
                 ))}
@@ -1069,23 +977,13 @@ export function WorkspaceInvoiceDetailScreen({
             { label: 'Outstanding', value: outstandingDisplay },
             { label: 'Due', value: formatInvoiceDueLabel(detail) },
             { label: 'Payment', value: payStatus },
-            ...(xeroDisplay ? [{ label: 'Xero', value: xeroDisplay.label }] : []),
-            { label: 'Settlement', value: settlementLabel ?? 'Not settled' },
+            { label: 'Sent', value: viewModel.hasBeenSent ? 'Yes' : 'No' },
+            { label: 'Accounting', value: viewModel.accountingStatusLabel },
+            { label: 'Settlement', value: viewModel.settlementSummaryLabel },
           ]}
           paymentLinkId={detail.id}
-          invoiceSync={invoiceSyncForRemoval}
-          linkUpdatedAt={detail.updatedAt}
-          link={{
-            amount: detail.amount,
-            currency: detail.currency,
-            invoiceCurrency: detail.invoiceCurrency,
-            description: detail.description,
-            customerEmail: detail.customerEmail,
-            customerName: detail.customerName,
-            invoiceReference: detail.invoiceReference,
-            invoiceDate: detail.invoiceDate,
-            dueDate: detail.dueDate,
-          }}
+          accountingState={viewModel.accountingState}
+          accountingStatusLabel={viewModel.accountingStatusLabel}
           onScrollToAccounting={goToAccountingSection}
           aiDismissed={aiDismissed}
           onDismissAi={() => setAiDismissed((d) => [...d, 0])}
@@ -1180,9 +1078,10 @@ export function WorkspaceInvoiceDetailScreen({
       <AlertDialog open={confirmMarkPaidOpen} onOpenChange={setConfirmMarkPaidOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mark payment received?</AlertDialogTitle>
+            <AlertDialogTitle>Mark as paid manually?</AlertDialogTitle>
             <AlertDialogDescription>
-              Only confirm after payment has actually cleared. This does not process a new charge.
+              This records payment in Provvy without processing a payment through Provvy&apos;s payment
+              rails. Only confirm after payment has actually cleared outside Provvy.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1194,7 +1093,7 @@ export function WorkspaceInvoiceDetailScreen({
                 void handleManualSettlement('mark_paid');
               }}
             >
-              Confirm paid
+              Record manual payment
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1228,7 +1127,8 @@ export function WorkspaceInvoiceDetailScreen({
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel this invoice?</AlertDialogTitle>
             <AlertDialogDescription>
-              The payment link will stop accepting payments. You can still delete the invoice later.
+              Cancelling stops the payment link from accepting new payments. The invoice stays in your
+              workspace for reference. Use Delete only if you want to remove it entirely.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1251,7 +1151,8 @@ export function WorkspaceInvoiceDetailScreen({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this invoice?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes the invoice from your workspace.
+              This permanently removes the invoice from your workspace. If you only need to stop payments,
+              use Cancel instead. Synced invoices may require voiding or archiving in accounting first.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

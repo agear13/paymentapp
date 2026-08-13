@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { toast } from 'sonner';
 import type { PaymentHealthStatus } from '@/lib/payments/lifecycle/lifecycle-stages';
+import { isAccountingLifecycleStage } from '@/lib/payments/lifecycle/lifecycle-stages';
 import type { PaymentTransactionLayers } from '@/lib/payments/payment-layers';
 import { PaymentTransactionLayersPanel } from '@/components/payment-links/payment-transaction-layers-panel';
 
@@ -161,6 +162,14 @@ export function PaymentLifecyclePanel({
   }
 
   const flowIndex = settlementFlowStep(snapshot.settlements, linkStatus);
+  const paymentStageLabel =
+    snapshot.currentStage && !isAccountingLifecycleStage(snapshot.currentStage)
+      ? snapshot.currentStage.replace(/_/g, ' ').toLowerCase()
+      : null;
+  const accountingStageLabel =
+    snapshot.currentStage && isAccountingLifecycleStage(snapshot.currentStage)
+      ? snapshot.currentStage.replace(/_/g, ' ').toLowerCase()
+      : null;
   const displayTimeline =
     snapshot.invoiceLifecycle?.timeline && snapshot.invoiceLifecycle.timeline.length > 0
       ? snapshot.invoiceLifecycle.timeline.map((item) => ({
@@ -198,7 +207,7 @@ export function PaymentLifecyclePanel({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">Payment Health</span>
+        <span className="text-sm font-medium">Payment status</span>
         <Badge variant="secondary">{snapshot.healthLabel}</Badge>
         {snapshot.invoiceLifecycle ? (
           <Badge variant="outline">{snapshot.invoiceLifecycle.stateLabel}</Badge>
@@ -208,12 +217,18 @@ export function PaymentLifecyclePanel({
             {snapshot.commercialReconciliation.reconciliationStatusLabel}
           </Badge>
         ) : null}
-        {snapshot.currentStage ? (
+        {paymentStageLabel ? (
           <span className="text-xs text-muted-foreground">
-            Current stage: {snapshot.currentStage.replace(/_/g, ' ').toLowerCase()}
+            Payment stage: {paymentStageLabel}
           </span>
         ) : null}
       </div>
+
+      {accountingStageLabel ? (
+        <p className="text-xs text-muted-foreground">
+          Accounting: {accountingStageLabel} — see the Accounting section for sync details.
+        </p>
+      ) : null}
 
       {flowIndex >= 0 ? (
         <div>
@@ -288,6 +303,7 @@ export function PaymentLifecyclePanel({
         <PaymentTransactionLayersPanel
           layers={snapshot.transactionLayers}
           xeroContext={snapshot.xeroContext}
+          showAuditDetails={false}
         />
       ) : null}
 

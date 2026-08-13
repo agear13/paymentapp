@@ -33,6 +33,15 @@ jest.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: 'org-001', isLoading: false }),
 }));
 
+jest.mock('@/hooks/use-commercial-readiness', () => ({
+  useCommercialReadinessOptional: () => ({
+    connection: { connected: false },
+    canSyncToAccounting: false,
+    canCreateInvoice: false,
+    loading: false,
+  }),
+}));
+
 jest.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: jest.fn() }),
 }));
@@ -65,7 +74,7 @@ jest.mock('@/components/payment-links/payment-lifecycle-panel', () => ({
 }));
 
 describe('WorkspaceInvoiceDetailScreen', () => {
-  it('renders the status hero without throwing when INVOICE_DETAIL_TONE_RING is in scope', () => {
+  it('renders unsent invoice state without contradictory sent/sync labels', () => {
     render(
       <WorkspaceInvoiceDetailScreen
         invoiceNumber="INV-2026-001"
@@ -73,9 +82,12 @@ describe('WorkspaceInvoiceDetailScreen', () => {
       />
     );
 
-    expect(screen.getByText('Awaiting payment')).toBeInTheDocument();
-    expect(screen.getByText('Current status')).toBeInTheDocument();
-    expect(screen.getByText('Payment information')).toBeInTheDocument();
+    expect(screen.getByText('Unsent')).toBeInTheDocument();
+    expect(screen.getByText('Ready to send')).toBeInTheDocument();
+    expect(screen.getByText('Send this invoice to your customer so they can view details and pay online.')).toBeInTheDocument();
+    expect(screen.getAllByText('Accounting not connected').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Sync in progress')).not.toBeInTheDocument();
+    expect(screen.queryByText('Last synced')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Acme Pty Ltd' })).toBeInTheDocument();
   });
 });

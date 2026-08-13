@@ -7,11 +7,19 @@ import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { invoiceCreationLabelForPaymentMethod } from '@/lib/payments/payment-rail-registry';
 import { operationalStatusLabel } from '@/lib/payments/operational-status-labels';
 
-export type InvoiceDisplayStatus = 'Paid' | 'Sent' | 'Overdue' | 'Draft' | 'Cancelled' | 'Confirming';
+export type InvoiceDisplayStatus =
+  | 'Paid'
+  | 'Sent'
+  | 'Unsent'
+  | 'Overdue'
+  | 'Draft'
+  | 'Cancelled'
+  | 'Confirming';
 
 export const INVOICE_DISPLAY_STATUS_CLS: Record<InvoiceDisplayStatus, string> = {
   Paid: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
   Sent: 'bg-primary/10 text-primary',
+  Unsent: 'bg-amber-500/10 text-amber-800 dark:text-amber-300',
   Overdue: 'bg-destructive/10 text-destructive',
   Draft: 'bg-secondary text-ink-soft',
   Cancelled: 'bg-secondary text-ink-soft line-through',
@@ -22,6 +30,7 @@ type LinkLike = {
   status: string;
   dueDate?: Date | string | null;
   paidAt?: Date | string | null;
+  lastSentAt?: Date | string | null;
   invoiceOnlyMode?: boolean;
   paymentMethod?: string | null;
 };
@@ -35,7 +44,11 @@ export function toInvoiceDisplayStatus(link: LinkLike): InvoiceDisplayStatus {
     const due = new Date(link.dueDate);
     if (!Number.isNaN(due.getTime()) && isPast(due)) return 'Overdue';
   }
-  return 'Sent';
+  if (link.lastSentAt) {
+    const sent = new Date(link.lastSentAt);
+    if (!Number.isNaN(sent.getTime())) return 'Sent';
+  }
+  return 'Unsent';
 }
 
 export function formatInvoiceDueLabel(link: LinkLike): string {
@@ -97,6 +110,7 @@ export function invoiceHeroState(link: LinkLike): {
   if (display === 'Confirming') return { headline: 'Payment confirming', tone: 'info' };
   if (display === 'Overdue') return { headline: 'Overdue', tone: 'bad' };
   if (display === 'Draft') return { headline: 'Draft, not sent', tone: 'info' };
+  if (display === 'Unsent') return { headline: 'Ready to send', tone: 'info' };
   return { headline: 'Awaiting payment', tone: 'warn' };
 }
 

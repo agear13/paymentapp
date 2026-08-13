@@ -122,3 +122,13 @@ export function merchantLayerTimelineLabel(stage: PaymentLifecycleStage): string
   const match = MERCHANT_LAYER_TIMELINE_STAGES.find((item) => item.stage === stage);
   return match?.label ?? LIFECYCLE_STAGE_LABELS[stage];
 }
+
+const ACCOUNTING_LIFECYCLE_STAGES = new Set<PaymentLifecycleStage>([
+  'ACCOUNTING_SYNC_STARTED',
+  'ACCOUNTING_SYNC_COMPLETED',
+  'ACCOUNTING_SYNC_FAILED',
+]);
+
+export function isAccountingLifecycleStage(stage: string): boolean {
+  return ACCOUNTING_LIFECYCLE_STAGES.has(stage as PaymentLifecycleStage);
+}

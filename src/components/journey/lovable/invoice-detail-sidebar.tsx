@@ -1,97 +1,74 @@
 'use client';
 
-import { useMemo } from 'react';
 import { ChevronRight, Sparkles, Landmark } from 'lucide-react';
 import { AccountingIntegrationNotice } from '@/components/journey/lovable/accounting-integration-notice';
-import type { AccountingInvoiceSyncRow } from '@/lib/accounting/accounting-push-state';
-import {
-  accountingSyncDisplayLabel,
-  formatAccountingLastSyncedLabel,
-  resolveAccountingPushState,
-  resolveAccountingSyncDisplayStatus,
-} from '@/lib/accounting/accounting-push-state';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
-
-type AccountingLinkSnapshot = {
-  amount: unknown;
-  currency?: string | null;
-  invoiceCurrency?: string | null;
-  description?: string | null;
-  customerEmail?: string | null;
-  customerName?: string | null;
-  invoiceReference?: string | null;
-  invoiceDate?: Date | string | null;
-  dueDate?: Date | string | null;
-};
+import type { InvoiceAccountingDisplayState } from '@/lib/payment-links/invoice-detail-view-model';
+import { invoiceAccountingStatusLabel } from '@/lib/payment-links/invoice-detail-view-model';
 
 type InvoiceDetailSidebarProps = {
   displayRef: string;
   summaryRows: { label: string; value: string }[];
   paymentLinkId: string;
-  invoiceSync: AccountingInvoiceSyncRow | null;
-  linkUpdatedAt?: Date | string | null;
-  link: AccountingLinkSnapshot;
+  accountingState: InvoiceAccountingDisplayState;
+  accountingStatusLabel: string;
   onScrollToAccounting: () => void;
   aiDismissed: number[];
   onDismissAi: () => void;
 };
 
 function SidebarAccountingQuickPanel({
-  invoiceSync,
-  linkUpdatedAt,
-  link,
+  accountingState,
+  accountingStatusLabel,
   onScrollToAccounting,
 }: {
-  invoiceSync: AccountingInvoiceSyncRow | null;
-  linkUpdatedAt?: Date | string | null;
-  link: AccountingLinkSnapshot;
+  accountingState: InvoiceAccountingDisplayState;
+  accountingStatusLabel: string;
   onScrollToAccounting: () => void;
 }) {
-  const pushState = useMemo(
-    () =>
-      resolveAccountingPushState({
-        invoiceSync,
-        linkUpdatedAt,
-        link,
-      }),
-    [invoiceSync, linkUpdatedAt, link]
-  );
-
-  const displayStatus = resolveAccountingSyncDisplayStatus(pushState);
-  const statusLabel = accountingSyncDisplayLabel(displayStatus);
-  const lastSyncedLabel = formatAccountingLastSyncedLabel(pushState.lastSyncedAt);
-
   const needsAccountingAction =
-    displayStatus === 'local_changes' ||
-    displayStatus === 'not_synced' ||
-    displayStatus === 'sync_failed' ||
-    displayStatus === 'update_pending';
-
-  const actionStatusText =
-    displayStatus === 'local_changes'
-      ? 'Changes not synced'
-      : displayStatus === 'sync_failed'
-        ? 'Sync failed'
-        : displayStatus === 'update_pending'
-          ? 'Update pending'
-          : displayStatus === 'not_synced'
-            ? 'Not synced'
-            : null;
+    accountingState === 'local_changes' ||
+    accountingState === 'not_synced' ||
+    accountingState === 'sync_failed' ||
+    accountingState === 'update_pending' ||
+    accountingState === 'not_connected' ||
+    accountingState === 'setup_incomplete';
 
   const statusToneClass =
-    displayStatus === 'synced'
+    accountingState === 'synced'
       ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400'
-      : displayStatus === 'local_changes' || displayStatus === 'sync_failed'
+      : accountingState === 'local_changes' || accountingState === 'sync_failed'
         ? 'border-amber-500/30 bg-amber-500/5 text-amber-800 dark:text-amber-300'
-        : displayStatus === 'sync_pending'
+        : accountingState === 'sync_pending'
           ? 'border-border bg-secondary/40 text-ink-soft'
           : 'border-border bg-secondary/30 text-ink-soft';
 
+  const actionStatusText =
+    accountingState === 'not_connected'
+      ? invoiceAccountingStatusLabel('not_connected')
+      : accountingState === 'setup_incomplete'
+        ? invoiceAccountingStatusLabel('setup_incomplete')
+        : accountingState === 'local_changes'
+          ? 'Changes not synced'
+          : accountingState === 'sync_failed'
+            ? 'Sync failed'
+            : accountingState === 'update_pending'
+              ? 'Update pending'
+              : accountingState === 'not_synced'
+                ? 'Not synced'
+                : null;
+
   return (
     <div className="space-y-3">
-      {needsAccountingAction ? (
-        <div className={`rounded-xl border px-4 py-3 ${statusToneClass}`}>
-          <p className="text-[13px] font-medium">⚠ {actionStatusText}</p>
+      <div className={`rounded-xl border px-4 py-3 ${statusToneClass}`}>
+        <p className="text-[13px] font-medium">
+          {accountingState === 'synced'
+            ? `✓ ${accountingStatusLabel}`
+            : accountingState === 'sync_pending'
+              ? accountingStatusLabel
+              : actionStatusText ?? accountingStatusLabel}
+        </p>
+        {needsAccountingAction ? (
           <button
             type="button"
             onClick={onScrollToAccounting}
@@ -100,18 +77,8 @@ function SidebarAccountingQuickPanel({
             Go to Accounting section
             <ChevronRight className="h-3.5 w-3.5" aria-hidden />
           </button>
-        </div>
-      ) : (
-        <div className={`rounded-xl border px-4 py-3 ${statusToneClass}`}>
-          <p className="text-[13px] font-medium">
-            {displayStatus === 'synced' ? `✓ ${statusLabel}` : statusLabel}
-          </p>
-        </div>
-      )}
-
-      {pushState.lastSyncedAt && displayStatus !== 'not_synced' ? (
-        <p className="text-[12px] text-ink-soft">{lastSyncedLabel}</p>
-      ) : null}
+        ) : null}
+      </div>
 
       <button
         type="button"
@@ -129,9 +96,8 @@ export function InvoiceDetailSidebar({
   displayRef,
   summaryRows,
   paymentLinkId,
-  invoiceSync,
-  linkUpdatedAt,
-  link,
+  accountingState,
+  accountingStatusLabel,
   onScrollToAccounting,
   aiDismissed,
   onDismissAi,
@@ -187,9 +153,8 @@ export function InvoiceDetailSidebar({
         <h2 className="text-[13.5px] font-semibold">Accounting</h2>
         <AccountingIntegrationNotice returnTo={COMMERCIAL_OS_ROUTES.invoiceDetail(displayRef, { id: paymentLinkId })} />
         <SidebarAccountingQuickPanel
-          invoiceSync={invoiceSync}
-          linkUpdatedAt={linkUpdatedAt}
-          link={link}
+          accountingState={accountingState}
+          accountingStatusLabel={accountingStatusLabel}
           onScrollToAccounting={onScrollToAccounting}
         />
       </section>

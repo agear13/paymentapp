@@ -10,6 +10,7 @@ import { ACCOUNTING_INTEGRATION_COPY } from '@/lib/accounting/accounting-integra
 import type { AccountingInvoiceSyncRow } from '@/lib/accounting/accounting-push-state';
 import { shouldShowPaidVoidWarning } from '@/lib/accounting/accounting-removal-ux';
 import { formatCurrency } from '@/lib/formatters/format-currency';
+import type { InvoiceAccountingDisplayState } from '@/lib/payment-links/invoice-detail-view-model';
 import { getXeroSyncDisplayStatus } from '@/lib/xero/xero-sync-display';
 import type { PaymentLinkDetails } from '@/components/payment-links/payment-link-detail-dialog';
 
@@ -30,13 +31,14 @@ type InvoiceDetailAccountingSectionProps = {
   paymentLinkId: string;
   invoiceSync: AccountingInvoiceSyncRow | null;
   linkSnapshot: AccountingLinkSnapshot;
-  xeroGuidance: {
+  accountingState: InvoiceAccountingDisplayState;
+  accountingGuidance: {
     tone: 'default' | 'success' | 'info';
     title: string;
-    message: React.ReactNode;
+    message: string;
   };
+  showAccountingSyncDetails: boolean;
   xeroDisplay: { label: string; dotClass: string } | null;
-  showXero: boolean;
   showFx: boolean;
   creationFx: PaymentLinkDetails['fxSnapshots'];
   settlementFx: PaymentLinkDetails['fxSnapshots'];
@@ -49,44 +51,47 @@ export function InvoiceDetailAccountingSection({
   paymentLinkId,
   invoiceSync,
   linkSnapshot,
-  xeroGuidance,
+  accountingState,
+  accountingGuidance,
+  showAccountingSyncDetails,
   xeroDisplay,
-  showXero,
   showFx,
   creationFx,
   settlementFx,
   ledgerEntries,
   onQueued,
 }: InvoiceDetailAccountingSectionProps) {
+  const showAdvancedAudit = showFx || ledgerEntries.length > 0;
+
   return (
     <div id="accounting-section" className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
         <InvoiceDetailSectionHeading
           eyebrow="Accounting"
-          title="Xero synchronisation"
+          title="Accounting synchronisation"
           description="Push or update this invoice in your accounting software when you choose — Provvy never overwrites accounting records automatically."
         />
 
         <div className="space-y-4">
-          <AccountingSyncStatusBadge
-            invoiceSync={invoiceSync}
-            linkUpdatedAt={detail.updatedAt}
-            link={linkSnapshot}
-          />
+          <AccountingSyncStatusBadge accountingState={accountingState} />
 
-          <AccountingPushAction
-            paymentLinkId={paymentLinkId}
-            invoiceSync={invoiceSync}
-            linkUpdatedAt={detail.updatedAt}
-            link={linkSnapshot}
-            onQueued={onQueued}
-          />
+          {accountingState !== 'not_connected' ? (
+            <AccountingPushAction
+              paymentLinkId={paymentLinkId}
+              invoiceSync={invoiceSync}
+              linkUpdatedAt={detail.updatedAt}
+              link={linkSnapshot}
+              onQueued={onQueued}
+            />
+          ) : null}
 
-          <CommercialOsNextStepBanner
-            tone={xeroGuidance.tone}
-            title={xeroGuidance.title}
-            message={xeroGuidance.message}
-          />
+          {accountingState !== 'not_connected' && accountingGuidance.title !== accountingGuidance.message ? (
+            <CommercialOsNextStepBanner
+              tone={accountingGuidance.tone}
+              title={accountingGuidance.title}
+              message={accountingGuidance.message}
+            />
+          ) : null}
 
           {shouldShowPaidVoidWarning({ status: detail.status, xeroSyncs: detail.xeroSyncs }) ? (
             <CommercialOsNextStepBanner
@@ -107,9 +112,11 @@ export function InvoiceDetailAccountingSection({
         </div>
       </section>
 
-      <AccountingActivityTimeline syncs={detail.xeroSyncs} />
+      {showAccountingSyncDetails ? (
+        <AccountingActivityTimeline syncs={detail.xeroSyncs} />
+      ) : null}
 
-      {showXero ? (
+      {showAccountingSyncDetails && (detail.xeroSyncs?.length ?? 0) > 0 ? (
         <InvoiceDetailExpandableCard title="Sync records" summary={xeroDisplay?.label ?? 'Sync status'}>
           <div className="space-y-6">
             {xeroDisplay ? (
@@ -121,113 +128,113 @@ export function InvoiceDetailAccountingSection({
             {detail.xeroInvoiceNumber ? (
               <InvoiceDetailField label="Xero invoice" value={detail.xeroInvoiceNumber} />
             ) : null}
-            {(detail.xeroSyncs?.length ?? 0) > 0 ? (
-              <div>
-                <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                  Sync history
-                </div>
-                <ul className="mt-3 space-y-2 text-[12.5px] text-ink-soft">
-                  {detail.xeroSyncs!.map((sync) => {
-                    const display = getXeroSyncDisplayStatus(sync, detail.xeroSyncs ?? []);
-                    return (
-                      <li key={sync.id} className="flex justify-between gap-4">
-                        <span>
-                          {sync.syncType} · {display.label}
-                          {sync.xeroInvoiceId ? ` · ${sync.xeroInvoiceId}` : ''}
-                        </span>
-                        <span>
-                          {format(new Date(sync.updatedAt || sync.createdAt), 'd MMM · HH:mm')}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+                Sync history
               </div>
-            ) : null}
+              <ul className="mt-3 space-y-2 text-[12.5px] text-ink-soft">
+                {detail.xeroSyncs!.map((sync) => {
+                  const display = getXeroSyncDisplayStatus(sync, detail.xeroSyncs ?? []);
+                  return (
+                    <li key={sync.id} className="flex justify-between gap-4">
+                      <span>
+                        {sync.syncType} · {display.label}
+                      </span>
+                      <span>
+                        {format(new Date(sync.updatedAt || sync.createdAt), 'd MMM · HH:mm')}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           </div>
         </InvoiceDetailExpandableCard>
       ) : null}
 
-      <InvoiceDetailExpandableCard
-        title="Ledger entries"
-        summary={ledgerEntries.length > 0 ? `${ledgerEntries.length} entries` : 'None yet'}
-        defaultOpen={ledgerEntries.length > 0}
-      >
-        {ledgerEntries.length > 0 ? (
-          <ul className="space-y-3">
-            {ledgerEntries.map((entry) => (
-              <li
-                key={entry.id}
-                className="flex items-center justify-between gap-4 rounded-xl border border-border bg-background px-4 py-3"
-              >
-                <div>
-                  <div className="text-[13px] font-medium">
-                    {entry.ledgerAccount?.name ?? 'Account'} ({entry.ledgerAccount?.code ?? '—'})
-                  </div>
-                  <div className="text-[12px] text-ink-soft">{entry.description}</div>
-                </div>
-                <div className="text-right">
-                  <div
-                    className={`text-[13px] font-medium ${
-                      entry.entryType === 'DEBIT' ? 'text-destructive' : 'text-emerald-600'
-                    }`}
-                  >
-                    {entry.entryType === 'DEBIT' ? 'DR' : 'CR'}{' '}
-                    {formatCurrency(Number(entry.amount), entry.currency)}
-                  </div>
-                  <div className="text-[11px] text-ink-soft">
-                    {format(new Date(entry.createdAt), 'd MMM · HH:mm')}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-[13px] text-ink-soft">
-            No ledger entries yet — entries appear after payment reconciliation.
-          </p>
-        )}
-      </InvoiceDetailExpandableCard>
-
-      {showFx ? (
-        <InvoiceDetailExpandableCard title="FX snapshots" summary="Creation & settlement rates">
+      {showAdvancedAudit ? (
+        <InvoiceDetailExpandableCard title="Advanced / audit" summary="Ledger, FX and technical details">
           <div className="space-y-6">
-            {(creationFx?.length ?? 0) > 0 ? (
-              <div>
-                <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                  At creation
-                </div>
-                <ul className="mt-3 space-y-2 text-[12.5px]">
-                  {creationFx!.map((snap) => (
-                    <li key={snap.id} className="flex justify-between gap-4">
-                      <span>
-                        1 {snap.baseCurrency} = {snap.rate.toFixed(6)} {snap.quoteCurrency}
-                      </span>
-                      <span className="text-ink-soft">
-                        {format(new Date(snap.capturedAt), 'd MMM · HH:mm')} · {snap.provider}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+                Ledger entries
               </div>
-            ) : null}
-            {(settlementFx?.length ?? 0) > 0 ? (
-              <div>
-                <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                  At settlement
-                </div>
-                <ul className="mt-3 space-y-2 text-[12.5px]">
-                  {settlementFx!.map((snap) => (
-                    <li key={snap.id} className="flex justify-between gap-4">
-                      <span>
-                        1 {snap.baseCurrency} = {snap.rate.toFixed(6)} {snap.quoteCurrency}
-                      </span>
-                      <span className="text-ink-soft">
-                        {format(new Date(snap.capturedAt), 'd MMM · HH:mm')} · {snap.provider}
-                      </span>
+              {ledgerEntries.length > 0 ? (
+                <ul className="mt-3 space-y-3">
+                  {ledgerEntries.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="flex items-center justify-between gap-4 rounded-xl border border-border bg-background px-4 py-3"
+                    >
+                      <div>
+                        <div className="text-[13px] font-medium">
+                          {entry.ledgerAccount?.name ?? 'Account'} ({entry.ledgerAccount?.code ?? '—'})
+                        </div>
+                        <div className="text-[12px] text-ink-soft">{entry.description}</div>
+                      </div>
+                      <div className="text-right">
+                        <div
+                          className={`text-[13px] font-medium ${
+                            entry.entryType === 'DEBIT' ? 'text-destructive' : 'text-emerald-600'
+                          }`}
+                        >
+                          {entry.entryType === 'DEBIT' ? 'DR' : 'CR'}{' '}
+                          {formatCurrency(Number(entry.amount), entry.currency)}
+                        </div>
+                        <div className="text-[11px] text-ink-soft">
+                          {format(new Date(entry.createdAt), 'd MMM · HH:mm')}
+                        </div>
+                      </div>
                     </li>
                   ))}
                 </ul>
+              ) : (
+                <p className="mt-2 text-[13px] text-ink-soft">
+                  No ledger entries yet — entries appear after payment reconciliation.
+                </p>
+              )}
+            </div>
+
+            {showFx ? (
+              <div className="space-y-6 border-t border-border pt-6">
+                {(creationFx?.length ?? 0) > 0 ? (
+                  <div>
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+                      FX at creation
+                    </div>
+                    <ul className="mt-3 space-y-2 text-[12.5px]">
+                      {creationFx!.map((snap) => (
+                        <li key={snap.id} className="flex justify-between gap-4">
+                          <span>
+                            1 {snap.baseCurrency} = {snap.rate.toFixed(6)} {snap.quoteCurrency}
+                          </span>
+                          <span className="text-ink-soft">
+                            {format(new Date(snap.capturedAt), 'd MMM · HH:mm')} · {snap.provider}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {(settlementFx?.length ?? 0) > 0 ? (
+                  <div>
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+                      FX at settlement
+                    </div>
+                    <ul className="mt-3 space-y-2 text-[12.5px]">
+                      {settlementFx!.map((snap) => (
+                        <li key={snap.id} className="flex justify-between gap-4">
+                          <span>
+                            1 {snap.baseCurrency} = {snap.rate.toFixed(6)} {snap.quoteCurrency}
+                          </span>
+                          <span className="text-ink-soft">
+                            {format(new Date(snap.capturedAt), 'd MMM · HH:mm')} · {snap.provider}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

@@ -93,11 +93,20 @@ export function getXeroSyncDisplayStatus(
     };
   }
 
+  if (sync.status === 'PENDING') {
+    return {
+      label: 'Sync in progress',
+      variant: 'default',
+      detail: sync.errorMessage ?? null,
+      isProgress: true,
+    };
+  }
+
   return {
     label: sync.status,
     variant: 'secondary',
     detail: sync.errorMessage ?? null,
-    isProgress: sync.status === 'PENDING',
+    isProgress: false,
   };
 }
 
