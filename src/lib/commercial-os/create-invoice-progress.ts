@@ -36,10 +36,84 @@ export type CreateInvoiceFieldValidation = {
 };
 
 export const CREATE_INVOICE_PAYMENT_METHOD_NOT_READY_MESSAGE =
-  'The selected payment method is not fully set up yet. Check Connected Systems.';
+  'Set up this payment method in Payment settings before creating this invoice.';
 
 export const CREATE_INVOICE_NO_RAILS_MESSAGE =
-  'Connect Stripe or Wise in Connected Systems, or choose Manual Bank Transfer or Crypto to create this invoice.';
+  'Set up at least one payment method in Payment settings before creating this invoice.';
+
+export type CreateInvoicePaymentOptionLike = {
+  value: string;
+  available: boolean;
+  configured: boolean;
+};
+
+export function isCreateInvoicePaymentOptionReady(opt: CreateInvoicePaymentOptionLike): boolean {
+  return opt.available && opt.configured;
+}
+
+export function pickDefaultCreateInvoicePaymentMethod<T extends CreateInvoicePaymentOptionLike>(
+  options: readonly T[]
+): T['value'] | undefined {
+  return options.find(isCreateInvoicePaymentOptionReady)?.value;
+}
+
+export function isCreateInvoicePaymentMethodSelectionReady(
+  options: readonly CreateInvoicePaymentOptionLike[],
+  paymentMethod: string | null | undefined
+): boolean {
+  if (!paymentMethod) return false;
+  const selected = options.find((opt) => opt.value === paymentMethod);
+  return selected ? isCreateInvoicePaymentOptionReady(selected) : false;
+}
+
+export function areCreateInvoiceFieldsSubmittable(
+  validation: Pick<
+    CreateInvoiceSubmitValidation,
+    'customer' | 'description' | 'amount' | 'paymentMethod'
+  >
+): boolean {
+  return (
+    validation.customer &&
+    validation.description &&
+    validation.amount &&
+    validation.paymentMethod
+  );
+}
+
+export function deriveCreateInvoiceFooterMessage(input: {
+  validation: CreateInvoiceSubmitValidation;
+  formLoading: boolean;
+  readyPaymentOptionCount: number;
+  showFieldErrors: boolean;
+  progressiveGuidance: string;
+}): string {
+  const {
+    validation,
+    formLoading,
+    readyPaymentOptionCount,
+    showFieldErrors,
+    progressiveGuidance,
+  } = input;
+
+  if (formLoading) {
+    return 'Loading payment settings…';
+  }
+
+  const fieldsSubmittable = areCreateInvoiceFieldsSubmittable(validation);
+
+  if (fieldsSubmittable && !validation.railReady) {
+    if (readyPaymentOptionCount > 0) {
+      return 'Choose a ready payment method to create this invoice.';
+    }
+    return 'Set up a payment method before creating this invoice.';
+  }
+
+  if (showFieldErrors && !fieldsSubmittable && validation.missingLabels.length > 0) {
+    return `Complete required fields: ${validation.missingLabels.join(', ')}.`;
+  }
+
+  return progressiveGuidance;
+}
 
 export type CreateInvoiceRailReadiness = {
   ready: boolean;

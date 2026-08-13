@@ -59,9 +59,13 @@ import {
   CreateInvoiceFormSkeleton,
   CreateInvoicePaymentMethodOption,
   CreateInvoiceWorkflowProgress,
+  merchantCreateInvoicePaymentLabel,
 } from '@/components/journey/lovable/create-invoice-ui';
 import {
+  areCreateInvoiceFieldsSubmittable,
   computeCreateInvoiceWorkflowProgress,
+  deriveCreateInvoiceFooterMessage,
+  pickDefaultCreateInvoicePaymentMethod,
   validateCreateInvoiceSubmitReadiness,
   validateCreateInvoicePaymentRailReadiness,
 } from '@/lib/commercial-os/create-invoice-progress';
@@ -85,11 +89,6 @@ type MerchantSettingsSnapshot = {
   defaultCurrency?: string | null;
 };
 
-type ConnectedSystemCard = {
-  name: string;
-  detail: string;
-};
-
 const PAYMENTS_SETTINGS_HREF = `${COMMERCIAL_OS_ROUTES.payments}?from=invoice`;
 
 type InvoicePaymentMethodOptionView = ReturnType<typeof buildInvoicePaymentMethodOptions>[number] & {
@@ -104,10 +103,6 @@ function isCreateInvoicePaymentMethodConfigured(
   if (value === 'MANUAL_BANK') return Boolean(railDefaults.manualBank);
   if (value === 'CRYPTO') return Boolean(railDefaults.crypto);
   return isPaymentRailConfiguredForMerchant(value, railSetup);
-}
-
-function paymentSettingsHref(method: string): string {
-  return `${PAYMENTS_SETTINGS_HREF}&method=${encodeURIComponent(method)}`;
 }
 
 const inputCls = CREATE_INVOICE_INPUT_CLS;
@@ -209,7 +204,6 @@ export function WorkspaceCreateInvoiceScreen() {
   const [draft, setDraft] = useState<CommercialDealDraft>(() => defaultCommercialDealDraft());
   const [merchantSettings, setMerchantSettings] = useState<MerchantSettingsSnapshot | null>(null);
   const [merchantSettingsLoaded, setMerchantSettingsLoaded] = useState(false);
-  const [connectedSystems, setConnectedSystems] = useState<ConnectedSystemCard[] | null>(null);
   const [aiPrompt, setAiPrompt] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -340,57 +334,6 @@ export function WorkspaceCreateInvoiceScreen() {
     };
   }, [organizationId]);
 
-  useEffect(() => {
-    if (!organizationId) {
-      setConnectedSystems(null);
-      return;
-    }
-
-    let cancelled = false;
-    void (async () => {
-      const cards: ConnectedSystemCard[] = [];
-      const [xeroRes, merchantRes] = await Promise.all([
-        fetch(`/api/xero/status?organization_id=${encodeURIComponent(organizationId)}`, {
-          cache: 'no-store',
-        }),
-        fetch(`/api/merchant-settings?organizationId=${encodeURIComponent(organizationId)}`, {
-          cache: 'no-store',
-        }),
-      ]);
-
-      if (!cancelled && xeroRes.ok) {
-        const xeroStatus = (await xeroRes.json()) as { connected?: boolean };
-        if (xeroStatus.connected) {
-          cards.push({ name: 'Xero', detail: 'Accounting · connected' });
-        }
-      }
-
-      if (!cancelled && merchantRes.ok) {
-        const settingsData = (await merchantRes.json()) as Array<{
-          stripe_account_id?: string | null;
-          wise_enabled?: boolean | null;
-          hedera_account_id?: string | null;
-        }>;
-        const s = settingsData[0];
-        if (s?.stripe_account_id) {
-          cards.push({ name: 'Stripe', detail: 'Card payments · connected' });
-        }
-        if (s?.wise_enabled) {
-          cards.push({ name: 'Wise', detail: 'International transfers · connected' });
-        }
-        if (s?.hedera_account_id) {
-          cards.push({ name: 'Hedera', detail: 'Crypto payments · connected' });
-        }
-      }
-
-      if (!cancelled) setConnectedSystems(cards);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [organizationId]);
-
   const platformFeatures = useMemo(
     () => ({
       wisePayments: merchantSettings?.wiseGloballyEnabled ?? false,
@@ -442,9 +385,11 @@ export function WorkspaceCreateInvoiceScreen() {
 
   useEffect(() => {
     if (!merchantSettingsLoaded || !railDefaultsLoaded || draft.paymentMethod) return;
-    const firstAvailable = paymentMethodOptions.find((opt) => opt.available)?.value;
-    if (firstAvailable) {
-      patchDraft({ paymentMethod: firstAvailable });
+    const defaultMethod = pickDefaultCreateInvoicePaymentMethod(paymentMethodOptions);
+    if (defaultMethod) {
+      patchDraft({
+        paymentMethod: defaultMethod as CommercialDealDraft['paymentMethod'],
+      });
     }
   }, [
     merchantSettingsLoaded,
@@ -455,13 +400,15 @@ export function WorkspaceCreateInvoiceScreen() {
   ]);
 
   useEffect(() => {
-    if (!railDefaultsLoaded || !draft.paymentMethod) return;
+    if (!railDefaultsLoaded || !merchantSettingsLoaded || !draft.paymentMethod) return;
     const selected = paymentMethodOptions.find((opt) => opt.value === draft.paymentMethod);
     if (selected && !selected.available) {
-      const fallback = paymentMethodOptions.find((opt) => opt.available)?.value;
-      patchDraft({ paymentMethod: fallback });
+      const fallback = pickDefaultCreateInvoicePaymentMethod(paymentMethodOptions);
+      patchDraft({
+        paymentMethod: fallback as CommercialDealDraft['paymentMethod'] | undefined,
+      });
     }
-  }, [railDefaultsLoaded, draft.paymentMethod, paymentMethodOptions, patchDraft]);
+  }, [railDefaultsLoaded, merchantSettingsLoaded, draft.paymentMethod, paymentMethodOptions, patchDraft]);
 
   const guidance = useMemo(() => {
     if (!draft.customerName.trim() && !draft.customerEmail.trim()) {
@@ -476,34 +423,19 @@ export function WorkspaceCreateInvoiceScreen() {
     if (!draft.paymentMethod) {
       return 'Choose how your customer will pay.';
     }
-    if (!railSetup.anyRailConfigured && draft.paymentMethod !== 'CRYPTO' && draft.paymentMethod !== 'MANUAL_BANK') {
-      return 'Connect a payment method in Connected Systems before sending.';
-    }
     if (draft.paymentMethod === 'MANUAL_BANK' && !railDefaults.manualBank) {
-      return 'Add your business bank account in Payment Settings before using manual bank transfer.';
+      return 'Add your business bank account in Payment settings before using bank transfer.';
     }
     if (draft.paymentMethod === 'CRYPTO' && !railDefaults.crypto) {
-      return 'Add your crypto wallet in Payment Settings before using crypto payments.';
+      return 'Add your crypto wallet in Payment settings before using crypto payments.';
     }
     return 'Review the preview, then create your invoice.';
-  }, [draft, railSetup.anyRailConfigured, railDefaults]);
+  }, [draft, railDefaults]);
 
-  const hasXeroConnected = useMemo(
-    () => (connectedSystems ?? []).some((s) => s.name === 'Xero'),
-    [connectedSystems]
-  );
-
-  const showPaymentRailGuidance =
-    hasXeroConnected &&
-    !railSetup.anyRailConfigured &&
-    merchantSettingsLoaded &&
-    railDefaultsLoaded &&
-    (Boolean(railDefaults.manualBank) || Boolean(railDefaults.crypto));
-
-  const previewAmount =
-    draft.amount && draft.amount > 0
-      ? formatCurrency(draft.amount, draft.currency)
-      : formatCurrency(0, draft.currency);
+  const hasPreviewAmount = typeof draft.amount === 'number' && draft.amount > 0;
+  const previewAmount = hasPreviewAmount
+    ? formatCurrency(draft.amount!, draft.currency)
+    : 'Add amount';
 
   const handleAiGenerate = () => {
     toast({
@@ -626,15 +558,13 @@ export function WorkspaceCreateInvoiceScreen() {
       isSubmitting={isSubmitting}
       handleSubmit={handleSubmit}
       router={router}
-      showPaymentRailGuidance={showPaymentRailGuidance}
       paymentMethodOptions={paymentMethodOptions}
       railDefaults={railDefaults}
       railDefaultsLoaded={railDefaultsLoaded}
       merchantSettingsLoaded={merchantSettingsLoaded}
       railSetup={railSetup}
-      anyRailConfigured={railSetup.anyRailConfigured}
       previewAmount={previewAmount}
-      connectedSystems={connectedSystems}
+      hasPreviewAmount={hasPreviewAmount}
       aiPrompt={aiPrompt}
       setAiPrompt={setAiPrompt}
       handleAiGenerate={handleAiGenerate}
@@ -650,15 +580,13 @@ function CreateInvoiceForm({
   isSubmitting,
   handleSubmit,
   router,
-  showPaymentRailGuidance,
   paymentMethodOptions,
   railDefaults,
   railDefaultsLoaded,
   merchantSettingsLoaded,
   railSetup,
-  anyRailConfigured,
   previewAmount,
-  connectedSystems,
+  hasPreviewAmount,
   aiPrompt,
   setAiPrompt,
   handleAiGenerate,
@@ -670,20 +598,26 @@ function CreateInvoiceForm({
   isSubmitting: boolean;
   handleSubmit: () => void;
   router: ReturnType<typeof useRouter>;
-  showPaymentRailGuidance: boolean;
   paymentMethodOptions: InvoicePaymentMethodOptionView[];
   railDefaults: MerchantDedicatedRailDefaults;
   railDefaultsLoaded: boolean;
   merchantSettingsLoaded: boolean;
   railSetup: PaymentLinkRailSetupStatus;
-  anyRailConfigured: boolean;
   previewAmount: string;
-  connectedSystems: ConnectedSystemCard[] | null;
+  hasPreviewAmount: boolean;
   aiPrompt: string;
   setAiPrompt: (value: string) => void;
   handleAiGenerate: () => void;
 }) {
   const [showValidation, setShowValidation] = useState(false);
+  const [formInteracted, setFormInteracted] = useState(false);
+  const updateDraft = useCallback(
+    (patch: Partial<CommercialDealDraft>) => {
+      setFormInteracted(true);
+      patchDraft(patch);
+    },
+    [patchDraft]
+  );
   const validation = useMemo(
     () =>
       validateCreateInvoiceSubmitReadiness(draft, {
@@ -695,10 +629,29 @@ function CreateInvoiceForm({
   );
   const workflowSteps = useMemo(() => computeCreateInvoiceWorkflowProgress(draft), [draft]);
   const formLoading = !merchantSettingsLoaded || !railDefaultsLoaded;
+  const { readyPaymentOptions, setupPaymentOptions } = useMemo(() => {
+    const ready = paymentMethodOptions.filter((opt) => opt.configured && opt.available);
+    const setup = paymentMethodOptions.filter((opt) => !(opt.configured && opt.available));
+    return { readyPaymentOptions: ready, setupPaymentOptions: setup };
+  }, [paymentMethodOptions]);
+  const selectedPaymentLabel = draft.paymentMethod
+    ? merchantCreateInvoicePaymentLabel(draft.paymentMethod).title
+    : undefined;
+  const showFieldErrors = showValidation || formInteracted;
+  const canSubmit = validation.isSubmittable && !formLoading;
+  const footerMessage = deriveCreateInvoiceFooterMessage({
+    validation,
+    formLoading,
+    readyPaymentOptionCount: readyPaymentOptions.length,
+    showFieldErrors,
+    progressiveGuidance: guidance,
+  });
+  const setupSectionExpanded = readyPaymentOptions.length === 0;
 
   const onCreateClick = () => {
     if (!validation.isSubmittable) {
       setShowValidation(true);
+      setFormInteracted(true);
       return;
     }
     void handleSubmit();
@@ -725,71 +678,8 @@ function CreateInvoiceForm({
         <CreateInvoiceWorkflowProgress steps={workflowSteps} />
       </header>
 
-      <AccountingFirstInvoiceBanner returnTo={COMMERCIAL_OS_ROUTES.createInvoice} />
-
-      {showPaymentRailGuidance ? (
-        <CommercialOsNextStepBanner
-          tone="info"
-          title="Payment options"
-          message={
-            <>
-              You can invoice today using your saved{' '}
-              {railDefaults.manualBank && railDefaults.crypto
-                ? 'bank transfer and crypto wallet details'
-                : railDefaults.manualBank
-                  ? 'bank transfer details'
-                  : 'crypto wallet details'}
-              . Connect Stripe in{' '}
-              <Link href={COMMERCIAL_OS_ROUTES.connected} className="font-medium text-primary hover:underline">
-                Connected Systems
-              </Link>{' '}
-              if you want to accept card payments too.
-            </>
-          }
-        />
-      ) : null}
-
-      <section className="mt-8 rounded-2xl border border-primary/25 bg-gradient-to-br from-accent/40 to-card p-6 shadow-card">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-purple text-primary-foreground shadow-glow">
-              <Sparkles className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-[15px] font-semibold">Start with AI</h2>
-              <p className="text-[13px] text-ink-soft">Describe what you are billing.</p>
-            </div>
-          </div>
-          <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-            Coming soon
-          </span>
-        </div>
-
-        <textarea
-          value={aiPrompt}
-          onChange={(e) => setAiPrompt(e.target.value)}
-          placeholder={`"I ran a marketing campaign for Beth.\nIt was $2,500 plus GST.\nDue in 14 days."`}
-          rows={3}
-          className={`${inputCls} mt-4 resize-none`}
-        />
-
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleAiGenerate}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-purple px-5 text-[13.5px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Sparkles className="h-4 w-4" />
-            Generate Invoice
-          </button>
-          <p className="text-[12.5px] text-ink-soft">
-            Will fill customer, description, amount, and due date — then you review.
-          </p>
-        </div>
-      </section>
-
-      <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_340px]">
-        <div className="order-2 space-y-6 lg:order-1">
+      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_340px]">
+        <div className="space-y-6">
           {formLoading ? (
             <CreateInvoiceFormSkeleton />
           ) : (
@@ -797,23 +687,23 @@ function CreateInvoiceForm({
           <CreateInvoiceFormCard
             title="Customer"
             icon={User}
-            incomplete={showValidation && !validation.customer}
+            incomplete={showFieldErrors && !validation.customer}
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <CreateInvoiceFieldLabel
                   required
-                  invalid={showValidation && !validation.customer}
+                  invalid={showFieldErrors && !validation.customer}
                 >
                   Name
                 </CreateInvoiceFieldLabel>
                 <input
                   type="text"
                   value={draft.customerName}
-                  onChange={(e) => patchDraft({ customerName: e.target.value })}
+                  onChange={(e) => updateDraft({ customerName: e.target.value })}
                   placeholder="Beth's Bakery"
                   className={inputCls}
-                  aria-invalid={showValidation && !validation.customer}
+                  aria-invalid={showFieldErrors && !validation.customer}
                 />
               </div>
               <div>
@@ -821,7 +711,7 @@ function CreateInvoiceForm({
                 <input
                   type="email"
                   value={draft.customerEmail}
-                  onChange={(e) => patchDraft({ customerEmail: e.target.value })}
+                  onChange={(e) => updateDraft({ customerEmail: e.target.value })}
                   placeholder="beth@example.com"
                   className={inputCls}
                 />
@@ -831,13 +721,13 @@ function CreateInvoiceForm({
                 <input
                   type="tel"
                   value={draft.customerPhone}
-                  onChange={(e) => patchDraft({ customerPhone: e.target.value })}
+                  onChange={(e) => updateDraft({ customerPhone: e.target.value })}
                   placeholder="Optional"
                   className={inputCls}
                 />
               </div>
             </div>
-            {showValidation && !validation.customer ? (
+            {showFieldErrors && !validation.customer ? (
               <p className="mt-3 text-[12.5px] text-amber-700 dark:text-amber-400">
                 Add a customer name or email address.
               </p>
@@ -847,23 +737,23 @@ function CreateInvoiceForm({
           <CreateInvoiceFormCard
             title="Invoice details"
             icon={FileText}
-            incomplete={showValidation && !validation.description}
+            incomplete={showFieldErrors && !validation.description}
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <CreateInvoiceFieldLabel
                   required
-                  invalid={showValidation && !validation.description}
+                  invalid={showFieldErrors && !validation.description}
                 >
                   Description
                 </CreateInvoiceFieldLabel>
                 <textarea
                   value={draft.description}
-                  onChange={(e) => patchDraft({ description: e.target.value })}
+                  onChange={(e) => updateDraft({ description: e.target.value })}
                   placeholder="Marketing campaign — March 2026"
                   rows={2}
                   className={`${inputCls} resize-none`}
-                  aria-invalid={showValidation && !validation.description}
+                  aria-invalid={showFieldErrors && !validation.description}
                 />
               </div>
               <div>
@@ -871,7 +761,7 @@ function CreateInvoiceForm({
                 <input
                   type="text"
                   value={draft.invoiceReference}
-                  onChange={(e) => patchDraft({ invoiceReference: e.target.value })}
+                  onChange={(e) => updateDraft({ invoiceReference: e.target.value })}
                   placeholder="INV-0042"
                   className={inputCls}
                 />
@@ -883,7 +773,7 @@ function CreateInvoiceForm({
                   value={toDateInputValue(draft.invoiceDate)}
                   onChange={(e) => {
                     const parsed = parseDateInput(e.target.value);
-                    if (parsed) patchDraft({ invoiceDate: parsed });
+                    if (parsed) updateDraft({ invoiceDate: parsed });
                   }}
                   className={inputCls}
                 />
@@ -893,21 +783,26 @@ function CreateInvoiceForm({
                 <input
                   type="date"
                   value={toDateInputValue(draft.dueDate)}
-                  onChange={(e) => patchDraft({ dueDate: parseDateInput(e.target.value) })}
+                  onChange={(e) => updateDraft({ dueDate: parseDateInput(e.target.value) })}
                   className={inputCls}
                 />
               </div>
             </div>
+            {showFieldErrors && !validation.description ? (
+              <p className="mt-3 text-[12.5px] text-amber-700 dark:text-amber-400">
+                Add a description for this invoice.
+              </p>
+            ) : null}
           </CreateInvoiceFormCard>
 
           <CreateInvoiceFormCard
             title="Amount"
             icon={CreditCard}
-            incomplete={showValidation && !validation.amount}
+            incomplete={showFieldErrors && !validation.amount}
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <CreateInvoiceFieldLabel required invalid={showValidation && !validation.amount}>
+                <CreateInvoiceFieldLabel required invalid={showFieldErrors && !validation.amount}>
                   Amount
                 </CreateInvoiceFieldLabel>
                 <input
@@ -917,11 +812,11 @@ function CreateInvoiceForm({
                   value={draft.amount ?? ''}
                   onChange={(e) => {
                     const raw = e.target.value;
-                    patchDraft({ amount: raw === '' ? undefined : Number.parseFloat(raw) });
+                    updateDraft({ amount: raw === '' ? undefined : Number.parseFloat(raw) });
                   }}
                   placeholder="0.00"
                   className={inputCls}
-                  aria-invalid={showValidation && !validation.amount}
+                  aria-invalid={showFieldErrors && !validation.amount}
                 />
               </div>
               <div>
@@ -929,85 +824,151 @@ function CreateInvoiceForm({
                 <div className="mt-1.5">
                   <CurrencySelect
                     value={draft.currency}
-                    onValueChange={(currency) => patchDraft({ currency })}
+                    onValueChange={(currency) => updateDraft({ currency })}
                     commercialInvoiceMode
                   />
                 </div>
               </div>
             </div>
+            {showFieldErrors && !validation.amount ? (
+              <p className="mt-3 text-[12.5px] text-amber-700 dark:text-amber-400">
+                Enter an amount greater than zero.
+              </p>
+            ) : null}
           </CreateInvoiceFormCard>
 
           <CreateInvoiceFormCard
             title="Payment method"
             icon={Landmark}
-            incomplete={showValidation && !validation.paymentMethod}
+            incomplete={showFieldErrors && !validation.paymentMethod}
           >
-            <fieldset className="space-y-2">
+            {readyPaymentOptions.length === 0 ? (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+                <p className="text-[13.5px] font-medium">No payment method is ready yet.</p>
+                <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-soft">
+                  Set up at least one payment method before creating an invoice.
+                </p>
+                <Link
+                  href={PAYMENTS_SETTINGS_HREF}
+                  className="mt-3 inline-flex text-[12.5px] font-medium text-primary hover:underline"
+                >
+                  Open Payment settings
+                </Link>
+              </div>
+            ) : null}
+            <fieldset className="space-y-3">
               <legend className="sr-only">Payment method</legend>
-              {paymentMethodOptions.map((opt) => (
-                <CreateInvoicePaymentMethodOption
-                  key={opt.value}
-                  value={opt.value as NonNullable<CommercialDealDraft['paymentMethod']>}
-                  label={opt.label}
-                  selected={draft.paymentMethod === opt.value}
-                  available={opt.available}
-                  configured={opt.configured}
-                  unavailableReason={opt.unavailableReason}
-                  onSelect={() =>
-                    patchDraft({
-                      paymentMethod: opt.value as CommercialDealDraft['paymentMethod'],
-                    })
-                  }
-                />
-              ))}
+              {readyPaymentOptions.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+                    Available
+                  </p>
+                  {readyPaymentOptions.map((opt) => (
+                    <CreateInvoicePaymentMethodOption
+                      key={opt.value}
+                      value={opt.value as NonNullable<CommercialDealDraft['paymentMethod']>}
+                      label={opt.label}
+                      selected={draft.paymentMethod === opt.value}
+                      available={opt.available}
+                      configured={opt.configured}
+                      unavailableReason={opt.unavailableReason}
+                      onSelect={() =>
+                        updateDraft({
+                          paymentMethod: opt.value as CommercialDealDraft['paymentMethod'],
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {setupPaymentOptions.length > 0 ? (
+                <details
+                  open={setupSectionExpanded}
+                  className="group rounded-xl border border-border/80 bg-secondary/20"
+                >
+                  <summary className="cursor-pointer list-none px-4 py-3 text-[12.5px] font-medium text-ink-soft marker:content-none">
+                    <span className="flex items-center justify-between gap-2">
+                      Requires setup
+                      <span className="text-[11px] font-normal uppercase tracking-wider opacity-80">
+                        {setupPaymentOptions.length} option
+                        {setupPaymentOptions.length === 1 ? '' : 's'}
+                      </span>
+                    </span>
+                  </summary>
+                  <div className="space-y-2 border-t border-border/60 px-3 pb-3 pt-2">
+                    {setupPaymentOptions.map((opt) => (
+                      <CreateInvoicePaymentMethodOption
+                        key={opt.value}
+                        value={opt.value as NonNullable<CommercialDealDraft['paymentMethod']>}
+                        label={opt.label}
+                        selected={draft.paymentMethod === opt.value}
+                        available={opt.available}
+                        configured={opt.configured}
+                        unavailableReason={opt.unavailableReason}
+                        subdued
+                        onSelect={() =>
+                          updateDraft({
+                            paymentMethod: opt.value as CommercialDealDraft['paymentMethod'],
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </fieldset>
-            {!anyRailConfigured ? (
-              <p className="mt-4 text-[12.5px] leading-relaxed text-ink-soft">
-                Connect Stripe or Wise in{' '}
-                <Link href={COMMERCIAL_OS_ROUTES.connected} className="font-medium text-primary hover:underline">
-                  Connected Systems
-                </Link>{' '}
-                for card and international bank payments.
+            {showFieldErrors && !validation.paymentMethod ? (
+              <p className="mt-3 text-[12.5px] text-amber-700 dark:text-amber-400">
+                Choose how your customer will pay.
               </p>
             ) : null}
-            {railDefaultsLoaded && !railDefaults.manualBank ? (
-              <p className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">
-                {MANUAL_BANK_UNAVAILABLE_REASON}{' '}
-                <Link href={paymentSettingsHref('Manual Bank Transfer')} className="font-medium text-primary hover:underline">
-                  Open Payment Settings
-                </Link>
-              </p>
-            ) : null}
-            {railDefaultsLoaded && !railDefaults.crypto ? (
-              <p className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">
-                {CRYPTO_UNAVAILABLE_REASON}{' '}
-                <Link href={paymentSettingsHref('Crypto Payments')} className="font-medium text-primary hover:underline">
-                  Open Payment Settings
-                </Link>
-              </p>
-            ) : null}
-            {railDefaults.manualBank ? (
-              <p className="mt-4 text-[12.5px] text-ink-soft">
-                Bank transfer details from your Payment Settings will appear on this invoice automatically.
-              </p>
-            ) : null}
-            {railDefaults.crypto ? (
-              <p className="mt-2 text-[12.5px] text-ink-soft">
-                Crypto wallet details from your Payment Settings will appear on this invoice automatically.
-              </p>
-            ) : null}
+            <p className="mt-4 text-[12.5px] leading-relaxed text-ink-soft">
+              Configure card, bank transfer, or crypto in{' '}
+              <Link href={PAYMENTS_SETTINGS_HREF} className="font-medium text-primary hover:underline">
+                Payment settings
+              </Link>
+              .
+            </p>
           </CreateInvoiceFormCard>
+
+          <details className="rounded-xl border border-border/80 bg-card/50 p-4">
+            <summary className="flex cursor-pointer list-none items-center gap-2 text-[13px] font-medium marker:content-none">
+              <Sparkles className="h-4 w-4 text-primary" aria-hidden />
+              Start with AI
+              <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-soft">
+                Coming soon
+              </span>
+            </summary>
+            <p className="mt-3 text-[12.5px] text-ink-soft">
+              Describe what you are billing and Provvy will draft customer, description, amount, and due
+              date for you to review.
+            </p>
+            <textarea
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder={`"Marketing campaign for Beth — $2,500, due in 14 days."`}
+              rows={2}
+              className={`${inputCls} mt-3 resize-none`}
+            />
+            <button
+              type="button"
+              onClick={handleAiGenerate}
+              className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg border border-border px-4 text-[12.5px] font-medium transition-colors hover:bg-secondary"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Generate invoice
+            </button>
+          </details>
             </>
           )}
         </div>
 
-        <div className="order-1 lg:order-2">
+        <div>
           <CreateInvoicePreviewSidebar
             draft={draft}
             previewAmount={previewAmount}
-            guidance={guidance}
-            paymentMethodOptions={paymentMethodOptions}
-            connectedSystems={connectedSystems}
+            hasPreviewAmount={hasPreviewAmount}
+            paymentMethodLabel={selectedPaymentLabel}
             loading={formLoading}
           />
         </div>
@@ -1020,18 +981,19 @@ function CreateInvoiceForm({
               <p className="text-[13px] text-destructive" role="alert">
                 {submitError}
               </p>
-            ) : showValidation && validation.submitBlockMessage ? (
-              <p className="text-[13px] text-amber-700 dark:text-amber-400" role="status">
-                {validation.submitBlockMessage}
-              </p>
-            ) : showValidation && !validation.isSubmittable ? (
-              <p className="text-[13px] text-amber-700 dark:text-amber-400" role="status">
-                Complete required fields: {validation.missingLabels.join(', ')}.
-              </p>
-            ) : formLoading ? (
-              <p className="truncate text-[13px] text-ink-soft">Loading payment settings…</p>
             ) : (
-              <p className="truncate text-[13px] text-ink-soft">{guidance}</p>
+              <p
+                className={`truncate text-[13px] ${
+                  showFieldErrors &&
+                  (!areCreateInvoiceFieldsSubmittable(validation) ||
+                    (areCreateInvoiceFieldsSubmittable(validation) && !validation.railReady))
+                    ? 'text-amber-700 dark:text-amber-400'
+                    : 'text-ink-soft'
+                }`}
+                role="status"
+              >
+                {footerMessage}
+              </p>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-3">
@@ -1044,9 +1006,9 @@ function CreateInvoiceForm({
             </button>
             <button
               type="button"
-              disabled={isSubmitting || formLoading}
+              disabled={isSubmitting || formLoading || !canSubmit}
               onClick={onCreateClick}
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-purple px-6 text-[14px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110 disabled:opacity-60"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-purple px-6 text-[14px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Create Invoice

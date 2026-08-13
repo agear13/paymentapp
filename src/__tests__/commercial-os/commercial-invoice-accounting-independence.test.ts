@@ -28,7 +28,9 @@ describe('commercial invoice accounting independence', () => {
       const sidebarSource = readSrc('components/journey/lovable/create-invoice-preview-sidebar.tsx');
       expect(screenSource).toContain("isAllowed('payment_links')");
       expect(screenSource).toContain('EntitlementUpgradePanel');
-      expect(`${screenSource}\n${sidebarSource}`).toContain('AccountingIntegrationNotice');
+      expect(sidebarSource).toContain('notConnectedStatus');
+      expect(sidebarSource).toContain('ACCOUNTING_INTEGRATION_COPY');
+      expect(sidebarSource).not.toMatch(/Commercial readiness/i);
     });
 
     it('workspace start screen routes create-invoice directly', () => {

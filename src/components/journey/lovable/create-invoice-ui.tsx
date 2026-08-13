@@ -1,7 +1,8 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
-import { Check, Coins, CreditCard, Globe2, Landmark, Wallet } from 'lucide-react';
+import { Coins, CreditCard, Globe2, Landmark, Wallet } from 'lucide-react';
+import type { PaymentMethod } from '@prisma/client';
 import type { CommercialDealDraft } from '@/lib/commercial-os/commercial-deal-draft';
 import type { CreateInvoiceWorkflowStepState } from '@/lib/commercial-os/create-invoice-progress';
 import { PaymentsProviderStatusBadge } from '@/components/journey/lovable/payments-settlement-ui';
@@ -67,22 +68,21 @@ export function CreateInvoiceWorkflowProgress({
 }) {
   return (
     <nav
-      aria-label="Commercial workflow"
-      className="flex flex-wrap items-center gap-2 text-[12px] text-ink-soft"
+      aria-label="Product lifecycle"
+      className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11.5px] text-ink-soft"
     >
       {steps.map((step, i) => (
-        <span key={step.label} className="inline-flex items-center gap-2">
-          {i > 0 ? <span className="text-border" aria-hidden>→</span> : null}
+        <span key={step.label} className="inline-flex items-center gap-1.5">
+          {i > 0 ? <span aria-hidden className="opacity-40">·</span> : null}
           <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium ${
-              step.status === 'done'
-                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                : step.status === 'current'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-ink-soft'
-            }`}
+            className={
+              step.status === 'current'
+                ? 'font-medium text-foreground'
+                : step.status === 'done'
+                  ? 'text-ink-soft'
+                  : 'opacity-70'
+            }
           >
-            {step.status === 'done' ? <Check className="h-3 w-3" aria-hidden /> : null}
             {step.label}
           </span>
         </span>
@@ -140,31 +140,61 @@ const PAYMENT_METHOD_ICONS: Partial<Record<CommercialDealDraft['paymentMethod'] 
   MANUAL: Landmark,
 };
 
+/** Merchant-facing labels for the Create Invoice payment method picker. */
+export function merchantCreateInvoicePaymentLabel(value: PaymentMethod): {
+  title: string;
+  detail?: string;
+} {
+  switch (value) {
+    case 'STRIPE':
+      return { title: 'Credit / debit card' };
+    case 'WISE':
+      return { title: 'Bank transfer', detail: 'Wise' };
+    case 'MANUAL_BANK':
+      return { title: 'Bank transfer', detail: 'Manual instructions' };
+    case 'HEDERA':
+      return { title: 'Crypto', detail: 'HashPack · Hedera' };
+    case 'EVM_WALLET':
+      return { title: 'Crypto', detail: 'MetaMask · EVM' };
+    case 'CRYPTO':
+      return { title: 'Crypto', detail: 'Manual wallet' };
+    default:
+      return { title: value.replace(/_/g, ' ') };
+  }
+}
+
 export function CreateInvoicePaymentMethodOption({
   value,
   label,
+  detail,
   selected,
   available,
   configured,
   unavailableReason,
   onSelect,
+  subdued = false,
 }: {
   value: NonNullable<CommercialDealDraft['paymentMethod']>;
+  /** @deprecated Prefer merchant label via merchantCreateInvoicePaymentLabel */
   label: string;
+  detail?: string;
   selected: boolean;
   available: boolean;
-  /** Merchant rail readiness — drives CONNECTED badge, independent of selectability. */
   configured: boolean;
   unavailableReason?: string;
   onSelect: () => void;
+  subdued?: boolean;
 }) {
   const Icon = PAYMENT_METHOD_ICONS[value] ?? CreditCard;
+  const display = merchantCreateInvoicePaymentLabel(value);
+  const title = display.title || label;
+  const secondaryDetail = detail ?? display.detail;
 
   return (
     <label
       className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors ${
         selected ? 'border-primary/40 bg-accent/30' : 'border-border hover:bg-secondary/40'
-      } ${!available ? 'cursor-not-allowed opacity-60' : ''}`}
+      } ${subdued ? 'opacity-75' : ''} ${!available ? 'cursor-not-allowed opacity-50' : ''}`}
     >
       <input
         type="radio"
@@ -180,11 +210,20 @@ export function CreateInvoicePaymentMethodOption({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-2">
-          <span className="text-[13.5px] font-medium">{label}</span>
-          <PaymentsProviderStatusBadge connected={configured} label="Setup" />
+          <span className="text-[13.5px] font-medium">{title}</span>
+          <PaymentsProviderStatusBadge
+            connected={configured}
+            label="Requires setup"
+            tone={configured ? 'success' : subdued ? 'neutral' : 'warning'}
+          />
         </span>
+        {secondaryDetail ? (
+          <span className="mt-0.5 block text-[11.5px] text-ink-soft">{secondaryDetail}</span>
+        ) : null}
         {!available && unavailableReason ? (
-          <span className="mt-0.5 block text-[12px] text-ink-soft">{unavailableReason}</span>
+          <span className="mt-0.5 block text-[12px] text-ink-soft">
+            Complete setup in Payment settings
+          </span>
         ) : null}
       </span>
     </label>

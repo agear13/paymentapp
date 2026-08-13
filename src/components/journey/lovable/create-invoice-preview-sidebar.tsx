@@ -1,40 +1,45 @@
 'use client';
 
+import { useState } from 'react';
 import { format } from 'date-fns';
-import { Sparkles } from 'lucide-react';
-import { AccountingIntegrationNotice } from '@/components/journey/lovable/accounting-integration-notice';
-import { PaymentsCheckPill } from '@/components/journey/lovable/payments-settlement-ui';
+import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
+import { ACCOUNTING_INTEGRATION_COPY } from '@/lib/accounting/accounting-integration-copy';
+import { ConnectAccountingModal } from '@/components/journey/lovable/connect-accounting-modal';
+import { merchantCreateInvoicePaymentLabel } from '@/components/journey/lovable/create-invoice-ui';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import type { CommercialDealDraft } from '@/lib/commercial-os/commercial-deal-draft';
-import type { buildInvoicePaymentMethodOptions } from '@/lib/payment-links/setup-status';
-import { usePaymentsSettlementReadiness } from '@/hooks/use-payments-settlement-readiness';
-
-type ConnectedSystemCard = {
-  name: string;
-  detail: string;
-};
+import type { PaymentMethod } from '@prisma/client';
 
 type CreateInvoicePreviewSidebarProps = {
   draft: CommercialDealDraft;
   previewAmount: string;
-  guidance: string;
-  paymentMethodOptions: ReturnType<typeof buildInvoicePaymentMethodOptions>;
-  connectedSystems: ConnectedSystemCard[] | null;
+  hasPreviewAmount: boolean;
+  paymentMethodLabel?: string;
   loading?: boolean;
 };
 
 export function CreateInvoicePreviewSidebar({
   draft,
   previewAmount,
-  guidance,
-  paymentMethodOptions,
-  connectedSystems,
+  hasPreviewAmount,
+  paymentMethodLabel,
   loading = false,
 }: CreateInvoicePreviewSidebarProps) {
-  const { readiness, loading: readinessLoading } = usePaymentsSettlementReadiness();
+  const readiness = useCommercialReadinessOptional();
+  const [accountingModalOpen, setAccountingModalOpen] = useState(false);
+
+  const connected = readiness?.connection.connected ?? false;
+  const syncReady = readiness?.canSyncToAccounting ?? readiness?.canCreateInvoice ?? false;
+  const showAccountingCta = readiness && !readiness.loading && !syncReady;
+
+  const payLabel =
+    paymentMethodLabel ??
+    (draft.paymentMethod
+      ? merchantCreateInvoicePaymentLabel(draft.paymentMethod as PaymentMethod).title
+      : null);
 
   return (
-    <aside className="space-y-6 lg:sticky lg:top-28 lg:self-start">
+    <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
       <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
         <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
           Live preview
@@ -72,7 +77,13 @@ export function CreateInvoicePreviewSidebar({
             <div className="flex items-end justify-between gap-3 border-t border-border pt-3">
               <div>
                 <div className="text-[11px] text-ink-soft">Total due</div>
-                <div className="text-2xl font-semibold tracking-tight">{previewAmount}</div>
+                <div
+                  className={`text-2xl font-semibold tracking-tight ${
+                    hasPreviewAmount ? '' : 'text-ink-soft'
+                  }`}
+                >
+                  {previewAmount}
+                </div>
               </div>
               {draft.dueDate ? (
                 <div className="text-right text-[12px] text-ink-soft">
@@ -80,12 +91,8 @@ export function CreateInvoicePreviewSidebar({
                 </div>
               ) : null}
             </div>
-            {draft.paymentMethod ? (
-              <div className="text-[12px] text-ink-soft">
-                Pay via{' '}
-                {paymentMethodOptions.find((o) => o.value === draft.paymentMethod)?.label ??
-                  draft.paymentMethod}
-              </div>
+            {payLabel ? (
+              <div className="text-[12px] text-ink-soft">Pay via {payLabel}</div>
             ) : (
               <div className="text-[12px] text-ink-soft">Choose a payment method</div>
             )}
@@ -93,62 +100,33 @@ export function CreateInvoicePreviewSidebar({
         )}
       </div>
 
-      <div className="rounded-2xl border border-primary/20 bg-card p-5 shadow-card">
-        <div className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-purple text-primary-foreground shadow-glow">
-            <Sparkles className="h-4 w-4" />
-          </div>
-          <div className="text-[14px] font-semibold tracking-tight">Provvy AI</div>
-        </div>
-        <p className="mt-4 text-[13px] leading-relaxed text-foreground">{guidance}</p>
-      </div>
-
-      {!readinessLoading && !readiness.requiredDone ? (
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-            Commercial readiness
-          </div>
-          <p className="mt-2 text-[12.5px] text-ink-soft">
-            {readiness.doneCount} of {readiness.checklist.length} setup steps complete before
-            end-to-end collection.
+      {showAccountingCta ? (
+        <div className="rounded-xl border border-border bg-secondary/30 p-4">
+          <p className="text-[13px] font-medium">
+            {connected
+              ? ACCOUNTING_INTEGRATION_COPY.setupIncompleteStatus
+              : ACCOUNTING_INTEGRATION_COPY.notConnectedStatus}
           </p>
-          <ul className="mt-3 space-y-1.5">
-            {readiness.checklist
-              .filter((item) => !item.optional && !item.done)
-              .slice(0, 3)
-              .map((item) => (
-                <PaymentsCheckPill key={item.id} done={false}>
-                  {item.label}
-                </PaymentsCheckPill>
-              ))}
-          </ul>
+          <p className="mt-1.5 text-[12px] leading-relaxed text-ink-soft">
+            {ACCOUNTING_INTEGRATION_COPY.notConnectedDescription}
+          </p>
+          {!connected ? (
+            <button
+              type="button"
+              onClick={() => setAccountingModalOpen(true)}
+              className="mt-3 inline-flex items-center rounded-xl border border-border bg-background px-3.5 py-2 text-[12.5px] font-semibold transition-colors hover:bg-secondary"
+            >
+              {ACCOUNTING_INTEGRATION_COPY.connectCta}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
-      <AccountingIntegrationNotice returnTo={COMMERCIAL_OS_ROUTES.createInvoice} />
-
-      <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-        <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-          Connected systems
-        </div>
-        {connectedSystems === null ? (
-          <p className="mt-3 text-[12.5px] text-ink-soft">Loading connections…</p>
-        ) : connectedSystems.length > 0 ? (
-          <ul className="mt-3 space-y-2">
-            {connectedSystems.map((sys) => (
-              <li key={sys.name} className="flex items-center justify-between text-[13px]">
-                <span className="font-medium">{sys.name}</span>
-                <span className="text-ink-soft">{sys.detail}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">
-            No payment or accounting connections yet. You can still invoice with manual bank or
-            crypto once configured in Payments &amp; Settlement.
-          </p>
-        )}
-      </div>
+      <ConnectAccountingModal
+        open={accountingModalOpen}
+        onOpenChange={setAccountingModalOpen}
+        returnTo={COMMERCIAL_OS_ROUTES.createInvoice}
+      />
     </aside>
   );
 }
