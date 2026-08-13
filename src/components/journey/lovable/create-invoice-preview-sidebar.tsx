@@ -125,7 +125,7 @@ export function CreateInvoicePreviewSidebar({
       <ConnectAccountingModal
         open={accountingModalOpen}
         onOpenChange={setAccountingModalOpen}
-        returnTo={COMMERCIAL_OS_ROUTES.createInvoice}
+        continueFrom={COMMERCIAL_OS_ROUTES.createInvoice}
       />
     </aside>
   );

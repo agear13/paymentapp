@@ -11,6 +11,8 @@ import {
 import { XeroConnectConfirmDialog } from '@/components/xero/xero-connect-confirm-dialog';
 import { useOrganization } from '@/hooks/use-organization';
 import { xeroConnectUrl } from '@/lib/journey/commercial-os-routes';
+import { commercialOsXeroOAuthReturnPath } from '@/lib/xero/oauth-return-path';
+import { storeXeroOAuthContinueFrom } from '@/lib/xero/xero-oauth-continue-context';
 import {
   ACCOUNTING_PROVIDER_OPTIONS,
   CONNECT_ACCOUNTING_MODAL,
@@ -20,13 +22,14 @@ import { useToast } from '@/hooks/use-toast';
 type ConnectAccountingModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  returnTo?: string;
+  /** Workspace path to return the user to after accounting setup (stored client-side). */
+  continueFrom?: string;
 };
 
 export function ConnectAccountingModal({
   open,
   onOpenChange,
-  returnTo,
+  continueFrom,
 }: ConnectAccountingModalProps) {
   const { organizationId } = useOrganization();
   const { toast } = useToast();
@@ -48,10 +51,16 @@ export function ConnectAccountingModal({
   const confirmXeroConnect = () => {
     if (!organizationId) return;
     setConnecting(true);
-    const destination =
-      returnTo ??
-      (typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/workspace/connected');
-    window.location.href = xeroConnectUrl(organizationId, destination);
+    const originPath =
+      continueFrom ??
+      (typeof window !== 'undefined'
+        ? `${window.location.pathname}${window.location.search}`
+        : undefined);
+    const oauthReturnPath = commercialOsXeroOAuthReturnPath();
+    if (originPath && originPath.split('?')[0] !== oauthReturnPath) {
+      storeXeroOAuthContinueFrom(originPath);
+    }
+    window.location.href = xeroConnectUrl(organizationId, oauthReturnPath);
   };
 
   return (
@@ -65,26 +74,37 @@ export function ConnectAccountingModal({
           <ul className="space-y-2 pt-2">
             {ACCOUNTING_PROVIDER_OPTIONS.map((provider) => (
               <li key={provider.id}>
-                <button
-                  type="button"
-                  disabled={!provider.available}
-                  onClick={() => {
-                    if (provider.id === 'xero') {
-                      beginXeroConnect();
-                    }
-                  }}
-                  className="flex w-full items-start justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <span>
-                    <span className="block text-[14px] font-semibold text-foreground">{provider.name}</span>
-                    <span className="mt-0.5 block text-[12.5px] text-ink-soft">{provider.description}</span>
-                  </span>
-                  {!provider.available ? (
-                    <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-soft">
+                {provider.available ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (provider.id === 'xero') {
+                        beginXeroConnect();
+                      }
+                    }}
+                    className="flex w-full items-start justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3 text-left transition-colors hover:bg-accent"
+                  >
+                    <span>
+                      <span className="block text-[14px] font-semibold text-foreground">{provider.name}</span>
+                      <span className="mt-0.5 block text-[12.5px] text-ink-soft">{provider.description}</span>
+                    </span>
+                  </button>
+                ) : (
+                  <div
+                    role="group"
+                    aria-disabled="true"
+                    aria-label={`${provider.name}, ${CONNECT_ACCOUNTING_MODAL.comingSoon}, unavailable`}
+                    className="flex w-full cursor-not-allowed items-start justify-between gap-3 rounded-xl border border-border bg-muted/40 px-4 py-3 text-left"
+                  >
+                    <span>
+                      <span className="block text-[14px] font-semibold text-foreground/80">{provider.name}</span>
+                      <span className="mt-0.5 block text-[12.5px] text-ink-soft">{provider.description}</span>
+                    </span>
+                    <span className="shrink-0 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-foreground/70">
                       {CONNECT_ACCOUNTING_MODAL.comingSoon}
                     </span>
-                  ) : null}
-                </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

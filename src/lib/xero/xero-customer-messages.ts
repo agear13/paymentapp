@@ -26,6 +26,10 @@ export type CustomerMessage = {
 };
 
 export const XERO_OAUTH_ERROR_MESSAGES: Record<string, CustomerMessage> = {
+  access_denied: {
+    message: 'Xero connection was cancelled.',
+    action: 'You can connect accounting again whenever you are ready.',
+  },
   missing_parameters: {
     message: 'Something went wrong while connecting to Xero.',
     action: 'Try connecting again from this page.',

@@ -78,7 +78,7 @@ export function AccountingIntegrationNotice({
         ) : null}
       </div>
 
-      <ConnectAccountingModal open={modalOpen} onOpenChange={setModalOpen} returnTo={returnTo} />
+      <ConnectAccountingModal open={modalOpen} onOpenChange={setModalOpen} continueFrom={returnTo} />
     </>
   );
 }

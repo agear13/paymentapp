@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { resolveRequestOrigin } from '@/lib/runtime/customer-facing-url';
-import { normalizeXeroOAuthReturnPath } from '@/lib/xero/oauth-return-path';
+import { resolveXeroOAuthReturnPath } from '@/lib/xero/oauth-return-path';
 
 /**
  * Build the post-OAuth redirect target after Xero connect/callback.
@@ -16,8 +16,7 @@ export function xeroIntegrationsRedirectUrl(
     process.env.NEXT_PUBLIC_APP_URL ??
     request.nextUrl.origin;
   const params = new URLSearchParams(query);
-  const path =
-    normalizeXeroOAuthReturnPath(returnPath) ?? '/dashboard/settings/integrations';
+  const path = resolveXeroOAuthReturnPath(returnPath);
   return `${origin.replace(/\/$/, '')}${path}?${params.toString()}`;
 }
 

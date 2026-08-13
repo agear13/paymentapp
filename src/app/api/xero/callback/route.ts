@@ -41,8 +41,17 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       loggers.xero.error('xero_callback_oauth_error', undefined, { step: 'oauth_error', error });
+      let returnFromState: string | undefined;
+      if (state) {
+        try {
+          const stateData = verifyOAuthState<XeroOAuthState>(state);
+          returnFromState = normalizeXeroOAuthReturnPath(stateData?.returnTo);
+        } catch {
+          returnFromState = undefined;
+        }
+      }
       return NextResponse.redirect(
-        xeroIntegrationsRedirectUrl(request, { xero_error: error })
+        xeroIntegrationsRedirectUrl(request, { xero_error: error }, returnFromState)
       );
     }
 

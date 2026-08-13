@@ -212,7 +212,7 @@ export function AccountingPushAction({
       <ConnectAccountingModal
         open={modalOpen}
         onOpenChange={setModalOpen}
-        returnTo={
+        continueFrom={
           typeof window !== 'undefined'
             ? `${window.location.pathname}${window.location.search}`
             : undefined

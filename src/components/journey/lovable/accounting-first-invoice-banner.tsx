@@ -64,7 +64,7 @@ export function AccountingFirstInvoiceBanner({ returnTo }: AccountingFirstInvoic
         </button>
       </div>
 
-      <ConnectAccountingModal open={modalOpen} onOpenChange={setModalOpen} returnTo={returnTo} />
+      <ConnectAccountingModal open={modalOpen} onOpenChange={setModalOpen} continueFrom={returnTo} />
     </>
   );
 }
