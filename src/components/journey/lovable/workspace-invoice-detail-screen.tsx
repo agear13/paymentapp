@@ -76,7 +76,7 @@ import { InvoiceDetailAccountingSection } from '@/components/journey/lovable/inv
 import { InvoiceDetailCommercialPosition } from '@/components/journey/lovable/invoice-detail-commercial-position';
 import { InvoiceDetailSidebar } from '@/components/journey/lovable/invoice-detail-sidebar';
 import {
-  INVOICE_DETAIL_INVOICE_DETAIL_TONE_RING,
+  INVOICE_DETAIL_TONE_RING,
   InvoiceDetailActionButton,
   InvoiceDetailExpandableCard,
   InvoiceDetailField,
