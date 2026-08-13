@@ -107,6 +107,7 @@ export async function createSaasSubscriptionCheckoutSession(input: {
     mode: 'subscription',
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
+    allow_promotion_codes: true,
     success_url: returnUrls.success_url,
     cancel_url: returnUrls.cancel_url,
     client_reference_id: input.organizationId,
