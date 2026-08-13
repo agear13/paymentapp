@@ -5,15 +5,15 @@
 
 export const ACCOUNTING_INTEGRATION_COPY = {
   sectionTitle: 'Accounting',
-  notConnectedStatus: 'Not connected',
+  notConnectedStatus: 'Accounting not connected',
   connectedStatus: 'Connected',
   setupIncompleteStatus: 'Setup incomplete',
   notConnectedDescription:
-    'Automatically sync invoices to your accounting software.',
+    'Connect your accounting software to automatically sync invoices and payment records.',
   firstInvoiceBannerTitle: 'Automatically sync invoices to your accounting software',
   firstInvoiceBannerBody:
     'Save time by pushing invoices directly into your accounting software.',
-  connectCta: 'Connect Accounting',
+  connectCta: 'Connect accounting',
   pushCta: 'Push to Accounting',
   updateAccountingCta: 'Update Accounting Record',
   alreadySyncedLabel: 'Already synced',

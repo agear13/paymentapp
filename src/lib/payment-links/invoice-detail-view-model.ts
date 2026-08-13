@@ -95,8 +95,21 @@ type PaymentLinkDetailLike = {
   settlementAmount?: unknown;
 };
 
+const MERCHANT_INVOICE_CREATED_LABEL = 'Invoice created';
+
+function isInvoiceCreatedLabel(label: string): boolean {
+  return label.toLowerCase() === MERCHANT_INVOICE_CREATED_LABEL.toLowerCase();
+}
+
+function normalizeMerchantTimelineLabel(label: string): string {
+  if (isInvoiceCreatedLabel(label)) {
+    return MERCHANT_INVOICE_CREATED_LABEL;
+  }
+  return label;
+}
+
 const PAYMENT_EVENT_MERCHANT_LABELS: Record<string, string> = {
-  CREATED: 'Invoice created',
+  CREATED: MERCHANT_INVOICE_CREATED_LABEL,
   OPENED: 'Customer opened payment link',
   PAYMENT_INITIATED: 'Payment link ready',
   PAYMENT_CONFIRMED: 'Payment confirmed',
@@ -171,8 +184,7 @@ export function invoiceAccountingGuidance(input: {
     return {
       tone: 'info',
       title: 'Accounting not connected',
-      message:
-        'Connect your accounting software to push invoices and payments when you are ready. Invoices work without a connection.',
+      message: ACCOUNTING_INTEGRATION_COPY.notConnectedDescription,
     };
   }
 
@@ -245,15 +257,17 @@ export function buildInvoiceActivityTimeline(
   lifecycle: LifecycleSnapshot | null
 ): InvoiceTimelineEntry[] {
   const entries: InvoiceTimelineEntry[] = [];
-  const lifecycleCreatedAt = lifecycle?.invoiceLifecycle?.timeline?.find(
-    (step) => step.id === 'created' || step.label === 'Invoice Created'
-  )?.occurredAt;
+  let hasInvoiceCreated = false;
 
   for (const step of lifecycle?.invoiceLifecycle?.timeline ?? []) {
     if (!step.reached || !step.occurredAt) continue;
+    const label = normalizeMerchantTimelineLabel(step.label);
+    if (isInvoiceCreatedLabel(label)) {
+      hasInvoiceCreated = true;
+    }
     const at = new Date(step.occurredAt);
     entries.push({
-      label: step.label,
+      label,
       detail: step.state,
       time: format(at, 'd MMM · HH:mm'),
       sortAt: at.getTime(),
@@ -261,17 +275,21 @@ export function buildInvoiceActivityTimeline(
   }
 
   for (const event of detail.paymentEvents ?? []) {
-    if (event.eventType === 'CREATED' && lifecycleCreatedAt) {
-      const createdMs = parseTimestamp(lifecycleCreatedAt);
-      const eventMs = parseTimestamp(event.createdAt);
-      if (createdMs != null && eventMs != null && Math.abs(createdMs - eventMs) < 60_000) {
+    if (event.eventType === 'CREATED' && hasInvoiceCreated) {
+      continue;
+    }
+
+    const label = paymentEventMerchantLabel(event.eventType, detail.status);
+    if (isInvoiceCreatedLabel(label)) {
+      if (hasInvoiceCreated) {
         continue;
       }
+      hasInvoiceCreated = true;
     }
 
     const at = new Date(event.createdAt);
     entries.push({
-      label: paymentEventMerchantLabel(event.eventType, detail.status),
+      label,
       detail: event.paymentMethod ? `via ${event.paymentMethod}` : '',
       time: format(at, 'd MMM · HH:mm'),
       sortAt: at.getTime(),
@@ -279,13 +297,27 @@ export function buildInvoiceActivityTimeline(
   }
 
   if (entries.length === 0 && detail.createdAt) {
+    hasInvoiceCreated = true;
     const at = new Date(detail.createdAt);
     entries.push({
-      label: 'Invoice created',
+      label: MERCHANT_INVOICE_CREATED_LABEL,
       detail: detail.description || '',
       time: format(at, 'd MMM · HH:mm'),
       sortAt: at.getTime(),
     });
+  }
+
+  if (hasInvoiceBeenSent(detail) && detail.lastSentAt) {
+    const sentMs = parseTimestamp(detail.lastSentAt);
+    if (sentMs != null) {
+      const at = new Date(sentMs);
+      entries.push({
+        label: 'Invoice sent',
+        detail: detail.lastSentToEmail ? `to ${detail.lastSentToEmail}` : '',
+        time: format(at, 'd MMM · HH:mm'),
+        sortAt: sentMs,
+      });
+    }
   }
 
   return entries.sort((a, b) => a.sortAt - b.sortAt);
@@ -319,7 +351,7 @@ export function deriveSettlementDisplayLabel(input: {
   }
 
   if (input.linkStatus === 'PAID') {
-    return 'Payment recorded';
+    return 'Payment received';
   }
 
   return null;
@@ -392,6 +424,69 @@ export function derivePaymentLifecycleStageLabel(currentStage: string | null | u
   return currentStage.replace(/_/g, ' ').toLowerCase();
 }
 
+export function deriveMerchantPaymentLifecycleHealthLabel(input: {
+  payStatus: PaymentDisplayStatus;
+  isPaid: boolean;
+  apiHealthLabel: string;
+}): string {
+  if (input.payStatus === 'Confirming') {
+    return 'Confirming';
+  }
+  if (input.payStatus === 'Part paid') {
+    return 'Part paid';
+  }
+  if (input.isPaid || input.payStatus === 'Settled') {
+    if (input.apiHealthLabel === 'Awaiting Payment' || input.apiHealthLabel === 'Processing') {
+      return 'Paid';
+    }
+    return input.apiHealthLabel;
+  }
+  return 'Awaiting payment';
+}
+
+export function shouldShowPaymentLifecycleAccountingNote(input: {
+  accountingState: InvoiceAccountingDisplayState;
+  accountingStageLabel: string | null;
+}): boolean {
+  return input.accountingState !== 'not_connected' && Boolean(input.accountingStageLabel);
+}
+
+export function isPaymentLifecycleAccountingTimelineItem(
+  item: { stage: string; label: string },
+  accountingConnected: boolean
+): boolean {
+  if (isAccountingLifecycleStage(item.stage)) {
+    return true;
+  }
+  if (item.stage === 'EXPORTED') {
+    return true;
+  }
+  if (!accountingConnected && /exported|accounting sync/i.test(item.label)) {
+    return true;
+  }
+  return false;
+}
+
+export function filterMerchantPaymentLifecycleTimeline<T extends { stage: string; label: string }>(
+  items: T[],
+  accountingState: InvoiceAccountingDisplayState
+): T[] {
+  const accountingConnected = accountingState !== 'not_connected';
+  return items.filter(
+    (item) => !isPaymentLifecycleAccountingTimelineItem(item, accountingConnected)
+  );
+}
+
+export function deriveSidebarInvoiceLabel(hasBeenSent: boolean): string {
+  return hasBeenSent ? 'Sent' : 'Not sent';
+}
+
+export function deriveSendInvoiceCtaLabel(
+  hasBeenSent: boolean
+): 'Send invoice' | 'Resend invoice' {
+  return hasBeenSent ? 'Resend invoice' : 'Send invoice';
+}
+
 export type InvoiceDetailViewModel = {
   displayStatus: InvoiceDisplayStatus;
   payStatus: PaymentDisplayStatus;
@@ -407,6 +502,8 @@ export type InvoiceDetailViewModel = {
   settlementSummaryLabel: string;
   nextStep: InvoiceNextStep;
   paymentLifecycleStageLabel: string | null;
+  sendInvoiceCtaLabel: 'Send invoice' | 'Resend invoice';
+  sidebarInvoiceLabel: string;
 };
 
 export function deriveInvoiceDetailViewModel(input: {
@@ -465,7 +562,7 @@ export function deriveInvoiceDetailViewModel(input: {
           settlementCurrency: detail.settlementCurrency,
           settlementAmount: detail.settlementAmount,
           linkStatus: detail.status,
-        }) ?? 'Awaiting settlement details'
+        }) ?? 'Payment received'
       : 'Awaiting payment',
     nextStep: deriveInvoiceNextStep({
       detail,
@@ -476,5 +573,7 @@ export function deriveInvoiceDetailViewModel(input: {
       accountingState,
     }),
     paymentLifecycleStageLabel: derivePaymentLifecycleStageLabel(lifecycleCurrentStage),
+    sendInvoiceCtaLabel: deriveSendInvoiceCtaLabel(hasBeenSent),
+    sidebarInvoiceLabel: deriveSidebarInvoiceLabel(hasBeenSent),
   };
 }

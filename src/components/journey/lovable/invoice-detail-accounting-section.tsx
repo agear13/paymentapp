@@ -202,6 +202,10 @@ export function InvoiceDetailAccountingSection({
                     <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
                       FX at creation
                     </div>
+                    <p className="mt-1.5 text-[12px] text-ink-soft">
+                      Rates captured when the invoice was created for transaction audit and
+                      reconciliation.
+                    </p>
                     <ul className="mt-3 space-y-2 text-[12.5px]">
                       {creationFx!.map((snap) => (
                         <li key={snap.id} className="flex justify-between gap-4">

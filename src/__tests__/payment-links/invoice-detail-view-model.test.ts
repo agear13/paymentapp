@@ -3,8 +3,13 @@ import {
   deriveInvoiceAccountingDisplayState,
   deriveInvoiceDetailViewModel,
   deriveInvoiceNextStep,
+  deriveMerchantPaymentLifecycleHealthLabel,
+  deriveSendInvoiceCtaLabel,
+  deriveSidebarInvoiceLabel,
+  filterMerchantPaymentLifecycleTimeline,
   hasInvoiceBeenSent,
   paymentEventMerchantLabel,
+  shouldShowPaymentLifecycleAccountingNote,
 } from '@/lib/payment-links/invoice-detail-view-model';
 import {
   toInvoiceDisplayStatus,
@@ -155,7 +160,7 @@ describe('deriveInvoiceDetailViewModel', () => {
     expect(vm.displayStatus).toBe('Paid');
     expect(vm.isPaid).toBe(true);
     expect(vm.payStatus).toBe('Settled');
-    expect(vm.settlementSummaryLabel).toBe('Payment recorded');
+    expect(vm.settlementSummaryLabel).toBe('Payment received');
     expect(vm.nextStep?.kind).toBe('accounting_action');
   });
 
@@ -212,9 +217,79 @@ describe('buildInvoiceActivityTimeline ordering', () => {
     );
 
     expect(timeline.map((entry) => entry.label)).toEqual([
-      'Invoice Created',
+      'Invoice created',
       'Payment link ready',
     ]);
+  });
+
+  it('deduplicates semantically equivalent invoice created events', () => {
+    const timeline = buildInvoiceActivityTimeline(
+      {
+        ...baseDetail,
+        paymentEvents: [
+          {
+            id: 'e-created-late',
+            eventType: 'CREATED',
+            createdAt: '2026-08-13T13:55:00.000Z',
+          },
+          {
+            id: 'e-init',
+            eventType: 'PAYMENT_INITIATED',
+            createdAt: '2026-08-13T13:54:00.000Z',
+          },
+        ],
+      },
+      {
+        invoiceLifecycle: {
+          state: 'OUTSTANDING',
+          stateLabel: 'Awaiting Payment',
+          amountPaid: 0,
+          amountOutstanding: 1000,
+          timeline: [
+            {
+              id: 'created',
+              state: 'ISSUED',
+              label: 'Invoice Created',
+              reached: true,
+              occurredAt: '2026-08-13T12:53:00.000Z',
+            },
+          ],
+        },
+      }
+    );
+
+    expect(timeline.map((entry) => entry.label)).toEqual([
+      'Invoice created',
+      'Payment link ready',
+    ]);
+  });
+
+  it('adds invoice sent from lastSentAt without inventing timestamps', () => {
+    const timeline = buildInvoiceActivityTimeline(
+      {
+        ...baseDetail,
+        lastSentAt: '2026-08-14T09:00:00.000Z',
+        lastSentToEmail: 'client@example.com',
+        paymentEvents: [
+          {
+            id: 'e1',
+            eventType: 'CREATED',
+            createdAt: '2026-08-13T10:00:00.000Z',
+          },
+        ],
+      },
+      null
+    );
+
+    const sentEntry = timeline.find((entry) => entry.label === 'Invoice sent');
+    expect(sentEntry).toBeDefined();
+    expect(sentEntry?.sortAt).toBe(new Date('2026-08-14T09:00:00.000Z').getTime());
+    expect(sentEntry?.detail).toBe('to client@example.com');
+  });
+
+  it('does not add invoice sent when lastSentAt is absent', () => {
+    const timeline = buildInvoiceActivityTimeline(baseDetail, null);
+    expect(timeline.some((entry) => entry.label === 'Invoice sent')).toBe(false);
   });
 
   it('labels PAYMENT_INITIATED as payment link ready for unpaid invoices', () => {
@@ -234,6 +309,61 @@ describe('deriveInvoiceNextStep', () => {
     });
 
     expect(next?.kind).toBe('send_invoice');
+  });
+});
+
+describe('send and sidebar labels', () => {
+  it('uses Send invoice when never sent', () => {
+    expect(deriveSendInvoiceCtaLabel(false)).toBe('Send invoice');
+    expect(deriveSidebarInvoiceLabel(false)).toBe('Not sent');
+  });
+
+  it('uses Resend invoice after successful send', () => {
+    expect(deriveSendInvoiceCtaLabel(true)).toBe('Resend invoice');
+    expect(deriveSidebarInvoiceLabel(true)).toBe('Sent');
+  });
+});
+
+describe('payment lifecycle presentation', () => {
+  it('maps unpaid invoices to Awaiting payment instead of Processing', () => {
+    expect(
+      deriveMerchantPaymentLifecycleHealthLabel({
+        payStatus: 'Unpaid',
+        isPaid: false,
+        apiHealthLabel: 'Processing',
+      })
+    ).toBe('Awaiting payment');
+  });
+
+  it('hides accounting sync note when accounting is disconnected', () => {
+    expect(
+      shouldShowPaymentLifecycleAccountingNote({
+        accountingState: 'not_connected',
+        accountingStageLabel: 'accounting sync started',
+      })
+    ).toBe(false);
+  });
+
+  it('shows accounting sync note when accounting is connected', () => {
+    expect(
+      shouldShowPaymentLifecycleAccountingNote({
+        accountingState: 'sync_pending',
+        accountingStageLabel: 'accounting sync started',
+      })
+    ).toBe(true);
+  });
+
+  it('filters accounting timeline items when disconnected', () => {
+    const filtered = filterMerchantPaymentLifecycleTimeline(
+      [
+        { stage: 'ISSUED', label: 'Invoice Created' },
+        { stage: 'EXPORTED', label: 'Invoice Exported' },
+        { stage: 'ACCOUNTING_SYNC_STARTED', label: 'Accounting Sync Started' },
+      ],
+      'not_connected'
+    );
+
+    expect(filtered.map((item) => item.stage)).toEqual(['ISSUED']);
   });
 });
 

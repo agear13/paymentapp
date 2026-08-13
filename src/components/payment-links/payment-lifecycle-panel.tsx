@@ -10,6 +10,14 @@ import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { toast } from 'sonner';
 import type { PaymentHealthStatus } from '@/lib/payments/lifecycle/lifecycle-stages';
 import { isAccountingLifecycleStage } from '@/lib/payments/lifecycle/lifecycle-stages';
+import type { PaymentDisplayStatus } from '@/lib/payment-links/invoice-display-status';
+import { toPaymentDisplayStatus } from '@/lib/payment-links/invoice-display-status';
+import {
+  deriveMerchantPaymentLifecycleHealthLabel,
+  filterMerchantPaymentLifecycleTimeline,
+  shouldShowPaymentLifecycleAccountingNote,
+  type InvoiceAccountingDisplayState,
+} from '@/lib/payment-links/invoice-detail-view-model';
 import type { PaymentTransactionLayers } from '@/lib/payments/payment-layers';
 import { PaymentTransactionLayersPanel } from '@/components/payment-links/payment-transaction-layers-panel';
 
@@ -94,9 +102,15 @@ function settlementFlowStep(settlements: SettlementItem[], linkStatus: string): 
 export function PaymentLifecyclePanel({
   paymentLinkId,
   linkStatus,
+  accountingState = 'not_connected',
+  payStatus,
+  isPaid,
 }: {
   paymentLinkId: string;
   linkStatus: string;
+  accountingState?: InvoiceAccountingDisplayState;
+  payStatus?: PaymentDisplayStatus;
+  isPaid?: boolean;
 }) {
   const [loading, setLoading] = React.useState(true);
   const [snapshot, setSnapshot] = React.useState<LifecycleSnapshot | null>(null);
@@ -170,7 +184,21 @@ export function PaymentLifecyclePanel({
     snapshot.currentStage && isAccountingLifecycleStage(snapshot.currentStage)
       ? snapshot.currentStage.replace(/_/g, ' ').toLowerCase()
       : null;
-  const displayTimeline =
+  const resolvedIsPaid =
+    isPaid ??
+    (linkStatus === 'PAID' || linkStatus === 'PAID_UNVERIFIED');
+  const resolvedPayStatus =
+    payStatus ?? toPaymentDisplayStatus({ status: linkStatus });
+  const merchantHealthLabel = deriveMerchantPaymentLifecycleHealthLabel({
+    payStatus: resolvedPayStatus,
+    isPaid: resolvedIsPaid,
+    apiHealthLabel: snapshot.healthLabel,
+  });
+  const showAccountingNote = shouldShowPaymentLifecycleAccountingNote({
+    accountingState,
+    accountingStageLabel,
+  });
+  const rawDisplayTimeline =
     snapshot.invoiceLifecycle?.timeline && snapshot.invoiceLifecycle.timeline.length > 0
       ? snapshot.invoiceLifecycle.timeline.map((item) => ({
           id: item.id,
@@ -194,7 +222,6 @@ export function PaymentLifecyclePanel({
         : snapshot.timeline.filter((item) =>
             [
               'INVOICE_CREATED',
-              'ACCOUNTING_SYNC_COMPLETED',
               'CUSTOMER_OPENED_LINK',
               'PAYMENT_CONFIRMED',
               'FX_SNAPSHOT_LOCKED',
@@ -203,13 +230,17 @@ export function PaymentLifecyclePanel({
               'RECONCILED',
             ].includes(item.stage)
           );
+  const displayTimeline = filterMerchantPaymentLifecycleTimeline(
+    rawDisplayTimeline,
+    accountingState
+  );
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">Payment status</span>
-        <Badge variant="secondary">{snapshot.healthLabel}</Badge>
-        {snapshot.invoiceLifecycle ? (
+        <Badge variant="secondary">{merchantHealthLabel}</Badge>
+        {snapshot.invoiceLifecycle && accountingState !== 'not_connected' ? (
           <Badge variant="outline">{snapshot.invoiceLifecycle.stateLabel}</Badge>
         ) : null}
         {snapshot.commercialReconciliation ? (
@@ -224,7 +255,7 @@ export function PaymentLifecyclePanel({
         ) : null}
       </div>
 
-      {accountingStageLabel ? (
+      {showAccountingNote ? (
         <p className="text-xs text-muted-foreground">
           Accounting: {accountingStageLabel} — see the Accounting section for sync details.
         </p>

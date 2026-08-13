@@ -10,6 +10,9 @@ import { render, screen, cleanup, within } from '@testing-library/react';
 import type { PaymentLinkDetails } from '@/components/payment-links/payment-link-detail-dialog';
 import {
   deriveInvoiceDetailViewModel,
+  deriveMerchantPaymentLifecycleHealthLabel,
+  filterMerchantPaymentLifecycleTimeline,
+  shouldShowPaymentLifecycleAccountingNote,
   type InvoiceDetailViewModel,
 } from '@/lib/payment-links/invoice-detail-view-model';
 import { receivablesInvoiceXeroColumn } from '@/lib/xero/xero-sync-display';
@@ -106,7 +109,17 @@ function deriveUiSurfaces(
     nextStepTitle: vm.nextStep?.title ?? null,
     nextStepKind: vm.nextStep?.kind ?? null,
     sidebarPayment: vm.payStatus,
-    sidebarSent: vm.hasBeenSent ? 'Yes' : 'No',
+    sidebarSent: vm.sidebarInvoiceLabel,
+    sendInvoiceCtaLabel: vm.sendInvoiceCtaLabel,
+    paymentLifecycleHealth: deriveMerchantPaymentLifecycleHealthLabel({
+      payStatus: vm.payStatus,
+      isPaid: vm.isPaid,
+      apiHealthLabel: 'Processing',
+    }),
+    showAccountingLifecycleNote: shouldShowPaymentLifecycleAccountingNote({
+      accountingState: vm.accountingState,
+      accountingStageLabel: 'accounting sync started',
+    }),
     sidebarAccounting: vm.accountingStatusLabel,
     sidebarSettlement: vm.settlementSummaryLabel,
     timelineLabels: vm.timeline.map((e) => e.label),
@@ -154,7 +167,7 @@ function expectSurfaces(
 }
 
 describe('invoice detail scenario verification (view-model + UI surfaces)', () => {
-  it('1. new unsent invoice + accounting disconnected', () => {
+  it('A: unsent + accounting disconnected', () => {
     const detail = baseDetail({
       paymentEvents: [
         { id: 'ev-created', eventType: 'CREATED', createdAt: new Date(BASE_CREATED) },
@@ -174,7 +187,7 @@ describe('invoice detail scenario verification (view-model + UI surfaces)', () =
     });
     const s = deriveUiSurfaces(vm, detail);
 
-    expectSurfaces('1 unsent + disconnected', s, {
+    expectSurfaces('A unsent + disconnected', s, {
       headerBadge: 'Unsent',
       heroHeadline: 'Ready to send',
       heroPaymentStatus: 'Unpaid',
@@ -182,16 +195,19 @@ describe('invoice detail scenario verification (view-model + UI surfaces)', () =
       heroAccountingStatus: 'Accounting not connected',
       sidebarAccounting: 'Accounting not connected',
       sidebarSettlement: 'Awaiting payment',
-      sidebarSent: 'No',
+      sidebarSent: 'Not sent',
+      sendInvoiceCtaLabel: 'Send invoice',
       nextStepTitle: 'Next step',
       nextStepKind: 'send_invoice',
       showAccountingSyncDetails: false,
-      timelineIncludes: ['Invoice Created', 'Payment link ready'],
-      forbidden: ['Sync in progress', 'PENDING', 'Last synced'],
+      paymentLifecycleHealth: 'Awaiting payment',
+      showAccountingLifecycleNote: false,
+      timelineIncludes: ['Invoice created', 'Payment link ready'],
+      forbidden: ['Sync in progress', 'PENDING', 'Last synced', 'accounting sync'],
     });
   });
 
-  it('2. send invoice successfully', () => {
+  it('B: sent + accounting disconnected', () => {
     const detail = baseDetail({
       lastSentAt: new Date(BASE_SENT),
       lastSentToEmail: 'client@example.com',
@@ -204,7 +220,7 @@ describe('invoice detail scenario verification (view-model + UI surfaces)', () =
     });
     const s = deriveUiSurfaces(vm, detail);
 
-    expectSurfaces('2 sent after email', s, {
+    expectSurfaces('B sent + disconnected', s, {
       headerBadge: 'Sent',
       heroHeadline: 'Awaiting payment',
       heroPaymentStatus: 'Unpaid',
@@ -212,83 +228,21 @@ describe('invoice detail scenario verification (view-model + UI surfaces)', () =
       heroAccountingStatus: 'Accounting not connected',
       sidebarAccounting: 'Accounting not connected',
       sidebarSettlement: 'Awaiting payment',
-      sidebarSent: 'Yes',
+      sidebarSent: 'Sent',
+      sendInvoiceCtaLabel: 'Resend invoice',
       nextStepTitle: 'Optional',
       nextStepKind: 'accounting_connect',
-      forbidden: ['Sync in progress', 'Send this invoice'],
+      paymentLifecycleHealth: 'Awaiting payment',
+      showAccountingLifecycleNote: false,
+      timelineIncludes: ['Invoice sent'],
+      forbidden: ['Sync in progress', 'Send this invoice', 'accounting sync'],
     });
   });
 
-  it('3. sent + unpaid', () => {
+  it('C: sent + accounting connected + sync in progress', () => {
     const detail = baseDetail({
       lastSentAt: new Date(BASE_SENT),
       lastSentToEmail: 'client@example.com',
-    });
-
-    const vm = deriveInvoiceDetailViewModel({
-      detail,
-      lifecycle: OUTSTANDING_LIFECYCLE,
-      accountingConnection: CONNECTED_READY,
-    });
-    const s = deriveUiSurfaces(vm, detail);
-
-    expectSurfaces('3 sent + unpaid + connected', s, {
-      headerBadge: 'Sent',
-      heroHeadline: 'Awaiting payment',
-      heroPaymentStatus: 'Unpaid',
-      sidebarPayment: 'Unpaid',
-      heroAccountingStatus: 'Not synced',
-      sidebarAccounting: 'Not synced',
-      sidebarSettlement: 'Awaiting payment',
-      sidebarSent: 'Yes',
-      nextStepTitle: null,
-      nextStepKind: null,
-      showAccountingSyncDetails: true,
-      forbidden: ['Send this invoice', 'Accounting not connected'],
-    });
-  });
-
-  it('4. paid invoice', () => {
-    const detail = baseDetail({
-      status: 'PAID',
-      paidAt: new Date(BASE_PAID),
-      lastSentAt: new Date(BASE_SENT),
-      lastSentToEmail: 'client@example.com',
-      paymentEvents: [
-        {
-          id: 'ev-confirmed',
-          eventType: 'PAYMENT_CONFIRMED',
-          paymentMethod: 'STRIPE',
-          createdAt: new Date(BASE_PAID),
-        },
-      ],
-    });
-
-    const vm = deriveInvoiceDetailViewModel({
-      detail,
-      lifecycle: PAID_LIFECYCLE,
-      accountingConnection: CONNECTED_READY,
-    });
-    const s = deriveUiSurfaces(vm, detail);
-
-    expectSurfaces('4 paid', s, {
-      headerBadge: 'Paid',
-      heroHeadline: 'Paid',
-      heroPaymentStatus: 'Settled',
-      sidebarPayment: 'Settled',
-      heroAccountingStatus: 'Not synced',
-      sidebarAccounting: 'Not synced',
-      sidebarSettlement: 'Payment recorded',
-      sidebarSent: 'Yes',
-      nextStepTitle: 'Next step',
-      nextStepKind: 'accounting_action',
-      timelineIncludes: ['Invoice Created', 'Invoice Paid', 'Payment confirmed'],
-    });
-  });
-
-  it('5. accounting connected + sync in progress', () => {
-    const detail = baseDetail({
-      lastSentAt: new Date(BASE_SENT),
       xeroSyncs: [
         {
           id: 'sync-1',
@@ -307,7 +261,7 @@ describe('invoice detail scenario verification (view-model + UI surfaces)', () =
     });
     const s = deriveUiSurfaces(vm, detail);
 
-    expectSurfaces('5 sync in progress', s, {
+    expectSurfaces('C sent + sync in progress', s, {
       headerBadge: 'Sent',
       heroHeadline: 'Awaiting payment',
       heroPaymentStatus: 'Unpaid',
@@ -315,15 +269,88 @@ describe('invoice detail scenario verification (view-model + UI surfaces)', () =
       heroAccountingStatus: 'Sync in progress',
       sidebarAccounting: 'Sync in progress',
       sidebarSettlement: 'Awaiting payment',
-      sidebarSent: 'Yes',
+      sidebarSent: 'Sent',
+      sendInvoiceCtaLabel: 'Resend invoice',
       nextStepTitle: null,
       nextStepKind: null,
       showAccountingSyncDetails: true,
       accountingGuidanceTitle: 'Sync in progress',
+      paymentLifecycleHealth: 'Awaiting payment',
+      showAccountingLifecycleNote: true,
+      forbidden: ['Accounting not connected'],
     });
   });
 
-  it('6. accounting connected + sync completed', () => {
+  it('D: sent + accounting connected + sync completed (unpaid)', () => {
+    const detail = baseDetail({
+      lastSentAt: new Date(BASE_SENT),
+      lastSentToEmail: 'client@example.com',
+      xeroSyncs: [
+        {
+          id: 'sync-1',
+          syncType: 'INVOICE',
+          status: 'SUCCESS',
+          xeroInvoiceId: 'xero-inv-99',
+          createdAt: new Date(BASE_SENT),
+          updatedAt: new Date(BASE_SENT),
+        },
+      ],
+    });
+
+    const vm = deriveInvoiceDetailViewModel({
+      detail,
+      lifecycle: OUTSTANDING_LIFECYCLE,
+      accountingConnection: CONNECTED_READY,
+    });
+    const s = deriveUiSurfaces(vm, detail);
+
+    expectSurfaces('D sent + synced unpaid', s, {
+      headerBadge: 'Sent',
+      heroHeadline: 'Awaiting payment',
+      heroPaymentStatus: 'Unpaid',
+      sidebarPayment: 'Unpaid',
+      heroAccountingStatus: 'Synced',
+      sidebarAccounting: 'Synced',
+      sidebarSettlement: 'Awaiting payment',
+      sidebarSent: 'Sent',
+      paymentLifecycleHealth: 'Awaiting payment',
+      showAccountingSyncDetails: true,
+    });
+  });
+
+  it('E: paid + accounting disconnected', () => {
+    const detail = baseDetail({
+      status: 'PAID',
+      paidAt: new Date(BASE_PAID),
+      lastSentAt: new Date(BASE_SENT),
+      lastSentToEmail: 'client@example.com',
+    });
+
+    const vm = deriveInvoiceDetailViewModel({
+      detail,
+      lifecycle: PAID_LIFECYCLE,
+      accountingConnection: NOT_CONNECTED,
+    });
+    const s = deriveUiSurfaces(vm, detail);
+
+    expectSurfaces('E paid + disconnected', s, {
+      headerBadge: 'Paid',
+      heroHeadline: 'Paid',
+      heroPaymentStatus: 'Settled',
+      sidebarPayment: 'Settled',
+      heroAccountingStatus: 'Accounting not connected',
+      sidebarAccounting: 'Accounting not connected',
+      sidebarSettlement: 'Payment received',
+      sidebarSent: 'Sent',
+      nextStepTitle: 'Next step',
+      nextStepKind: 'accounting_connect',
+      showAccountingSyncDetails: false,
+      showAccountingLifecycleNote: false,
+      forbidden: ['accounting sync'],
+    });
+  });
+
+  it('F: paid + accounting connected', () => {
     const detail = baseDetail({
       status: 'PAID',
       paidAt: new Date(BASE_PAID),
@@ -357,20 +384,86 @@ describe('invoice detail scenario verification (view-model + UI surfaces)', () =
     });
     const s = deriveUiSurfaces(vm, detail);
 
-    expectSurfaces('6 sync completed', s, {
+    expectSurfaces('F paid + connected synced', s, {
       headerBadge: 'Paid',
       heroHeadline: 'Paid',
       heroPaymentStatus: 'Settled',
       sidebarPayment: 'Settled',
       heroAccountingStatus: 'Synced',
       sidebarAccounting: 'Synced',
-      sidebarSettlement: 'Payment recorded',
-      sidebarSent: 'Yes',
+      sidebarSettlement: 'Payment received',
+      sidebarSent: 'Sent',
       nextStepTitle: 'Payment received',
       nextStepKind: 'payment_received',
       showAccountingSyncDetails: true,
       accountingGuidanceTitle: 'Synced with accounting',
     });
+  });
+
+  it('deduplicates duplicate invoice created events in commercial activity', () => {
+    const detail = baseDetail({
+      lastSentAt: new Date('2026-08-13T13:55:00.000Z'),
+      lastSentToEmail: 'client@example.com',
+      paymentEvents: [
+        {
+          id: 'ev-init',
+          eventType: 'PAYMENT_INITIATED',
+          paymentMethod: 'STRIPE',
+          createdAt: new Date('2026-08-13T13:54:00.000Z'),
+        },
+        {
+          id: 'ev-created-late',
+          eventType: 'CREATED',
+          createdAt: new Date('2026-08-13T13:55:00.000Z'),
+        },
+      ],
+    });
+
+    const vm = deriveInvoiceDetailViewModel({
+      detail,
+      lifecycle: {
+        invoiceLifecycle: {
+          state: 'OUTSTANDING',
+          stateLabel: 'Awaiting Payment',
+          amountPaid: 0,
+          amountOutstanding: 1500,
+          timeline: [
+            {
+              id: 'created',
+              state: 'ISSUED',
+              label: 'Invoice Created',
+              reached: true,
+              occurredAt: '2026-08-13T12:53:00.000Z',
+            },
+          ],
+        },
+      },
+      accountingConnection: NOT_CONNECTED,
+    });
+
+    const createdCount = vm.timeline.filter((e) => e.label === 'Invoice created').length;
+    expect(createdCount).toBe(1);
+    expect(vm.timeline.map((e) => e.label)).toEqual([
+      'Invoice created',
+      'Payment link ready',
+      'Invoice sent',
+    ]);
+  });
+
+  it('filters accounting stages from payment lifecycle timeline when disconnected', () => {
+    const filtered = filterMerchantPaymentLifecycleTimeline(
+      [
+        { stage: 'ISSUED', label: 'Invoice Created' },
+        { stage: 'OUTSTANDING', label: 'Awaiting Payment' },
+        { stage: 'EXPORTED', label: 'Invoice Exported' },
+      ],
+      'not_connected'
+    );
+
+    expect(filtered.map((item) => item.label)).toEqual([
+      'Invoice Created',
+      'Awaiting Payment',
+    ]);
   });
 });
 
@@ -505,12 +598,12 @@ describe('invoice detail scenario verification (rendered DOM)', () => {
     expect(headerBadge?.textContent).toBe(vm.displayStatus);
     expect(screen.getAllByText(vm.hero.headline).length).toBeGreaterThan(0);
     expect(readSidebar('Payment')).toBe(vm.payStatus);
-    expect(readSidebar('Sent')).toBe(vm.hasBeenSent ? 'Yes' : 'No');
+    expect(readSidebar('Invoice')).toBe(vm.sidebarInvoiceLabel);
     expect(readSidebar('Accounting')).toBe(vm.accountingStatusLabel);
     expect(readSidebar('Settlement')).toBe(vm.settlementSummaryLabel);
 
     if (vm.nextStep) {
-      expect(screen.getByText(vm.nextStep.title)).toBeInTheDocument();
+      expect(screen.getAllByText(vm.nextStep.title).length).toBeGreaterThan(0);
       expect(screen.getByText(vm.nextStep.message)).toBeInTheDocument();
     }
 

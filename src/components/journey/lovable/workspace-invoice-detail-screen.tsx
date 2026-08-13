@@ -548,7 +548,7 @@ export function WorkspaceInvoiceDetailScreen({
                 className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-purple px-4 text-[13px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110"
               >
                 <Send className="h-4 w-4" />
-                Send invoice
+                {viewModel.sendInvoiceCtaLabel}
               </button>
             ) : viewModel.nextStep.kind === 'payment_received' ||
               viewModel.nextStep.kind === 'accounting_action' ? (
@@ -764,7 +764,7 @@ export function WorkspaceInvoiceDetailScreen({
                   className="space-y-3 rounded-2xl border border-border bg-background p-5"
                 >
                   <label className="text-[11px] font-medium uppercase tracking-wider text-ink-soft" htmlFor="send-email">
-                    Send invoice
+                    {viewModel.sendInvoiceCtaLabel}
                   </label>
                   <input
                     id="send-email"
@@ -777,17 +777,13 @@ export function WorkspaceInvoiceDetailScreen({
                   />
                   <div className="flex flex-wrap gap-2">
                     <InvoiceDetailActionButton
-                      label={sendLoading ? 'Sending…' : 'Send invoice'}
+                      label={sendLoading ? 'Sending…' : viewModel.sendInvoiceCtaLabel}
                       icon={Send}
                       primary
                       disabled={sendLoading}
-                      onClick={() => void handleSend()}
-                    />
-                    <InvoiceDetailActionButton
-                      label={sendLoading ? 'Sending…' : 'Resend invoice'}
-                      icon={Send}
-                      disabled={sendLoading}
-                      onClick={() => void handleResend()}
+                      onClick={() =>
+                        void (viewModel.hasBeenSent ? handleResend() : handleSend())
+                      }
                     />
                   </div>
                 </div>
@@ -908,7 +904,13 @@ export function WorkspaceInvoiceDetailScreen({
 
           <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
             <h2 className="mb-4 text-[13.5px] font-semibold">Payment lifecycle</h2>
-            <PaymentLifecyclePanel paymentLinkId={detail.id} linkStatus={detail.status} />
+            <PaymentLifecyclePanel
+              paymentLinkId={detail.id}
+              linkStatus={detail.status}
+              accountingState={viewModel.accountingState}
+              payStatus={viewModel.payStatus}
+              isPaid={viewModel.isPaid}
+            />
           </section>
 
           <InvoiceDetailAccountingSection
@@ -977,7 +979,7 @@ export function WorkspaceInvoiceDetailScreen({
             { label: 'Outstanding', value: outstandingDisplay },
             { label: 'Due', value: formatInvoiceDueLabel(detail) },
             { label: 'Payment', value: payStatus },
-            { label: 'Sent', value: viewModel.hasBeenSent ? 'Yes' : 'No' },
+            { label: 'Invoice', value: viewModel.sidebarInvoiceLabel },
             { label: 'Accounting', value: viewModel.accountingStatusLabel },
             { label: 'Settlement', value: viewModel.settlementSummaryLabel },
           ]}
