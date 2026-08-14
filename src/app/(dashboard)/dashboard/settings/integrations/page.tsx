@@ -22,6 +22,7 @@ import {
   isMultiCheckoutRailConfigured,
   isMultiCheckoutRailIncomplete,
 } from '@/lib/payment-links/setup-status';
+import { buildMerchantPaymentRailsFromSetup } from '@/lib/commercial-os/merchant-payment-rails';
 import {
   evmNetworkDisplayName,
   getMultiCheckoutRails,
@@ -60,6 +61,8 @@ export default async function IntegrationsPage() {
     wisePayments: config.features.wisePayments,
     evmWalletPayments: config.features.evmWalletPayments,
   });
+
+  const merchantRails = buildMerchantPaymentRailsFromSetup(railSetup);
 
   const paymentRails = getMultiCheckoutRails();
 
@@ -208,12 +211,8 @@ export default async function IntegrationsPage() {
             <div className="border-t p-6">
               <XeroAccountMapping
                 organizationId={organizationId}
-                stablecoinSettlementsEnabled={isMultiCheckoutRailConfigured(railSetup, 'hedera')}
-                merchantRails={{
-                  stripeEnabled: isMultiCheckoutRailConfigured(railSetup, 'stripe'),
-                  wiseEnabled: isMultiCheckoutRailConfigured(railSetup, 'wise'),
-                  stablecoinSettlementsEnabled: isMultiCheckoutRailConfigured(railSetup, 'hedera'),
-                }}
+                stablecoinSettlementsEnabled={merchantRails.stablecoinSettlementsEnabled}
+                merchantRails={merchantRails}
               />
             </div>
           </details>

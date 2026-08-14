@@ -57,6 +57,15 @@ import type { CryptoSettlementStrategy } from '@/lib/accounting/settlement-accou
 import { validateXeroMappingDuplicates } from '@/lib/accounting/validate-xero-mapping-duplicates';
 import { normalizeMerchantPaymentRails } from '@/lib/commercial-os/merchant-payment-rails';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
+import {
+  computePaymentLinkRailSetup,
+  toPaymentLinkRailSnapshot,
+} from '@/lib/payment-links/setup-status';
+import {
+  deriveMerchantPaymentCapabilities,
+  type MerchantPaymentCapabilities,
+} from '@/lib/accounting/merchant-payment-capabilities';
+import config from '@/lib/config/env';
 
 function applyMappingError(raw: string, setError: (value: string | null) => void) {
   const customer = formatMappingIssue(raw);
@@ -121,24 +130,103 @@ export function XeroAccountMapping({
   const [saving, setSaving] = React.useState(false);
   const [creatingAccounts, setCreatingAccounts] = React.useState(false);
   const [applyingRecommended, setApplyingRecommended] = React.useState(false);
+  const [refreshingAccounts, setRefreshingAccounts] = React.useState(false);
+  const [localCapabilities, setLocalCapabilities] =
+    React.useState<MerchantPaymentCapabilities | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [connectionReady, setConnectionReady] = React.useState(false);
 
-  const rails: MerchantPaymentRails = normalizeMerchantPaymentRails(
-    merchantRails ?? {
+  const rails: MerchantPaymentRails = React.useMemo(() => {
+    if (merchantRails) {
+      return normalizeMerchantPaymentRails(merchantRails);
+    }
+    return normalizeMerchantPaymentRails({
       stripeEnabled: true,
       wiseEnabled: false,
       stablecoinSettlementsEnabled,
       manualBankEnabled: false,
-    }
-  );
+    });
+  }, [merchantRails, stablecoinSettlementsEnabled]);
 
   const merchantCapabilities =
-    readiness?.merchantPaymentCapabilities ?? {
+    readiness?.merchantPaymentCapabilities ??
+    localCapabilities ?? {
       hederaConfigured: false,
       evmConfigured: false,
       enabledSettlementTokens: [],
     };
+
+  React.useEffect(() => {
+    if (readiness?.merchantPaymentCapabilities) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadCapabilities() {
+      try {
+        const response = await fetch(
+          `/api/merchant-settings?organizationId=${encodeURIComponent(organizationId)}`,
+          { cache: 'no-store' }
+        );
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const rows = (await response.json()) as Array<{
+          stripe_account_id?: string | null;
+          hedera_account_id?: string | null;
+          wise_enabled?: boolean | null;
+          wise_profile_id?: string | null;
+          evm_wallet_enabled?: boolean | null;
+          evm_wallet_address?: string | null;
+          evm_supported_networks?: string[] | null;
+          evm_supported_tokens?: string[] | null;
+          _features?: {
+            wiseGloballyEnabled?: boolean;
+            evmGloballyEnabled?: boolean;
+          };
+        }>;
+        const settings = rows[0];
+        if (!settings || cancelled) {
+          return;
+        }
+
+        const snapshot = toPaymentLinkRailSnapshot({
+          stripeAccountId: settings.stripe_account_id,
+          hederaAccountId: settings.hedera_account_id,
+          wiseEnabled: settings.wise_enabled ?? false,
+          wiseProfileId: settings.wise_profile_id,
+          evmWalletEnabled: settings.evm_wallet_enabled,
+          evmWalletAddress: settings.evm_wallet_address,
+          evmSupportedNetworks: settings.evm_supported_networks,
+          evmSupportedTokens: settings.evm_supported_tokens,
+        });
+        const railSetup = computePaymentLinkRailSetup(snapshot, {
+          wisePayments: settings._features?.wiseGloballyEnabled ?? config.features.wisePayments,
+          evmWalletPayments:
+            settings._features?.evmGloballyEnabled ?? config.features.evmWalletPayments,
+        });
+
+        if (!cancelled) {
+          setLocalCapabilities(
+            deriveMerchantPaymentCapabilities({
+              railSetup,
+              evmSupportedTokens: settings.evm_supported_tokens,
+            })
+          );
+        }
+      } catch {
+        // Optional fallback — readiness provider is preferred.
+      }
+    }
+
+    void loadCapabilities();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId, readiness?.merchantPaymentCapabilities]);
 
   const chartAccountCodes = React.useMemo(
     () => new Set(accounts.map((account) => account.code).filter(Boolean)),
@@ -268,6 +356,22 @@ export function XeroAccountMapping({
         err instanceof Error ? err.message : 'Could not load Xero accounts',
         setError
       );
+    }
+  }
+
+  async function handleRefreshAccounts() {
+    try {
+      setRefreshingAccounts(true);
+      setError(null);
+      await fetchAccounts();
+      toast.success('Xero accounts refreshed');
+    } catch (err) {
+      applyMappingError(
+        err instanceof Error ? err.message : 'Could not refresh Xero accounts',
+        setError
+      );
+    } finally {
+      setRefreshingAccounts(false);
     }
   }
 
@@ -777,6 +881,8 @@ export function XeroAccountMapping({
                 merchantCapabilities={merchantCapabilities}
                 applyingRecommended={applyingRecommended}
                 onApplyAllRecommendations={() => void handleApplyAllPaymentRecommendations()}
+                onRefreshAccounts={() => void handleRefreshAccounts()}
+                refreshingAccounts={refreshingAccounts}
               />
               {showStripeFeeMapping
                 ? RECOMMENDED_STANDARD_MAPPINGS.filter(

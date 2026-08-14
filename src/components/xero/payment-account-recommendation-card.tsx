@@ -42,6 +42,8 @@ type PaymentAccountRecommendationCardProps = {
   onUseRecommended: () => void;
   displayState: MappingDisplayState;
   showChooseDifferent?: boolean;
+  onRefreshAccounts?: () => void | Promise<void>;
+  refreshingAccounts?: boolean;
 };
 
 function badgeTone(status: PaymentAccountRecommendation['status']) {
@@ -64,6 +66,8 @@ export function PaymentAccountRecommendationCard({
   onUseRecommended,
   displayState,
   showChooseDifferent = false,
+  onRefreshAccounts,
+  refreshingAccounts = false,
 }: PaymentAccountRecommendationCardProps) {
   const { definition, status, suggestedCode, reconciliationExplanation, flowSteps } =
     recommendation;
@@ -191,7 +195,12 @@ export function PaymentAccountRecommendationCard({
             <p className="mt-2 text-muted-foreground">{reconciliationExplanation}</p>
           </details>
 
-          <CreateAccountInXeroGuidePanel guide={createAccountGuide} suggestedCode={suggestedCode} />
+          <CreateAccountInXeroGuidePanel
+            guide={createAccountGuide}
+            suggestedCode={suggestedCode}
+            onRefreshAccounts={onRefreshAccounts}
+            refreshingAccounts={refreshingAccounts}
+          />
 
           {genericFallback ? (
             <details className="rounded-lg border border-dashed border-border/70 px-4 py-3 text-sm">

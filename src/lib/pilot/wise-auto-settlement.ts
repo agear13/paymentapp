@@ -1,6 +1,9 @@
 /**
- * Wise auto-settlement requires webhook correlation via wise_transfer_id on payment links.
- * Pilot week 1 uses Stripe; keep auto-matching hidden until explicitly enabled.
+ * Wise auto-settlement requires webhook secret + explicit platform flag.
+ * Incoming pay-ins are correlated via PROVVY-{shortCode} from:
+ *   - account-details-payment#state-change + Balance Statement paymentReference
+ *   - swift-in#credit data.resource.reference
+ * balances#update is ignored for reference correlation (transfer_reference is Wise-internal).
  */
 export function isWiseAutoSettlementAvailable(
   processEnv: NodeJS.ProcessEnv = process.env

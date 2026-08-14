@@ -10,6 +10,27 @@ describe('getSettlementAccountsForUi with payment capabilities', () => {
     manualBankEnabled: false,
   };
 
+  const evmOnlyRails = {
+    stripeEnabled: true,
+    wiseEnabled: false,
+    stablecoinSettlementsEnabled: false,
+    manualBankEnabled: false,
+  };
+
+  const evmCapabilities = deriveMerchantPaymentCapabilities({
+    railSetup: {
+      multiRails: {
+        stripe: { configured: true, incomplete: false },
+        hedera: { configured: false, incomplete: false },
+        wise: { configured: false, incomplete: false },
+        evm_wallet: { configured: true, incomplete: false },
+      },
+      anyRailConfigured: true,
+      readyForPaymentRequests: true,
+    },
+    evmSupportedTokens: ['USDC', 'USDT'],
+  });
+
   it('shows shared digital holding under shared strategy', () => {
     const definitions = getSettlementAccountsForUi(
       { crypto_settlement_strategy: 'shared' },
@@ -53,5 +74,19 @@ describe('getSettlementAccountsForUi with payment capabilities', () => {
     );
 
     expect(definitions.map((item) => item.accountName)).toEqual(['USDC Holding']);
+  });
+
+  it('renders EVM per-asset rows when only capabilities indicate crypto (no stablecoin flag)', () => {
+    const definitions = getSettlementAccountsForUi(
+      { crypto_settlement_strategy: 'per_asset' },
+      evmOnlyRails,
+      evmCapabilities
+    );
+
+    expect(definitions.map((item) => item.accountName)).toEqual([
+      'Stripe Holding',
+      'USDC Holding',
+      'USDT Holding',
+    ]);
   });
 });

@@ -7,6 +7,7 @@ import {
   type WiseBankDetails,
 } from '@/lib/wise/client';
 import config from '@/lib/config/env';
+import { buildProvvyWiseReference } from '@/lib/wise/wise-payment-reference';
 
 export interface MerchantWiseConfig {
   wiseProfileId: string;
@@ -37,7 +38,7 @@ export interface WisePaymentContext {
 }
 
 export function buildWiseReference(shortCode: string): string {
-  return `PROVVY-${shortCode}`;
+  return buildProvvyWiseReference(shortCode);
 }
 
 export async function getMerchantWiseConfig(organizationId: string, fallbackCurrency: string): Promise<MerchantWiseConfig> {

@@ -57,6 +57,10 @@ export const XERO_GUIDE_FIELD_CLASSIFICATION_LABELS: Record<
 export const HOLDING_ACCOUNT_ACCOUNTANT_DISCLAIMER =
   "These are Provvy's recommended Xero configuration settings. GST/BAS treatment can depend on your accounting setup. Confirm tax treatment with your accountant if you're unsure.";
 
+/** Opens Xero Chart of accounts (merchant creates holding accounts here). */
+export const XERO_CHART_OF_ACCOUNTS_URL =
+  'https://go.xero.com/GeneralLedger/ChartOfAccounts.aspx';
+
 const STANDARD_CREATE_STEPS = [
   'Open Xero and go to Accounting → Chart of accounts.',
   'Click Add Account.',

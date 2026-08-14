@@ -27,6 +27,34 @@ export type SettlementUiAccountDefinition = {
 const CLEARING_HELPER =
   'Provvy records the payment against this holding account when the customer pays. Clearing to your bank is handled in your normal Xero workflow — not posted automatically by Provvy.';
 
+/** True when crypto holding-account setup rows should appear in accounting UI. */
+export function shouldShowCryptoSettlementAccounts(
+  rails: MerchantPaymentRails,
+  settings: MerchantSettlementSettings,
+  capabilities?: MerchantPaymentCapabilities | null
+): boolean {
+  if (rails.stablecoinSettlementsEnabled) {
+    return true;
+  }
+  if ((capabilities?.enabledSettlementTokens.length ?? 0) > 0) {
+    return true;
+  }
+  return LEGACY_CRYPTO_ASSET_SLOTS.some((slot) =>
+    Boolean(readSettlementMappingCode(settings, slot.mappingField))
+  );
+}
+
+/** True when the crypto strategy selector and token summary banner should render. */
+export function shouldShowCryptoSettlementStrategyUi(
+  rails: MerchantPaymentRails,
+  capabilities?: MerchantPaymentCapabilities | null
+): boolean {
+  return (
+    shouldShowCryptoSettlementAccounts(rails, {}, capabilities) &&
+    (capabilities?.enabledSettlementTokens.length ?? 0) > 0
+  );
+}
+
 function perAssetDefinitionsForTokens(
   enabledTokens?: readonly string[] | null
 ): SettlementUiAccountDefinition[] {
@@ -38,7 +66,7 @@ function perAssetDefinitionsForTokens(
   return slots.map((slot) => ({
     id: `per-asset-${slot.asset.toLowerCase()}`,
     kind: 'per_asset' as const,
-    title: `Where ${slot.asset} payments land`,
+    title: `${slot.asset} Holding`,
     accountName: `${slot.asset} Holding`,
     mappingField: slot.mappingField,
     suggestedCode: slot.suggestedCode,
@@ -62,7 +90,7 @@ export function getSettlementAccountsForUi(
     definitions.push({
       id: 'stripe-holding',
       kind: 'rail',
-      title: 'Where card payments land (Stripe)',
+      title: STRIPE_HOLDING.accountName,
       accountName: STRIPE_HOLDING.accountName,
       mappingField: STRIPE_HOLDING.mappingField,
       suggestedCode: STRIPE_HOLDING.suggestedCode,
@@ -75,7 +103,7 @@ export function getSettlementAccountsForUi(
     definitions.push({
       id: 'wise-holding',
       kind: 'rail',
-      title: 'Where bank transfers land',
+      title: WISE_HOLDING.accountName,
       accountName: WISE_HOLDING.accountName,
       mappingField: WISE_HOLDING.mappingField,
       suggestedCode: WISE_HOLDING.suggestedCode,
@@ -85,11 +113,7 @@ export function getSettlementAccountsForUi(
     });
   }
 
-  const showDigital = rails.stablecoinSettlementsEnabled || LEGACY_CRYPTO_ASSET_SLOTS.some(
-    (slot) => Boolean(readSettlementMappingCode(settings, slot.mappingField))
-  );
-
-  if (!showDigital) {
+  if (!shouldShowCryptoSettlementAccounts(rails, settings, capabilities)) {
     return definitions;
   }
 

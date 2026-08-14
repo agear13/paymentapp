@@ -12,7 +12,7 @@ import {
   resolvePaymentAccountRecommendation,
   type PaymentAccountChartAccount,
 } from '@/lib/accounting/payment-account-recommendations';
-import { getSettlementAccountsForUi } from '@/lib/accounting/settlement-account-ui';
+import { getSettlementAccountsForUi, shouldShowCryptoSettlementStrategyUi } from '@/lib/accounting/settlement-account-ui';
 import type { SettlementUiAccountDefinition } from '@/lib/accounting/settlement-account-ui';
 import type { MappingDisplayState } from '@/lib/commercial-os/xero-invoice-readiness';
 import type { XeroMappingField } from '@/lib/accounting/recommended-accounting-config';
@@ -38,6 +38,8 @@ type PaymentAccountsSetupSectionProps = {
   merchantCapabilities: MerchantPaymentCapabilities;
   applyingRecommended?: boolean;
   onApplyAllRecommendations?: () => void;
+  onRefreshAccounts?: () => void | Promise<void>;
+  refreshingAccounts?: boolean;
 };
 
 function isStepComplete(state: MappingDisplayState): boolean {
@@ -100,6 +102,8 @@ export function PaymentAccountsSetupSection({
   merchantCapabilities,
   applyingRecommended = false,
   onApplyAllRecommendations,
+  onRefreshAccounts,
+  refreshingAccounts = false,
 }: PaymentAccountsSetupSectionProps) {
   const settings = toMerchantSettlementSettings(mappings);
   const strategy = resolveCryptoSettlementStrategy(settings);
@@ -113,9 +117,10 @@ export function PaymentAccountsSetupSection({
     [mappings, merchantCapabilities, strategy]
   );
 
-  const showCryptoStrategy =
-    merchantRails.stablecoinSettlementsEnabled &&
-    merchantCapabilities.enabledSettlementTokens.length > 0;
+  const showCryptoStrategy = shouldShowCryptoSettlementStrategyUi(
+    merchantRails,
+    merchantCapabilities
+  );
 
   const stepComplete = React.useCallback(
     (definition: SettlementUiAccountDefinition) =>
@@ -206,6 +211,8 @@ export function PaymentAccountsSetupSection({
           }}
           displayState={state}
           showChooseDifferent={showChooseDifferent}
+          onRefreshAccounts={onRefreshAccounts}
+          refreshingAccounts={refreshingAccounts}
         />
         {complete && index < steps.length - 1 ? (
           <Button size="sm" onClick={() => goToNextStep(index)} className="gap-1">

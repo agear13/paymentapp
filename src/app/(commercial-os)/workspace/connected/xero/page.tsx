@@ -5,8 +5,8 @@ import { prisma } from '@/lib/server/prisma';
 import config from '@/lib/config/env';
 import {
   computePaymentLinkRailSetup,
-  isMultiCheckoutRailConfigured,
 } from '@/lib/payment-links/setup-status';
+import { buildMerchantPaymentRailsFromSetup } from '@/lib/commercial-os/merchant-payment-rails';
 import { WorkspaceXeroManageScreen } from '@/components/journey/lovable/workspace-xero-manage-screen';
 
 export default async function WorkspaceXeroManagePage() {
@@ -34,17 +34,13 @@ export default async function WorkspaceXeroManagePage() {
     evmWalletPayments: config.features.evmWalletPayments,
   });
 
-  const stablecoinSettlementsEnabled = isMultiCheckoutRailConfigured(railSetup, 'hedera');
+  const merchantRails = buildMerchantPaymentRailsFromSetup(railSetup);
 
   return (
     <Suspense fallback={null}>
       <WorkspaceXeroManageScreen
         organizationId={org.id}
-        merchantRails={{
-          stripeEnabled: isMultiCheckoutRailConfigured(railSetup, 'stripe'),
-          wiseEnabled: isMultiCheckoutRailConfigured(railSetup, 'wise'),
-          stablecoinSettlementsEnabled,
-        }}
+        merchantRails={merchantRails}
         guidedSetupAssistant={config.features.guidedSetup}
       />
     </Suspense>
