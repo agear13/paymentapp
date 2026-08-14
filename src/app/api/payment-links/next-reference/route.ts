@@ -3,13 +3,9 @@ import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { applyRateLimit } from '@/lib/rate-limit';
-
-const AUTO_PREFIX = 'INV-';
-const PAD_LENGTH = 4;
-
-function formatInvoiceReference(sequence: number): string {
-  return `${AUTO_PREFIX}${String(sequence).padStart(PAD_LENGTH, '0')}`;
-}
+import { getProvvyLocalNextInvoiceReference } from '@/lib/payment-links/invoice-reference';
+import { buildNextInvoiceReferencePayload } from '@/lib/payment-links/next-invoice-reference-response';
+import { suggestNextXeroInvoiceNumberForOrg } from '@/lib/xero/xero-invoice-number-suggestion.server';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,18 +35,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const rows = await prisma.$queryRaw<Array<{ max_sequence: number }>>`
-      SELECT COALESCE(MAX((substring(invoice_reference from '^INV-([0-9]+)$'))::int), 0) AS max_sequence
-      FROM payment_links
-      WHERE organization_id = ${organizationId}::uuid
-        AND invoice_reference ~ '^INV-[0-9]+$'
-    `;
-    const nextSequence = Number(rows[0]?.max_sequence ?? 0) + 1;
+    const xeroSuggestion = await suggestNextXeroInvoiceNumberForOrg(organizationId);
+    const provvyReference = await getProvvyLocalNextInvoiceReference(organizationId, prisma);
 
     return NextResponse.json({
-      data: {
-        invoiceReference: formatInvoiceReference(nextSequence),
-      },
+      data: buildNextInvoiceReferencePayload(xeroSuggestion, provvyReference),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';

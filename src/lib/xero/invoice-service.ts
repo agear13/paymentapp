@@ -18,6 +18,8 @@ import {
   enrichXeroLineDescription,
 } from './xero-layer-export';
 import { resolveXeroInvoiceDates } from '@/lib/payment-links/invoice-commercial-timing-export';
+import { isEligibleXeroInvoiceNumberCandidate } from '@/lib/xero/xero-invoice-number-suggestion';
+import { assertXeroInvoiceNumberAvailableForCreate } from '@/lib/xero/xero-invoice-number-suggestion.server';
 
 export interface InvoiceCreationParams {
   paymentLinkId: string;
@@ -144,6 +146,14 @@ export async function createXeroInvoice(
   params: InvoiceCreationParams
 ): Promise<InvoiceCreationResult> {
   const prepared = await prepareXeroAccrecInvoice(params);
+  const invoiceNumberCandidate = params.invoiceReference?.trim();
+  if (invoiceNumberCandidate && isEligibleXeroInvoiceNumberCandidate(invoiceNumberCandidate)) {
+    await assertXeroInvoiceNumberAvailableForCreate(
+      params.organizationId,
+      invoiceNumberCandidate
+    );
+    prepared.invoice.invoiceNumber = invoiceNumberCandidate;
+  }
   const response = await prepared.xeroClient.accountingApi.createInvoices(
     prepared.tenantId,
     { invoices: [prepared.invoice] }

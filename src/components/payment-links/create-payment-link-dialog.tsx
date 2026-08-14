@@ -378,6 +378,11 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   const initialAttachmentRef = React.useRef<PaymentLinkAttachmentDraft | null>(null);
   const wasOpenRef = React.useRef(false);
   const invoiceRefSuggestionRequestedRef = React.useRef(false);
+  const [invoiceNumberHint, setInvoiceNumberHint] = React.useState<{
+    source: 'xero' | 'provvy' | 'manual';
+    suggestionLabel?: string;
+    ambiguousReason?: string;
+  } | null>(null);
 
   React.useEffect(() => {
     if (!open) {
@@ -491,9 +496,25 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           `/api/payment-links/next-reference?organizationId=${organizationId}`
         );
         if (!response.ok) return;
-        const json = (await response.json()) as { data?: { invoiceReference?: string } };
-        const suggested = json.data?.invoiceReference?.trim();
-        if (cancelled || !suggested) return;
+        const json = (await response.json()) as {
+          data?: {
+            invoiceReference?: string | null;
+            source?: 'xero' | 'provvy' | 'manual';
+            suggestionLabel?: string;
+            ambiguousReason?: string;
+          };
+        };
+        const data = json.data;
+        if (cancelled || !data) return;
+
+        setInvoiceNumberHint({
+          source: data.source ?? 'provvy',
+          suggestionLabel: data.suggestionLabel,
+          ambiguousReason: data.ambiguousReason,
+        });
+
+        const suggested = data.invoiceReference?.trim();
+        if (!suggested) return;
         const latestFieldState = form.getFieldState('invoiceReference');
         const latestValue = form.getValues('invoiceReference')?.trim() || '';
         if (!latestFieldState.isDirty && !latestValue) {
@@ -1682,16 +1703,24 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               name="invoiceReference"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Invoice reference (internal, optional)</FormLabel>
+                  <FormLabel>
+                    {invoiceNumberHint?.source === 'xero'
+                      ? 'Invoice number'
+                      : 'Invoice reference (internal, optional)'}
+                  </FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="INV-001"
+                      placeholder={invoiceNumberHint?.source === 'xero' ? 'INV-00484' : 'INV-001'}
                       {...field}
                       value={field.value || ''}
                     />
                   </FormControl>
                   <FormDescription>
-                    Auto-generated sequentially per organization; you can edit before saving.
+                    {invoiceNumberHint?.source === 'xero' && invoiceNumberHint.suggestionLabel
+                      ? invoiceNumberHint.suggestionLabel
+                      : invoiceNumberHint?.ambiguousReason
+                        ? invoiceNumberHint.ambiguousReason
+                        : 'Auto-generated sequentially per organization; you can edit before saving.'}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

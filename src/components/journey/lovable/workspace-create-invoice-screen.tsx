@@ -215,6 +215,13 @@ export function WorkspaceCreateInvoiceScreen() {
     crypto: null,
   });
   const [railDefaultsLoaded, setRailDefaultsLoaded] = useState(false);
+  const [invoiceNumberHint, setInvoiceNumberHint] = useState<{
+    source: 'xero' | 'provvy' | 'manual';
+    suggestionLabel?: string;
+    ambiguousReason?: string;
+  } | null>(null);
+  const [invoiceReferenceEdited, setInvoiceReferenceEdited] = useState(false);
+  const [invoiceReferenceLoading, setInvoiceReferenceLoading] = useState(false);
 
   const payCode = created?.shortCode?.trim() ?? '';
   const paymentUrl = usePaymentLinkUrl(isValidShortCode(payCode) ? payCode : null);
@@ -316,27 +323,51 @@ export function WorkspaceCreateInvoiceScreen() {
     if (!organizationId) return;
     let cancelled = false;
 
-    void (async () => {
+    const loadInvoiceNumberSuggestion = async () => {
+      setInvoiceReferenceLoading(true);
       try {
         const response = await fetch(
           `/api/payment-links/next-reference?organizationId=${organizationId}`
         );
         if (!response.ok) return;
-        const json = (await response.json()) as { data?: { invoiceReference?: string } };
-        const suggested = json.data?.invoiceReference?.trim();
-        if (cancelled || !suggested) return;
+        const json = (await response.json()) as {
+          data?: {
+            invoiceReference?: string | null;
+            source?: 'xero' | 'provvy' | 'manual';
+            suggestionLabel?: string;
+            ambiguousReason?: string;
+          };
+        };
+        if (cancelled) return;
+        const data = json.data;
+        if (!data) return;
+
+        setInvoiceNumberHint({
+          source: data.source ?? 'provvy',
+          suggestionLabel: data.suggestionLabel,
+          ambiguousReason: data.ambiguousReason,
+        });
+
+        const suggested = data.invoiceReference?.trim();
+        if (!suggested) return;
         setDraft((prev) =>
-          prev.invoiceReference.trim() ? prev : { ...prev, invoiceReference: suggested }
+          invoiceReferenceEdited || prev.invoiceReference.trim()
+            ? prev
+            : { ...prev, invoiceReference: suggested }
         );
       } catch {
         // Non-blocking
+      } finally {
+        if (!cancelled) setInvoiceReferenceLoading(false);
       }
-    })();
+    };
+
+    void loadInvoiceNumberSuggestion();
 
     return () => {
       cancelled = true;
     };
-  }, [organizationId]);
+  }, [organizationId, invoiceReferenceEdited]);
 
   const platformFeatures = useMemo(
     () => ({
@@ -577,6 +608,9 @@ export function WorkspaceCreateInvoiceScreen() {
       aiPrompt={aiPrompt}
       setAiPrompt={setAiPrompt}
       handleAiGenerate={handleAiGenerate}
+      invoiceNumberHint={invoiceNumberHint}
+      invoiceReferenceLoading={invoiceReferenceLoading}
+      onInvoiceReferenceEdited={() => setInvoiceReferenceEdited(true)}
     />
   );
 }
@@ -599,6 +633,9 @@ function CreateInvoiceForm({
   aiPrompt,
   setAiPrompt,
   handleAiGenerate,
+  invoiceNumberHint,
+  invoiceReferenceLoading,
+  onInvoiceReferenceEdited,
 }: {
   draft: CommercialDealDraft;
   patchDraft: (patch: Partial<CommercialDealDraft>) => void;
@@ -617,6 +654,13 @@ function CreateInvoiceForm({
   aiPrompt: string;
   setAiPrompt: (value: string) => void;
   handleAiGenerate: () => void;
+  invoiceNumberHint: {
+    source: 'xero' | 'provvy' | 'manual';
+    suggestionLabel?: string;
+    ambiguousReason?: string;
+  } | null;
+  invoiceReferenceLoading: boolean;
+  onInvoiceReferenceEdited: () => void;
 }) {
   const [showValidation, setShowValidation] = useState(false);
   const [formInteracted, setFormInteracted] = useState(false);
@@ -766,14 +810,32 @@ function CreateInvoiceForm({
                 />
               </div>
               <div>
-                <CreateInvoiceFieldLabel>Invoice reference</CreateInvoiceFieldLabel>
+                <CreateInvoiceFieldLabel>
+                  {invoiceNumberHint?.source === 'xero' ? 'Invoice number' : 'Invoice reference'}
+                </CreateInvoiceFieldLabel>
                 <input
                   type="text"
                   value={draft.invoiceReference}
-                  onChange={(e) => updateDraft({ invoiceReference: e.target.value })}
-                  placeholder="INV-0042"
+                  onChange={(e) => {
+                    onInvoiceReferenceEdited();
+                    updateDraft({ invoiceReference: e.target.value });
+                  }}
+                  placeholder={invoiceNumberHint?.source === 'xero' ? 'INV-00484' : 'INV-0042'}
                   className={inputCls}
                 />
+                {invoiceReferenceLoading ? (
+                  <p className="mt-1.5 text-[12px] text-ink-soft">Loading invoice number suggestion…</p>
+                ) : invoiceNumberHint?.source === 'xero' && invoiceNumberHint.suggestionLabel ? (
+                  <p className="mt-1.5 text-[12px] text-ink-soft">{invoiceNumberHint.suggestionLabel}</p>
+                ) : invoiceNumberHint?.ambiguousReason ? (
+                  <p className="mt-1.5 text-[12px] text-amber-700 dark:text-amber-400">
+                    {invoiceNumberHint.ambiguousReason}
+                  </p>
+                ) : invoiceNumberHint?.source === 'provvy' ? (
+                  <p className="mt-1.5 text-[12px] text-ink-soft">
+                    Auto-generated for this workspace. Edit if needed.
+                  </p>
+                ) : null}
               </div>
               <div>
                 <CreateInvoiceFieldLabel>Issue date</CreateInvoiceFieldLabel>
