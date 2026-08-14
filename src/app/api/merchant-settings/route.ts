@@ -6,6 +6,7 @@ import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
 import config from '@/lib/config/env';
+import { isWiseAutoSettlementAvailable } from '@/lib/pilot/wise-auto-settlement';
 import { resolveWiseFieldsForCreate } from '@/lib/merchant-settings/resolve-wise-create-fields';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { runOperationalInitializationConvergence } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest) {
       _features: {
         wiseGloballyEnabled: config.features.wisePayments,
         evmGloballyEnabled: config.features.evmWalletPayments,
+        wiseAutoSettlementAvailable: isWiseAutoSettlementAvailable(),
       },
     }));
 

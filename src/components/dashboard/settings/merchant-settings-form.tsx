@@ -59,6 +59,10 @@ import {
   evmNetworkDisplayName,
   getPaymentRail,
 } from '@/lib/payments/payment-rail-registry';
+import {
+  MANUAL_BANK_RECOMMENDED_HELPER,
+  WISE_MERCHANT_PROFILE_SAVED_COPY,
+} from '@/lib/payments/wise-bank-transfer-ux';
 
 const evmRail = getPaymentRail('evm_wallet');
 
@@ -110,6 +114,7 @@ export function MerchantSettingsForm({
   const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
   const [logoPreviewError, setLogoPreviewError] = React.useState(false);
   const [wiseGloballyEnabled, setWiseGloballyEnabled] = React.useState(true); // Default to true, will be updated from API
+  const [wiseAutoSettlementAvailable, setWiseAutoSettlementAvailable] = React.useState(false);
   const [evmGloballyEnabled, setEvmGloballyEnabled] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -151,10 +156,14 @@ export function MerchantSettingsForm({
       if (settings._features && typeof settings._features === 'object') {
         const features = settings._features as {
           wiseGloballyEnabled?: boolean;
+          wiseAutoSettlementAvailable?: boolean;
           evmGloballyEnabled?: boolean;
         };
         if (features.wiseGloballyEnabled !== undefined) {
           setWiseGloballyEnabled(features.wiseGloballyEnabled);
+        }
+        if (features.wiseAutoSettlementAvailable !== undefined) {
+          setWiseAutoSettlementAvailable(features.wiseAutoSettlementAvailable);
         }
         if (features.evmGloballyEnabled !== undefined) {
           setEvmGloballyEnabled(features.evmGloballyEnabled);
@@ -898,7 +907,7 @@ export function MerchantSettingsForm({
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <Building2 className="h-5 w-5 text-emerald-600" />
-            <h4 className="text-base font-medium">Wise (bank transfer)</h4>
+            <h4 className="text-base font-medium">Wise profile (automated checkout)</h4>
           </div>
 
           {!wiseGloballyEnabled ? (
@@ -916,9 +925,11 @@ export function MerchantSettingsForm({
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
-                      <FormLabel className="text-base">Enable Wise Payments</FormLabel>
+                      <FormLabel className="text-base">Save Wise profile</FormLabel>
                       <FormDescription>
-                        Allow customers to pay via bank transfer using Wise.
+                        Store your Wise Business profile for receiving-account lookups and future
+                        automated checkout. For bank transfers today, use Bank transfer (manual
+                        verification) on invoices.
                       </FormDescription>
                     </div>
                     <FormControl>
@@ -998,16 +1009,29 @@ export function MerchantSettingsForm({
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    Wise is enabled but no Profile ID is set. Wise will not appear as a payment option until you add your Profile ID.
+                    Wise is toggled on but no Profile ID is set. Automated Wise checkout will not
+                    be available until you add your Profile ID. Use Bank transfer (manual
+                    verification) on invoices in the meantime.
                   </AlertDescription>
                 </Alert>
               )}
 
-              {form.watch('wiseEnabled') && form.watch('wiseProfileId') && (
+              {form.watch('wiseEnabled') && form.watch('wiseProfileId') && !wiseAutoSettlementAvailable && (
+                <Alert className="border-amber-200 bg-amber-50">
+                  <Info className="h-4 w-4 text-amber-700" />
+                  <AlertDescription className="text-amber-900 space-y-2">
+                    <p>{WISE_MERCHANT_PROFILE_SAVED_COPY}</p>
+                    <p className="text-sm">{MANUAL_BANK_RECOMMENDED_HELPER}</p>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {form.watch('wiseEnabled') && form.watch('wiseProfileId') && wiseAutoSettlementAvailable && (
                 <Alert className="border-emerald-200 bg-emerald-50">
                   <Building2 className="h-4 w-4 text-emerald-600" />
                   <AlertDescription className="text-emerald-800">
-                    Wise is configured and will appear as a payment option on your invoices.
+                    Wise profile saved. Automated Wise checkout can appear on invoices when you
+                    select Wise bank transfer (automated checkout — pilot).
                   </AlertDescription>
                 </Alert>
               )}

@@ -38,6 +38,12 @@ import {
 
 } from '@/lib/payments/payment-rail-registry';
 
+import {
+  isWiseInvoiceMethodAvailable,
+  WISE_AUTO_SETTLEMENT_UNAVAILABLE_REASON,
+  WISE_INVOICE_UNAVAILABLE_WHEN_AUTO_OFF,
+} from '@/lib/payments/wise-bank-transfer-ux';
+
 
 
 /** Merchant fields required to evaluate rail setup (matches typical Prisma select). */
@@ -65,10 +71,11 @@ export type PaymentLinkMerchantRailSnapshot = {
 
 
 export type PaymentRailPlatformFeatures = Partial<
-
   Record<PaymentRailPlatformFeature, boolean>
-
->;
+> & {
+  /** Platform flag: WISE_AUTO_SETTLEMENT_ENABLED + webhook prerequisites (server-computed). */
+  wiseAutoSettlementAvailable?: boolean;
+};
 
 
 
@@ -366,6 +373,14 @@ export function unavailableReasonForInvoiceRail(
 
   }
 
+  if (
+    rail.paymentMethod === 'WISE' &&
+    features.wisePayments &&
+    !isWiseInvoiceMethodAvailable(features)
+  ) {
+    return WISE_INVOICE_UNAVAILABLE_WHEN_AUTO_OFF;
+  }
+
   return undefined;
 
 }
@@ -406,7 +421,7 @@ export function buildInvoicePaymentMethodOptions(input: {
 
     const configured = isPaymentRailConfiguredForMerchant(rail.paymentMethod, input.setup);
 
-    const available =
+    let available =
 
       rail.invoiceAlwaysSelectable === true ||
 
@@ -416,11 +431,16 @@ export function buildInvoicePaymentMethodOptions(input: {
 
         : configured);
 
+    if (rail.paymentMethod === 'WISE') {
+      available = available && isWiseInvoiceMethodAvailable(input.features);
+    }
+
     const unavailableReason = available
 
       ? undefined
 
-      : unavailableReasonForInvoiceRail(rail.paymentMethod, input.setup, input.features);
+      : unavailableReasonForInvoiceRail(rail.paymentMethod, input.setup, input.features) ??
+        (rail.paymentMethod === 'WISE' ? WISE_AUTO_SETTLEMENT_UNAVAILABLE_REASON : undefined);
 
     return {
 

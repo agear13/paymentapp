@@ -142,7 +142,7 @@ export async function fetchMerchantDedicatedRailDefaults(
 }
 
 export const MANUAL_BANK_UNAVAILABLE_REASON =
-  "Manual Bank Transfer isn't ready yet. Add your business bank account in Payment Settings to enable this payment method.";
+  "Bank transfer (manual verification) isn't ready yet. Add your business bank account in Payment Settings to enable this payment method.";
 
 export const CRYPTO_UNAVAILABLE_REASON =
   "Crypto payments aren't ready yet. Add your wallet in Payment Settings to enable this payment method.";

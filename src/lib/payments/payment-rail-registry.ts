@@ -285,23 +285,25 @@ export const PAYMENT_RAIL_REGISTRY: readonly PaymentRailDefinition[] = [
 
     merchantSettingsLabel: 'Wise',
 
-    invoiceCreationLabel: 'Bank transfer (Wise)',
+    invoiceCreationLabel: 'Wise bank transfer (automated checkout — pilot)',
 
     integrationsIcon: '🏦',
 
-    integrationsDescription: 'Bank transfer via Wise.',
+    integrationsDescription:
+      'Automated Wise checkout when enabled by your platform. Not available for most merchants yet — use Bank transfer (manual verification) instead.',
 
     checkoutSurface: 'multi',
 
-    merchantSetupCompleteDescription: 'Wise is enabled and a profile is on file.',
+    merchantSetupCompleteDescription:
+      'Wise profile saved. Automated checkout only appears when your platform enables Wise auto-settlement.',
 
     merchantSetupIncompleteDescription:
 
-      'Enable Wise and attach a Wise profile to offer bank-friendly payouts where supported.',
+      'Enable Wise and attach a Wise profile for future automated checkout. Use Bank transfer (manual verification) for invoices today.',
 
     merchantSetupAttentionDescription:
 
-      'Wise is toggled on but no profile ID is set. Finish Wise setup in merchant settings.',
+      'Wise is toggled on but no profile ID is set. Add a profile ID or use Bank transfer (manual verification) on invoices.',
 
     unavailableIncompleteReason: 'Wise Profile ID not configured',
 
@@ -389,15 +391,16 @@ export const PAYMENT_RAIL_REGISTRY: readonly PaymentRailDefinition[] = [
 
     settlementProvider: 'manual',
 
-    displayLabel: 'Manual Bank',
+    displayLabel: 'Bank transfer',
 
-    merchantSettingsLabel: 'Manual Bank',
+    merchantSettingsLabel: 'Bank transfer',
 
-    invoiceCreationLabel: 'Manual bank transfer (bank / Wise / Revolut / other)',
+    invoiceCreationLabel: 'Bank transfer (manual verification)',
 
     integrationsIcon: '🏛️',
 
-    integrationsDescription: 'Manual bank transfer instructions on invoices.',
+    integrationsDescription:
+      'Bank transfer with payer instructions. You verify payment in Provvy after funds are sent — the working option for Wise, Revolut, and other bank apps.',
 
     checkoutSurface: 'dedicated',
 

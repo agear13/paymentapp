@@ -60,8 +60,12 @@ describe('merchantCreateInvoicePaymentLabel', () => {
   it('uses merchant-friendly payment method titles', () => {
     expect(merchantCreateInvoicePaymentLabel('STRIPE')).toEqual({ title: 'Credit / debit card' });
     expect(merchantCreateInvoicePaymentLabel('WISE')).toEqual({
+      title: 'Wise checkout',
+      detail: 'Automated · pilot only',
+    });
+    expect(merchantCreateInvoicePaymentLabel('MANUAL_BANK')).toEqual({
       title: 'Bank transfer',
-      detail: 'Wise',
+      detail: 'Manual verification · working option',
     });
     expect(merchantCreateInvoicePaymentLabel('HEDERA')).toEqual({
       title: 'Crypto',

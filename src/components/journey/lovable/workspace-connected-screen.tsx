@@ -31,7 +31,7 @@ type ComingSoonSystem = {
 
 const COMING_SOON: ComingSoonSystem[] = [
   { name: 'Stripe', detail: 'Payments', explanation: 'Accept card payments directly on your invoices.' },
-  { name: 'Wise', detail: 'Payments', explanation: 'Collect international bank transfers with Wise.' },
+  { name: 'Wise', detail: 'Payments', explanation: 'Save your Wise profile for future automated checkout. Bank transfers today use manual verification.' },
   { name: 'Outlook', detail: 'Email', explanation: 'Send invoices from your work inbox.' },
   { name: 'Slack', detail: 'Communications', explanation: 'Get payment notifications in Slack.' },
   { name: 'WhatsApp', detail: 'Communications', explanation: 'Share payment links via WhatsApp.' },
@@ -182,8 +182,8 @@ export function WorkspaceConnectedScreen() {
           }
           if (settings?.wise_enabled && settings.wise_profile_id?.trim()) {
             cards.push({
-              name: 'Wise',
-              detail: 'Multi-currency · configured',
+              name: 'Wise profile',
+              detail: 'Saved · use Bank transfer (manual verification) for invoices',
               tag: 'Payments',
             });
           }

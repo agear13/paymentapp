@@ -215,7 +215,10 @@ export function WorkspaceReceivablesScreen() {
           cards.push({ name: 'Stripe', detail: 'Cards · configured' });
         }
         if (settings?.wise_enabled && settings.wise_profile_id?.trim()) {
-          cards.push({ name: 'Wise', detail: 'Multi-currency · configured' });
+          cards.push({
+            name: 'Wise profile',
+            detail: 'Saved · use Bank transfer (manual verification) for invoices',
+          });
         }
         if (settings?.evm_wallet_enabled && settings.evm_wallet_address?.trim()) {
           const networks = settings.evm_supported_networks?.join(', ') || 'EVM';

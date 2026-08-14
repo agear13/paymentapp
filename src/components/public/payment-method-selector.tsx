@@ -212,7 +212,9 @@ export const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             )}
             {selectedMethod === 'wise' && (
               <>
-                <span className="font-medium">Wise Payment:</span> Pay by bank transfer. Get payment reference and bank details, then complete the transfer in your bank.
+                <span className="font-medium">Wise bank transfer:</span> Pay using the bank details
+                shown. The merchant verifies funds and confirms payment — automatic matching is not
+                available during this pilot.
               </>
             )}
             {selectedMethod === 'metamask' && (

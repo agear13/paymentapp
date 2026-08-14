@@ -88,6 +88,7 @@ interface MerchantSettings {
   wiseProfileId?: string;
   wiseCurrency?: string | null;
   wiseGloballyEnabled?: boolean;
+  wiseAutoSettlementAvailable?: boolean;
   evmGloballyEnabled?: boolean;
   /** Merchant default / accounting currency (ISO 4217) — used as invoice currency default, not payment rail. */
   defaultCurrency?: string | null;
@@ -406,6 +407,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
               wiseProfileId: settings.wise_profile_id,
               wiseCurrency: settings.wise_currency ?? null,
               wiseGloballyEnabled: settings._features?.wiseGloballyEnabled ?? false,
+              wiseAutoSettlementAvailable: settings._features?.wiseAutoSettlementAvailable ?? false,
               evmGloballyEnabled: settings._features?.evmGloballyEnabled ?? false,
               defaultCurrency: settings.default_currency ?? null,
             });
@@ -434,8 +436,13 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     () => ({
       wisePayments: merchantSettings?.wiseGloballyEnabled ?? false,
       evmWalletPayments: merchantSettings?.evmGloballyEnabled ?? false,
+      wiseAutoSettlementAvailable: merchantSettings?.wiseAutoSettlementAvailable ?? false,
     }),
-    [merchantSettings?.wiseGloballyEnabled, merchantSettings?.evmGloballyEnabled]
+    [
+      merchantSettings?.wiseGloballyEnabled,
+      merchantSettings?.evmGloballyEnabled,
+      merchantSettings?.wiseAutoSettlementAvailable,
+    ]
   );
 
   const railSetup = React.useMemo(
@@ -1188,7 +1195,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
                         <label htmlFor="mode-pay" className="text-sm cursor-pointer leading-snug">
                           <span className="font-medium">Invoice with payment request</span>
                           <span className="block text-muted-foreground">
-                            Customer gets a normal pay page (card, crypto, or Wise as configured).
+                            Customer gets a normal pay page (card, crypto, or bank transfer as configured).
                           </span>
                         </label>
                       </div>

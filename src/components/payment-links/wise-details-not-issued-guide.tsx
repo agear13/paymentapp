@@ -37,8 +37,8 @@ export function WiseDetailsNotIssuedGuide({
         </AlertTitle>
         <AlertDescription className="text-amber-900/90 space-y-3">
           <p>
-            Before you can accept Wise payments, Wise needs to issue your receiving bank account
-            details for {displayCurrency}.
+            Before automated Wise checkout can load bank details, Wise needs to issue your receiving
+            bank account details for {displayCurrency}.
           </p>
 
           <div className="rounded-md border border-amber-200/80 bg-white/60 px-3 py-2.5 text-sm">
@@ -97,10 +97,11 @@ export function WiseDetailsNotIssuedGuide({
             <div className="space-y-1 text-sm text-slate-700">
               <p className="font-medium text-slate-900">Why am I seeing this?</p>
               <p>
-                Provvypay retrieves your Wise receiving account details automatically when generating
-                a Wise payment request. Wise has indicated that your {displayCurrency} receiving
+                Provvypay loads your Wise receiving account details from Wise when generating an
+                automated checkout request. Wise has indicated that your {displayCurrency} receiving
                 account hasn&apos;t been issued yet, so there are no bank details available to display
-                on the invoice.
+                on the invoice. Use Bank transfer (manual verification) if you need bank instructions
+                today.
               </p>
             </div>
           </div>

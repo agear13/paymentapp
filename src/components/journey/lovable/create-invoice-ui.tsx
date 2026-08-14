@@ -149,9 +149,9 @@ export function merchantCreateInvoicePaymentLabel(value: PaymentMethod): {
     case 'STRIPE':
       return { title: 'Credit / debit card' };
     case 'WISE':
-      return { title: 'Bank transfer', detail: 'Wise' };
+      return { title: 'Wise checkout', detail: 'Automated · pilot only' };
     case 'MANUAL_BANK':
-      return { title: 'Bank transfer', detail: 'Manual instructions' };
+      return { title: 'Bank transfer', detail: 'Manual verification · working option' };
     case 'HEDERA':
       return { title: 'Crypto', detail: 'HashPack · Hedera' };
     case 'EVM_WALLET':

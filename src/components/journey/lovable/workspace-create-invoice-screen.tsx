@@ -85,6 +85,7 @@ type MerchantSettingsSnapshot = {
   wiseProfileId?: string | null;
   wiseCurrency?: string | null;
   wiseGloballyEnabled?: boolean;
+  wiseAutoSettlementAvailable?: boolean;
   evmGloballyEnabled?: boolean;
   defaultCurrency?: string | null;
 };
@@ -254,6 +255,9 @@ export function WorkspaceCreateInvoiceScreen() {
             wiseGloballyEnabled:
               (settings._features as { wiseGloballyEnabled?: boolean } | undefined)?.wiseGloballyEnabled ??
               false,
+            wiseAutoSettlementAvailable:
+              (settings._features as { wiseAutoSettlementAvailable?: boolean } | undefined)
+                ?.wiseAutoSettlementAvailable ?? false,
             evmGloballyEnabled:
               (settings._features as { evmGloballyEnabled?: boolean } | undefined)?.evmGloballyEnabled ??
               false,
@@ -338,8 +342,13 @@ export function WorkspaceCreateInvoiceScreen() {
     () => ({
       wisePayments: merchantSettings?.wiseGloballyEnabled ?? false,
       evmWalletPayments: merchantSettings?.evmGloballyEnabled ?? false,
+      wiseAutoSettlementAvailable: merchantSettings?.wiseAutoSettlementAvailable ?? false,
     }),
-    [merchantSettings?.wiseGloballyEnabled, merchantSettings?.evmGloballyEnabled]
+    [
+      merchantSettings?.wiseGloballyEnabled,
+      merchantSettings?.evmGloballyEnabled,
+      merchantSettings?.wiseAutoSettlementAvailable,
+    ]
   );
 
   const railSetup = useMemo(

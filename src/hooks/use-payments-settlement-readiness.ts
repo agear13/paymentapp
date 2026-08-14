@@ -26,7 +26,11 @@ type MerchantSettingsRow = {
   evm_wallet_enabled?: boolean | null;
   evm_wallet_address?: string | null;
   evm_supported_networks?: string[] | null;
-  _features?: { wiseGloballyEnabled?: boolean; evmGloballyEnabled?: boolean };
+  _features?: {
+    wiseGloballyEnabled?: boolean;
+    evmGloballyEnabled?: boolean;
+    wiseAutoSettlementAvailable?: boolean;
+  };
 };
 
 export function usePaymentsSettlementReadiness(): {
@@ -107,6 +111,7 @@ export function usePaymentsSettlementReadiness(): {
     return computePaymentLinkRailSetup(snapshot, {
       wisePayments: merchantRow._features?.wiseGloballyEnabled ?? false,
       evmWalletPayments: merchantRow._features?.evmGloballyEnabled ?? false,
+      wiseAutoSettlementAvailable: merchantRow._features?.wiseAutoSettlementAvailable ?? false,
     });
   }, [merchantRow]);
 

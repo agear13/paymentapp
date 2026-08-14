@@ -183,7 +183,7 @@ export const WisePaymentOption: React.FC<WisePaymentOptionProps> = ({
           </div>
           <div className="flex-1">
             <div className="flex items-center justify-between mb-1">
-              <h3 className="text-lg font-semibold text-slate-900">Wise (Bank transfer)</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Wise bank transfer</h3>
               {isSelected && (
                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-600">
                   <Check className="w-4 h-4 text-white" />
@@ -191,7 +191,8 @@ export const WisePaymentOption: React.FC<WisePaymentOptionProps> = ({
               )}
             </div>
             <p className="text-sm text-slate-600 mb-3">
-              Pay by bank transfer using Wise. You&apos;ll get payment reference and bank details.
+              Pay by bank transfer using Wise instructions. Your merchant confirms payment after
+              verifying the transfer — status is not updated automatically during this pilot.
             </p>
             {!isAvailable && (
               <p className="text-xs text-amber-600 mt-3 font-medium">
@@ -240,7 +241,7 @@ export const WisePaymentOption: React.FC<WisePaymentOptionProps> = ({
                 <li>Open your bank app or online banking.</li>
                 <li>Make a transfer to the details below.</li>
                 <li>Use the payment reference exactly as shown.</li>
-                <li>We&apos;ll update the status when we receive your payment.</li>
+                <li>The merchant will confirm your payment after verifying the transfer.</li>
               </ol>
 
               {/* Amount */}

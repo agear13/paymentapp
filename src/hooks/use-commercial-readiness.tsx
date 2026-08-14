@@ -30,6 +30,7 @@ type MerchantSettingsRow = {
   _features?: {
     wiseGloballyEnabled?: boolean;
     evmGloballyEnabled?: boolean;
+    wiseAutoSettlementAvailable?: boolean;
   };
 };
 
@@ -61,6 +62,7 @@ function merchantRailsFromSettings(
   const railSetup = computePaymentLinkRailSetup(snapshot, {
     wisePayments: settings._features?.wiseGloballyEnabled ?? false,
     evmWalletPayments: settings._features?.evmGloballyEnabled ?? false,
+    wiseAutoSettlementAvailable: settings._features?.wiseAutoSettlementAvailable ?? false,
   });
 
   return buildMerchantPaymentRailsFromSetup(railSetup, dedicatedDefaults);
