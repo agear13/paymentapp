@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CheckCircle2, Check, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Check } from 'lucide-react';
 import type { PaymentAccountRecommendation } from '@/lib/accounting/payment-account-recommendations';
 import { recommendationBadgeLabel } from '@/lib/accounting/payment-account-recommendations';
 import { PaymentFlowDiagram } from '@/components/xero/payment-flow-diagram';
@@ -21,8 +21,9 @@ import {
 } from '@/components/xero/payment-account-recommendation-display';
 import {
   XERO_ACCOUNT_SECTION_COPY,
-  XERO_CREATE_ACCOUNT_IN_XERO_GUIDE,
+  resolveCreateAccountInXeroGuide,
 } from '@/lib/xero/xero-setup-guidance';
+import { CreateAccountInXeroGuidePanel } from '@/components/xero/create-account-in-xero-guide-panel';
 import type { MappingDisplayState } from '@/lib/commercial-os/xero-invoice-readiness';
 import { mappingStateBadgeLabel } from '@/lib/commercial-os/xero-invoice-readiness';
 
@@ -66,6 +67,10 @@ export function PaymentAccountRecommendationCard({
 }: PaymentAccountRecommendationCardProps) {
   const { definition, status, suggestedCode, reconciliationExplanation, flowSteps } =
     recommendation;
+  const createAccountGuide = resolveCreateAccountInXeroGuide({
+    paymentRail: definition.paymentRail,
+    accountName: definition.accountName,
+  });
   const heroAccount = heroRecommendationAccount(recommendation);
   const genericFallback = recommendation.recommendedAccount
     ? isGenericFallbackAccountName(recommendation.recommendedAccount.name)
@@ -186,19 +191,7 @@ export function PaymentAccountRecommendationCard({
             <p className="mt-2 text-muted-foreground">{reconciliationExplanation}</p>
           </details>
 
-          <details className="rounded-lg border border-border/70 bg-muted/20 px-4 py-3 text-sm">
-            <summary className="cursor-pointer font-medium text-foreground">
-              {XERO_CREATE_ACCOUNT_IN_XERO_GUIDE.title}
-            </summary>
-            <ol className="mt-3 list-decimal space-y-2 pl-5 text-muted-foreground">
-              {XERO_CREATE_ACCOUNT_IN_XERO_GUIDE.steps.map((step) => (
-                <li key={step}>{step.replace('{code}', suggestedCode)}</li>
-              ))}
-            </ol>
-            <p className="mt-3 text-xs text-muted-foreground">
-              {XERO_CREATE_ACCOUNT_IN_XERO_GUIDE.afterCreate}
-            </p>
-          </details>
+          <CreateAccountInXeroGuidePanel guide={createAccountGuide} suggestedCode={suggestedCode} />
 
           {genericFallback ? (
             <details className="rounded-lg border border-dashed border-border/70 px-4 py-3 text-sm">
@@ -208,7 +201,7 @@ export function PaymentAccountRecommendationCard({
               <p className="mt-2 text-muted-foreground">
                 Some charts use a generic Suspense or Clearing account for multiple payment types.
                 Provvy does not recommend that for new setups — dedicated holding accounts make
-                automatic reconciliation reliable.
+                payment recording and later bank reconciliation clearer.
               </p>
             </details>
           ) : null}

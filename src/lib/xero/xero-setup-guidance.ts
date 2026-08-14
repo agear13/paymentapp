@@ -3,6 +3,9 @@
  */
 
 import type { XeroMappingField } from '@/lib/accounting/recommended-accounting-config';
+import { HOLDING_ACCOUNT_BANK_SETTLEMENT_NOTE } from '@/lib/xero/xero-holding-account-guides';
+
+export { HOLDING_ACCOUNT_BANK_SETTLEMENT_NOTE };
 
 export const XERO_SETUP_PAGE = {
   title: 'Set up accounting sync',
@@ -25,7 +28,9 @@ export const XERO_CONNECT_MODAL = {
 } as const;
 
 export const CLEARING_ACCOUNTS_EXPLANATION = {
-  body: 'Provvy records each payment in Xero first, then matches it when the money reaches your bank.',
+  body:
+    'Provvy records each customer payment in Xero against the mapped holding account when they pay. ' +
+    HOLDING_ACCOUNT_BANK_SETTLEMENT_NOTE,
   reassurance: 'Provvy only adds new accounts in Xero if you ask — nothing is deleted.',
 } as const;
 
@@ -257,17 +262,22 @@ export type MerchantPaymentRails = {
   manualBankEnabled?: boolean;
 };
 
-export const XERO_CREATE_ACCOUNT_IN_XERO_GUIDE = {
-  title: 'How to create this in Xero',
-  steps: [
-    'Open Xero and go to Accounting → Chart of accounts.',
-    'Click Add Account.',
-    `Enter the account name and type shown above (use code ${'{code}'} if Xero asks for one).`,
-    'Save the account, return here, and choose it from the list.',
-  ],
-  afterCreate:
-    'After the account appears in Xero, click "Use recommended account" or pick it from the list below.',
-} as const;
+export type {
+  XeroCreateAccountField,
+  XeroCreateAccountInXeroGuide,
+  XeroGuideFieldClassification,
+} from '@/lib/xero/xero-holding-account-guides';
+
+export {
+  CANONICAL_HOLDING_ACCOUNT_NAMES,
+  HOLDING_ACCOUNT_ACCOUNTANT_DISCLAIMER,
+  HOLDING_ACCOUNT_CREATE_IN_XERO_GUIDES,
+  STRIPE_HOLDING_CREATE_IN_XERO_GUIDE,
+  XERO_CREATE_ACCOUNT_IN_XERO_GUIDE,
+  XERO_GUIDE_FIELD_CLASSIFICATION_LABELS,
+  isDetailedHoldingAccountGuide,
+  resolveCreateAccountInXeroGuide,
+} from '@/lib/xero/xero-holding-account-guides';
 
 export const XERO_ACCOUNTANT_MODE_SECTION = {
   summary: 'Accountant mode',

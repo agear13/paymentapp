@@ -24,7 +24,7 @@ export type SettlementUiAccountDefinition = {
 };
 
 const CLEARING_HELPER =
-  'Provvy records the payment here first, then matches it when the money reaches your bank.';
+  'Provvy records the payment against this holding account when the customer pays. Clearing to your bank is handled in your normal Xero workflow — not posted automatically by Provvy.';
 
 function perAssetDefinitions(): SettlementUiAccountDefinition[] {
   return LEGACY_CRYPTO_ASSET_SLOTS.map((slot) => ({

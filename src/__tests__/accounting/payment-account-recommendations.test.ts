@@ -115,7 +115,7 @@ describe('resolvePaymentAccountRecommendation', () => {
       'Customer pays',
       'Stripe Holding',
       'Bank account',
-      'Automatic reconciliation',
+      'Bank settlement (in Xero)',
     ]);
   });
 });

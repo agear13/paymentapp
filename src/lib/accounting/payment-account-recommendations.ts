@@ -257,32 +257,47 @@ function scoreCandidate(
 
 function reconciliationExplanation(definition: SettlementUiAccountDefinition): string {
   if (definition.kind === 'shared_digital') {
-    return 'Provvy posts every crypto payment here first so deposits can be matched to invoices automatically.';
+    return (
+      'Provvy records each crypto payment against this holding account in Xero when the customer pays. ' +
+      'Wallet or exchange settlement and clearing this balance are not posted automatically by Provvy.'
+    );
   }
   if (definition.kind === 'per_asset') {
-    return `Provvy isolates ${definition.paymentAsset} in this account so your accountant can reconcile each asset separately.`;
+    return (
+      `Provvy records ${definition.paymentAsset} payments against this holding account in Xero when the customer pays. ` +
+      'Your accountant reconciles each asset separately; bank or wallet settlement is not posted automatically by Provvy.'
+    );
   }
   if (definition.paymentRail === 'stripe') {
-    return 'Provvy records card payments here when customers pay, then clears them to your bank when Stripe settles.';
+    return (
+      'Provvy records card payments against Stripe Holding in Xero when customers pay. ' +
+      'When Stripe settles to your bank, that holding balance is not cleared automatically by Provvy — use your normal Xero reconciliation workflow.'
+    );
   }
   if (definition.paymentRail === 'wise') {
-    return 'Provvy records bank transfers here until the deposit appears in your bank account, enabling automatic matching.';
+    return (
+      'Provvy records bank transfer and Wise payments against Wise Holding in Xero when customers pay. ' +
+      'When the deposit reaches your bank account, that holding balance is not cleared automatically by Provvy — use your normal Xero reconciliation workflow.'
+    );
   }
-  return 'Provvy uses this account to track payments before they reach your bank, which makes reconciliation automatic.';
+  return (
+    'Provvy records customer payments against this holding account in Xero. ' +
+    'Bank settlement and clearing the holding balance are not posted automatically by Provvy.'
+  );
 }
 
 function whyProvvyRecommends(definition: SettlementUiAccountDefinition): string {
   if (definition.kind === 'shared_digital') {
-    return 'Most businesses use one Digital Asset Holding account — it keeps crypto setup simple and reconciliation automatic.';
+    return 'Most businesses use one Digital Asset Holding account — it keeps crypto setup simple while Provvy records payments in Xero.';
   }
   if (definition.kind === 'per_asset') {
     return `Accountants often prefer a dedicated ${definition.paymentAsset} holding account when each asset is reconciled separately.`;
   }
   if (definition.paymentRail === 'stripe') {
-    return 'Stripe Holding is the standard pattern — card payments land here before your bank deposit, so Provvy can match them to invoices.';
+    return 'Stripe Holding is the standard pattern — Provvy records card payments here in Xero when customers pay, before funds settle to your bank.';
   }
   if (definition.paymentRail === 'wise') {
-    return 'Wise Holding separates incoming transfers from your main bank balance until Provvy confirms each payment.';
+    return 'Wise Holding keeps bank transfers separate from your main bank balance in Xero while Provvy records each payment.';
   }
   return definition.helperText ?? 'Provvy uses this account when recording customer payments in Xero.';
 }
@@ -303,7 +318,7 @@ export function getPaymentFlowSteps(definition: SettlementUiAccountDefinition): 
       { label: 'Customer pays' },
       { label: STRIPE_HOLDING.accountName },
       { label: 'Bank account' },
-      { label: 'Automatic reconciliation' },
+      { label: 'Bank settlement (in Xero)' },
     ];
   }
 
@@ -311,7 +326,7 @@ export function getPaymentFlowSteps(definition: SettlementUiAccountDefinition): 
     { label: 'Customer pays' },
     { label: WISE_HOLDING.accountName },
     { label: 'Bank account' },
-    { label: 'Automatic reconciliation' },
+    { label: 'Bank settlement (in Xero)' },
   ];
 }
 
@@ -332,7 +347,7 @@ function buildConfidenceIndicators(
       label: 'Used by most businesses',
       active: definition.kind !== 'per_asset',
     },
-    { id: 'reconcile', label: 'Suitable for automatic reconciliation', active: true },
+    { id: 'reconcile', label: 'Dedicated holding account', active: true },
   ];
 }
 
@@ -456,7 +471,7 @@ function sharedDigitalDefinition(): SettlementUiAccountDefinition {
     suggestedCode: SHARED_DIGITAL_HOLDING.suggestedCode,
     paymentRail: 'crypto',
     helperText:
-      'Provvy records crypto payments here first, then matches them when funds reach your bank.',
+      'Provvy records crypto payments against this holding account in Xero when customers pay.',
   };
 }
 
@@ -471,7 +486,7 @@ function perAssetDefinitions(): SettlementUiAccountDefinition[] {
     paymentAsset: slot.asset,
     paymentRail: 'crypto',
     helperText:
-      'Provvy records the payment here first, then matches it when the money reaches your bank.',
+      'Provvy records the payment against this holding account in Xero when the customer pays.',
   }));
 }
 

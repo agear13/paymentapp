@@ -38,7 +38,7 @@ export const XERO_CONTEXTUAL_HELP = {
   stripeClearing:
     'Provvy records Stripe card payments here before they reach your bank account.',
   paymentRails:
-    'Provvy records each payment in Xero first, then matches it when money reaches your bank.',
+    'Provvy records each customer payment in Xero against the mapped holding account. Bank settlement and clearing that balance are not posted automatically by Provvy.',
   clearingAccounts:
     'Provvy can add these accounts in Xero for you — nothing is deleted.',
 } as const;
@@ -97,7 +97,7 @@ export function buildXeroGuidedTourSteps(
       id: 'payment-rails',
       title: 'Where payments go',
       explanation:
-        'Provvy records each payment in Xero first, then matches it when money reaches your bank.',
+        'Provvy records each customer payment in Xero against the mapped holding account. Bank settlement and clearing that balance are not posted automatically by Provvy.',
       targetId: 'payment-reconciliation',
       continueLabel: 'Next',
     });

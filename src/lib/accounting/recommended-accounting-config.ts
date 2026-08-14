@@ -50,10 +50,10 @@ export type RecommendedStandardMappingConfig = {
 };
 
 export const CLEARING_ACCOUNT_HELPER_TEXT =
-  'Provvy records the payment here first, then matches it when the money reaches your bank.';
+  'Provvy records the payment against this holding account when the customer pays. Clearing to your bank is handled in your normal Xero workflow — not posted automatically by Provvy.';
 
 export const ADVANCED_SETTLEMENT_SECTION_COPY =
-  'Provvy records crypto payments in Xero first, then matches them when funds settle. Your accountant can adjust these later if needed.';
+  'Provvy records crypto payments in Xero against the mapped holding account when customers pay. Wallet settlement and clearing that balance are handled in your normal Xero workflow — your accountant can adjust mappings later if needed.';
 
 export const RECOMMENDED_SETUP_BANNER = {
   title: 'Suggested setup',
