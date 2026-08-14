@@ -43,16 +43,17 @@ import {
 } from '@/lib/xero/xero-setup-guidance';
 import {
   mappingStateBadgeLabel,
+  buildMappingFieldStates,
   type MappingDisplayState,
 } from '@/lib/commercial-os/xero-invoice-readiness';
+import type { XeroReadinessMappingsPayload } from '@/lib/commercial-os/xero-readiness';
 import { getSettlementAccountsForUi } from '@/lib/accounting/settlement-account-ui';
 import type { SettlementUiAccountDefinition } from '@/lib/accounting/settlement-account-ui';
 import {
-  buildPaymentAccountUiGroups,
   resolvePaymentAccountRecommendation,
 } from '@/lib/accounting/payment-account-recommendations';
 import { PaymentAccountsSetupSection } from '@/components/xero/payment-accounts-setup-section';
-import type { MerchantSettlementSettings } from '@/lib/accounting/settlement-account-types';
+import type { CryptoSettlementStrategy } from '@/lib/accounting/settlement-account-types';
 import { validateXeroMappingDuplicates } from '@/lib/accounting/validate-xero-mapping-duplicates';
 import { normalizeMerchantPaymentRails } from '@/lib/commercial-os/merchant-payment-rails';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
@@ -83,7 +84,9 @@ interface XeroAccount {
   class?: string;
 }
 
-type AccountMappings = Record<XeroMappingField, string>;
+type AccountMappings = Partial<Record<XeroMappingField, string>> & {
+  crypto_settlement_strategy?: CryptoSettlementStrategy | null;
+};
 
 const DEFAULT_ACCOUNT_ORDER = 999;
 
@@ -130,9 +133,33 @@ export function XeroAccountMapping({
     }
   );
 
+  const merchantCapabilities =
+    readiness?.merchantPaymentCapabilities ?? {
+      hederaConfigured: false,
+      evmConfigured: false,
+      enabledSettlementTokens: [],
+    };
+
+  const chartAccountCodes = React.useMemo(
+    () => new Set(accounts.map((account) => account.code).filter(Boolean)),
+    [accounts]
+  );
+
+  const localFieldStates = React.useMemo(
+    () =>
+      buildMappingFieldStates(
+        mappings as XeroReadinessMappingsPayload,
+        connectionReady && accounts.length > 0,
+        chartAccountCodes,
+        rails,
+        merchantCapabilities
+      ),
+    [mappings, connectionReady, accounts.length, chartAccountCodes, rails, merchantCapabilities]
+  );
+
   const settlementAccountsForUi = React.useMemo(
-    () => getSettlementAccountsForUi(mappings, rails),
-    [mappings, rails]
+    () => getSettlementAccountsForUi(mappings, rails, merchantCapabilities),
+    [mappings, rails, merchantCapabilities]
   );
 
   const railSettlementAccounts = React.useMemo(
@@ -145,19 +172,12 @@ export function XeroAccountMapping({
     [settlementAccountsForUi]
   );
 
-  const paymentUiGroups = React.useMemo(
-    () => buildPaymentAccountUiGroups(mappings as MerchantSettlementSettings, rails),
-    [mappings, rails]
-  );
-
   const showStripeFeeMapping = rails.stripeEnabled;
   const showRailMappings = railSettlementAccounts.length > 0;
   const showCryptoMappings = digitalSettlementAccounts.length > 0;
 
   const showPaymentSection =
-    paymentUiGroups.primary.length > 0 ||
-    showStripeFeeMapping ||
-    paymentUiGroups.advancedPerAsset.length > 0;
+    settlementAccountsForUi.length > 0 || showStripeFeeMapping;
 
   const missingClearingAccounts = React.useMemo(
     () =>
@@ -432,8 +452,13 @@ export function XeroAccountMapping({
     setDirty(true);
   }
 
+  function updateCryptoStrategy(strategy: CryptoSettlementStrategy) {
+    setMappings((current) => ({ ...current, crypto_settlement_strategy: strategy }));
+    setDirty(true);
+  }
+
   function fieldState(field: XeroMappingField): MappingDisplayState {
-    return readiness?.fieldStates[field] ?? 'recommended';
+    return localFieldStates[field] ?? 'recommended';
   }
 
   function shouldShowMappingField(field: XeroMappingField, section: 'invoice' | 'optional'): boolean {
@@ -457,6 +482,12 @@ export function XeroAccountMapping({
     }
     if (readiness?.settlementAccountsNeedAction) {
       setOptionalDetailsOpen(true);
+      requestAnimationFrame(() => {
+        document.getElementById('payment-reconciliation')?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      });
     }
   }, [
     progressive,
@@ -470,9 +501,8 @@ export function XeroAccountMapping({
       setApplyingRecommended(true);
       setError(null);
 
-      const settings = mappings as MerchantSettlementSettings;
-      const groups = buildPaymentAccountUiGroups(settings, rails);
-      const allDefinitions = [...groups.primary, ...groups.advancedPerAsset];
+      const settings = mappings;
+      const allDefinitions = getSettlementAccountsForUi(settings, rails, merchantCapabilities);
       const nextMappings = { ...mappings };
 
       for (const definition of allDefinitions) {
@@ -726,7 +756,11 @@ export function XeroAccountMapping({
         {(showPaymentSection) && (
           <details
             id="payment-reconciliation"
-            className="rounded-lg border border-border bg-card"
+            className={`rounded-lg border bg-card ${
+              readiness?.settlementAccountsNeedAction
+                ? 'border-amber-500/50 ring-1 ring-amber-500/20'
+                : 'border-border'
+            }`}
             open={optionalDetailsOpen}
             onToggle={(event) => setOptionalDetailsOpen((event.target as HTMLDetailsElement).open)}
           >
@@ -737,8 +771,10 @@ export function XeroAccountMapping({
                 accounts={accounts}
                 mappings={mappings}
                 onMappingChange={updateMapping}
+                onStrategyChange={updateCryptoStrategy}
                 fieldState={fieldState}
                 merchantRails={rails}
+                merchantCapabilities={merchantCapabilities}
                 applyingRecommended={applyingRecommended}
                 onApplyAllRecommendations={() => void handleApplyAllPaymentRecommendations()}
               />

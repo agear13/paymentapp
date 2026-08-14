@@ -9,24 +9,33 @@ import {
   PaymentAccountStepSummary,
 } from '@/components/xero/payment-account-recommendation-card';
 import {
-  buildPaymentAccountUiGroups,
   resolvePaymentAccountRecommendation,
   type PaymentAccountChartAccount,
 } from '@/lib/accounting/payment-account-recommendations';
+import { getSettlementAccountsForUi } from '@/lib/accounting/settlement-account-ui';
 import type { SettlementUiAccountDefinition } from '@/lib/accounting/settlement-account-ui';
 import type { MappingDisplayState } from '@/lib/commercial-os/xero-invoice-readiness';
 import type { XeroMappingField } from '@/lib/accounting/recommended-accounting-config';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
-import { XERO_ACCOUNTANT_MODE_SECTION } from '@/lib/xero/xero-setup-guidance';
-import { readSettlementMappingCode } from '@/lib/accounting/settlement-account-types';
-import type { MerchantSettlementSettings } from '@/lib/accounting/settlement-account-types';
+import { CRYPTO_SETTLEMENT_STRATEGY_COPY } from '@/lib/xero/xero-setup-guidance';
+import type { MerchantPaymentCapabilities } from '@/lib/accounting/merchant-payment-capabilities';
+import { resolveCryptoSettlementStrategy } from '@/lib/accounting/crypto-settlement-strategy';
+import type { CryptoSettlementStrategy } from '@/lib/accounting/settlement-account-types';
+import { toMerchantSettlementSettings } from '@/lib/accounting/settlement-settings-mapper';
+import {
+  buildPaymentTokenAccountingSummary,
+  recommendsPerAssetCryptoStrategy,
+} from '@/lib/accounting/payment-account-setup-copy';
+import type { SettlementSettingsPayload } from '@/lib/accounting/settlement-settings-mapper';
 
 type PaymentAccountsSetupSectionProps = {
   accounts: PaymentAccountChartAccount[];
-  mappings: Partial<Record<XeroMappingField, string>>;
+  mappings: SettlementSettingsPayload;
   onMappingChange: (field: XeroMappingField, value: string) => void;
+  onStrategyChange: (strategy: CryptoSettlementStrategy) => void;
   fieldState: (field: XeroMappingField) => MappingDisplayState;
   merchantRails: MerchantPaymentRails;
+  merchantCapabilities: MerchantPaymentCapabilities;
   applyingRecommended?: boolean;
   onApplyAllRecommendations?: () => void;
 };
@@ -35,22 +44,78 @@ function isStepComplete(state: MappingDisplayState): boolean {
   return state === 'configured';
 }
 
+function CryptoSettlementStrategySelector({
+  strategy,
+  onStrategyChange,
+  showRecommendation,
+}: {
+  strategy: CryptoSettlementStrategy;
+  onStrategyChange: (strategy: CryptoSettlementStrategy) => void;
+  showRecommendation: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card/50 p-4 space-y-3">
+      <div>
+        <h4 className="text-sm font-semibold text-foreground">{CRYPTO_SETTLEMENT_STRATEGY_COPY.title}</h4>
+        {showRecommendation ? (
+          <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+            {CRYPTO_SETTLEMENT_STRATEGY_COPY.recommendation}
+          </p>
+        ) : null}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {(['shared', 'per_asset'] as const).map((option) => {
+          const copy = option === 'shared'
+            ? CRYPTO_SETTLEMENT_STRATEGY_COPY.shared
+            : CRYPTO_SETTLEMENT_STRATEGY_COPY.perAsset;
+          const selected = strategy === option;
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onStrategyChange(option)}
+              className={`rounded-lg border p-4 text-left transition-colors ${
+                selected
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                  : 'border-border hover:bg-muted/30'
+              }`}
+            >
+              <p className="text-sm font-medium text-foreground">{copy.label}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{copy.description}</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function PaymentAccountsSetupSection({
   accounts,
   mappings,
   onMappingChange,
+  onStrategyChange,
   fieldState,
   merchantRails,
+  merchantCapabilities,
   applyingRecommended = false,
   onApplyAllRecommendations,
 }: PaymentAccountsSetupSectionProps) {
-  const settings = mappings as MerchantSettlementSettings;
-  const groups = React.useMemo(
-    () => buildPaymentAccountUiGroups(settings, merchantRails),
-    [settings, merchantRails]
+  const settings = toMerchantSettlementSettings(mappings);
+  const strategy = resolveCryptoSettlementStrategy(settings);
+  const steps = React.useMemo(
+    () => getSettlementAccountsForUi(settings, merchantRails, merchantCapabilities),
+    [settings, merchantRails, merchantCapabilities]
   );
 
-  const steps = groups.primary;
+  const summary = React.useMemo(
+    () => buildPaymentTokenAccountingSummary(mappings, merchantCapabilities, strategy),
+    [mappings, merchantCapabilities, strategy]
+  );
+
+  const showCryptoStrategy =
+    merchantRails.stablecoinSettlementsEnabled &&
+    merchantCapabilities.enabledSettlementTokens.length > 0;
 
   const stepComplete = React.useCallback(
     (definition: SettlementUiAccountDefinition) =>
@@ -96,13 +161,6 @@ export function PaymentAccountsSetupSection({
       item.recommendedAccount &&
       mappings[item.definition.mappingField]?.trim() !== item.recommendedAccount.code
   ).length;
-
-  const showAdvanced =
-    groups.advancedPerAsset.length > 0 &&
-    (groups.cryptoStrategy === 'per_asset' ||
-      groups.advancedPerAsset.some((definition) =>
-        Boolean(readSettlementMappingCode(settings, definition.mappingField))
-      ));
 
   const goToNextStep = (fromIndex: number) => {
     setReviewStep(null);
@@ -161,6 +219,20 @@ export function PaymentAccountsSetupSection({
 
   return (
     <div className="space-y-3">
+      {summary ? (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+          {summary}
+        </div>
+      ) : null}
+
+      {showCryptoStrategy ? (
+        <CryptoSettlementStrategySelector
+          strategy={strategy}
+          onStrategyChange={onStrategyChange}
+          showRecommendation={recommendsPerAssetCryptoStrategy(merchantCapabilities)}
+        />
+      ) : null}
+
       {linkableCount > 0 && onApplyAllRecommendations ? (
         <Button
           size="sm"
@@ -214,62 +286,6 @@ export function PaymentAccountsSetupSection({
           );
         })}
       </div>
-
-      {groups.advancedPerAsset.length > 0 ? (
-        <details className="rounded-lg border border-border bg-card/40">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
-            {XERO_ACCOUNTANT_MODE_SECTION.summary}
-            {showAdvanced ? ' — in use' : ''}
-          </summary>
-          <div className="space-y-4 border-t px-4 pb-4 pt-4">
-            <p className="text-sm text-muted-foreground">{XERO_ACCOUNTANT_MODE_SECTION.intro}</p>
-            <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              {XERO_ACCOUNTANT_MODE_SECTION.bullets.map((bullet) => (
-                <li key={bullet}>{bullet}</li>
-              ))}
-            </ul>
-            <p className="text-xs text-muted-foreground">
-              Per-asset accounts (HBAR, USDC, USDT, AUDD) appear here — most businesses use a single
-              Digital Asset Holding account above.
-            </p>
-            <div className="space-y-4">
-              {groups.advancedPerAsset.map((definition, index) => {
-                const recommendation = resolvePaymentAccountRecommendation(
-                  accounts,
-                  definition,
-                  mappings[definition.mappingField]
-                );
-                const state = fieldState(definition.mappingField);
-                return (
-                  <div key={definition.id} className="rounded-lg border border-border/60 p-4">
-                    <PaymentAccountStepHeader
-                      stepNumber={index + 1}
-                      title={definition.title}
-                      status={recommendation.status}
-                      displayState={state}
-                    />
-                    <div className="mt-3">
-                      <PaymentAccountRecommendationCard
-                        recommendation={recommendation}
-                        accounts={accounts}
-                        value={mappings[definition.mappingField] || ''}
-                        onChange={(value) => onMappingChange(definition.mappingField, value)}
-                        onUseRecommended={() => {
-                          if (recommendation.recommendedAccount) {
-                            onMappingChange(definition.mappingField, recommendation.recommendedAccount.code);
-                          }
-                        }}
-                        displayState={state}
-                        showChooseDifferent
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </details>
-      ) : null}
     </div>
   );
 }

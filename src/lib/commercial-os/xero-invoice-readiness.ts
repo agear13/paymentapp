@@ -4,10 +4,12 @@
 
 import type { XeroMappingField } from '@/lib/accounting/recommended-accounting-config';
 import { RECOMMENDED_STANDARD_MAPPINGS } from '@/lib/accounting/recommended-accounting-config';
+import type { MerchantPaymentCapabilities } from '@/lib/accounting/merchant-payment-capabilities';
 import {
   canResolveSettlementAccount,
   getSettlementAccountsForUi,
 } from '@/lib/accounting/settlement-account-ui';
+import { toMerchantSettlementSettings } from '@/lib/accounting/settlement-settings-mapper';
 import type { MerchantSettlementSettings } from '@/lib/accounting/settlement-account-types';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 import type { XeroReadinessMappingsPayload } from '@/lib/commercial-os/xero-readiness';
@@ -45,7 +47,19 @@ function railsWithDefaults(rails: MerchantPaymentRails): MerchantPaymentRails {
 function asSettlementSettings(
   mappings: XeroReadinessMappingsPayload | null
 ): MerchantSettlementSettings {
-  return mappings ?? {};
+  return toMerchantSettlementSettings(mappings);
+}
+
+function settlementDefinitions(
+  mappings: XeroReadinessMappingsPayload | null,
+  rails: MerchantPaymentRails,
+  capabilities?: MerchantPaymentCapabilities | null
+) {
+  return getSettlementAccountsForUi(
+    asSettlementSettings(mappings),
+    railsWithDefaults(rails),
+    capabilities
+  );
 }
 
 export function resolveMappingDisplayState(
@@ -68,7 +82,8 @@ export function buildMappingFieldStates(
   mappings: XeroReadinessMappingsPayload | null,
   chartLoaded: boolean,
   chartAccountCodes: Set<string> | null,
-  rails: MerchantPaymentRails
+  rails: MerchantPaymentRails,
+  capabilities?: MerchantPaymentCapabilities | null
 ): Partial<Record<XeroMappingField, MappingDisplayState>> {
   const states: Partial<Record<XeroMappingField, MappingDisplayState>> = {};
   const normalizedRails = railsWithDefaults(rails);
@@ -83,7 +98,7 @@ export function buildMappingFieldStates(
     );
   }
 
-  for (const definition of getSettlementAccountsForUi(settings, normalizedRails)) {
+  for (const definition of settlementDefinitions(mappings, normalizedRails, capabilities)) {
     states[definition.mappingField] = resolveMappingDisplayState(
       mappings?.[definition.mappingField as keyof XeroReadinessMappingsPayload],
       chartLoaded,
@@ -107,11 +122,12 @@ export function buildMappingFieldStates(
 /** True when every enabled payment rail can resolve a holding account. */
 export function settlementAccountsReady(
   mappings: XeroReadinessMappingsPayload | null,
-  rails: MerchantPaymentRails
+  rails: MerchantPaymentRails,
+  capabilities?: MerchantPaymentCapabilities | null
 ): boolean {
   const normalizedRails = railsWithDefaults(rails);
   const settings = asSettlementSettings(mappings);
-  const definitions = getSettlementAccountsForUi(settings, normalizedRails);
+  const definitions = settlementDefinitions(mappings, normalizedRails, capabilities);
 
   if (definitions.length === 0) {
     return true;
@@ -162,11 +178,13 @@ export function countOptionalRecommended(
 
 export function settlementAccountsNeedAction(
   fieldStates: Partial<Record<XeroMappingField, MappingDisplayState>>,
-  rails: MerchantPaymentRails
+  rails: MerchantPaymentRails,
+  mappings?: XeroReadinessMappingsPayload | null,
+  capabilities?: MerchantPaymentCapabilities | null
 ): boolean {
   const normalizedRails = railsWithDefaults(rails);
 
-  return getSettlementAccountsForUi({}, normalizedRails).some((definition) => {
+  return settlementDefinitions(mappings ?? null, normalizedRails, capabilities).some((definition) => {
     const state = fieldStates[definition.mappingField];
     return state === 'required' || state === 'needs_review';
   });
@@ -174,11 +192,13 @@ export function settlementAccountsNeedAction(
 
 export function countSettlementAccountActions(
   fieldStates: Partial<Record<XeroMappingField, MappingDisplayState>>,
-  rails: MerchantPaymentRails
+  rails: MerchantPaymentRails,
+  mappings?: XeroReadinessMappingsPayload | null,
+  capabilities?: MerchantPaymentCapabilities | null
 ): number {
   const normalizedRails = railsWithDefaults(rails);
 
-  return getSettlementAccountsForUi({}, normalizedRails).filter((definition) => {
+  return settlementDefinitions(mappings ?? null, normalizedRails, capabilities).filter((definition) => {
     const state = fieldStates[definition.mappingField];
     return state === 'required' || state === 'needs_review';
   }).length;

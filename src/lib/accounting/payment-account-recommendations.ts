@@ -396,7 +396,6 @@ export function resolvePaymentAccountRecommendation(
 
   const best = scored[0]?.account ?? null;
   const bestScore = scored[0]?.score ?? 0;
-  const secondScore = scored[1]?.score ?? 0;
   const suggestedCode = resolveSuggestedAccountCode(accounts, definition);
   const trimmedMapped = mappedCode?.trim() || null;
   const mappedAccount = trimmedMapped
@@ -417,15 +416,16 @@ export function resolvePaymentAccountRecommendation(
     matchReason = best
       ? `Saved code ${trimmedMapped} is not in your chart — Provvy suggests "${best.name}" instead.`
       : null;
-  } else if (best) {
-    if (bestScore >= 96) {
-      status = 'found';
-    } else {
-      const closeAlternatives =
-        scored.length > 1 && secondScore >= 80 && bestScore - secondScore < 8;
-      status = closeAlternatives ? 'choose_account' : 'found';
-    }
+  } else if (best && bestScore >= 96) {
+    status = 'found';
     recommendedAccount = best;
+  } else if (best && bestScore >= 84) {
+    status = 'choose_account';
+    recommendedAccount = best;
+  } else {
+    status = 'create_in_xero';
+    recommendedAccount = null;
+    matchReason = null;
   }
 
   const alternatives = scored

@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
         xero_audd_clearing_account_id: true,
         xero_wise_clearing_account_id: true,
         xero_fee_expense_account_id: true,
+        crypto_settlement_strategy: true,
       },
     });
 
@@ -128,6 +129,17 @@ export async function PUT(request: NextRequest) {
       'xero_fee_expense_account_id',
     ];
 
+    if (
+      mappings.crypto_settlement_strategy != null &&
+      mappings.crypto_settlement_strategy !== 'shared' &&
+      mappings.crypto_settlement_strategy !== 'per_asset'
+    ) {
+      return NextResponse.json(
+        { error: 'crypto_settlement_strategy must be shared or per_asset' },
+        { status: 400 }
+      );
+    }
+
     for (const field of required) {
       if (!mappings[field]) {
         return NextResponse.json(
@@ -170,6 +182,7 @@ export async function PUT(request: NextRequest) {
         xero_audd_clearing_account_id: mappings.xero_audd_clearing_account_id,
         xero_wise_clearing_account_id: mappings.xero_wise_clearing_account_id,
         xero_fee_expense_account_id: mappings.xero_fee_expense_account_id,
+        crypto_settlement_strategy: mappings.crypto_settlement_strategy ?? null,
         updated_at: new Date(),
       },
     });

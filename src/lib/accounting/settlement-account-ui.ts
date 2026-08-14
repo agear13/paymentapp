@@ -4,6 +4,7 @@
 
 import { LEGACY_CRYPTO_ASSET_SLOTS, SHARED_DIGITAL_HOLDING, STRIPE_HOLDING, WISE_HOLDING } from '@/lib/accounting/settlement-account-config';
 import { resolveCryptoSettlementStrategy } from '@/lib/accounting/crypto-settlement-strategy';
+import type { MerchantPaymentCapabilities } from '@/lib/accounting/merchant-payment-capabilities';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 import type { MerchantSettlementSettings, SettlementClearingMappingField } from '@/lib/accounting/settlement-account-types';
 import { readSettlementMappingCode } from '@/lib/accounting/settlement-account-types';
@@ -26,8 +27,15 @@ export type SettlementUiAccountDefinition = {
 const CLEARING_HELPER =
   'Provvy records the payment against this holding account when the customer pays. Clearing to your bank is handled in your normal Xero workflow — not posted automatically by Provvy.';
 
-function perAssetDefinitions(): SettlementUiAccountDefinition[] {
-  return LEGACY_CRYPTO_ASSET_SLOTS.map((slot) => ({
+function perAssetDefinitionsForTokens(
+  enabledTokens?: readonly string[] | null
+): SettlementUiAccountDefinition[] {
+  const slots =
+    enabledTokens && enabledTokens.length > 0
+      ? LEGACY_CRYPTO_ASSET_SLOTS.filter((slot) => enabledTokens.includes(slot.asset))
+      : LEGACY_CRYPTO_ASSET_SLOTS;
+
+  return slots.map((slot) => ({
     id: `per-asset-${slot.asset.toLowerCase()}`,
     kind: 'per_asset' as const,
     title: `Where ${slot.asset} payments land`,
@@ -45,7 +53,8 @@ function perAssetDefinitions(): SettlementUiAccountDefinition[] {
  */
 export function getSettlementAccountsForUi(
   settings: MerchantSettlementSettings,
-  rails: MerchantPaymentRails
+  rails: MerchantPaymentRails,
+  capabilities?: MerchantPaymentCapabilities | null
 ): SettlementUiAccountDefinition[] {
   const definitions: SettlementUiAccountDefinition[] = [];
 
@@ -84,7 +93,10 @@ export function getSettlementAccountsForUi(
     return definitions;
   }
 
-  if (resolveCryptoSettlementStrategy(settings) === 'shared') {
+  const strategy = resolveCryptoSettlementStrategy(settings);
+  const enabledTokens = capabilities?.enabledSettlementTokens;
+
+  if (strategy === 'shared') {
     definitions.push({
       id: 'shared-digital-holding',
       kind: 'shared_digital',
@@ -98,7 +110,7 @@ export function getSettlementAccountsForUi(
     return definitions;
   }
 
-  definitions.push(...perAssetDefinitions());
+  definitions.push(...perAssetDefinitionsForTokens(enabledTokens));
   return definitions;
 }
 

@@ -45,11 +45,10 @@ export function inferCryptoSettlementStrategy(
 export function resolveCryptoSettlementStrategy(
   settings: MerchantSettlementSettings
 ): CryptoSettlementStrategy {
-  if (
-    settings.cryptoSettlementStrategy === 'shared' ||
-    settings.cryptoSettlementStrategy === 'per_asset'
-  ) {
-    return settings.cryptoSettlementStrategy;
+  const explicit =
+    settings.cryptoSettlementStrategy ?? settings.crypto_settlement_strategy ?? null;
+  if (explicit === 'shared' || explicit === 'per_asset') {
+    return explicit;
   }
   return inferCryptoSettlementStrategy(settings);
 }

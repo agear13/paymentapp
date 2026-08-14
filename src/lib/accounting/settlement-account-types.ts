@@ -25,6 +25,8 @@ export type MerchantSettlementSettings = {
   xero_fee_expense_account_id?: string | null;
   /** Explicit override when persisted; otherwise inferred from column configuration. */
   cryptoSettlementStrategy?: CryptoSettlementStrategy | null;
+  /** Prisma/API snake_case alias for cryptoSettlementStrategy. */
+  crypto_settlement_strategy?: CryptoSettlementStrategy | null;
 };
 
 /** Clearing-account columns on merchant_settings used by settlement resolver. */

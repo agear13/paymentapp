@@ -262,6 +262,22 @@ export type MerchantPaymentRails = {
   manualBankEnabled?: boolean;
 };
 
+export const CRYPTO_SETTLEMENT_STRATEGY_COPY = {
+  title: 'Crypto accounting strategy',
+  shared: {
+    label: 'One shared holding account',
+    description:
+      'Record all crypto payments (HBAR, USDC, USDT, AUDD, etc.) in a single Digital Asset Holding account in Xero.',
+  },
+  perAsset: {
+    label: 'Separate account per token',
+    description:
+      'Record each enabled token in its own holding account (for example USDC Holding and USDT Holding). Required to verify MetaMask USDC and USDT post to different Xero accounts.',
+  },
+  recommendation:
+    'If you accept more than one token and need to verify payments separately, choose separate accounts per token.',
+} as const;
+
 export type {
   XeroCreateAccountField,
   XeroCreateAccountInXeroGuide,

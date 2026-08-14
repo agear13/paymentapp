@@ -21,6 +21,7 @@ import {
 } from '@/lib/commercial-os/xero-invoice-readiness';
 import type { XeroMappingField } from '@/lib/accounting/recommended-accounting-config';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
+import type { MerchantPaymentCapabilities } from '@/lib/accounting/merchant-payment-capabilities';
 
 export type XeroOverallStatus = 'setup_incomplete' | 'ready_to_invoice' | 'fully_set_up';
 
@@ -87,6 +88,7 @@ export type XeroReadinessResult = {
   settlementAccountsNeedAction: boolean;
   settlementAccountActionCount: number;
   optionalRecommendedCount: number;
+  merchantPaymentCapabilities: MerchantPaymentCapabilities;
 };
 
 export type XeroReadinessMappingsPayload = {
@@ -99,6 +101,7 @@ export type XeroReadinessMappingsPayload = {
   xero_usdt_clearing_account_id?: string | null;
   xero_audd_clearing_account_id?: string | null;
   xero_wise_clearing_account_id?: string | null;
+  crypto_settlement_strategy?: 'shared' | 'per_asset' | null;
 };
 
 export type XeroReadinessInput = {
@@ -117,6 +120,7 @@ export type XeroReadinessInput = {
     recentSyncs?: XeroRecentSync[];
   };
   merchantRails: MerchantPaymentRails;
+  merchantPaymentCapabilities?: MerchantPaymentCapabilities | null;
 };
 
 const STATUS_LABELS: Record<XeroOverallStatus, string> = {
@@ -209,7 +213,11 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     invoiceMappings.receivable.saved &&
     invoiceMappings.receivable.validInChart;
 
-  const settlementReady = settlementAccountsReady(input.mappings, input.merchantRails);
+  const settlementReady = settlementAccountsReady(
+    input.mappings,
+    input.merchantRails,
+    input.merchantPaymentCapabilities
+  );
 
   const coreInvoiceReady = coreInvoiceAccountsReady && settlementReady;
 
@@ -217,7 +225,8 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     input.mappings,
     input.chartLoaded,
     input.chartAccountCodes,
-    input.merchantRails
+    input.merchantRails,
+    input.merchantPaymentCapabilities
   );
 
   let overallStatus: XeroOverallStatus = 'setup_incomplete';
@@ -283,13 +292,28 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     allInvoiceAccountsConfigured: allInvoiceAccountsConfigured(fieldStates),
     settlementAccountsNeedAction: settlementAccountsNeedAction(
       fieldStates,
-      input.merchantRails
+      input.merchantRails,
+      input.mappings,
+      input.merchantPaymentCapabilities
     ),
     settlementAccountActionCount: countSettlementAccountActions(
       fieldStates,
-      input.merchantRails
+      input.merchantRails,
+      input.mappings,
+      input.merchantPaymentCapabilities
     ),
     optionalRecommendedCount: countOptionalRecommended(fieldStates, input.merchantRails),
+    merchantPaymentCapabilities:
+      input.merchantPaymentCapabilities ??
+      deriveEmptyPaymentCapabilities(),
+  };
+}
+
+function deriveEmptyPaymentCapabilities(): MerchantPaymentCapabilities {
+  return {
+    hederaConfigured: false,
+    evmConfigured: false,
+    enabledSettlementTokens: [],
   };
 }
 
@@ -326,4 +350,9 @@ export const EMPTY_XERO_READINESS: Omit<XeroReadinessResult, 'loading'> = {
   settlementAccountsNeedAction: false,
   settlementAccountActionCount: 0,
   optionalRecommendedCount: 0,
+  merchantPaymentCapabilities: {
+    hederaConfigured: false,
+    evmConfigured: false,
+    enabledSettlementTokens: [],
+  },
 };

@@ -16,6 +16,7 @@ import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 import {
   buildMerchantPaymentRailsFromSetup,
 } from '@/lib/commercial-os/merchant-payment-rails';
+import { deriveMerchantPaymentCapabilities } from '@/lib/accounting/merchant-payment-capabilities';
 import { fetchMerchantDedicatedRailDefaults } from '@/lib/payment-links/merchant-dedicated-rail-defaults';
 
 type MerchantSettingsRow = {
@@ -109,7 +110,37 @@ async function fetchCommercialReadiness(
   ]);
 
   const merchantRows = merchantRes.ok ? ((await merchantRes.json()) as MerchantSettingsRow[]) : [];
-  const merchantRails = merchantRailsFromSettings(merchantRows[0] ?? null, dedicatedDefaultsRes);
+  const merchantSettings = merchantRows[0] ?? null;
+  const merchantRails = merchantRailsFromSettings(merchantSettings, dedicatedDefaultsRes);
+
+  const railSetup = merchantSettings
+    ? computePaymentLinkRailSetup(
+        toPaymentLinkRailSnapshot({
+          stripeAccountId: merchantSettings.stripe_account_id,
+          hederaAccountId: merchantSettings.hedera_account_id,
+          wiseEnabled: merchantSettings.wise_enabled ?? false,
+          wiseProfileId: merchantSettings.wise_profile_id,
+          evmWalletEnabled: merchantSettings.evm_wallet_enabled,
+          evmWalletAddress: merchantSettings.evm_wallet_address,
+          evmSupportedNetworks: merchantSettings.evm_supported_networks,
+          evmSupportedTokens: merchantSettings.evm_supported_tokens,
+        }),
+        {
+          wisePayments: merchantSettings._features?.wiseGloballyEnabled ?? false,
+          evmWalletPayments: merchantSettings._features?.evmGloballyEnabled ?? false,
+          wiseAutoSettlementAvailable:
+            merchantSettings._features?.wiseAutoSettlementAvailable ?? false,
+        }
+      )
+    : computePaymentLinkRailSetup(null, {
+        wisePayments: false,
+        evmWalletPayments: false,
+      });
+
+  const merchantPaymentCapabilities = deriveMerchantPaymentCapabilities({
+    railSetup,
+    evmSupportedTokens: merchantSettings?.evm_supported_tokens,
+  });
 
   const status = statusRes.ok
     ? ((await statusRes.json()) as {
@@ -154,6 +185,7 @@ async function fetchCommercialReadiness(
     chartLoaded,
     queue: { pendingCount, hasRecentFailures, recentSyncs },
     merchantRails,
+    merchantPaymentCapabilities,
   });
 }
 

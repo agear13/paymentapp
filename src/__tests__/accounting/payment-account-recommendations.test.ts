@@ -54,14 +54,14 @@ describe('resolvePaymentAccountRecommendation', () => {
     expect(result.recommendedAccount?.name).not.toBe('Suspense Account');
   });
 
-  it('matches Suspense Account as fallback when no rail-specific account exists', () => {
+  it('does not treat generic suspense account as a suitable match', () => {
     const sparseChart = [
       { code: '9999', name: 'Suspense Account', type: 'CURRENT', status: 'ACTIVE' },
     ];
     const result = resolvePaymentAccountRecommendation(sparseChart, stripeDefinition);
 
-    expect(result.recommendedAccount?.code).toBe('9999');
-    expect(result.matchReason).toContain('Generic clearing account');
+    expect(result.status).toBe('create_in_xero');
+    expect(result.recommendedAccount).toBeNull();
   });
 
   it('prompts to create account when missing from chart', () => {
