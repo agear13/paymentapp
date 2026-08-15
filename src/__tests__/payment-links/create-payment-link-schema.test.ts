@@ -112,10 +112,24 @@ describe('CreatePaymentLinkSchema — invoice creation payloads', () => {
     expect(firstIssue(result)?.path).toEqual(['amount']);
   });
 
-  it('rejects missing paymentMethod when not invoice-only', () => {
+  it('rejects missing paymentMethod when not invoice-only or customer-choice', () => {
     const result = parsePayload({ ...base });
     expect(result.success).toBe(false);
     expect(firstIssue(result)?.path).toEqual(['paymentMethod']);
+  });
+
+  it('accepts customer choice without paymentMethod', () => {
+    const result = parsePayload({ ...base, customerChoosesAtCheckout: true });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.paymentMethod).toBeUndefined();
+      expect(result.data.customerChoosesAtCheckout).toBe(true);
+    }
+  });
+
+  it('accepts invoice-only without paymentMethod', () => {
+    const result = parsePayload({ ...base, invoiceOnlyMode: true });
+    expect(result.success).toBe(true);
   });
 
   it('rejects CRYPTO without network/address/currency', () => {

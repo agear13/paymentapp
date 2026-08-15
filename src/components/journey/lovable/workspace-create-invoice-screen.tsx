@@ -57,6 +57,7 @@ import {
   CreateInvoiceFieldLabel,
   CreateInvoiceFormCard,
   CreateInvoiceFormSkeleton,
+  CreateInvoicePaymentCollectionModeOption,
   CreateInvoicePaymentMethodOption,
   CreateInvoiceWorkflowProgress,
   merchantCreateInvoicePaymentLabel,
@@ -64,11 +65,17 @@ import {
 import {
   areCreateInvoiceFieldsSubmittable,
   computeCreateInvoiceWorkflowProgress,
+  CREATE_INVOICE_CUSTOMER_CHOICE_RAILS_MESSAGE,
   deriveCreateInvoiceFooterMessage,
   pickDefaultCreateInvoicePaymentMethod,
   validateCreateInvoiceSubmitReadiness,
   validateCreateInvoicePaymentRailReadiness,
 } from '@/lib/commercial-os/create-invoice-progress';
+import {
+  getOperationalMultiCheckoutOptions,
+  INVOICE_PAYMENT_METHOD_CUSTOMER_CHOICE_LABEL,
+  type PaymentCollectionMode,
+} from '@/lib/payment-links/payment-collection-mode';
 import {
   CRYPTO_UNAVAILABLE_REASON,
   fetchMerchantDedicatedRailDefaults,
@@ -424,7 +431,9 @@ export function WorkspaceCreateInvoiceScreen() {
   }, [railSetup, platformFeatures, railDefaults]);
 
   useEffect(() => {
-    if (!merchantSettingsLoaded || !railDefaultsLoaded || draft.paymentMethod) return;
+    if (!merchantSettingsLoaded || !railDefaultsLoaded) return;
+    if ((draft.paymentCollectionMode ?? 'single') !== 'single') return;
+    if (draft.paymentMethod) return;
     const defaultMethod = pickDefaultCreateInvoicePaymentMethod(paymentMethodOptions);
     if (defaultMethod) {
       patchDraft({
@@ -435,12 +444,15 @@ export function WorkspaceCreateInvoiceScreen() {
     merchantSettingsLoaded,
     railDefaultsLoaded,
     draft.paymentMethod,
+    draft.paymentCollectionMode,
     paymentMethodOptions,
     patchDraft,
   ]);
 
   useEffect(() => {
-    if (!railDefaultsLoaded || !merchantSettingsLoaded || !draft.paymentMethod) return;
+    if (!railDefaultsLoaded || !merchantSettingsLoaded) return;
+    if ((draft.paymentCollectionMode ?? 'single') !== 'single') return;
+    if (!draft.paymentMethod) return;
     const selected = paymentMethodOptions.find((opt) => opt.value === draft.paymentMethod);
     if (selected && !selected.available) {
       const fallback = pickDefaultCreateInvoicePaymentMethod(paymentMethodOptions);
@@ -448,9 +460,17 @@ export function WorkspaceCreateInvoiceScreen() {
         paymentMethod: fallback as CommercialDealDraft['paymentMethod'] | undefined,
       });
     }
-  }, [railDefaultsLoaded, merchantSettingsLoaded, draft.paymentMethod, paymentMethodOptions, patchDraft]);
+  }, [
+    railDefaultsLoaded,
+    merchantSettingsLoaded,
+    draft.paymentMethod,
+    draft.paymentCollectionMode,
+    paymentMethodOptions,
+    patchDraft,
+  ]);
 
   const guidance = useMemo(() => {
+    const mode = draft.paymentCollectionMode ?? 'single';
     if (!draft.customerName.trim() && !draft.customerEmail.trim()) {
       return 'Start with who you are billing.';
     }
@@ -459,6 +479,16 @@ export function WorkspaceCreateInvoiceScreen() {
     }
     if (!draft.amount || draft.amount <= 0) {
       return 'Enter the amount you are charging.';
+    }
+    if (mode === 'invoice_only') {
+      return 'Review the preview, then create your invoice.';
+    }
+    if (mode === 'customer_choice') {
+      const readyMulti = getOperationalMultiCheckoutOptions(paymentMethodOptions);
+      if (readyMulti.length === 0) {
+        return CREATE_INVOICE_CUSTOMER_CHOICE_RAILS_MESSAGE;
+      }
+      return 'Your customer will choose how to pay at checkout.';
     }
     if (!draft.paymentMethod) {
       return 'Choose how your customer will pay.';
@@ -470,7 +500,7 @@ export function WorkspaceCreateInvoiceScreen() {
       return 'Add your crypto wallet in Payment settings before using crypto payments.';
     }
     return 'Review the preview, then create your invoice.';
-  }, [draft, railDefaults]);
+  }, [draft, railDefaults, paymentMethodOptions]);
 
   const hasPreviewAmount = typeof draft.amount === 'number' && draft.amount > 0;
   const previewAmount = hasPreviewAmount
@@ -521,6 +551,7 @@ export function WorkspaceCreateInvoiceScreen() {
       railSetup,
       manualBankReady: Boolean(railDefaults.manualBank),
       cryptoReady: Boolean(railDefaults.crypto),
+      paymentMethodOptions,
     });
     if (!railReadiness.ready && railReadiness.blockMessage) {
       setSubmitError(railReadiness.blockMessage);
@@ -677,19 +708,42 @@ function CreateInvoiceForm({
         railSetup,
         manualBankReady: Boolean(railDefaults.manualBank),
         cryptoReady: Boolean(railDefaults.crypto),
+        paymentMethodOptions,
       }),
-    [draft, railSetup, railDefaults.manualBank, railDefaults.crypto]
+    [draft, railSetup, railDefaults.manualBank, railDefaults.crypto, paymentMethodOptions]
   );
   const workflowSteps = useMemo(() => computeCreateInvoiceWorkflowProgress(draft), [draft]);
   const formLoading = !merchantSettingsLoaded || !railDefaultsLoaded;
+  const collectionMode = draft.paymentCollectionMode ?? 'single';
   const { readyPaymentOptions, setupPaymentOptions } = useMemo(() => {
     const ready = paymentMethodOptions.filter((opt) => opt.configured && opt.available);
     const setup = paymentMethodOptions.filter((opt) => !(opt.configured && opt.available));
     return { readyPaymentOptions: ready, setupPaymentOptions: setup };
   }, [paymentMethodOptions]);
-  const selectedPaymentLabel = draft.paymentMethod
-    ? merchantCreateInvoicePaymentLabel(draft.paymentMethod).title
-    : undefined;
+  const operationalMultiCheckoutOptions = useMemo(
+    () => getOperationalMultiCheckoutOptions(paymentMethodOptions),
+    [paymentMethodOptions]
+  );
+  const selectedPaymentLabel = useMemo(() => {
+    if (collectionMode === 'invoice_only') return 'Invoice only';
+    if (collectionMode === 'customer_choice') return INVOICE_PAYMENT_METHOD_CUSTOMER_CHOICE_LABEL;
+    return draft.paymentMethod
+      ? merchantCreateInvoicePaymentLabel(draft.paymentMethod).title
+      : undefined;
+  }, [collectionMode, draft.paymentMethod]);
+  const setCollectionMode = useCallback(
+    (mode: PaymentCollectionMode) => {
+      if (mode === 'single') {
+        updateDraft({ paymentCollectionMode: mode });
+        return;
+      }
+      updateDraft({
+        paymentCollectionMode: mode,
+        paymentMethod: undefined,
+      });
+    },
+    [updateDraft]
+  );
   const showFieldErrors = showValidation || formInteracted;
   const canSubmit = validation.isSubmittable && !formLoading;
   const footerMessage = deriveCreateInvoiceFooterMessage({
@@ -909,97 +963,183 @@ function CreateInvoiceForm({
           </CreateInvoiceFormCard>
 
           <CreateInvoiceFormCard
-            title="Payment method"
+            title="How can your customer pay?"
             icon={Landmark}
             incomplete={showFieldErrors && !validation.paymentMethod}
           >
-            {readyPaymentOptions.length === 0 ? (
-              <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
-                <p className="text-[13.5px] font-medium">No payment method is ready yet.</p>
-                <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-soft">
-                  Set up at least one payment method before creating an invoice.
-                </p>
-                <Link
-                  href={PAYMENTS_SETTINGS_HREF}
-                  className="mt-3 inline-flex text-[12.5px] font-medium text-primary hover:underline"
-                >
-                  Open Payment settings
-                </Link>
-              </div>
-            ) : null}
             <fieldset className="space-y-3">
-              <legend className="sr-only">Payment method</legend>
-              {readyPaymentOptions.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                    Available
-                  </p>
-                  {readyPaymentOptions.map((opt) => (
-                    <CreateInvoicePaymentMethodOption
-                      key={opt.value}
-                      value={opt.value as NonNullable<CommercialDealDraft['paymentMethod']>}
-                      label={opt.label}
-                      selected={draft.paymentMethod === opt.value}
-                      available={opt.available}
-                      configured={opt.configured}
-                      unavailableReason={opt.unavailableReason}
-                      onSelect={() =>
-                        updateDraft({
-                          paymentMethod: opt.value as CommercialDealDraft['paymentMethod'],
-                        })
-                      }
-                    />
-                  ))}
-                </div>
-              ) : null}
-              {setupPaymentOptions.length > 0 ? (
-                <details
-                  open={setupSectionExpanded}
-                  className="group rounded-xl border border-border/80 bg-secondary/20"
-                >
-                  <summary className="cursor-pointer list-none px-4 py-3 text-[12.5px] font-medium text-ink-soft marker:content-none">
-                    <span className="flex items-center justify-between gap-2">
-                      Requires setup
-                      <span className="text-[11px] font-normal uppercase tracking-wider opacity-80">
-                        {setupPaymentOptions.length} option
-                        {setupPaymentOptions.length === 1 ? '' : 's'}
-                      </span>
-                    </span>
-                  </summary>
-                  <div className="space-y-2 border-t border-border/60 px-3 pb-3 pt-2">
-                    {setupPaymentOptions.map((opt) => (
-                      <CreateInvoicePaymentMethodOption
-                        key={opt.value}
-                        value={opt.value as NonNullable<CommercialDealDraft['paymentMethod']>}
-                        label={opt.label}
-                        selected={draft.paymentMethod === opt.value}
-                        available={opt.available}
-                        configured={opt.configured}
-                        unavailableReason={opt.unavailableReason}
-                        subdued
-                        onSelect={() =>
-                          updateDraft({
-                            paymentMethod: opt.value as CommercialDealDraft['paymentMethod'],
-                          })
-                        }
-                      />
-                    ))}
-                  </div>
-                </details>
-              ) : null}
+              <legend className="sr-only">How can your customer pay?</legend>
+              <CreateInvoicePaymentCollectionModeOption
+                mode="single"
+                selected={collectionMode === 'single'}
+                onSelect={() => setCollectionMode('single')}
+                title="Single payment method"
+                description="Lock this invoice to one payment method at checkout."
+              />
+              <CreateInvoicePaymentCollectionModeOption
+                mode="customer_choice"
+                selected={collectionMode === 'customer_choice'}
+                onSelect={() => setCollectionMode('customer_choice')}
+                title="Customer chooses at checkout"
+                description="Show your configured checkout options and let the customer decide."
+              />
+              <CreateInvoicePaymentCollectionModeOption
+                mode="invoice_only"
+                selected={collectionMode === 'invoice_only'}
+                onSelect={() => setCollectionMode('invoice_only')}
+                title="Invoice only"
+                description="Send the invoice without online payment on the public page."
+              />
             </fieldset>
-            {showFieldErrors && !validation.paymentMethod ? (
-              <p className="mt-3 text-[12.5px] text-amber-700 dark:text-amber-400">
-                Choose how your customer will pay.
+
+            {collectionMode === 'invoice_only' ? (
+              <p className="mt-4 text-[12.5px] leading-relaxed text-ink-soft">
+                No online payment will be offered on the public invoice page.
               </p>
             ) : null}
-            <p className="mt-4 text-[12.5px] leading-relaxed text-ink-soft">
-              Configure card, bank transfer, or crypto in{' '}
-              <Link href={PAYMENTS_SETTINGS_HREF} className="font-medium text-primary hover:underline">
-                Payment settings
-              </Link>
-              .
-            </p>
+
+            {collectionMode === 'customer_choice' ? (
+              <div className="mt-4 space-y-3">
+                {operationalMultiCheckoutOptions.length === 0 ? (
+                  <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+                    <p className="text-[13.5px] font-medium">No checkout payment methods are ready yet.</p>
+                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-soft">
+                      {CREATE_INVOICE_CUSTOMER_CHOICE_RAILS_MESSAGE}
+                    </p>
+                    <Link
+                      href={PAYMENTS_SETTINGS_HREF}
+                      className="mt-3 inline-flex text-[12.5px] font-medium text-primary hover:underline"
+                    >
+                      Open Payment settings
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-[12.5px] text-ink-soft">
+                      Your customer can choose from these payment methods at checkout:
+                    </p>
+                    <ul className="space-y-2">
+                      {operationalMultiCheckoutOptions.map((opt) => {
+                        const display = merchantCreateInvoicePaymentLabel(
+                          opt.value as PaymentMethod
+                        );
+                        return (
+                          <li
+                            key={opt.value}
+                            className="rounded-xl border border-border/80 bg-secondary/20 px-4 py-3 text-[13.5px] font-medium"
+                          >
+                            {display.detail ? `${display.title} — ${display.detail}` : display.title}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <p className="text-[12px] leading-relaxed text-ink-soft">
+                      Missing Xero holding accounts will not block invoice creation. Configure
+                      accounting destinations in{' '}
+                      <Link
+                        href={COMMERCIAL_OS_ROUTES.connectedXero}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        Connected Xero
+                      </Link>{' '}
+                      when you are ready.
+                    </p>
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            {collectionMode === 'single' ? (
+              <>
+                {readyPaymentOptions.length === 0 ? (
+                  <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+                    <p className="text-[13.5px] font-medium">No payment method is ready yet.</p>
+                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-soft">
+                      Set up at least one payment method before creating an invoice.
+                    </p>
+                    <Link
+                      href={PAYMENTS_SETTINGS_HREF}
+                      className="mt-3 inline-flex text-[12.5px] font-medium text-primary hover:underline"
+                    >
+                      Open Payment settings
+                    </Link>
+                  </div>
+                ) : null}
+                <fieldset className="mt-4 space-y-3">
+                  <legend className="sr-only">Payment method</legend>
+                  {readyPaymentOptions.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+                        Available
+                      </p>
+                      {readyPaymentOptions.map((opt) => (
+                        <CreateInvoicePaymentMethodOption
+                          key={opt.value}
+                          value={opt.value as NonNullable<CommercialDealDraft['paymentMethod']>}
+                          label={opt.label}
+                          selected={draft.paymentMethod === opt.value}
+                          available={opt.available}
+                          configured={opt.configured}
+                          unavailableReason={opt.unavailableReason}
+                          onSelect={() =>
+                            updateDraft({
+                              paymentMethod: opt.value as CommercialDealDraft['paymentMethod'],
+                            })
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  {setupPaymentOptions.length > 0 ? (
+                    <details
+                      open={setupSectionExpanded}
+                      className="group rounded-xl border border-border/80 bg-secondary/20"
+                    >
+                      <summary className="cursor-pointer list-none px-4 py-3 text-[12.5px] font-medium text-ink-soft marker:content-none">
+                        <span className="flex items-center justify-between gap-2">
+                          Requires setup
+                          <span className="text-[11px] font-normal uppercase tracking-wider opacity-80">
+                            {setupPaymentOptions.length} option
+                            {setupPaymentOptions.length === 1 ? '' : 's'}
+                          </span>
+                        </span>
+                      </summary>
+                      <div className="space-y-2 border-t border-border/60 px-3 pb-3 pt-2">
+                        {setupPaymentOptions.map((opt) => (
+                          <CreateInvoicePaymentMethodOption
+                            key={opt.value}
+                            value={opt.value as NonNullable<CommercialDealDraft['paymentMethod']>}
+                            label={opt.label}
+                            selected={draft.paymentMethod === opt.value}
+                            available={opt.available}
+                            configured={opt.configured}
+                            unavailableReason={opt.unavailableReason}
+                            subdued
+                            onSelect={() =>
+                              updateDraft({
+                                paymentMethod: opt.value as CommercialDealDraft['paymentMethod'],
+                              })
+                            }
+                          />
+                        ))}
+                      </div>
+                    </details>
+                  ) : null}
+                </fieldset>
+                {showFieldErrors && !validation.paymentMethod ? (
+                  <p className="mt-3 text-[12.5px] text-amber-700 dark:text-amber-400">
+                    Choose how your customer will pay.
+                  </p>
+                ) : null}
+                <p className="mt-4 text-[12.5px] leading-relaxed text-ink-soft">
+                  Configure card, bank transfer, or crypto in{' '}
+                  <Link href={PAYMENTS_SETTINGS_HREF} className="font-medium text-primary hover:underline">
+                    Payment settings
+                  </Link>
+                  .
+                </p>
+              </>
+            ) : null}
           </CreateInvoiceFormCard>
 
           <details className="rounded-xl border border-border/80 bg-card/50 p-4">

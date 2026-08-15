@@ -382,8 +382,11 @@ export async function POST(request: NextRequest) {
     // Generate unique short code
     const shortCode = await generateUniqueShortCode();
     const invoiceOnly = validatedData.invoiceOnlyMode === true;
-    const resolvedPaymentMethod = invoiceOnly ? null : validatedData.paymentMethod ?? null;
-    const isWisePayment = !invoiceOnly && validatedData.paymentMethod === 'WISE';
+    const customerChooses = validatedData.customerChoosesAtCheckout === true;
+    const resolvedPaymentMethod =
+      invoiceOnly || customerChooses ? null : validatedData.paymentMethod ?? null;
+    const isWisePayment =
+      !invoiceOnly && !customerChooses && validatedData.paymentMethod === 'WISE';
     let wiseContext: Awaited<ReturnType<typeof buildWisePaymentContext>> | null = null;
 
     const effectiveInvoiceCurrency = (

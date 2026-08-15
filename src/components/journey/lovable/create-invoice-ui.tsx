@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Coins, CreditCard, Globe2, Landmark, Wallet } from 'lucide-react';
 import type { PaymentMethod } from '@prisma/client';
 import type { CommercialDealDraft } from '@/lib/commercial-os/commercial-deal-draft';
+import type { PaymentCollectionMode } from '@/lib/payment-links/payment-collection-mode';
 import type { CreateInvoiceWorkflowStepState } from '@/lib/commercial-os/create-invoice-progress';
 import { PaymentsProviderStatusBadge } from '@/components/journey/lovable/payments-settlement-ui';
 
@@ -153,14 +154,49 @@ export function merchantCreateInvoicePaymentLabel(value: PaymentMethod): {
     case 'MANUAL_BANK':
       return { title: 'Bank transfer', detail: 'Manual verification · working option' };
     case 'HEDERA':
-      return { title: 'Crypto', detail: 'HashPack · Hedera' };
+      return { title: 'HashPack', detail: 'HBAR / USDC / USDT / AUDD' };
     case 'EVM_WALLET':
-      return { title: 'Crypto', detail: 'MetaMask · EVM' };
+      return { title: 'MetaMask', detail: 'USDC / USDT' };
     case 'CRYPTO':
       return { title: 'Crypto', detail: 'Manual wallet' };
     default:
       return { title: value.replace(/_/g, ' ') };
   }
+}
+
+export function CreateInvoicePaymentCollectionModeOption({
+  mode,
+  selected,
+  onSelect,
+  title,
+  description,
+}: {
+  mode: PaymentCollectionMode;
+  selected: boolean;
+  onSelect: () => void;
+  title: string;
+  description: string;
+}) {
+  return (
+    <label
+      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors ${
+        selected ? 'border-primary/40 bg-accent/30' : 'border-border hover:bg-secondary/40'
+      }`}
+    >
+      <input
+        type="radio"
+        name="paymentCollectionMode"
+        value={mode}
+        checked={selected}
+        onChange={onSelect}
+        className="mt-1"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="text-[13.5px] font-medium">{title}</span>
+        <span className="mt-0.5 block text-[12px] leading-relaxed text-ink-soft">{description}</span>
+      </span>
+    </label>
+  );
 }
 
 export function CreateInvoicePaymentMethodOption({

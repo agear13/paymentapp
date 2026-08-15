@@ -68,8 +68,12 @@ describe('merchantCreateInvoicePaymentLabel', () => {
       detail: 'Manual verification · working option',
     });
     expect(merchantCreateInvoicePaymentLabel('HEDERA')).toEqual({
-      title: 'Crypto',
-      detail: 'HashPack · Hedera',
+      title: 'HashPack',
+      detail: 'HBAR / USDC / USDT / AUDD',
+    });
+    expect(merchantCreateInvoicePaymentLabel('EVM_WALLET')).toEqual({
+      title: 'MetaMask',
+      detail: 'USDC / USDT',
     });
   });
 });

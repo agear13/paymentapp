@@ -327,6 +327,8 @@ export const CreatePaymentLinkSchema = z.object({
   paymentMethod: PaymentLinkMethodSchema.optional(),
   /** Invoice-only public page (no online checkout UI). */
   invoiceOnlyMode: z.boolean().optional(),
+  /** Customer selects from operational multi-checkout rails at pay time; persists payment_method = null. */
+  customerChoosesAtCheckout: z.boolean().optional(),
   /** When payment_method = HEDERA */
   hederaCheckoutMode: z.enum(['INTERACTIVE', 'MANUAL']).optional(),
   /** When payment_method = CRYPTO — manual wallet instructions (no auto-fill) */
@@ -357,10 +359,11 @@ export const CreatePaymentLinkSchema = z.object({
   .refine(
     (d) => {
       if (d.invoiceOnlyMode === true) return true;
+      if (d.customerChoosesAtCheckout === true) return true;
       return d.paymentMethod != null;
     },
     {
-      message: 'Payment method is required when not in invoice-only mode',
+      message: 'Payment method is required when not in invoice-only or customer-choice mode',
       path: ['paymentMethod'],
     }
   )

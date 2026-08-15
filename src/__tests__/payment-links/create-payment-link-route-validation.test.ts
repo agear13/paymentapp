@@ -158,4 +158,43 @@ describe('POST /api/payment-links validation errors', () => {
     });
     expect(JSON.stringify(body)).not.toContain('041234567');
   });
+
+  it('persists payment_method = null when customerChoosesAtCheckout is true', async () => {
+    mockInsert.mockImplementation(async (_tx, args) => ({
+      id: 'pl-2',
+      short_code: 'test5678',
+      status: 'ACTIVE',
+      organization_id: ORG_ID,
+      payment_method: args.resolvedPaymentMethod,
+    }));
+    mockTransaction.mockImplementation(async (fn) => fn({}));
+
+    const request = new NextRequest('http://localhost/api/payment-links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        organizationId: ORG_ID,
+        amount: 1500,
+        currency: 'AUD',
+        invoiceCurrency: 'AUD',
+        description: 'Consulting services',
+        invoiceDate: new Date('2026-08-14T12:00:00.000Z').toISOString(),
+        dueDate: new Date('2026-08-28T12:00:00.000Z').toISOString(),
+        customerName: 'Beth',
+        customerEmail: 'client@example.com',
+        invoiceOnlyMode: false,
+        customerChoosesAtCheckout: true,
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(201);
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        resolvedPaymentMethod: null,
+      })
+    );
+  });
 });

@@ -5,6 +5,8 @@
 
 import type { PaymentMethod } from '@prisma/client';
 
+import type { PaymentCollectionMode } from '@/lib/payment-links/payment-collection-mode';
+
 export type CommercialDealDraft = {
   customerName: string;
   customerEmail: string;
@@ -15,6 +17,7 @@ export type CommercialDealDraft = {
   dueDate: Date | undefined;
   amount: number | undefined;
   currency: string;
+  paymentCollectionMode: PaymentCollectionMode;
   paymentMethod: PaymentMethod | undefined;
 };
 
@@ -32,6 +35,7 @@ export function defaultCommercialDealDraft(currency = 'AUD'): CommercialDealDraf
     dueDate,
     amount: undefined,
     currency,
+    paymentCollectionMode: 'single',
     paymentMethod: undefined,
   };
 }

@@ -5,6 +5,7 @@
 
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { invoiceCreationLabelForPaymentMethod } from '@/lib/payments/payment-rail-registry';
+import { INVOICE_PAYMENT_METHOD_CUSTOMER_CHOICE_LABEL } from '@/lib/payment-links/payment-collection-mode';
 import { operationalStatusLabel } from '@/lib/payments/operational-status-labels';
 
 export type InvoiceDisplayStatus =
@@ -70,7 +71,7 @@ export function formatInvoiceDueLabel(link: LinkLike): string {
 
 export function invoicePaymentMethodLabel(link: LinkLike): string {
   if (link.invoiceOnlyMode) return 'Invoice only';
-  if (!link.paymentMethod) return '—';
+  if (!link.paymentMethod) return INVOICE_PAYMENT_METHOD_CUSTOMER_CHOICE_LABEL;
   try {
     return invoiceCreationLabelForPaymentMethod(
       link.paymentMethod as Parameters<typeof invoiceCreationLabelForPaymentMethod>[0]

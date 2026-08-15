@@ -8,6 +8,7 @@ import { ConnectAccountingModal } from '@/components/journey/lovable/connect-acc
 import { merchantCreateInvoicePaymentLabel } from '@/components/journey/lovable/create-invoice-ui';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import type { CommercialDealDraft } from '@/lib/commercial-os/commercial-deal-draft';
+import { INVOICE_PAYMENT_METHOD_CUSTOMER_CHOICE_LABEL } from '@/lib/payment-links/payment-collection-mode';
 import type { PaymentMethod } from '@prisma/client';
 
 type CreateInvoicePreviewSidebarProps = {
@@ -32,11 +33,16 @@ export function CreateInvoicePreviewSidebar({
   const syncReady = readiness?.canSyncToAccounting ?? readiness?.canCreateInvoice ?? false;
   const showAccountingCta = readiness && !readiness.loading && !syncReady;
 
+  const collectionMode = draft.paymentCollectionMode ?? 'single';
   const payLabel =
     paymentMethodLabel ??
-    (draft.paymentMethod
-      ? merchantCreateInvoicePaymentLabel(draft.paymentMethod as PaymentMethod).title
-      : null);
+    (collectionMode === 'invoice_only'
+      ? 'Invoice only'
+      : collectionMode === 'customer_choice'
+        ? INVOICE_PAYMENT_METHOD_CUSTOMER_CHOICE_LABEL
+        : draft.paymentMethod
+          ? merchantCreateInvoicePaymentLabel(draft.paymentMethod as PaymentMethod).title
+          : null);
 
   return (
     <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
@@ -92,9 +98,15 @@ export function CreateInvoicePreviewSidebar({
               ) : null}
             </div>
             {payLabel ? (
-              <div className="text-[12px] text-ink-soft">Pay via {payLabel}</div>
+              <div className="text-[12px] text-ink-soft">
+                {collectionMode === 'invoice_only'
+                  ? 'No online payment'
+                  : collectionMode === 'customer_choice'
+                    ? payLabel
+                    : `Pay via ${payLabel}`}
+              </div>
             ) : (
-              <div className="text-[12px] text-ink-soft">Choose a payment method</div>
+              <div className="text-[12px] text-ink-soft">Choose how your customer will pay</div>
             )}
           </div>
         )}

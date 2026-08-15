@@ -38,7 +38,9 @@ export async function createPaymentLinkFromDraft(
   if (!draft.description.trim()) {
     throw new Error('Add a description so your customer knows what this invoice is for.');
   }
-  if (!draft.paymentMethod) {
+
+  const mode = draft.paymentCollectionMode ?? 'single';
+  if (mode === 'single' && !draft.paymentMethod) {
     throw new Error('Choose how your customer will pay.');
   }
 
@@ -54,9 +56,13 @@ export async function createPaymentLinkFromDraft(
     customerPhone: draft.customerPhone.trim() || undefined,
     invoiceDate: draft.invoiceDate.toISOString(),
     dueDate: draft.dueDate?.toISOString(),
-    invoiceOnlyMode: false,
-    paymentMethod: draft.paymentMethod,
+    invoiceOnlyMode: mode === 'invoice_only',
+    customerChoosesAtCheckout: mode === 'customer_choice',
   };
+
+  if (mode === 'single' && draft.paymentMethod) {
+    body.paymentMethod = draft.paymentMethod;
+  }
 
   if (draft.paymentMethod === 'MANUAL_BANK' && railDefaults?.manualBank) {
     Object.assign(body, railDefaults.manualBank);

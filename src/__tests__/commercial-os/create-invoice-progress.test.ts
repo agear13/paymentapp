@@ -60,6 +60,25 @@ describe('create-invoice-progress', () => {
     expect(validation.missingLabels).toEqual([]);
   });
 
+  it('accepts customer-choice draft without paymentMethod', () => {
+    const validation = validateCreateInvoiceDraft({
+      ...completeDraft,
+      paymentCollectionMode: 'customer_choice',
+      paymentMethod: undefined,
+    });
+    expect(validation.isSubmittable).toBe(true);
+    expect(validation.missingLabels).not.toContain('Payment method');
+  });
+
+  it('accepts invoice-only draft without paymentMethod', () => {
+    const validation = validateCreateInvoiceDraft({
+      ...completeDraft,
+      paymentCollectionMode: 'invoice_only',
+      paymentMethod: undefined,
+    });
+    expect(validation.isSubmittable).toBe(true);
+  });
+
   it('advances workflow from Invoice to Payment to Settlement', () => {
     const empty = computeCreateInvoiceWorkflowProgress(defaultCommercialDealDraft());
     expect(empty[0]?.status).toBe('current');
@@ -152,6 +171,36 @@ describe('validateCreateInvoicePaymentRailReadiness', () => {
     const result = validateCreateInvoicePaymentRailReadiness(
       { ...completeDraft, paymentMethod: 'MANUAL_BANK' },
       { railSetup, manualBankReady: true, cryptoReady: false }
+    );
+
+    expect(result).toEqual({ ready: true });
+  });
+
+  it('allows customer choice when operational multi-checkout rails exist', () => {
+    const railSetup = railSetupWith({ stripe: true, hedera: true });
+
+    const result = validateCreateInvoicePaymentRailReadiness(
+      { ...completeDraft, paymentCollectionMode: 'customer_choice' },
+      {
+        railSetup,
+        manualBankReady: false,
+        cryptoReady: false,
+        paymentMethodOptions: [
+          { value: 'STRIPE', available: true, configured: true },
+          { value: 'HEDERA', available: true, configured: true },
+        ],
+      }
+    );
+
+    expect(result).toEqual({ ready: true });
+  });
+
+  it('skips rail readiness checks for invoice-only mode', () => {
+    const railSetup = railSetupWith({ stripe: false, wise: false, hedera: false });
+
+    const result = validateCreateInvoicePaymentRailReadiness(
+      { ...completeDraft, paymentCollectionMode: 'invoice_only' },
+      { railSetup, manualBankReady: false, cryptoReady: false }
     );
 
     expect(result).toEqual({ ready: true });

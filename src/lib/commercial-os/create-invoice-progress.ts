@@ -4,6 +4,10 @@
 
 import type { CommercialDealDraft } from '@/lib/commercial-os/commercial-deal-draft';
 import {
+  getOperationalMultiCheckoutOptions,
+  type OperationalPaymentOptionLike,
+} from '@/lib/payment-links/payment-collection-mode';
+import {
   CRYPTO_UNAVAILABLE_REASON,
   MANUAL_BANK_UNAVAILABLE_REASON,
 } from '@/lib/payment-links/merchant-dedicated-rail-defaults';
@@ -37,6 +41,12 @@ export type CreateInvoiceFieldValidation = {
 
 export const CREATE_INVOICE_PAYMENT_METHOD_NOT_READY_MESSAGE =
   'Set up this payment method in Payment settings before creating this invoice.';
+
+export const CREATE_INVOICE_CUSTOMER_CHOICE_RAILS_MESSAGE =
+  'Set up at least one payment method in Payment settings before offering customer choice at checkout.';
+
+export const CREATE_INVOICE_SINGLE_METHOD_MESSAGE =
+  'Choose a payment method for this invoice.';
 
 export const CREATE_INVOICE_NO_RAILS_MESSAGE =
   'Set up at least one payment method in Payment settings before creating this invoice.';
@@ -129,13 +139,17 @@ export function validateCreateInvoiceDraft(draft: CommercialDealDraft): CreateIn
   const hasCustomer = Boolean(draft.customerName.trim() || draft.customerEmail.trim());
   const hasDescription = Boolean(draft.description.trim());
   const hasAmount = typeof draft.amount === 'number' && draft.amount > 0;
-  const hasPaymentMethod = Boolean(draft.paymentMethod);
+  const mode = draft.paymentCollectionMode ?? 'single';
+  const hasPaymentMethod =
+    mode === 'invoice_only' ||
+    mode === 'customer_choice' ||
+    Boolean(draft.paymentMethod);
 
   const missingLabels: string[] = [];
   if (!hasCustomer) missingLabels.push('Customer name or email');
   if (!hasDescription) missingLabels.push('Description');
   if (!hasAmount) missingLabels.push('Amount');
-  if (!hasPaymentMethod) missingLabels.push('Payment method');
+  if (mode === 'single' && !draft.paymentMethod) missingLabels.push('Payment method');
 
   return {
     customer: hasCustomer,
@@ -153,8 +167,23 @@ export function validateCreateInvoicePaymentRailReadiness(
     railSetup: PaymentLinkRailSetupStatus;
     manualBankReady: boolean;
     cryptoReady: boolean;
+    paymentMethodOptions?: readonly CreateInvoicePaymentOptionLike[];
   }
 ): CreateInvoiceRailReadiness {
+  const mode = draft.paymentCollectionMode ?? 'single';
+
+  if (mode === 'invoice_only') {
+    return { ready: true };
+  }
+
+  if (mode === 'customer_choice') {
+    const readyMulti = getOperationalMultiCheckoutOptions(input.paymentMethodOptions ?? []);
+    if (readyMulti.length === 0) {
+      return { ready: false, blockMessage: CREATE_INVOICE_CUSTOMER_CHOICE_RAILS_MESSAGE };
+    }
+    return { ready: true };
+  }
+
   const pm = draft.paymentMethod;
 
   if (pm === 'MANUAL_BANK' && !input.manualBankReady) {
@@ -188,6 +217,7 @@ export function validateCreateInvoiceSubmitReadiness(
     railSetup: PaymentLinkRailSetupStatus;
     manualBankReady: boolean;
     cryptoReady: boolean;
+    paymentMethodOptions?: readonly CreateInvoicePaymentOptionLike[];
   }
 ): CreateInvoiceSubmitValidation {
   const fields = validateCreateInvoiceDraft(draft);
@@ -206,7 +236,11 @@ export function computeCreateInvoiceWorkflowProgress(
 ): CreateInvoiceWorkflowStepState[] {
   const validation = validateCreateInvoiceDraft(draft);
   const invoiceDone = validation.customer && validation.description && validation.amount;
-  const paymentDone = validation.paymentMethod;
+  const paymentDone =
+    validation.paymentMethod &&
+    (draft.paymentCollectionMode === 'customer_choice' ||
+      draft.paymentCollectionMode === 'invoice_only' ||
+      Boolean(draft.paymentMethod));
 
   let currentIndex = 0;
   if (invoiceDone && !paymentDone) currentIndex = 1;
