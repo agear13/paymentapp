@@ -11,6 +11,7 @@ import type {
   CryptoRailDefaults,
   ManualBankRailDefaults,
 } from '@/lib/payment-links/merchant-dedicated-rail-defaults';
+import { formatPaymentLinkApiValidationMessage } from '@/lib/payment-links/payment-link-api-validation-error';
 
 export { EntitlementRequiredError } from '@/lib/entitlements/entitlement-api-errors';
 
@@ -77,10 +78,12 @@ export async function createPaymentLinkFromDraft(
     if (entitlementPayload) {
       throw new EntitlementRequiredError(entitlementPayload);
     }
-    const generic = responseBody as { error?: string; message?: string };
-    throw new Error(
-      generic.message || generic.error || 'Failed to create invoice. Please try again.'
-    );
+    const generic = responseBody as {
+      error?: string;
+      message?: string;
+      details?: Array<{ field: string; message: string }>;
+    };
+    throw new Error(formatPaymentLinkApiValidationMessage(generic));
   }
 
   const result = (await response.json()) as { data: CreatePaymentLinkResult };

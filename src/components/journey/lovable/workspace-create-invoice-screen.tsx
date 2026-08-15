@@ -775,7 +775,7 @@ function CreateInvoiceForm({
                   type="tel"
                   value={draft.customerPhone}
                   onChange={(e) => updateDraft({ customerPhone: e.target.value })}
-                  placeholder="Optional"
+                  placeholder="0412 345 678 (optional)"
                   className={inputCls}
                 />
               </div>

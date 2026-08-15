@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
+import { ZodError } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -181,6 +182,7 @@ function transformPaymentLink(link: any) {
 }
 import { applyRateLimit } from '@/lib/rate-limit';
 import { UpdatePaymentLinkSchema } from '@/lib/validations/schemas';
+import { createZodValidationErrorResponse } from '@/lib/validations/middleware';
 import {
   transitionPaymentLinkState,
   isPaymentLinkEditable,
@@ -818,11 +820,8 @@ export async function PATCH(
       'Failed to update payment link'
     );
 
-    if (error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      );
+    if (error instanceof ZodError) {
+      return createZodValidationErrorResponse(error);
     }
 
     return NextResponse.json(

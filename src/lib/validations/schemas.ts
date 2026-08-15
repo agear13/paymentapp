@@ -12,6 +12,10 @@ import {
 } from '@/lib/payment-links/payment-link-attachment.shared';
 import { getInvoiceSelectablePaymentMethods } from '@/lib/payments/payment-rail-registry';
 import { DocumentCommercialTimingSchema } from '@/lib/commercial-timing/validation';
+import {
+  normalizePhoneToE164,
+  PHONE_VALIDATION_MESSAGE,
+} from '@/lib/validations/phone-number';
 
 // ============================================================================
 // ENUM SCHEMAS
@@ -161,15 +165,45 @@ export const emailSchema = z
   .email('Invalid email address')
   .max(255, 'Email must not exceed 255 characters');
 
-// Phone validation (international format) - only validates if value provided
+// Phone validation — accepts common AU formats, normalizes to E.164 for storage
 export const phoneSchema = z
   .string()
   .max(50, 'Phone number must not exceed 50 characters')
-  .refine(
-    (val) => !val || val === '' || /^\+?[1-9]\d{1,14}$/.test(val),
-    'Phone number must be in valid international format (e.g., +61412345678)'
-  )
+  .superRefine((val, ctx) => {
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    if (!normalizePhoneToE164(trimmed)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: PHONE_VALIDATION_MESSAGE,
+      });
+    }
+  })
+  .transform((val) => {
+    const trimmed = val.trim();
+    if (!trimmed) return undefined;
+    return normalizePhoneToE164(trimmed)!;
+  })
   .optional();
+
+/** Legacy create-invoice dialog form field — empty string when omitted. */
+export const customerPhoneFormFieldSchema = z
+  .string()
+  .max(50, 'Phone number must not exceed 50 characters.')
+  .transform((val) => val.trim())
+  .superRefine((val, ctx) => {
+    if (!val) return;
+    if (!normalizePhoneToE164(val)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: PHONE_VALIDATION_MESSAGE,
+      });
+    }
+  })
+  .transform((val) => {
+    if (!val) return '';
+    return normalizePhoneToE164(val)!;
+  });
 
 // UUID validation
 export const uuidSchema = z
@@ -274,9 +308,7 @@ export const CreatePaymentLinkSchema = z.object({
     .optional()
     .or(z.literal(''))
     .transform((val) => val && val.trim() ? val : undefined),
-  customerPhone: phoneSchema
-    .or(z.literal(''))
-    .transform((val) => val && val.trim() ? val : undefined),
+  customerPhone: phoneSchema,
   invoiceDate: z
     .string()
     .datetime('Invalid datetime format')

@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 import { loggers } from '@/lib/logger';
 import { requireAuth } from '@/lib/auth/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
@@ -22,6 +22,7 @@ import {
 } from '@/lib/payments/payment-link-status-api-policy';
 import { prisma } from '@/lib/server/prisma';
 import { PUBLIC_CHECKOUT_METHOD_LABELS } from '@/lib/payments/payment-rail-registry';
+import { createZodValidationErrorResponse } from '@/lib/validations/middleware';
 
 const StatusTransitionSchema = z.object({
   status: PaymentLinkStatusSchema,
@@ -185,11 +186,8 @@ export async function POST(
       'Failed to transition payment link status'
     );
 
-    if (error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      );
+    if (error instanceof ZodError) {
+      return createZodValidationErrorResponse(error);
     }
 
     return NextResponse.json(

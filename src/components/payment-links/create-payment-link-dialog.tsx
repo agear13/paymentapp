@@ -55,7 +55,10 @@ import {
   type PaymentLinkRailSetupStatus,
   type PaymentLinksGuardrailKind,
 } from '@/lib/payment-links/setup-status';
-import { PaymentLinkMethodSchema } from '@/lib/validations/schemas';
+import {
+  PaymentLinkMethodSchema,
+  customerPhoneFormFieldSchema,
+} from '@/lib/validations/schemas';
 import { PaymentLinksGuardrailModal } from '@/components/payment-links-onboarding/payment-links-guardrail-modal';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -64,6 +67,7 @@ import {
   PAYMENT_LINK_ATTACHMENT_MAX_BYTES,
   isAllowedPaymentLinkAttachmentMime,
 } from '@/lib/payment-links/payment-link-attachment.shared';
+import { formatPaymentLinkApiValidationMessage } from '@/lib/payment-links/payment-link-api-validation-error';
 
 warnIfUndefined('Button', Button, 'create-payment-link-dialog.tsx');
 warnIfUndefined('CANONICAL_NETWORKS', CANONICAL_NETWORKS, 'create-payment-link-dialog.tsx');
@@ -145,14 +149,7 @@ const createPaymentLinkFormSchema = z
     .max(255, 'Customer name must not exceed 255 characters.')
     .transform((val) => val?.trim() || '')
     .optional(),
-  customerPhone: z
-    .string()
-    .transform((val) => val?.trim() || '')
-    .refine(
-      (val) => !val || /^\+?[1-9]\d{1,14}$/.test(val),
-      'Enter a valid phone number in international format (e.g., +61412345678).'
-    )
-    .optional(),
+  customerPhone: customerPhoneFormFieldSchema,
   invoiceDate: z.date().optional(),
   dueDate: z.date().optional(),
   expiresAt: z.date().optional(),
@@ -833,7 +830,9 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           return;
         }
         setWiseDetailsNotIssuedCurrency(null);
-        throw new Error(error.error || 'Failed to update invoice. Please try again.');
+        throw new Error(
+          formatPaymentLinkApiValidationMessage(error, 'Failed to update invoice. Please try again.')
+        );
       }
 
       const result = await response.json();
@@ -938,7 +937,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
           return;
         }
         setWiseDetailsNotIssuedCurrency(null);
-        throw new Error(error.error || 'Failed to create invoice. Please try again.');
+        throw new Error(formatPaymentLinkApiValidationMessage(error));
       }
 
       const result = await response.json();

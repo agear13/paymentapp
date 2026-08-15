@@ -3,6 +3,8 @@
  * Specialized validation functions for domain-specific formats
  */
 
+import { normalizePhoneToE164 } from '@/lib/validations/phone-number';
+
 // ============================================================================
 // ISO 4217 CURRENCY CODE VALIDATOR
 // ============================================================================
@@ -254,38 +256,20 @@ export const validateEmail = (email: string): boolean => {
 };
 
 /**
- * International phone number validation
- * Supports E.164 format: +[country code][number]
+ * International phone number validation.
+ * Accepts common Australian formats and valid E.164 numbers.
  */
 export const validatePhone = (phone: string): boolean => {
   if (!phone || typeof phone !== 'string') return false;
-  
-  const trimmed = phone.trim();
-  
-  // Length check (E.164 allows 1-15 digits after +)
-  if (trimmed.length > 50) return false;
-  
-  // E.164 format: +[1-9][0-9]{1,14}
-  const pattern = /^\+?[1-9]\d{1,14}$/;
-  
-  return pattern.test(trimmed.replace(/[\s()-]/g, ''));
+  if (!phone.trim()) return false;
+  return normalizePhoneToE164(phone) !== null;
 };
 
 /**
- * Normalizes phone number to E.164 format
+ * Normalizes phone number to E.164 format when valid.
  */
 export const normalizePhone = (phone: string): string | null => {
-  if (!phone) return null;
-  
-  // Remove spaces, dashes, parentheses
-  let normalized = phone.replace(/[\s()-]/g, '');
-  
-  // Add + prefix if missing
-  if (!normalized.startsWith('+')) {
-    normalized = '+' + normalized;
-  }
-  
-  return validatePhone(normalized) ? normalized : null;
+  return normalizePhoneToE164(phone);
 };
 
 // ============================================================================

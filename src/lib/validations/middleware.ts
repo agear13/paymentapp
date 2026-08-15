@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ZodSchema, ZodError, ZodObject, type ZodRawShape } from 'zod';
 import { log } from '@/lib/logger';
+import { createZodValidationErrorBody } from '@/lib/validations/zod-api-error';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -168,6 +169,14 @@ export const createValidationErrorResponse = (
     },
     { status: 400 }
   );
+};
+
+/** Zod 4-safe 400 response with field paths and messages only (no input values). */
+export const createZodValidationErrorResponse = (
+  error: ZodError,
+  errorLabel = 'Validation error'
+): NextResponse => {
+  return NextResponse.json(createZodValidationErrorBody(error, errorLabel), { status: 400 });
 };
 
 // ============================================================================
@@ -429,6 +438,7 @@ export const validation = {
   validateQueryParams,
   validatePathParams,
   createValidationErrorResponse,
+  createZodValidationErrorResponse,
   withValidation,
   safeParse,
   validatePartial,

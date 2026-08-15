@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
+import { ZodError } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { loggers } from '@/lib/logger';
 import { requireAuth } from '@/lib/supabase/middleware';
@@ -27,6 +28,7 @@ import { runPaymentLinkPostCreateEffects } from '@/lib/payment-links/payment-lin
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { AuditEventType, logPaymentEvent } from '@/lib/audit/audit-log';
 import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
+import { createZodValidationErrorResponse } from '@/lib/validations/middleware';
 
 /** FX summary for list view (lightweight) */
 export interface FxSummary {
@@ -509,11 +511,16 @@ export async function POST(request: NextRequest) {
     }
     loggers.api.error({ error: error.message }, 'Failed to create payment link');
 
-    if (error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
+    if (error instanceof ZodError) {
+      loggers.api.warn(
+        {
+          validationFields: error.issues.map((issue) =>
+            issue.path.length > 0 ? issue.path.map(String).join('.') : 'body'
+          ),
+        },
+        'Payment link create validation failed'
       );
+      return createZodValidationErrorResponse(error);
     }
 
     return NextResponse.json(
