@@ -564,6 +564,10 @@ jest.mock('@/components/payment-links/payment-lifecycle-panel', () => ({
   PaymentLifecyclePanel: () => null,
 }));
 
+jest.mock('@/components/journey/lovable/invoice-treasury-lifecycle-panel', () => ({
+  InvoiceTreasuryLifecyclePanel: () => null,
+}));
+
 function readSidebar(label: string): string | null {
   const heading = screen.getByRole('heading', { name: 'At a glance' });
   const section = heading.closest('section');

@@ -233,6 +233,17 @@ export function WorkspacePaymentsSettlementScreen() {
       </PaymentsSectionCard>
 
       {!loading ? (
+        <div className="flex justify-end">
+          <Link
+            href={COMMERCIAL_OS_ROUTES.treasury}
+            className="text-[13px] font-medium text-accent-foreground underline"
+          >
+            Treasury activity & reconciliation →
+          </Link>
+        </div>
+      ) : null}
+
+      {!loading ? (
         <PaymentsSettlementCommercialReadiness
           checklist={readiness.checklist}
           doneCount={readiness.doneCount}

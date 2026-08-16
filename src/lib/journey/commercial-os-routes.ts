@@ -43,6 +43,7 @@ export const COMMERCIAL_OS_ROUTES = {
   accountPreferences: '/workspace/settings/preferences',
   accountSecurity: '/workspace/settings/security',
   payments: '/workspace/payments',
+  treasury: '/workspace/treasury',
   assessment: '/journey/assessment',
   provisioning: '/journey/provisioning',
   /** Journey onboarding continues here after inline auth or OAuth. */

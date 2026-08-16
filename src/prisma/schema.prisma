@@ -234,6 +234,10 @@ model organizations {
   organization_services        organization_services[]
   referral_codes               referral_codes[]
   operational_onboarding_transitions operational_onboarding_transitions[]
+  treasury_integration_connections   treasury_integration_connections[]
+  treasury_events                    treasury_events[]
+  treasury_event_links               treasury_event_links[]
+  treasury_manual_reconciliations    treasury_manual_reconciliations[]
 }
 
 /// Immutable operational onboarding / bootstrap / graph initialization transitions.
@@ -336,6 +340,7 @@ model payment_events {
   payment_lifecycle_events payment_lifecycle_events[]
   payment_settlements      payment_settlements[]
   fx_snapshots             fx_snapshots[]
+  treasury_events          treasury_events[]
 
   @@index([payment_link_id, correlation_id], name: "payment_events_payment_link_correlation_idx")
   @@index([payment_link_id, created_at])
@@ -459,6 +464,7 @@ model payment_links {
   commission_obligations  commission_obligations[]
   crypto_payment_confirmations crypto_payment_confirmations[]
   manual_bank_payment_confirmations manual_bank_payment_confirmations[]
+  treasury_events              treasury_events[]
   /// Deal Network pilot project (Strait) — optional invoice↔project coordination link.
   pilot_deal_id           String?                   @db.VarChar(255)
   pilot_deal              deal_network_pilot_deals? @relation("PilotDealPaymentLinks", fields: [pilot_deal_id], references: [id], onDelete: SetNull)
@@ -1605,6 +1611,135 @@ model obligation_report_email_events {
   @@index([lead_id])
   @@index([email_type])
   @@index([provider_message_id])
+}
+
+enum TreasuryEventType {
+  CUSTOMER_PAYMENT
+  ASSET_RECEIVED
+  WALLET_TRANSFER
+  EXCHANGE_DEPOSIT
+  CONVERSION
+  FIAT_CREDIT
+  BANK_SETTLEMENT
+  UNKNOWN
+}
+
+enum TreasuryEventStatus {
+  CONFIRMED
+  INFERRED
+  UNKNOWN
+  EXCEPTION
+}
+
+enum TreasuryLinkType {
+  PARENT_CHILD
+  CORRELATION
+  MANUAL
+}
+
+/// Encrypted third-party treasury provider credentials (e.g. Digital Surge read-only API key).
+model treasury_integration_connections {
+  id                  String        @id @default(uuid()) @db.Uuid
+  organization_id     String        @db.Uuid
+  provider            String        @db.VarChar(64)
+  encrypted_api_key   String        @db.Text
+  status              String        @default("active") @db.VarChar(32)
+  last_sync_at        DateTime?     @db.Timestamptz(6)
+  last_sync_error     String?       @db.Text
+  metadata            Json?
+  created_at          DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime      @updatedAt @db.Timestamptz(6)
+  organizations       organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@unique([organization_id, provider], name: "ux_treasury_connections_org_provider")
+  @@index([organization_id])
+}
+
+/// Immutable treasury lifecycle events — orthogonal to payment_events (PAYMENT_CONFIRMED remains canonical).
+model treasury_events {
+  id                       String              @id @default(uuid()) @db.Uuid
+  organization_id          String              @db.Uuid
+  event_type               TreasuryEventType
+  status                   TreasuryEventStatus @default(CONFIRMED)
+  provider                 String              @db.VarChar(64)
+  provider_reference       String              @db.VarChar(512)
+  asset                    String?             @db.VarChar(32)
+  destination_asset        String?             @db.VarChar(32)
+  amount                   Decimal?            @db.Decimal(18, 8)
+  destination_amount       Decimal?            @db.Decimal(18, 8)
+  exchange_rate            Decimal?            @db.Decimal(18, 8)
+  fee_amount               Decimal?            @db.Decimal(18, 8)
+  fee_currency             String?             @db.VarChar(32)
+  source_address           String?             @db.VarChar(128)
+  destination_address      String?             @db.VarChar(128)
+  wallet_network           String?             @db.VarChar(64)
+  transaction_hash         String?             @db.VarChar(128)
+  payment_link_id          String?             @db.Uuid
+  payment_event_id         String?             @db.Uuid
+  parent_treasury_event_id String?             @db.Uuid
+  occurred_at              DateTime            @db.Timestamptz(6)
+  metadata                 Json?
+  raw_provider_payload     Json?
+  created_at               DateTime            @default(now()) @db.Timestamptz(6)
+  organizations            organizations       @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  payment_links            payment_links?      @relation(fields: [payment_link_id], references: [id], onDelete: SetNull)
+  payment_events           payment_events?     @relation(fields: [payment_event_id], references: [id], onDelete: SetNull)
+  parent_event             treasury_events?    @relation("TreasuryEventParent", fields: [parent_treasury_event_id], references: [id], onDelete: SetNull)
+  child_events             treasury_events[]   @relation("TreasuryEventParent")
+  source_links             treasury_event_links[] @relation("TreasuryLinkSource")
+  target_links             treasury_event_links[] @relation("TreasuryLinkTarget")
+  manual_links_as_source   treasury_manual_reconciliations[] @relation("ManualLinkSource")
+  manual_links_as_target   treasury_manual_reconciliations[] @relation("ManualLinkTarget")
+
+  @@unique([organization_id, provider, provider_reference, event_type], name: "ux_treasury_events_idempotency")
+  @@index([organization_id, transaction_hash])
+  @@index([organization_id, payment_link_id])
+  @@index([organization_id, payment_event_id])
+  @@index([organization_id, occurred_at(sort: Desc)])
+  @@index([organization_id, event_type])
+  @@index([parent_treasury_event_id])
+}
+
+/// Directed links between treasury events (correlation, parent-child, manual).
+model treasury_event_links {
+  id                 String              @id @default(uuid()) @db.Uuid
+  organization_id    String              @db.Uuid
+  source_event_id    String              @db.Uuid
+  target_event_id    String              @db.Uuid
+  link_type          TreasuryLinkType
+  link_status        TreasuryEventStatus @default(CONFIRMED)
+  created_by_user_id String?             @db.VarChar(255)
+  evidence           Json?
+  created_at         DateTime            @default(now()) @db.Timestamptz(6)
+  organizations      organizations       @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  source_event       treasury_events     @relation("TreasuryLinkSource", fields: [source_event_id], references: [id], onDelete: Cascade)
+  target_event       treasury_events     @relation("TreasuryLinkTarget", fields: [target_event_id], references: [id], onDelete: Cascade)
+
+  @@unique([source_event_id, target_event_id, link_type], name: "ux_treasury_event_links_pair")
+  @@index([organization_id])
+  @@index([source_event_id])
+  @@index([target_event_id])
+}
+
+/// Auditable manual reconciliation actions when deterministic correlation is unavailable.
+model treasury_manual_reconciliations {
+  id                 String              @id @default(uuid()) @db.Uuid
+  organization_id    String              @db.Uuid
+  source_event_id    String              @db.Uuid
+  target_event_id    String              @db.Uuid
+  linked_by_user_id  String              @db.VarChar(255)
+  linked_at          DateTime            @default(now()) @db.Timestamptz(6)
+  previous_status    TreasuryEventStatus
+  new_status         TreasuryEventStatus
+  evidence           Json
+  notes              String?             @db.Text
+  organizations      organizations       @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  source_event       treasury_events     @relation("ManualLinkSource", fields: [source_event_id], references: [id], onDelete: Cascade)
+  target_event       treasury_events     @relation("ManualLinkTarget", fields: [target_event_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id, linked_at(sort: Desc)])
+  @@index([source_event_id])
+  @@index([target_event_id])
 }
 
 model user_auth_profiles {

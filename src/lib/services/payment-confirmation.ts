@@ -58,6 +58,7 @@ export interface ConfirmPaymentResult {
   success: boolean;
   paymentEventId?: string;
   alreadyProcessed?: boolean;
+  organizationId?: string;
   error?: string;
 }
 
@@ -700,6 +701,7 @@ export async function confirmPayment(
         success: true,
         paymentEventId: paymentEvent.id,
         alreadyProcessed: false,
+        organizationId: paymentLink.organization_id,
       };
     });
 
@@ -722,6 +724,29 @@ export async function confirmPayment(
         currency: currencyReceived,
         amount: amountReceived,
         metadata: metadata as Record<string, unknown> | undefined,
+      });
+    }
+
+    if (
+      result.success &&
+      result.paymentEventId &&
+      result.alreadyProcessed === false &&
+      result.organizationId
+    ) {
+      const { hookTreasuryFromPaymentConfirmation } = await import(
+        '@/lib/treasury/events/hook-after-payment-confirmed'
+      );
+      hookTreasuryFromPaymentConfirmation({
+        organizationId: result.organizationId,
+        paymentLinkId,
+        paymentEventId: result.paymentEventId,
+        provider,
+        currency: currencyReceived,
+        amount: amountReceived,
+        tokenType: tokenType ?? null,
+        sourceReference: normalizedProviderRef,
+        metadata: metadata as Record<string, unknown> | undefined,
+        receivedAt: new Date(),
       });
     }
 

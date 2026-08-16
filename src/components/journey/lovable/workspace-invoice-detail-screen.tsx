@@ -70,6 +70,7 @@ import { isValidShortCode } from '@/lib/short-code';
 import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
 import { InvoicePaymentReviewPanel } from '@/components/journey/lovable/invoice-payment-review-panel';
 import { AccountingSyncedInvoiceRemovalDialog } from '@/components/journey/lovable/accounting-synced-invoice-removal-dialog';
+import { InvoiceTreasuryLifecyclePanel } from '@/components/journey/lovable/invoice-treasury-lifecycle-panel';
 import { InvoiceDetailAccountingSection } from '@/components/journey/lovable/invoice-detail-accounting-section';
 import { InvoiceDetailCommercialPosition } from '@/components/journey/lovable/invoice-detail-commercial-position';
 import { InvoiceDetailSidebar } from '@/components/journey/lovable/invoice-detail-sidebar';
@@ -912,6 +913,14 @@ export function WorkspaceInvoiceDetailScreen({
               isPaid={viewModel.isPaid}
             />
           </section>
+
+          {viewModel.isPaid ? (
+            <InvoiceTreasuryLifecyclePanel
+              paymentLinkId={detail.id}
+              invoiceReference={detail.invoiceReference ?? invoiceNumber}
+              isPaid={viewModel.isPaid}
+            />
+          ) : null}
 
           <InvoiceDetailAccountingSection
             detail={detail}

@@ -16,6 +16,7 @@ import {
   parseAlchemyAddressActivity,
   verifyAlchemyWebhookSignature,
 } from '@/lib/evm/alchemy.server';
+import { parseAlchemyOutboundAddressActivity } from '@/lib/evm/alchemy-outbound.server';
 import {
   buildPendingContextFromMetadata,
   pollAndConfirmEvmPayment,
@@ -23,6 +24,46 @@ import {
 import { findPendingEvmPaymentByTxHash } from '@/lib/payments/evm-wallet-rail.server';
 import { resolveMerchantEvmWallet } from '@/lib/payments/evm-wallet-rail.server';
 import { prisma } from '@/lib/server/prisma';
+import { ingestObservedTransferForOrganization } from '@/lib/treasury/observers/wallet-transfer/observe-wallet-transfers';
+
+async function observeOutboundFromAlchemyWebhook(
+  payload: Record<string, unknown>
+): Promise<void> {
+  const event = payload.event as Record<string, unknown> | undefined;
+  const activities =
+    (event?.activity as Array<{ fromAddress?: string }> | undefined) ?? [];
+
+  const fromAddresses = [
+    ...new Set(
+      activities
+        .map((a) => a.fromAddress?.trim())
+        .filter((address): address is string => Boolean(address))
+    ),
+  ];
+
+  for (const fromAddress of fromAddresses) {
+    const merchantSettings = await prisma.merchant_settings.findFirst({
+      where: {
+        evm_wallet_enabled: true,
+        evm_wallet_address: { equals: fromAddress, mode: 'insensitive' },
+      },
+      select: { organization_id: true, evm_wallet_address: true },
+    });
+
+    if (!merchantSettings?.evm_wallet_address) continue;
+
+    const outbound = parseAlchemyOutboundAddressActivity(
+      payload as Parameters<typeof parseAlchemyOutboundAddressActivity>[0],
+      merchantSettings.evm_wallet_address
+    );
+    if (!outbound) continue;
+
+    await ingestObservedTransferForOrganization(
+      merchantSettings.organization_id,
+      outbound
+    );
+  }
+}
 
 async function forwardToEvmWalletWebhook(payload: Record<string, unknown>): Promise<Response> {
   const baseUrl = config.appUrl.replace(/\/$/, '');
@@ -78,6 +119,13 @@ export async function POST(request: NextRequest) {
     if (txHashes.length === 0) {
       return NextResponse.json({ received: true, processed: false, reason: 'no_transactions' });
     }
+
+    void observeOutboundFromAlchemyWebhook(payload).catch((error: unknown) => {
+      log.warn('Alchemy outbound treasury observation failed', {
+        correlationId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
 
     for (const txHash of txHashes) {
       const pending = await findPendingEvmPaymentByTxHash(txHash);
