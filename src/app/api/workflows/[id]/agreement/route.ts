@@ -5,6 +5,7 @@ import { requireWorkflowOrganizationAccess } from '@/lib/workflows/require-workf
 import {
   approveWorkflowAgreementStructure,
   getWorkflowAgreementContext,
+  retryWorkflowAgreementBootstrap,
   runWorkflowAgreementExtraction,
   submitPastedAgreement,
   submitUploadedAgreement,
@@ -50,7 +51,7 @@ export async function GET(
   const { id } = await context.params;
 
   try {
-    const contextData = await getWorkflowAgreementContext(access.organizationId, id);
+    const contextData = await getWorkflowAgreementContext(access.organizationId, id, access.userId);
     return apiResponse(contextData);
   } catch (error) {
     return mapAgreementError(error);
@@ -166,6 +167,14 @@ export async function PATCH(
         undefined,
         { force: body.force === true }
       );
+      return apiResponse(contextData);
+    }
+    if (body.action === 'bootstrap') {
+      const contextData = await retryWorkflowAgreementBootstrap({
+        organizationId: access.organizationId,
+        workflowId: id,
+        userId: access.userId,
+      });
       return apiResponse(contextData);
     }
     return apiError('Unsupported action', 400);

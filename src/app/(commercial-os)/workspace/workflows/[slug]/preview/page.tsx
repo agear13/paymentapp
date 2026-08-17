@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation';
-import { WorkflowInstanceScreen } from '@/components/journey/lovable/workflow-instance-screen';
+import { WorkflowDetailScreen } from '@/components/journey/lovable/workflow-detail-screen';
 import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
 
-export default async function WorkflowInstancePage({
+export default async function WorkflowPreviewPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
@@ -11,5 +11,5 @@ export default async function WorkflowInstancePage({
   if (!getWorkflowBySlug(slug)) {
     notFound();
   }
-  return <WorkflowInstanceScreen slug={slug} />;
+  return <WorkflowDetailScreen slug={slug} />;
 }

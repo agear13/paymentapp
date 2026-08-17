@@ -191,6 +191,31 @@ function buildTimePlaceholderRecord(): Record<string, string | undefined> {
   };
 }
 
+/** Drop optional URL env vars that fail Zod `.url()` when RELAX merges real .env.local values. */
+function stripInvalidOptionalUrls(record: Record<string, string | undefined>) {
+  const optionalUrlKeys = [
+    'UPSTASH_REDIS_REST_URL',
+    'XERO_REDIRECT_URI',
+    'AGREEMENT_ANALYZER_DEMO_URL',
+    'SENTRY_DSN',
+    'R2_PUBLIC_URL',
+    'R2_PUBLIC_BASE_URL',
+    'R2_ENDPOINT',
+    'ASSET_CDN_URL',
+  ] as const;
+
+  for (const key of optionalUrlKeys) {
+    const value = record[key]?.trim();
+    if (value) {
+      try {
+        z.string().url().parse(value);
+      } catch {
+        delete record[key];
+      }
+    }
+  }
+}
+
 // Parse and validate environment variables
 function validateEnv() {
   // Skip validation during build time (Next.js build process)
@@ -220,7 +245,9 @@ function validateEnv() {
     console.warn(
       'RELAX_ENV_VALIDATION=1: merging placeholders for missing env (development or CI test only).',
     );
-    return envSchema.parse({ ...buildTimePlaceholderRecord(), ...process.env });
+    const merged = { ...buildTimePlaceholderRecord(), ...process.env };
+    stripInvalidOptionalUrls(merged);
+    return envSchema.parse(merged);
   }
 
   if (process.env.TEST_MODE === 'true' && process.env.NODE_ENV !== 'production') {

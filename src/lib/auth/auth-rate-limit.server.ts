@@ -1,22 +1,16 @@
 import 'server-only';
 
 import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import {
   checkRateLimit,
+  createUpstashRedis,
   getClientIdentifier,
   getRateLimitHeaders,
 } from '@/lib/rate-limit';
 
-const redis =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN,
-      })
-    : null;
+const redis = createUpstashRedis();
 
 export const authRateLimiters = {
   registerHourly: redis

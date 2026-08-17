@@ -465,7 +465,7 @@ export function ExtractionReviewModal({
 
         onOpenChange(false);
         toast.success('Agreement structure approved', {
-          description: 'Ready for participant setup in the next phase.',
+          description: 'Activating commercial workflow — participants and obligations will appear shortly.',
         });
         onComplete();
       }

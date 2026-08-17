@@ -1,7 +1,7 @@
-import { WorkspaceFeature } from '@/lib/workspace-features/types';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
+import { WorkspaceFeature } from '@/lib/workspace-features/types';
 import type { OrganizationWorkflowWithTemplate } from '@/lib/workflows/types';
-
 /** Features enabled because a workflow is installed (DEPLOYED or PAUSED). */
 export function deriveFeaturesFromDeployedWorkflows(
   workflows: OrganizationWorkflowWithTemplate[]
@@ -26,5 +26,5 @@ export function isWorkflowInstalled(
 export function workflowInstanceHref(templateSlug: string): string | null {
   const template = getWorkflowBySlug(templateSlug);
   if (!template?.template.deployable) return null;
-  return `/workspace/workflows/${templateSlug}`;
+  return COMMERCIAL_OS_ROUTES.workflowInstance(templateSlug);
 }

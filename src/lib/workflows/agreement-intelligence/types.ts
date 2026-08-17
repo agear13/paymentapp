@@ -44,8 +44,25 @@ export type WorkflowAgreementRecord = {
   extractedAt: string | null;
   approvedAt: string | null;
   approvedByUserId: string | null;
+  pilotDealId: string | null;
+  bootstrapError: string | null;
+  bootstrappedAt: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type WorkflowOperationalHubSummary = {
+  lifecycleStatus: OrganizationWorkflowLifecycleStatus;
+  lifecycleLabel: string;
+  isOperational: boolean;
+  pilotDealId: string | null;
+  agreementTitle: string | null;
+  participantCount: number;
+  obligationCount: number;
+  participants: Array<{ id: string; name: string; role: string }>;
+  obligations: Array<{ id: string; label: string; amountLabel: string; status: string }>;
+  upcomingActions: Array<{ label: string; detail: string }>;
+  settlementSchedule: string | null;
 };
 
 export type WorkflowAgreementHubSummary = {
@@ -62,6 +79,8 @@ export type WorkflowAgreementHubSummary = {
   canApprove: boolean;
   canUpload: boolean;
   canRetryExtraction: boolean;
+  canRetryBootstrap: boolean;
+  isOperational: boolean;
 };
 
 export class WorkflowAgreementError extends Error {

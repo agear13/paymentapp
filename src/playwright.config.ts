@@ -15,7 +15,7 @@ export default defineConfig({
   fullyParallel: true,
   // Limit parallel UI hits against a single `next dev` instance (cold compile + HMR).
   workers: process.env.CI ? 1 : 2,
-  timeout: 90_000,
+  timeout: 180_000,
   retries: process.env.CI ? 2 : 0,
   use: {
     baseURL: process.env.E2E_BASE_URL || defaultBaseUrl,

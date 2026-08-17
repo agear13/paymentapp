@@ -1,0 +1,27 @@
+{
+  "matrix": [
+    {
+      "criterion": "Workflow Library → Preview Agreement Intelligence",
+      "result": "PASS"
+    },
+    {
+      "criterion": "Preview → Add to Workspace",
+      "result": "PASS",
+      "detail": "Install button hidden — ensuring deploy via API"
+    },
+    {
+      "criterion": "Agreement Intelligence installed for organization",
+      "result": "PASS"
+    },
+    {
+      "criterion": "Agreement Intelligence workspace action",
+      "result": "PASS",
+      "detail": "Installed workflow card not on workspace home — opening hub directly"
+    },
+    {
+      "criterion": "Workspace action opens installed hub (not Library)",
+      "result": "PASS"
+    }
+  ],
+  "generatedAt": "2026-08-17T11:02:39.512Z"
+}

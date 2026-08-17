@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
+  Brain,
   Check,
   FilePlus2,
   LayoutGrid,
@@ -15,6 +16,9 @@ import {
   Star,
 } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import { buildInstalledWorkspaceActions } from '@/lib/journey/installed-workflow-workspace-actions';
+import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
+import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
 
 type CardId = 'create-invoice' | 'manage-invoices' | 'sync-xero' | 'collections' | 'workspace';
 
@@ -56,9 +60,9 @@ const CARDS: {
   {
     id: 'workspace',
     title: 'Commercial Workspace',
-    desc: 'Open your full commercial operating system with all workflows.',
+    desc: 'Open your commercial operating dashboard with active workflows and items needing attention.',
     icon: LayoutGrid,
-    to: COMMERCIAL_OS_ROUTES.workflows,
+    to: COMMERCIAL_OS_ROUTES.commercialWorkspace,
   },
 ];
 
@@ -110,6 +114,7 @@ type Business = {
 
 export function WorkspaceStartScreen() {
   const router = useRouter();
+  const { workflows, loading: workflowsLoading } = useDeployedWorkflows();
   const [selected, setSelected] = useState<CardId | null>(null);
   const [objective, setObjective] = useState('reconcile');
   const [business, setBusiness] = useState<Business>({});
@@ -163,8 +168,13 @@ export function WorkspaceStartScreen() {
     return `We've detected ${list} in your workflow. Your first workspace will be preconfigured to accept and reconcile payments across these channels.`;
   }, [detected]);
 
-  const launch = (card: (typeof CARDS)[number]) => {
-    setSelected(card.id);
+  const installedWorkflowCards = useMemo(
+    () => buildInstalledWorkspaceActions(workflows),
+    [workflows]
+  );
+
+  const launch = (card: { id: string; to: string }) => {
+    setSelected(card.id as CardId);
     try {
       sessionStorage.setItem('provvy.startWorkflow', card.id);
     } catch {
@@ -241,6 +251,37 @@ export function WorkspaceStartScreen() {
                 </button>
               );
             })}
+
+            {!workflowsLoading &&
+              installedWorkflowCards.map((action, index) => {
+                const catalog = getWorkflowBySlug(action.slug);
+                const Icon = catalog?.icon ?? Brain;
+                const cardIndex = CARDS.length + index;
+                return (
+                  <button
+                    key={action.slug}
+                    type="button"
+                    onClick={() => launch({ id: action.slug, to: action.href })}
+                    aria-label={`Start with ${action.title}`}
+                    style={{ animationDelay: `${cardIndex * 50}ms` }}
+                    className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 text-left shadow-card transition-all animate-fade-up hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-glow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-purple text-primary-foreground shadow-glow">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="mt-4 text-[15px] font-semibold tracking-tight text-foreground">
+                      {action.title}
+                    </div>
+                    <div className="mt-1 text-[13px] text-ink-soft">{action.description}</div>
+                    <div className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary opacity-80 transition-opacity group-hover:opacity-100">
+                      Start here
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </div>
+                  </button>
+                );
+              })}
           </div>
 
           <p className="mt-6 text-[12.5px] text-ink-soft">

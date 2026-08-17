@@ -8,13 +8,19 @@ import { Redis } from '@upstash/redis'
 
 const RATE_LIMIT_TIMEOUT_MS = Number.parseInt(process.env.RATE_LIMIT_TIMEOUT_MS || '60', 10)
 
-// Create Redis client
-const redis = process.env.UPSTASH_REDIS_REST_URL
-  ? new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-    })
-  : null
+function createUpstashRedis(): Redis | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL?.trim()
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim()
+  if (!url || !token || !url.startsWith('https://')) {
+    return null
+  }
+  return new Redis({ url, token })
+}
+
+export { createUpstashRedis }
+
+// Create Redis client (skip invalid/placeholder URLs in local dev and E2E)
+const redis = createUpstashRedis()
 
 // Rate limiters for different endpoints
 export const rateLimiters = {

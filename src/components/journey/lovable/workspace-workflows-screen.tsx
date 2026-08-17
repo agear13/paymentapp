@@ -52,10 +52,14 @@ export function WorkspaceWorkflowsScreen() {
               </div>
             </div>
             <Link
-              href={recommended.deployRoute}
+              href={
+                isInstalled(recommended.slug)
+                  ? COMMERCIAL_OS_ROUTES.workflowInstance(recommended.slug)
+                  : COMMERCIAL_OS_ROUTES.workflowDetail(recommended.slug)
+              }
               className="inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
             >
-              Continue Workflow
+              {isInstalled(recommended.slug) ? 'Open Workflow' : 'Continue Workflow'}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>

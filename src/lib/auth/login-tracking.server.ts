@@ -19,17 +19,22 @@ export type UserAuthProfile = {
 };
 
 export async function getUserAuthProfile(userId: string): Promise<UserAuthProfile | null> {
-  const row = await prisma.user_auth_profiles.findUnique({ where: { user_id: userId } });
-  if (!row) return null;
-  return {
-    userId: row.user_id,
-    lastLoginAt: row.last_login_at,
-    lastLoginBrowser: row.last_login_browser,
-    lastLoginOs: row.last_login_os,
-    lastLoginLocation: row.last_login_location,
-    suspiciousLoginPending: row.suspicious_login_pending,
-    suspiciousLoginReason: row.suspicious_login_reason,
-  };
+  try {
+    const row = await prisma.user_auth_profiles.findUnique({ where: { user_id: userId } });
+    if (!row) return null;
+    return {
+      userId: row.user_id,
+      lastLoginAt: row.last_login_at,
+      lastLoginBrowser: row.last_login_browser,
+      lastLoginOs: row.last_login_os,
+      lastLoginLocation: row.last_login_location,
+      suspiciousLoginPending: row.suspicious_login_pending,
+      suspiciousLoginReason: row.suspicious_login_reason,
+    };
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'P2021') return null;
+    throw error;
+  }
 }
 
 export async function recordSuccessfulLogin(input: {
@@ -46,78 +51,96 @@ export async function recordSuccessfulLogin(input: {
       input.request.headers.get('cf-connecting-ip')
   );
 
-  const existing = await prisma.user_auth_profiles.findUnique({
-    where: { user_id: input.userId },
-  });
-
-  const suspiciousResult = evaluateSuspiciousLogin({
-    userId: input.userId,
-    previousLocation: existing?.last_login_location,
-    previousLoginAt: existing?.last_login_at,
-    currentLocation: location,
-  });
-
-  const now = new Date();
-
-  await prisma.user_auth_profiles.upsert({
-    where: { user_id: input.userId },
-    create: {
-      user_id: input.userId,
-      last_login_at: now,
-      last_login_browser: parsed.browser,
-      last_login_os: parsed.os,
-      last_login_location: location ?? null,
-      last_login_ip_hash: ipHash ?? null,
-      previous_login_at: null,
-      previous_login_location: null,
-      suspicious_login_pending: suspiciousResult.suspicious,
-      suspicious_login_reason: suspiciousResult.reason ?? null,
-    },
-    update: {
-      previous_login_at: existing?.last_login_at ?? null,
-      previous_login_location: existing?.last_login_location ?? null,
-      last_login_at: now,
-      last_login_browser: parsed.browser,
-      last_login_os: parsed.os,
-      last_login_location: location ?? null,
-      last_login_ip_hash: ipHash ?? null,
-      suspicious_login_pending: suspiciousResult.suspicious,
-      suspicious_login_reason: suspiciousResult.reason ?? null,
-    },
-  });
-
-  if (suspiciousResult.suspicious) {
-    recordAuthAuditEvent({
-      eventType: AuditEventType.SECURITY_SUSPICIOUS_LOGIN,
-      userId: input.userId,
-      email: input.email,
-      request: input.request,
-      metadata: {
-        ruleId: suspiciousResult.ruleId,
-        reason: suspiciousResult.reason,
-        location,
-      },
-      success: false,
+  try {
+    const existing = await prisma.user_auth_profiles.findUnique({
+      where: { user_id: input.userId },
     });
-  }
 
-  return { suspicious: suspiciousResult.suspicious, reason: suspiciousResult.reason };
+    const suspiciousResult = evaluateSuspiciousLogin({
+      userId: input.userId,
+      previousLocation: existing?.last_login_location,
+      previousLoginAt: existing?.last_login_at,
+      currentLocation: location,
+    });
+
+    const now = new Date();
+
+    await prisma.user_auth_profiles.upsert({
+      where: { user_id: input.userId },
+      create: {
+        user_id: input.userId,
+        last_login_at: now,
+        last_login_browser: parsed.browser,
+        last_login_os: parsed.os,
+        last_login_location: location ?? null,
+        last_login_ip_hash: ipHash ?? null,
+        previous_login_at: null,
+        previous_login_location: null,
+        suspicious_login_pending: suspiciousResult.suspicious,
+        suspicious_login_reason: suspiciousResult.reason ?? null,
+      },
+      update: {
+        previous_login_at: existing?.last_login_at ?? null,
+        previous_login_location: existing?.last_login_location ?? null,
+        last_login_at: now,
+        last_login_browser: parsed.browser,
+        last_login_os: parsed.os,
+        last_login_location: location ?? null,
+        last_login_ip_hash: ipHash ?? null,
+        suspicious_login_pending: suspiciousResult.suspicious,
+        suspicious_login_reason: suspiciousResult.reason ?? null,
+      },
+    });
+
+    if (suspiciousResult.suspicious) {
+      recordAuthAuditEvent({
+        eventType: AuditEventType.SECURITY_SUSPICIOUS_LOGIN,
+        userId: input.userId,
+        email: input.email,
+        request: input.request,
+        metadata: {
+          ruleId: suspiciousResult.ruleId,
+          reason: suspiciousResult.reason,
+          location,
+        },
+        success: false,
+      });
+    }
+
+    return { suspicious: suspiciousResult.suspicious, reason: suspiciousResult.reason };
+  } catch (error) {
+    const code = (error as { code?: string })?.code;
+    if (code === 'P2021') {
+      return { suspicious: false };
+    }
+    throw error;
+  }
 }
 
 export async function clearSuspiciousLoginFlag(userId: string): Promise<void> {
-  await prisma.user_auth_profiles.updateMany({
-    where: { user_id: userId },
-    data: {
-      suspicious_login_pending: false,
-      suspicious_login_reason: null,
-    },
-  });
+  try {
+    await prisma.user_auth_profiles.updateMany({
+      where: { user_id: userId },
+      data: {
+        suspicious_login_pending: false,
+        suspicious_login_reason: null,
+      },
+    });
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'P2021') return;
+    throw error;
+  }
 }
 
 export async function isSuspiciousLoginPending(userId: string): Promise<boolean> {
-  const row = await prisma.user_auth_profiles.findUnique({
-    where: { user_id: userId },
-    select: { suspicious_login_pending: true },
-  });
-  return Boolean(row?.suspicious_login_pending);
+  try {
+    const row = await prisma.user_auth_profiles.findUnique({
+      where: { user_id: userId },
+      select: { suspicious_login_pending: true },
+    });
+    return Boolean(row?.suspicious_login_pending);
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'P2021') return false;
+    throw error;
+  }
 }

@@ -6,6 +6,7 @@
 export const COMMERCIAL_OS_ROUTES = {
   provisioningBuild: '/journey/provisioning?build=1',
   workspace: '/workspace',
+  commercialWorkspace: '/workspace/commercial',
   receivables: '/workspace/receivables',
   createInvoice: '/workspace/receivables/create',
   invoiceList: '/workspace/receivables/invoices',
@@ -28,7 +29,9 @@ export const COMMERCIAL_OS_ROUTES = {
   },
   workflows: '/workspace/workflows',
   workflowLibrary: '/workspace/workflows',
-  workflowDetail: (slug: string) => `/workspace/workflows/${slug}`,
+  /** Marketplace preview — always the capability/detail page. */
+  workflowDetail: (slug: string) => `/workspace/workflows/${slug}/preview`,
+  /** Installed workflow operating surface. */
   workflowInstance: (slug: string) => `/workspace/workflows/${slug}`,
   publicWorkflowDetail: (slug: string) => `/journey/workflows/${slug}`,
   workflowReconciliation: '/workspace/workflow/reconciliation',

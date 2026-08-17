@@ -8,9 +8,11 @@ import type {
 } from '@/lib/workflows/agreement-intelligence/types';
 import {
   canApproveStructure,
+  canRetryBootstrap,
   canRetryExtraction,
   canReviewExtraction,
   canUploadAgreement,
+  isOperationalWorkflow,
 } from '@/lib/workflows/agreement-intelligence/lifecycle';
 
 function resolveSettlementSchedule(result: ExtractionResult | null): string | null {
@@ -65,5 +67,7 @@ export function buildWorkflowAgreementHubSummary(input: {
     canApprove: canApproveStructure(input.lifecycleStatus),
     canUpload: canUploadAgreement(input.lifecycleStatus),
     canRetryExtraction: canRetryExtraction(input.lifecycleStatus),
+    canRetryBootstrap: canRetryBootstrap(input.lifecycleStatus),
+    isOperational: isOperationalWorkflow(input.lifecycleStatus),
   };
 }

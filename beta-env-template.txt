@@ -37,7 +37,10 @@ SESSION_SECRET=your-session-secret
 NEXT_PUBLIC_APP_URL=https://your-service-name.onrender.com
 NODE_ENV=production
 
-# OPTIONAL: Email, monitoring, etc.
+# E2E PLAYWRIGHT (local only — add to src/.env.local, never commit)
+E2E_EMAIL=e2e-agreement-intelligence@yourdomain.test
+E2E_PASSWORD=generate-via-npm-run-e2e-setup-auth
+
 RESEND_API_KEY=your-resend-key (optional)
 SENTRY_DSN=your-sentry-dsn (optional)
 

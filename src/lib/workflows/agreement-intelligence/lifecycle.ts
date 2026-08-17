@@ -6,6 +6,9 @@ export const WORKFLOW_LIFECYCLE_LABELS: Record<OrganizationWorkflowLifecycleStat
   READY_FOR_REVIEW: 'Ready for review',
   EXTRACTION_FAILED: 'Extraction failed',
   APPROVED: 'Structure approved',
+  BOOTSTRAPPING: 'Activating workflow',
+  BOOTSTRAP_FAILED: 'Activation failed',
+  ACTIVE: 'Active',
 };
 
 export function canUploadAgreement(lifecycleStatus: OrganizationWorkflowLifecycleStatus): boolean {
@@ -22,4 +25,20 @@ export function canApproveStructure(lifecycleStatus: OrganizationWorkflowLifecyc
 
 export function canRetryExtraction(lifecycleStatus: OrganizationWorkflowLifecycleStatus): boolean {
   return lifecycleStatus === 'EXTRACTION_FAILED';
+}
+
+export function canRetryBootstrap(lifecycleStatus: OrganizationWorkflowLifecycleStatus): boolean {
+  return lifecycleStatus === 'BOOTSTRAP_FAILED';
+}
+
+export function isOperationalWorkflow(lifecycleStatus: OrganizationWorkflowLifecycleStatus): boolean {
+  return lifecycleStatus === 'ACTIVE';
+}
+
+export function isWorkflowLockedForInput(lifecycleStatus: OrganizationWorkflowLifecycleStatus): boolean {
+  return (
+    lifecycleStatus === 'APPROVED' ||
+    lifecycleStatus === 'BOOTSTRAPPING' ||
+    lifecycleStatus === 'ACTIVE'
+  );
 }

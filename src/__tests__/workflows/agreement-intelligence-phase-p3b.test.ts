@@ -64,6 +64,19 @@ jest.mock('@/lib/ai-extractor/commercial-graph', () => ({
   })),
 }));
 
+jest.mock('@/lib/deal-network-demo/pilot-snapshot.server', () => ({
+  getPilotSnapshotForUser: jest.fn().mockResolvedValue({ deals: [], participants: [] }),
+  syncPilotSnapshotForUser: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('@/lib/onboarding/refresh-onboarding-project-obligations.server', () => ({
+  refreshProjectObligationsAfterParticipantPersist: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('@/lib/workflows/agreement-intelligence/operational-hub-summary.server', () => ({
+  buildWorkflowOperationalHubSummary: jest.fn().mockResolvedValue(null),
+}));
+
 const { prisma } = jest.requireMock('@/lib/server/prisma');
 const { getOrganizationWorkflowById } = jest.requireMock('@/lib/workflows/organization-workflows.server');
 const { extractAgreementFromText } = jest.requireMock('@/lib/ai-extractor/extraction-service');
@@ -450,7 +463,7 @@ describe('Phase P3-B — Agreement Intelligence workflow workspace', () => {
       ).rejects.toMatchObject({ code: 'INVALID_STATE' });
     });
 
-    it('approval records user + timestamp and persists approved state', async () => {
+    it('approval bootstraps commercial workflow and transitions to ACTIVE', async () => {
       const extraction = sampleExtraction();
       prisma.organization_workflows.findFirst
         .mockResolvedValueOnce(
@@ -464,18 +477,21 @@ describe('Phase P3-B — Agreement Intelligence workflow workspace', () => {
         )
         .mockResolvedValueOnce(
           workflowRow({
-            lifecycle_status: 'APPROVED',
+            lifecycle_status: 'ACTIVE',
             agreement: agreementRow({
               extraction_status: 'APPROVED',
               extraction_result: extraction,
               approved_at: new Date('2026-08-17T11:00:00Z'),
               approved_by_user_id: 'user-1',
+              pilot_deal_id: `aiwf-${WF_ID}`,
+              bootstrapped_at: new Date('2026-08-17T11:00:00Z'),
             }),
           })
         );
       prisma.organization_workflow_agreements.update.mockResolvedValue(
         agreementRow({ extraction_status: 'APPROVED' })
       );
+      prisma.organization_workflows.update.mockResolvedValue({});
 
       const context = await approveWorkflowAgreementStructure({
         organizationId: ORG_A,
@@ -490,10 +506,11 @@ describe('Phase P3-B — Agreement Intelligence workflow workspace', () => {
           data: expect.objectContaining({
             extraction_status: 'APPROVED',
             approved_by_user_id: 'user-1',
+            pilot_deal_id: `aiwf-${WF_ID}`,
           }),
         })
       );
-      expect(context.lifecycleStatus).toBe('APPROVED');
+      expect(context.lifecycleStatus).toBe('ACTIVE');
     });
   });
 
@@ -540,6 +557,9 @@ describe('Phase P3-B — Agreement Intelligence workflow workspace', () => {
           extractedAt: new Date().toISOString(),
           approvedAt: null,
           approvedByUserId: null,
+          pilotDealId: null,
+          bootstrapError: null,
+          bootstrappedAt: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },

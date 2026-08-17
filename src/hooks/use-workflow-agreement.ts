@@ -1,7 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { AgreementIntelligenceConfiguration, WorkflowAgreementHubSummary, WorkflowAgreementRecord } from '@/lib/workflows/agreement-intelligence/types';
+import type {
+  AgreementIntelligenceConfiguration,
+  WorkflowAgreementHubSummary,
+  WorkflowAgreementRecord,
+  WorkflowOperationalHubSummary,
+} from '@/lib/workflows/agreement-intelligence/types';
 import type { OrganizationWorkflowLifecycleStatus } from '@prisma/client';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 
@@ -11,6 +16,7 @@ export type WorkflowAgreementContext = {
   configuration: AgreementIntelligenceConfiguration;
   agreement: WorkflowAgreementRecord | null;
   hubSummary: WorkflowAgreementHubSummary;
+  operationalSummary: WorkflowOperationalHubSummary | null;
 };
 
 export function useWorkflowAgreement(workflowId: string | null) {
@@ -168,6 +174,34 @@ export function useWorkflowAgreement(workflowId: string | null) {
     [workflowId, refresh]
   );
 
+  const retryBootstrap = useCallback(async () => {
+    if (!workflowId) return false;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await csrfAwareFetch(`/api/workflows/${workflowId}/agreement`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'bootstrap' }),
+      });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(payload?.error ?? 'Activation failed');
+        await refresh();
+        return false;
+      }
+      const data = (await res.json()) as WorkflowAgreementContext;
+      setContext(data);
+      return true;
+    } catch {
+      setError('Activation failed');
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  }, [workflowId, refresh]);
+
   return {
     context,
     loading,
@@ -177,6 +211,7 @@ export function useWorkflowAgreement(workflowId: string | null) {
     submitPaste,
     submitUpload,
     retryExtraction,
+    retryBootstrap,
     updateConfiguration,
   };
 }

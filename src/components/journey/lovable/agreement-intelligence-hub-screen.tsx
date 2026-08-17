@@ -54,6 +54,7 @@ export function AgreementIntelligenceHubScreen() {
     submitPaste,
     submitUpload,
     retryExtraction,
+    retryBootstrap,
     updateConfiguration,
   } = useWorkflowAgreement(installed?.id ?? null);
 
@@ -75,11 +76,11 @@ export function AgreementIntelligenceHubScreen() {
     return (
       <div className="animate-fade-up space-y-6 pb-16">
         <Link
-          href={COMMERCIAL_OS_ROUTES.workflows}
+          href={COMMERCIAL_OS_ROUTES.workspace}
           className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Workflow Library
+          Back to Workspace
         </Link>
         <div className="rounded-2xl border border-border bg-card p-8 shadow-card">
           <h1 className="text-xl font-semibold">Agreement Intelligence</h1>
@@ -98,22 +99,31 @@ export function AgreementIntelligenceHubScreen() {
   }
 
   const hub = context?.hubSummary;
+  const operational = context?.operationalSummary;
   const agreement = context?.agreement;
   const extraction = agreement?.extractionResult;
   const lifecycleStatus = context?.lifecycleStatus ?? installed.lifecycleStatus ?? 'AWAITING_INPUT';
   const statusLabel = WORKFLOW_LIFECYCLE_LABELS[lifecycleStatus] ?? lifecycleStatus;
   const showEmptyState = !hub?.hasAgreement || lifecycleStatus === 'AWAITING_INPUT';
-  const isExtracting = lifecycleStatus === 'EXTRACTING' || submitting;
-  const isApproved = lifecycleStatus === 'APPROVED';
+  const isExtracting =
+    lifecycleStatus === 'EXTRACTING' ||
+    lifecycleStatus === 'BOOTSTRAPPING' ||
+    submitting;
+  const isActive = lifecycleStatus === 'ACTIVE';
+  const isBootstrapFailed = lifecycleStatus === 'BOOTSTRAP_FAILED';
+  const isLocked =
+    lifecycleStatus === 'APPROVED' ||
+    lifecycleStatus === 'ACTIVE' ||
+    lifecycleStatus === 'BOOTSTRAPPING';
 
   return (
     <div className="animate-fade-up space-y-8 pb-16">
       <Link
-        href={COMMERCIAL_OS_ROUTES.workflows}
+        href={COMMERCIAL_OS_ROUTES.workspace}
         className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-foreground"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Back to Workflow Library
+        Back to Workspace
       </Link>
 
       <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-card">
@@ -130,8 +140,14 @@ export function AgreementIntelligenceHubScreen() {
                 Turn your agreements into structured commercial workflows.
               </p>
               <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
-                Status: {statusLabel}
+                {isActive ? 'ACTIVE' : `Status: ${statusLabel}`}
               </div>
+              {isActive && operational && (
+                <p className="mt-2 text-[13px] text-ink-soft">
+                  1 Agreement · {operational.participantCount} Participants ·{' '}
+                  {operational.obligationCount} Obligations
+                </p>
+              )}
             </div>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={() => setConfigOpen((v) => !v)}>
@@ -155,7 +171,7 @@ export function AgreementIntelligenceHubScreen() {
                       if (ok) toast.success('Configuration updated');
                     })
                   }
-                  disabled={isApproved || submitting}
+                  disabled={isLocked || submitting}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -183,7 +199,7 @@ export function AgreementIntelligenceHubScreen() {
                       if (ok) toast.success('Configuration updated');
                     })
                   }
-                  disabled={isApproved || submitting}
+                  disabled={isLocked || submitting}
                 />
               </div>
             </div>
@@ -209,7 +225,7 @@ export function AgreementIntelligenceHubScreen() {
                 <li>2. Provvy extracts commercial terms</li>
                 <li>3. Review the extracted structure</li>
                 <li>4. Approve the workflow</li>
-                <li className="md:col-span-2">5. Track obligations and participants (next phase)</li>
+                <li className="md:col-span-2">5. Track obligations and participants after activation</li>
               </ol>
               <div className="flex flex-wrap gap-3">
                 <Button type="button" onClick={() => setInputOpen(true)}>
@@ -224,20 +240,117 @@ export function AgreementIntelligenceHubScreen() {
             </div>
           )}
 
-          {isExtracting && (
+          {isExtracting && lifecycleStatus === 'BOOTSTRAPPING' && (
+            <div className="flex items-center gap-3 rounded-xl border border-border bg-secondary/20 px-4 py-4 text-[14px] text-foreground">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              Creating participants, obligations, and settlement structure…
+            </div>
+          )}
+
+          {isExtracting && lifecycleStatus !== 'BOOTSTRAPPING' && (
             <div className="flex items-center gap-3 rounded-xl border border-border bg-secondary/20 px-4 py-4 text-[14px] text-foreground">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
               Extracting commercial terms from your agreement…
             </div>
           )}
 
-          {hub?.hasAgreement && !showEmptyState && !isExtracting && (
+          {hub?.hasAgreement && !showEmptyState && !isExtracting && isActive && operational && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold">
+                  {operational.agreementTitle ?? hub.title ?? 'Agreement'}
+                </h2>
+                <p className="mt-1 text-[13px] text-ink-soft">
+                  Commercial structure is active. Payments are not executed automatically — use
+                  existing funding and release flows when ready.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <MetricCard label="Participants" value={operational.participantCount} />
+                <MetricCard label="Obligations" value={operational.obligationCount} />
+                <MetricCard
+                  label="Settlement schedule"
+                  value={operational.settlementSchedule ?? 'Not captured'}
+                />
+              </div>
+
+              {operational.participants.length > 0 && (
+                <div className="rounded-xl border border-border bg-secondary/10 p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                    Participants
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {operational.participants.map((participant) => (
+                      <li key={participant.id} className="text-[14px]">
+                        <span className="font-medium">{participant.name}</span>
+                        {participant.role ? (
+                          <span className="text-ink-soft"> · {participant.role}</span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {operational.obligations.length > 0 && (
+                <div className="rounded-xl border border-border bg-secondary/10 p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                    Obligations
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {operational.obligations.map((obligation) => (
+                      <li key={obligation.id} className="text-[14px]">
+                        <span className="font-medium">{obligation.label}</span>
+                        <span className="text-ink-soft"> — {obligation.amountLabel}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {operational.settlementSchedule && (
+                <div className="rounded-xl border border-border bg-secondary/10 p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                    Settlement schedule
+                  </p>
+                  <p className="mt-3 text-[14px] font-medium">{operational.settlementSchedule}</p>
+                </div>
+              )}
+
+              {operational.upcomingActions.length > 0 && (
+                <div className="rounded-xl border border-border bg-secondary/10 p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                    Upcoming actions
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {operational.upcomingActions.map((action) => (
+                      <li key={`${action.label}-${action.detail}`} className="text-[14px]">
+                        <span className="font-medium">{action.label}</span>
+                        <span className="text-ink-soft"> — {action.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[13px] font-medium text-emerald-700 dark:text-emerald-400">
+                <CheckCircle2 className="h-4 w-4" />
+                Active
+                {agreement?.bootstrappedAt
+                  ? ` · ${new Date(agreement.bootstrappedAt).toLocaleString()}`
+                  : ''}
+              </div>
+            </div>
+          )}
+
+          {hub?.hasAgreement && !showEmptyState && !isExtracting && !isActive && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-semibold">{hub.title ?? 'Agreement'}</h2>
                 <p className="mt-1 text-[13px] text-ink-soft">
-                  {isApproved
-                    ? 'Structure approved — ready for participant setup in the next phase.'
+                  {isBootstrapFailed
+                    ? 'Structure was approved but activation failed. Retry to create the commercial workflow.'
                     : 'Review AI-extracted terms before approving. Extracted data is not automatically correct.'}
                 </p>
               </div>
@@ -295,22 +408,36 @@ export function AgreementIntelligenceHubScreen() {
                 </div>
               )}
 
+              {isBootstrapFailed && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-4">
+                  <p className="text-[14px] font-medium text-amber-900 dark:text-amber-200">
+                    Activation failed
+                  </p>
+                  <p className="mt-1 text-[13px] text-ink-soft">
+                    {agreement?.bootstrapError ??
+                      'Could not create participants and obligations from the approved structure.'}
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-3">
                 {hub.canReview && extraction && (
                   <Button type="button" onClick={() => setReviewOpen(true)}>
                     Review Agreement
                   </Button>
                 )}
-                {isApproved && (
-                  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[13px] font-medium text-emerald-700 dark:text-emerald-400">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Approved
-                    {agreement?.approvedAt
-                      ? ` · ${new Date(agreement.approvedAt).toLocaleString()}`
-                      : ''}
-                  </div>
+                {hub.canRetryBootstrap && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={submitting}
+                    onClick={() => void retryBootstrap()}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Retry activation
+                  </Button>
                 )}
-                {!isApproved && hub.canUpload && (
+                {!isLocked && hub.canUpload && (
                   <Button type="button" variant="outline" disabled={submitting} onClick={() => setInputOpen(true)}>
                     Replace agreement
                   </Button>

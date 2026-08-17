@@ -13,24 +13,34 @@ import {
   Plug,
   Sparkles,
   Settings,
-  Brain,
 } from 'lucide-react';
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
 import { WorkspaceAccountMenu } from '@/components/commercial-os/workspace-account-menu';
 import { WorkspaceAccountingBanners } from '@/components/journey/lovable/workspace-accounting-banners';
-import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
-import { WorkspaceFeature } from '@/lib/workspace-features/types';
 
 type NavItem = {
   to: string;
   label: string;
   icon: typeof LayoutGrid;
   exact?: boolean;
+  isActive?: (pathname: string) => boolean;
 };
+
+function isWorkflowLibraryPath(pathname: string): boolean {
+  return (
+    pathname === '/workspace/workflows' ||
+    /^\/workspace\/workflows\/[^/]+\/preview$/.test(pathname)
+  );
+}
 
 const NAV: NavItem[] = [
   { to: '/workspace', label: 'Workspace', icon: LayoutGrid, exact: true },
-  { to: '/workspace/workflows', label: 'Workflows', icon: Workflow },
+  {
+    to: '/workspace/workflows',
+    label: 'Workflow Library',
+    icon: Workflow,
+    isActive: isWorkflowLibraryPath,
+  },
   { to: '/workspace/timeline', label: 'Timeline', icon: Activity },
   { to: '/workspace/connected', label: 'Connected Systems', icon: Plug },
   { to: '/workspace/advisor', label: 'AI Advisor', icon: Sparkles },
@@ -40,19 +50,6 @@ const NAV: NavItem[] = [
 export function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '';
   const [dark, setDark] = useState(false);
-  const { enabledFeatures } = useDeployedWorkflows();
-
-  const showAgreementIntelligence = enabledFeatures.includes(
-    WorkspaceFeature.AgreementIntelligence
-  );
-
-  const navItems: NavItem[] = [
-    ...NAV.slice(0, 2),
-    ...(showAgreementIntelligence
-      ? [{ to: '/workspace/workflows/agreement-intelligence', label: 'Agreement Intelligence', icon: Brain }]
-      : []),
-    ...NAV.slice(2),
-  ];
 
   useEffect(() => {
     const stored = localStorage.getItem('theme');
@@ -80,8 +77,12 @@ export function WorkspaceLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-6">
             <ProvvyBrandMark href="/workspace" />
             <nav className="hidden items-center gap-1 lg:flex">
-              {navItems.map((item) => {
-                const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
+              {NAV.map((item) => {
+                const active = item.isActive
+                  ? item.isActive(pathname)
+                  : item.exact
+                    ? pathname === item.to
+                    : pathname.startsWith(item.to);
                 const Icon = item.icon;
                 return (
                   <Link
@@ -117,8 +118,12 @@ export function WorkspaceLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav className="mt-2 flex items-center gap-1 overflow-x-auto lg:hidden">
-          {navItems.map((item) => {
-            const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
+          {NAV.map((item) => {
+            const active = item.isActive
+              ? item.isActive(pathname)
+              : item.exact
+                ? pathname === item.to
+                : pathname.startsWith(item.to);
             const Icon = item.icon;
             return (
               <Link

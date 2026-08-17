@@ -1755,6 +1755,9 @@ enum OrganizationWorkflowLifecycleStatus {
   READY_FOR_REVIEW
   EXTRACTION_FAILED
   APPROVED
+  BOOTSTRAPPING
+  BOOTSTRAP_FAILED
+  ACTIVE
 }
 
 enum WorkflowAgreementSourceType {
@@ -1811,6 +1814,9 @@ model organization_workflow_agreements {
   extracted_at             DateTime?                         @db.Timestamptz(6)
   approved_at              DateTime?                         @db.Timestamptz(6)
   approved_by_user_id      String?                           @db.VarChar(255)
+  pilot_deal_id            String?                           @db.VarChar(255)
+  bootstrap_error          String?                           @db.Text
+  bootstrapped_at          DateTime?                         @db.Timestamptz(6)
   created_at               DateTime                          @default(now()) @db.Timestamptz(6)
   updated_at               DateTime                          @updatedAt @db.Timestamptz(6)
   organization_workflows   organization_workflows            @relation(fields: [organization_workflow_id], references: [id], onDelete: Cascade)
@@ -1818,6 +1824,7 @@ model organization_workflow_agreements {
 
   @@index([organization_id])
   @@index([extraction_status])
+  @@index([pilot_deal_id])
 }
 
 model user_auth_profiles {
