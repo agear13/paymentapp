@@ -238,6 +238,8 @@ model organizations {
   treasury_events                    treasury_events[]
   treasury_event_links               treasury_event_links[]
   treasury_manual_reconciliations    treasury_manual_reconciliations[]
+  organization_workflows             organization_workflows[]
+  organization_workflow_agreements   organization_workflow_agreements[]
 }
 
 /// Immutable operational onboarding / bootstrap / graph initialization transitions.
@@ -1740,6 +1742,82 @@ model treasury_manual_reconciliations {
   @@index([organization_id, linked_at(sort: Desc)])
   @@index([source_event_id])
   @@index([target_event_id])
+}
+
+enum OrganizationWorkflowStatus {
+  DEPLOYED
+  PAUSED
+}
+
+enum OrganizationWorkflowLifecycleStatus {
+  AWAITING_INPUT
+  EXTRACTING
+  READY_FOR_REVIEW
+  EXTRACTION_FAILED
+  APPROVED
+}
+
+enum WorkflowAgreementSourceType {
+  PDF
+  PASTE
+}
+
+enum WorkflowAgreementExtractionStatus {
+  PENDING
+  EXTRACTING
+  READY_FOR_REVIEW
+  FAILED
+  APPROVED
+}
+
+/// Workspace-scoped installed workflow instance (template defined in workflow-library-catalog).
+model organization_workflows {
+  id                String                              @id @default(uuid()) @db.Uuid
+  organization_id   String                              @db.Uuid
+  template_slug     String                              @db.VarChar(64)
+  template_version  String                              @db.VarChar(32)
+  status            OrganizationWorkflowStatus          @default(DEPLOYED)
+  lifecycle_status  OrganizationWorkflowLifecycleStatus @default(AWAITING_INPUT)
+  configuration     Json                                @default("{}")
+  deployed_at       DateTime                            @default(now()) @db.Timestamptz(6)
+  paused_at         DateTime?                           @db.Timestamptz(6)
+  created_at        DateTime                            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime                            @updatedAt @db.Timestamptz(6)
+  organizations     organizations                       @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  agreement         organization_workflow_agreements?
+
+  @@unique([organization_id, template_slug], name: "ux_organization_workflows_org_template")
+  @@index([organization_id, status])
+  @@index([organization_id, lifecycle_status])
+}
+
+/// Agreement input linked to an installed Agreement Intelligence workflow instance.
+model organization_workflow_agreements {
+  id                       String                            @id @default(uuid()) @db.Uuid
+  organization_id          String                            @db.Uuid
+  organization_workflow_id String                            @unique @db.Uuid
+  source_type              WorkflowAgreementSourceType
+  title                    String?                           @db.VarChar(512)
+  original_filename        String?                           @db.VarChar(512)
+  mime_type                String?                           @db.VarChar(128)
+  file_size_bytes          Int?
+  storage_key              String?                           @db.VarChar(1024)
+  source_text              String?                           @db.Text
+  extraction_status        WorkflowAgreementExtractionStatus @default(PENDING)
+  extraction_result        Json?
+  commercial_graph         Json?
+  approved_structure       Json?
+  extraction_error         String?                           @db.Text
+  extracted_at             DateTime?                         @db.Timestamptz(6)
+  approved_at              DateTime?                         @db.Timestamptz(6)
+  approved_by_user_id      String?                           @db.VarChar(255)
+  created_at               DateTime                          @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                          @updatedAt @db.Timestamptz(6)
+  organization_workflows   organization_workflows            @relation(fields: [organization_workflow_id], references: [id], onDelete: Cascade)
+  organizations            organizations                     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id])
+  @@index([extraction_status])
 }
 
 model user_auth_profiles {

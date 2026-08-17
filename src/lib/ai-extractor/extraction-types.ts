@@ -7,7 +7,7 @@ export type { AgreementType, ServiceCategory };
 export type { ExtractionReadinessAssessment, ReadinessDimension, ReadinessDimensionScore } from './extraction-readiness';
 
 export type ExtractionConfidence = 'high' | 'medium' | 'low' | 'absent';
-export type ExtractorEntryPoint = 'project_create' | 'participant_add' | 'onboarding';
+export type ExtractorEntryPoint = 'project_create' | 'participant_add' | 'onboarding' | 'workflow_agreement';
 export type ParticipationModelOption =
   | 'fixed_payout'
   | 'revenue_share'

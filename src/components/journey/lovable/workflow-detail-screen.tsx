@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   ArrowLeft,
-  ArrowRight,
   Check,
   Clock,
   Sparkles,
@@ -13,6 +12,8 @@ import {
 } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
+import { WorkflowDeployButton } from '@/components/journey/lovable/workflow-deploy-button';
+import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
 
 function Metric({
   icon: Icon,
@@ -43,8 +44,13 @@ export function WorkflowDetailScreen({
   backHref?: string;
   backLabel?: string;
 }) {
+  const { isInstalled, refresh } = useDeployedWorkflows();
   const workflow = getWorkflowBySlug(slug);
   if (!workflow) notFound();
+
+  const installed = isInstalled(slug);
+  const isDeployable = workflow.template.deployable;
+  const previewCapabilities = workflow.template.previewCapabilities;
 
   const Icon = workflow.icon;
 
@@ -114,17 +120,47 @@ export function WorkflowDetailScreen({
           </div>
 
           <div>
-            <div className="text-[13px] font-semibold text-foreground">Included capabilities</div>
-            <ul className="mt-4 space-y-2.5">
-              {workflow.capabilities.map((capability) => (
-                <li key={capability} className="flex items-start gap-2.5 text-[13.5px] text-foreground">
-                  <div className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                    <Check className="h-2.5 w-2.5" />
-                  </div>
-                  {capability}
-                </li>
-              ))}
-            </ul>
+            {previewCapabilities?.length ? (
+              <>
+                <div className="text-[13px] font-semibold text-foreground">
+                  This workflow will
+                </div>
+                <ul className="mt-4 space-y-2.5">
+                  {previewCapabilities.map((capability) => (
+                    <li
+                      key={capability}
+                      className="flex items-start gap-2.5 text-[13.5px] text-foreground"
+                    >
+                      <div className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                        <Check className="h-2.5 w-2.5" />
+                      </div>
+                      {capability}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 text-[11px] text-ink-soft">
+                  Capability explanations describe intended workflow behaviour. Full automation
+                  arrives in later phases — human review remains part of the process.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="text-[13px] font-semibold text-foreground">Included capabilities</div>
+                <ul className="mt-4 space-y-2.5">
+                  {workflow.capabilities.map((capability) => (
+                    <li
+                      key={capability}
+                      className="flex items-start gap-2.5 text-[13.5px] text-foreground"
+                    >
+                      <div className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                        <Check className="h-2.5 w-2.5" />
+                      </div>
+                      {capability}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
 
             <div className="mt-8 flex items-center gap-2 text-[13px] font-semibold text-foreground">
               <Brain className="h-3.5 w-3.5 text-primary" />
@@ -140,22 +176,34 @@ export function WorkflowDetailScreen({
 
         <div className="flex flex-wrap items-center justify-between gap-4 bg-secondary/40 p-6">
           <div className="text-[12.5px] text-ink-soft">
-            Preview the workflow end-to-end or deploy it into your Commercial OS workspace.
+            {isDeployable
+              ? 'Review what this workflow will do, then add it to your workspace.'
+              : 'Preview the workflow end-to-end or deploy it into your Commercial OS workspace.'}
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link
-              href={workflow.previewRoute}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-5 py-2.5 text-[13px] font-medium text-foreground transition-colors hover:bg-accent"
-            >
-              Preview Workflow
-            </Link>
-            <Link
-              href={workflow.deployRoute}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-purple px-5 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
-            >
-              Deploy Workflow
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            {isDeployable ? (
+              <WorkflowDeployButton
+                templateSlug={slug}
+                installed={installed}
+                instanceHref={COMMERCIAL_OS_ROUTES.workflowInstance(slug)}
+                onDeployed={() => void refresh()}
+              />
+            ) : (
+              <>
+                <Link
+                  href={workflow.previewRoute}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-5 py-2.5 text-[13px] font-medium text-foreground transition-colors hover:bg-accent"
+                >
+                  Preview Workflow
+                </Link>
+                <Link
+                  href={workflow.deployRoute}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-purple px-5 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
+                >
+                  Deploy Workflow
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>

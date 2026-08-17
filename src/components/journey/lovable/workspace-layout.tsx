@@ -13,10 +13,13 @@ import {
   Plug,
   Sparkles,
   Settings,
+  Brain,
 } from 'lucide-react';
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
 import { WorkspaceAccountMenu } from '@/components/commercial-os/workspace-account-menu';
 import { WorkspaceAccountingBanners } from '@/components/journey/lovable/workspace-accounting-banners';
+import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
+import { WorkspaceFeature } from '@/lib/workspace-features/types';
 
 type NavItem = {
   to: string;
@@ -37,6 +40,19 @@ const NAV: NavItem[] = [
 export function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '';
   const [dark, setDark] = useState(false);
+  const { enabledFeatures } = useDeployedWorkflows();
+
+  const showAgreementIntelligence = enabledFeatures.includes(
+    WorkspaceFeature.AgreementIntelligence
+  );
+
+  const navItems: NavItem[] = [
+    ...NAV.slice(0, 2),
+    ...(showAgreementIntelligence
+      ? [{ to: '/workspace/workflows/agreement-intelligence', label: 'Agreement Intelligence', icon: Brain }]
+      : []),
+    ...NAV.slice(2),
+  ];
 
   useEffect(() => {
     const stored = localStorage.getItem('theme');
@@ -64,7 +80,7 @@ export function WorkspaceLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-6">
             <ProvvyBrandMark href="/workspace" />
             <nav className="hidden items-center gap-1 lg:flex">
-              {NAV.map((item) => {
+              {navItems.map((item) => {
                 const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
                 const Icon = item.icon;
                 return (
@@ -101,7 +117,7 @@ export function WorkspaceLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav className="mt-2 flex items-center gap-1 overflow-x-auto lg:hidden">
-          {NAV.map((item) => {
+          {navItems.map((item) => {
             const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
             const Icon = item.icon;
             return (

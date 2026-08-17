@@ -4,10 +4,13 @@ import Link from 'next/link';
 import { Library, Sparkles, Clock, ArrowRight, Check } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { WORKFLOW_LIBRARY, getRecommendedWorkflow } from '@/lib/journey/workflow-library-catalog';
+import { WorkflowDeployButton } from '@/components/journey/lovable/workflow-deploy-button';
+import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
 
 export function WorkspaceWorkflowsScreen() {
   const recommended = getRecommendedWorkflow();
   const library = WORKFLOW_LIBRARY.filter((entry) => !entry.recommended);
+  const { isInstalled, refresh } = useDeployedWorkflows();
 
   return (
     <div className="animate-fade-up space-y-8 pb-16">
@@ -64,25 +67,56 @@ export function WorkspaceWorkflowsScreen() {
           Additional workflows
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
-          {library.map((workflow) => (
-            <div key={workflow.slug} className="rounded-2xl border border-border bg-card p-5 shadow-card">
-              <div className="text-[15px] font-semibold">{workflow.name}</div>
-              <p className="mt-1 text-[13px] text-ink-soft">{workflow.summary}</p>
-              <div className="mt-4 flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-soft">
-                  <Clock className="h-3.5 w-3.5" />
-                  Saves {workflow.saved}
-                </span>
-                <Link
-                  href={COMMERCIAL_OS_ROUTES.workflowDetail(workflow.slug)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-accent"
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  Preview
-                </Link>
+          {library.map((workflow) => {
+            const installed = isInstalled(workflow.slug);
+            const deployable = workflow.template.deployable;
+
+            return (
+              <div key={workflow.slug} className="rounded-2xl border border-border bg-card p-5 shadow-card">
+                <div className="text-[15px] font-semibold">{workflow.name}</div>
+                <p className="mt-1 text-[13px] text-ink-soft">{workflow.summary}</p>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-soft">
+                    <Clock className="h-3.5 w-3.5" />
+                    Saves {workflow.saved}
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={COMMERCIAL_OS_ROUTES.workflowDetail(workflow.slug)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-accent"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      Preview
+                    </Link>
+                    {deployable ? (
+                      installed ? (
+                        <Link
+                          href={COMMERCIAL_OS_ROUTES.workflowInstance(workflow.slug)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-medium text-accent-foreground"
+                        >
+                          Open Workflow
+                        </Link>
+                      ) : (
+                        <WorkflowDeployButton
+                          templateSlug={workflow.slug}
+                          installed={false}
+                          instanceHref={COMMERCIAL_OS_ROUTES.workflowInstance(workflow.slug)}
+                          onDeployed={() => void refresh()}
+                          variant="secondary"
+                          className="!mt-0"
+                        />
+                      )
+                    ) : null}
+                  </div>
+                </div>
+                {deployable && installed ? (
+                  <div className="mt-2 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                    Added to Workspace
+                  </div>
+                ) : null}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </div>

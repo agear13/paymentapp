@@ -9,6 +9,25 @@ import {
   Brain,
 } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import type { EntitlementFeature } from '@/lib/entitlements/types';
+import { WorkspaceFeature } from '@/lib/workspace-features/types';
+import { AGREEMENT_INTELLIGENCE_CONFIGURATION_SCHEMA } from '@/lib/workflows/agreement-intelligence/configuration';
+
+export type WorkflowTemplateMetadata = {
+  /** Semantic version pinned on deploy — catalog updates do not mutate installed instances. */
+  version: string;
+  category: string;
+  /** When true, Add to Workspace is available (P3-A: agreement-intelligence only). */
+  deployable: boolean;
+  /** Entitlement required to deploy; undefined = membership only. */
+  requiredEntitlement?: EntitlementFeature;
+  /** Workspace feature enabled when this workflow is installed. */
+  workspaceFeature?: WorkspaceFeature;
+  /** Capability checklist shown on preview/detail for deployable workflows. */
+  previewCapabilities?: string[];
+  /** Allowed configuration keys for deploy; empty = no config accepted. */
+  configurationSchema?: Record<string, unknown>;
+};
 
 export type WorkflowLibraryEntry = {
   slug: string;
@@ -30,7 +49,24 @@ export type WorkflowLibraryEntry = {
   recommended?: boolean;
   deployRoute: string;
   previewRoute: string;
+  template: WorkflowTemplateMetadata;
 };
+
+const DEFAULT_TEMPLATE: WorkflowTemplateMetadata = {
+  version: '1.0.0',
+  category: 'commercial',
+  deployable: false,
+};
+
+const AGREEMENT_INTELLIGENCE_PREVIEW_CAPABILITIES = [
+  'Upload agreements',
+  'Extract participants',
+  'Extract obligations',
+  'Extract payment terms',
+  'Identify revenue shares',
+  'Create approval requirements',
+  'Monitor obligations',
+] as const;
 
 export const WORKFLOW_LIBRARY: WorkflowLibraryEntry[] = [
   {
@@ -66,6 +102,7 @@ export const WORKFLOW_LIBRARY: WorkflowLibraryEntry[] = [
     recommended: true,
     deployRoute: COMMERCIAL_OS_ROUTES.workflowReconciliation,
     previewRoute: `${COMMERCIAL_OS_ROUTES.workflowReconciliation}?tour=1`,
+    template: { ...DEFAULT_TEMPLATE, category: 'reconciliation' },
   },
   {
     slug: 'payment-collection',
@@ -96,6 +133,7 @@ export const WORKFLOW_LIBRARY: WorkflowLibraryEntry[] = [
     icon: CreditCard,
     deployRoute: COMMERCIAL_OS_ROUTES.workflowReconciliation,
     previewRoute: COMMERCIAL_OS_ROUTES.publicWorkflowDetail('payment-collection'),
+    template: { ...DEFAULT_TEMPLATE, category: 'collections' },
   },
   {
     slug: 'cashflow-forecasting',
@@ -125,6 +163,7 @@ export const WORKFLOW_LIBRARY: WorkflowLibraryEntry[] = [
     icon: TrendingUp,
     deployRoute: COMMERCIAL_OS_ROUTES.workflowLibrary,
     previewRoute: COMMERCIAL_OS_ROUTES.publicWorkflowDetail('cashflow-forecasting'),
+    template: { ...DEFAULT_TEMPLATE, category: 'forecasting' },
   },
   {
     slug: 'revenue-sharing',
@@ -155,6 +194,7 @@ export const WORKFLOW_LIBRARY: WorkflowLibraryEntry[] = [
     icon: Split,
     deployRoute: COMMERCIAL_OS_ROUTES.workflowReconciliation,
     previewRoute: COMMERCIAL_OS_ROUTES.publicWorkflowDetail('revenue-sharing'),
+    template: { ...DEFAULT_TEMPLATE, category: 'revenue' },
   },
   {
     slug: 'supplier-payments',
@@ -183,6 +223,7 @@ export const WORKFLOW_LIBRARY: WorkflowLibraryEntry[] = [
     icon: Coins,
     deployRoute: COMMERCIAL_OS_ROUTES.workflowLibrary,
     previewRoute: COMMERCIAL_OS_ROUTES.publicWorkflowDetail('supplier-payments'),
+    template: { ...DEFAULT_TEMPLATE, category: 'payments' },
   },
   {
     slug: 'commercial-operations',
@@ -212,6 +253,7 @@ export const WORKFLOW_LIBRARY: WorkflowLibraryEntry[] = [
     icon: Workflow,
     deployRoute: COMMERCIAL_OS_ROUTES.workflowReconciliation,
     previewRoute: COMMERCIAL_OS_ROUTES.publicWorkflowDetail('commercial-operations'),
+    template: { ...DEFAULT_TEMPLATE, category: 'operations' },
   },
   {
     slug: 'agreement-intelligence',
@@ -238,8 +280,17 @@ export const WORKFLOW_LIBRARY: WorkflowLibraryEntry[] = [
     ],
     saved: '17 hrs / mo',
     icon: Brain,
-    deployRoute: COMMERCIAL_OS_ROUTES.workflowReconciliation,
-    previewRoute: COMMERCIAL_OS_ROUTES.publicWorkflowDetail('agreement-intelligence'),
+    deployRoute: COMMERCIAL_OS_ROUTES.workflowInstance('agreement-intelligence'),
+    previewRoute: COMMERCIAL_OS_ROUTES.workflowDetail('agreement-intelligence'),
+    template: {
+      version: '1.0.0',
+      category: 'agreement_intelligence',
+      deployable: true,
+      requiredEntitlement: 'ai_import',
+      workspaceFeature: WorkspaceFeature.AgreementIntelligence,
+      previewCapabilities: [...AGREEMENT_INTELLIGENCE_PREVIEW_CAPABILITIES],
+      configurationSchema: AGREEMENT_INTELLIGENCE_CONFIGURATION_SCHEMA,
+    },
   },
 ];
 

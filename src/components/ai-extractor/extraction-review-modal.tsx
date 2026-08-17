@@ -101,6 +101,8 @@ interface ExtractionReviewModalProps {
   rawConversationText?: string;
   /** Entry Point A: called with new deal id. Entry Point B: called with no args. Entry Point C: called with new participants. */
   onComplete: (dealId?: string, participants?: DemoParticipant[]) => void;
+  /** Required for workflow_agreement — installed workflow instance id. */
+  workflowId?: string;
 }
 
 export function ExtractionReviewModal({
@@ -112,6 +114,7 @@ export function ExtractionReviewModal({
   rawConversationText,
   existingDeal,
   existingParticipants,
+  workflowId,
   onComplete,
 }: ExtractionReviewModalProps) {
   const { currency: workspaceCurrency } = useOrganizationCurrency();
@@ -225,12 +228,18 @@ export function ExtractionReviewModal({
     if (entryPoint === 'project_create' && !form.projectName.trim()) {
       return 'Project name is required.';
     }
+    if (entryPoint === 'workflow_agreement' && !form.projectName.trim()) {
+      return 'Agreement name is required.';
+    }
 
     const originalsById = new Map(result.parties.map((p) => [p.id, p]));
 
     if (isUnsupportedCurrency && extractedCurrency) {
       if (entryPoint === 'project_create' && !form.projectValue) {
         return `Convert the project value from ${extractedCurrency} to AUD or USD before saving.`;
+      }
+      if (entryPoint === 'workflow_agreement' && !form.projectValue) {
+        return `Convert the project value from ${extractedCurrency} to AUD or USD before approving.`;
       }
       const unconverted = form.parties.filter(
         (p) =>
@@ -423,6 +432,42 @@ export function ExtractionReviewModal({
         });
         logExtractorDebugSnapshot({ persistedParticipants: newParticipants.length });
         onComplete(undefined, newParticipants);
+      } else if (entryPoint === 'workflow_agreement') {
+        if (!workflowId) {
+          throw new Error('Workflow context is missing.');
+        }
+
+        const approvedResult: ExtractionResult = {
+          ...result,
+          projectName: { ...result.projectName, value: form.projectName.trim() || null },
+          projectDescription: {
+            ...result.projectDescription,
+            value: form.projectDescription.trim() || null,
+          },
+          projectValue: { ...result.projectValue, value: form.projectValue },
+          currency: { ...result.currency, value: form.currency },
+        };
+
+        const response = await csrfAwareFetch(`/api/workflows/${workflowId}/agreement`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            reviewForm: form,
+            extractionResult: approvedResult,
+          }),
+        });
+
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error ?? 'Could not approve agreement structure.');
+        }
+
+        onOpenChange(false);
+        toast.success('Agreement structure approved', {
+          description: 'Ready for participant setup in the next phase.',
+        });
+        onComplete();
       }
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'An unexpected error occurred.');
@@ -431,7 +476,7 @@ export function ExtractionReviewModal({
     }
   };
 
-  const showProjectSection = entryPoint === 'project_create';
+  const showProjectSection = entryPoint === 'project_create' || entryPoint === 'workflow_agreement';
 
   const confidenceConfig = {
     high:   { variant: 'default' as const, text: '✓ High confidence extraction. Review and save below.' },
@@ -445,16 +490,30 @@ export function ExtractionReviewModal({
     project_create: 'Save Project',
     participant_add: 'Add Participants',
     onboarding: 'Add to Project',
+    workflow_agreement: 'Approve Agreement Structure',
   }[entryPoint];
+
+  const dialogTitle =
+    entryPoint === 'workflow_agreement'
+      ? 'Review AI-Extracted Structure'
+      : 'Review Extracted Agreement';
 
   return (<>
     <Dialog open={open} onOpenChange={(o) => { if (!saving) onOpenChange(o); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] flex min-h-0 flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 px-6 pt-6">
-          <DialogTitle>Review Extracted Agreement</DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto scroll-smooth px-6 py-1">
+          {entryPoint === 'workflow_agreement' && (
+            <Alert className="border-blue-500/30 bg-blue-500/5 text-blue-900 dark:text-blue-200">
+              <AlertDescription className="text-xs">
+                AI extracted this structure from your agreement. Review and edit before approving —
+                approved terms are recorded as your confirmation, not automatic execution.
+              </AlertDescription>
+            </Alert>
+          )}
           {/* Overall confidence banner */}
           <Alert variant={conf.variant === 'destructive' ? 'destructive' : undefined}
                  className={cn(result.overallConfidence === 'high' && 'border-emerald-500/30 bg-emerald-500/5 text-emerald-800 dark:text-emerald-300')}>

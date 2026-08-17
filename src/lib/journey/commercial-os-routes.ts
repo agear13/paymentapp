@@ -29,6 +29,7 @@ export const COMMERCIAL_OS_ROUTES = {
   workflows: '/workspace/workflows',
   workflowLibrary: '/workspace/workflows',
   workflowDetail: (slug: string) => `/workspace/workflows/${slug}`,
+  workflowInstance: (slug: string) => `/workspace/workflows/${slug}`,
   publicWorkflowDetail: (slug: string) => `/journey/workflows/${slug}`,
   workflowReconciliation: '/workspace/workflow/reconciliation',
   workflowReconciliationTour: '/workspace/workflow/reconciliation?tour=1',
