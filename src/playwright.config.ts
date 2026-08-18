@@ -14,7 +14,7 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   // Limit parallel UI hits against a single `next dev` instance (cold compile + HMR).
-  workers: process.env.CI ? 1 : 2,
+  workers: 1,
   timeout: 180_000,
   retries: process.env.CI ? 2 : 0,
   use: {
@@ -28,7 +28,7 @@ export default defineConfig({
         command: `npx next dev -p ${e2ePort}`,
         url: defaultBaseUrl,
         reuseExistingServer: !process.env.CI,
-        timeout: 180_000,
+        timeout: 300_000,
         env: {
           ...process.env,
           RELAX_ENV_VALIDATION: '1',

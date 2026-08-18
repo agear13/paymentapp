@@ -103,8 +103,23 @@ try {
             role: 'OWNER',
           },
         });
+        await tx.organizations.update({
+          where: { id: organization.id },
+          data: {
+            subscription_plan: 'professional',
+            subscription_status: 'active',
+          },
+        });
       });
       console.log('Provisioned E2E workspace organization for test user.');
+    } else {
+      await prisma.organizations.update({
+        where: { id: membership.organization_id },
+        data: {
+          subscription_plan: 'professional',
+          subscription_status: 'active',
+        },
+      });
     }
   }
 

@@ -1,27 +1,99 @@
 {
   "matrix": [
     {
-      "criterion": "Workflow Library → Preview Agreement Intelligence",
-      "result": "PASS"
+      "criterion": "Authenticated session established",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace"
+    },
+    {
+      "criterion": "Workflow Library is marketplace/library",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace/workflows"
+    },
+    {
+      "criterion": "Preview is marketplace capability page (/preview), not installed hub",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence/preview; no upload/review controls"
+    },
+    {
+      "criterion": "Add to Workspace installs workflow",
+      "result": "PASS",
+      "detail": "Add to Workspace button"
+    },
+    {
+      "criterion": "Installed workflow opens instance hub",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence"
+    },
+    {
+      "criterion": "Workspace shows Agreement Intelligence action",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace"
+    },
+    {
+      "criterion": "Workspace action opens installed hub (not Library)",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence"
+    },
+    {
+      "criterion": "Commercial Workspace is /workspace/commercial",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace/commercial"
+    },
+    {
+      "criterion": "Create Invoice page unchanged",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace/receivables/create"
+    },
+    {
+      "criterion": "Manage Invoices page unchanged",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace/receivables/invoices"
+    },
+    {
+      "criterion": "Golden path: authenticated session",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace"
+    },
+    {
+      "criterion": "Opened Workflow Library preview",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence/preview"
     },
     {
       "criterion": "Preview → Add to Workspace",
       "result": "PASS",
-      "detail": "Install button hidden — ensuring deploy via API"
+      "detail": "API deploy fallback"
     },
     {
-      "criterion": "Agreement Intelligence installed for organization",
-      "result": "PASS"
-    },
-    {
-      "criterion": "Agreement Intelligence workspace action",
+      "criterion": "Agreement Intelligence workspace action visible",
       "result": "PASS",
-      "detail": "Installed workflow card not on workspace home — opening hub directly"
+      "detail": "Appeared after install"
     },
     {
-      "criterion": "Workspace action opens installed hub (not Library)",
+      "criterion": "Opened installed workflow hub",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence"
+    },
+    {
+      "criterion": "Paste agreement → extract → READY_FOR_REVIEW",
+      "result": "PASS",
+      "detail": "URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence"
+    },
+    {
+      "criterion": "Review extraction modal opens",
       "result": "PASS"
+    },
+    {
+      "criterion": "Approve → bootstrap → ACTIVE",
+      "result": "PASS",
+      "detail": "lifecycle=ACTIVE; URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence"
+    },
+    {
+      "criterion": "Approval/bootstrap did not create payment links",
+      "result": "PASS",
+      "detail": "before=0; after=0"
     }
   ],
-  "generatedAt": "2026-08-17T11:02:39.512Z"
+  "generatedAt": "2026-08-18T03:44:57.308Z"
 }

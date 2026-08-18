@@ -1,5 +1,10 @@
 import { expect, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import {
+  dismissCookieConsent,
+  installCookieConsentBypass,
+} from './e2e-cookie-consent';
+import { gotoApp } from './e2e-navigation';
 
 export function e2eTestEmail(): string {
   const email = process.env.E2E_EMAIL?.trim();
@@ -21,34 +26,8 @@ type LoginResponse = {
   code?: string;
 };
 
-async function signInViaApi(page: Page, email: string, password: string): Promise<void> {
-  const response = await page.request.post('/api/auth/login', {
-    data: { email, password },
-  });
-  const raw = await response.text();
-  let payload: LoginResponse = {};
-  if (raw) {
-    try {
-      payload = JSON.parse(raw) as LoginResponse;
-    } catch {
-      throw new Error(`E2E API login returned non-JSON (${response.status()}): ${raw.slice(0, 200)}`);
-    }
-  }
-
-  if (!response.ok()) {
-    throw new Error(
-      `E2E API login failed (${response.status()}): ${payload.error ?? 'unknown error'}`
-    );
-  }
-
-  if (payload.suspiciousLogin) {
-    const confirm = await page.request.post('/api/auth/confirm-login');
-    expect(confirm.ok(), 'E2E confirm-login after suspicious sign-in').toBeTruthy();
-  }
-}
-
 async function signInViaBrowserFetch(page: Page, email: string, password: string): Promise<void> {
-  await page.goto('/auth/login', { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await gotoApp(page, '/auth/login');
   const result = await page.evaluate(
     async ({ loginEmail, loginPassword }) => {
       const response = await fetch('/api/auth/login', {
@@ -79,6 +58,7 @@ async function signInViaBrowserFetch(page: Page, email: string, password: string
     throw new Error(`E2E browser login failed (${result.status}): ${result.error}`);
   }
 }
+
 export async function signInViaUi(page: Page, email: string, password: string): Promise<void> {
   await signInViaBrowserFetch(page, email, password);
 }
@@ -105,6 +85,10 @@ export async function signInViaMagicLink(page: Page, email: string): Promise<boo
 }
 
 async function ensureE2eWorkspace(page: Page): Promise<void> {
+  if (page.isClosed()) {
+    throw new Error('Cannot ensure workspace: page is closed');
+  }
+
   const orgRes = await page.evaluate(async () => {
     const response = await fetch('/api/user/organization', { credentials: 'include' });
     return { ok: response.ok, status: response.status };
@@ -129,25 +113,46 @@ async function ensureE2eWorkspace(page: Page): Promise<void> {
   expect(bootstrap.ok(), 'E2E workspace bootstrap').toBeTruthy();
 }
 
+export { dismissCookieConsent, installCookieConsentBypass } from './e2e-cookie-consent';
+export { ensureCookieBannerDismissed } from './e2e-cookie-consent';
+
 export async function ensureE2eSession(page: Page): Promise<void> {
+  await installCookieConsentBypass(page);
+
   const email = e2eTestEmail();
   const password = e2eTestPassword();
 
   if (password) {
-    await signInViaBrowserFetch(page, email, password);
-    await ensureE2eWorkspace(page);
-    await page.goto('/workspace', { waitUntil: 'commit', timeout: 120_000 });
-    await page.getByRole('heading', { name: /Where would you like to start/i }).waitFor({
-      timeout: 120_000,
-    });
-    if (page.url().includes('/auth/') || page.url().includes('/onboarding')) {
-      throw new Error(`E2E session not established after login (at ${page.url()})`);
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await signInViaBrowserFetch(page, email, password);
+        await ensureE2eWorkspace(page);
+        await gotoApp(page, '/workspace');
+        await page.getByRole('heading', { name: /Where would you like to start/i }).waitFor({
+          timeout: 120_000,
+        });
+        if (page.url().includes('/auth/') || page.url().includes('/onboarding')) {
+          throw new Error(`E2E session not established after login (at ${page.url()})`);
+        }
+        await dismissCookieConsent(page);
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt === 0 && String(error).includes('closed')) {
+          continue;
+        }
+        throw error;
+      }
     }
-    return;
+    throw lastError;
   }
 
   const magicOk = await signInViaMagicLink(page, email);
-  if (magicOk) return;
+  if (magicOk) {
+    await dismissCookieConsent(page);
+    return;
+  }
 
   throw new Error(
     'E2E auth failed. Run `npm run e2e:setup-auth-db`, then set E2E_PASSWORD in src/.env.local (never commit), or provide a valid SUPABASE_SERVICE_ROLE_KEY JWT for magic-link auth.'

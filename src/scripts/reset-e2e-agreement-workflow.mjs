@@ -39,6 +39,30 @@ try {
     throw new Error(`No organization membership for E2E user ${email}`);
   }
 
+  const orgUserIds = (
+    await prisma.user_organizations.findMany({
+      where: { organization_id: membership.organization_id },
+      select: { user_id: true },
+    })
+  ).map((row) => row.user_id);
+
+  if (orgUserIds.length > 0) {
+    const deleted = await prisma.deal_network_pilot_deals.deleteMany({
+      where: { user_id: { in: orgUserIds } },
+    });
+    if (deleted.count > 0) {
+      console.log(`Removed ${deleted.count} pilot deal(s) to reset AI import usage for E2E org.`);
+    }
+  }
+
+  await prisma.organizations.update({
+    where: { id: membership.organization_id },
+    data: {
+      subscription_plan: 'professional',
+      subscription_status: 'active',
+    },
+  });
+
   const workflow = await prisma.organization_workflows.findUnique({
     where: {
       ux_organization_workflows_org_template: {

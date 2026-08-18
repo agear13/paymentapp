@@ -41,13 +41,6 @@ export async function GET(
   const access = await requireWorkflowOrganizationAccess(request);
   if (!access.ok) return access.response;
 
-  const entitlementBlock = await requireAiImportEntitlement(
-    access.organizationId,
-    access.userId,
-    access.userEmail
-  );
-  if (entitlementBlock) return entitlementBlock;
-
   const { id } = await context.params;
 
   try {
@@ -111,13 +104,6 @@ export async function PUT(
   const access = await requireWorkflowOrganizationAccess(request);
   if (!access.ok) return access.response;
 
-  const entitlementBlock = await requireAiImportEntitlement(
-    access.organizationId,
-    access.userId,
-    access.userEmail
-  );
-  if (entitlementBlock) return entitlementBlock;
-
   const { id } = await context.params;
 
   try {
@@ -149,18 +135,18 @@ export async function PATCH(
   const access = await requireWorkflowOrganizationAccess(request);
   if (!access.ok) return access.response;
 
-  const entitlementBlock = await requireAiImportEntitlement(
-    access.organizationId,
-    access.userId,
-    access.userEmail
-  );
-  if (entitlementBlock) return entitlementBlock;
-
   const { id } = await context.params;
 
   try {
     const body = (await request.json()) as { action?: string; force?: boolean };
     if (body.action === 'extract') {
+      const entitlementBlock = await requireAiImportEntitlement(
+        access.organizationId,
+        access.userId,
+        access.userEmail
+      );
+      if (entitlementBlock) return entitlementBlock;
+
       const contextData = await runWorkflowAgreementExtraction(
         access.organizationId,
         id,
