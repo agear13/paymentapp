@@ -65,7 +65,6 @@ import {
   deriveMerchantPaymentCapabilities,
   type MerchantPaymentCapabilities,
 } from '@/lib/accounting/merchant-payment-capabilities';
-import config from '@/lib/config/env';
 
 function applyMappingError(raw: string, setError: (value: string | null) => void) {
   const customer = formatMappingIssue(raw);
@@ -203,9 +202,9 @@ export function XeroAccountMapping({
           evmSupportedTokens: settings.evm_supported_tokens,
         });
         const railSetup = computePaymentLinkRailSetup(snapshot, {
-          wisePayments: settings._features?.wiseGloballyEnabled ?? config.features.wisePayments,
-          evmWalletPayments:
-            settings._features?.evmGloballyEnabled ?? config.features.evmWalletPayments,
+          // Feature flags come from GET /api/merchant-settings `_features` (server-resolved).
+          wisePayments: settings._features?.wiseGloballyEnabled ?? false,
+          evmWalletPayments: settings._features?.evmGloballyEnabled ?? false,
         });
 
         if (!cancelled) {

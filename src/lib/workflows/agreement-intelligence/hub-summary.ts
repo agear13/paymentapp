@@ -13,6 +13,7 @@ import {
   canReviewExtraction,
   canUploadAgreement,
   isOperationalWorkflow,
+  showsOperationalHub,
 } from '@/lib/workflows/agreement-intelligence/lifecycle';
 
 function resolveSettlementSchedule(result: ExtractionResult | null): string | null {
@@ -69,5 +70,6 @@ export function buildWorkflowAgreementHubSummary(input: {
     canRetryExtraction: canRetryExtraction(input.lifecycleStatus),
     canRetryBootstrap: canRetryBootstrap(input.lifecycleStatus),
     isOperational: isOperationalWorkflow(input.lifecycleStatus),
+    showsOperationalHub: showsOperationalHub(input.lifecycleStatus),
   };
 }

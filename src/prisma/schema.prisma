@@ -1757,6 +1757,7 @@ enum OrganizationWorkflowLifecycleStatus {
   APPROVED
   BOOTSTRAPPING
   BOOTSTRAP_FAILED
+  PARTICIPANT_SETUP
   ACTIVE
 }
 

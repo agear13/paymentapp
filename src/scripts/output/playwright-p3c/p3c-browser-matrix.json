@@ -24,76 +24,7 @@
       "criterion": "Installed workflow opens instance hub",
       "result": "PASS",
       "detail": "URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence"
-    },
-    {
-      "criterion": "Workspace shows Agreement Intelligence action",
-      "result": "PASS",
-      "detail": "URL=http://127.0.0.1:3333/workspace"
-    },
-    {
-      "criterion": "Workspace action opens installed hub (not Library)",
-      "result": "PASS",
-      "detail": "URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence"
-    },
-    {
-      "criterion": "Commercial Workspace is /workspace/commercial",
-      "result": "PASS",
-      "detail": "URL=http://127.0.0.1:3333/workspace/commercial"
-    },
-    {
-      "criterion": "Create Invoice page unchanged",
-      "result": "PASS",
-      "detail": "URL=http://127.0.0.1:3333/workspace/receivables/create"
-    },
-    {
-      "criterion": "Manage Invoices page unchanged",
-      "result": "PASS",
-      "detail": "URL=http://127.0.0.1:3333/workspace/receivables/invoices"
-    },
-    {
-      "criterion": "Golden path: authenticated session",
-      "result": "PASS",
-      "detail": "URL=http://127.0.0.1:3333/workspace"
-    },
-    {
-      "criterion": "Opened Workflow Library preview",
-      "result": "PASS",
-      "detail": "URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence/preview"
-    },
-    {
-      "criterion": "Preview → Add to Workspace",
-      "result": "PASS",
-      "detail": "API deploy fallback"
-    },
-    {
-      "criterion": "Agreement Intelligence workspace action visible",
-      "result": "PASS",
-      "detail": "Appeared after install"
-    },
-    {
-      "criterion": "Opened installed workflow hub",
-      "result": "PASS",
-      "detail": "URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence"
-    },
-    {
-      "criterion": "Paste agreement → extract → READY_FOR_REVIEW",
-      "result": "PASS",
-      "detail": "URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence"
-    },
-    {
-      "criterion": "Review extraction modal opens",
-      "result": "PASS"
-    },
-    {
-      "criterion": "Approve → bootstrap → ACTIVE",
-      "result": "PASS",
-      "detail": "lifecycle=ACTIVE; URL=http://127.0.0.1:3333/workspace/workflows/agreement-intelligence"
-    },
-    {
-      "criterion": "Approval/bootstrap did not create payment links",
-      "result": "PASS",
-      "detail": "before=0; after=0"
     }
   ],
-  "generatedAt": "2026-08-18T03:44:57.308Z"
+  "generatedAt": "2026-08-18T15:24:03.502Z"
 }

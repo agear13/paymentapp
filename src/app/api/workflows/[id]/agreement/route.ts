@@ -5,6 +5,7 @@ import { requireWorkflowOrganizationAccess } from '@/lib/workflows/require-workf
 import {
   approveWorkflowAgreementStructure,
   getWorkflowAgreementContext,
+  refreshWorkflowActivation,
   retryWorkflowAgreementBootstrap,
   runWorkflowAgreementExtraction,
   submitPastedAgreement,
@@ -157,6 +158,14 @@ export async function PATCH(
     }
     if (body.action === 'bootstrap') {
       const contextData = await retryWorkflowAgreementBootstrap({
+        organizationId: access.organizationId,
+        workflowId: id,
+        userId: access.userId,
+      });
+      return apiResponse(contextData);
+    }
+    if (body.action === 'refresh_activation') {
+      const contextData = await refreshWorkflowActivation({
         organizationId: access.organizationId,
         workflowId: id,
         userId: access.userId,

@@ -152,22 +152,26 @@ async function browserApi<T>(
 ): Promise<{ ok: boolean; status: number; data: T }> {
   return page.evaluate(
     async ({ url, options }) => {
-      const res = await fetch(url, {
-        method: options.method ?? 'GET',
-        credentials: 'include',
-        headers: options.headers,
-        body: options.body ? JSON.stringify(options.body) : undefined,
-      });
-      const text = await res.text();
-      let data: unknown = null;
-      if (text) {
-        try {
-          data = JSON.parse(text);
-        } catch {
-          data = text;
+      try {
+        const res = await fetch(url, {
+          method: options.method ?? 'GET',
+          credentials: 'include',
+          headers: options.headers,
+          body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+        const text = await res.text();
+        let data: unknown = null;
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = text;
+          }
         }
+        return { ok: res.ok, status: res.status, data };
+      } catch {
+        return { ok: false, status: 0, data: null };
       }
-      return { ok: res.ok, status: res.status, data };
     },
     { url: path, options: init ?? {} }
   ) as Promise<{ ok: boolean; status: number; data: T }>;
@@ -175,8 +179,9 @@ async function browserApi<T>(
 
 async function readAgreementHubState(
   page: Page
-): Promise<'empty' | 'review' | 'active' | 'extracting' | 'bootstrap_failed'> {
+): Promise<'empty' | 'review' | 'active' | 'participant_setup' | 'extracting' | 'bootstrap_failed'> {
   if ((await page.getByText('ACTIVE').filter({ hasText: /^ACTIVE$/ }).count()) > 0) return 'active';
+  if ((await page.getByText('PARTICIPANT SETUP').count()) > 0) return 'participant_setup';
   if ((await page.getByRole('button', { name: 'Review Agreement' }).count()) > 0) return 'review';
   if ((await page.getByText(/Retry activation/i).count()) > 0) return 'bootstrap_failed';
   if ((await page.getByText(/Extracting commercial terms|Creating participants/i).count()) > 0) {
@@ -241,7 +246,7 @@ async function waitForAgreementHub(
 
 async function pasteAndExtractToReview(page: Page): Promise<void> {
   const state = await waitForAgreementHub(page);
-  if (state === 'active' || state === 'review') return;
+  if (state === 'active' || state === 'participant_setup' || state === 'review') return;
   if (state === 'extracting') {
     await expect(page.getByRole('button', { name: 'Review Agreement' })).toBeVisible({
       timeout: 180_000,
@@ -267,18 +272,83 @@ async function pasteAndExtractToReview(page: Page): Promise<void> {
   });
 }
 
-async function assertActiveHubContent(page: Page): Promise<void> {
+async function assertOperationalHubContent(page: Page, workflowId: string): Promise<void> {
   await expect(page.getByText(/1 Agreement · \d+ Participants · \d+ Obligations/i)).toBeVisible({
     timeout: 30_000,
   });
 
+  const ctxRes = await browserApi<{
+    lifecycleStatus: string;
+    agreement: {
+      approvedStructure: {
+        reviewForm: {
+          parties: Array<{ name: string; role: string; revenueSharePct?: number | null }>;
+        };
+      } | null;
+      extractionResult: {
+        parties: Array<{
+          name: { value: string };
+          role: { value: string };
+          revenueSharePct?: { value: number | null };
+        }>;
+      } | null;
+    } | null;
+    operationalSummary: {
+      participantCount: number;
+      obligationCount: number;
+      isActivationComplete: boolean;
+      participants: Array<{ name: string; operationalRole: string | null; statusLabel: string }>;
+      obligations: Array<{ label: string; amountLabel: string }>;
+      settlementSchedule: string | null;
+      settlement: { schedule: string | null };
+    } | null;
+  }>(page, `/api/workflows/${workflowId}/agreement`);
+
+  expect(ctxRes.ok).toBeTruthy();
+  expect(['PARTICIPANT_SETUP', 'ACTIVE']).toContain(ctxRes.data.lifecycleStatus);
+
+  const approvedParties =
+    ctxRes.data.agreement?.approvedStructure?.reviewForm.parties ??
+    (ctxRes.data.agreement?.extractionResult?.parties ?? []).map((party) => ({
+      name: party.name.value,
+      role: party.role.value,
+      revenueSharePct: party.revenueSharePct?.value ?? null,
+    }));
+  const promoterParty = approvedParties.find(
+    (party) => /promoter/i.test(party.role) || party.name === 'Apex Promotions'
+  );
+  const djParty = approvedParties.find(
+    (party) => /\bdj\b/i.test(party.role) || party.name === 'DJ Nova'
+  );
+  expect(promoterParty?.name).toBe('Apex Promotions');
+  expect(promoterParty?.role).toMatch(/promoter/i);
+  expect(promoterParty?.revenueSharePct).toBe(20);
+  expect(djParty?.name).toBe('DJ Nova');
+  expect(djParty?.role).toMatch(/\bdj\b/i);
+  expect(djParty?.revenueSharePct).toBe(10);
+
+  const operational = ctxRes.data.operationalSummary;
+  expect(operational?.participantCount).toBe(2);
+  expect(operational?.obligationCount).toBe(2);
+  expect(operational?.participants).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ name: 'Apex Promotions', operationalRole: 'Introducer' }),
+      expect.objectContaining({ name: 'DJ Nova', operationalRole: 'Contributor' }),
+    ])
+  );
+  expect(operational?.obligations.some((row) => row.amountLabel === '20%')).toBe(true);
+  expect(operational?.obligations.some((row) => row.amountLabel === '10%')).toBe(true);
+  expect(operational?.settlement.schedule ?? operational?.settlementSchedule).toMatch(/Friday/i);
+
   const body = await page.locator('body').innerText();
-  for (const name of ['Venue', 'Promoter', 'DJ']) {
-    expect(body).toContain(name);
-  }
-  expect(body).toMatch(/20%|revenue share/i);
+  expect(body).toContain('Apex Promotions');
+  expect(body).toContain('DJ Nova');
+  expect(body).toContain('Introducer');
+  expect(body).toContain('Contributor');
+  expect(body).toMatch(/20%/);
+  expect(body).toMatch(/10%/);
   expect(body).toMatch(/Friday|settlement/i);
-  expect(body).toMatch(/Settlement schedule/i);
+  expect(body).toMatch(/Settlement/i);
 }
 
 test.describe('P3-C Agreement Intelligence browser verification', () => {
@@ -433,29 +503,32 @@ test.describe('P3-C Agreement Intelligence browser verification', () => {
         },
         { timeout: 240_000, intervals: [1000, 2000, 3000] }
       )
-      .toBe('ACTIVE');
+      .toBe('PARTICIPANT_SETUP');
 
     await gotoApp(page, ROUTES.instance);
     await waitForAgreementHub(page);
-    await expect(page.getByText('ACTIVE').filter({ hasText: /^ACTIVE$/ })).toBeVisible({
+    await expect(page.getByText('PARTICIPANT SETUP')).toBeVisible({
       timeout: 60_000,
     });
-    evidence.pass('Approve → bootstrap → ACTIVE', `lifecycle=ACTIVE; URL=${page.url()}`);
-    await evidence.screenshot(page, 'run2-active-hub');
+    evidence.pass(
+      'Approve → bootstrap → PARTICIPANT_SETUP',
+      `lifecycle=PARTICIPANT_SETUP; URL=${page.url()}`
+    );
+    await evidence.screenshot(page, 'run2-participant-setup-hub');
 
     const paymentLinksAfter = await browserApi<{ links?: unknown[] }>(page, '/api/payment-links');
     const linkCountAfter = paymentLinksAfter.ok ? paymentLinksAfter.data.links?.length ?? 0 : 0;
     expect(linkCountAfter).toBeLessThanOrEqual(linkCountBefore);
     evidence.pass('Approval/bootstrap did not create payment links', `before=${linkCountBefore}; after=${linkCountAfter}`);
 
-    await assertActiveHubContent(page);
+    await assertOperationalHubContent(page, workflowId);
     evidence.pass(
-      'ACTIVE hub shows Venue/Promoter/DJ, obligations, settlement schedule separately',
-      'Body contains participants, revenue share, settlement section'
+      'Operational hub shows compensated participants, obligations, settlement schedule separately',
+      'Apex Promotions/Introducer + DJ Nova/Contributor; 20%/10%; Friday settlement; API + UI verified'
     );
   });
 
-  test('Run 3 — Idempotent bootstrap on ACTIVE workflow', async ({ page }) => {
+  test('Run 3 — Idempotent bootstrap on activated workflow', async ({ page }) => {
     test.setTimeout(900_000);
 
     await ensureE2eSession(page);
@@ -473,9 +546,9 @@ test.describe('P3-C Agreement Intelligence browser verification', () => {
       } | null;
     }>(page, `/api/workflows/${workflowId}/agreement`);
 
-    if (ctxRes.data.lifecycleStatus !== 'ACTIVE') {
+    if (!['ACTIVE', 'PARTICIPANT_SETUP'].includes(ctxRes.data.lifecycleStatus)) {
       evidence.blocked(
-        'Idempotent bootstrap requires ACTIVE workflow',
+        'Idempotent bootstrap requires activated workflow',
         `lifecycle=${ctxRes.data.lifecycleStatus}; run golden path first`
       );
       test.skip();
@@ -500,7 +573,7 @@ test.describe('P3-C Agreement Intelligence browser verification', () => {
       });
 
       expect(retryRes.ok).toBeTruthy();
-      expect(retryRes.data.lifecycleStatus).toBe('ACTIVE');
+      expect(['ACTIVE', 'PARTICIPANT_SETUP']).toContain(retryRes.data.lifecycleStatus);
       expect(retryRes.data.operationalSummary?.participantCount).toBe(participantsBefore);
       expect(retryRes.data.operationalSummary?.obligationCount).toBeLessThanOrEqual(obligationsBefore + 1);
     }
@@ -539,9 +612,10 @@ test.describe('P3-C Agreement Intelligence browser verification', () => {
     await ensureCookieBannerDismissed(page);
     await page.getByRole('button', { name: 'Approve Agreement Structure' }).click();
 
-    await expect(page.getByText(/Activation failed|Retry activation/i)).toBeVisible({
+    await expect(page.getByRole('button', { name: 'Retry activation' })).toBeVisible({
       timeout: 180_000,
     });
+    await expect(page.getByText('Status: Activation failed')).toBeVisible();
     expect(await page.getByText(/^ACTIVE$/).count()).toBe(0);
 
     const workflowId = await getWorkflowId(page);
@@ -567,12 +641,15 @@ test.describe('P3-C Agreement Intelligence browser verification', () => {
         },
         { timeout: 240_000, intervals: [1000, 2000, 3000] }
       )
-      .toBe('ACTIVE');
+      .toBe('PARTICIPANT_SETUP');
 
     await gotoApp(page, ROUTES.instance);
     await waitForAgreementHub(page);
-    await assertActiveHubContent(page);
-    evidence.pass('Retry activation → ACTIVE with persisted structure', `lifecycle=ACTIVE; URL=${page.url()}`);
+    await assertOperationalHubContent(page, workflowId);
+    evidence.pass(
+      'Retry activation → operational workflow with persisted structure',
+      `lifecycle=PARTICIPANT_SETUP; URL=${page.url()}`
+    );
     await evidence.screenshot(page, 'run4-active-after-retry');
   });
 });

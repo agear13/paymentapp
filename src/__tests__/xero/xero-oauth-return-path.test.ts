@@ -111,6 +111,22 @@ describe('xeroIntegrationsRedirectUrl', () => {
     );
     expect(url).toBe(`${origin}/dashboard/settings/integrations?xero_success=connected`);
   });
+
+  it('F. multiple Xero organisations → select_tenant on Commercial OS return path', () => {
+    const request = new NextRequest(`${origin}/api/xero/callback`);
+    const url = xeroIntegrationsRedirectUrl(
+      request,
+      {
+        xero_success: 'connected',
+        xero_accounting: 'existing',
+        select_tenant: 'true',
+      },
+      '/workspace/connected/xero'
+    );
+    expect(url).toBe(
+      `${origin}/workspace/connected/xero?xero_success=connected&xero_accounting=existing&select_tenant=true`
+    );
+  });
 });
 
 describe('formatXeroOAuthError', () => {

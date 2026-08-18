@@ -11,6 +11,9 @@ import {
   RefreshCw,
   Settings2,
   Upload,
+  AlertTriangle,
+  Clock3,
+  Users,
 } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
@@ -110,10 +113,15 @@ export function AgreementIntelligenceHubScreen() {
     lifecycleStatus === 'BOOTSTRAPPING' ||
     submitting;
   const isActive = lifecycleStatus === 'ACTIVE';
+  const isParticipantSetup = lifecycleStatus === 'PARTICIPANT_SETUP';
+  const showsOperationalHub = isActive || isParticipantSetup;
   const isBootstrapFailed = lifecycleStatus === 'BOOTSTRAP_FAILED';
+  const isPaused = installed.status === 'PAUSED';
+  const coordinationBlocked = operational?.coordinationBlocked ?? isPaused;
   const isLocked =
     lifecycleStatus === 'APPROVED' ||
     lifecycleStatus === 'ACTIVE' ||
+    lifecycleStatus === 'PARTICIPANT_SETUP' ||
     lifecycleStatus === 'BOOTSTRAPPING';
 
   return (
@@ -140,9 +148,9 @@ export function AgreementIntelligenceHubScreen() {
                 Turn your agreements into structured commercial workflows.
               </p>
               <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
-                {isActive ? 'ACTIVE' : `Status: ${statusLabel}`}
+                {isActive ? 'ACTIVE' : isParticipantSetup ? 'PARTICIPANT SETUP' : `Status: ${statusLabel}`}
               </div>
-              {isActive && operational && (
+              {showsOperationalHub && operational && (
                 <p className="mt-2 text-[13px] text-ink-soft">
                   1 Agreement · {operational.participantCount} Participants ·{' '}
                   {operational.obligationCount} Obligations
@@ -254,7 +262,7 @@ export function AgreementIntelligenceHubScreen() {
             </div>
           )}
 
-          {hub?.hasAgreement && !showEmptyState && !isExtracting && isActive && operational && (
+          {hub?.hasAgreement && !showEmptyState && !isExtracting && showsOperationalHub && operational && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-semibold">
@@ -266,26 +274,115 @@ export function AgreementIntelligenceHubScreen() {
                 </p>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <MetricCard label="Participants" value={operational.participantCount} />
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <MetricCard label="Parties" value={operational.participantCount} />
+                <MetricCard
+                  label="Compensated"
+                  value={operational.compensatedParticipantCount}
+                />
                 <MetricCard label="Obligations" value={operational.obligationCount} />
                 <MetricCard
                   label="Settlement schedule"
-                  value={operational.settlementSchedule ?? 'Not captured'}
+                  value={operational.settlement.schedule ?? 'Not captured'}
                 />
               </div>
+
+              {isParticipantSetup && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-[13px] text-foreground">
+                  Participant setup is in progress. Complete invitations, approvals, and onboarding
+                  before the workflow becomes fully active. No payments execute automatically.
+                </div>
+              )}
+
+              {coordinationBlocked && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-[13px] text-foreground">
+                  This workflow is paused. Operational visibility remains available, but
+                  coordination actions are blocked until you resume the workflow.
+                </div>
+              )}
+
+              {operational.projectParticipantsUrl && (
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href={operational.projectParticipantsUrl}
+                    className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary/10 px-4 py-2 text-[13px] font-medium hover:bg-secondary/20"
+                  >
+                    <Users className="h-4 w-4" />
+                    Manage participants
+                  </Link>
+                </div>
+              )}
+
+              {operational.needsAttention.length > 0 && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                  <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="h-4 w-4" />
+                    Needs attention
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {operational.needsAttention.map((item) => (
+                      <li key={item.id} className="text-[14px]">
+                        <span className="font-medium">{item.label}</span>
+                        <span className="text-ink-soft"> — {item.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {operational.participants.length > 0 && (
                 <div className="rounded-xl border border-border bg-secondary/10 p-4">
                   <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
                     Participants
                   </p>
-                  <ul className="mt-3 space-y-2">
+                  <ul className="mt-3 space-y-3">
                     {operational.participants.map((participant) => (
-                      <li key={participant.id} className="text-[14px]">
-                        <span className="font-medium">{participant.name}</span>
-                        {participant.role ? (
-                          <span className="text-ink-soft"> · {participant.role}</span>
+                      <li
+                        key={`${participant.id ?? participant.name}-${participant.partyKind}`}
+                        className="rounded-lg border border-border/60 bg-background/60 px-3 py-3 text-[14px]"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="font-medium">{participant.name}</p>
+                            <p className="mt-1 text-[13px] text-ink-soft">
+                              {participant.commercialRole ?? 'Role not captured'}
+                              {participant.operationalRole
+                                ? ` · ${participant.operationalRole}`
+                                : ''}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-soft">
+                            {participant.partyKind === 'contractual_party'
+                              ? 'Contractual'
+                              : 'Compensated'}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-[13px]">
+                          <span className="font-medium">Status:</span>{' '}
+                          <span className="text-ink-soft">{participant.statusLabel}</span>
+                          {participant.approvalStatus ? (
+                            <>
+                              {' '}
+                              · <span className="text-ink-soft">{participant.approvalStatus}</span>
+                            </>
+                          ) : null}
+                          {participant.onboardingStatus ? (
+                            <>
+                              {' '}
+                              ·{' '}
+                              <span className="text-ink-soft">
+                                Onboarding {participant.onboardingStatus.replace(/_/g, ' ').toLowerCase()}
+                              </span>
+                            </>
+                          ) : null}
+                        </p>
+                        {participant.manageUrl && participant.partyKind === 'compensated_participant' ? (
+                          <Link
+                            href={participant.manageUrl}
+                            className="mt-2 inline-flex text-[13px] font-medium text-primary hover:underline"
+                          >
+                            Open participant setup
+                          </Link>
                         ) : null}
                       </li>
                     ))}
@@ -298,29 +395,84 @@ export function AgreementIntelligenceHubScreen() {
                   <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
                     Obligations
                   </p>
-                  <ul className="mt-3 space-y-2">
+                  <ul className="mt-3 space-y-3">
                     {operational.obligations.map((obligation) => (
-                      <li key={obligation.id} className="text-[14px]">
-                        <span className="font-medium">{obligation.label}</span>
-                        <span className="text-ink-soft"> — {obligation.amountLabel}</span>
+                      <li
+                        key={obligation.id}
+                        className="rounded-lg border border-border/60 bg-background/60 px-3 py-3 text-[14px]"
+                      >
+                        <p className="font-medium">{obligation.label}</p>
+                        <p className="mt-1 text-[13px] text-ink-soft">
+                          {obligation.amountLabel} · {obligation.type.replace(/_/g, ' ')}
+                        </p>
+                        <p className="mt-1 text-[13px] text-ink-soft">
+                          Beneficiary: {obligation.beneficiary}
+                          {obligation.obligor ? ` · Obligor: ${obligation.obligor}` : ''}
+                        </p>
+                        {obligation.cadence ? (
+                          <p className="mt-1 text-[13px] text-ink-soft">
+                            Cadence: {obligation.cadence}
+                          </p>
+                        ) : null}
+                        <p className="mt-2 text-[13px]">
+                          <span className="font-medium">Status:</span>{' '}
+                          <span className="text-ink-soft">{obligation.status}</span>
+                        </p>
+                        {obligation.nextAction ? (
+                          <p className="mt-1 text-[13px] text-ink-soft">
+                            Next: {obligation.nextAction}
+                          </p>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
 
-              {operational.settlementSchedule && (
+              {(operational.settlement.schedule || operational.settlement.approvalRequired) && (
                 <div className="rounded-xl border border-border bg-secondary/10 p-4">
                   <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
-                    Settlement schedule
+                    Settlement
                   </p>
-                  <p className="mt-3 text-[14px] font-medium">{operational.settlementSchedule}</p>
+                  <div className="mt-3 space-y-2 text-[14px]">
+                    <p className="font-medium">
+                      {operational.settlement.schedule ?? 'Schedule not captured'}
+                    </p>
+                    {operational.settlement.nextSettlementLabel ? (
+                      <p className="text-[13px] text-ink-soft">
+                        Next settlement: {operational.settlement.nextSettlementLabel}
+                      </p>
+                    ) : null}
+                    <p className="text-[13px] text-ink-soft">
+                      Approval: {operational.settlement.approvalRequired ? 'Required' : 'Not required'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {operational.actions.length > 0 && (
+                <div className="rounded-xl border border-border bg-secondary/10 p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                    Proposed actions
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {operational.actions.map((action) => (
+                      <li key={action.id} className="text-[14px]">
+                        <span className="font-medium">{action.label}</span>
+                        <span className="text-ink-soft"> — {action.detail}</span>
+                        <span className="ml-2 rounded-full border border-border px-2 py-0.5 text-[11px] uppercase tracking-wide text-ink-soft">
+                          {action.disposition.replace(/_/g, ' ')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
               {operational.upcomingActions.length > 0 && (
                 <div className="rounded-xl border border-border bg-secondary/10 p-4">
-                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                  <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                    <Clock3 className="h-4 w-4" />
                     Upcoming actions
                   </p>
                   <ul className="mt-3 space-y-2">
@@ -334,9 +486,32 @@ export function AgreementIntelligenceHubScreen() {
                 </div>
               )}
 
+              {operational.activity.length > 0 && (
+                <div className="rounded-xl border border-border bg-secondary/10 p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                    Activity
+                  </p>
+                  <ul className="mt-3 space-y-3">
+                    {operational.activity.map((entry) => (
+                      <li key={entry.id} className="text-[14px]">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <span className="font-medium">{entry.label}</span>
+                          <span className="text-[12px] text-ink-soft">
+                            {new Date(entry.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        {entry.detail ? (
+                          <p className="mt-1 text-[13px] text-ink-soft">{entry.detail}</p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[13px] font-medium text-emerald-700 dark:text-emerald-400">
                 <CheckCircle2 className="h-4 w-4" />
-                Active
+                {isActive ? 'Active' : 'Participant setup'}
                 {agreement?.bootstrappedAt
                   ? ` · ${new Date(agreement.bootstrappedAt).toLocaleString()}`
                   : ''}

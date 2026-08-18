@@ -118,8 +118,12 @@ export async function bootstrapAgreementIntelligenceCommercialGraph(input: {
   organizationWorkflowId: string;
   approvedStructure: ApprovedAgreementStructure;
   existingPilotDealId?: string | null;
+  /** Retry path must never re-trigger the one-shot Playwright bootstrap failure hook. */
+  skipE2eForcedFailure?: boolean;
 }): Promise<AgreementIntelligenceBootstrapResult> {
-  maybeThrowE2eForcedBootstrapFailure();
+  if (!input.skipE2eForcedFailure) {
+    maybeThrowE2eForcedBootstrapFailure();
+  }
 
   const pilotDealId =
     input.existingPilotDealId?.trim() ||
@@ -187,5 +191,6 @@ export async function retryAgreementIntelligenceBootstrap(input: {
     organizationWorkflowId: input.organizationWorkflowId,
     approvedStructure: input.approvedStructure,
     existingPilotDealId: input.pilotDealId,
+    skipE2eForcedFailure: true,
   });
 }

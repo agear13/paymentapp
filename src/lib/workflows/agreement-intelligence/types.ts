@@ -51,18 +51,89 @@ export type WorkflowAgreementRecord = {
   updatedAt: string;
 };
 
+export type WorkflowOperationalPartyKind =
+  | 'contractual_party'
+  | 'compensated_participant';
+
+export type WorkflowOperationalParticipant = {
+  id: string | null;
+  name: string;
+  commercialRole: string | null;
+  operationalRole: string | null;
+  partyKind: WorkflowOperationalPartyKind;
+  statusLabel: string;
+  approvalStatus: string | null;
+  onboardingStatus: string | null;
+  needsAttention: boolean;
+  attentionReason: string | null;
+  manageUrl: string | null;
+};
+
+export type WorkflowOperationalObligation = {
+  id: string;
+  label: string;
+  amountLabel: string;
+  status: string;
+  type: string;
+  beneficiary: string;
+  obligor: string | null;
+  cadence: string | null;
+  nextAction: string | null;
+};
+
+export type WorkflowNeedsAttentionItem = {
+  id: string;
+  label: string;
+  detail: string;
+  participantId?: string | null;
+};
+
+export type WorkflowActivityItem = {
+  id: string;
+  label: string;
+  detail: string | null;
+  timestamp: string;
+};
+
+export type WorkflowSettlementSummary = {
+  schedule: string | null;
+  approvalRequired: boolean;
+  nextSettlementLabel: string | null;
+};
+
+export type WorkflowOperationalActionDisposition = 'PROPOSED' | 'REQUIRES_APPROVAL' | 'READY';
+
+export type WorkflowOperationalAction = {
+  id: string;
+  label: string;
+  detail: string;
+  disposition: WorkflowOperationalActionDisposition;
+  participantId?: string | null;
+};
+
 export type WorkflowOperationalHubSummary = {
   lifecycleStatus: OrganizationWorkflowLifecycleStatus;
   lifecycleLabel: string;
   isOperational: boolean;
+  isActivationComplete: boolean;
   pilotDealId: string | null;
   agreementTitle: string | null;
   participantCount: number;
   obligationCount: number;
-  participants: Array<{ id: string; name: string; role: string }>;
-  obligations: Array<{ id: string; label: string; amountLabel: string; status: string }>;
-  upcomingActions: Array<{ label: string; detail: string }>;
+  contractualPartyCount: number;
+  compensatedParticipantCount: number;
+  participants: WorkflowOperationalParticipant[];
+  obligations: WorkflowOperationalObligation[];
+  needsAttention: WorkflowNeedsAttentionItem[];
+  actions: WorkflowOperationalAction[];
+  upcomingActions: Array<{ label: string; detail: string; participantId?: string | null }>;
+  settlement: WorkflowSettlementSummary;
+  /** @deprecated Prefer settlement.schedule — kept for existing clients/tests */
   settlementSchedule: string | null;
+  activity: WorkflowActivityItem[];
+  projectParticipantsUrl: string | null;
+  workflowDeploymentStatus: 'DEPLOYED' | 'PAUSED';
+  coordinationBlocked: boolean;
 };
 
 export type WorkflowAgreementHubSummary = {
@@ -81,6 +152,7 @@ export type WorkflowAgreementHubSummary = {
   canRetryExtraction: boolean;
   canRetryBootstrap: boolean;
   isOperational: boolean;
+  showsOperationalHub: boolean;
 };
 
 export class WorkflowAgreementError extends Error {

@@ -25,6 +25,7 @@ const migrationFiles = [
   '20260817120000_organization_workflows/migration.sql',
   '20260817140000_organization_workflow_agreements/migration.sql',
   '20260817160000_agreement_intelligence_bootstrap/migration.sql',
+  '20260818120000_agreement_intelligence_participant_setup/migration.sql',
 ];
 
 /** Minimal columns bootstrap reads; full payment_events migration assumes newer base schema. */

@@ -26,6 +26,12 @@ import {
   agreementIntelligencePilotDealId,
 } from '@/lib/workflows/agreement-intelligence/bootstrap-agreement-intelligence.server';
 import { buildWorkflowOperationalHubSummary } from '@/lib/workflows/agreement-intelligence/operational-hub-summary.server';
+import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import {
+  filterCompensatedParticipants,
+  isParticipantSetupComplete,
+  resolvePostBootstrapLifecycle,
+} from '@/lib/workflows/agreement-intelligence/participant-setup.server';
 import { isWorkflowLockedForInput } from '@/lib/workflows/agreement-intelligence/lifecycle';
 import type {
   ApprovedAgreementStructure,
@@ -114,6 +120,62 @@ async function setWorkflowLifecycle(
   });
 }
 
+async function finalizeWorkflowActivation(input: {
+  workflowId: string;
+  agreementId: string;
+  userId: string;
+  pilotDealId: string;
+  operatorApprovalRequired: boolean;
+}): Promise<OrganizationWorkflowLifecycleStatus> {
+  const snapshot = await getPilotSnapshotForUser(input.userId);
+  const compensatedParticipants = filterCompensatedParticipants(
+    snapshot.participants.filter((participant) => participant.dealId === input.pilotDealId)
+  );
+  const lifecycleStatus = resolvePostBootstrapLifecycle({
+    compensatedParticipants,
+    operatorApprovalRequired: input.operatorApprovalRequired,
+  });
+
+  await prisma.organization_workflow_agreements.update({
+    where: { id: input.agreementId },
+    data: {
+      bootstrapped_at: new Date(),
+      bootstrap_error: null,
+    },
+  });
+  await setWorkflowLifecycle(input.workflowId, lifecycleStatus);
+  return lifecycleStatus;
+}
+
+async function maybeAdvanceParticipantSetupToActive(input: {
+  workflowId: string;
+  userId: string;
+  lifecycleStatus: OrganizationWorkflowLifecycleStatus;
+  pilotDealId: string | null;
+  operatorApprovalRequired: boolean;
+}): Promise<OrganizationWorkflowLifecycleStatus> {
+  if (input.lifecycleStatus !== 'PARTICIPANT_SETUP' || !input.pilotDealId) {
+    return input.lifecycleStatus;
+  }
+
+  const snapshot = await getPilotSnapshotForUser(input.userId);
+  const compensatedParticipants = filterCompensatedParticipants(
+    snapshot.participants.filter((participant) => participant.dealId === input.pilotDealId)
+  );
+
+  if (
+    !isParticipantSetupComplete({
+      compensatedParticipants,
+      operatorApprovalRequired: input.operatorApprovalRequired,
+    })
+  ) {
+    return 'PARTICIPANT_SETUP';
+  }
+
+  await setWorkflowLifecycle(input.workflowId, 'ACTIVE');
+  return 'ACTIVE';
+}
+
 function buildStorageKey(organizationId: string, workflowId: string, filename: string): string {
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
   return `workflow-agreements/${organizationId}/${workflowId}/${randomUUID()}-${safeName}`;
@@ -125,28 +187,56 @@ async function buildAgreementContextResponse(
   userId?: string
 ) {
   const row = await getWorkflowRow(organizationId, workflowId);
-  const agreement = row.agreement ? serializeAgreement(row.agreement) : null;
   const configuration = parseAgreementIntelligenceConfiguration(row.configuration);
+  let lifecycleStatus = row.lifecycle_status;
+  const agreementRecord = row.agreement;
+
+  if (userId && lifecycleStatus === 'PARTICIPANT_SETUP' && agreementRecord?.pilot_deal_id) {
+    lifecycleStatus = await maybeAdvanceParticipantSetupToActive({
+      workflowId,
+      userId,
+      lifecycleStatus,
+      pilotDealId: agreementRecord.pilot_deal_id,
+      operatorApprovalRequired: configuration.operatorApprovalRequired,
+    });
+  }
+
+  const agreement = agreementRecord ? serializeAgreement(agreementRecord) : null;
   const hubSummary = buildWorkflowAgreementHubSummary({
-    lifecycleStatus: row.lifecycle_status,
+    lifecycleStatus,
     configuration: row.configuration,
     agreement,
   });
 
   let operationalSummary: WorkflowOperationalHubSummary | null = null;
   if (userId) {
+    const approvedStructure = agreement?.approvedStructure ?? null;
     operationalSummary = await buildWorkflowOperationalHubSummary({
       userId,
-      lifecycleStatus: row.lifecycle_status,
+      lifecycleStatus,
       pilotDealId: agreement?.pilotDealId ?? null,
       agreementTitle: agreement?.title ?? agreement?.extractionResult?.projectName.value ?? null,
       extractionSettlement: hubSummary.settlementSchedule,
+      operatorApprovalRequired: configuration.operatorApprovalRequired,
+      reviewForm: approvedStructure?.reviewForm ?? null,
+      commercialGraph:
+        approvedStructure?.commercialGraph ?? agreement?.commercialGraph ?? null,
+      agreementMeta: agreement
+        ? {
+            createdAt: agreement.createdAt,
+            extractedAt: agreement.extractedAt,
+            approvedAt: agreement.approvedAt,
+            bootstrappedAt: agreement.bootstrappedAt,
+            sourceType: agreement.sourceType,
+          }
+        : null,
+      workflowDeploymentStatus: row.status === 'PAUSED' ? 'PAUSED' : 'DEPLOYED',
     });
   }
 
   return {
     workflowId: row.id,
-    lifecycleStatus: row.lifecycle_status,
+    lifecycleStatus,
     configuration,
     agreement,
     hubSummary,
@@ -557,14 +647,14 @@ export async function approveWorkflowAgreementStructure(input: {
       existingPilotDealId: pilotDealId,
     });
 
-    await prisma.organization_workflow_agreements.update({
-      where: { id: row.agreement.id },
-      data: {
-        bootstrapped_at: new Date(),
-        bootstrap_error: null,
-      },
+    const configuration = parseAgreementIntelligenceConfiguration(row.configuration);
+    await finalizeWorkflowActivation({
+      workflowId: input.workflowId,
+      agreementId: row.agreement.id,
+      userId: input.userId,
+      pilotDealId,
+      operatorApprovalRequired: configuration.operatorApprovalRequired,
     });
-    await setWorkflowLifecycle(input.workflowId, 'ACTIVE');
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Failed to bootstrap commercial workflow';
@@ -584,9 +674,13 @@ export async function retryWorkflowAgreementBootstrap(input: {
   userId: string;
 }) {
   const row = await getWorkflowRow(input.organizationId, input.workflowId);
-  if (row.lifecycle_status !== 'BOOTSTRAP_FAILED' && row.lifecycle_status !== 'ACTIVE') {
+  if (
+    row.lifecycle_status !== 'BOOTSTRAP_FAILED' &&
+    row.lifecycle_status !== 'ACTIVE' &&
+    row.lifecycle_status !== 'PARTICIPANT_SETUP'
+  ) {
     throw new WorkflowAgreementError(
-      'Commercial bootstrap can only be retried after a failed activation',
+      'Commercial bootstrap can only be retried after a failed activation or on an active workflow',
       'INVALID_STATE',
       409
     );
@@ -618,17 +712,17 @@ export async function retryWorkflowAgreementBootstrap(input: {
       organizationWorkflowId: input.workflowId,
       approvedStructure,
       existingPilotDealId: pilotDealId,
+      skipE2eForcedFailure: true,
     });
 
-    await prisma.organization_workflow_agreements.update({
-      where: { id: row.agreement.id },
-      data: {
-        pilot_deal_id: pilotDealId,
-        bootstrapped_at: new Date(),
-        bootstrap_error: null,
-      },
+    const configuration = parseAgreementIntelligenceConfiguration(row.configuration);
+    await finalizeWorkflowActivation({
+      workflowId: input.workflowId,
+      agreementId: row.agreement.id,
+      userId: input.userId,
+      pilotDealId,
+      operatorApprovalRequired: configuration.operatorApprovalRequired,
     });
-    await setWorkflowLifecycle(input.workflowId, 'ACTIVE');
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Failed to bootstrap commercial workflow';
@@ -638,6 +732,35 @@ export async function retryWorkflowAgreementBootstrap(input: {
     });
     await setWorkflowLifecycle(input.workflowId, 'BOOTSTRAP_FAILED');
   }
+
+  return getWorkflowAgreementContext(input.organizationId, input.workflowId, input.userId);
+}
+
+export async function refreshWorkflowActivation(input: {
+  organizationId: string;
+  workflowId: string;
+  userId: string;
+}) {
+  const row = await getWorkflowRow(input.organizationId, input.workflowId);
+  if (
+    row.lifecycle_status !== 'PARTICIPANT_SETUP' &&
+    row.lifecycle_status !== 'ACTIVE'
+  ) {
+    throw new WorkflowAgreementError(
+      'Activation refresh is only available after commercial bootstrap',
+      'INVALID_STATE',
+      409
+    );
+  }
+
+  const configuration = parseAgreementIntelligenceConfiguration(row.configuration);
+  await maybeAdvanceParticipantSetupToActive({
+    workflowId: input.workflowId,
+    userId: input.userId,
+    lifecycleStatus: row.lifecycle_status,
+    pilotDealId: row.agreement?.pilot_deal_id ?? null,
+    operatorApprovalRequired: configuration.operatorApprovalRequired,
+  });
 
   return getWorkflowAgreementContext(input.organizationId, input.workflowId, input.userId);
 }
