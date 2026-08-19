@@ -55,9 +55,17 @@ describe('agreement upload storage', () => {
     publicBaseUrl: null,
   };
 
-  let tempDir: string;
+  let tempDir: string | undefined;
+
+  function requireTempDir(): string {
+    if (!tempDir) {
+      throw new Error('Temporary upload directory was not created');
+    }
+    return tempDir;
+  }
 
   beforeEach(async () => {
+    jest.useRealTimers();
     jest.clearAllMocks();
     resetAgreementR2ClientCache();
     resetAgreementUploadStorageForTests();
@@ -65,7 +73,10 @@ describe('agreement upload storage', () => {
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true });
+      tempDir = undefined;
+    }
     delete process.env.STORAGE_PROVIDER;
     delete process.env.R2_ACCOUNT_ID;
     delete process.env.R2_ACCESS_KEY_ID;
@@ -111,7 +122,7 @@ describe('agreement upload storage', () => {
   });
 
   it('uploads and downloads files from local storage', async () => {
-    const storage = new LocalAgreementUploadStorage(tempDir);
+    const storage = new LocalAgreementUploadStorage(requireTempDir());
 
     await storage.upload({
       storageKey,
@@ -126,7 +137,7 @@ describe('agreement upload storage', () => {
   });
 
   it('deletes local files and reports missing objects', async () => {
-    const storage = new LocalAgreementUploadStorage(tempDir);
+    const storage = new LocalAgreementUploadStorage(requireTempDir());
 
     await storage.upload({ storageKey, bytes, mimeType: 'application/pdf' });
     await storage.delete(storageKey);
@@ -181,7 +192,7 @@ describe('agreement upload storage', () => {
   });
 
   it('falls back to local storage when R2 download misses legacy files', async () => {
-    const local = new LocalAgreementUploadStorage(tempDir);
+    const local = new LocalAgreementUploadStorage(requireTempDir());
     await local.upload({ storageKey, bytes, mimeType: 'application/pdf' });
 
     const r2 = new R2AgreementUploadStorage(r2Config);
@@ -192,13 +203,13 @@ describe('agreement upload storage', () => {
 
     expect(downloaded.bytes.equals(bytes)).toBe(true);
 
-    const localPath = path.join(tempDir, storageKey);
+    const localPath = path.join(requireTempDir(), storageKey);
     const fileOnDisk = await readFile(localPath);
     expect(fileOnDisk.equals(bytes)).toBe(true);
   });
 
   it('rejects invalid storage keys', async () => {
-    const storage = new LocalAgreementUploadStorage(tempDir);
+    const storage = new LocalAgreementUploadStorage(requireTempDir());
 
     await expect(
       storage.upload({
