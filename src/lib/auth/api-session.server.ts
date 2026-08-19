@@ -5,8 +5,10 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { enforceCsrfForRequest } from '@/lib/security/csrf';
 import { isEmailVerified } from '@/lib/auth/email-verification';
 import {
+  assertMfaChallengeSatisfied,
   assertNoPendingSuspiciousLogin,
   emailNotVerifiedResponse,
+  mfaChallengeRequiredResponse,
   suspiciousLoginResponse,
 } from '@/lib/auth/verified-session.server';
 
@@ -15,6 +17,8 @@ export type ApiSessionOptions = {
   allowUnverifiedEmail?: boolean;
   /** confirm-login must run while suspicious-login flag is set. */
   allowSuspiciousLogin?: boolean;
+  /** MFA enroll/challenge routes may run at AAL1. */
+  allowAal1?: boolean;
 };
 
 /**
@@ -47,6 +51,14 @@ export async function getCurrentUserForApi(
       await assertNoPendingSuspiciousLogin(user.id);
     } catch {
       return { user: null, response: suspiciousLoginResponse() };
+    }
+  }
+
+  if (!options?.allowAal1) {
+    try {
+      await assertMfaChallengeSatisfied();
+    } catch {
+      return { user: null, response: mfaChallengeRequiredResponse() };
     }
   }
 

@@ -11,6 +11,7 @@ import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
+import { assertRecentStepUp } from '@/lib/auth/step-up.server';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { loggers } from '@/lib/logger';
@@ -144,6 +145,15 @@ export async function POST(request: NextRequest) {
 
     const { methodType, handle, notes, isDefault, hederaAccountId } = parsed.data;
     const userId = parsed.data.userId ?? user.id;
+
+    if (methodType === 'HEDERA') {
+      const stepUp = await assertRecentStepUp({
+        request,
+        userId: user.id,
+        email: user.email,
+      });
+      if (!stepUp.ok) return stepUp.response;
+    }
 
     const canManage = await checkUserPermission(user.id, organizationId, 'manage_ledger');
     const isOwnMethod = userId === user.id;

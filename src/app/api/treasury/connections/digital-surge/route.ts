@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { z } from 'zod';
-import { requireTreasuryOrganizationAccess } from '@/lib/treasury/api/require-treasury-access';
+import {
+  getTreasuryOrganizationId,
+  requireTreasuryOrganizationAccess,
+} from '@/lib/treasury/api/require-treasury-access';
+import { requirePaymentConfigurationAccess } from '@/lib/auth/step-up.server';
 import {
   disconnectDigitalSurge,
   getDigitalSurgeConnectionStatus,
@@ -38,13 +42,8 @@ const postSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const auth = await getCurrentUserForApi(req);
-  if (!auth.user) return auth.response!;
-
-  const access = await requireTreasuryOrganizationAccess(req);
-  if (!access.ok) {
-    return access.response;
-  }
+  const access = await requirePaymentConfigurationAccess(req, getTreasuryOrganizationId(req));
+  if (!access.ok) return access.response;
 
   let body: z.infer<typeof postSchema>;
   try {
@@ -62,13 +61,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await getCurrentUserForApi(req);
-  if (!auth.user) return auth.response!;
-
-  const access = await requireTreasuryOrganizationAccess(req);
-  if (!access.ok) {
-    return access.response;
-  }
+  const access = await requirePaymentConfigurationAccess(req, getTreasuryOrganizationId(req));
+  if (!access.ok) return access.response;
 
   await disconnectDigitalSurge(access.organizationId);
   return NextResponse.json({ success: true, connected: false });

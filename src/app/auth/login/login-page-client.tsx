@@ -145,6 +145,8 @@ export function LoginPageClient() {
 
       if (data.suspiciousLogin) {
         router.replace('/auth/confirm-login');
+      } else if (data.mfaRequired) {
+        router.replace('/auth/mfa');
       } else {
         router.replace(getPostAuthDestination());
       }

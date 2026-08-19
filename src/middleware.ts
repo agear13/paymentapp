@@ -277,7 +277,9 @@ export async function middleware(request: NextRequest) {
   const isVerifyEmailRoute = pathname.startsWith('/auth/verify-email');
   const isConfirmLoginRoute = pathname.startsWith('/auth/confirm-login');
   const isResetPasswordRoute = pathname.startsWith('/auth/reset-password');
-  const isAuthUtilityRoute = isVerifyEmailRoute || isConfirmLoginRoute || isResetPasswordRoute;
+  const isMfaChallengeRoute = pathname.startsWith('/auth/mfa');
+  const isAuthUtilityRoute =
+    isVerifyEmailRoute || isConfirmLoginRoute || isResetPasswordRoute || isMfaChallengeRoute;
 
   if (hasSession && isAuthRoute && !isAuthCallbackRoute && !isAuthUtilityRoute) {
     if (DEBUG_MIDDLEWARE) { console.log('[middleware] decision=redirect_to_dashboard'); }

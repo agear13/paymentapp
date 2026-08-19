@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { enforceCsrfForRequest } from '@/lib/security/csrf';
 import { AuthError } from './errors';
 import { isEmailVerified } from '@/lib/auth/email-verification';
-import { assertNoPendingSuspiciousLogin } from '@/lib/auth/verified-session.server';
+import { assertMfaChallengeSatisfied, assertNoPendingSuspiciousLogin } from '@/lib/auth/verified-session.server';
 
 /**
  * Require authentication for API route handlers (with CSRF on mutating requests).
@@ -36,6 +36,7 @@ export async function requireAuth(request: NextRequest) {
   }
 
   await assertNoPendingSuspiciousLogin(user.id);
+  await assertMfaChallengeSatisfied();
 
   return user;
 }

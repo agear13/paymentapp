@@ -10,6 +10,8 @@ export type SignOutClientOptions = {
 
 /**
  * Shared sign-out flow used by dashboard sidebar and Commercial OS account menu.
+ * This only clears the current browser session. High-risk credential changes
+ * must call `revokeUserSessions` on the server (global or others).
  */
 export async function signOutClient({
   supabase,

@@ -22,6 +22,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { enforceCsrfForRequest } from '@/lib/security/csrf'
 import { isEmailVerified } from '@/lib/auth/email-verification'
 import { isSuspiciousLoginPending } from '@/lib/auth/login-tracking.server'
+import { assertMfaChallengeSatisfied } from '@/lib/auth/verified-session.server'
 
 function getSupabaseEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -212,6 +213,23 @@ export async function requireAuth(request: NextRequest) {
       session: null,
       response: NextResponse.json(
         { error: 'Unusual sign-in activity detected.', code: 'SUSPICIOUS_LOGIN_PENDING' },
+        { status: 403 }
+      ),
+    }
+  }
+
+  try {
+    await assertMfaChallengeSatisfied()
+  } catch {
+    return {
+      user: null,
+      session: null,
+      response: NextResponse.json(
+        {
+          error: 'Two-factor authentication is required. Enter the code from your authenticator app.',
+          code: 'MFA_CHALLENGE_REQUIRED',
+          challengePath: '/auth/mfa',
+        },
         { status: 403 }
       ),
     }

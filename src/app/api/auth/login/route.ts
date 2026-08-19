@@ -113,12 +113,21 @@ export async function POST(request: NextRequest) {
     metadata: { suspicious: loginTracking.suspicious },
   });
 
+  let totpEnrolled = false;
+  try {
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    totpEnrolled = (factors?.totp ?? []).some((factor) => factor.status === 'verified');
+  } catch {
+    totpEnrolled = false;
+  }
+
   if (loginTracking.suspicious) {
     return authSuccess({
       suspiciousLogin: true,
+      mfaRequired: totpEnrolled,
       message: loginTracking.reason,
     });
   }
 
-  return authSuccess({ userId: data.user.id });
+  return authSuccess({ userId: data.user.id, mfaRequired: totpEnrolled });
 }

@@ -3,40 +3,20 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { AuditEventType, createAuditLog, AuditSeverity } from '@/lib/audit/audit-log';
 import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { disconnectXero } from '@/lib/xero';
 import { logger } from '@/lib/logger';
-import { hasOrganizationPermission } from '@/lib/auth/organization-access';
-import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
+import { requirePaymentConfigurationAccess } from '@/lib/auth/step-up.server';
+import { notifyAccountSecurityEvent } from '@/lib/auth/sensitive-action-notify.server';
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await getCurrentUserForApi(request);
-    if (!auth.user) return auth.response!;
-    const user = auth.user;
-
-    const body = await request.json();
-    const resolved = await resolveSessionOrganizationId(
-      user.id,
-      body.organizationId,
-      'xero/disconnect'
-    );
-    if (resolved.response) return resolved.response;
-    const organizationId = resolved.organizationId;
-
-    const canManageSettings = await hasOrganizationPermission(
-      user.id,
-      organizationId,
-      'manage_settings'
-    );
-    if (!canManageSettings) {
-      return NextResponse.json(
-        { error: 'Forbidden - insufficient organization permissions' },
-        { status: 403 }
-      );
-    }
+    const body = await request.json().catch(() => ({}));
+    const access = await requirePaymentConfigurationAccess(request, body.organizationId);
+    if (!access.ok) return access.response;
+    const user = access.user;
+    const organizationId = access.organizationId;
 
     await disconnectXero(organizationId);
 
@@ -58,6 +38,12 @@ export async function POST(request: NextRequest) {
       userAgent: auditCtx.userAgent,
       correlationId: auditCtx.correlationId,
       timestamp: new Date(),
+    });
+
+    void notifyAccountSecurityEvent({
+      to: user.email,
+      subject: 'Xero was disconnected',
+      text: 'The Xero connection for your Provvypay workspace was disconnected. If you did not do this, contact support immediately and reset your password.',
     });
 
     return NextResponse.json({

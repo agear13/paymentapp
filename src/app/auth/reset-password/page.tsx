@@ -10,10 +10,14 @@ import { emitAuthAuditEvent } from '@/lib/security/auth-audit.client';
 import { TurnstileWidget } from '@/components/auth/turnstile-widget';
 import { MIN_PASSWORD_LENGTH, validatePassword } from '@/lib/auth/password-policy';
 import { GENERIC_RESET_RESPONSE } from '@/lib/auth/auth-errors';
+import { CsrfBootstrap } from '@/components/security/csrf-bootstrap';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
+import { CSRF_PREPARING_LABEL, useClientCsrfReady } from '@/hooks/use-client-csrf-ready';
 
 export default function ResetPasswordPage() {
   const supabase = createClient();
 
+  const { isReady, isPreparing } = useClientCsrfReady();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -123,13 +127,22 @@ export default function ResetPasswordPage() {
     }
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) throw updateError;
+      const response = await csrfAwareFetch('/api/security/complete-password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Could not update password.');
+      }
       void emitAuthAuditEvent({
         eventType: 'auth.password.reset.completed',
         email,
       });
-      setMessage('Password updated successfully. You can now sign in.');
+      await supabase.auth.signOut();
+      setReadyToSetPassword(false);
+      setMessage(data.message ?? 'Password updated successfully. You can now sign in.');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not update password.');
     } finally {
@@ -137,10 +150,11 @@ export default function ResetPasswordPage() {
     }
   };
 
-  const showSetPasswordForm = readyToSetPassword || (isRecoveryLink && !tokenHash);
+  const showSetPasswordForm = readyToSetPassword;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-8">
+      <CsrfBootstrap />
       <div className="w-full max-w-md space-y-6 rounded-lg border bg-card p-6">
         <div className="space-y-2 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Reset password</h1>
@@ -182,8 +196,8 @@ export default function ResetPasswordPage() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Updating password...' : 'Update password'}
+            <Button type="submit" className="w-full" disabled={loading || isPreparing || !isReady}>
+              {isPreparing ? CSRF_PREPARING_LABEL : loading ? 'Updating password...' : 'Update password'}
             </Button>
           </form>
         ) : (

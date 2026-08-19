@@ -32,6 +32,10 @@ export enum AuditEventType {
   AUTH_MFA_ENABLED = 'auth.mfa.enabled',
   AUTH_MFA_DISABLED = 'auth.mfa.disabled',
   AUTH_MFA_RECOVERY_USED = 'auth.mfa.recovery.used',
+  AUTH_MFA_CHALLENGE_FAILED = 'auth.mfa.challenge.failed',
+  AUTH_MFA_CHALLENGE_SUCCESS = 'auth.mfa.challenge.success',
+  AUTH_STEP_UP_SUCCESS = 'auth.stepup.success',
+  AUTH_STEP_UP_FAILED = 'auth.stepup.failed',
   
   // Authorization Events
   ACCESS_GRANTED = 'access.granted',
@@ -75,6 +79,8 @@ export enum AuditEventType {
   XERO_DISCONNECTED = 'xero.disconnected',
   WISE_SETTINGS_CHANGED = 'wise.settings.changed',
   STRIPE_SETTINGS_CHANGED = 'stripe.settings.changed',
+  HEDERA_SETTINGS_CHANGED = 'hedera.settings.changed',
+  EVM_SETTINGS_CHANGED = 'evm.settings.changed',
   XERO_SYNC_SUCCESS = 'xero.sync.success',
   XERO_SYNC_FAILED = 'xero.sync.failed',
   STRIPE_WEBHOOK_RECEIVED = 'stripe.webhook.received',

@@ -5,7 +5,7 @@ import { CSRF_EXEMPT_PATH_PREFIXES } from '@/lib/security/csrf-policy';
 const API_ROOT = path.join(process.cwd(), 'app', 'api');
 const MUTATING_FN = /export async function (POST|PUT|PATCH|DELETE)\b/;
 const CSRF_GUARD =
-  /getCurrentUserForApi\(|requireWorkflowOrganizationAccess\(|requireAuth\(request|requireAuth\(req|requireUser\(request|requireUser\(req|enforceCsrfForRequest\(|verifyCronRequest\(|isAuthorizedCron\(|isValidInternalAdminRequest\(|requireAdminForApi\(|getAuthedParticipantForProgram\(|requireAgreementAnalyzerDashboardForApi\(/;
+  /getCurrentUserForApi\(|requirePaymentConfigurationAccess\(|assertRecentStepUp\(|requireWorkflowOrganizationAccess\(|requireAuth\(request|requireAuth\(req|requireUser\(request|requireUser\(req|enforceCsrfForRequest\(|verifyCronRequest\(|isAuthorizedCron\(|isValidInternalAdminRequest\(|requireAdminForApi\(|getAuthedParticipantForProgram\(|requireAgreementAnalyzerDashboardForApi\(/;
 const LEGACY_UNGUARDED = /getCurrentUser\(\)|await requireAuth\(\)/;
 
 function mutatingHandlers(content: string): string[] {
@@ -56,7 +56,9 @@ describe('CSRF coverage matrix', () => {
         '/api/public/',
         '/api/stripe/webhook',
         '/api/jobs/',
-        '/api/auth/',
+        '/api/auth/login',
+        '/api/auth/reset-password',
+        '/api/auth/change-email',
       ])
     );
   });

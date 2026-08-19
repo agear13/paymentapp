@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
-import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
+import { requirePaymentConfigurationAccess } from '@/lib/auth/step-up.server';
+import { notifyAccountSecurityEvent } from '@/lib/auth/sensitive-action-notify.server';
 import { AuditEventType, createAuditLog, AuditSeverity } from '@/lib/audit/audit-log';
 import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
@@ -95,9 +96,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await getCurrentUserForApi(request);
-    if (!auth.user) return auth.response!;
-    const user = auth.user;
+    const access = await requirePaymentConfigurationAccess(request);
+    if (!access.ok) return access.response;
+    const user = access.user;
 
     const { id } = await params;
     const { data: body, error } = await validateBody(request, updateMerchantSettingsSchema);
@@ -114,18 +115,16 @@ export async function PATCH(
         wise_profile_id: true,
         wise_enabled: true,
         wise_currency: true,
+        hedera_account_id: true,
+        evm_wallet_enabled: true,
+        evm_wallet_address: true,
       },
     });
     if (!existing) {
       return apiError('Merchant settings not found', 404);
     }
 
-    const canManageSettings = await hasOrganizationPermission(
-      user.id,
-      existing.organization_id,
-      'manage_settings'
-    );
-    if (!canManageSettings) {
+    if (existing.organization_id !== access.organizationId) {
       return apiError('Forbidden - insufficient organization permissions', 403);
     }
 
@@ -207,6 +206,52 @@ export async function PATCH(
       });
     }
 
+    if (body.hederaAccountId !== undefined) {
+      void createAuditLog({
+        eventType: AuditEventType.HEDERA_SETTINGS_CHANGED,
+        severity: AuditSeverity.INFO,
+        userId: user.id,
+        organizationId: existing.organization_id,
+        resource: 'merchant_settings',
+        resourceId: id,
+        action: 'update',
+        oldValue: JSON.stringify({ hederaAccountId: existing.hedera_account_id }),
+        newValue: JSON.stringify({ hederaAccountId: body.hederaAccountId }),
+        ipAddress: auditCtx.ipAddress,
+        userAgent: auditCtx.userAgent,
+        correlationId: auditCtx.correlationId,
+        timestamp: new Date(),
+      });
+    }
+    if (
+      body.evmWalletEnabled !== undefined ||
+      body.evmWalletAddress !== undefined ||
+      body.evmSupportedNetworks !== undefined ||
+      body.evmSupportedTokens !== undefined
+    ) {
+      void createAuditLog({
+        eventType: AuditEventType.EVM_SETTINGS_CHANGED,
+        severity: AuditSeverity.INFO,
+        userId: user.id,
+        organizationId: existing.organization_id,
+        resource: 'merchant_settings',
+        resourceId: id,
+        action: 'update',
+        oldValue: JSON.stringify({
+          evmWalletEnabled: existing.evm_wallet_enabled,
+          evmWalletAddress: existing.evm_wallet_address,
+        }),
+        newValue: JSON.stringify({
+          evmWalletEnabled: body.evmWalletEnabled,
+          evmWalletAddress: body.evmWalletAddress,
+        }),
+        ipAddress: auditCtx.ipAddress,
+        userAgent: auditCtx.userAgent,
+        correlationId: auditCtx.correlationId,
+        timestamp: new Date(),
+      });
+    }
+
     const railUpdated =
       body.stripeAccountId !== undefined ||
       body.hederaAccountId !== undefined ||
@@ -238,6 +283,11 @@ export async function PATCH(
       operationalOnboarding = convergence.onboarding;
       operationalInitialization = convergence.snapshot;
       correlationId = convergence.correlationId;
+      void notifyAccountSecurityEvent({
+        to: user.email,
+        subject: 'Payment configuration changed',
+        text: 'Payment destination or processing settings were changed on your Provvypay workspace. If you did not make this change, contact support immediately and reset your password.',
+      });
     }
 
     return apiResponse({
@@ -258,9 +308,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await getCurrentUserForApi(request);
-    if (!auth.user) return auth.response!;
-    const user = auth.user;
+    const access = await requirePaymentConfigurationAccess(request);
+    if (!access.ok) return access.response;
+    const user = access.user;
 
     const { id } = await params;
 
@@ -272,12 +322,7 @@ export async function DELETE(
       return apiError('Merchant settings not found', 404);
     }
 
-    const canManageSettings = await hasOrganizationPermission(
-      user.id,
-      existing.organization_id,
-      'manage_settings'
-    );
-    if (!canManageSettings) {
+    if (existing.organization_id !== access.organizationId) {
       return apiError('Forbidden - insufficient organization permissions', 403);
     }
 
@@ -286,6 +331,12 @@ export async function DELETE(
     });
 
     log.info(`Deleted merchant settings: ${id} by user ${user.id}`);
+
+    void notifyAccountSecurityEvent({
+      to: user.email,
+      subject: 'Payment configuration deleted',
+      text: 'Merchant payment settings were deleted on your Provvypay workspace. If you did not do this, contact support immediately and reset your password.',
+    });
 
     return apiResponse({ success: true });
   } catch (error) {

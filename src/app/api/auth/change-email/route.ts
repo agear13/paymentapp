@@ -5,6 +5,7 @@ import { recordAuthAuditEvent } from '@/lib/audit/auth-audit.server';
 import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { authEmailSchema, authJsonError, authSuccess } from '@/lib/auth/auth-api.shared';
 import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from '@/lib/auth/disposable-email';
+import { isEmailVerified } from '@/lib/auth/email-verification';
 import { createRouteHandlerSupabaseClient } from '@/lib/supabase/route-handler-client';
 
 const bodySchema = z.object({
@@ -14,15 +15,25 @@ const bodySchema = z.object({
 const AUTH_LIFECYCLE_OPTIONS = {
   allowUnverifiedEmail: true,
   allowSuspiciousLogin: true,
+  allowAal1: true,
 } as const;
 
 /**
- * POST /api/auth/change-email — update email for unverified accounts (re-sends verification).
+ * POST /api/auth/change-email — unverified onboarding only.
+ * Verified accounts must use /api/security/change-email with MFA/AAL2.
  */
 export async function POST(request: NextRequest) {
   const auth = await getCurrentUserForApi(request, AUTH_LIFECYCLE_OPTIONS);
   if (!auth.user) {
     return auth.response ?? authJsonError('Authentication required', 401);
+  }
+
+  if (isEmailVerified(auth.user)) {
+    return authJsonError(
+      'Verified accounts must confirm an email change from Sign-in & Security with two-factor authentication.',
+      403,
+      { code: 'STEP_UP_REQUIRED' }
+    );
   }
 
   let body: unknown;
@@ -54,7 +65,7 @@ export async function POST(request: NextRequest) {
     userId: auth.user.id,
     email,
     request,
-    metadata: { previousEmail: auth.user.email },
+    metadata: { previousEmail: auth.user.email, unverifiedOnboarding: true },
   });
 
   recordAuthAuditEvent({

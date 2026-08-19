@@ -1,75 +1,65 @@
 /**
  * Alert Monitoring API
  * Evaluate and retrieve alert status
- * 
+ *
  * Sprint 15: Alerting & Monitoring
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
 import { evaluateAllAlerts, getAlertRules } from '@/lib/monitoring/alert-rules';
 import { logger } from '@/lib/logger';
-import { hasOrganizationAccess } from '@/lib/auth/organization-access';
 import { checkAdminAuth } from '@/lib/auth/admin.server';
+import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 import {
   cronAuthFailureResponse,
   verifyCronRequest,
 } from '@/lib/jobs/cron-request-auth';
 
 /**
- * GET /api/monitoring/alerts?organization_id=xxx
- * 
- * Evaluate all alert rules and return results
- * 
- * Query params:
- * - organization_id: optional, filter alerts for specific organization
+ * GET /api/monitoring/alerts
+ *
+ * Merchant callers are always scoped to the session organization.
+ * A client-supplied organization_id is accepted only when it matches that org.
  */
 export async function GET(request: NextRequest) {
   try {
-    // Get authenticated user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const auth = await getCurrentUserForApi(request);
+    if (!auth.user) {
+      return auth.response ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+    const { searchParams } = new URL(request.url);
+    const resolved = await resolveSessionOrganizationId(
+      auth.user.id,
+      searchParams.get('organization_id'),
+      'monitoring/alerts'
+    );
+    if (resolved.response || !resolved.organizationId) {
+      return (
+        resolved.response ??
+        NextResponse.json({ error: 'Organization required' }, { status: 403 })
       );
     }
+    const organizationId = resolved.organizationId;
 
-    // Get organization from query params
-    const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organization_id') || undefined;
+    logger.info({ organizationId, userId: auth.user.id }, 'Evaluating alerts via API');
 
-    if (organizationId) {
-      const canAccessOrg = await hasOrganizationAccess(user.id, organizationId);
-      if (!canAccessOrg) {
-        return NextResponse.json(
-          { error: 'Forbidden - insufficient organization permissions' },
-          { status: 403 }
-        );
-      }
-    }
-
-    logger.info({ organizationId, userId: user.id }, 'Evaluating alerts via API');
-
-    // Evaluate all alerts
     const evaluation = await evaluateAllAlerts(organizationId);
-
-    // Get alert rule definitions
     const rules = getAlertRules();
 
-    // Combine results with rule definitions
     const alertsWithRules = evaluation.alerts.map((alert) => {
       const rule = rules.find((r) => r.id === alert.rule);
       return {
         ...alert,
-        ruleDefinition: rule ? {
-          name: rule.name,
-          description: rule.description,
-          severity: rule.severity,
-          enabled: rule.enabled,
-        } : null,
+        ruleDefinition: rule
+          ? {
+              name: rule.name,
+              description: rule.description,
+              severity: rule.severity,
+              enabled: rule.enabled,
+            }
+          : null,
       };
     });
 
@@ -102,9 +92,9 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/monitoring/alerts/evaluate
- * 
- * Manually trigger alert evaluation (for testing or manual checks)
+ * POST /api/monitoring/alerts
+ *
+ * Cron or platform admin only. May evaluate globally when organizationId is omitted.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -116,16 +106,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const body = await request.json();
-    const { organizationId } = body;
+    const body = await request.json().catch(() => ({}));
+    const { organizationId } = body as { organizationId?: string };
 
     logger.info({ organizationId }, 'Manual alert evaluation triggered');
 
-    const evaluation = await evaluateAllAlerts(organizationId);
+    const evaluation = await evaluateAllAlerts(
+      typeof organizationId === 'string' ? organizationId : undefined
+    );
 
     const triggeredAlerts = evaluation.alerts.filter((a) => a.result.triggered);
 
-    // Log triggered alerts
     if (triggeredAlerts.length > 0) {
       logger.warn(
         {
@@ -171,10 +162,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-
-
-
-
-
-

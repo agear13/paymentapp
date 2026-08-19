@@ -28,7 +28,16 @@ export const CSRF_EXEMPT_PATH_PREFIXES = [
   '/api/test/',
   '/api/huntpay/',
   '/api/security/csrf-token',
-  '/api/auth/',
+  // Unauthenticated or pre-session auth routes only. Authenticated security
+  // mutations live under /api/security/* and require CSRF.
+  '/api/auth/login',
+  '/api/auth/signup',
+  '/api/auth/reset-password',
+  '/api/auth/turnstile-config',
+  '/api/auth/audit',
+  '/api/auth/change-email',
+  '/api/auth/resend-verification',
+  '/api/auth/confirm-login',
   // Agreement Analyzer public funnel and external-webhook routes.
   // These cannot carry a session CSRF token:
   //   upload    — unauthenticated lead-generation form (public funnel)

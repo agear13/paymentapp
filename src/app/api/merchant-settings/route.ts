@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/server/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
-import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
+import { requirePaymentConfigurationAccess } from '@/lib/auth/step-up.server';
+import { notifyAccountSecurityEvent } from '@/lib/auth/sensitive-action-notify.server';
 import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
 import config from '@/lib/config/env';
@@ -93,24 +94,14 @@ export async function GET(request: NextRequest) {
 // POST /api/merchant-settings
 export async function POST(request: NextRequest) {
   try {
-    const auth = await getCurrentUserForApi(request);
-    if (!auth.user) return auth.response!;
-    const user = auth.user;
-
     const { data: body, error } = await validateBody(request, createMerchantSettingsSchema);
-    
     if (error) {
       return error;
     }
 
-    const canManageSettings = await hasOrganizationPermission(
-      user.id,
-      body.organizationId,
-      'manage_settings'
-    );
-    if (!canManageSettings) {
-      return apiError('Forbidden - insufficient organization permissions', 403);
-    }
+    const access = await requirePaymentConfigurationAccess(request, body.organizationId);
+    if (!access.ok) return access.response;
+    const user = access.user;
 
     const wiseFields = resolveWiseFieldsForCreate({
       wiseProfileId: body.wiseProfileId,
@@ -173,6 +164,11 @@ export async function POST(request: NextRequest) {
       operationalOnboarding = convergence.onboarding;
       operationalInitialization = convergence.snapshot;
       correlationId = convergence.correlationId;
+      void notifyAccountSecurityEvent({
+        to: user.email,
+        subject: 'Payment configuration created',
+        text: 'Payment destination settings were created on your Provvypay workspace. If you did not do this, contact support immediately and reset your password.',
+      });
     }
 
     return apiResponse({ settings, operationalOnboarding, operationalInitialization, correlationId }, 201);

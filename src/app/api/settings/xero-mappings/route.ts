@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
+import { requirePaymentConfigurationAccess } from '@/lib/auth/step-up.server';
 import { AuditEventType, createAuditLog, AuditSeverity } from '@/lib/audit/audit-log';
 import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { prisma } from '@/lib/server/prisma';
@@ -14,6 +13,7 @@ import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { validateMappedAccountCodes } from '@/lib/xero/accounts-service';
 import { validateXeroMappingDuplicates } from '@/lib/accounting/validate-xero-mapping-duplicates';
 import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
+import { createClient } from '@/lib/supabase/server';
 
 // GET /api/settings/xero-mappings?organization_id=xxx
 export async function GET(request: NextRequest) {
@@ -84,33 +84,13 @@ export async function GET(request: NextRequest) {
 // PUT /api/settings/xero-mappings
 export async function PUT(request: NextRequest) {
   try {
-    const auth = await getCurrentUserForApi(request);
-    if (!auth.user) return auth.response!;
-    const user = auth.user;
-
     const body = await request.json();
-
-    const resolved = await resolveSessionOrganizationId(
-      user.id,
-      body.organizationId,
-      'settings/xero-mappings PUT'
-    );
-    if (resolved.response) return resolved.response;
-    const organizationId = resolved.organizationId;
+    const access = await requirePaymentConfigurationAccess(request, body.organizationId);
+    if (!access.ok) return access.response;
+    const user = access.user;
+    const organizationId = access.organizationId;
     const mappings = { ...body };
     delete mappings.organizationId;
-
-    const canManageSettings = await hasOrganizationPermission(
-      user.id,
-      organizationId,
-      'manage_settings'
-    );
-    if (!canManageSettings) {
-      return NextResponse.json(
-        { error: 'Forbidden - insufficient organization permissions' },
-        { status: 403 }
-      );
-    }
 
     // Standard exports need revenue; clearing accounts remain optional so setup does not
     // block standard businesses before an accountant reviews settlement details.

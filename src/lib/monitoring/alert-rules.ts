@@ -158,13 +158,20 @@ export async function checkQueueBacklog(organizationId?: string): Promise<AlertR
  * Triggers when no syncs have been processed in the last 5 minutes
  * (indicates cron job may not be running)
  */
-export async function checkSyncProcessing(): Promise<AlertResult> {
+export async function checkSyncProcessing(organizationId?: string): Promise<AlertResult> {
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
+  const where = organizationId
+    ? {
+        updated_at: { gte: fiveMinutesAgo },
+        payment_links: { organization_id: organizationId },
+      }
+    : {
+        updated_at: { gte: fiveMinutesAgo },
+      };
+
   const recentSyncs = await prisma.xero_syncs.count({
-    where: {
-      updated_at: { gte: fiveMinutesAgo },
-    },
+    where,
   });
 
   return {
@@ -299,7 +306,7 @@ export async function evaluateAllAlerts(organizationId?: string): Promise<{
     checkFailureRate(organizationId).then((result) => ({ rule: 'failure_rate', result })),
     checkStuckPaymentLinks(organizationId).then((result) => ({ rule: 'stuck_links', result })),
     checkQueueBacklog(organizationId).then((result) => ({ rule: 'queue_backlog', result })),
-    checkSyncProcessing().then((result) => ({ rule: 'sync_processing', result })),
+    checkSyncProcessing(organizationId).then((result) => ({ rule: 'sync_processing', result })),
     checkHighRetryCount(organizationId).then((result) => ({ rule: 'high_retry', result })),
     checkLedgerBalance(organizationId).then((result) => ({ rule: 'ledger_balance', result })),
   ]);

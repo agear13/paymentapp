@@ -4,9 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUserForApi } from '@/lib/auth/api-session.server';
-import { hasOrganizationPermission } from '@/lib/auth/organization-access';
-import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
+import { requirePaymentConfigurationAccess } from '@/lib/auth/step-up.server';
 import { resolveXeroConnectionForApi } from '@/lib/xero/connection-service';
 import { createRecommendedClearingAccounts } from '@/lib/xero/create-recommended-clearing-accounts-service';
 import { fetchXeroAccounts } from '@/lib/xero/accounts-service';
@@ -14,35 +12,10 @@ import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await getCurrentUserForApi(request);
-    if (!auth.user) return auth.response!;
-    const user = auth.user;
-
     const body = await request.json().catch(() => ({}));
-    const resolved = await resolveSessionOrganizationId(
-      user.id,
-      body.organizationId,
-      'xero/accounts/create-recommended-clearing'
-    );
-    if (resolved.response) return resolved.response;
-    const organizationId = resolved.organizationId;
-
-    const canManageSettings = await hasOrganizationPermission(
-      user.id,
-      organizationId,
-      'manage_settings'
-    );
-    if (!canManageSettings) {
-      return NextResponse.json(
-        {
-          error: 'You need organization settings permission to create accounts in Xero.',
-          details:
-            'Ask an organization admin to grant you settings access, or create the clearing accounts manually in Xero.',
-          code: 'FORBIDDEN',
-        },
-        { status: 403 }
-      );
-    }
+    const access = await requirePaymentConfigurationAccess(request, body.organizationId);
+    if (!access.ok) return access.response;
+    const organizationId = access.organizationId;
 
     const connectionResolved = await resolveXeroConnectionForApi(organizationId);
     if (!connectionResolved.persisted || connectionResolved.stale || !connectionResolved.connection) {

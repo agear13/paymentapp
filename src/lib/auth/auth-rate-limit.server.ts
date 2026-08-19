@@ -48,6 +48,15 @@ export const authRateLimiters = {
         analytics: false,
       })
     : null,
+
+  mfaVerify: redis
+    ? new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(8, '15 m'),
+        prefix: 'ratelimit:auth:mfa-verify',
+        analytics: false,
+      })
+    : null,
 };
 
 const RESEND_COOLDOWN_SECONDS = Number.parseInt(
@@ -83,6 +92,14 @@ export async function checkRegistrationRateLimit(request: Request) {
 export async function checkPasswordResetRateLimit(request: Request) {
   const ip = getClientIdentifier(request);
   const result = await checkRateLimit(authRateLimiters.passwordReset, ip);
+  if (!result.success) {
+    return { allowed: false as const, retryAfterSeconds: secondsUntilReset(result.reset) };
+  }
+  return { allowed: true as const };
+}
+
+export async function checkMfaVerifyRateLimit(userId: string) {
+  const result = await checkRateLimit(authRateLimiters.mfaVerify, userId);
   if (!result.success) {
     return { allowed: false as const, retryAfterSeconds: secondsUntilReset(result.reset) };
   }
