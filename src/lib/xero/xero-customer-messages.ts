@@ -175,6 +175,30 @@ export function formatMappingIssue(raw: string): CustomerMessage {
   };
 }
 
+/**
+ * Create-in-Xero failures from POST /api/xero/accounts/create-recommended-clearing.
+ * Do not run these through formatMappingIssue — that path masks Xero's reason
+ * as a generic save failure.
+ */
+export function formatClearingAccountCreateFailures(
+  failed: Array<{ accountName?: string | null; error: string }>
+): CustomerMessage {
+  const count = failed.length;
+  const details = failed
+    .map((item) => {
+      const name = item.accountName?.trim();
+      const error = item.error.trim();
+      return name ? `${name}: ${error}` : error;
+    })
+    .filter(Boolean)
+    .join('\n');
+
+  return {
+    message: `${count} holding account${count === 1 ? '' : 's'} could not be added in Xero.`,
+    action: details || 'Xero rejected the account. Check the account name and code, then try again.',
+  };
+}
+
 export function formatSyncIssueForCustomer(
   raw: string | null | undefined,
   options: { xeroCurrentlyConnected: boolean }

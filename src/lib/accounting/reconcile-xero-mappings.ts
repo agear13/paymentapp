@@ -5,6 +5,7 @@
  */
 
 import type { XeroMappingField } from '@/lib/accounting/recommended-accounting-config';
+import { withSaveableCryptoSettlementStrategy } from '@/lib/accounting/crypto-settlement-strategy';
 
 export const XERO_MAPPING_CODE_FIELDS: readonly XeroMappingField[] = [
   'xero_revenue_account_id',
@@ -107,5 +108,37 @@ export function reconcileXeroMappingsWithLoadedChart(
     mappings: next,
     clearedMappings,
     skippedBecauseChartUnavailable: false,
+  };
+}
+
+export function persistableXeroMappingCode(value: string | null | undefined): string | null {
+  return trimmed(value);
+}
+
+/** Empty holding / invoice codes become null so unresolved rails do not fail persistence. */
+export function nullEmptyXeroMappingCodes(mappings: XeroMappingSnapshot): XeroMappingSnapshot {
+  const next: XeroMappingSnapshot = { ...mappings };
+  for (const field of XERO_MAPPING_CODE_FIELDS) {
+    if (!(field in next)) {
+      continue;
+    }
+    next[field] = persistableXeroMappingCode(next[field]);
+  }
+  return next;
+}
+
+/**
+ * Chart-reconcile, null empty codes, and align crypto strategy so valid
+ * Stripe/USDC/HBAR mappings persist even when Wise/USDT/AUDD stay unresolved.
+ */
+export function prepareXeroMappingsForPersistence(
+  mappings: XeroMappingSnapshot,
+  chart: { loaded: boolean; codes: Set<string> | null }
+): ReconcileXeroMappingsResult {
+  const emptied = nullEmptyXeroMappingCodes(mappings);
+  const reconciled = reconcileXeroMappingsWithLoadedChart(emptied, chart);
+  return {
+    ...reconciled,
+    mappings: withSaveableCryptoSettlementStrategy(reconciled.mappings),
   };
 }

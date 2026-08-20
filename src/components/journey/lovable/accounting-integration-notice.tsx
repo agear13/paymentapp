@@ -55,6 +55,11 @@ export function AccountingIntegrationNotice({
           <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">
             {ACCOUNTING_INTEGRATION_COPY.notConnectedDescription}
           </p>
+        ) : readiness.paymentAccountingStatus === 'partial' ||
+          readiness.paymentAccountingStatus === 'unconfigured' ? (
+          <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">
+            {ACCOUNTING_INTEGRATION_COPY.paymentAccountingPartialNote}
+          </p>
         ) : (
           <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">
             Invoices sync to your accounting software automatically when you push or receive payment.

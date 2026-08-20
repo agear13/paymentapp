@@ -1,6 +1,7 @@
 import {
   reconcileXeroMappingsWithLoadedChart,
   missingMappedAccountCodes,
+  prepareXeroMappingsForPersistence,
 } from '@/lib/accounting/reconcile-xero-mappings';
 import { buildPaymentAccountMappingView, paymentAccountLinkLabel } from '@/lib/accounting/payment-account-mapping-view';
 import { computeXeroReadiness } from '@/lib/commercial-os/xero-readiness';
@@ -71,6 +72,36 @@ describe('reconcileXeroMappingsWithLoadedChart', () => {
     expect(result.clearedMappings).toEqual([]);
     expect(result.mappings.xero_usdc_clearing_account_id).toBe('9999');
     expect(result.mappings.xero_revenue_account_id).toBe('200');
+  });
+});
+
+describe('prepareXeroMappingsForPersistence', () => {
+  it('persists Stripe/USDC/HBAR and leaves unresolved Wise/USDT/AUDD as null', () => {
+    const result = prepareXeroMappingsForPersistence(
+      {
+        xero_revenue_account_id: '200',
+        xero_receivable_account_id: '610',
+        xero_stripe_clearing_account_id: '1050',
+        xero_usdc_clearing_account_id: '1052',
+        xero_hbar_clearing_account_id: '1051',
+        xero_usdt_clearing_account_id: '',
+        xero_audd_clearing_account_id: null,
+        xero_wise_clearing_account_id: '9999',
+        crypto_settlement_strategy: 'shared',
+      },
+      { loaded: true, codes: new Set(['200', '610', '1050', '1051', '1052']) }
+    );
+
+    expect(result.mappings.xero_stripe_clearing_account_id).toBe('1050');
+    expect(result.mappings.xero_usdc_clearing_account_id).toBe('1052');
+    expect(result.mappings.xero_hbar_clearing_account_id).toBe('1051');
+    expect(result.mappings.xero_usdt_clearing_account_id).toBeNull();
+    expect(result.mappings.xero_audd_clearing_account_id).toBeNull();
+    expect(result.mappings.xero_wise_clearing_account_id).toBeNull();
+    expect(result.mappings.crypto_settlement_strategy).toBe('per_asset');
+    expect(result.clearedMappings.map((item) => item.field)).toEqual([
+      'xero_wise_clearing_account_id',
+    ]);
   });
 });
 
@@ -157,7 +188,7 @@ describe('sync readiness after repaired USDC mapping', () => {
     expect(result.canSyncToAccounting).toBe(true);
   });
 
-  it('is not sync-ready when a required holding was cleared and not replaced', () => {
+  it('is not payment-complete when a required holding was cleared and not replaced', () => {
     const result = computeXeroReadiness({
       status: { connected: true, tenantId: 'tenant-1' },
       mappings: {
@@ -185,7 +216,8 @@ describe('sync readiness after repaired USDC mapping', () => {
 
     expect(result.fieldStates.xero_usdc_clearing_account_id).toBe('required');
     expect(result.settlementAccountsNeedAction).toBe(true);
-    expect(result.canSyncToAccounting).toBe(false);
+    expect(result.canSyncToAccounting).toBe(true);
+    expect(result.paymentAccountingStatus).toBe('partial');
   });
 });
 

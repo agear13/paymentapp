@@ -12,10 +12,13 @@ import {
   countSettlementAccountActions,
   filterPostConnectSyncs,
   invoiceAccountsNeedAction,
+  computePaymentAccountingStatus,
+  paymentAccountingStatusLabel,
   settlementAccountsNeedAction,
   shouldShowPastPayments,
   type HeroAnswer,
   type MappingDisplayState,
+  type PaymentAccountingStatus,
   type XeroRecentSync,
 } from '@/lib/commercial-os/xero-invoice-readiness';
 import type { XeroMappingField } from '@/lib/accounting/recommended-accounting-config';
@@ -76,7 +79,11 @@ export type XeroReadinessResult = {
   nextAction: XeroReadinessNextAction | null;
   /** @deprecated Prefer canSyncToAccounting — no longer gates invoice creation in UI. */
   canCreateInvoice: boolean;
-  /** When true, Push to Accounting and auto-sync can run (requires connection + mappings). */
+  /**
+   * Invoice sync-ready: healthy Xero connection, tenant selected, and valid
+   * revenue + receivable mappings in the current chart. Payment holdings are
+   * tracked separately via paymentAccountingStatus.
+   */
   canSyncToAccounting: boolean;
   heroAnswer: HeroAnswer;
   heroSubline: string;
@@ -86,6 +93,8 @@ export type XeroReadinessResult = {
   allInvoiceAccountsConfigured: boolean;
   settlementAccountsNeedAction: boolean;
   settlementAccountActionCount: number;
+  paymentAccountingStatus: PaymentAccountingStatus;
+  paymentAccountingLabel: string;
   optionalRecommendedCount: number;
   merchantPaymentCapabilities: MerchantPaymentCapabilities;
 };
@@ -226,22 +235,25 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     input.mappings,
     input.merchantPaymentCapabilities
   );
+  const paymentStatus = computePaymentAccountingStatus(
+    fieldStates,
+    input.merchantRails,
+    input.mappings,
+    input.merchantPaymentCapabilities
+  );
 
-  const coreInvoiceReady = coreInvoiceAccountsReady && settlementReady;
+  const invoiceReady = coreInvoiceAccountsReady;
 
   let overallStatus: XeroOverallStatus = 'setup_incomplete';
 
-  if (coreInvoiceReady) {
-    overallStatus = 'ready_to_invoice';
-    const stripeReady =
-      !input.merchantRails.stripeEnabled ||
-      (paymentMappings.stripeClearing.saved && paymentMappings.stripeClearing.validInChart);
-    if (stripeReady) {
-      overallStatus = 'fully_set_up';
-    }
+  if (invoiceReady) {
+    overallStatus =
+      paymentStatus === 'complete' || paymentStatus === 'not_applicable'
+        ? 'fully_set_up'
+        : 'ready_to_invoice';
   }
 
-  const canSyncToAccounting = coreInvoiceReady;
+  const canSyncToAccounting = invoiceReady;
   const canCreateInvoice = canSyncToAccounting;
   const heroAnswer: HeroAnswer = canCreateInvoice ? 'Yes' : 'Not yet';
   const heroSubline = computeHeroSubline({
@@ -251,6 +263,15 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     settlementReady,
     fieldStates,
   });
+
+  if (
+    invoiceReady &&
+    (paymentStatus === 'partial' || paymentStatus === 'unconfigured')
+  ) {
+    recommendations.push(
+      'Some payment holding accounts are not mapped yet. Invoice creation and sync still work.'
+    );
+  }
 
   const statusDetail = heroSubline;
 
@@ -302,6 +323,8 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
       input.mappings,
       input.merchantPaymentCapabilities
     ),
+    paymentAccountingStatus: paymentStatus,
+    paymentAccountingLabel: paymentAccountingStatusLabel(paymentStatus),
     optionalRecommendedCount: countOptionalRecommended(fieldStates, input.merchantRails),
     merchantPaymentCapabilities:
       input.merchantPaymentCapabilities ??
@@ -349,6 +372,8 @@ export const EMPTY_XERO_READINESS: Omit<XeroReadinessResult, 'loading'> = {
   allInvoiceAccountsConfigured: false,
   settlementAccountsNeedAction: false,
   settlementAccountActionCount: 0,
+  paymentAccountingStatus: 'not_applicable',
+  paymentAccountingLabel: 'Not applicable',
   optionalRecommendedCount: 0,
   merchantPaymentCapabilities: {
     hederaConfigured: false,

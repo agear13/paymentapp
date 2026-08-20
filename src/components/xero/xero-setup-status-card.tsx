@@ -107,6 +107,14 @@ export function XeroSetupStatusCard({ variant = 'commercial' }: XeroSetupStatusC
             value={canSyncToAccounting ? 'Ready' : 'Not yet'}
             ok={canSyncToAccounting}
           />
+          <StatusRow
+            label="Payment accounting"
+            value={readiness.paymentAccountingLabel}
+            ok={
+              readiness.paymentAccountingStatus === 'complete' ||
+              readiness.paymentAccountingStatus === 'not_applicable'
+            }
+          />
           <StatusRow label="Past payments to Xero" value={historicalSyncLine} />
         </div>
       )}

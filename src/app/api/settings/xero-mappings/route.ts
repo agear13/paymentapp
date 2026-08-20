@@ -15,7 +15,8 @@ import { validateXeroMappingDuplicates } from '@/lib/accounting/validate-xero-ma
 import {
   chartCodesFromAccounts,
   missingMappedAccountCodes,
-  reconcileXeroMappingsWithLoadedChart,
+  persistableXeroMappingCode,
+  prepareXeroMappingsForPersistence,
   type XeroMappingSnapshot,
 } from '@/lib/accounting/reconcile-xero-mappings';
 import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
@@ -130,7 +131,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const reconciled = reconcileXeroMappingsWithLoadedChart(mappings, {
+    const reconciled = prepareXeroMappingsForPersistence(mappings, {
       loaded: true,
       codes: chartCodesFromAccounts(chartAccounts),
     });
@@ -174,21 +175,36 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Update merchant settings
+    // Update merchant settings. Empty/unresolved rails persist as null so
+    // a missing Wise/USDT/AUDD mapping cannot block Stripe/USDC/HBAR.
     const updated = await prisma.merchant_settings.updateMany({
       where: {
         organization_id: organizationId,
       },
       data: {
-        xero_revenue_account_id: nextMappings.xero_revenue_account_id,
-        xero_receivable_account_id: nextMappings.xero_receivable_account_id,
-        xero_stripe_clearing_account_id: nextMappings.xero_stripe_clearing_account_id,
-        xero_hbar_clearing_account_id: nextMappings.xero_hbar_clearing_account_id,
-        xero_usdc_clearing_account_id: nextMappings.xero_usdc_clearing_account_id,
-        xero_usdt_clearing_account_id: nextMappings.xero_usdt_clearing_account_id,
-        xero_audd_clearing_account_id: nextMappings.xero_audd_clearing_account_id,
-        xero_wise_clearing_account_id: nextMappings.xero_wise_clearing_account_id,
-        xero_fee_expense_account_id: nextMappings.xero_fee_expense_account_id,
+        xero_revenue_account_id: persistableXeroMappingCode(nextMappings.xero_revenue_account_id),
+        xero_receivable_account_id: persistableXeroMappingCode(nextMappings.xero_receivable_account_id),
+        xero_stripe_clearing_account_id: persistableXeroMappingCode(
+          nextMappings.xero_stripe_clearing_account_id
+        ),
+        xero_hbar_clearing_account_id: persistableXeroMappingCode(
+          nextMappings.xero_hbar_clearing_account_id
+        ),
+        xero_usdc_clearing_account_id: persistableXeroMappingCode(
+          nextMappings.xero_usdc_clearing_account_id
+        ),
+        xero_usdt_clearing_account_id: persistableXeroMappingCode(
+          nextMappings.xero_usdt_clearing_account_id
+        ),
+        xero_audd_clearing_account_id: persistableXeroMappingCode(
+          nextMappings.xero_audd_clearing_account_id
+        ),
+        xero_wise_clearing_account_id: persistableXeroMappingCode(
+          nextMappings.xero_wise_clearing_account_id
+        ),
+        xero_fee_expense_account_id: persistableXeroMappingCode(
+          nextMappings.xero_fee_expense_account_id
+        ),
         crypto_settlement_strategy: nextMappings.crypto_settlement_strategy ?? null,
         updated_at: new Date(),
       },

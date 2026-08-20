@@ -56,3 +56,38 @@ export function resolveCryptoSettlementStrategy(
 export function isSharedCryptoStrategy(settings: MerchantSettlementSettings): boolean {
   return resolveCryptoSettlementStrategy(settings) === 'shared';
 }
+
+/**
+ * Persist a strategy that matches the codes actually being saved.
+ * Distinct per-token codes must not fail the whole save merely because the
+ * selector was still on "shared" or the column was unset.
+ */
+export function withSaveableCryptoSettlementStrategy<T extends MerchantSettlementSettings>(
+  mappings: T
+): T {
+  const inferred = inferCryptoSettlementStrategy(mappings);
+  const explicit =
+    mappings.cryptoSettlementStrategy ?? mappings.crypto_settlement_strategy ?? null;
+
+  if (explicit === 'shared' && inferred === 'per_asset') {
+    return {
+      ...mappings,
+      crypto_settlement_strategy: 'per_asset',
+      cryptoSettlementStrategy: 'per_asset',
+    };
+  }
+
+  if (explicit === 'shared' || explicit === 'per_asset') {
+    return {
+      ...mappings,
+      crypto_settlement_strategy: explicit,
+      cryptoSettlementStrategy: explicit,
+    };
+  }
+
+  return {
+    ...mappings,
+    crypto_settlement_strategy: inferred,
+    cryptoSettlementStrategy: inferred,
+  };
+}

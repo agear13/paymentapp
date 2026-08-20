@@ -248,6 +248,49 @@ export function allInvoiceAccountsConfigured(
   return INVOICE_REQUIRED_FIELDS.every((field) => fieldStates[field] === 'configured');
 }
 
+export type PaymentAccountingStatus =
+  | 'not_applicable'
+  | 'unconfigured'
+  | 'partial'
+  | 'complete';
+
+export function computePaymentAccountingStatus(
+  fieldStates: Partial<Record<XeroMappingField, MappingDisplayState>>,
+  rails: MerchantPaymentRails,
+  mappings?: XeroReadinessMappingsPayload | null,
+  capabilities?: MerchantPaymentCapabilities | null
+): PaymentAccountingStatus {
+  const definitions = settlementDefinitions(mappings ?? null, railsWithDefaults(rails), capabilities);
+  if (definitions.length === 0) {
+    return 'not_applicable';
+  }
+
+  const configuredCount = definitions.filter(
+    (definition) => fieldStates[definition.mappingField] === 'configured'
+  ).length;
+
+  if (configuredCount === 0) {
+    return 'unconfigured';
+  }
+  if (configuredCount < definitions.length) {
+    return 'partial';
+  }
+  return 'complete';
+}
+
+export function paymentAccountingStatusLabel(status: PaymentAccountingStatus): string {
+  switch (status) {
+    case 'not_applicable':
+      return 'Not applicable';
+    case 'unconfigured':
+      return 'Not configured';
+    case 'partial':
+      return 'Partially configured';
+    case 'complete':
+      return 'Configured';
+  }
+}
+
 export type HeroAnswer = 'Yes' | 'Not yet';
 
 export function computeHeroSubline(params: {
@@ -257,7 +300,7 @@ export function computeHeroSubline(params: {
   settlementReady: boolean;
   fieldStates: Partial<Record<XeroMappingField, MappingDisplayState>>;
 }): string {
-  const { connected, tenantSelected, canSendInvoices, settlementReady, fieldStates } = params;
+  const { connected, tenantSelected, canSendInvoices, fieldStates } = params;
 
   if (!connected) {
     return 'Connect accounting to sync invoices automatically.';
@@ -274,10 +317,6 @@ export function computeHeroSubline(params: {
   );
   if (needsReview) {
     return 'Update the invoice accounts marked "Needs fixing" below.';
-  }
-
-  if (!settlementReady) {
-    return 'Choose where payments are recorded in Xero — open "Where payments go" below.';
   }
 
   return 'Choose where invoices are recorded in Xero — open "Where invoices go" below.';

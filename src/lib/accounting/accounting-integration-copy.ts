@@ -8,6 +8,9 @@ export const ACCOUNTING_INTEGRATION_COPY = {
   notConnectedStatus: 'Accounting not connected',
   connectedStatus: 'Connected',
   setupIncompleteStatus: 'Setup incomplete',
+  paymentAccountingPartialStatus: 'Partially configured',
+  paymentAccountingPartialNote:
+    'Some payment holding accounts are not mapped yet. Invoice creation and sync still work.',
   notConnectedDescription:
     'Connect your accounting software to automatically sync invoices and payment records.',
   firstInvoiceBannerTitle: 'Automatically sync invoices to your accounting software',

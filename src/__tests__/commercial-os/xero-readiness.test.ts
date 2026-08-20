@@ -97,7 +97,8 @@ describe('computeXeroReadiness', () => {
     });
 
     expect(result.settlementAccountsNeedAction).toBe(true);
-    expect(result.canSyncToAccounting).toBe(false);
+    expect(result.canSyncToAccounting).toBe(true);
+    expect(result.paymentAccountingStatus).toBe('unconfigured');
     expect(result.fieldStates.xero_stripe_clearing_account_id).toBe('needs_review');
   });
 });

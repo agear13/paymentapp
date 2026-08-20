@@ -31,6 +31,7 @@ export function CreateInvoicePreviewSidebar({
 
   const connected = readiness?.connection.connected ?? false;
   const syncReady = readiness?.canSyncToAccounting ?? readiness?.canCreateInvoice ?? false;
+  const paymentPartial = readiness?.paymentAccountingStatus === 'partial';
   const showAccountingCta = readiness && !readiness.loading && !syncReady;
 
   const collectionMode = draft.paymentCollectionMode ?? 'single';
@@ -131,6 +132,13 @@ export function CreateInvoicePreviewSidebar({
               {ACCOUNTING_INTEGRATION_COPY.connectCta}
             </button>
           ) : null}
+        </div>
+      ) : connected && syncReady && paymentPartial ? (
+        <div className="rounded-xl border border-border bg-secondary/30 p-4">
+          <p className="text-[13px] font-medium">{ACCOUNTING_INTEGRATION_COPY.connectedStatus}</p>
+          <p className="mt-1.5 text-[12px] leading-relaxed text-ink-soft">
+            {ACCOUNTING_INTEGRATION_COPY.paymentAccountingPartialNote}
+          </p>
         </div>
       ) : null}
 

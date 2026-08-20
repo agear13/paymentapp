@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { formatMappingIssue } from '@/lib/xero/xero-customer-messages';
+import { formatMappingIssue, formatClearingAccountCreateFailures } from '@/lib/xero/xero-customer-messages';
 import { Loader2, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -55,7 +55,7 @@ import {
   applyRecommendedPaymentMappings,
 } from '@/lib/accounting/payment-account-mapping-view';
 import {
-  reconcileXeroMappingsWithLoadedChart,
+  prepareXeroMappingsForPersistence,
   type ClearedXeroMapping,
   type XeroMappingSnapshot,
 } from '@/lib/accounting/reconcile-xero-mappings';
@@ -436,7 +436,7 @@ export function XeroAccountMapping({
 
   async function persistMappings(nextMappings: Partial<AccountMappings>, successMessage: string) {
     const snapshot = nextMappings as XeroMappingSnapshot;
-    const reconciled = reconcileXeroMappingsWithLoadedChart(snapshot, {
+    const reconciled = prepareXeroMappingsForPersistence(snapshot, {
       loaded: chartLoadedSuccessfully,
       codes: chartLoadedSuccessfully ? chartAccountCodes : null,
     });
@@ -579,31 +579,30 @@ export function XeroAccountMapping({
       }
       setMappings(nextMappings);
 
-      if (created.length > 0) {
+      const shouldPersist = created.length > 0 || existing.length > 0;
+      if (shouldPersist) {
         const saved = await persistMappings(
           nextMappings,
-          `Created ${created.length} recommended clearing account${created.length === 1 ? '' : 's'} in Xero`
-        );
-        if (!saved) setDirty(true);
-      } else if (existing.length > 0) {
-        const saved = await persistMappings(
-          nextMappings,
-          'Linked existing clearing accounts from your Xero chart'
+          created.length > 0
+            ? `Created ${created.length} recommended clearing account${created.length === 1 ? '' : 's'} in Xero`
+            : 'Linked existing clearing accounts from your Xero chart'
         );
         if (!saved) {
           setDirty(true);
-          toast.info('Clearing accounts exist in Xero — save mappings to finish linking them');
+          if (created.length === 0) {
+            toast.info('Clearing accounts exist in Xero — save mappings to finish linking them');
+          }
         }
       }
 
       if (failed?.length) {
-        const customer = formatMappingIssue(
-          failed[0]?.error ?? 'Could not create holding accounts in Xero'
+        const customer = formatClearingAccountCreateFailures(
+          failed.map((item: { config?: { accountName?: string; rail?: string }; error?: string }) => ({
+            accountName: item.config?.accountName ?? item.config?.rail,
+            error: item.error ?? 'Xero rejected this holding account.',
+          }))
         );
-        toast.error(
-          `${failed.length} holding account${failed.length === 1 ? '' : 's'} could not be added in Xero`,
-          { description: customer.action }
-        );
+        toast.error(customer.message, { description: customer.action });
         setError(`${customer.message} ${customer.action}`);
       }
 
