@@ -165,6 +165,34 @@ describe('P4 — Referral Management workflow', () => {
     ).rejects.toMatchObject({ status: 409, name: 'ReferralManagementError' });
   });
 
+  it('F: cannot configure a promoter against a service that is not in this organization', async () => {
+    prisma.organization_services.findFirst.mockResolvedValue(null);
+    await expect(
+      addReferralManagementPromoter({
+        organizationId: ORG,
+        workflowId: WF,
+        userId: USER,
+        name: 'Apex Promotions',
+        email: 'apex@example.com',
+        role: 'Promoter',
+        compensation: {
+          kind: 'revenue_share',
+          percentage: 20,
+          serviceId: '99999999-9999-9999-9999-999999999999',
+        },
+      })
+    ).rejects.toMatchObject({ status: 422, name: 'ReferralManagementError' });
+    expect(prisma.organization_services.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organization_id: ORG,
+          active: true,
+        }),
+      })
+    );
+    expect(createPilotParticipantForUser).not.toHaveBeenCalled();
+  });
+
   it('refuses to fabricate a destination when the catalogue is empty', async () => {
     prisma.organization_services.findFirst.mockResolvedValue(null);
     await expect(

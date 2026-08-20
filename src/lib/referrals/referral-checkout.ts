@@ -15,6 +15,7 @@ import {
   commissionSnapshotToPrismaJson,
 } from '@/lib/referrals/commission-attribution-snapshot';
 import {
+  isProjectRevenueShareServiceScoped,
   isServiceAllowedForReferral,
   parseManualPayoutMethodFromCheckoutConfig,
 } from '@/lib/referrals/referral-commerce-config';
@@ -128,6 +129,13 @@ export async function createReferralCheckoutSession(
       return { success: false, error: 'No referral rule or splits configured' };
     }
 
+    if (isProjectRevenueShareServiceScoped(referralLink.checkout_config)) {
+      return {
+        success: false,
+        error: 'This referral requires purchasing the configured service',
+      };
+    }
+
     const merchantSettings = referralLink.organizations.merchant_settings[0];
     if (paymentRail === 'stripe' && !merchantSettings?.stripe_account_id) {
       log.warn('Stripe not configured', { organizationId: referralLink.organization_id });
@@ -156,7 +164,8 @@ export async function createReferralCheckoutSession(
     const paymentMethod = resolveReferralPaymentLinkMethod({
       checkoutConfig: referralLink.checkout_config,
       merchant: merchantRailAvailabilityFromSettings(merchantSettings, {
-        globalWiseEnabled: config.features.wisePayments,
+        globalWiseEnabled: (config as { features?: { wisePayments?: boolean } }).features
+          ?.wisePayments,
       }),
     });
 

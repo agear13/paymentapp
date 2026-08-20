@@ -1,5 +1,8 @@
 import { prisma } from '@/lib/server/prisma';
-import { filterServicesForReferralConfig } from '@/lib/referrals/referral-commerce-config';
+import {
+  filterServicesForReferralConfig,
+  isProjectRevenueShareServiceScoped,
+} from '@/lib/referrals/referral-commerce-config';
 import { isCustomAmountAllowedOnCheckoutConfig } from '@/lib/referrals/referral-payment-rails';
 import { resolveMerchantBranding } from '@/lib/branding/resolve-merchant-branding';
 import { getPublicAppUrl } from '@/lib/runtime/customer-facing-url';
@@ -27,7 +30,7 @@ export type ReferralCheckoutPageSuccess = {
 
 export type ReferralCheckoutPageFailure = {
   ok: false;
-  reason: 'not_found' | 'inactive' | 'misconfigured' | 'error';
+  reason: 'not_found' | 'inactive' | 'misconfigured' | 'error' | 'offer_unavailable';
   referralCode: string;
   merchantDisplayName: string;
   merchantLogoUrl: string | null;
@@ -223,6 +226,20 @@ export async function loadReferralCommissionCheckoutPage(
       referralLink.checkout_config
     );
     const services = sanitizeServices(filtered);
+    const revenueShareServiceScoped = isProjectRevenueShareServiceScoped(
+      referralLink.checkout_config
+    );
+
+    if (revenueShareServiceScoped && services.length === 0) {
+      return {
+        ok: false,
+        reason: 'offer_unavailable',
+        referralCode: code,
+        merchantDisplayName: branding.merchantDisplayName,
+        merchantLogoUrl: branding.merchantLogoUrl,
+        message: 'This referral offer is no longer available.',
+      };
+    }
 
     logReferralCheckoutContext({
       referralCode: code,
@@ -243,7 +260,9 @@ export async function loadReferralCommissionCheckoutPage(
       merchantDisplayName: branding.merchantDisplayName,
       merchantLogoUrl: branding.merchantLogoUrl,
       paymentRails,
-      allowCustomAmount: isCustomAmountAllowedOnCheckoutConfig(referralLink.checkout_config),
+      allowCustomAmount: revenueShareServiceScoped
+        ? false
+        : isCustomAmountAllowedOnCheckoutConfig(referralLink.checkout_config),
     };
   } catch (error) {
     console.error('[ReferralCheckout] load failed', {

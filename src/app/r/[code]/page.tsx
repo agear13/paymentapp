@@ -78,9 +78,11 @@ export default async function ReferralLandingPage({
       title={
         checkout.reason === 'inactive'
           ? 'Link unavailable'
-          : checkout.reason === 'misconfigured'
-            ? 'Checkout not ready'
-            : 'Checkout unavailable'
+          : checkout.reason === 'offer_unavailable'
+            ? 'Referral offer unavailable'
+            : checkout.reason === 'misconfigured'
+              ? 'Checkout not ready'
+              : 'Checkout unavailable'
       }
       message={checkout.message}
     />

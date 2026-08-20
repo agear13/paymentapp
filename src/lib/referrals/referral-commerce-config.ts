@@ -113,13 +113,27 @@ export function buildCheckoutConfigFields(commerce: ParticipantReferralCommerce)
   return mergeReferralCommerceIntoCheckoutConfig({}, commerce);
 }
 
-/** Service ids explicitly scoped on this link; empty = all active services allowed. */
+/**
+ * Service ids explicitly scoped on this link.
+ * Empty / missing = all of this organization's active services (legacy + referral_commerce default).
+ * Non-empty applies to both referral_commerce and project_revenue_share (Referral Management).
+ */
 export function getScopedServiceIds(checkoutConfig: unknown): string[] | null {
   const commerce = parseReferralCommerceFromCheckoutConfig(checkoutConfig);
-  if (!commerce || commerce.commissionMode !== 'referral_commerce') return null;
+  if (!commerce) return null;
   const ids = commerce.enabledServiceIds;
   if (!ids || ids.length === 0) return null;
   return ids;
+}
+
+/**
+ * Referral Management revenue-share links persist a selected organization_service on
+ * checkout_config. Those links must never fall back to the full catalogue.
+ */
+export function isProjectRevenueShareServiceScoped(checkoutConfig: unknown): boolean {
+  const commerce = parseReferralCommerceFromCheckoutConfig(checkoutConfig);
+  if (!commerce || commerce.commissionMode === 'referral_commerce') return false;
+  return (commerce.enabledServiceIds?.length ?? 0) > 0;
 }
 
 export function filterServicesForReferralConfig<T extends { id: string }>(
