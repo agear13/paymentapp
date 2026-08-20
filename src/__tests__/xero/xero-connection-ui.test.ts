@@ -29,4 +29,12 @@ describe('Xero customer copy', () => {
     expect(mapping.message.toLowerCase()).not.toContain('integrations');
     expect(mapping.action.toLowerCase()).not.toContain('review your account choices');
   });
+
+  it('keeps the actual missing mapping codes in save errors', () => {
+    const issue = formatMappingIssue(
+      'Some mapped Xero account codes are no longer available: 200. Refresh accounts and reselect valid options.'
+    );
+    expect(issue.message).toContain('200');
+    expect(issue.message).not.toBe('Provvy could not save your Xero account choices.');
+  });
 });

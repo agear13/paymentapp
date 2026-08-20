@@ -141,6 +141,10 @@ export const XERO_ACCOUNT_SECTION_COPY = {
   useSuggestedInvoiceAccounts: "Use Provvy's suggestions",
   changeInvoiceAccounts: 'Change invoice accounts',
   saveChoices: 'Save choices',
+  clearedStaleMappings: (items: readonly string[]) =>
+    items.length === 1
+      ? `Removed 1 saved account missing from Xero: ${items[0]}.`
+      : `Removed ${items.length} saved accounts missing from Xero: ${items.join('; ')}.`,
   selectPlaceholder: 'Choose a Xero account',
   learnMore: 'Learn more',
 } as const;

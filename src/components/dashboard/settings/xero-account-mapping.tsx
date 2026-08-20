@@ -54,6 +54,11 @@ import type { SettlementUiAccountDefinition } from '@/lib/accounting/settlement-
 import {
   applyRecommendedPaymentMappings,
 } from '@/lib/accounting/payment-account-mapping-view';
+import {
+  reconcileXeroMappingsWithLoadedChart,
+  type ClearedXeroMapping,
+  type XeroMappingSnapshot,
+} from '@/lib/accounting/reconcile-xero-mappings';
 import { PaymentAccountsSetupSection } from '@/components/xero/payment-accounts-setup-section';
 import type { CryptoSettlementStrategy } from '@/lib/accounting/settlement-account-types';
 import { validateXeroMappingDuplicates } from '@/lib/accounting/validate-xero-mapping-duplicates';
@@ -139,6 +144,7 @@ export function XeroAccountMapping({
   const [error, setError] = React.useState<string | null>(null);
   const [connectionReady, setConnectionReady] = React.useState(false);
   const [connectionStale, setConnectionStale] = React.useState(false);
+  const [chartLoadedSuccessfully, setChartLoadedSuccessfully] = React.useState(false);
 
   const rails: MerchantPaymentRails = React.useMemo(() => {
     if (merchantRails) {
@@ -325,6 +331,7 @@ export function XeroAccountMapping({
       if (!statusRes.ok || !status.connected) {
         setConnectionReady(false);
         setConnectionStale(false);
+        setChartLoadedSuccessfully(false);
         setAccounts([]);
         return;
       }
@@ -333,6 +340,7 @@ export function XeroAccountMapping({
       setConnectionStale(Boolean(status.stale));
       if (status.stale) {
         setAccounts([]);
+        setChartLoadedSuccessfully(false);
         setError(null);
         return;
       }
@@ -374,12 +382,15 @@ export function XeroAccountMapping({
 
       if (!response.ok) {
         const data = await response.json();
+        setChartLoadedSuccessfully(false);
         throw new Error(data.error || 'Failed to fetch Xero accounts');
       }
 
       const { data } = await response.json();
       setAccounts(data);
+      setChartLoadedSuccessfully(true);
     } catch (err) {
+      setChartLoadedSuccessfully(false);
       applyMappingError(
         err instanceof Error ? err.message : 'Could not load Xero accounts',
         setError
@@ -424,7 +435,14 @@ export function XeroAccountMapping({
   }
 
   async function persistMappings(nextMappings: Partial<AccountMappings>, successMessage: string) {
-    const validation = validateMappings(nextMappings);
+    const snapshot = nextMappings as XeroMappingSnapshot;
+    const reconciled = reconcileXeroMappingsWithLoadedChart(snapshot, {
+      loaded: chartLoadedSuccessfully,
+      codes: chartLoadedSuccessfully ? chartAccountCodes : null,
+    });
+    const payload = reconciled.mappings as Partial<AccountMappings>;
+
+    const validation = validateMappings(payload);
     if (!validation.valid) {
       setError(validation.error!);
       toast.error(validation.error!);
@@ -436,7 +454,7 @@ export function XeroAccountMapping({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         organizationId,
-        ...nextMappings,
+        ...payload,
       }),
     });
 
@@ -449,10 +467,32 @@ export function XeroAccountMapping({
       throw new Error(data.error || 'Failed to save mappings');
     }
 
+    const data = (await response.json()) as {
+      data?: { clearedMappings?: ClearedXeroMapping[] };
+    };
+    const clearedMappings = data.data?.clearedMappings?.length
+      ? data.data.clearedMappings
+      : reconciled.clearedMappings;
+
     toast.success(successMessage);
-    setPersistedMappings(nextMappings);
-    setMappings(nextMappings);
+    if (clearedMappings.length > 0) {
+      toast.info(
+        XERO_ACCOUNT_SECTION_COPY.clearedStaleMappings(
+          clearedMappings.map((item) => {
+            const copy = getXeroFieldCustomerCopy(item.field);
+            const label =
+              copy?.label ?? XERO_MAPPING_FIELD_LABELS[item.field] ?? item.field;
+            return `${label} (${item.previousCode})`;
+          })
+        )
+      );
+    }
+
+    setPersistedMappings(payload);
+    setMappings(payload);
     setDirty(false);
+    await fetchMappings();
+    await fetchAccounts();
     void readiness?.refresh();
     return true;
   }

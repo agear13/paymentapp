@@ -254,3 +254,20 @@ export function countLinkableRecommendedAccounts(
 ): number {
   return views.filter((view) => view.candidateAccount && view.state !== 'linked').length;
 }
+
+/** Linked only after the mapping is persisted and still in the current chart. */
+export function paymentAccountLinkLabel(options: {
+  persistedState: PaymentAccountMappingUiState;
+  persistedCode: string | null;
+  draftCode: string | null;
+}): 'linked' | 'selected' | 'unresolved' {
+  if (options.persistedState === 'linked') {
+    return 'linked';
+  }
+  const draft = options.draftCode?.trim() || null;
+  const persisted = options.persistedCode?.trim() || null;
+  if (draft && draft !== persisted) {
+    return 'selected';
+  }
+  return 'unresolved';
+}

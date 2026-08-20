@@ -10,8 +10,14 @@ import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
-import { validateMappedAccountCodes } from '@/lib/xero/accounts-service';
+import { fetchXeroAccounts } from '@/lib/xero/accounts-service';
 import { validateXeroMappingDuplicates } from '@/lib/accounting/validate-xero-mapping-duplicates';
+import {
+  chartCodesFromAccounts,
+  missingMappedAccountCodes,
+  reconcileXeroMappingsWithLoadedChart,
+  type XeroMappingSnapshot,
+} from '@/lib/accounting/reconcile-xero-mappings';
 import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
 import { createClient } from '@/lib/supabase/server';
 
@@ -89,25 +95,14 @@ export async function PUT(request: NextRequest) {
     if (!access.ok) return access.response;
     const user = access.user;
     const organizationId = access.organizationId;
-    const mappings = { ...body };
+    const mappings = { ...body } as XeroMappingSnapshot & Record<string, unknown>;
     delete mappings.organizationId;
 
     // Standard exports need revenue; clearing accounts remain optional so setup does not
     // block standard businesses before an accountant reviews settlement details.
     const required = [
       'xero_revenue_account_id',
-    ];
-    const mappingFields = [
-      'xero_revenue_account_id',
-      'xero_receivable_account_id',
-      'xero_stripe_clearing_account_id',
-      'xero_hbar_clearing_account_id',
-      'xero_usdc_clearing_account_id',
-      'xero_usdt_clearing_account_id',
-      'xero_audd_clearing_account_id',
-      'xero_wise_clearing_account_id',
-      'xero_fee_expense_account_id',
-    ];
+    ] as const;
 
     if (
       mappings.crypto_settlement_strategy != null &&
@@ -120,8 +115,29 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    let chartAccounts: Awaited<ReturnType<typeof fetchXeroAccounts>>['accounts'];
+    try {
+      chartAccounts = (await fetchXeroAccounts(organizationId)).accounts;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load Xero accounts';
+      if (message.toLowerCase().includes('no active xero connection')) {
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+      log.error('Error loading Xero chart while saving mappings', error);
+      return NextResponse.json(
+        { error: 'Could not load your Xero chart to verify account choices. Mappings were not changed.' },
+        { status: 503 }
+      );
+    }
+
+    const reconciled = reconcileXeroMappingsWithLoadedChart(mappings, {
+      loaded: true,
+      codes: chartCodesFromAccounts(chartAccounts),
+    });
+    const nextMappings = reconciled.mappings;
+
     for (const field of required) {
-      if (!mappings[field]) {
+      if (!nextMappings[field]) {
         return NextResponse.json(
           { error: `${field} is required` },
           { status: 400 }
@@ -129,19 +145,30 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const duplicateValidation = validateXeroMappingDuplicates(mappings);
+    const duplicateValidation = validateXeroMappingDuplicates(nextMappings);
     if (!duplicateValidation.valid) {
       return NextResponse.json({ error: duplicateValidation.error }, { status: 400 });
     }
 
-    const mappedCodes = mappingFields
-      .map((field) => mappings[field] as string)
-      .filter(Boolean);
-    const mappingValidation = await validateMappedAccountCodes(organizationId, mappedCodes);
-    if (!mappingValidation.valid) {
+    const mappedCodes = [
+      nextMappings.xero_revenue_account_id,
+      nextMappings.xero_receivable_account_id,
+      nextMappings.xero_stripe_clearing_account_id,
+      nextMappings.xero_hbar_clearing_account_id,
+      nextMappings.xero_usdc_clearing_account_id,
+      nextMappings.xero_usdt_clearing_account_id,
+      nextMappings.xero_audd_clearing_account_id,
+      nextMappings.xero_wise_clearing_account_id,
+      nextMappings.xero_fee_expense_account_id,
+    ].filter((code): code is string => Boolean(code));
+    const missingCodes = missingMappedAccountCodes(
+      mappedCodes,
+      chartCodesFromAccounts(chartAccounts)
+    );
+    if (missingCodes.length > 0) {
       return NextResponse.json(
         {
-          error: `Some mapped Xero account codes are no longer available: ${mappingValidation.missingCodes.join(', ')}. Refresh accounts and reselect valid options.`,
+          error: `Some mapped Xero account codes are no longer available: ${missingCodes.join(', ')}. Refresh accounts and reselect valid options.`,
         },
         { status: 400 }
       );
@@ -153,16 +180,16 @@ export async function PUT(request: NextRequest) {
         organization_id: organizationId,
       },
       data: {
-        xero_revenue_account_id: mappings.xero_revenue_account_id,
-        xero_receivable_account_id: mappings.xero_receivable_account_id,
-        xero_stripe_clearing_account_id: mappings.xero_stripe_clearing_account_id,
-        xero_hbar_clearing_account_id: mappings.xero_hbar_clearing_account_id,
-        xero_usdc_clearing_account_id: mappings.xero_usdc_clearing_account_id,
-        xero_usdt_clearing_account_id: mappings.xero_usdt_clearing_account_id,
-        xero_audd_clearing_account_id: mappings.xero_audd_clearing_account_id,
-        xero_wise_clearing_account_id: mappings.xero_wise_clearing_account_id,
-        xero_fee_expense_account_id: mappings.xero_fee_expense_account_id,
-        crypto_settlement_strategy: mappings.crypto_settlement_strategy ?? null,
+        xero_revenue_account_id: nextMappings.xero_revenue_account_id,
+        xero_receivable_account_id: nextMappings.xero_receivable_account_id,
+        xero_stripe_clearing_account_id: nextMappings.xero_stripe_clearing_account_id,
+        xero_hbar_clearing_account_id: nextMappings.xero_hbar_clearing_account_id,
+        xero_usdc_clearing_account_id: nextMappings.xero_usdc_clearing_account_id,
+        xero_usdt_clearing_account_id: nextMappings.xero_usdt_clearing_account_id,
+        xero_audd_clearing_account_id: nextMappings.xero_audd_clearing_account_id,
+        xero_wise_clearing_account_id: nextMappings.xero_wise_clearing_account_id,
+        xero_fee_expense_account_id: nextMappings.xero_fee_expense_account_id,
+        crypto_settlement_strategy: nextMappings.crypto_settlement_strategy ?? null,
         updated_at: new Date(),
       },
     });
@@ -177,6 +204,7 @@ export async function PUT(request: NextRequest) {
     log.info('Updated Xero account mappings', {
       organizationId,
       mappingsCount: mappedCodes.length,
+      clearedStaleCount: reconciled.clearedMappings.length,
     });
 
     const auditCtx = extractRequestAuditContext(request);
@@ -188,7 +216,10 @@ export async function PUT(request: NextRequest) {
       resource: 'xero_mappings',
       resourceId: organizationId,
       action: 'update',
-      newValue: JSON.stringify({ fieldsUpdated: mappedCodes.length }),
+      newValue: JSON.stringify({
+        fieldsUpdated: mappedCodes.length,
+        clearedStaleCount: reconciled.clearedMappings.length,
+      }),
       ipAddress: auditCtx.ipAddress,
       userAgent: auditCtx.userAgent,
       correlationId: auditCtx.correlationId,
@@ -196,7 +227,11 @@ export async function PUT(request: NextRequest) {
     });
 
     return NextResponse.json({
-      data: { success: true, message: 'Mappings updated successfully' },
+      data: {
+        success: true,
+        message: 'Mappings updated successfully',
+        clearedMappings: reconciled.clearedMappings,
+      },
     });
   } catch (error) {
     log.error('Error saving Xero mappings', error);

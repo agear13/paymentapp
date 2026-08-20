@@ -365,11 +365,10 @@ function actionableGuidance(
     return `Link "${recommendedAccount.name}" (${recommendedAccount.code}) — Provvy found it in your Xero chart.`;
   }
   if (status === 'update_mapping') {
-    return `Your saved account is missing from Xero — link ${
-      recommendedAccount
-        ? `"${recommendedAccount.name}" (${recommendedAccount.code})`
-        : `an existing account or create "${definition.accountName}"`
-    } with code ${suggestedCode}.`;
+    if (recommendedAccount) {
+      return `Your saved account is missing from Xero — link "${recommendedAccount.name}" (${recommendedAccount.code}).`;
+    }
+    return `Your saved account is missing from Xero — choose an existing account or create "${definition.accountName}" with code ${suggestedCode}.`;
   }
   if (status === 'choose_account' && recommendedAccount) {
     return `Provvy recommends "${recommendedAccount.name}" — review similar accounts below or confirm this selection.`;

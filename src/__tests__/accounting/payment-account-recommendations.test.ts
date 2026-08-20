@@ -85,6 +85,8 @@ describe('resolvePaymentAccountRecommendation', () => {
     const result = resolvePaymentAccountRecommendation(chart, stripeDefinition, '7777');
 
     expect(result.status).toBe('update_mapping');
+    expect(result.actionableGuidance).toContain('Stripe Holding');
+    expect(result.actionableGuidance).not.toMatch(/with code 1051/);
   });
 
   it('uses linked when a saved mapping still exists in the chart', () => {

@@ -144,6 +144,12 @@ export function formatMappingIssue(raw: string): CustomerMessage {
       action: 'Pick a different account for each holding account, then save.',
     };
   }
+  if (lower.includes('no longer available') || lower.includes('missing from xero')) {
+    return {
+      message: text,
+      action: 'Choose a current Xero account for each holding that still needs attention, then save.',
+    };
+  }
   if (lower.includes('not a valid code') || lower.includes('uuid')) {
     return {
       message: 'One of the saved account choices is no longer valid in Xero.',

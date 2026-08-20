@@ -125,7 +125,9 @@ export async function validateMappedAccountCodes(
   }
 
   const { accounts } = await fetchXeroAccounts(organizationId);
-  const availableCodes = new Set(accounts.map((account) => account.code));
+  const availableCodes = new Set(
+    accounts.map((account) => account.code?.trim()).filter((code): code is string => Boolean(code))
+  );
   const missingCodes = uniqueCodes.filter((code) => !availableCodes.has(code));
 
   return {

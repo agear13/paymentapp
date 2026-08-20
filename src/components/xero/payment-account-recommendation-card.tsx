@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select';
 import { CheckCircle2, Check } from 'lucide-react';
 import type { PaymentAccountMappingView } from '@/lib/accounting/payment-account-mapping-view';
+import { paymentAccountLinkLabel } from '@/lib/accounting/payment-account-mapping-view';
 import { friendlyMatchSubtitle } from '@/components/xero/payment-account-recommendation-display';
 import { PaymentFlowDiagram } from '@/components/xero/payment-flow-diagram';
 import {
@@ -71,7 +72,6 @@ function pickerLabel(account: ChartAccount, view: PaymentAccountMappingView, val
 
 export function PaymentAccountRecommendationCard({
   view,
-  draftView,
   value,
   onChange,
   onUseRecommended,
@@ -86,10 +86,11 @@ export function PaymentAccountRecommendationCard({
     accountName: definition.accountName,
   });
   const heroAccount = view.heroAccount;
-  const draftSelected =
-    Boolean(value.trim()) &&
-    draftView.state === 'linked' &&
-    value.trim() !== (view.persistedCode ?? '');
+  const linkLabel = paymentAccountLinkLabel({
+    persistedState: view.state,
+    persistedCode: view.persistedCode,
+    draftCode: value,
+  });
   const [showAccountPicker, setShowAccountPicker] = React.useState(view.pickerDefaultOpen);
 
   React.useEffect(() => {
@@ -142,12 +143,12 @@ export function PaymentAccountRecommendationCard({
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {view.showLinkedLabel ? (
+                {linkLabel === 'linked' ? (
                   <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400">
                     <Check className="h-4 w-4" aria-hidden />
                     Linked
                   </span>
-                ) : draftSelected ? (
+                ) : linkLabel === 'selected' ? (
                   <span className="inline-flex items-center gap-1.5 text-sm font-medium text-primary">
                     Selected — save your choices to link
                   </span>
