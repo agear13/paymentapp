@@ -13,6 +13,9 @@ import {
   syncPilotSnapshotForUser,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { refreshProjectObligationsAfterParticipantPersist } from '@/lib/onboarding/refresh-onboarding-project-obligations.server';
+import { prisma } from '@/lib/server/prisma';
+import { compensationKindOf } from '@/lib/workflows/agreement-intelligence/participant-coordination';
+import { referralManagementDealId } from '@/lib/workflows/referral-management/constants';
 import type { ApprovedAgreementStructure } from '@/lib/workflows/agreement-intelligence/types';
 
 export type AgreementIntelligenceBootstrapResult = {
@@ -69,18 +72,27 @@ function mapApprovedStructureToDeal(
   };
 }
 
-function assignStableParticipantIds(
-  participants: DemoParticipant[],
-  organizationWorkflowId: string,
-  reviewPartyIds: string[]
-): DemoParticipant[] {
-  return participants.map((participant, index) => {
-    const partyId = reviewPartyIds[index] ?? participant.id;
-    return {
-      ...participant,
-      id: stableParticipantId(organizationWorkflowId, partyId),
-    };
+function normalizeParticipantEmail(email: string | null | undefined): string | null {
+  const normalized = email?.trim().toLowerCase() ?? '';
+  return normalized.length > 0 ? normalized : null;
+}
+
+function findReusableCompensatedParticipant(
+  existingParticipants: DemoParticipant[],
+  email: string | null | undefined,
+  eligibleDealIds: Set<string>,
+  claimedIds: Set<string>
+): DemoParticipant | null {
+  const normalized = normalizeParticipantEmail(email);
+  if (!normalized) return null;
+  const matches = existingParticipants.filter((participant) => {
+    if (claimedIds.has(participant.id)) return false;
+    if (!eligibleDealIds.has(participant.dealId ?? '')) return false;
+    if (normalizeParticipantEmail(participant.email) !== normalized) return false;
+    return compensationKindOf(participant) != null;
   });
+  if (matches.length === 0) return null;
+  return matches.find((participant) => Boolean(participant.referralCode?.trim())) ?? matches[0];
 }
 
 function mergeParticipantsForDeal(
@@ -88,7 +100,10 @@ function mergeParticipantsForDeal(
   nextParticipants: DemoParticipant[],
   dealId: string
 ): DemoParticipant[] {
-  const others = existingParticipants.filter((participant) => participant.dealId !== dealId);
+  const nextIds = new Set(nextParticipants.map((participant) => participant.id));
+  const others = existingParticipants.filter(
+    (participant) => participant.dealId !== dealId && !nextIds.has(participant.id)
+  );
   const existingForDeal = existingParticipants.filter((participant) => participant.dealId === dealId);
   const existingById = new Map(existingForDeal.map((participant) => [participant.id, participant]));
 
@@ -97,6 +112,10 @@ function mergeParticipantsForDeal(
     if (!existing) return built;
     return {
       ...mergeExtractedCompensationIntoExistingParticipant(existing, built),
+      id: existing.id,
+      inviteToken: existing.inviteToken,
+      referralCode: existing.referralCode,
+      customerCommerceUrl: existing.customerCommerceUrl,
       name: built.name,
       email: built.email || existing.email,
       roleDetails: built.roleDetails ?? existing.roleDetails,
@@ -142,13 +161,57 @@ export async function bootstrapAgreementIntelligenceCommercialGraph(input: {
   const reviewPartyIds = input.approvedStructure.reviewForm.parties
     .filter((party) => party.name.trim().length > 0)
     .map((party) => party.id);
-  const participants = assignStableParticipantIds(
-    builtParticipants,
-    input.organizationWorkflowId,
-    reviewPartyIds
-  );
 
   const snapshot = await getPilotSnapshotForUser(input.userId);
+  const workflow = await prisma.organization_workflows.findUnique({
+    where: { id: input.organizationWorkflowId },
+    select: { id: true, organization_id: true },
+  });
+  const orgWorkflows = workflow
+    ? await prisma.organization_workflows.findMany({
+        where: { organization_id: workflow.organization_id },
+        select: { id: true },
+      })
+    : [{ id: input.organizationWorkflowId }];
+  const eligibleDealIds = new Set<string>([
+    pilotDealId,
+    ...orgWorkflows.flatMap((row) => [
+      agreementIntelligencePilotDealId(row.id),
+      referralManagementDealId(row.id),
+    ]),
+  ]);
+
+  const claimedIds = new Set<string>();
+  const participants = builtParticipants.map((built, index) => {
+    const reusable =
+      compensationKindOf(built) != null
+        ? findReusableCompensatedParticipant(
+            snapshot.participants,
+            built.email,
+            eligibleDealIds,
+            claimedIds
+          )
+        : null;
+    if (reusable) {
+      claimedIds.add(reusable.id);
+      return {
+        ...mergeExtractedCompensationIntoExistingParticipant(reusable, built),
+        id: reusable.id,
+        dealId: pilotDealId,
+        inviteToken: reusable.inviteToken,
+        referralCode: reusable.referralCode,
+        customerCommerceUrl: reusable.customerCommerceUrl,
+        name: built.name,
+        email: built.email?.trim() ? built.email : reusable.email,
+      };
+    }
+    const partyId = reviewPartyIds[index] ?? built.id;
+    return {
+      ...built,
+      id: stableParticipantId(input.organizationWorkflowId, partyId),
+    };
+  });
+
   const mergedDeals = [
     deal,
     ...snapshot.deals.filter((existingDeal) => existingDeal.id !== pilotDealId),
@@ -174,7 +237,6 @@ export async function bootstrapAgreementIntelligenceCommercialGraph(input: {
 }
 
 async function countObligationsForDeal(userId: string, dealId: string): Promise<number> {
-  const { prisma } = await import('@/lib/server/prisma');
   return prisma.deal_network_pilot_obligations.count({
     where: { user_id: userId, deal_id: dealId },
   });

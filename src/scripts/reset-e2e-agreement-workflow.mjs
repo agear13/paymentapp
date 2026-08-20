@@ -55,11 +55,20 @@ try {
     }
   }
 
+  const org = await prisma.organizations.findUnique({
+    where: { id: membership.organization_id },
+    select: { stripe_subscription_id: true },
+  });
   await prisma.organizations.update({
     where: { id: membership.organization_id },
     data: {
       subscription_plan: 'professional',
       subscription_status: 'active',
+      ...(org?.stripe_subscription_id
+        ? {}
+        : {
+            stripe_subscription_id: `sub_e2e_${membership.organization_id.replace(/-/g, '').slice(0, 24)}`,
+          }),
     },
   });
 
@@ -71,6 +80,13 @@ try {
       },
     },
     include: { agreement: true },
+  });
+
+  await prisma.organization_workflows.deleteMany({
+    where: {
+      organization_id: membership.organization_id,
+      template_slug: 'referral-management',
+    },
   });
 
   if (!workflow) {

@@ -316,8 +316,11 @@ export function buildParticipantCoordinationView(
   };
 }
 
-export function workflowParticipantHref(participantId: string): string {
-  return COMMERCIAL_OS_ROUTES.workflowParticipant(AGREEMENT_INTELLIGENCE_SLUG, participantId);
+export function workflowParticipantHref(
+  participantId: string,
+  slug: string = AGREEMENT_INTELLIGENCE_SLUG
+): string {
+  return COMMERCIAL_OS_ROUTES.workflowParticipant(slug, participantId);
 }
 
 export function emptyContractualCoordination(): {

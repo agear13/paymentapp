@@ -2,12 +2,15 @@
 
 import { ArrowLeft, Copy, Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
   AgreementStatusLine,
   PayoutStatusLine,
   ReferralStatusLine,
 } from '@/components/journey/lovable/agreement-intelligence-participant-status';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
 import type { WorkflowActivityItem, WorkflowOperationalParticipant } from '@/lib/workflows/agreement-intelligence/types';
 import type { ParticipantCoordinationAction } from '@/lib/workflows/agreement-intelligence/participant-coordination';
 
@@ -16,6 +19,7 @@ type Props = {
   activity: WorkflowActivityItem[];
   coordinationBlocked: boolean;
   busy: boolean;
+  showReferralManagementHandoff?: boolean;
   onBack: () => void;
   onAction: (
     action: ParticipantCoordinationAction,
@@ -35,6 +39,7 @@ export function AgreementIntelligenceParticipantDetail({
   activity,
   coordinationBlocked,
   busy,
+  showReferralManagementHandoff = true,
   onBack,
   onAction,
 }: Props) {
@@ -42,6 +47,14 @@ export function AgreementIntelligenceParticipantDetail({
     entry.id.includes(participant.id ?? '___never___')
   );
   const canAct = !coordinationBlocked && !busy && participant.partyKind === 'compensated_participant';
+  const { isInstalled } = useDeployedWorkflows();
+  const referralManagementHref = participant.id
+    ? COMMERCIAL_OS_ROUTES.workflowParticipant('referral-management', participant.id)
+    : COMMERCIAL_OS_ROUTES.workflowDetail('referral-management');
+  const showReferralHandoff =
+    showReferralManagementHandoff &&
+    participant.partyKind === 'compensated_participant' &&
+    participant.compensationKind !== 'fixed';
 
   return (
     <div className="space-y-6">
@@ -234,6 +247,16 @@ export function AgreementIntelligenceParticipantDetail({
                 {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Activate referral
               </Button>
+            ) : null}
+            {showReferralHandoff ? (
+              <p className="text-[13px]">
+                <span className="text-ink-soft">Referral relationship detected. </span>
+                <Link href={referralManagementHref} className="font-medium text-primary">
+                  {isInstalled('referral-management')
+                    ? 'Activate in Referral Management'
+                    : 'Open Referral Management'}
+                </Link>
+              </p>
             ) : null}
           </div>
         </>

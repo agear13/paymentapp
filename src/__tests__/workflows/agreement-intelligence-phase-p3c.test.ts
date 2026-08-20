@@ -6,6 +6,7 @@ import {
   agreementIntelligencePilotDealId,
   bootstrapAgreementIntelligenceCommercialGraph,
 } from '@/lib/workflows/agreement-intelligence/bootstrap-agreement-intelligence.server';
+import { referralManagementDealId } from '@/lib/workflows/referral-management/constants';
 import { buildWorkflowOperationalHubSummary } from '@/lib/workflows/agreement-intelligence/operational-hub-summary.server';
 import { canRetryBootstrap, isOperationalWorkflow } from '@/lib/workflows/agreement-intelligence/lifecycle';
 import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
@@ -17,6 +18,7 @@ jest.mock('@/lib/server/prisma', () => ({
     organization_workflows: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       update: jest.fn(),
     },
     organization_workflow_agreements: {
@@ -306,6 +308,8 @@ describe('Phase P3-C — Agreement Intelligence commercial bootstrap', () => {
     prisma.deal_network_pilot_obligations.findMany.mockResolvedValue([
       { id: 'ob-1', obligation_type: 'PARTICIPANT', amount_owed: 0, currency: 'AUD', status: 'DRAFT' },
     ]);
+    prisma.organization_workflows.findUnique.mockResolvedValue(null);
+    prisma.organization_workflows.findMany.mockResolvedValue([]);
   });
 
   it('uses stable pilot deal id derived from workflow instance', () => {
@@ -505,5 +509,128 @@ describe('Phase P3-C — Agreement Intelligence commercial bootstrap', () => {
     const syncCall = syncPilotSnapshotForUser.mock.calls[0];
     expect(syncCall?.[1].some((deal: { id: string }) => deal.id === 'other-deal')).toBe(true);
     expect(syncCall?.[1].some((deal: { id: string }) => deal.id === PILOT_DEAL_ID)).toBe(true);
+  });
+
+  it('reuses an existing Referral Management promoter by exact org-scoped email', async () => {
+    const rmWorkflowId = 'wf-rm-33333333-3333-3333-3333-333333333333';
+    const rmDealId = referralManagementDealId(rmWorkflowId);
+    const existingId = 'rm-apex-existing';
+    const structure = approvedStructure();
+    structure.reviewForm.parties[1] = {
+      ...structure.reviewForm.parties[1],
+      name: 'Apex Promotions',
+      email: '  Apex@Example.com ',
+    };
+    structure.extractionResult.parties[1] = {
+      ...structure.extractionResult.parties[1],
+      name: { value: 'Apex Promotions', confidence: 'high' },
+      email: { value: 'apex@example.com', confidence: 'high' },
+    };
+
+    prisma.organization_workflows.findUnique.mockResolvedValue({
+      id: WF_ID,
+      organization_id: ORG_A,
+    });
+    prisma.organization_workflows.findMany.mockResolvedValue([{ id: WF_ID }, { id: rmWorkflowId }]);
+    getPilotSnapshotForUser
+      .mockResolvedValueOnce({
+        deals: [{ id: rmDealId, name: 'Referral Management' }],
+        participants: [
+          {
+            id: existingId,
+            dealId: rmDealId,
+            name: 'Apex Promotions',
+            email: 'apex@example.com',
+            role: 'Promoter',
+            inviteToken: 'invite-existing',
+            referralCode: 'APEX20',
+            customerCommerceUrl: 'https://example.test/r/APEX20',
+            commissionKind: 'pct_deal_value',
+            commissionValue: 20,
+            compensationProfile: { compensationType: 'REVENUE_SHARE', percentage: 20 },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        deals: [{ id: PILOT_DEAL_ID }],
+        participants: [{ id: existingId, dealId: PILOT_DEAL_ID, email: 'apex@example.com' }],
+      });
+
+    await bootstrapAgreementIntelligenceCommercialGraph({
+      userId: USER_ID,
+      organizationWorkflowId: WF_ID,
+      approvedStructure: structure,
+    });
+
+    const syncedParticipants = syncPilotSnapshotForUser.mock.calls[0]?.[2] as Array<{
+      id: string;
+      dealId?: string;
+      email?: string;
+      referralCode?: string;
+      customerCommerceUrl?: string;
+    }>;
+    const apexRows = syncedParticipants.filter(
+      (row) => row.email?.trim().toLowerCase() === 'apex@example.com'
+    );
+    expect(apexRows).toHaveLength(1);
+    expect(apexRows[0]?.id).toBe(existingId);
+    expect(apexRows[0]?.dealId).toBe(PILOT_DEAL_ID);
+    expect(apexRows[0]?.referralCode).toBe('APEX20');
+    expect(apexRows[0]?.customerCommerceUrl).toBe('https://example.test/r/APEX20');
+    expect(syncedParticipants.filter((row) => row.id === existingId)).toHaveLength(1);
+  });
+
+  it('does not merge compensated participants by name alone', async () => {
+    const rmDealId = referralManagementDealId('wf-rm-other');
+    const structure = approvedStructure();
+    structure.reviewForm.parties[1] = {
+      ...structure.reviewForm.parties[1],
+      name: 'Apex Promotions',
+      email: 'apex@example.com',
+    };
+
+    prisma.organization_workflows.findUnique.mockResolvedValue({
+      id: WF_ID,
+      organization_id: ORG_A,
+    });
+    prisma.organization_workflows.findMany.mockResolvedValue([
+      { id: WF_ID },
+      { id: 'wf-rm-other' },
+    ]);
+    getPilotSnapshotForUser
+      .mockResolvedValueOnce({
+        deals: [{ id: rmDealId }],
+        participants: [
+          {
+            id: 'rm-same-name',
+            dealId: rmDealId,
+            name: 'Apex Promotions',
+            email: 'different@example.com',
+            role: 'Promoter',
+            commissionKind: 'pct_deal_value',
+            commissionValue: 20,
+            compensationProfile: { compensationType: 'REVENUE_SHARE', percentage: 20 },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ deals: [{ id: PILOT_DEAL_ID }], participants: [] });
+
+    await bootstrapAgreementIntelligenceCommercialGraph({
+      userId: USER_ID,
+      organizationWorkflowId: WF_ID,
+      approvedStructure: structure,
+    });
+
+    const syncedParticipants = syncPilotSnapshotForUser.mock.calls[0]?.[2] as Array<{
+      id: string;
+      email?: string;
+    }>;
+    expect(syncedParticipants.some((row) => row.id === 'rm-same-name')).toBe(true);
+    expect(
+      syncedParticipants.filter((row) => row.email?.trim().toLowerCase() === 'apex@example.com')
+    ).toHaveLength(1);
+    expect(syncedParticipants.find((row) => row.email === 'apex@example.com')?.id).not.toBe(
+      'rm-same-name'
+    );
   });
 });

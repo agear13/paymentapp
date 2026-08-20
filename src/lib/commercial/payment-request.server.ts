@@ -40,10 +40,13 @@ export function buildPaymentSetupPortalUrl(token: string): string {
   return `${appBaseUrl()}/payment-setup/${token}`;
 }
 
-async function buildParticipantWorkspacePayoutLink(participantId: string): Promise<string | null> {
+async function buildParticipantWorkspacePayoutLink(
+  participantId: string,
+  origin?: string
+): Promise<string | null> {
   const portalToken = await ensurePortalTokenOnParticipantRow(participantId);
   if (!portalToken) return null;
-  return buildParticipantWorkspacePayoutUrl(portalToken, appBaseUrl());
+  return buildParticipantWorkspacePayoutUrl(portalToken, origin?.trim() || appBaseUrl());
 }
 
 function hasValidPaymentToken(participant: DemoParticipant): boolean {
@@ -67,7 +70,7 @@ export type GeneratePaymentRequestResult = {
 export async function generatePaymentRequestForParticipant(
   participantId: string,
   operatorUserId: string,
-  options?: { sendEmail?: boolean }
+  options?: { sendEmail?: boolean; origin?: string }
 ): Promise<GeneratePaymentRequestResult | null> {
   const row = await prisma.deal_network_pilot_participants.findUnique({
     where: { id: participantId },
@@ -87,7 +90,10 @@ export async function generatePaymentRequestForParticipant(
   const input = buildSupplierOnboardingInput(cur, { id: row.deal_id, name: dealName });
   const derived = generateDraftInvoice(input);
 
-  const portalUrlFromExisting = await buildParticipantWorkspacePayoutLink(participantId);
+  const portalUrlFromExisting = await buildParticipantWorkspacePayoutLink(
+    participantId,
+    options?.origin
+  );
 
   if (isPaymentRequestSent(cur) && portalUrlFromExisting) {
     let emailSent = false;
@@ -199,7 +205,9 @@ export async function generatePaymentRequestForParticipant(
     },
   });
 
-  const portalUrl = (await buildParticipantWorkspacePayoutLink(participantId)) ?? buildPaymentSetupPortalUrl(tokenData.token);
+  const portalUrl =
+    (await buildParticipantWorkspacePayoutLink(participantId, options?.origin)) ??
+    buildPaymentSetupPortalUrl(tokenData.token);
   let emailSent = false;
   let emailError: string | undefined;
 

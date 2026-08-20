@@ -1,4 +1,4 @@
-import type { OrganizationWorkflowStatus } from '@prisma/client';
+import type { OrganizationWorkflowLifecycleStatus, OrganizationWorkflowStatus } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { evaluateFeature } from '@/lib/entitlements/workspace-entitlements';
 import { resolveEntitlementContext } from '@/lib/entitlements/resolve-context.server';
@@ -25,6 +25,11 @@ export type DeployWorkflowResult = {
   workflow: OrganizationWorkflowWithTemplate;
   created: boolean;
 };
+
+function initialLifecycleStatus(templateSlug: string): OrganizationWorkflowLifecycleStatus {
+  if (templateSlug === 'referral-management') return 'ACTIVE';
+  return 'AWAITING_INPUT';
+}
 
 export async function deployWorkflowToOrganization(
   input: DeployWorkflowInput
@@ -92,7 +97,7 @@ export async function deployWorkflowToOrganization(
         template_slug: input.templateSlug,
         template_version: template.template.version,
         status: 'DEPLOYED' satisfies OrganizationWorkflowStatus,
-        lifecycle_status: 'AWAITING_INPUT',
+        lifecycle_status: initialLifecycleStatus(input.templateSlug),
         configuration,
       },
     });

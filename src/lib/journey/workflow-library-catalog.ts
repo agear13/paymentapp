@@ -7,6 +7,7 @@ import {
   Coins,
   Workflow,
   Brain,
+  Share2,
 } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import type { EntitlementFeature } from '@/lib/entitlements/types';
@@ -17,7 +18,7 @@ export type WorkflowTemplateMetadata = {
   /** Semantic version pinned on deploy — catalog updates do not mutate installed instances. */
   version: string;
   category: string;
-  /** When true, Add to Workspace is available (P3-A: agreement-intelligence only). */
+  /** When true, Add to Workspace is available. */
   deployable: boolean;
   /** Entitlement required to deploy; undefined = membership only. */
   requiredEntitlement?: EntitlementFeature;
@@ -57,6 +58,15 @@ const DEFAULT_TEMPLATE: WorkflowTemplateMetadata = {
   category: 'commercial',
   deployable: false,
 };
+
+const REFERRAL_MANAGEMENT_PREVIEW_CAPABILITIES = [
+  'Add promoters without an agreement',
+  'Assign catalogue services',
+  'Issue referral links and QR codes',
+  'Coordinate promoter approval and payout details',
+  'Attribute referred checkout revenue',
+  'Hand off commission to Revenue Sharing',
+] as const;
 
 const AGREEMENT_INTELLIGENCE_PREVIEW_CAPABILITIES = [
   'Upload agreements',
@@ -195,6 +205,45 @@ export const WORKFLOW_LIBRARY: WorkflowLibraryEntry[] = [
     deployRoute: COMMERCIAL_OS_ROUTES.workflowReconciliation,
     previewRoute: COMMERCIAL_OS_ROUTES.publicWorkflowDetail('revenue-sharing'),
     template: { ...DEFAULT_TEMPLATE, category: 'revenue' },
+  },
+  {
+    slug: 'referral-management',
+    name: 'Referral Management',
+    summary: 'Manage promoters, affiliates and referral revenue from one place.',
+    outcome: 'Acquire, attribute and coordinate referral revenue on existing Provvy checkout.',
+    problem:
+      'Promoters, referral links and commission tracking live in disconnected tools instead of the commercial operating system.',
+    overview:
+      'A first-class workflow over existing participant, referral, payout and attribution primitives — without a second referral backend.',
+    systems: ['Pinch Payments', 'Xero'],
+    impact: {
+      timeSaved: 'Same day',
+      businessImpact: 'Attributed referral revenue',
+      deployment: 'Same day',
+    },
+    capabilities: [
+      'Add promoters without uploading an agreement',
+      'Issue existing referral links and QR codes',
+      'Coordinate approval and payout details',
+      'Attribute referred checkout revenue',
+      'Hand off settlement to Revenue Sharing',
+    ],
+    reasoning: [
+      'Referral Management acquires and attributes. Revenue Sharing calculates and settles.',
+      'Agreement Intelligence can optionally enrich the same participant identity.',
+    ],
+    saved: 'Uses existing referral infrastructure',
+    icon: Share2,
+    deployRoute: COMMERCIAL_OS_ROUTES.workflowInstance('referral-management'),
+    previewRoute: COMMERCIAL_OS_ROUTES.workflowDetail('referral-management'),
+    template: {
+      version: '1.0.0',
+      category: 'referral',
+      deployable: true,
+      requiredEntitlement: 'referral_management',
+      workspaceFeature: WorkspaceFeature.CommissionLinks,
+      previewCapabilities: [...REFERRAL_MANAGEMENT_PREVIEW_CAPABILITIES],
+    },
   },
   {
     slug: 'supplier-payments',

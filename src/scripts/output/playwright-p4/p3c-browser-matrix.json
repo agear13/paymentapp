@@ -1,0 +1,44 @@
+{
+  "matrix": [
+    {
+      "criterion": "Workflow Library shows Referral Management",
+      "result": "PASS"
+    },
+    {
+      "criterion": "Referral Management preview is available",
+      "result": "PASS"
+    },
+    {
+      "criterion": "Installed Referral Management opens in Commercial OS",
+      "result": "PASS"
+    },
+    {
+      "criterion": "Manual revenue-share promoter created",
+      "result": "PASS"
+    },
+    {
+      "criterion": "Promoter detail stays in Commercial OS",
+      "result": "PASS"
+    },
+    {
+      "criterion": "Request approval issued",
+      "result": "PASS",
+      "detail": "http://localhost:3333/participant/5c2ec79b-36ef-4663-99ec-349bfe1dc996"
+    },
+    {
+      "criterion": "Existing participant portal opens for approval",
+      "result": "PASS",
+      "detail": "http://localhost:3333/participant/5c2ec79b-36ef-4663-99ec-349bfe1dc996"
+    },
+    {
+      "criterion": "Participant approval reflected in Referral Management",
+      "result": "PASS"
+    },
+    {
+      "criterion": "Request payout details",
+      "result": "PASS",
+      "detail": "https://app.provvypay.com/participant/5c2ec79b-36ef-4663-99ec-349bfe1dc996?step=payout"
+    }
+  ],
+  "generatedAt": "2026-08-20T06:02:28.247Z"
+}

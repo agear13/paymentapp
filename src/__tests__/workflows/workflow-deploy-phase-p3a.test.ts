@@ -97,6 +97,16 @@ describe('Phase P3-A — Workflow Library deployment', () => {
       expect(isDeployableWorkflowSlug('agreement-intelligence')).toBe(true);
     });
 
+    it('includes Referral Management as a Professional deployable workflow', () => {
+      const entry = getWorkflowBySlug('referral-management');
+      expect(entry).toBeDefined();
+      expect(entry!.template.deployable).toBe(true);
+      expect(entry!.template.requiredEntitlement).toBe('referral_management');
+      expect(entry!.template.workspaceFeature).toBe(WorkspaceFeature.CommissionLinks);
+      expect(entry!.summary).toMatch(/promoters, affiliates and referral revenue/i);
+      expect(isDeployableWorkflowSlug('referral-management')).toBe(true);
+    });
+
     it('rejects unknown slug', () => {
       expect(resolveWorkflowTemplate('not-a-workflow')).toBeNull();
       expect(isDeployableWorkflowSlug('payment-collection')).toBe(false);
@@ -137,6 +147,31 @@ describe('Phase P3-A — Workflow Library deployment', () => {
             organization_id: ORG_A,
             template_slug: 'agreement-intelligence',
             template_version: '1.0.0',
+          }),
+        })
+      );
+    });
+
+    it('deploys Referral Management as ACTIVE without agreement upload', async () => {
+      prisma.organization_workflows.create.mockResolvedValue(
+        workflowRow({
+          template_slug: 'referral-management',
+          lifecycle_status: 'ACTIVE',
+        })
+      );
+
+      const result = await deployWorkflowToOrganization({
+        organizationId: ORG_A,
+        userId: 'user-1',
+        templateSlug: 'referral-management',
+      });
+
+      expect(result.created).toBe(true);
+      expect(prisma.organization_workflows.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            template_slug: 'referral-management',
+            lifecycle_status: 'ACTIVE',
           }),
         })
       );
@@ -264,6 +299,15 @@ describe('Phase P3-A — Workflow Library deployment', () => {
       const list = await listOrganizationWorkflows(ORG_A);
       const features = deriveFeaturesFromDeployedWorkflows(list);
       expect(features).toContain(WorkspaceFeature.AgreementIntelligence);
+    });
+
+    it('enables commission links when Referral Management is installed', async () => {
+      prisma.organization_workflows.findMany.mockResolvedValue([
+        workflowRow({ template_slug: 'referral-management' }),
+      ]);
+      const list = await listOrganizationWorkflows(ORG_A);
+      const features = deriveFeaturesFromDeployedWorkflows(list);
+      expect(features).toContain(WorkspaceFeature.CommissionLinks);
     });
   });
 

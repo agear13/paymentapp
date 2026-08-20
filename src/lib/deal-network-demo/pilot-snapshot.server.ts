@@ -501,6 +501,45 @@ export async function syncPilotSnapshotForUser(
   });
 }
 
+export function upsertPilotDealForUser(userId: string, deal: RecentDeal) {
+  const data = dealToPrismaData(deal, userId);
+  return prisma.deal_network_pilot_deals.upsert({
+    where: { id: deal.id },
+    create: { id: deal.id, ...data },
+    update: data,
+  });
+}
+
+export async function createPilotParticipantForUser(
+  userId: string,
+  participant: DemoParticipant
+): Promise<DemoParticipant> {
+  if (!participant.id || !participant.dealId || !participant.inviteToken) {
+    throw new Error('Participant id, dealId, and inviteToken are required');
+  }
+  const deal = await prisma.deal_network_pilot_deals.findFirst({
+    where: { id: participant.dealId, user_id: userId },
+    select: { id: true },
+  });
+  if (!deal) {
+    throw new Error('Project not found');
+  }
+  const existing = await prisma.deal_network_pilot_participants.findUnique({
+    where: { id: participant.id },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new Error('Participant already exists');
+  }
+  const row = await prisma.deal_network_pilot_participants.create({
+    data: {
+      id: participant.id,
+      ...participantToPrismaData(participant),
+    },
+  });
+  return participantRowToDemo(row);
+}
+
 export async function getParticipantByInviteToken(token: string) {
   return prisma.deal_network_pilot_participants.findUnique({
     where: { invite_token: token },
