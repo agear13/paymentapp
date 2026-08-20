@@ -9,6 +9,7 @@ import type {
 } from '@/lib/workflows/agreement-intelligence/types';
 import type { OrganizationWorkflowLifecycleStatus } from '@prisma/client';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
+import type { ParticipantCoordinationAction } from '@/lib/workflows/agreement-intelligence/participant-coordination';
 
 export type WorkflowAgreementContext = {
   workflowId: string;
@@ -24,6 +25,7 @@ export function useWorkflowAgreement(workflowId: string | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [coordinating, setCoordinating] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!workflowId) {
@@ -202,16 +204,55 @@ export function useWorkflowAgreement(workflowId: string | null) {
     }
   }, [workflowId, refresh]);
 
+  const coordinateParticipant = useCallback(
+    async (
+      participantId: string,
+      action: ParticipantCoordinationAction,
+      extra?: { missingFields?: string[]; requestedChanges?: string }
+    ) => {
+      if (!workflowId) return false;
+      setCoordinating(true);
+      setError(null);
+      try {
+        const res = await csrfAwareFetch(
+          `/api/workflows/${workflowId}/agreement/participants/${participantId}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ action, ...extra }),
+          }
+        );
+        if (!res.ok) {
+          const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+          setError(payload?.error ?? 'Participant coordination failed');
+          return false;
+        }
+        const data = (await res.json()) as WorkflowAgreementContext;
+        setContext(data);
+        return true;
+      } catch {
+        setError('Participant coordination failed');
+        return false;
+      } finally {
+        setCoordinating(false);
+      }
+    },
+    [workflowId]
+  );
+
   return {
     context,
     loading,
     error,
     submitting,
+    coordinating,
     refresh,
     submitPaste,
     submitUpload,
     retryExtraction,
     retryBootstrap,
     updateConfiguration,
+    coordinateParticipant,
   };
 }

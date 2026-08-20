@@ -1,5 +1,5 @@
 /**
- * Applies workflow/agreement migrations needed for P3-C E2E when deploy is not run.
+ * Applies workflow/agreement/referral-catalog migrations needed for P3-C/P3-E E2E when deploy is not run.
  * Local dev DB only — idempotent (safe to re-run).
  */
 import { config as loadEnv } from 'dotenv';
@@ -20,6 +20,9 @@ const prisma = new PrismaClient();
 const migrationFiles = [
   '20260328120000_deal_network_pilot_tables/migration.sql',
   '20260417120000_deal_network_pilot_obligations/migration.sql',
+  '20260503150000_payment_links_referral_link_id/migration.sql',
+  '20260513120000_sprint1_referral_attribution/migration.sql',
+  '20260513210000_organization_services_updated_at/migration.sql',
   '20260520120000_project_funding_sources/migration.sql',
   '20260624120000_user_auth_profiles/migration.sql',
   '20260817120000_organization_workflows/migration.sql',
@@ -41,11 +44,25 @@ const supplementalStatements = [
 ];
 
 function splitStatements(sql) {
-  return sql
-    .split(/;\s*\n/)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean)
-    .map((chunk) => `${chunk};`);
+  const parts = [];
+  let rest = sql.replace(/^\uFEFF/, '');
+  while (rest.trim()) {
+    const doBlock = rest.match(/^\s*DO\s+\$\$[\s\S]*?END\s*\$\$\s*;/i);
+    if (doBlock) {
+      parts.push(doBlock[0].trim());
+      rest = rest.slice(doBlock[0].length);
+      continue;
+    }
+    const idx = rest.search(/;\s*(?:\n|$)/);
+    if (idx === -1) {
+      const tail = rest.trim();
+      if (tail) parts.push(tail.endsWith(';') ? tail : `${tail};`);
+      break;
+    }
+    parts.push(`${rest.slice(0, idx).trim()};`);
+    rest = rest.slice(idx + 1);
+  }
+  return parts.filter((chunk) => chunk.replace(/;+$/, '').trim().length > 0);
 }
 
 async function execStatement(sql) {

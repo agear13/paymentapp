@@ -55,6 +55,51 @@ export type WorkflowOperationalPartyKind =
   | 'contractual_party'
   | 'compensated_participant';
 
+export type WorkflowCoordinationAgreementStatus =
+  | 'not_requested'
+  | 'requested'
+  | 'viewed'
+  | 'approved';
+
+export type WorkflowCoordinationPayoutStatus =
+  | 'not_applicable'
+  | 'required'
+  | 'requested'
+  | 'submitted'
+  | 'flagged'
+  | 'complete';
+
+export type WorkflowCoordinationTaxStatus =
+  | 'not_applicable'
+  | 'required'
+  | 'incomplete'
+  | 'complete';
+
+export type WorkflowCoordinationReferralStatus =
+  | 'not_applicable'
+  | 'not_configured'
+  | 'service_required'
+  | 'ready'
+  | 'active';
+
+export type WorkflowCoordinationCompensationKind = 'fixed' | 'revenue_share' | 'commission' | null;
+
+export type WorkflowCoordinationNextActionKind =
+  | 'request_approval'
+  | 'request_payout_details'
+  | 'review_payout_details'
+  | 'request_update'
+  | 'activate_referral'
+  | 'none';
+
+export type WorkflowOperationalReferralSummary = {
+  code: string | null;
+  url: string | null;
+  qrUrl: string | null;
+  destinationLabel: string | null;
+  commissionLabel: string | null;
+};
+
 export type WorkflowOperationalParticipant = {
   id: string | null;
   name: string;
@@ -67,6 +112,23 @@ export type WorkflowOperationalParticipant = {
   needsAttention: boolean;
   attentionReason: string | null;
   manageUrl: string | null;
+  agreementStatus: WorkflowCoordinationAgreementStatus | null;
+  payoutSetupStatus: WorkflowCoordinationPayoutStatus;
+  taxInformationStatus: WorkflowCoordinationTaxStatus;
+  referralStatus: WorkflowCoordinationReferralStatus;
+  compensationKind: WorkflowCoordinationCompensationKind;
+  compensationLabel: string | null;
+  nextActionLabel: string | null;
+  nextActionKind: WorkflowCoordinationNextActionKind;
+  missingPayoutFields: string[];
+  referral: WorkflowOperationalReferralSummary | null;
+  workspaceUrl: string | null;
+  payoutReview: {
+    preferredMethod: string | null;
+    abn: string | null;
+    gst: string | null;
+    submittedAt: string | null;
+  } | null;
 };
 
 export type WorkflowOperationalObligation = {
@@ -86,6 +148,7 @@ export type WorkflowNeedsAttentionItem = {
   label: string;
   detail: string;
   participantId?: string | null;
+  href?: string | null;
 };
 
 export type WorkflowActivityItem = {
@@ -109,6 +172,8 @@ export type WorkflowOperationalAction = {
   detail: string;
   disposition: WorkflowOperationalActionDisposition;
   participantId?: string | null;
+  kind?: WorkflowCoordinationNextActionKind;
+  href?: string | null;
 };
 
 export type WorkflowOperationalHubSummary = {

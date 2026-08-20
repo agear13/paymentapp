@@ -94,6 +94,45 @@ export function deriveAuditTimelineFromParticipants(
       });
     }
 
+    if (p.paymentSetup?.paymentRequestGeneratedAt) {
+      entries.push({
+        id: `payout_requested-${p.id}-${p.paymentSetup.paymentRequestGeneratedAt}`,
+        type: 'payout_state_updated',
+        title: 'Payout details requested',
+        description: `${p.name} was asked to complete payout and tax information.`,
+        timestamp: p.paymentSetup.paymentRequestGeneratedAt,
+        ...base,
+      });
+    }
+
+    if (p.supplierOnboarding?.submission?.submittedAt) {
+      entries.push({
+        id: `payout_submitted-${p.id}-${p.supplierOnboarding.submission.submittedAt}`,
+        type: 'payout_state_updated',
+        title: 'Payout details submitted',
+        description: `${p.name} submitted payout and tax information.`,
+        timestamp: p.supplierOnboarding.submission.submittedAt,
+        ...base,
+      });
+    }
+
+    const flagged = [...(p.supplierOnboarding?.events ?? [])]
+      .reverse()
+      .find((event) => event.type === 'SUPPLIER_ONBOARDING_CHANGES_REQUESTED');
+    if (flagged) {
+      entries.push({
+        id: `payout_flagged-${p.id}-${flagged.timestamp}`,
+        type: 'payout_state_updated',
+        title: 'Payout details flagged',
+        description:
+          'requestedChanges' in flagged.payload
+            ? String(flagged.payload.requestedChanges)
+            : `${p.name} was asked to update payout details.`,
+        timestamp: flagged.timestamp,
+        ...base,
+      });
+    }
+
     if (p.inviteLink || p.customerCommerceUrl) {
       entries.push({
         id: `attribution_configured-${p.id}`,

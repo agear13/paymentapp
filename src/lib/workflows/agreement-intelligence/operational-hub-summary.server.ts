@@ -21,6 +21,7 @@ import {
   countParticipantKinds,
   isOperationalCoordinationBlocked,
 } from '@/lib/workflows/agreement-intelligence/operational-hub-coordination.server';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import type { WorkflowOperationalHubSummary } from '@/lib/workflows/agreement-intelligence/types';
 
 function resolveSettlementSchedule(input: {
@@ -47,6 +48,7 @@ export async function buildWorkflowOperationalHubSummary(input: {
     sourceType: string | null;
   } | null;
   workflowDeploymentStatus?: 'DEPLOYED' | 'PAUSED';
+  organizationId?: string | null;
 }): Promise<WorkflowOperationalHubSummary> {
   const operatorApprovalRequired = input.operatorApprovalRequired ?? true;
   const settlementSchedule = input.extractionSettlement ?? null;
@@ -74,9 +76,7 @@ export async function buildWorkflowOperationalHubSummary(input: {
     }),
     settlementSchedule,
     activity: [],
-    projectParticipantsUrl: input.pilotDealId
-      ? `/dashboard/projects/${encodeURIComponent(input.pilotDealId)}/participants`
-      : null,
+    projectParticipantsUrl: COMMERCIAL_OS_ROUTES.workflowInstance('agreement-intelligence'),
     workflowDeploymentStatus,
     coordinationBlocked,
   };
@@ -107,12 +107,23 @@ export async function buildWorkflowOperationalHubSummary(input: {
     extractionSettlement: input.extractionSettlement,
   });
 
+  const catalogItems = input.organizationId
+    ? (
+        await prisma.organization_services.findMany({
+          where: { organization_id: input.organizationId, active: true },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        })
+      ).map((row) => ({ id: row.id, name: row.name }))
+    : [];
+
   const participants = buildOperationalParticipants({
     reviewForm: input.reviewForm ?? null,
     pilotParticipants,
     pilotDealId: input.pilotDealId,
     commercialGraph: input.commercialGraph ?? null,
     operatorApprovalRequired,
+    catalogItems,
   });
 
   const counts = countParticipantKinds(participants);

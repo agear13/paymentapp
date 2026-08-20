@@ -48,6 +48,9 @@ jest.mock('@/lib/server/prisma', () => ({
       count: jest.fn(),
       findMany: jest.fn(),
     },
+    organization_services: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   },
 }));
 
@@ -315,8 +318,7 @@ describe('Agreement Intelligence P3-D activation and participant setup', () => {
       operatorApprovalRequired: true,
     });
 
-    expect(actions.some((row) => row.label.includes('Invite Apex Promotions'))).toBe(true);
-    expect(actions.some((row) => row.label.includes('Review Apex Promotions approval'))).toBe(true);
+    expect(actions.some((row) => row.label.includes('Request approval for Apex Promotions'))).toBe(true);
     expect(actions.every((row) => row.disposition !== 'READY' || !/payment|payout|invoice/i.test(row.label))).toBe(
       true
     );

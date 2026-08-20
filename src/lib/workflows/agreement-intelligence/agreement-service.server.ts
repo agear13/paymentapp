@@ -231,6 +231,7 @@ async function buildAgreementContextResponse(
           }
         : null,
       workflowDeploymentStatus: row.status === 'PAUSED' ? 'PAUSED' : 'DEPLOYED',
+      organizationId,
     });
   }
 

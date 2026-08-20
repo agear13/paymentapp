@@ -19,6 +19,12 @@ import type {
   WorkflowSettlementSummary,
 } from '@/lib/workflows/agreement-intelligence/types';
 import { participantSetupStatusLabel } from '@/lib/workflows/agreement-intelligence/participant-setup.server';
+import {
+  buildParticipantCoordinationView,
+  emptyContractualCoordination,
+  workflowParticipantHref,
+  type CoordinationCatalogItem,
+} from '@/lib/workflows/agreement-intelligence/participant-coordination';
 
 function obligationStatusLabel(approvalStatus: string | undefined | null): string {
   if (approvalStatus === 'Approved') return 'Active';
@@ -47,6 +53,7 @@ function buildContractualParties(input: {
   pilotDealId: string;
   commercialGraph: CommercialGraphSnapshot | null;
   operatorApprovalRequired: boolean;
+  catalogItems: CoordinationCatalogItem[];
 }): WorkflowOperationalParticipant[] {
   const compensatedByKey = new Map<string, DemoParticipant>();
   for (const participant of input.pilotParticipants) {
@@ -67,7 +74,7 @@ function buildContractualParties(input: {
       null;
 
     if (matched) {
-      rows.push(mapCompensatedParticipant(matched, party.role, input.pilotDealId, input.operatorApprovalRequired));
+      rows.push(mapCompensatedParticipant(matched, party.role, input.operatorApprovalRequired, input.catalogItems));
       continue;
     }
 
@@ -83,6 +90,7 @@ function buildContractualParties(input: {
       needsAttention: false,
       attentionReason: null,
       manageUrl: null,
+      ...emptyContractualCoordination(),
     });
   }
 
@@ -101,6 +109,7 @@ function buildContractualParties(input: {
         needsAttention: false,
         attentionReason: null,
         manageUrl: null,
+        ...emptyContractualCoordination(),
       });
     }
   }
@@ -116,8 +125,8 @@ function buildContractualParties(input: {
           input.reviewForm?.parties.find(
             (party) => party.name.trim().toLowerCase() === participant.name.trim().toLowerCase()
           )?.role ?? null,
-          input.pilotDealId,
-          input.operatorApprovalRequired
+          input.operatorApprovalRequired,
+          input.catalogItems
         )
       );
     }
@@ -129,8 +138,8 @@ function buildContractualParties(input: {
 function mapCompensatedParticipant(
   participant: DemoParticipant,
   commercialRole: string | null | undefined,
-  pilotDealId: string,
-  operatorApprovalRequired: boolean
+  operatorApprovalRequired: boolean,
+  catalogItems: CoordinationCatalogItem[]
 ): WorkflowOperationalParticipant {
   const workflow = deriveParticipantOperationalWorkflow(participant);
   const lifecycleAction = deriveParticipantLifecycleAction(participant);
@@ -138,6 +147,10 @@ function mapCompensatedParticipant(
   const needsAttention =
     lifecycleAction.urgency === 'attention' || lifecycleAction.urgency === 'action_required';
   const setupLabel = participantSetupStatusLabel(participant, operatorApprovalRequired);
+  const coordination = buildParticipantCoordinationView(participant, {
+    catalogItems,
+    operatorApprovalRequired,
+  });
 
   return {
     id: participant.id,
@@ -153,7 +166,8 @@ function mapCompensatedParticipant(
     onboardingStatus,
     needsAttention,
     attentionReason: needsAttention ? lifecycleAction.description : null,
-    manageUrl: `/dashboard/projects/${encodeURIComponent(pilotDealId)}/participants`,
+    manageUrl: workflowParticipantHref(participant.id),
+    ...coordination,
   };
 }
 
@@ -269,8 +283,30 @@ export function buildNeedsAttention(input: {
   operatorApprovalRequired: boolean;
 }): WorkflowNeedsAttentionItem[] {
   const items: WorkflowNeedsAttentionItem[] = [];
+  const compensated = input.participants.filter(
+    (participant) => participant.partyKind === 'compensated_participant'
+  );
+  const payoutRequired = compensated.filter(
+    (participant) =>
+      participant.agreementStatus === 'approved' &&
+      (participant.payoutSetupStatus === 'required' || participant.payoutSetupStatus === 'flagged')
+  );
+  if (payoutRequired.length > 0) {
+    items.push({
+      id: 'payout-setup-group',
+      label:
+        payoutRequired.length === 1
+          ? `${payoutRequired[0].name} requires payout setup`
+          : `${payoutRequired.length} participants require payout setup`,
+      detail: 'Collect payout and tax details before settlement.',
+      participantId: payoutRequired.length === 1 ? payoutRequired[0].id : null,
+      href: payoutRequired.length === 1 && payoutRequired[0].id
+        ? workflowParticipantHref(payoutRequired[0].id)
+        : '#participants',
+    });
+  }
 
-  for (const participant of input.participants) {
+  for (const participant of compensated) {
     if (participant.partyKind !== 'compensated_participant') continue;
     if (participant.approvalStatus === 'Pending approval') {
       items.push({
@@ -278,6 +314,7 @@ export function buildNeedsAttention(input: {
         label: `${participant.name} — approval required`,
         detail: 'Share the participation agreement and collect approval before release.',
         participantId: participant.id,
+        href: participant.id ? workflowParticipantHref(participant.id) : '#participants',
       });
     } else if (participant.onboardingStatus === 'NOT_STARTED' || participant.onboardingStatus === 'INCOMPLETE') {
       items.push({
@@ -285,6 +322,7 @@ export function buildNeedsAttention(input: {
         label: `${participant.name} — onboarding incomplete`,
         detail: 'Collect payout and supplier details before settlement.',
         participantId: participant.id,
+        href: participant.id ? workflowParticipantHref(participant.id) : '#participants',
       });
     } else if (participant.needsAttention && participant.attentionReason) {
       items.push({
@@ -292,6 +330,7 @@ export function buildNeedsAttention(input: {
         label: `${participant.name} — ${participant.statusLabel}`,
         detail: participant.attentionReason,
         participantId: participant.id,
+        href: participant.id ? workflowParticipantHref(participant.id) : '#participants',
       });
     }
   }
@@ -472,28 +511,59 @@ export function buildOperationalActions(input: {
     if (input.operatorApprovalRequired && participant.approvalStatus === 'Pending approval') {
       actions.push({
         id: `invite-${participant.id}`,
-        label: `Invite ${participant.name}`,
+        label: `Request approval for ${participant.name}`,
         detail: 'Share the participation agreement for approval.',
         disposition: 'REQUIRES_APPROVAL',
         participantId: participant.id,
+        kind: 'request_approval',
+        href: workflowParticipantHref(participant.id),
       });
+    } else if (participant.payoutSetupStatus === 'submitted') {
       actions.push({
-        id: `review-${participant.id}`,
-        label: `Review ${participant.name} approval`,
-        detail: participant.attentionReason ?? 'Participant approval is pending.',
-        disposition: 'PROPOSED',
+        id: `review-payout-${participant.id}`,
+        label: `Review ${participant.name} payout details`,
+        detail: 'Submitted payout and tax information needs operator review.',
+        disposition: 'REQUIRES_APPROVAL',
         participantId: participant.id,
+        kind: 'review_payout_details',
+        href: workflowParticipantHref(participant.id),
+      });
+    } else if (participant.payoutSetupStatus === 'flagged') {
+      actions.push({
+        id: `update-payout-${participant.id}`,
+        label: `Request update from ${participant.name}`,
+        detail: participant.missingPayoutFields.length
+          ? `Missing: ${participant.missingPayoutFields.join(', ')}`
+          : 'Payout details were flagged for update.',
+        disposition: 'REQUIRES_APPROVAL',
+        participantId: participant.id,
+        kind: 'request_update',
+        href: workflowParticipantHref(participant.id),
       });
     } else if (
+      participant.payoutSetupStatus === 'required' ||
+      participant.payoutSetupStatus === 'requested' ||
       participant.onboardingStatus === 'NOT_STARTED' ||
       participant.onboardingStatus === 'INCOMPLETE'
     ) {
       actions.push({
         id: `onboard-${participant.id}`,
-        label: `Complete ${participant.name} onboarding`,
+        label: `Request payout details from ${participant.name}`,
         detail: 'Collect payout and supplier details before release.',
         disposition: 'REQUIRES_APPROVAL',
         participantId: participant.id,
+        kind: 'request_payout_details',
+        href: workflowParticipantHref(participant.id),
+      });
+    } else if (participant.referralStatus === 'ready') {
+      actions.push({
+        id: `referral-${participant.id}`,
+        label: `Activate referral for ${participant.name}`,
+        detail: participant.compensationLabel ?? 'Generate the participant referral link.',
+        disposition: 'READY',
+        participantId: participant.id,
+        kind: 'activate_referral',
+        href: workflowParticipantHref(participant.id),
       });
     }
   }
@@ -535,8 +605,12 @@ export function buildOperationalParticipants(input: {
   pilotDealId: string;
   commercialGraph: CommercialGraphSnapshot | null;
   operatorApprovalRequired: boolean;
+  catalogItems?: CoordinationCatalogItem[];
 }): WorkflowOperationalParticipant[] {
-  return buildContractualParties(input);
+  return buildContractualParties({
+    ...input,
+    catalogItems: input.catalogItems ?? [],
+  });
 }
 
 export function countParticipantKinds(participants: WorkflowOperationalParticipant[]): {

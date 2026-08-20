@@ -28,6 +28,9 @@ jest.mock('@/lib/server/prisma', () => ({
       count: jest.fn(),
       findMany: jest.fn(),
     },
+    organization_services: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   },
 }));
 

@@ -13,7 +13,6 @@ import {
   Upload,
   AlertTriangle,
   Clock3,
-  Users,
 } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
@@ -33,6 +32,9 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { AgreementIntelligenceParticipantDetail } from '@/components/journey/lovable/agreement-intelligence-participant-detail';
+import { ParticipantCoordinationSummary } from '@/components/journey/lovable/agreement-intelligence-participant-status';
+import type { ParticipantCoordinationAction } from '@/lib/workflows/agreement-intelligence/participant-coordination';
 
 function MetricCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -53,17 +55,35 @@ export function AgreementIntelligenceHubScreen() {
     loading: agreementLoading,
     error,
     submitting,
+    coordinating,
     refresh,
     submitPaste,
     submitUpload,
     retryExtraction,
     retryBootstrap,
     updateConfiguration,
+    coordinateParticipant,
   } = useWorkflowAgreement(installed?.id ?? null);
 
   const [inputOpen, setInputOpen] = React.useState(false);
   const [reviewOpen, setReviewOpen] = React.useState(false);
   const [configOpen, setConfigOpen] = React.useState(false);
+  const [selectedParticipantId, setSelectedParticipantId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    setSelectedParticipantId(params.get('participant'));
+  }, []);
+
+  const selectParticipant = React.useCallback((participantId: string | null) => {
+    setSelectedParticipantId(participantId);
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (participantId) url.searchParams.set('participant', participantId);
+    else url.searchParams.delete('participant');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+  }, []);
 
   const loading = workflowsLoading || agreementLoading;
 
@@ -118,6 +138,21 @@ export function AgreementIntelligenceHubScreen() {
   const isBootstrapFailed = lifecycleStatus === 'BOOTSTRAP_FAILED';
   const isPaused = installed.status === 'PAUSED';
   const coordinationBlocked = operational?.coordinationBlocked ?? isPaused;
+  const selectedParticipant =
+    operational?.participants.find((participant) => participant.id === selectedParticipantId) ??
+    null;
+
+  const runCoordination = async (
+    action: ParticipantCoordinationAction,
+    extra?: { missingFields?: string[]; requestedChanges?: string }
+  ) => {
+    if (!selectedParticipant?.id) return false;
+    const ok = await coordinateParticipant(selectedParticipant.id, action, extra);
+    if (ok) {
+      toast.success('Participant coordination updated');
+    }
+    return ok;
+  };
   const isLocked =
     lifecycleStatus === 'APPROVED' ||
     lifecycleStatus === 'ACTIVE' ||
@@ -301,18 +336,17 @@ export function AgreementIntelligenceHubScreen() {
                 </div>
               )}
 
-              {operational.projectParticipantsUrl && (
-                <div className="flex flex-wrap gap-3">
-                  <Link
-                    href={operational.projectParticipantsUrl}
-                    className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary/10 px-4 py-2 text-[13px] font-medium hover:bg-secondary/20"
-                  >
-                    <Users className="h-4 w-4" />
-                    Manage participants
-                  </Link>
-                </div>
-              )}
-
+              {selectedParticipant ? (
+                <AgreementIntelligenceParticipantDetail
+                  participant={selectedParticipant}
+                  activity={operational.activity}
+                  coordinationBlocked={coordinationBlocked}
+                  busy={coordinating}
+                  onBack={() => selectParticipant(null)}
+                  onAction={runCoordination}
+                />
+              ) : (
+                <>
               {operational.needsAttention.length > 0 && (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
                   <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
@@ -322,8 +356,26 @@ export function AgreementIntelligenceHubScreen() {
                   <ul className="mt-3 space-y-2">
                     {operational.needsAttention.map((item) => (
                       <li key={item.id} className="text-[14px]">
-                        <span className="font-medium">{item.label}</span>
-                        <span className="text-ink-soft"> — {item.detail}</span>
+                        {item.participantId || item.href ? (
+                          <button
+                            type="button"
+                            className="text-left"
+                            onClick={() => {
+                              if (item.participantId) selectParticipant(item.participantId);
+                              else if (item.href === '#participants') {
+                                document.getElementById('participants')?.scrollIntoView({ behavior: 'smooth' });
+                              }
+                            }}
+                          >
+                            <span className="font-medium">{item.label}</span>
+                            <span className="text-ink-soft"> — {item.detail}</span>
+                          </button>
+                        ) : (
+                          <>
+                            <span className="font-medium">{item.label}</span>
+                            <span className="text-ink-soft"> — {item.detail}</span>
+                          </>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -331,7 +383,7 @@ export function AgreementIntelligenceHubScreen() {
               )}
 
               {operational.participants.length > 0 && (
-                <div className="rounded-xl border border-border bg-secondary/10 p-4">
+                <div id="participants" className="rounded-xl border border-border bg-secondary/10 p-4">
                   <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
                     Participants
                   </p>
@@ -357,32 +409,15 @@ export function AgreementIntelligenceHubScreen() {
                               : 'Compensated'}
                           </span>
                         </div>
-                        <p className="mt-2 text-[13px]">
-                          <span className="font-medium">Status:</span>{' '}
-                          <span className="text-ink-soft">{participant.statusLabel}</span>
-                          {participant.approvalStatus ? (
-                            <>
-                              {' '}
-                              · <span className="text-ink-soft">{participant.approvalStatus}</span>
-                            </>
-                          ) : null}
-                          {participant.onboardingStatus ? (
-                            <>
-                              {' '}
-                              ·{' '}
-                              <span className="text-ink-soft">
-                                Onboarding {participant.onboardingStatus.replace(/_/g, ' ').toLowerCase()}
-                              </span>
-                            </>
-                          ) : null}
-                        </p>
-                        {participant.manageUrl && participant.partyKind === 'compensated_participant' ? (
-                          <Link
-                            href={participant.manageUrl}
+                        <ParticipantCoordinationSummary participant={participant} />
+                        {participant.partyKind === 'compensated_participant' && participant.id ? (
+                          <button
+                            type="button"
                             className="mt-2 inline-flex text-[13px] font-medium text-primary hover:underline"
+                            onClick={() => selectParticipant(participant.id)}
                           >
-                            Open participant setup
-                          </Link>
+                            Manage
+                          </button>
                         ) : null}
                       </li>
                     ))}
@@ -458,11 +493,27 @@ export function AgreementIntelligenceHubScreen() {
                   <ul className="mt-3 space-y-2">
                     {operational.actions.map((action) => (
                       <li key={action.id} className="text-[14px]">
-                        <span className="font-medium">{action.label}</span>
-                        <span className="text-ink-soft"> — {action.detail}</span>
-                        <span className="ml-2 rounded-full border border-border px-2 py-0.5 text-[11px] uppercase tracking-wide text-ink-soft">
-                          {action.disposition.replace(/_/g, ' ')}
-                        </span>
+                        {action.participantId ? (
+                          <button
+                            type="button"
+                            className="text-left"
+                            onClick={() => selectParticipant(action.participantId ?? null)}
+                          >
+                            <span className="font-medium">{action.label}</span>
+                            <span className="text-ink-soft"> — {action.detail}</span>
+                            <span className="ml-2 rounded-full border border-border px-2 py-0.5 text-[11px] uppercase tracking-wide text-ink-soft">
+                              {action.disposition.replace(/_/g, ' ')}
+                            </span>
+                          </button>
+                        ) : (
+                          <>
+                            <span className="font-medium">{action.label}</span>
+                            <span className="text-ink-soft"> — {action.detail}</span>
+                            <span className="ml-2 rounded-full border border-border px-2 py-0.5 text-[11px] uppercase tracking-wide text-ink-soft">
+                              {action.disposition.replace(/_/g, ' ')}
+                            </span>
+                          </>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -516,10 +567,12 @@ export function AgreementIntelligenceHubScreen() {
                   ? ` · ${new Date(agreement.bootstrappedAt).toLocaleString()}`
                   : ''}
               </div>
+                </>
+              )}
             </div>
           )}
 
-          {hub?.hasAgreement && !showEmptyState && !isExtracting && !isActive && (
+          {hub?.hasAgreement && !showEmptyState && !isExtracting && !showsOperationalHub && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-semibold">{hub.title ?? 'Agreement'}</h2>

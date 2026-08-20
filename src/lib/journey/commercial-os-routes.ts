@@ -33,6 +33,9 @@ export const COMMERCIAL_OS_ROUTES = {
   workflowDetail: (slug: string) => `/workspace/workflows/${slug}/preview`,
   /** Installed workflow operating surface. */
   workflowInstance: (slug: string) => `/workspace/workflows/${slug}`,
+  /** Native participant coordination inside an installed workflow hub. */
+  workflowParticipant: (slug: string, participantId: string) =>
+    `/workspace/workflows/${slug}?participant=${encodeURIComponent(participantId)}`,
   publicWorkflowDetail: (slug: string) => `/journey/workflows/${slug}`,
   workflowReconciliation: '/workspace/workflow/reconciliation',
   workflowReconciliationTour: '/workspace/workflow/reconciliation?tour=1',
