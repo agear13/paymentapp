@@ -13,7 +13,6 @@ import {
   filterPostConnectSyncs,
   invoiceAccountsNeedAction,
   settlementAccountsNeedAction,
-  settlementAccountsReady,
   shouldShowPastPayments,
   type HeroAnswer,
   type MappingDisplayState,
@@ -213,14 +212,6 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     invoiceMappings.receivable.saved &&
     invoiceMappings.receivable.validInChart;
 
-  const settlementReady = settlementAccountsReady(
-    input.mappings,
-    input.merchantRails,
-    input.merchantPaymentCapabilities
-  );
-
-  const coreInvoiceReady = coreInvoiceAccountsReady && settlementReady;
-
   const fieldStates = buildMappingFieldStates(
     input.mappings,
     input.chartLoaded,
@@ -228,6 +219,15 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     input.merchantRails,
     input.merchantPaymentCapabilities
   );
+
+  const settlementReady = !settlementAccountsNeedAction(
+    fieldStates,
+    input.merchantRails,
+    input.mappings,
+    input.merchantPaymentCapabilities
+  );
+
+  const coreInvoiceReady = coreInvoiceAccountsReady && settlementReady;
 
   let overallStatus: XeroOverallStatus = 'setup_incomplete';
 

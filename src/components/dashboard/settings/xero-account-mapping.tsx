@@ -44,14 +44,16 @@ import {
 import {
   mappingStateBadgeLabel,
   buildMappingFieldStates,
+  chartAccountCodeSet,
+  countSettlementAccountActions,
   type MappingDisplayState,
 } from '@/lib/commercial-os/xero-invoice-readiness';
 import type { XeroReadinessMappingsPayload } from '@/lib/commercial-os/xero-readiness';
 import { getSettlementAccountsForUi } from '@/lib/accounting/settlement-account-ui';
 import type { SettlementUiAccountDefinition } from '@/lib/accounting/settlement-account-ui';
 import {
-  resolvePaymentAccountRecommendation,
-} from '@/lib/accounting/payment-account-recommendations';
+  applyRecommendedPaymentMappings,
+} from '@/lib/accounting/payment-account-mapping-view';
 import { PaymentAccountsSetupSection } from '@/components/xero/payment-accounts-setup-section';
 import type { CryptoSettlementStrategy } from '@/lib/accounting/settlement-account-types';
 import { validateXeroMappingDuplicates } from '@/lib/accounting/validate-xero-mapping-duplicates';
@@ -230,10 +232,7 @@ export function XeroAccountMapping({
     };
   }, [organizationId, readiness?.merchantPaymentCapabilities]);
 
-  const chartAccountCodes = React.useMemo(
-    () => new Set(accounts.map((account) => account.code).filter(Boolean)),
-    [accounts]
-  );
+  const chartAccountCodes = React.useMemo(() => chartAccountCodeSet(accounts), [accounts]);
 
   const localFieldStates = React.useMemo(
     () =>
@@ -245,6 +244,25 @@ export function XeroAccountMapping({
         merchantCapabilities
       ),
     [mappings, connectionReady, accounts.length, chartAccountCodes, rails, merchantCapabilities]
+  );
+
+  const savedFieldStates = React.useMemo(
+    () =>
+      buildMappingFieldStates(
+        persistedMappings as XeroReadinessMappingsPayload,
+        connectionReady && accounts.length > 0,
+        chartAccountCodes,
+        rails,
+        merchantCapabilities
+      ),
+    [
+      persistedMappings,
+      connectionReady,
+      accounts.length,
+      chartAccountCodes,
+      rails,
+      merchantCapabilities,
+    ]
   );
 
   const settlementAccountsForUi = React.useMemo(
@@ -623,29 +641,26 @@ export function XeroAccountMapping({
       setApplyingRecommended(true);
       setError(null);
 
-      const settings = mappings;
-      const allDefinitions = getSettlementAccountsForUi(settings, rails, merchantCapabilities);
-      const nextMappings = { ...mappings };
+      const allDefinitions = getSettlementAccountsForUi(mappings, rails, merchantCapabilities);
+      const result = applyRecommendedPaymentMappings(accounts, allDefinitions, mappings);
 
-      for (const definition of allDefinitions) {
-        if (nextMappings[definition.mappingField]) continue;
-        const recommendation = resolvePaymentAccountRecommendation(
-          accounts,
-          definition,
-          nextMappings[definition.mappingField]
-        );
-        if (recommendation.recommendedAccount?.code) {
-          nextMappings[definition.mappingField] = recommendation.recommendedAccount.code;
+      if (result.appliedCount === 0) {
+        if (result.unresolvedCount === 0) {
+          toast.info('Recommended payment accounts are already linked');
+        } else {
+          toast.info(
+            'No additional recommended accounts could be linked automatically. Create or choose accounts below.'
+          );
         }
-      }
-
-      if (JSON.stringify(nextMappings) === JSON.stringify(mappings)) {
-        toast.info('Recommended payment accounts are already linked');
         return;
       }
 
-      setMappings(nextMappings);
-      await persistMappings(nextMappings, 'Payment accounts linked');
+      await persistMappings(
+        result.nextMappings as Partial<AccountMappings>,
+        result.appliedCount === 1
+          ? '1 recommended payment account linked'
+          : `${result.appliedCount} recommended payment accounts linked`
+      );
     } catch (err) {
       applyMappingError(
         err instanceof Error ? err.message : 'Failed to link recommended payment accounts',
@@ -665,11 +680,19 @@ export function XeroAccountMapping({
   })();
 
   const paymentSectionSummary = (() => {
-    if (readiness?.settlementAccountsNeedAction) {
-      const count = readiness.settlementAccountActionCount;
+    const count = countSettlementAccountActions(
+      savedFieldStates,
+      rails,
+      persistedMappings as XeroReadinessMappingsPayload,
+      merchantCapabilities
+    );
+    if (count > 0) {
       return XERO_ACCOUNT_SECTION_COPY.paymentSummaryRequired(count);
     }
-    const optionalCount = readiness?.optionalRecommendedCount ?? 0;
+    const optionalCount = savedFieldStates.xero_fee_expense_account_id === 'recommended' ||
+      savedFieldStates.xero_fee_expense_account_id === 'needs_review'
+      ? 1
+      : 0;
     if (optionalCount > 0) {
       return XERO_ACCOUNT_SECTION_COPY.paymentSummaryWithOptional(optionalCount);
     }
@@ -900,6 +923,7 @@ export function XeroAccountMapping({
               <PaymentAccountsSetupSection
                 accounts={accounts}
                 mappings={mappings}
+                persistedMappings={persistedMappings}
                 onMappingChange={updateMapping}
                 onStrategyChange={updateCryptoStrategy}
                 fieldState={fieldState}

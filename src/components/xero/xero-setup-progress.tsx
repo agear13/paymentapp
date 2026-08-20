@@ -1,17 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, Circle } from 'lucide-react';
 import {
   computeXeroSetupSteps,
   xeroSetupProgressPercent,
   XERO_SETUP_PROGRESS_COPY,
+  type MerchantPaymentRails,
   type XeroSetupStep,
 } from '@/lib/xero/xero-setup-guidance';
+import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
+import {
+  buildMappingFieldStates,
+  chartAccountCodeSet,
+  settlementAccountsNeedAction,
+} from '@/lib/commercial-os/xero-invoice-readiness';
+import type { XeroReadinessMappingsPayload } from '@/lib/commercial-os/xero-readiness';
+import { normalizeMerchantPaymentRails } from '@/lib/commercial-os/merchant-payment-rails';
 
 type XeroSetupProgressProps = {
   organizationId: string;
   variant?: 'default' | 'commercial';
+  merchantRails?: MerchantPaymentRails;
 };
 
 type SetupData = {
@@ -19,74 +29,131 @@ type SetupData = {
   tenantId?: string | null;
   revenueMapped: boolean;
   receivableMapped: boolean;
+  paymentAccountsConfigured: boolean;
   pendingPaymentCount: number;
 };
+
+function stepsFromReadiness(
+  readiness: NonNullable<ReturnType<typeof useCommercialReadinessOptional>>
+): XeroSetupStep[] {
+  return computeXeroSetupSteps({
+    connected: readiness.connection.connected,
+    tenantId: readiness.connection.tenantSelected ? 'selected' : null,
+    revenueMapped:
+      readiness.invoiceMappings.revenue.saved && readiness.invoiceMappings.revenue.validInChart,
+    receivableMapped:
+      readiness.invoiceMappings.receivable.saved &&
+      readiness.invoiceMappings.receivable.validInChart,
+    paymentAccountsConfigured: !readiness.settlementAccountsNeedAction,
+    pendingPaymentCount: readiness.queue.pendingCount,
+  });
+}
 
 export function XeroSetupProgress({
   organizationId,
   variant = 'default',
+  merchantRails,
 }: XeroSetupProgressProps) {
-  const [steps, setSteps] = useState<XeroSetupStep[]>([]);
-  const [loading, setLoading] = useState(true);
+  const readiness = useCommercialReadinessOptional();
+  const [fetchedSteps, setFetchedSteps] = useState<XeroSetupStep[]>([]);
+  const [fetchedLoading, setFetchedLoading] = useState(true);
+
+  const rails = useMemo(
+    () =>
+      normalizeMerchantPaymentRails(
+        merchantRails ?? {
+          stripeEnabled: true,
+          wiseEnabled: false,
+          stablecoinSettlementsEnabled: false,
+          manualBankEnabled: false,
+        }
+      ),
+    [merchantRails]
+  );
 
   useEffect(() => {
+    if (readiness && !readiness.loading) {
+      return;
+    }
+    if (readiness?.loading) {
+      return;
+    }
+
     let cancelled = false;
 
     async function load() {
-      setLoading(true);
+      setFetchedLoading(true);
       try {
-        const [statusRes, mappingsRes, queueRes] = await Promise.all([
+        const [statusRes, mappingsRes, queueRes, accountsRes] = await Promise.all([
           fetch(`/api/xero/status?organization_id=${encodeURIComponent(organizationId)}`, {
             cache: 'no-store',
           }),
           fetch(`/api/settings/xero-mappings?organization_id=${encodeURIComponent(organizationId)}`, {
             cache: 'no-store',
           }),
-          fetch(
-            `/api/xero/sync/stats?organization_id=${encodeURIComponent(organizationId)}`,
-            { cache: 'no-store' }
-          ),
+          fetch(`/api/xero/sync/stats?organization_id=${encodeURIComponent(organizationId)}`, {
+            cache: 'no-store',
+          }),
+          fetch(`/api/xero/accounts?organization_id=${encodeURIComponent(organizationId)}`, {
+            cache: 'no-store',
+          }),
         ]);
 
         const status = statusRes.ok
           ? ((await statusRes.json()) as { connected?: boolean; tenantId?: string })
           : { connected: false };
         const mappingsPayload = mappingsRes.ok
-          ? ((await mappingsRes.json()) as {
-              data?: {
-                xero_revenue_account_id?: string | null;
-                xero_receivable_account_id?: string | null;
-              } | null;
-            })
+          ? ((await mappingsRes.json()) as { data?: XeroReadinessMappingsPayload | null })
           : { data: null };
         const queuePayload = queueRes.ok
           ? ((await queueRes.json()) as { pendingCount?: number })
           : { pendingCount: 0 };
+        const accountsPayload = accountsRes.ok
+          ? ((await accountsRes.json()) as {
+              data?: Array<{ code?: string | null; status?: string | null }>;
+            })
+          : { data: [] };
+
+        const mappings = mappingsPayload.data ?? null;
+        const chartLoaded = Boolean(status.connected) && accountsRes.ok;
+        const chartCodes = chartAccountCodeSet(accountsPayload.data ?? []);
+        const fieldStates = buildMappingFieldStates(
+          mappings,
+          chartLoaded,
+          chartCodes,
+          rails
+        );
 
         const data: SetupData = {
           connected: Boolean(status.connected),
           tenantId: status.tenantId,
-          revenueMapped: Boolean(mappingsPayload.data?.xero_revenue_account_id?.trim()),
-          receivableMapped: Boolean(mappingsPayload.data?.xero_receivable_account_id?.trim()),
+          revenueMapped: fieldStates.xero_revenue_account_id === 'configured',
+          receivableMapped: fieldStates.xero_receivable_account_id === 'configured',
+          paymentAccountsConfigured: !settlementAccountsNeedAction(
+            fieldStates,
+            rails,
+            mappings
+          ),
           pendingPaymentCount: queuePayload.pendingCount ?? 0,
         };
 
         if (!cancelled) {
-          setSteps(computeXeroSetupSteps(data));
+          setFetchedSteps(computeXeroSetupSteps(data));
         }
       } catch {
         if (!cancelled) {
-          setSteps(
+          setFetchedSteps(
             computeXeroSetupSteps({
               connected: false,
               revenueMapped: false,
               receivableMapped: false,
+              paymentAccountsConfigured: false,
               pendingPaymentCount: 0,
             })
           );
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setFetchedLoading(false);
       }
     }
 
@@ -94,8 +161,11 @@ export function XeroSetupProgress({
     return () => {
       cancelled = true;
     };
-  }, [organizationId]);
+  }, [organizationId, rails, readiness, readiness?.loading]);
 
+  const steps =
+    readiness && !readiness.loading ? stepsFromReadiness(readiness) : fetchedSteps;
+  const loading = readiness ? readiness.loading : fetchedLoading;
   const percent = xeroSetupProgressPercent(steps);
   const isCommercial = variant === 'commercial';
 

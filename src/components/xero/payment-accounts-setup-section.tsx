@@ -8,10 +8,11 @@ import {
   PaymentAccountStepHeader,
   PaymentAccountStepSummary,
 } from '@/components/xero/payment-account-recommendation-card';
+import type { PaymentAccountChartAccount } from '@/lib/accounting/payment-account-recommendations';
 import {
-  resolvePaymentAccountRecommendation,
-  type PaymentAccountChartAccount,
-} from '@/lib/accounting/payment-account-recommendations';
+  buildPaymentAccountMappingView,
+  countLinkableRecommendedAccounts,
+} from '@/lib/accounting/payment-account-mapping-view';
 import { getSettlementAccountsForUi, shouldShowCryptoSettlementStrategyUi } from '@/lib/accounting/settlement-account-ui';
 import type { SettlementUiAccountDefinition } from '@/lib/accounting/settlement-account-ui';
 import type { MappingDisplayState } from '@/lib/commercial-os/xero-invoice-readiness';
@@ -31,6 +32,7 @@ import type { SettlementSettingsPayload } from '@/lib/accounting/settlement-sett
 type PaymentAccountsSetupSectionProps = {
   accounts: PaymentAccountChartAccount[];
   mappings: SettlementSettingsPayload;
+  persistedMappings?: SettlementSettingsPayload;
   onMappingChange: (field: XeroMappingField, value: string) => void;
   onStrategyChange: (strategy: CryptoSettlementStrategy) => void;
   fieldState: (field: XeroMappingField) => MappingDisplayState;
@@ -41,10 +43,6 @@ type PaymentAccountsSetupSectionProps = {
   onRefreshAccounts?: () => void | Promise<void>;
   refreshingAccounts?: boolean;
 };
-
-function isStepComplete(state: MappingDisplayState): boolean {
-  return state === 'configured';
-}
 
 function CryptoSettlementStrategySelector({
   strategy,
@@ -95,9 +93,9 @@ function CryptoSettlementStrategySelector({
 export function PaymentAccountsSetupSection({
   accounts,
   mappings,
+  persistedMappings,
   onMappingChange,
   onStrategyChange,
-  fieldState,
   merchantRails,
   merchantCapabilities,
   applyingRecommended = false,
@@ -122,25 +120,44 @@ export function PaymentAccountsSetupSection({
     merchantCapabilities
   );
 
+  const savedMappings = persistedMappings ?? mappings;
+
+  const persistedViews = React.useMemo(
+    () =>
+      steps.map((definition) =>
+        buildPaymentAccountMappingView(
+          accounts,
+          definition,
+          savedMappings[definition.mappingField]
+        )
+      ),
+    [accounts, steps, savedMappings]
+  );
+
+  const draftViews = React.useMemo(
+    () =>
+      steps.map((definition) =>
+        buildPaymentAccountMappingView(accounts, definition, mappings[definition.mappingField])
+      ),
+    [accounts, steps, mappings]
+  );
+
   const stepComplete = React.useCallback(
-    (definition: SettlementUiAccountDefinition) =>
-      isStepComplete(fieldState(definition.mappingField)),
-    [fieldState]
+    (index: number) => persistedViews[index]?.complete === true,
+    [persistedViews]
   );
 
   const firstIncompleteIndex = React.useMemo(
-    () => steps.findIndex((definition) => !stepComplete(definition)),
+    () => steps.findIndex((_, index) => !stepComplete(index)),
     [steps, stepComplete]
   );
 
-  const [activeStep, setActiveStep] = React.useState(() =>
-    Math.max(0, steps.findIndex((definition) => !stepComplete(definition)))
-  );
+  const [activeStep, setActiveStep] = React.useState(() => Math.max(0, firstIncompleteIndex));
   const [reviewStep, setReviewStep] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     if (reviewStep !== null) return;
-    const index = steps.findIndex((definition) => !stepComplete(definition));
+    const index = steps.findIndex((_, stepIndex) => !stepComplete(stepIndex));
     if (index >= 0) {
       setActiveStep(index);
     }
@@ -149,27 +166,11 @@ export function PaymentAccountsSetupSection({
   const expandedStep =
     reviewStep ?? (firstIncompleteIndex >= 0 ? activeStep : null);
 
-  const primaryRecommendations = React.useMemo(
-    () =>
-      steps.map((definition) =>
-        resolvePaymentAccountRecommendation(
-          accounts,
-          definition,
-          mappings[definition.mappingField]
-        )
-      ),
-    [accounts, steps, mappings]
-  );
-
-  const linkableCount = primaryRecommendations.filter(
-    (item) =>
-      item.recommendedAccount &&
-      mappings[item.definition.mappingField]?.trim() !== item.recommendedAccount.code
-  ).length;
+  const linkableCount = countLinkableRecommendedAccounts(persistedViews);
 
   const goToNextStep = (fromIndex: number) => {
     setReviewStep(null);
-    const next = steps.findIndex((definition, index) => index > fromIndex && !stepComplete(definition));
+    const next = steps.findIndex((_, index) => index > fromIndex && !stepComplete(index));
     if (next >= 0) {
       setActiveStep(next);
     } else {
@@ -178,39 +179,30 @@ export function PaymentAccountsSetupSection({
   };
 
   const renderStepContent = (definition: SettlementUiAccountDefinition, index: number) => {
-    const recommendation = resolvePaymentAccountRecommendation(
-      accounts,
-      definition,
-      mappings[definition.mappingField]
-    );
-    const state = fieldState(definition.mappingField);
-    const complete = stepComplete(definition);
-    const showChooseDifferent =
-      state === 'needs_review' ||
-      recommendation.status === 'choose_account' ||
-      recommendation.status === 'update_mapping' ||
-      Boolean(mappings[definition.mappingField]);
+    const persistedView = persistedViews[index];
+    const draftView = draftViews[index];
+    if (!persistedView || !draftView) return null;
+    const complete = persistedView.complete;
 
     return (
       <div className="space-y-4">
         <PaymentAccountStepHeader
           stepNumber={index + 1}
           title={definition.title}
-          status={recommendation.status}
-          displayState={state}
+          view={persistedView}
         />
         <PaymentAccountRecommendationCard
-          recommendation={recommendation}
+          view={persistedView}
+          draftView={draftView}
           accounts={accounts}
           value={mappings[definition.mappingField] || ''}
           onChange={(value) => onMappingChange(definition.mappingField, value)}
           onUseRecommended={() => {
-            if (recommendation.recommendedAccount) {
-              onMappingChange(definition.mappingField, recommendation.recommendedAccount.code);
+            const candidate = persistedView.candidateAccount ?? draftView.candidateAccount;
+            if (candidate) {
+              onMappingChange(definition.mappingField, candidate.code);
             }
           }}
-          displayState={state}
-          showChooseDifferent={showChooseDifferent}
           onRefreshAccounts={onRefreshAccounts}
           refreshingAccounts={refreshingAccounts}
         />
@@ -263,7 +255,7 @@ export function PaymentAccountsSetupSection({
 
       <div className="space-y-2">
         {steps.map((definition, index) => {
-          const complete = stepComplete(definition);
+          const complete = stepComplete(index);
           const isExpanded = expandedStep === index;
 
           if (!isExpanded) {

@@ -87,6 +87,21 @@ describe('resolvePaymentAccountRecommendation', () => {
     expect(result.status).toBe('update_mapping');
   });
 
+  it('uses linked when a saved mapping still exists in the chart', () => {
+    const result = resolvePaymentAccountRecommendation(chart, stripeDefinition, '1050');
+
+    expect(result.status).toBe('linked');
+    expect(result.recommendedAccount?.code).toBe('1050');
+    expect(result.matchReason).toContain('Already linked');
+  });
+
+  it('does not treat an unsaved chart match as linked', () => {
+    const result = resolvePaymentAccountRecommendation(chart, stripeDefinition);
+
+    expect(result.status).toBe('found');
+    expect(result.status).not.toBe('linked');
+  });
+
   it('provides crypto flow steps for digital asset holding', () => {
     const steps = getPaymentFlowSteps({
       id: 'shared',

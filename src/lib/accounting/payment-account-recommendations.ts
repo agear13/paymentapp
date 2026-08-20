@@ -25,6 +25,7 @@ export type PaymentAccountChartAccount = AccountingChartAccount & {
 };
 
 export type PaymentAccountRecommendationStatus =
+  | 'linked'
   | 'found'
   | 'create_in_xero'
   | 'choose_account'
@@ -337,7 +338,7 @@ function buildConfidenceIndicators(
 ): ConfidenceIndicator[] {
   const foundInXero =
     Boolean(recommendedAccount) &&
-    (status === 'found' || status === 'choose_account');
+    (status === 'linked' || status === 'found' || status === 'choose_account');
 
   return [
     { id: 'provvy', label: 'Recommended by Provvy', active: true },
@@ -357,11 +358,18 @@ function actionableGuidance(
   suggestedCode: string,
   recommendedAccount: PaymentAccountChartAccount | null
 ): string {
+  if (status === 'linked' && recommendedAccount) {
+    return `Linked to "${recommendedAccount.name}" (${recommendedAccount.code}).`;
+  }
   if (status === 'found' && recommendedAccount) {
     return `Link "${recommendedAccount.name}" (${recommendedAccount.code}) — Provvy found it in your Xero chart.`;
   }
   if (status === 'update_mapping') {
-    return `Your saved account code is missing from Xero — link "${recommendedAccount?.name ?? definition.accountName}" or create it with code ${suggestedCode}.`;
+    return `Your saved account is missing from Xero — link ${
+      recommendedAccount
+        ? `"${recommendedAccount.name}" (${recommendedAccount.code})`
+        : `an existing account or create "${definition.accountName}"`
+    } with code ${suggestedCode}.`;
   }
   if (status === 'choose_account' && recommendedAccount) {
     return `Provvy recommends "${recommendedAccount.name}" — review similar accounts below or confirm this selection.`;
@@ -406,16 +414,16 @@ export function resolvePaymentAccountRecommendation(
   let recommendedAccount: PaymentAccountChartAccount | null = best;
   let matchReason: string | null = scored[0]?.reason ?? null;
 
-  if (mappedAccount && isActive(mappedAccount)) {
-    status = 'found';
+  if (trimmedMapped && (!mappedAccount || !isActive(mappedAccount))) {
+    status = 'update_mapping';
+    recommendedAccount = best && bestScore >= 84 ? best : null;
+    matchReason = recommendedAccount
+      ? `Saved code ${trimmedMapped} is not in your chart — Provvy suggests "${recommendedAccount.name}" instead.`
+      : `Saved code ${trimmedMapped} is not in your chart.`;
+  } else if (mappedAccount && isActive(mappedAccount)) {
+    status = 'linked';
     recommendedAccount = mappedAccount;
     matchReason = `Already linked — Provvy is using "${mappedAccount.name}" (${mappedAccount.code}).`;
-  } else if (trimmedMapped && !mappedAccount) {
-    status = 'update_mapping';
-    recommendedAccount = best;
-    matchReason = best
-      ? `Saved code ${trimmedMapped} is not in your chart — Provvy suggests "${best.name}" instead.`
-      : null;
   } else if (best && bestScore >= 96) {
     status = 'found';
     recommendedAccount = best;
@@ -552,13 +560,15 @@ export function buildPaymentAccountUiGroups(
 
 export function recommendationBadgeLabel(status: PaymentAccountRecommendationStatus): string {
   switch (status) {
+    case 'linked':
+      return 'Linked';
     case 'found':
       return 'Found in Xero';
     case 'create_in_xero':
-      return 'Create in Xero';
+      return 'Not in Xero';
     case 'choose_account':
-      return 'Review match';
+      return 'Choose account';
     case 'update_mapping':
-      return 'Update link';
+      return 'Needs attention';
   }
 }

@@ -1,5 +1,6 @@
 import {
   buildMappingFieldStates,
+  chartAccountCodeSet,
   computeHeroSubline,
   filterPostConnectSyncs,
   resolveMappingDisplayState,
@@ -29,6 +30,16 @@ describe('resolveMappingDisplayState', () => {
 
   it('returns configured when code exists in chart', () => {
     expect(resolveMappingDisplayState('200', true, new Set(['200']), true)).toBe('configured');
+  });
+
+  it('does not treat a saved code as configured until the chart confirms it', () => {
+    expect(resolveMappingDisplayState('200', false, null, true)).toBe('required');
+    expect(resolveMappingDisplayState('200', false, null, false)).toBe('recommended');
+  });
+
+  it('trims chart codes when building the lookup set', () => {
+    expect(chartAccountCodeSet([{ code: ' 200 ', status: 'ACTIVE' }]).has('200')).toBe(true);
+    expect(chartAccountCodeSet([{ code: '200', status: 'ARCHIVED' }]).has('200')).toBe(false);
   });
 });
 

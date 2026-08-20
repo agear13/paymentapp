@@ -40,6 +40,23 @@ function trimmed(code: string | null | undefined): string | null {
   return value ? value : null;
 }
 
+function isActiveChartAccount(status: string | null | undefined): boolean {
+  const value = (status ?? '').trim().toLowerCase();
+  return !value || value === 'active';
+}
+
+/** Active Xero account codes, trimmed — shared by mapping UI and readiness. */
+export function chartAccountCodeSet(
+  accounts: Array<{ code?: string | null; status?: string | null }>
+): Set<string> {
+  return new Set(
+    accounts
+      .filter((account) => isActiveChartAccount(account.status))
+      .map((account) => trimmed(account.code))
+      .filter((code): code is string => Boolean(code))
+  );
+}
+
 function railsWithDefaults(rails: MerchantPaymentRails): MerchantPaymentRails {
   return normalizeMerchantPaymentRails(rails);
 }
@@ -72,7 +89,10 @@ export function resolveMappingDisplayState(
   if (!value) {
     return isRequired ? 'required' : 'recommended';
   }
-  if (chartLoaded && chartAccountCodes && !chartAccountCodes.has(value)) {
+  if (!chartLoaded || !chartAccountCodes) {
+    return isRequired ? 'required' : 'recommended';
+  }
+  if (!chartAccountCodes.has(value)) {
     return 'needs_review';
   }
   return 'configured';

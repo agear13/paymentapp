@@ -11,21 +11,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CheckCircle2, Check } from 'lucide-react';
-import type { PaymentAccountRecommendation } from '@/lib/accounting/payment-account-recommendations';
-import { recommendationBadgeLabel } from '@/lib/accounting/payment-account-recommendations';
+import type { PaymentAccountMappingView } from '@/lib/accounting/payment-account-mapping-view';
+import { friendlyMatchSubtitle } from '@/components/xero/payment-account-recommendation-display';
 import { PaymentFlowDiagram } from '@/components/xero/payment-flow-diagram';
-import {
-  friendlyMatchSubtitle,
-  heroRecommendationAccount,
-  isGenericFallbackAccountName,
-} from '@/components/xero/payment-account-recommendation-display';
 import {
   XERO_ACCOUNT_SECTION_COPY,
   resolveCreateAccountInXeroGuide,
 } from '@/lib/xero/xero-setup-guidance';
 import { CreateAccountInXeroGuidePanel } from '@/components/xero/create-account-in-xero-guide-panel';
-import type { MappingDisplayState } from '@/lib/commercial-os/xero-invoice-readiness';
-import { mappingStateBadgeLabel } from '@/lib/commercial-os/xero-invoice-readiness';
 
 type ChartAccount = {
   accountID?: string;
@@ -35,66 +28,79 @@ type ChartAccount = {
 };
 
 type PaymentAccountRecommendationCardProps = {
-  recommendation: PaymentAccountRecommendation;
+  view: PaymentAccountMappingView;
+  draftView: PaymentAccountMappingView;
   accounts: ChartAccount[];
   value: string;
   onChange: (value: string) => void;
   onUseRecommended: () => void;
-  displayState: MappingDisplayState;
-  showChooseDifferent?: boolean;
   onRefreshAccounts?: () => void | Promise<void>;
   refreshingAccounts?: boolean;
 };
 
-function badgeTone(status: PaymentAccountRecommendation['status']) {
-  switch (status) {
-    case 'found':
+function badgeTone(state: PaymentAccountMappingView['state']) {
+  switch (state) {
+    case 'linked':
+    case 'recommended_found':
       return 'border-emerald-500/40 text-emerald-700 dark:text-emerald-400';
-    case 'create_in_xero':
-    case 'update_mapping':
+    case 'needs_create':
+    case 'stale_mapping':
       return 'border-amber-500/50 text-amber-800 dark:text-amber-300';
     default:
       return 'border-primary/40 text-primary';
   }
 }
 
+function pickerLabel(account: ChartAccount, view: PaymentAccountMappingView, value: string): string {
+  const code = account.code.trim();
+  const persisted = (view.persistedAccount?.code ?? view.persistedCode ?? '').trim();
+  const candidate = (view.candidateAccount?.code ?? '').trim();
+  const selected = value.trim();
+
+  if (view.state === 'linked' && code === persisted) {
+    return `${account.code} · ${account.name} (Currently linked)`;
+  }
+  if (code === selected && selected && code !== persisted) {
+    return `${account.code} · ${account.name} (Selected)`;
+  }
+  if (candidate && code === candidate && view.state !== 'linked') {
+    return `${account.code} · ${account.name} (Recommended)`;
+  }
+  return `${account.code} · ${account.name}`;
+}
+
 export function PaymentAccountRecommendationCard({
-  recommendation,
-  accounts,
+  view,
+  draftView,
   value,
   onChange,
   onUseRecommended,
-  displayState,
-  showChooseDifferent = false,
   onRefreshAccounts,
   refreshingAccounts = false,
 }: PaymentAccountRecommendationCardProps) {
-  const { definition, status, suggestedCode, reconciliationExplanation, flowSteps } =
-    recommendation;
+  const { recommendation } = view;
+  const definition = recommendation.definition;
+  const { suggestedCode, reconciliationExplanation, flowSteps } = recommendation;
   const createAccountGuide = resolveCreateAccountInXeroGuide({
     paymentRail: definition.paymentRail,
     accountName: definition.accountName,
   });
-  const heroAccount = heroRecommendationAccount(recommendation);
-  const genericFallback = recommendation.recommendedAccount
-    ? isGenericFallbackAccountName(recommendation.recommendedAccount.name)
-    : false;
-  const selectedCode = value?.trim() || heroAccount?.code || '';
-  const isUsingRecommended = Boolean(heroAccount) && selectedCode === heroAccount.code;
-  const [showAccountPicker, setShowAccountPicker] = React.useState(
-    showChooseDifferent || status === 'choose_account' || !heroAccount
-  );
+  const heroAccount = view.heroAccount;
+  const draftSelected =
+    Boolean(value.trim()) &&
+    draftView.state === 'linked' &&
+    value.trim() !== (view.persistedCode ?? '');
+  const [showAccountPicker, setShowAccountPicker] = React.useState(view.pickerDefaultOpen);
 
   React.useEffect(() => {
-    if (showChooseDifferent || status === 'choose_account' || !heroAccount) {
-      setShowAccountPicker(true);
-    }
-  }, [showChooseDifferent, status, heroAccount]);
+    setShowAccountPicker(view.pickerDefaultOpen);
+  }, [view.pickerDefaultOpen, view.state, view.persistedCode]);
 
-  const currentAssetAccounts = accounts.filter(
-    (account) => account.type.trim().toUpperCase() === 'CURRENT'
-  );
-  const pickerAccounts = currentAssetAccounts.length > 0 ? currentAssetAccounts : accounts;
+  const pickerAccounts = view.preferredTypeAccounts;
+  const canChooseAnother = view.otherPickerAccounts.length > 0;
+  const showPicker =
+    showAccountPicker &&
+    (heroAccount ? canChooseAnother : view.hasSuitableExistingAccounts);
 
   return (
     <div className="space-y-4">
@@ -108,7 +114,7 @@ export function PaymentAccountRecommendationCard({
       {heroAccount ? (
         <div
           className={`rounded-xl border-2 p-5 ${
-            isUsingRecommended
+            view.showLinkedLabel
               ? 'border-emerald-500/50 bg-emerald-500/5'
               : 'border-primary/40 bg-primary/5'
           }`}
@@ -116,13 +122,17 @@ export function PaymentAccountRecommendationCard({
           <div className="flex items-start gap-3">
             <CheckCircle2
               className={`mt-0.5 h-6 w-6 shrink-0 ${
-                isUsingRecommended ? 'text-emerald-600' : 'text-primary'
+                view.showLinkedLabel ? 'text-emerald-600' : 'text-primary'
               }`}
             />
             <div className="min-w-0 flex-1 space-y-3">
               <div>
                 <p className="text-base font-semibold text-foreground">
-                  Provvy found a suitable account
+                  {view.state === 'linked'
+                    ? 'Linked Xero account'
+                    : view.state === 'stale_mapping'
+                      ? 'Recommended replacement in Xero'
+                      : 'Provvy found a suitable account'}
                 </p>
                 <p className="mt-1 text-lg font-medium text-foreground">
                   {heroAccount.code} · {heroAccount.name}
@@ -132,17 +142,21 @@ export function PaymentAccountRecommendationCard({
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {!isUsingRecommended ? (
-                  <Button size="sm" onClick={onUseRecommended}>
-                    Use this account
-                  </Button>
-                ) : (
+                {view.showLinkedLabel ? (
                   <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400">
                     <Check className="h-4 w-4" aria-hidden />
                     Linked
                   </span>
+                ) : draftSelected ? (
+                  <span className="inline-flex items-center gap-1.5 text-sm font-medium text-primary">
+                    Selected — save your choices to link
+                  </span>
+                ) : (
+                  <Button size="sm" onClick={onUseRecommended}>
+                    {view.state === 'stale_mapping' ? 'Use this replacement' : 'Use this account'}
+                  </Button>
                 )}
-                {!showAccountPicker ? (
+                {canChooseAnother && !showAccountPicker ? (
                   <Button
                     size="sm"
                     variant="outline"
@@ -159,16 +173,15 @@ export function PaymentAccountRecommendationCard({
         <div className="rounded-xl border border-border bg-card p-5 space-y-4">
           <div>
             <p className="text-base font-semibold text-foreground">
-              {genericFallback
-                ? "We couldn't find the recommended account"
-                : `Create ${definition.accountName} in Xero`}
+              {view.state === 'stale_mapping'
+                ? 'Your saved Xero account is missing'
+                : 'Recommended account is not in Xero'}
             </p>
-            {genericFallback ? (
-              <p className="mt-1 text-sm text-muted-foreground">
-                Provvy did not find a close match in your chart. Create the recommended account or
-                link an existing Current Asset account below.
-              </p>
-            ) : null}
+            <p className="mt-1 text-sm text-muted-foreground">
+              {view.createIsRequired
+                ? `Provvy can create "${definition.accountName}" in Xero, then you can link it here.`
+                : `Provvy did not find "${definition.accountName}" in your chart. You can create it in Xero, or link another Current Asset or Bank account.`}
+            </p>
           </div>
 
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -201,41 +214,28 @@ export function PaymentAccountRecommendationCard({
             onRefreshAccounts={onRefreshAccounts}
             refreshingAccounts={refreshingAccounts}
           />
-
-          {genericFallback ? (
-            <details className="rounded-lg border border-dashed border-border/70 px-4 py-3 text-sm">
-              <summary className="cursor-pointer text-muted-foreground">
-                Advanced accountant note
-              </summary>
-              <p className="mt-2 text-muted-foreground">
-                Some charts use a generic Suspense or Clearing account for multiple payment types.
-                Provvy does not recommend that for new setups — dedicated holding accounts make
-                payment recording and later bank reconciliation clearer.
-              </p>
-            </details>
-          ) : null}
         </div>
       )}
 
-      {showAccountPicker || !heroAccount ? (
+      {showPicker ? (
         <div className="space-y-2">
           <p className="text-sm font-medium text-foreground">
-            {heroAccount ? 'Choose another account' : 'Choose an existing Current Asset account'}
+            {heroAccount
+              ? 'Choose another account'
+              : view.createIsRequired
+                ? 'If an account already exists, choose it here'
+                : 'Or link an existing Current Asset or Bank account'}
           </p>
           <Select value={value || undefined} onValueChange={onChange}>
             <SelectTrigger className="w-full bg-background">
               <SelectValue placeholder={XERO_ACCOUNT_SECTION_COPY.selectPlaceholder} />
             </SelectTrigger>
             <SelectContent>
-              {pickerAccounts.map((account) => {
-                const isRecommended = account.code === heroAccount?.code;
-                return (
-                  <SelectItem key={account.code} value={account.code}>
-                    {account.code} · {account.name}
-                    {isRecommended ? ' (Recommended)' : ''}
-                  </SelectItem>
-                );
-              })}
+              {pickerAccounts.map((account) => (
+                <SelectItem key={account.code} value={account.code}>
+                  {pickerLabel(account, view, value)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -248,7 +248,7 @@ export function PaymentAccountRecommendationCard({
         <PaymentFlowDiagram steps={flowSteps} className="mt-3" />
       </details>
 
-      {displayState === 'needs_review' ? (
+      {view.showStaleWarning ? (
         <p className="text-sm text-amber-800 dark:text-amber-300">
           {recommendation.actionableGuidance}
         </p>
@@ -261,7 +261,6 @@ export function PaymentAccountStepSummary({
   stepNumber,
   title,
   complete,
-  badge,
 }: {
   stepNumber: number;
   title: string;
@@ -285,7 +284,6 @@ export function PaymentAccountStepSummary({
       {complete ? (
         <span className="text-xs text-emerald-700 dark:text-emerald-400">Done</span>
       ) : null}
-      {badge}
     </div>
   );
 }
@@ -293,13 +291,11 @@ export function PaymentAccountStepSummary({
 export function PaymentAccountStepHeader({
   stepNumber,
   title,
-  status,
-  displayState,
+  view,
 }: {
   stepNumber: number;
   title: string;
-  status: PaymentAccountRecommendation['status'];
-  displayState: MappingDisplayState;
+  view: PaymentAccountMappingView;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -307,14 +303,9 @@ export function PaymentAccountStepHeader({
         Step {stepNumber}
       </span>
       <h3 className="text-base font-semibold text-foreground">{title}</h3>
-      <Badge variant="outline" className={badgeTone(status)}>
-        {recommendationBadgeLabel(status)}
+      <Badge variant="outline" className={badgeTone(view.state)}>
+        {view.badgeLabel}
       </Badge>
-      {displayState === 'required' ? (
-        <Badge variant="outline" className="border-destructive/40 text-destructive">
-          {mappingStateBadgeLabel(displayState)}
-        </Badge>
-      ) : null}
     </div>
   );
 }

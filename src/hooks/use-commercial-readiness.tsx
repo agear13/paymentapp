@@ -8,6 +8,7 @@ import {
   type XeroReadinessMappingsPayload,
   type XeroReadinessResult,
 } from '@/lib/commercial-os/xero-readiness';
+import { chartAccountCodeSet } from '@/lib/commercial-os/xero-invoice-readiness';
 import {
   computePaymentLinkRailSetup,
   toPaymentLinkRailSnapshot,
@@ -158,10 +159,10 @@ async function fetchCommercialReadiness(
   let chartAccountCodes: Set<string> | null = null;
   let chartLoaded = false;
   if (accountsRes.ok && status.connected) {
-    const accountsBody = (await accountsRes.json()) as { data?: Array<{ code: string }> };
-    chartAccountCodes = new Set(
-      (accountsBody.data ?? []).map((account) => account.code).filter(Boolean)
-    );
+    const accountsBody = (await accountsRes.json()) as {
+      data?: Array<{ code?: string | null; status?: string | null }>;
+    };
+    chartAccountCodes = chartAccountCodeSet(accountsBody.data ?? []);
     chartLoaded = true;
   }
 

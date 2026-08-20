@@ -147,8 +147,8 @@ export const XERO_ACCOUNT_SECTION_COPY = {
 
 export const XERO_OAUTH_SUCCESS = {
   title: 'Xero is connected',
-  body: 'Provvy loaded your Xero accounts. Nothing has been saved yet — please confirm your choices below.',
-  nextStep: 'Pick the accounts Provvy should use, then save your choices.',
+  body: 'Provvy can now talk to your Xero organisation. Confirming invoice and payment accounts is a separate step — nothing is recorded in Xero until you save those choices.',
+  nextStep: 'Review the recommended accounts below, then save your choices.',
   continueLabel: 'Review accounts',
 } as const;
 
@@ -213,7 +213,8 @@ export const SYNC_STATUS_GUIDANCE: Record<
 export type XeroSetupStepId =
   | 'connected'
   | 'business_selected'
-  | 'mappings_reviewed'
+  | 'invoice_accounts'
+  | 'payment_accounts'
   | 'historical_processed';
 
 export type XeroSetupStep = {
@@ -227,22 +228,32 @@ export type XeroSetupProgressInput = {
   tenantId?: string | null;
   revenueMapped: boolean;
   receivableMapped: boolean;
+  paymentAccountsConfigured: boolean;
   pendingPaymentCount: number;
 };
 
 export function computeXeroSetupSteps(input: XeroSetupProgressInput): XeroSetupStep[] {
   const hasTenant = Boolean(input.tenantId?.trim());
-  const mappingsComplete = input.revenueMapped && input.receivableMapped;
+  const invoiceComplete = input.revenueMapped && input.receivableMapped;
   const queueComplete = input.pendingPaymentCount === 0;
 
   return [
     { id: 'connected', label: 'Xero connected', complete: input.connected },
     {
       id: 'business_selected',
-      label: 'Business chosen',
+      label: 'Xero business chosen',
       complete: input.connected && hasTenant,
     },
-    { id: 'mappings_reviewed', label: 'Invoice accounts confirmed', complete: mappingsComplete },
+    {
+      id: 'invoice_accounts',
+      label: 'Invoice accounts confirmed',
+      complete: invoiceComplete,
+    },
+    {
+      id: 'payment_accounts',
+      label: 'Payment accounts confirmed',
+      complete: input.paymentAccountsConfigured,
+    },
     {
       id: 'historical_processed',
       label: 'Earlier payments synced',

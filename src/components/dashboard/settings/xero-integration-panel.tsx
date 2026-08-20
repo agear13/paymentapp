@@ -60,7 +60,11 @@ export function XeroIntegrationPanel({
         ) : null}
 
         {showLegacyProgress ? (
-          <XeroSetupProgress organizationId={organizationId} variant="commercial" />
+          <XeroSetupProgress
+            organizationId={organizationId}
+            variant="commercial"
+            merchantRails={rails}
+          />
         ) : null}
 
         {!showAssistant && showCommercialLayout ? (

@@ -81,4 +81,23 @@ describe('computeXeroReadiness', () => {
     expect(result.overallStatus).toBe('fully_set_up');
     expect(result.statusLabel).toBe('All set');
   });
+
+  it('does not treat stale payment mappings as configured', () => {
+    const result = computeXeroReadiness({
+      status: { connected: true, tenantId: 'tenant-1' },
+      mappings: {
+        xero_revenue_account_id: '200',
+        xero_receivable_account_id: '610',
+        xero_stripe_clearing_account_id: '9999',
+      },
+      chartAccountCodes: new Set(['200', '610', '105']),
+      chartLoaded: true,
+      queue: { pendingCount: 0, hasRecentFailures: false },
+      merchantRails: DEFAULT_RAILS,
+    });
+
+    expect(result.settlementAccountsNeedAction).toBe(true);
+    expect(result.canSyncToAccounting).toBe(false);
+    expect(result.fieldStates.xero_stripe_clearing_account_id).toBe('needs_review');
+  });
 });
