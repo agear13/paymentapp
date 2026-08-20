@@ -20,6 +20,10 @@ type AgreementIntelligenceInputModalProps = {
   submitting: boolean;
   onUpload: (file: File) => Promise<boolean>;
   onPaste: (text: string) => Promise<boolean>;
+  title?: string;
+  uploadDescription?: string;
+  pasteLabel?: string;
+  pastePlaceholder?: string;
 };
 
 export function AgreementIntelligenceInputModal({
@@ -28,6 +32,10 @@ export function AgreementIntelligenceInputModal({
   submitting,
   onUpload,
   onPaste,
+  title = 'Provide Agreement',
+  uploadDescription = 'Upload a PDF, DOCX, TXT, or image of your agreement. Provvy extracts readable text and sends it through the workspace AI Extractor.',
+  pasteLabel = 'Agreement text',
+  pastePlaceholder = 'Paste the full agreement text here…',
 }: AgreementIntelligenceInputModalProps) {
   const [pasteText, setPasteText] = React.useState('');
   const [localError, setLocalError] = React.useState<string | null>(null);
@@ -63,7 +71,7 @@ export function AgreementIntelligenceInputModal({
     <Dialog open={open} onOpenChange={(next) => { if (!submitting) onOpenChange(next); }}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Provide Agreement</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
         <Tabs defaultValue="upload">
@@ -73,10 +81,7 @@ export function AgreementIntelligenceInputModal({
           </TabsList>
 
           <TabsContent value="upload" className="space-y-4 pt-2">
-            <p className="text-[13px] text-muted-foreground">
-              Upload a PDF, DOCX, TXT, or image of your agreement. Provvy extracts readable text
-              and sends it through the workspace AI Extractor.
-            </p>
+            <p className="text-[13px] text-muted-foreground">{uploadDescription}</p>
             <input
               ref={fileInputRef}
               type="file"
@@ -106,13 +111,13 @@ export function AgreementIntelligenceInputModal({
 
           <TabsContent value="paste" className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="agreement-paste">Agreement text</Label>
+              <Label htmlFor="agreement-paste">{pasteLabel}</Label>
               <Textarea
                 id="agreement-paste"
                 value={pasteText}
                 onChange={(event) => setPasteText(event.target.value)}
                 rows={12}
-                placeholder="Paste the full agreement text here…"
+                placeholder={pastePlaceholder}
                 className="field-sizing-fixed max-h-80 resize-none overflow-y-auto text-sm"
               />
             </div>

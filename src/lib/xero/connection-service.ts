@@ -254,54 +254,73 @@ export async function getXeroConnection(
   }
 }
 
+const ACCESS_TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+
+const organizationTokenRefreshLocks = new Map<string, Promise<unknown>>();
+
+async function withOrganizationTokenRefreshLock<T>(
+  organizationId: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  const previous = organizationTokenRefreshLocks.get(organizationId) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const held = previous.catch(() => undefined).then(() => gate);
+  organizationTokenRefreshLocks.set(organizationId, held);
+  await previous.catch(() => undefined);
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (organizationTokenRefreshLocks.get(organizationId) === held) {
+      organizationTokenRefreshLocks.delete(organizationId);
+    }
+  }
+}
+
+function mergeRefreshedTokens(
+  previous: XeroConnection,
+  refreshed: XeroOAuthTokenBundle
+): XeroOAuthTokenBundle {
+  return {
+    accessToken: refreshed.accessToken,
+    refreshToken: refreshed.refreshToken?.trim() || previous.refreshToken,
+    expiresAt: refreshed.expiresAt,
+    idToken: refreshed.idToken?.trim() ? refreshed.idToken : previous.idToken,
+    scope: refreshed.scope?.trim() ? refreshed.scope : previous.scope,
+    tokenType: refreshed.tokenType?.trim() ? refreshed.tokenType : previous.tokenType,
+  };
+}
+
+async function refreshPersistedConnection(
+  connection: XeroConnection
+): Promise<XeroConnection> {
+  const refreshed = await refreshAccessToken({
+    accessToken: connection.accessToken,
+    refreshToken: connection.refreshToken,
+    expiresAt: connection.expiresAt,
+    idToken: connection.idToken,
+    scope: connection.scope,
+    tokenType: connection.tokenType,
+  });
+
+  return storeXeroConnection(
+    connection.organizationId,
+    connection.tenantId,
+    mergeRefreshedTokens(connection, refreshed)
+  );
+}
+
 /**
  * Get valid access token (refreshing if necessary)
  */
 export async function getValidAccessToken(
   organizationId: string
 ): Promise<string | null> {
-  const connection = await getXeroConnection(organizationId);
-
-  if (!connection) {
-    return null;
-  }
-
-  // Check if token is expired or will expire in the next 5 minutes
-  const expiryBuffer = 5 * 60 * 1000; // 5 minutes in milliseconds
-  const isExpired = connection.expiresAt.getTime() - Date.now() < expiryBuffer;
-
-  if (!isExpired) {
-    return connection.accessToken;
-  }
-
-  loggers.xero.info('xero_get_valid_token_refresh', {
-    step: 'refresh_access_token',
-    organizationId,
-    tenantId: connection.tenantId,
-    expiresAt: connection.expiresAt.toISOString(),
-  });
-
-  try {
-    const refreshed = await refreshAccessToken(connection.refreshToken);
-
-    await storeXeroConnection(organizationId, connection.tenantId, {
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      expiresAt: refreshed.expiresAt,
-      idToken: refreshed.idToken,
-      scope: refreshed.scope,
-      tokenType: refreshed.tokenType,
-    });
-
-    return refreshed.accessToken;
-  } catch (error) {
-    loggers.xero.error('xero_get_valid_token_refresh_failed', error, {
-      step: 'refresh_access_token',
-      organizationId,
-      tenantId: connection.tenantId,
-    });
-    return null;
-  }
+  const connection = await getActiveConnection(organizationId);
+  return connection?.accessToken ?? null;
 }
 
 /**
@@ -381,88 +400,82 @@ export async function updateSelectedTenant(
 }
 
 /**
- * Get active Xero connection with valid token
- * Returns null if no connection or token is invalid
+ * Get active Xero connection with valid token.
+ * Concurrent callers for the same organization share one refresh so Xero's
+ * rotating refresh token is not invalidated by a parallel invalid_grant.
  */
 export async function getActiveConnection(
   organizationId: string
 ): Promise<XeroConnection | null> {
-  loggers.xero.debug('xero_get_active_connection_start', {
-    step: 'get_active_connection',
-    organizationId,
-  });
-
-  const connection = await getXeroConnection(organizationId);
-
-  if (!connection) {
-    loggers.xero.debug('xero_get_active_connection_none', {
+  return withOrganizationTokenRefreshLock(organizationId, async () => {
+    loggers.xero.debug('xero_get_active_connection_start', {
       step: 'get_active_connection',
       organizationId,
     });
-    return null;
-  }
 
-  const expiryBuffer = 5 * 60 * 1000;
-  const isExpired = connection.expiresAt.getTime() - Date.now() < expiryBuffer;
+    const connection = await getXeroConnection(organizationId);
 
-  if (!isExpired) {
-    loggers.xero.debug('xero_get_active_connection_valid', {
-      step: 'get_active_connection',
-      organizationId,
-      tenantId: connection.tenantId,
-    });
-    return connection;
-  }
+    if (!connection) {
+      loggers.xero.debug('xero_get_active_connection_none', {
+        step: 'get_active_connection',
+        organizationId,
+      });
+      return null;
+    }
 
-  loggers.xero.info('xero_get_active_connection_refresh', {
-    step: 'refresh_access_token',
-    organizationId,
-    tenantId: connection.tenantId,
-    expiresAt: connection.expiresAt.toISOString(),
-  });
+    const isExpired =
+      connection.expiresAt.getTime() - Date.now() < ACCESS_TOKEN_EXPIRY_BUFFER_MS;
 
-  try {
-    const refreshed = await refreshAccessToken(connection.refreshToken);
-
-    const stored = await storeXeroConnection(organizationId, connection.tenantId, {
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      expiresAt: refreshed.expiresAt,
-      idToken: refreshed.idToken,
-      scope: refreshed.scope,
-      tokenType: refreshed.tokenType,
-    });
-
-    loggers.xero.info('xero_get_active_connection_refreshed', {
-      step: 'refresh_access_token',
-      organizationId,
-      tenantId: stored.tenantId,
-    });
-
-    return stored;
-  } catch (error: unknown) {
-    const err = error as {
-      message?: string;
-      response?: { status?: number; statusText?: string; body?: unknown };
-    };
-    loggers.xero.error('xero_get_active_connection_refresh_failed', error, {
-      step: 'refresh_access_token',
-      organizationId,
-      tenantId: connection.tenantId,
-      status: err.response?.status,
-      statusText: err.response?.statusText,
-    });
-
-    if (connection.expiresAt.getTime() > Date.now()) {
-      loggers.xero.warn('xero_get_active_connection_stale_fallback', {
-        step: 'refresh_access_token',
+    if (!isExpired) {
+      loggers.xero.debug('xero_get_active_connection_valid', {
+        step: 'get_active_connection',
         organizationId,
         tenantId: connection.tenantId,
       });
       return connection;
     }
-    return null;
-  }
+
+    loggers.xero.info('xero_get_active_connection_refresh', {
+      step: 'refresh_access_token',
+      organizationId,
+      tenantId: connection.tenantId,
+      expiresAt: connection.expiresAt.toISOString(),
+    });
+
+    try {
+      const stored = await refreshPersistedConnection(connection);
+
+      loggers.xero.info('xero_get_active_connection_refreshed', {
+        step: 'refresh_access_token',
+        organizationId,
+        tenantId: stored.tenantId,
+      });
+
+      return stored;
+    } catch (error: unknown) {
+      const err = error as {
+        message?: string;
+        response?: { status?: number; statusText?: string; body?: unknown };
+      };
+      loggers.xero.error('xero_get_active_connection_refresh_failed', error, {
+        step: 'refresh_access_token',
+        organizationId,
+        tenantId: connection.tenantId,
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+      });
+
+      if (connection.expiresAt.getTime() > Date.now()) {
+        loggers.xero.warn('xero_get_active_connection_stale_fallback', {
+          step: 'refresh_access_token',
+          organizationId,
+          tenantId: connection.tenantId,
+        });
+        return connection;
+      }
+      return null;
+    }
+  });
 }
 
 /**
@@ -487,12 +500,16 @@ export async function resolveXeroConnectionForApi(organizationId: string): Promi
 }
 
 /**
- * Get connection status for organization
+ * Get connection status for organization.
+ * `connected` means a decryptable Xero connection row exists for this org —
+ * not that the short-lived access token is currently usable. Expired access
+ * tokens are refreshed separately; a refresh failure is `stale`, not disconnected.
  */
 export async function getConnectionStatus(
   organizationId: string
 ): Promise<{
   connected: boolean;
+  stale?: boolean;
   tenantId?: string;
   expiresAt?: Date;
   connectedAt?: Date;
@@ -523,10 +540,19 @@ export async function getConnectionStatus(
     };
   }
 
-  const isValid = await hasValidConnection(organizationId);
+  const active = await getActiveConnection(organizationId);
+  if (active) {
+    return {
+      connected: true,
+      tenantId: active.tenantId,
+      expiresAt: active.expiresAt,
+      connectedAt: active.connectedAt,
+    };
+  }
 
   return {
-    connected: isValid,
+    connected: true,
+    stale: true,
     tenantId: connection.tenantId,
     expiresAt: connection.expiresAt,
     connectedAt: connection.connectedAt,

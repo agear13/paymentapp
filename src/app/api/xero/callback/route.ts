@@ -99,16 +99,25 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user || user.id !== userId) {
+
+    if (user && user.id !== userId) {
       loggers.xero.error('xero_callback_user_mismatch', authError ?? undefined, {
         step: 'verify_user_session',
         organizationId,
-        callbackUserId: user?.id,
+        callbackUserId: user.id,
         stateUserId: userId,
       });
       return NextResponse.redirect(
         xeroIntegrationsRedirectUrl(request, { xero_error: 'unauthorized' }, oauthReturnPath)
       );
+    }
+
+    if (!user || authError) {
+      loggers.xero.warn('xero_callback_session_missing_continuing_with_signed_state', {
+        step: 'verify_user_session',
+        organizationId,
+        stateUserId: userId,
+      });
     }
 
     loggers.xero.info('xero_callback_check_config', { step: 'check_environment', organizationId });

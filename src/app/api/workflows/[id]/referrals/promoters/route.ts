@@ -26,6 +26,7 @@ const bodySchema = z.object({
       serviceId: z.string().uuid(),
     }),
   ]),
+  reuseExisting: z.boolean().optional(),
 });
 
 export async function POST(

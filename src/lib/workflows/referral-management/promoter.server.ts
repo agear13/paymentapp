@@ -96,6 +96,7 @@ export async function addReferralManagementPromoter(input: {
   phone?: string | null;
   role: ReferralPromoterRole;
   compensation: ReferralCompensationInput;
+  reuseExisting?: boolean;
 }) {
   const scoped = await requireReferralManagementWorkflow(input);
   const deal = await ensureReferralManagementDeal(input);
@@ -125,6 +126,14 @@ export async function addReferralManagementPromoter(input: {
       Boolean(compensationKindOf(item))
   );
   if (duplicate) {
+    if (input.reuseExisting) {
+      const context = await getReferralManagementContext({
+        organizationId: input.organizationId,
+        workflowId: input.workflowId,
+        userId: input.userId,
+      });
+      return { context, participant: duplicate, created: false, reused: true };
+    }
     throw new ReferralManagementError(
       'A promoter with this email already exists. Open the existing relationship instead of creating a duplicate.',
       'CONFLICT',
@@ -209,7 +218,7 @@ export async function addReferralManagementPromoter(input: {
     workflowId: input.workflowId,
     userId: input.userId,
   });
-  return { context, participant: persisted, created: true };
+  return { context, participant: persisted, created: true, reused: false };
 }
 
 export async function runReferralManagementAction(input: {

@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     let tenants: Awaited<ReturnType<typeof getAvailableTenants>> = null;
     let tenantsError: string | undefined;
 
-    if (status.connected) {
+    if (status.connected && !status.stale) {
       try {
         tenants = await getAvailableTenants(organizationId);
       } catch (err) {
@@ -78,6 +78,10 @@ export async function GET(request: NextRequest) {
     }
 
     let operatorMessage: string | undefined;
+    if (status.stale) {
+      operatorMessage =
+        'Xero access is being refreshed. If invoices fail to sync, reconnect from Integrations.';
+    }
     if (!status.connected && status.tenantId) {
       operatorMessage = staleConnectionMessage();
     }

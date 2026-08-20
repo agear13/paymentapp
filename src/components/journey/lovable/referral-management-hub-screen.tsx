@@ -17,6 +17,11 @@ import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { AgreementIntelligenceInputModal } from '@/components/journey/lovable/agreement-intelligence-input-modal';
+import { ReferralImportReview } from '@/components/journey/lovable/referral-import-review';
+import { candidateToPromoterInput } from '@/lib/workflows/referral-management/import-from-extraction';
+import type { ReferralImportPreview } from '@/lib/workflows/referral-management/import-from-extraction';
+import type { AddPromoterInput, AddPromoterResult } from '@/hooks/use-referral-management';
 import { AgreementIntelligenceParticipantDetail } from '@/components/journey/lovable/agreement-intelligence-participant-detail';
 import { ParticipantCoordinationSummary } from '@/components/journey/lovable/agreement-intelligence-participant-status';
 import type { ReferralManagementContext } from '@/lib/workflows/referral-management/hub.server';
@@ -33,28 +38,147 @@ function MetricCard({ label, value }: { label: string; value: React.ReactNode })
 function AddPromoterForm({
   catalog,
   busy,
+  error,
   onSubmit,
+  onExtract,
+  onImported,
 }: {
   catalog: ReferralManagementContext['catalog'];
   busy: boolean;
-  onSubmit: ReturnType<typeof useReferralManagement>['addPromoter'];
+  error: string | null;
+  onSubmit: (body: AddPromoterInput) => Promise<AddPromoterResult>;
+  onExtract: ReturnType<typeof useReferralManagement>['extractReferralRelationships'];
+  onImported: (participantId?: string) => void;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [mode, setMode] = React.useState<'choose' | 'manual' | 'import'>('choose');
   const [kind, setKind] = React.useState<'revenue_share' | 'fixed'>('revenue_share');
+  const [importOpen, setImportOpen] = React.useState(false);
+  const [preview, setPreview] = React.useState<ReferralImportPreview | null>(null);
+  const [importError, setImportError] = React.useState<string | null>(null);
+
+  const reset = () => {
+    setOpen(false);
+    setMode('choose');
+    setPreview(null);
+    setImportError(null);
+    setImportOpen(false);
+  };
 
   if (!open) {
     return (
-      <Button type="button" onClick={() => setOpen(true)}>
+      <Button type="button" onClick={() => { setOpen(true); setMode('choose'); }}>
         <Plus className="mr-2 h-4 w-4" />
         Add promoter
       </Button>
     );
   }
 
+  if (mode === 'choose') {
+    return (
+      <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+        <p className="text-[13px] font-semibold">Add promoter</p>
+        <p className="text-[13px] text-ink-soft">
+          Create the referral relationship here. You do not need to leave Referral Management.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={() => setMode('manual')}>
+            Manually add
+          </Button>
+          <Button type="button" variant="outline" onClick={() => { setMode('import'); setImportOpen(true); }}>
+            From agreement or conversation
+          </Button>
+          <Button type="button" variant="ghost" onClick={reset}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'import') {
+    return (
+      <>
+        <AgreementIntelligenceInputModal
+          open={importOpen}
+          onOpenChange={(next) => {
+            if (!next && !preview) reset();
+            else setImportOpen(next);
+          }}
+          submitting={busy}
+          title="From agreement or conversation"
+          uploadDescription="Upload a signed or unsigned agreement, supplier agreement, invoice, or similar commercial document. Provvy uses the existing Agreement Intelligence extractor."
+          pasteLabel="Agreement or conversation"
+          pastePlaceholder="Paste an agreement, invoice, email, WhatsApp, SMS, Telegram, or other conversation…"
+          onUpload={async (file) => {
+            const next = await onExtract({ file });
+            if (!next) return false;
+            setPreview(next);
+            setImportOpen(false);
+            return true;
+          }}
+          onPaste={async (text) => {
+            const next = await onExtract({
+              text,
+              sourceLabel: 'Pasted agreement or conversation',
+            });
+            if (!next) return false;
+            setPreview(next);
+            setImportOpen(false);
+            return true;
+          }}
+        />
+        {preview ? (
+          <ReferralImportReview
+            preview={preview}
+            catalog={catalog}
+            busy={busy}
+            error={importError ?? error}
+            onChange={setPreview}
+            onBack={reset}
+            onConfirm={async () => {
+              setImportError(null);
+              const selected = preview.candidates.filter((row) => row.selected);
+              if (selected.length === 0) {
+                setImportError('Select at least one referral relationship to add.');
+                return;
+              }
+              let lastId: string | undefined;
+              let reused = false;
+              for (const candidate of selected) {
+                const mapped = candidateToPromoterInput(candidate);
+                if ('error' in mapped) {
+                  setImportError(mapped.error);
+                  return;
+                }
+                const result = await onSubmit({ ...mapped, reuseExisting: true });
+                if (!result.ok) return;
+                lastId = result.participantId;
+                reused = Boolean(result.reused);
+              }
+              toast.success(reused && selected.length === 1 ? 'Existing promoter opened' : 'Promoter added');
+              reset();
+              onImported(lastId);
+            }}
+          />
+        ) : !importOpen ? (
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <Button type="button" variant="outline" onClick={reset}>
+              Cancel
+            </Button>
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
   if (catalog.length === 0) {
     return (
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-[13px] text-amber-900 dark:text-amber-200">
-        Add an active catalogue service before creating a promoter. A checkout destination will not be fabricated.
+      <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-[13px] text-amber-900 dark:text-amber-200">
+        <p>Add an active catalogue service before creating a promoter. A checkout destination will not be fabricated.</p>
+        <Button type="button" variant="outline" onClick={reset}>
+          Back
+        </Button>
       </div>
     );
   }
@@ -67,7 +191,7 @@ function AddPromoterForm({
         const form = event.currentTarget;
         const data = new FormData(form);
         const serviceId = String(data.get('serviceId') ?? '');
-        const ok = await onSubmit(
+        const result = await onSubmit(
           kind === 'revenue_share'
             ? {
                 name: String(data.get('name') ?? ''),
@@ -101,10 +225,11 @@ function AddPromoterForm({
                 },
               }
         );
-        if (ok) {
+        if (result.ok) {
           toast.success('Promoter added');
-          setOpen(false);
+          reset();
           form.reset();
+          onImported(result.participantId);
         }
       }}
     >
@@ -151,7 +276,7 @@ function AddPromoterForm({
           {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Save promoter
         </Button>
-        <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+        <Button type="button" variant="outline" onClick={reset}>
           Cancel
         </Button>
       </div>
@@ -163,9 +288,8 @@ export function ReferralManagementHubScreen() {
   const { getBySlug, loading: workflowsLoading, refresh: refreshWorkflows } = useDeployedWorkflows();
   const template = getWorkflowBySlug('referral-management');
   const installed = getBySlug('referral-management');
-  const { context, loading, error, busy, addPromoter, coordinatePromoter } = useReferralManagement(
-    installed?.id ?? null
-  );
+  const { context, loading, error, busy, addPromoter, extractReferralRelationships, coordinatePromoter } =
+    useReferralManagement(installed?.id ?? null);
   const [selectedParticipantId, setSelectedParticipantId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -254,7 +378,16 @@ export function ReferralManagementHubScreen() {
           </p>
         </div>
         {!context.paused ? (
-          <AddPromoterForm catalog={context.catalog} busy={busy} onSubmit={addPromoter} />
+          <AddPromoterForm
+            catalog={context.catalog}
+            busy={busy}
+            error={error}
+            onSubmit={addPromoter}
+            onExtract={extractReferralRelationships}
+            onImported={(participantId) => {
+              if (participantId) selectParticipant(participantId);
+            }}
+          />
         ) : null}
       </div>
 

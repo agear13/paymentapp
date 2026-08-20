@@ -117,8 +117,55 @@ export async function exchangeCodeForTokens(
   }
 }
 
-export async function refreshAccessToken(refreshToken: string): Promise<XeroOAuthTokenBundle> {
-  if (!refreshToken) {
+function parseRefreshedTokenSet(
+  tokenSet: {
+    access_token?: string;
+    refresh_token?: string;
+    id_token?: string;
+    scope?: string;
+    token_type?: string;
+    expires_at?: number;
+    expires_in?: number;
+  },
+  previous: XeroOAuthTokenBundle
+): XeroOAuthTokenBundle {
+  if (!tokenSet.access_token) {
+    throw new Error('TokenSet missing access_token');
+  }
+
+  let expiresAt: Date;
+  if (tokenSet.expires_at != null) {
+    expiresAt = new Date(Number(tokenSet.expires_at) * 1000);
+  } else if (tokenSet.expires_in != null) {
+    expiresAt = new Date(Date.now() + Number(tokenSet.expires_in) * 1000);
+  } else {
+    throw new Error('TokenSet missing expires_at and expires_in');
+  }
+
+  return {
+    accessToken: tokenSet.access_token,
+    refreshToken: tokenSet.refresh_token?.trim() || previous.refreshToken,
+    expiresAt,
+    idToken: tokenSet.id_token?.trim() ? tokenSet.id_token : previous.idToken ?? null,
+    scope: tokenSet.scope?.trim() ? tokenSet.scope : previous.scope ?? null,
+    tokenType: tokenSet.token_type?.trim() ? tokenSet.token_type : previous.tokenType ?? null,
+  };
+}
+
+/**
+ * Refresh a Xero access token. Pass the full persisted token bundle so openid-client
+ * has access_token, scope, and token_type — not only the rotating refresh token.
+ * If Xero omits a rotated refresh token, the previous refresh token is kept.
+ */
+export async function refreshAccessToken(
+  tokens: XeroOAuthTokenBundle | string
+): Promise<XeroOAuthTokenBundle> {
+  const previous: XeroOAuthTokenBundle =
+    typeof tokens === 'string'
+      ? { accessToken: '', refreshToken: tokens, expiresAt: new Date(0) }
+      : tokens;
+
+  if (!previous.refreshToken) {
     throw new Error('Refresh token is required but was not provided');
   }
 
@@ -129,30 +176,37 @@ export async function refreshAccessToken(refreshToken: string): Promise<XeroOAut
     const client = getXeroClient();
 
     loggers.xero.debug('xero_refresh_set_token', { step: 'set_refresh_token' });
-    await client.setTokenSet({
-      refresh_token: refreshToken,
-    });
+    await applyConnectionToXeroClient(
+      client,
+      {
+        id: 'refresh',
+        organizationId: 'refresh',
+        tenantId: 'refresh',
+        accessToken: previous.accessToken || previous.refreshToken,
+        refreshToken: previous.refreshToken,
+        expiresAt: previous.expiresAt,
+        connectedAt: new Date(),
+        idToken: previous.idToken,
+        scope: previous.scope,
+        tokenType: previous.tokenType,
+      },
+      'refresh_access_token'
+    );
 
     loggers.xero.info('xero_refresh_call_api', { step: 'call_xero_refresh_api' });
     const tokenSet = await client.refreshToken();
 
     logTokenSetTrace('refresh_token_raw', tokenSet);
 
-    const parsed = tokenSetParametersFromApiCallback(tokenSet);
+    const parsed = parseRefreshedTokenSet(tokenSet, previous);
 
     loggers.xero.info('xero_refresh_token_success', {
       step: 'refresh_access_token',
       expiresAt: parsed.expiresAt.toISOString(),
+      rotatedRefreshToken: Boolean(tokenSet.refresh_token),
     });
 
-    return {
-      accessToken: parsed.accessToken,
-      refreshToken: parsed.refreshToken,
-      expiresAt: parsed.expiresAt,
-      idToken: parsed.idToken ?? null,
-      scope: parsed.scope ?? null,
-      tokenType: parsed.tokenType ?? null,
-    };
+    return parsed;
   } catch (error: unknown) {
     const err = error as {
       message?: string;

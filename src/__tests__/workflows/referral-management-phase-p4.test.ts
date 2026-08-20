@@ -165,6 +165,25 @@ describe('P4 — Referral Management workflow', () => {
     ).rejects.toMatchObject({ status: 409, name: 'ReferralManagementError' });
   });
 
+  it('E: import reuses an existing compensated participant by exact email', async () => {
+    const existing = promoter({ email: 'apex@example.com' });
+    getPilotSnapshotForUser.mockResolvedValue({ deals: [], participants: [existing] });
+    const result = await addReferralManagementPromoter({
+      organizationId: ORG,
+      workflowId: WF,
+      userId: USER,
+      name: 'Apex Promotions',
+      email: 'apex@example.com',
+      role: 'Promoter',
+      compensation: { kind: 'revenue_share', percentage: 20, serviceId: SERVICE },
+      reuseExisting: true,
+    });
+    expect(result.created).toBe(false);
+    expect(result.reused).toBe(true);
+    expect(result.participant.id).toBe('p-apex');
+    expect(createPilotParticipantForUser).not.toHaveBeenCalled();
+  });
+
   it('F: cannot configure a promoter against a service that is not in this organization', async () => {
     prisma.organization_services.findFirst.mockResolvedValue(null);
     await expect(
