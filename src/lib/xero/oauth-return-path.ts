@@ -2,7 +2,7 @@ import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 
 /**
  * Allowed post-OAuth redirect targets for Xero connect flows.
- * Legacy dashboard integrations remains the fallback when no return path is set.
+ * Commercial OS Connected Systems is the default when no return path is set.
  */
 const ALLOWED_XERO_OAUTH_RETURN_PREFIXES = [
   '/workspace',
@@ -38,6 +38,6 @@ export function legacyXeroOAuthDefaultReturnPath(): string {
 export function resolveXeroOAuthReturnPath(returnPath?: string | null): string {
   return (
     normalizeXeroOAuthReturnPath(returnPath) ??
-    legacyXeroOAuthDefaultReturnPath()
+    commercialOsXeroOAuthReturnPath()
   );
 }

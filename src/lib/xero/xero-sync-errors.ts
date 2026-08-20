@@ -101,7 +101,7 @@ function friendlyHint(detail: string): string | null {
     return `${detail}. A valid exchange rate is required when the invoice currency differs from your Xero base currency.`;
   }
   if (d.includes('not a valid code')) {
-    return `${detail}. Check Settings → Integrations → Xero account codes (use chart codes like 200, not UUIDs).`;
+    return `${detail}. Check Connected Systems → Xero account codes (use chart codes like 200, not UUIDs).`;
   }
   return null;
 }

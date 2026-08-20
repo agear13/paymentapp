@@ -9,6 +9,7 @@ import { resolveXeroConnectionForApi } from '@/lib/xero/connection-service';
 import { logger } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
+import { XERO_ACCOUNTS_STALE_MESSAGE } from '@/lib/xero/xero-connection-ui';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -51,8 +52,8 @@ export async function GET(request: NextRequest) {
     if (connectionResolved.stale || !connectionResolved.connection) {
       return NextResponse.json(
         {
-          error:
-            'Xero connection needs to be refreshed. Disconnect in Integrations and connect again.',
+          error: XERO_ACCOUNTS_STALE_MESSAGE,
+          stale: true,
         },
         { status: 503 }
       );

@@ -31,7 +31,9 @@ jest.mock('@/lib/logger', () => ({
 }));
 
 import { prisma } from '@/lib/server/prisma';
+import { revokeConnection } from '@/lib/xero/client';
 import {
+  disconnectXero,
   getConnectionStatus,
   getValidAccessToken,
 } from '@/lib/xero/connection-service';
@@ -39,6 +41,8 @@ import {
 const ORG_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const findUnique = prisma.xero_connections.findUnique as jest.Mock;
 const upsert = prisma.xero_connections.upsert as jest.Mock;
+const remove = prisma.xero_connections.delete as jest.Mock;
+const mockRevokeConnection = revokeConnection as jest.Mock;
 
 type ConnectionRow = {
   id: string;
@@ -81,6 +85,12 @@ describe('Xero connection status persistence', () => {
         return { ...row };
       }
     );
+
+    remove.mockImplementation(async ({ where }: { where: { organization_id: string } }) => {
+      if (row && row.organization_id === where.organization_id) {
+        row = null;
+      }
+    });
   });
 
   function persistRow(overrides: Partial<ConnectionRow> = {}) {
@@ -172,6 +182,29 @@ describe('Xero connection status persistence', () => {
 
     expect(token).toBe('access-new');
     expect(decryptStoredRefresh()).toBe('refresh-old');
+  });
+
+  it('deletes the local connection even when Xero revoke fails', async () => {
+    persistRow({ expires_at: new Date(Date.now() + 30 * 60 * 1000) });
+    mockRevokeConnection.mockRejectedValue(new Error('xero unavailable'));
+
+    await disconnectXero(ORG_ID);
+
+    expect(remove).toHaveBeenCalledWith({ where: { organization_id: ORG_ID } });
+    expect(await getConnectionStatus(ORG_ID)).toEqual({ connected: false });
+  });
+
+  it('deletes an undecryptable persisted row so the workspace can reconnect', async () => {
+    persistRow({
+      access_token: 'not-valid-ciphertext',
+      refresh_token: 'not-valid-ciphertext',
+    });
+
+    await disconnectXero(ORG_ID);
+
+    expect(mockRevokeConnection).not.toHaveBeenCalled();
+    expect(remove).toHaveBeenCalledWith({ where: { organization_id: ORG_ID } });
+    expect(await getConnectionStatus(ORG_ID)).toEqual({ connected: false });
   });
 });
 

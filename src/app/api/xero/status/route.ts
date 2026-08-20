@@ -12,10 +12,7 @@ import {
 import { loggers } from '@/lib/logger';
 import { hasOrganizationPermission } from '@/lib/auth/organization-access';
 import { resolveSessionOrganizationId } from '@/lib/organization/resolve-organization-api.server';
-
-function staleConnectionMessage(): string {
-  return 'Xero connection needs to be refreshed. Disconnect in Integrations and connect again.';
-}
+import { XERO_REAUTHORIZATION_MESSAGE } from '@/lib/xero/xero-connection-ui';
 
 export async function GET(request: NextRequest) {
   try {
@@ -62,7 +59,6 @@ export async function GET(request: NextRequest) {
     const status = await getConnectionStatus(organizationId);
 
     let tenants: Awaited<ReturnType<typeof getAvailableTenants>> = null;
-    let tenantsError: string | undefined;
 
     if (status.connected && !status.stale) {
       try {
@@ -73,20 +69,12 @@ export async function GET(request: NextRequest) {
           err: err instanceof Error ? err.message : String(err),
         });
         tenants = [];
-        tenantsError = staleConnectionMessage();
       }
     }
 
     let operatorMessage: string | undefined;
-    if (status.stale) {
-      operatorMessage =
-        'Xero access is being refreshed. If invoices fail to sync, reconnect from Integrations.';
-    }
-    if (!status.connected && status.tenantId) {
-      operatorMessage = staleConnectionMessage();
-    }
-    if (tenantsError) {
-      operatorMessage = tenantsError;
+    if (status.stale || (!status.connected && status.tenantId)) {
+      operatorMessage = XERO_REAUTHORIZATION_MESSAGE;
     }
 
     return NextResponse.json({
@@ -104,7 +92,7 @@ export async function GET(request: NextRequest) {
       {
         error: 'Failed to fetch connection status',
         operatorMessage:
-          'Could not load Xero status. Try again, or reconnect Xero from Integrations.',
+          'Could not load Xero status. Try again from Connected Systems.',
       },
       { status: 500 }
     );

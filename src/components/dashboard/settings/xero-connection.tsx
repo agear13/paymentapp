@@ -41,6 +41,9 @@ import {
   formatXeroOAuthError,
 } from '@/lib/xero/xero-customer-messages';
 import { XERO_CONNECTION_COPY } from '@/lib/xero/xero-setup-guidance';
+import { resolveXeroConnectionUiMode } from '@/lib/xero/xero-connection-ui';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
+import { redirectIfStepUpRequired } from '@/lib/auth/step-up.client';
 
 interface XeroConnectionProps {
   organizationId: string;
@@ -53,10 +56,11 @@ interface XeroConnectionProps {
 
 interface ConnectionStatus {
   connected: boolean;
+  stale?: boolean;
   tenantId?: string;
   expiresAt?: string;
   connectedAt?: string;
-  /** Server hint when tokens are invalid, tenant list fails, or Xero env is missing. */
+  /** Server hint when tokens cannot be refreshed, tenant list fails, or Xero env is missing. */
   operatorMessage?: string;
   tenants?: Array<{
     tenantId: string;
@@ -209,7 +213,7 @@ export function XeroConnection({
   const handleDisconnect = async () => {
     setDisconnecting(true);
     try {
-      const response = await fetch('/api/xero/disconnect', {
+      const response = await csrfAwareFetch('/api/xero/disconnect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -217,8 +221,13 @@ export function XeroConnection({
         body: JSON.stringify({ organizationId }),
       });
 
+      if (await redirectIfStepUpRequired(response)) {
+        return;
+      }
+
       if (!response.ok) {
-        throw new Error('Failed to disconnect');
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || 'Failed to disconnect');
       }
 
       toast.success('Disconnected from Xero');
@@ -236,13 +245,17 @@ export function XeroConnection({
   const handleTenantChange = async (tenantId: string) => {
     setChangingTenant(true);
     try {
-      const response = await fetch('/api/xero/tenant', {
+      const response = await csrfAwareFetch('/api/xero/tenant', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ organizationId, tenantId }),
       });
+
+      if (await redirectIfStepUpRequired(response)) {
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('Failed to update tenant');
@@ -281,11 +294,78 @@ export function XeroConnection({
   }
 
   const isCommercial = variant === 'commercial';
-  const connectionIssue = formatXeroConnectionIssue(status?.operatorMessage);
+  const uiMode = resolveXeroConnectionUiMode(status);
+  const isPersisted = uiMode === 'connected' || uiMode === 'needs_reauthorization';
+  const needsReauthorization = uiMode === 'needs_reauthorization';
+  const connectionIssue =
+    needsReauthorization
+      ? null
+      : formatXeroConnectionIssue(status?.operatorMessage);
+
+  const heading =
+    uiMode === 'needs_reauthorization'
+      ? XERO_CONNECTION_COPY.needsAttentionHeading
+      : uiMode === 'connected'
+        ? XERO_CONNECTION_COPY.connectedHeading
+        : XERO_CONNECTION_COPY.disconnectedHeading;
+
+  const helper =
+    uiMode === 'needs_reauthorization'
+      ? XERO_CONNECTION_COPY.needsAttentionHelper
+      : uiMode === 'connected'
+        ? isCommercial
+          ? XERO_CONNECTION_COPY.connectedHelper
+          : 'Your Xero account is connected. Invoices and payments will be automatically synced.'
+        : isCommercial
+          ? XERO_CONNECTION_COPY.disconnectedHelper
+          : 'Connect your Xero account to automatically sync invoices and payments.';
+
+  const disconnectButton = (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disconnecting}
+        >
+          {disconnecting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Disconnecting...
+            </>
+          ) : (
+            'Disconnect'
+          )}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Disconnect Xero?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will remove your Xero connection. You&apos;ll need to reconnect
+            to sync invoices and payments again.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDisconnect}>
+            Disconnect
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 
   return (
     <div id="xero-connection" className="space-y-4">
-      {connectionIssue ? (
+      {needsReauthorization ? (
+        <Alert variant="destructive">
+          <AlertTitle>Xero needs attention</AlertTitle>
+          <AlertDescription>
+            <p>{XERO_CONNECTION_COPY.needsAttentionHelper}</p>
+          </AlertDescription>
+        </Alert>
+      ) : connectionIssue ? (
         <Alert>
           <AlertTitle>Xero</AlertTitle>
           <AlertDescription>
@@ -328,15 +408,19 @@ export function XeroConnection({
         confirming={connecting}
       />
 
-      {/* Connection Status */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         {!isCommercial ? (
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">Status:</span>
-            {status?.connected ? (
+            {uiMode === 'connected' ? (
               <Badge variant="default" className="gap-1">
                 <CheckCircle className="h-3 w-3" />
                 Connected
+              </Badge>
+            ) : uiMode === 'needs_reauthorization' ? (
+              <Badge variant="destructive" className="gap-1">
+                <XCircle className="h-3 w-3" />
+                Needs reconnect
               </Badge>
             ) : (
               <Badge variant="secondary" className="gap-1">
@@ -346,48 +430,10 @@ export function XeroConnection({
             )}
           </div>
         ) : (
-          <p className="text-sm font-medium text-foreground">
-            {status?.connected
-              ? XERO_CONNECTION_COPY.connectedHeading
-              : XERO_CONNECTION_COPY.disconnectedHeading}
-          </p>
+          <p className="text-sm font-medium text-foreground">{heading}</p>
         )}
 
-        {status?.connected ? (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={disconnecting}
-              >
-                {disconnecting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Disconnecting...
-                  </>
-                ) : (
-                  'Disconnect'
-                )}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Disconnect Xero?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will remove your Xero connection. You&apos;ll need to reconnect
-                  to sync invoices and payments again.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDisconnect}>
-                  Disconnect
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        ) : (
+        {isPersisted ? disconnectButton : (
           <Button
             size="sm"
             onClick={openConnectDialog}
@@ -405,8 +451,7 @@ export function XeroConnection({
         )}
       </div>
 
-      {/* Tenant Selector (when connected) */}
-      {status?.connected && status.tenants && status.tenants.length > 0 && (
+      {uiMode === 'connected' && status?.tenants && status.tenants.length > 0 && (
         <div className="space-y-2">
           <label className="text-sm font-medium">{XERO_CONNECTION_COPY.businessLabel}</label>
           <div className="flex items-center gap-2">
@@ -434,47 +479,26 @@ export function XeroConnection({
         </div>
       )}
 
-      {/* Reconnect (commercial keeps this minimal — no token expiry details) */}
-      {status?.connected && !isCommercial ? (
-        <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Connected since</span>
-            <span className="text-xs">
-              {status.connectedAt
-                ? new Date(status.connectedAt).toLocaleDateString()
-                : 'Unknown'}
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleReconnect}
-            className="w-full"
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Reconnect
-          </Button>
-        </div>
-      ) : status?.connected && isCommercial ? (
+      {needsReauthorization ? (
         <Button variant="outline" size="sm" onClick={handleReconnect} className="w-full sm:w-auto">
           <RefreshCw className="mr-2 h-4 w-4" />
           {XERO_CONNECTION_COPY.reconnectButton}
         </Button>
       ) : null}
 
-      {/* Help Text — operational only; readiness lives in Setup status (Commercial OS). */}
-      {variant !== 'commercial' ? (
-        <p className="text-xs text-muted-foreground">
-          {status?.connected
-            ? 'Your Xero account is connected. Invoices and payments will be automatically synced.'
-            : 'Connect your Xero account to automatically sync invoices and payments.'}
-        </p>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          {status?.connected
-            ? XERO_CONNECTION_COPY.connectedHelper
-            : XERO_CONNECTION_COPY.disconnectedHelper}
-        </p>
+      {uiMode === 'connected' && !isCommercial && status?.connectedAt ? (
+        <div className="rounded-lg border bg-muted/50 p-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Connected since</span>
+            <span className="text-xs">
+              {new Date(status.connectedAt).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {needsReauthorization ? null : (
+        <p className="text-xs text-muted-foreground">{helper}</p>
       )}
     </div>
   );

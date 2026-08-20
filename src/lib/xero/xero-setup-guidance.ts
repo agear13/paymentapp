@@ -155,13 +155,16 @@ export const XERO_OAUTH_SUCCESS = {
 export const XERO_CONNECTION_COPY = {
   connectedHeading: 'Xero connection',
   disconnectedHeading: 'Connect Xero',
+  needsAttentionHeading: 'Xero needs attention',
   connectButton: 'Connect Xero',
-  reconnectButton: 'Reconnect to Xero',
+  reconnectButton: 'Reconnect Xero',
   businessLabel: 'Which Xero business?',
   businessHelper: 'Provvy will send invoices and payments to this business.',
   disconnectedHelper: 'Connect accounting so Provvy can sync invoices and record payments for you.',
   connectedHelper:
     'Your Xero connection is active. Choose your business below if you have more than one.',
+  needsAttentionHelper:
+    "Provvy couldn't refresh the Xero authorization. You can disconnect and reconnect Xero from Connected Systems.",
 } as const;
 
 export const XERO_SETUP_PROGRESS_COPY = {

@@ -1,7 +1,6 @@
 import {
   commercialOsXeroOAuthReturnPath,
   isAllowedXeroOAuthReturnPath,
-  legacyXeroOAuthDefaultReturnPath,
   normalizeXeroOAuthReturnPath,
   resolveXeroOAuthReturnPath,
 } from '@/lib/xero/oauth-return-path';
@@ -36,9 +35,9 @@ describe('normalizeXeroOAuthReturnPath', () => {
 });
 
 describe('resolveXeroOAuthReturnPath', () => {
-  it('falls back to legacy integrations when return path is missing or invalid', () => {
-    expect(resolveXeroOAuthReturnPath(undefined)).toBe(legacyXeroOAuthDefaultReturnPath());
-    expect(resolveXeroOAuthReturnPath('/auth/login')).toBe(legacyXeroOAuthDefaultReturnPath());
+  it('falls back to Connected Systems when return path is missing or invalid', async () => {
+    expect(resolveXeroOAuthReturnPath(undefined)).toBe(commercialOsXeroOAuthReturnPath());
+    expect(resolveXeroOAuthReturnPath('/auth/login')).toBe(commercialOsXeroOAuthReturnPath());
   });
 
   it('preserves allowlisted workspace return paths', () => {
@@ -90,16 +89,16 @@ describe('xeroIntegrationsRedirectUrl', () => {
     expect(url).toBe(`${origin}/workspace/connected/xero?xero_error=connection_failed`);
   });
 
-  it('D. missing/invalid state (no returnPath) → legacy integrations fallback', () => {
+  it('D. missing/invalid state (no returnPath) → Connected Systems', () => {
     const request = new NextRequest(`${origin}/api/xero/callback`);
     const url = xeroIntegrationsRedirectUrl(request, { xero_error: 'invalid_state' });
-    expect(url).toBe(`${origin}/dashboard/settings/integrations?xero_error=invalid_state`);
+    expect(url).toBe(`${origin}/workspace/connected/xero?xero_error=invalid_state`);
   });
 
-  it('E. missing returnTo in state → legacy integrations fallback', () => {
+  it('E. missing returnTo in state → Connected Systems', () => {
     const request = new NextRequest(`${origin}/api/xero/callback`);
     const url = xeroIntegrationsRedirectUrl(request, { xero_success: 'connected' });
-    expect(url).toBe(`${origin}/dashboard/settings/integrations?xero_success=connected`);
+    expect(url).toBe(`${origin}/workspace/connected/xero?xero_success=connected`);
   });
 
   it('legacy dashboard explicit returnTo → legacy integrations', () => {

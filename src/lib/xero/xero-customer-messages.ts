@@ -72,16 +72,21 @@ export function formatXeroConnectionIssue(
   const text = raw.trim();
   const lower = text.toLowerCase();
 
-  if (lower.includes('no active xero connection') || lower.includes('connect xero')) {
+  if (
+    lower.includes('needs to be reconnected') ||
+    lower.includes('could not refresh') ||
+    lower.includes("couldn't refresh") ||
+    (lower.includes('refresh') && (lower.includes('authorization') || lower.includes('token')))
+  ) {
     return {
-      message: 'Xero is not connected right now.',
-      action: 'Use Connect to Xero above to link your business.',
+      message: "Provvy couldn't refresh the Xero authorization.",
+      action: 'Use Reconnect Xero above, or disconnect and reconnect from Connected Systems.',
     };
   }
-  if (lower.includes('token') && (lower.includes('expir') || lower.includes('refresh'))) {
+  if (lower.includes('no active xero connection') || /\bconnect xero\b/.test(lower)) {
     return {
-      message: 'Your Xero link needs to be refreshed.',
-      action: 'Use Reconnect below to sign in to Xero again.',
+      message: 'Xero is not connected right now.',
+      action: 'Use Connect Xero above to link your business.',
     };
   }
   if (lower.includes('tenant') || lower.includes('organisation') || lower.includes('organization')) {
@@ -113,7 +118,18 @@ export function formatMappingIssue(raw: string): CustomerMessage {
   if (lower.includes('no active xero connection')) {
     return {
       message: 'Connect Xero before choosing accounts.',
-      action: 'Use Connect to Xero at the top of this page.',
+      action: 'Use Connect Xero at the top of this page.',
+    };
+  }
+  if (
+    lower.includes('needs to be reconnected') ||
+    lower.includes('could not refresh') ||
+    lower.includes("couldn't refresh") ||
+    (lower.includes('refresh') && (lower.includes('authorization') || lower.includes('token')))
+  ) {
+    return {
+      message: "Provvy couldn't refresh the Xero authorization.",
+      action: 'Use Reconnect Xero above, then choose accounts.',
     };
   }
   if (lower.includes('revenue account is required')) {

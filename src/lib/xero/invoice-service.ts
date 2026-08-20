@@ -327,7 +327,7 @@ async function prepareXeroAccrecInvoice(params: InvoiceCreationParams): Promise<
   });
 
   if (!settings?.xero_revenue_account_id) {
-    throw new Error('Revenue account not mapped. Please configure Xero account mappings in Settings → Integrations.');
+    throw new Error('Revenue account not mapped. Please configure Xero account mappings in Connected Systems.');
   }
 
   // Validate account code is not a UUID (common misconfiguration)
@@ -337,7 +337,7 @@ async function prepareXeroAccrecInvoice(params: InvoiceCreationParams): Promise<
   if (uuidRegex.test(revenueAccountCode)) {
     throw new Error(
       `Invalid Xero account code: "${revenueAccountCode}". ` +
-      `This appears to be an internal ID. Please set a valid Xero account code (e.g., "200", "400") in Settings → Integrations → Xero Account Mapping.`
+      `This appears to be an internal ID. Please set a valid Xero account code (e.g., "200", "400") in Connected Systems → Xero account mapping.`
     );
   }
 
@@ -346,7 +346,7 @@ async function prepareXeroAccrecInvoice(params: InvoiceCreationParams): Promise<
     throw new Error(
       `Invalid Xero account code: "${revenueAccountCode}". ` +
       `Xero account codes should be short alphanumeric values (e.g., "200", "400"). ` +
-      `Please configure correct account codes in Settings → Integrations.`
+      `Please configure correct account codes in Connected Systems.`
     );
   }
 

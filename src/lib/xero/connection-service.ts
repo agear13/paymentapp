@@ -334,27 +334,30 @@ export async function hasValidConnection(
 }
 
 /**
- * Disconnect Xero connection
+ * Disconnect Xero connection.
+ * Local row deletion is the source of truth. Xero-side revoke is best-effort
+ * so a failed remote revocation cannot leave the workspace stuck connected.
  */
 export async function disconnectXero(
   organizationId: string
 ): Promise<void> {
-  const connection = await getXeroConnection(organizationId);
-
-  if (!connection) {
+  const row = await getXeroConnectionRow(organizationId);
+  if (!row) {
     return;
   }
 
-  try {
-    await revokeConnection(connection.accessToken);
-  } catch (error) {
-    loggers.xero.error('xero_revoke_failed', error, {
-      step: 'revoke_connection',
-      organizationId,
-    });
+  const connection = await getXeroConnection(organizationId);
+  if (connection) {
+    try {
+      await revokeConnection(connection.accessToken);
+    } catch (error) {
+      loggers.xero.error('xero_revoke_failed', error, {
+        step: 'revoke_connection',
+        organizationId,
+      });
+    }
   }
 
-  // Delete connection from database
   await prisma.xero_connections.delete({
     where: { organization_id: organizationId },
   });

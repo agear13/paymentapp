@@ -56,6 +56,8 @@ import { PaymentAccountsSetupSection } from '@/components/xero/payment-accounts-
 import type { CryptoSettlementStrategy } from '@/lib/accounting/settlement-account-types';
 import { validateXeroMappingDuplicates } from '@/lib/accounting/validate-xero-mapping-duplicates';
 import { normalizeMerchantPaymentRails } from '@/lib/commercial-os/merchant-payment-rails';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
+import { redirectIfStepUpRequired } from '@/lib/auth/step-up.client';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
 import {
   computePaymentLinkRailSetup,
@@ -134,6 +136,7 @@ export function XeroAccountMapping({
     React.useState<MerchantPaymentCapabilities | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [connectionReady, setConnectionReady] = React.useState(false);
+  const [connectionStale, setConnectionStale] = React.useState(false);
 
   const rails: MerchantPaymentRails = React.useMemo(() => {
     if (merchantRails) {
@@ -303,11 +306,19 @@ export function XeroAccountMapping({
 
       if (!statusRes.ok || !status.connected) {
         setConnectionReady(false);
+        setConnectionStale(false);
         setAccounts([]);
         return;
       }
 
       setConnectionReady(true);
+      setConnectionStale(Boolean(status.stale));
+      if (status.stale) {
+        setAccounts([]);
+        setError(null);
+        return;
+      }
+
       await fetchAccounts();
     } catch (err) {
       applyMappingError(
@@ -402,7 +413,7 @@ export function XeroAccountMapping({
       return false;
     }
 
-    const response = await fetch('/api/settings/xero-mappings', {
+    const response = await csrfAwareFetch('/api/settings/xero-mappings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -410,6 +421,10 @@ export function XeroAccountMapping({
         ...nextMappings,
       }),
     });
+
+    if (await redirectIfStepUpRequired(response)) {
+      return false;
+    }
 
     if (!response.ok) {
       const data = await response.json();
@@ -475,11 +490,15 @@ export function XeroAccountMapping({
       setCreatingAccounts(true);
       setError(null);
 
-      const response = await fetch('/api/xero/accounts/create-recommended-clearing', {
+      const response = await csrfAwareFetch('/api/xero/accounts/create-recommended-clearing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ organizationId }),
       });
+
+      if (await redirectIfStepUpRequired(response)) {
+        return;
+      }
 
       const payload = await response.json();
       if (!response.ok) {
@@ -788,6 +807,14 @@ export function XeroAccountMapping({
     return (
       <p className="text-sm text-muted-foreground py-4">
         Connect Xero above to choose accounts.
+      </p>
+    );
+  }
+
+  if (connectionStale) {
+    return (
+      <p className="text-sm text-muted-foreground py-4">
+        Reconnect Xero above to load accounts.
       </p>
     );
   }
