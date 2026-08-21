@@ -30,6 +30,7 @@ describe('participant identity recovery UX', () => {
     expect(text).toContain('Send secure sign-in link');
     expect(text).toContain('You are not signed in yet');
     expect(text).not.toContain('Continue as');
+    expect(container.querySelector('[data-invitation-gate="sign-in-to-continue"]')).not.toBeNull();
   });
 
   it('explains recovery after signing out of the wrong account', () => {

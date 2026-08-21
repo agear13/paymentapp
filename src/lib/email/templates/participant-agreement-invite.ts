@@ -42,6 +42,7 @@ export function buildParticipantAgreementInviteEmail(
       ${htmlOperator} invited you to participate in <strong>${htmlProject}</strong>.
       Open your secure workspace to review and approve your agreement. You will sign in with this email address.
     </p>
+    <!-- This href is the public workspace URL only. It is not a Supabase magic link and contains no auth code. -->
     <p style="margin:24px 0;">
       <a href="${htmlUrl}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;border-radius:8px;padding:12px 20px;font-weight:600;">
         Review agreement

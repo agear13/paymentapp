@@ -14,6 +14,10 @@ import {
   reloadParticipantInvitation,
   signOutParticipantSession,
 } from '@/lib/participant-portal/participant-sign-out.client';
+import {
+  buildAuthCallbackForwardUrl,
+  participantUrlNeedsAuthCallback,
+} from '@/lib/participant-portal/participant-magic-link';
 import type { ParticipantCommercialWorkspaceModel } from '@/lib/participant-portal/participant-portal-data';
 import type { ParticipantWorkspaceOnboarding } from '@/lib/participant-portal/participant-workspace-onboarding';
 
@@ -45,6 +49,7 @@ export default function ParticipantWorkspacePage() {
   const [payload, setPayload] = React.useState<WorkspacePayload | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [forwardingAuth, setForwardingAuth] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [deniedEmail, setDeniedEmail] = React.useState<string | null>(null);
 
@@ -85,13 +90,28 @@ export default function ParticipantWorkspacePage() {
   );
 
   React.useEffect(() => {
+    if (!token) return;
+    if (typeof window === 'undefined') return;
+    if (!participantUrlNeedsAuthCallback(window.location.search, window.location.hash)) return;
+    setForwardingAuth(true);
+    window.location.replace(
+      buildAuthCallbackForwardUrl({
+        participantPath: `/participant/${token}`,
+        search: window.location.search,
+        hash: window.location.hash,
+      })
+    );
+  }, [token]);
+
+  React.useEffect(() => {
     if (!token) {
       setLoading(false);
       setLoadError('Missing workspace token');
       return;
     }
+    if (forwardingAuth) return;
     void fetchWorkspace();
-  }, [token, fetchWorkspace]);
+  }, [token, fetchWorkspace, forwardingAuth]);
 
   React.useEffect(() => {
     if (!token || loadError || payload?.auth?.status !== 'authorized') return;
@@ -112,6 +132,14 @@ export default function ParticipantWorkspacePage() {
     await signOutParticipantSession();
     reloadParticipantInvitation(token, false);
   }, [token]);
+
+  if (forwardingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <p className="text-sm text-muted-foreground">Completing sign-in…</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

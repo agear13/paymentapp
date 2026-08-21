@@ -65,7 +65,10 @@ export function ParticipantAuthGate({
         </CardHeader>
         <div className="space-y-4 px-6 pb-6">
           {invitation.invitedEmail ? (
-            <div className="rounded-lg bg-muted px-3 py-3 space-y-1">
+            <div
+              className="rounded-lg bg-muted px-3 py-3 space-y-1"
+              data-invitation-gate="sign-in-to-continue"
+            >
               <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Sign in to continue
               </p>
@@ -86,12 +89,15 @@ export function ParticipantAuthGate({
           ) : (
             <p className="text-sm text-muted-foreground">
               We&apos;ll email a secure sign-in link to this address. You are not signed in yet.
+              Open that newest sign-in email — not the original invitation that says Review
+              agreement.
             </p>
           )}
           {sent ? (
             <p className="text-sm text-foreground">
-              A secure sign-in link has been sent. Open the newest email from this inbox in this
-              browser to continue.
+              A secure sign-in link has been sent. Open the newest sign-in email in this browser.
+              Do not use the original Review agreement invitation — that link is not a sign-in
+              code.
             </p>
           ) : (
             <Button

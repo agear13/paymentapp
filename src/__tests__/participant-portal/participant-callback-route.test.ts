@@ -1,16 +1,21 @@
 import { NextRequest } from 'next/server';
 
 const mockExchangeCodeForSession = jest.fn();
+const mockVerifyOtp = jest.fn();
 const mockGetUser = jest.fn();
-const mockSignOut = jest.fn();
 const mockFindParticipantByPortalToken = jest.fn();
 
 jest.mock('@/lib/supabase/route-handler-client', () => ({
-  createRouteHandlerSupabaseClient: jest.fn(async () => ({
+  createAuthCookieBuffer: () => ({
+    cookies: [],
+    names: () => [],
+    applyTo: (response: { cookies?: { set?: unknown } }) => response,
+  }),
+  createRequestBoundSupabaseClient: jest.fn(() => ({
     auth: {
       exchangeCodeForSession: mockExchangeCodeForSession,
+      verifyOtp: mockVerifyOtp,
       getUser: mockGetUser,
-      signOut: mockSignOut,
     },
   })),
 }));
@@ -29,7 +34,17 @@ jest.mock('@/lib/auth/login-tracking.server', () => ({
 }));
 
 jest.mock('@/lib/runtime/customer-facing-url', () => ({
-  resolveCanonicalPublicOrigin: () => 'https://app.example.com',
+  resolveCanonicalPublicOrigin: () => 'https://provvypay-api.onrender.com',
+}));
+
+jest.mock('@/lib/logger', () => ({
+  loggers: {
+    auth: {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    },
+  },
 }));
 
 import { GET as authCallback } from '@/app/auth/callback/route';
@@ -42,24 +57,18 @@ const PARTICIPANT = {
   email_confirmed_at: '2026-08-21T00:00:00Z',
   app_metadata: { provider: 'email' },
 };
-const OPERATOR = {
-  id: 'operator-user',
-  email: 'alishajaynegeary@gmail.com',
-  email_confirmed_at: '2026-08-21T00:00:00Z',
-  app_metadata: { provider: 'email' },
-};
 
-function callbackRequest() {
-  const url = new URL('https://app.example.com/auth/callback');
-  url.searchParams.set('code', 'participant-otp-code');
-  url.searchParams.set('redirectedFrom', RETURN_PATH);
+function callbackRequest(search: Record<string, string>) {
+  const url = new URL('https://provvypay-api.onrender.com/auth/callback');
+  for (const [key, value] of Object.entries(search)) {
+    url.searchParams.set(key, value);
+  }
   return new NextRequest(url);
 }
 
 describe('participant recovery callback route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSignOut.mockResolvedValue({ error: null });
     mockFindParticipantByPortalToken.mockResolvedValue({
       participantEmail: 'jaynealisha77@gmail.com',
       authenticatedUserId: null,
@@ -67,45 +76,48 @@ describe('participant recovery callback route', () => {
     });
   });
 
-  it('persists the invited session and does not sign out after a successful participant exchange', async () => {
+  it('does not send the browser to /participant until a code is exchanged', async () => {
+    const response = await authCallback(
+      callbackRequest({ next: RETURN_PATH })
+    );
+
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      `https://provvypay-api.onrender.com/auth/callback/complete?next=${encodeURIComponent(RETURN_PATH)}`
+    );
+  });
+
+  it('persists the invited session after a successful participant exchange and then redirects to the workspace', async () => {
     mockExchangeCodeForSession.mockResolvedValue({
       data: { user: PARTICIPANT, session: { user: PARTICIPANT } },
       error: null,
     });
     mockGetUser.mockResolvedValue({ data: { user: PARTICIPANT }, error: null });
 
-    const response = await authCallback(callbackRequest());
+    const response = await authCallback(
+      callbackRequest({ code: 'participant-otp-code', next: RETURN_PATH })
+    );
 
     expect(mockExchangeCodeForSession).toHaveBeenCalledWith('participant-otp-code');
-    expect(mockGetUser).toHaveBeenCalled();
-    expect(mockSignOut).not.toHaveBeenCalled();
     expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe(`https://app.example.com${RETURN_PATH}`);
+    expect(response.headers.get('location')).toBe(
+      `https://provvypay-api.onrender.com${RETURN_PATH}`
+    );
   });
 
-  it('does not sign out the new participant when getUser() still sees leftover operator cookies', async () => {
-    mockExchangeCodeForSession.mockResolvedValue({
-      data: { user: PARTICIPANT, session: { user: PARTICIPANT } },
-      error: null,
-    });
-    mockGetUser.mockResolvedValue({ data: { user: OPERATOR }, error: null });
-
-    const response = await authCallback(callbackRequest());
-
-    expect(mockSignOut).not.toHaveBeenCalled();
-    expect(response.headers.get('location')).toBe(`https://app.example.com${RETURN_PATH}`);
-  });
-
-  it('signs out leftover operator cookies only when the exchange failed', async () => {
+  it('does not redirect to the participant workspace when the exchange fails', async () => {
     mockExchangeCodeForSession.mockResolvedValue({
       data: { user: null, session: null },
-      error: { message: 'expired' },
+      error: { message: 'invalid code verifier' },
     });
-    mockGetUser.mockResolvedValue({ data: { user: OPERATOR }, error: null });
 
-    const response = await authCallback(callbackRequest());
+    const response = await authCallback(
+      callbackRequest({ code: 'stale-code', next: RETURN_PATH })
+    );
 
-    expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' });
-    expect(response.headers.get('location')).toBe(`https://app.example.com${RETURN_PATH}`);
+    expect(response.headers.get('location')).toBe(
+      `https://provvypay-api.onrender.com/auth/callback/complete?next=${encodeURIComponent(RETURN_PATH)}&error=exchange_failed`
+    );
   });
 });

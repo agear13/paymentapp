@@ -14,7 +14,12 @@ jest.mock('@/lib/security/csrf', () => ({
 }));
 
 jest.mock('@/lib/supabase/route-handler-client', () => ({
-  createRouteHandlerSupabaseClient: jest.fn(async () => ({
+  createAuthCookieBuffer: () => ({
+    cookies: [],
+    names: () => [],
+    applyTo: (response: { cookies: { set: jest.Mock } }) => response,
+  }),
+  createRequestBoundSupabaseClient: jest.fn(() => ({
     auth: {
       signInWithOtp: mockSignInWithOtp,
       signOut: mockSignOut,
@@ -31,7 +36,17 @@ jest.mock('@/lib/participant-portal/participant-session.server', () => ({
 }));
 
 jest.mock('@/lib/runtime/customer-facing-url', () => ({
-  resolveCanonicalPublicOrigin: () => 'https://app.example.com',
+  resolveCanonicalPublicOrigin: () => 'https://provvypay-api.onrender.com',
+}));
+
+jest.mock('@/lib/logger', () => ({
+  loggers: {
+    auth: {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    },
+  },
 }));
 
 import { POST as sendParticipantLink } from '@/app/api/participant-portal/[token]/auth/send-link/route';
@@ -41,9 +56,10 @@ const PARTICIPANT = { id: 'participant-user', email: 'jaynealisha77@gmail.com' }
 const OPERATOR = { id: 'operator-user', email: 'alishajaynegeary@gmail.com' };
 
 function sendRequest() {
-  return new NextRequest(`https://app.example.com/api/participant-portal/${TOKEN}/auth/send-link`, {
-    method: 'POST',
-  });
+  return new NextRequest(
+    `https://provvypay-api.onrender.com/api/participant-portal/${TOKEN}/auth/send-link`,
+    { method: 'POST' }
+  );
 }
 
 describe('participant recovery send-link', () => {
@@ -70,9 +86,13 @@ describe('participant recovery send-link', () => {
       email: 'jaynealisha77@gmail.com',
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: `https://app.example.com/auth/callback?redirectedFrom=${encodeURIComponent(`/participant/${TOKEN}`)}`,
+        emailRedirectTo: `https://provvypay-api.onrender.com/auth/callback?next=${encodeURIComponent(`/participant/${TOKEN}`)}`,
       },
     });
+    const body = await response.json();
+    expect(body.emailRedirectTo).toBe(
+      `https://provvypay-api.onrender.com/auth/callback?next=${encodeURIComponent(`/participant/${TOKEN}`)}`
+    );
     expect(response.status).toBe(200);
   });
 
