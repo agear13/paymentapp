@@ -172,9 +172,14 @@ export const XERO_CONNECTION_COPY = {
 } as const;
 
 export const XERO_SETUP_PROGRESS_COPY = {
-  title: 'Setup checklist',
+  title: 'Xero setup',
   loading: 'Loading setup progress…',
-  percentComplete: (percent: number) => `${percent}% complete`,
+  invoiceSection: 'Xero setup',
+  invoiceReadiness: 'Invoice / accounting readiness',
+  paymentSection: 'Payment accounting',
+  historicalSection: 'Historical payments',
+  invoiceReadyHint: 'Invoice sync is ready. Payment holding accounts can be completed over time.',
+  invoiceNotReadyHint: 'Finish the Xero setup steps below to enable invoice sync.',
 } as const;
 
 export const QUEUE_GUIDANCE = {
@@ -217,9 +222,7 @@ export const SYNC_STATUS_GUIDANCE: Record<
 export type XeroSetupStepId =
   | 'connected'
   | 'business_selected'
-  | 'invoice_accounts'
-  | 'payment_accounts'
-  | 'historical_processed';
+  | 'invoice_accounts';
 
 export type XeroSetupStep = {
   id: XeroSetupStepId;
@@ -232,14 +235,12 @@ export type XeroSetupProgressInput = {
   tenantId?: string | null;
   revenueMapped: boolean;
   receivableMapped: boolean;
-  paymentAccountsConfigured: boolean;
-  pendingPaymentCount: number;
 };
 
+/** Invoice/accounting setup tasks only — payment holdings are not binary checklist items. */
 export function computeXeroSetupSteps(input: XeroSetupProgressInput): XeroSetupStep[] {
   const hasTenant = Boolean(input.tenantId?.trim());
   const invoiceComplete = input.revenueMapped && input.receivableMapped;
-  const queueComplete = input.pendingPaymentCount === 0;
 
   return [
     { id: 'connected', label: 'Xero connected', complete: input.connected },
@@ -253,19 +254,10 @@ export function computeXeroSetupSteps(input: XeroSetupProgressInput): XeroSetupS
       label: 'Invoice accounts confirmed',
       complete: invoiceComplete,
     },
-    {
-      id: 'payment_accounts',
-      label: 'Payment accounts confirmed',
-      complete: input.paymentAccountsConfigured,
-    },
-    {
-      id: 'historical_processed',
-      label: 'Earlier payments synced',
-      complete: queueComplete && input.connected,
-    },
   ];
 }
 
+/** Percentage of invoice setup tasks completed — not accounting/invoice readiness. */
 export function xeroSetupProgressPercent(steps: XeroSetupStep[]): number {
   if (steps.length === 0) return 0;
   const complete = steps.filter((s) => s.complete).length;

@@ -6,6 +6,8 @@ import { createEvidenceTracker } from './helpers/e2e-evidence';
 import {
   ensureCookieBannerDismissed,
   ensureE2eSession,
+  restoreOperatorE2eSession,
+  signInInvitedParticipant,
 } from './helpers/e2e-auth';
 import { gotoApp } from './helpers/e2e-navigation';
 
@@ -338,6 +340,14 @@ test.describe('P3-E Agreement Intelligence participant coordination', () => {
 
     const workspaceUrl = first.data.coordination?.workspaceUrl;
     expect(workspaceUrl).toBeTruthy();
+    const invitedEmail = `apex.p3e.${Date.now()}@example.com`;
+    const emailPatch = await browserApi<{ error?: string }>(page, `/api/deal-network-pilot/participants/${apex!.id}`, {
+      method: 'PATCH',
+      headers: await getCsrfHeaders(page),
+      body: { email: invitedEmail },
+    });
+    expect(emailPatch.ok, emailPatch.data.error).toBeTruthy();
+    await signInInvitedParticipant(page, invitedEmail);
     await page.goto(workspaceUrl!, { waitUntil: 'domcontentloaded' });
     await ensureCookieBannerDismissed(page);
     await expect(page.getByRole('button', { name: 'Approve participation' })).toBeVisible({
@@ -349,6 +359,7 @@ test.describe('P3-E Agreement Intelligence participant coordination', () => {
     await page.getByRole('button', { name: 'Approve participation' }).click();
     await expect(page.getByText(/Approved/i).first()).toBeVisible({ timeout: 60_000 });
 
+    await restoreOperatorE2eSession(page);
     await gotoApp(page, `${INSTANCE}?participant=${encodeURIComponent(apex!.id!)}`);
     await waitForAgreementHub(page);
     await expect(page.getByRole('button', { name: 'Back to participants' })).toBeVisible();
@@ -368,6 +379,7 @@ test.describe('P3-E Agreement Intelligence participant coordination', () => {
     expect(portalUrl).toBeTruthy();
     evidence.pass('8. Request payout details', portalUrl ?? '');
 
+    await signInInvitedParticipant(page, invitedEmail);
     await page.goto(portalUrl!, { waitUntil: 'domcontentloaded' });
     await ensureCookieBannerDismissed(page);
     expect(page.url()).toMatch(/\/participant\//);
@@ -377,6 +389,7 @@ test.describe('P3-E Agreement Intelligence participant coordination', () => {
     evidence.pass('10. Payout information submitted in participant portal');
     await evidence.screenshot(page, 'p3e-06-payout-submitted');
 
+    await restoreOperatorE2eSession(page);
     await gotoApp(page, `${INSTANCE}?participant=${encodeURIComponent(apex!.id!)}`);
     await waitForAgreementHub(page);
     ctx = await loadContext(page, workflowId);

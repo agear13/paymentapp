@@ -73,6 +73,11 @@ export async function signInViaMagicLink(page: Page, email: string): Promise<boo
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  await admin.auth.admin.createUser({
+    email,
+    email_confirm: true,
+  });
+
   const { data, error } = await admin.auth.admin.generateLink({
     type: 'magiclink',
     email,
@@ -82,6 +87,22 @@ export async function signInViaMagicLink(page: Page, email: string): Promise<boo
   await page.goto(data.properties.action_link, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForURL((href) => !href.pathname.startsWith('/auth/login'), { timeout: 45_000 });
   return true;
+}
+
+export async function signInInvitedParticipant(page: Page, email: string): Promise<void> {
+  await page.context().clearCookies();
+  const ok = await signInViaMagicLink(page, email);
+  if (!ok) {
+    throw new Error(
+      `Could not authenticate invited participant ${email}. Provide SUPABASE_SERVICE_ROLE_KEY for magic-link auth.`
+    );
+  }
+  await dismissCookieConsent(page);
+}
+
+export async function restoreOperatorE2eSession(page: Page): Promise<void> {
+  await page.context().clearCookies();
+  await ensureE2eSession(page);
 }
 
 async function ensureE2eWorkspace(page: Page): Promise<void> {

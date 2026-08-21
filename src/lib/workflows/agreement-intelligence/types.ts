@@ -122,6 +122,7 @@ export type WorkflowOperationalParticipant = {
   nextActionKind: WorkflowCoordinationNextActionKind;
   missingPayoutFields: string[];
   referral: WorkflowOperationalReferralSummary | null;
+  eligibleServiceIds: string[];
   workspaceUrl: string | null;
   payoutReview: {
     preferredMethod: string | null;

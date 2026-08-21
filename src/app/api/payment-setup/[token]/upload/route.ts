@@ -6,6 +6,11 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import type { Prisma } from '@prisma/client';
 import type { PaymentAttachment } from '@/lib/commercial/payment-setup-types';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  authorizeParticipantRelationship,
+  participantAuthDeniedResponse,
+  requireParticipantSession,
+} from '@/lib/participant-portal/participant-session.server';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_MIME_TYPES = [
@@ -21,20 +26,32 @@ const ALLOWED_MIME_TYPES = [
 /**
  * POST /api/payment-setup/[token]/upload
  *
- * Public endpoint — authenticated by payment setup token.
- * Accepts multipart form data with a single file.
- * Stores the file using the existing agreement upload storage (R2 / local).
- * Appends attachment metadata to participant_payload.paymentSetup.attachments.
+ * Authenticated participant mutation — session must match the invited identity.
  */
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ token: string }> }
 ) {
   try {
+    const session = await requireParticipantSession(request);
+    if ('response' in session) return session.response;
+
     const { token } = await context.params;
     const tokenResult = await findParticipantByPaymentSetupToken(token);
     if (!tokenResult) {
       return NextResponse.json({ error: 'Invalid or expired link.' }, { status: 404 });
+    }
+
+    const access = await authorizeParticipantRelationship({
+      user: session.user,
+      participantId: tokenResult.participantDbId,
+      participantEmail: tokenResult.participantEmail,
+      authenticatedUserId: tokenResult.authenticatedUserId,
+      dealOwnerUserId: tokenResult.deal.user_id,
+      action: 'mutate',
+    });
+    if (access.status !== 'ok' || access.role !== 'participant') {
+      return participantAuthDeniedResponse();
     }
 
     const formData = await request.formData();

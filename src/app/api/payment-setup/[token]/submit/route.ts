@@ -25,6 +25,11 @@ import {
   orchestrateOperationalMutation,
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+import {
+  authorizeParticipantRelationship,
+  participantAuthDeniedResponse,
+  requireParticipantSession,
+} from '@/lib/participant-portal/participant-session.server';
 
 const paymentBankSchema = z.object({
   accountName: z.string().nullable(),
@@ -56,17 +61,16 @@ const submitSchema = z.object({
 /**
  * POST /api/payment-setup/[token]/submit
  *
- * Public endpoint — authenticated by payment setup token only (no login required).
- *
- * Supplier submits their payment information from the public portal.
- * Invalidates the token after successful submission.
- * Dispatches operator notification.
+ * Authenticated participant mutation — session must match the invited identity.
  */
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ token: string }> }
 ) {
   try {
+    const session = await requireParticipantSession(request);
+    if ('response' in session) return session.response;
+
     const { token } = await context.params;
     if (!token) {
       return NextResponse.json({ error: 'Invalid link' }, { status: 400 });
@@ -78,6 +82,18 @@ export async function POST(
         { error: 'This link has expired or is no longer valid.' },
         { status: 404 }
       );
+    }
+
+    const access = await authorizeParticipantRelationship({
+      user: session.user,
+      participantId: tokenResult.participantDbId,
+      participantEmail: tokenResult.participantEmail,
+      authenticatedUserId: tokenResult.authenticatedUserId,
+      dealOwnerUserId: tokenResult.deal.user_id,
+      action: 'mutate',
+    });
+    if (access.status !== 'ok' || access.role !== 'participant') {
+      return participantAuthDeniedResponse();
     }
 
     const body = submitSchema.parse(await request.json());

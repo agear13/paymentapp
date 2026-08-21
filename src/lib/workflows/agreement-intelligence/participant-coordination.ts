@@ -39,6 +39,7 @@ export type ParticipantCoordinationView = {
   nextActionLabel: string | null;
   missingPayoutFields: string[];
   referral: WorkflowOperationalReferralSummary | null;
+  eligibleServiceIds: string[];
   workspaceUrl: string | null;
   payoutReview: {
     preferredMethod: string | null;
@@ -303,6 +304,10 @@ export function buildParticipantCoordinationView(
             destinationLabel: referral.destinationLabel,
             commissionLabel: compensationLabelOf(participant),
           },
+    eligibleServiceIds:
+      participant.compensationProfile?.commissionServiceIds ??
+      participant.referralCommerce?.enabledServiceIds ??
+      [],
     workspaceUrl: participantWorkspacePathFromParticipant(participant),
     payoutReview:
       payoutSetupStatus === 'not_applicable'
@@ -334,6 +339,7 @@ export function emptyContractualCoordination(): {
   nextActionLabel: null;
   missingPayoutFields: [];
   referral: null;
+  eligibleServiceIds: [];
   workspaceUrl: null;
   payoutReview: null;
 } {
@@ -348,6 +354,7 @@ export function emptyContractualCoordination(): {
     nextActionLabel: null,
     missingPayoutFields: [],
     referral: null,
+    eligibleServiceIds: [],
     workspaceUrl: null,
     payoutReview: null,
   };

@@ -48,6 +48,9 @@ describe('Workspace information architecture', () => {
     expect(COMMERCIAL_OS_ROUTES.workflowInstance('referral-management')).toBe(
       '/workspace/workflows/referral-management'
     );
+    expect(COMMERCIAL_OS_ROUTES.workflowServices('referral-management')).toBe(
+      '/workspace/workflows/referral-management?view=services'
+    );
     expect(COMMERCIAL_OS_ROUTES.commercialWorkspace).toBe('/workspace/commercial');
     expect(COMMERCIAL_OS_ROUTES.workspace).toBe('/workspace');
   });

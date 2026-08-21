@@ -36,6 +36,8 @@ export const COMMERCIAL_OS_ROUTES = {
   /** Native participant coordination inside an installed workflow hub. */
   workflowParticipant: (slug: string, participantId: string) =>
     `/workspace/workflows/${slug}?participant=${encodeURIComponent(participantId)}`,
+  /** Service catalog operating surface inside Referral Management. */
+  workflowServices: (slug: string) => `/workspace/workflows/${slug}?view=services`,
   publicWorkflowDetail: (slug: string) => `/journey/workflows/${slug}`,
   workflowReconciliation: '/workspace/workflow/reconciliation',
   workflowReconciliationTour: '/workspace/workflow/reconciliation?tour=1',

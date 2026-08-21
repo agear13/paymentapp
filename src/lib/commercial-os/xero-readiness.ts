@@ -97,6 +97,8 @@ export type XeroReadinessResult = {
   paymentAccountingLabel: string;
   optionalRecommendedCount: number;
   merchantPaymentCapabilities: MerchantPaymentCapabilities;
+  merchantRails: MerchantPaymentRails;
+  mappings: XeroReadinessMappingsPayload | null;
 };
 
 export type XeroReadinessMappingsPayload = {
@@ -329,6 +331,8 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     merchantPaymentCapabilities:
       input.merchantPaymentCapabilities ??
       deriveEmptyPaymentCapabilities(),
+    merchantRails: input.merchantRails,
+    mappings: input.mappings,
   };
 }
 
@@ -380,4 +384,11 @@ export const EMPTY_XERO_READINESS: Omit<XeroReadinessResult, 'loading'> = {
     evmConfigured: false,
     enabledSettlementTokens: [],
   },
+  merchantRails: {
+    stripeEnabled: false,
+    wiseEnabled: false,
+    stablecoinSettlementsEnabled: false,
+    manualBankEnabled: false,
+  },
+  mappings: null,
 };

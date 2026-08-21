@@ -8,24 +8,32 @@ import {
   ReferralManagementError,
 } from '@/lib/workflows/referral-management/promoter.server';
 
-const bodySchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  email: z.string().trim().email(),
-  phone: z.string().trim().max(40).optional(),
-  role: z.enum(['Promoter', 'Affiliate', 'Partner', 'Other']),
-  compensation: z.discriminatedUnion('kind', [
+const compensationSchema = z
+  .discriminatedUnion('kind', [
     z.object({
       kind: z.literal('revenue_share'),
       percentage: z.number().gt(0).lte(100),
-      serviceId: z.string().uuid(),
+      serviceId: z.string().uuid().optional(),
+      serviceIds: z.array(z.string().uuid()).min(1).optional(),
     }),
     z.object({
       kind: z.literal('fixed'),
       amount: z.number().positive(),
       currency: z.string().length(3),
-      serviceId: z.string().uuid(),
+      serviceId: z.string().uuid().optional(),
+      serviceIds: z.array(z.string().uuid()).min(1).optional(),
     }),
-  ]),
+  ])
+  .refine((value) => Boolean(value.serviceId) || (value.serviceIds?.length ?? 0) > 0, {
+    message: 'Select at least one service',
+  });
+
+const bodySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  email: z.string().trim().email(),
+  phone: z.string().trim().max(40).optional(),
+  role: z.enum(['Promoter', 'Affiliate', 'Partner', 'Other']),
+  compensation: compensationSchema,
   reuseExisting: z.boolean().optional(),
 });
 

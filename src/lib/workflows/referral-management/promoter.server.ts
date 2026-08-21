@@ -8,9 +8,15 @@ import type { OnboardingParticipantRole } from '@/lib/onboarding/operator-onboar
 import {
   createPilotParticipantForUser,
   getPilotSnapshotForUser,
+  updatePilotParticipantPayload,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { orchestrateOperationalMutation } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
-import { defaultReferralCommerce, normalizeReferralCommerce } from '@/lib/referrals/referral-commerce-config';
+import {
+  defaultReferralCommerce,
+  normalizeReferralCommerce,
+  shouldIssueReferralLink,
+} from '@/lib/referrals/referral-commerce-config';
+import { ensureReferralIssuance } from '@/lib/referrals/ensure-referral-issuance';
 import { buildInviteCompensationProfile } from '@/lib/participants/participant-compensation';
 import {
   CommercialCoordinationError,
@@ -21,6 +27,7 @@ import type { ParticipantCoordinationAction } from '@/lib/workflows/agreement-in
 import { ensureReferralManagementDeal } from '@/lib/workflows/referral-management/ensure-program-deal.server';
 import {
   REFERRAL_MANAGEMENT_SLUG,
+  compensationServiceIds,
   type ReferralCompensationInput,
   type ReferralPromoterRole,
 } from '@/lib/workflows/referral-management/constants';
@@ -104,15 +111,24 @@ export async function addReferralManagementPromoter(input: {
     throw new ReferralManagementError('Workflow not found', 'NOT_FOUND', 404);
   }
 
-  const service = await prisma.organization_services.findFirst({
+  const serviceIds = compensationServiceIds(input.compensation);
+  if (serviceIds.length === 0) {
+    throw new ReferralManagementError(
+      'Select at least one active service this promoter can refer.',
+      'INVALID_STATE',
+      422
+    );
+  }
+
+  const services = await prisma.organization_services.findMany({
     where: {
-      id: input.compensation.serviceId,
+      id: { in: serviceIds },
       organization_id: input.organizationId,
       active: true,
     },
     select: { id: true, name: true },
   });
-  if (!service) {
+  if (services.length !== serviceIds.length) {
     throw new ReferralManagementError(
       'Service selection required before a promoter can be added.',
       'INVALID_STATE',
@@ -162,7 +178,7 @@ export async function addReferralManagementPromoter(input: {
           createReferralLink: true,
           commissionMode: 'project_revenue_share',
           commerceCommissionPct: input.compensation.percentage,
-          enabledServiceIds: [service.id],
+          enabledServiceIds: serviceIds,
         }),
   });
 
@@ -179,7 +195,7 @@ export async function addReferralManagementPromoter(input: {
     compensationProfile: compensationProfile
       ? {
           ...compensationProfile,
-          commissionServiceIds: [service.id],
+          commissionServiceIds: serviceIds,
           commissionSourceMode: 'selected',
           customerAttributionEnabled: !isFixed,
         }
@@ -189,7 +205,7 @@ export async function addReferralManagementPromoter(input: {
           fixedAmount: isFixed ? input.compensation.amount : undefined,
           configured: true,
           configuredAt: new Date().toISOString(),
-          commissionServiceIds: [service.id],
+          commissionServiceIds: serviceIds,
           commissionSourceMode: 'selected',
           customerAttributionEnabled: !isFixed,
           revenueSources: [],
@@ -201,7 +217,7 @@ export async function addReferralManagementPromoter(input: {
           createReferralLink: true,
           commissionMode: 'project_revenue_share',
           commerceCommissionPct: input.compensation.percentage,
-          enabledServiceIds: [service.id],
+          enabledServiceIds: serviceIds,
         }),
   };
 
@@ -219,6 +235,112 @@ export async function addReferralManagementPromoter(input: {
     userId: input.userId,
   });
   return { context, participant: persisted, created: true, reused: false };
+}
+
+export async function updateReferralManagementPromoterServices(input: {
+  organizationId: string;
+  workflowId: string;
+  userId: string;
+  participantId: string;
+  serviceIds: string[];
+}) {
+  const scoped = await requireReferralManagementWorkflow(input);
+  if (!scoped.participant) {
+    throw new ReferralManagementError('Participant not found', 'NOT_FOUND', 404);
+  }
+
+  const serviceIds = [...new Set(input.serviceIds.map((id) => id.trim()).filter(Boolean))];
+  if (serviceIds.length === 0) {
+    throw new ReferralManagementError(
+      'Select at least one active service this promoter can refer.',
+      'INVALID_STATE',
+      422
+    );
+  }
+
+  const services = await prisma.organization_services.findMany({
+    where: {
+      id: { in: serviceIds },
+      organization_id: input.organizationId,
+      active: true,
+    },
+    select: { id: true },
+  });
+  if (services.length !== serviceIds.length) {
+    throw new ReferralManagementError(
+      'Select at least one active service this promoter can refer.',
+      'INVALID_STATE',
+      422
+    );
+  }
+
+  const participant = scoped.participant;
+  const isFixed = compensationKindOf(participant) === 'fixed';
+  const nextCommerce = isFixed
+    ? participant.referralCommerce
+    : normalizeReferralCommerce({
+        ...(participant.referralCommerce ?? defaultReferralCommerce()),
+        createReferralLink: true,
+        enabledServiceIds: serviceIds,
+      });
+
+  const next: DemoParticipant = {
+    ...participant,
+    compensationProfile: {
+      compensationType: isFixed ? 'FIXED_FEE' : 'REVENUE_SHARE',
+      configured: true,
+      configuredAt: new Date().toISOString(),
+      revenueSources: [],
+      ...participant.compensationProfile,
+      commissionServiceIds: serviceIds,
+      commissionSourceMode: 'selected',
+    },
+    referralCommerce: nextCommerce,
+  };
+
+  const persisted = await updatePilotParticipantPayload(participant.id, input.userId, next);
+  if (!persisted) {
+    throw new ReferralManagementError('Participant not found', 'NOT_FOUND', 404);
+  }
+
+  if (
+    !isFixed &&
+    nextCommerce &&
+    shouldIssueReferralLink(nextCommerce) &&
+    (participant.approvalStatus === 'Approved' || Boolean(participant.referralCode?.trim()))
+  ) {
+    const issued = await ensureReferralIssuance({
+      organizationId: input.organizationId,
+      operatorUserId: input.userId,
+      participantEmail: persisted.email,
+      participantName: persisted.name,
+      sourceParticipantId: persisted.id,
+      commissionKind: persisted.commissionKind,
+      commissionValue: persisted.commissionValue,
+      projectLabel: 'Referral Management',
+      referralCommerce: nextCommerce,
+    });
+    await updatePilotParticipantPayload(persisted.id, input.userId, {
+      ...persisted,
+      referralCode: issued.code,
+      customerCommerceUrl: issued.referralUrl,
+      inviteLink: issued.referralUrl,
+    });
+  }
+
+  await orchestrateOperationalMutation({
+    userId: input.userId,
+    mutation: 'snapshot_persist',
+    projectId: persisted.dealId ?? scoped.snapshot.participants.find((row) => row.id === persisted.id)?.dealId,
+    focusParticipant: persisted,
+  });
+
+  const context = await getReferralManagementContext({
+    organizationId: input.organizationId,
+    workflowId: input.workflowId,
+    userId: input.userId,
+  });
+  return { context, participant: persisted };
 }
 
 export async function runReferralManagementAction(input: {

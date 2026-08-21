@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { approveParticipantByInviteToken } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import {
+  approveParticipantByInviteToken,
+  getParticipantByInviteToken,
+} from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { ReferralIssuanceError } from '@/lib/referrals/ensure-referral-issuance';
 import { shouldIssueAttributionForParticipant } from '@/lib/operations/truth/attribution-truth';
 import { log } from '@/lib/logger';
@@ -8,7 +11,6 @@ import {
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import { prisma } from '@/lib/server/prisma';
-import { requireAuth } from '@/lib/supabase/middleware';
 import { referralTrace } from '@/lib/referrals/referral-trace';
 import { hydrateAgreementEligibleServices } from '@/lib/operations/hydration/hydrate-agreement-eligible-services.server';
 import { dispatchCommercialNotification } from '@/lib/commercial/dispatch-commercial-notification.server';
@@ -19,6 +21,11 @@ import { generateDraftInvoice } from '@/lib/commercial/supplier-onboarding';
 import { buildPersistedDraftInvoiceProjection } from '@/lib/commercial/supplier-invoice-projection';
 import { v4 as uuidv4 } from 'uuid';
 import type { PersistedDraftInvoice } from '@/lib/commercial/payment-setup-types';
+import {
+  authorizeParticipantRelationship,
+  participantAuthDeniedResponse,
+  requireParticipantSession,
+} from '@/lib/participant-portal/participant-session.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,8 +48,29 @@ export async function POST(
   }
 
   try {
-    const auth = await requireAuth(request as NextRequest);
-    const approverUserId = auth.user?.id ?? null;
+    const auth = await requireParticipantSession(request as NextRequest);
+    if ('response' in auth) return auth.response;
+
+    const existing = await getParticipantByInviteToken(token);
+    if (!existing?.deal) {
+      return NextResponse.json(
+        { error: 'Invite link is inactive (participant removed)' },
+        { status: 404 }
+      );
+    }
+    const access = await authorizeParticipantRelationship({
+      user: auth.user,
+      participantId: existing.id,
+      participantEmail: existing.email?.trim() || (existing.participant_payload as { email?: string } | null)?.email,
+      authenticatedUserId: existing.authenticated_user_id,
+      dealOwnerUserId: existing.deal.user_id,
+      action: 'mutate',
+    });
+    if (access.status !== 'ok' || access.role !== 'participant') {
+      return participantAuthDeniedResponse();
+    }
+
+    const approverUserId = auth.user.id;
 
     log.info('approve participation started', { inviteToken: token, approverUserId });
 

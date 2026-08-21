@@ -121,4 +121,44 @@ describe('referral-commerce-config', () => {
     });
     expect(n.commerceCommissionPct).toBe(15);
   });
+
+  it('legacy empty enabledServiceIds remains all-active catalogue access', () => {
+    const legacy = {
+      referralCommerce: {
+        commissionMode: 'referral_commerce',
+      },
+    };
+    expect(getScopedServiceIds(legacy)).toBeNull();
+    expect(filterServicesForReferralConfig(services, legacy)).toEqual(services);
+    expect(isServiceAllowedForReferral(legacy, 'c')).toBe(true);
+  });
+
+  it('explicit Referral Management ids never expand to the rest of the catalogue', () => {
+    const scoped = {
+      referralCommerce: {
+        commissionMode: 'project_revenue_share',
+        enabledServiceIds: ['a'],
+      },
+    };
+    expect(filterServicesForReferralConfig(services, scoped).map((row) => row.id)).toEqual(['a']);
+    expect(isServiceAllowedForReferral(scoped, 'c')).toBe(false);
+  });
+
+  it('replacing enabledServiceIds drops previously allowed services from future checkouts', () => {
+    const before = {
+      referralCommerce: {
+        commissionMode: 'project_revenue_share',
+        enabledServiceIds: ['a', 'b'],
+      },
+    };
+    const after = {
+      referralCommerce: {
+        commissionMode: 'project_revenue_share',
+        enabledServiceIds: ['a'],
+      },
+    };
+    expect(filterServicesForReferralConfig(services, before).map((row) => row.id)).toEqual(['a', 'b']);
+    expect(filterServicesForReferralConfig(services, after).map((row) => row.id)).toEqual(['a']);
+    expect(isServiceAllowedForReferral(after, 'b')).toBe(false);
+  });
 });

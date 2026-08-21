@@ -3,7 +3,7 @@ import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 import { createEvidenceTracker } from './helpers/e2e-evidence';
-import { ensureCookieBannerDismissed, ensureE2eSession } from './helpers/e2e-auth';
+import { ensureCookieBannerDismissed, ensureE2eSession, restoreOperatorE2eSession, signInInvitedParticipant } from './helpers/e2e-auth';
 import { gotoApp } from './helpers/e2e-navigation';
 
 test.describe.configure({ mode: 'serial' });
@@ -232,7 +232,7 @@ test.describe('P4 Referral Management golden path', () => {
     await page.getByPlaceholder('Name / business name').fill('Apex Promotions');
     const apexEmail = `apex.p4.${Date.now()}@example.com`;
     await page.getByPlaceholder('Email').fill(apexEmail);
-    await expect(page.locator('select[name="serviceId"]')).toBeVisible();
+    await expect(page.getByText('Eligible services')).toBeVisible();
     await page.getByRole('button', { name: 'Revenue share' }).click();
     await page.locator('input[name="percentage"]').fill('20');
     await page.getByRole('button', { name: 'Save promoter' }).click();
@@ -256,6 +256,7 @@ test.describe('P4 Referral Management golden path', () => {
     expect(workspaceUrl).toBeTruthy();
     evidence.pass('Request approval issued', workspaceUrl ?? '');
 
+    await signInInvitedParticipant(page, apexEmail);
     await page.goto(workspaceUrl!, { waitUntil: 'domcontentloaded' });
     await ensureCookieBannerDismissed(page);
     await expect(page.getByRole('button', { name: 'Approve participation' })).toBeVisible({
@@ -266,6 +267,7 @@ test.describe('P4 Referral Management golden path', () => {
     await page.getByRole('button', { name: 'Approve participation' }).click();
     await expect(page.getByText(/Approved/i).first()).toBeVisible({ timeout: 60_000 });
 
+    await restoreOperatorE2eSession(page);
     await gotoApp(page, `${INSTANCE}?participant=${encodeURIComponent(apex!.id!)}`);
     await expect(page.getByRole('button', { name: 'Back to participants' })).toBeVisible({
       timeout: 120_000,
@@ -282,12 +284,14 @@ test.describe('P4 Referral Management golden path', () => {
     expect(new URL(portalUrl!, page.url()).origin).toBe(new URL(page.url()).origin);
     evidence.pass('Request payout details', portalUrl ?? '');
 
+    await signInInvitedParticipant(page, apexEmail);
     await page.goto(portalUrl!, { waitUntil: 'domcontentloaded' });
     await ensureCookieBannerDismissed(page);
     expect(page.url()).toMatch(/\/participant\//);
     await fillPayoutForm(page);
     evidence.pass('Participant submitted payout/tax details in existing portal');
 
+    await restoreOperatorE2eSession(page);
     await gotoApp(page, `${INSTANCE}?participant=${encodeURIComponent(apex!.id!)}`);
     await expect(page.getByRole('button', { name: 'Back to participants' })).toBeVisible({
       timeout: 120_000,

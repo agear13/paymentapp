@@ -16,6 +16,7 @@ import { CommercialPerformanceCard } from '@/components/commercial/workspace/com
 import { SettlementExplanationCard } from '@/components/commercial/workspace/settlement-explanation-card';
 import { CommercialWorkspaceNav } from '@/components/commercial/workspace/commercial-workspace-nav';
 import { Button } from '@/components/ui/button';
+import { ParticipantLogoutButton } from '@/components/participant-portal/participant-logout-button';
 
 type Props = {
   workspace: ParticipantCommercialWorkspaceModel;
@@ -24,6 +25,8 @@ type Props = {
   onRefresh?: () => void;
   isRefreshing?: boolean;
   onboarding?: ParticipantWorkspaceOnboarding;
+  signedInEmail?: string | null;
+  onSignOut?: () => void;
 };
 
 function formatSyncedAt(iso: string): string {
@@ -130,6 +133,8 @@ export function ParticipantCommercialWorkspaceView({
   onRefresh,
   isRefreshing = false,
   onboarding,
+  signedInEmail,
+  onSignOut,
 }: Props) {
   return (
     <div className="min-h-screen bg-muted/30">
@@ -141,9 +146,15 @@ export function ParticipantCommercialWorkspaceView({
             </div>
             <span className="font-semibold tracking-tight shrink-0">Provvypay</span>
           </div>
-          <p className="text-xs text-muted-foreground truncate hidden sm:block">
-            {workspace.projectName}
-          </p>
+          <div className="flex items-center gap-3 min-w-0">
+            <p className="text-xs text-muted-foreground truncate hidden sm:block">
+              {workspace.projectName}
+            </p>
+            {signedInEmail ? (
+              <p className="text-xs text-muted-foreground truncate hidden md:block">{signedInEmail}</p>
+            ) : null}
+            {onSignOut ? <ParticipantLogoutButton onSignedOut={onSignOut} /> : null}
+          </div>
         </div>
       </header>
 

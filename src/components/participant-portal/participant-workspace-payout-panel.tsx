@@ -9,6 +9,7 @@ import type { SupplierOnboardingInput } from '@/lib/commercial/supplier-onboardi
 import type { PaymentAttachment } from '@/lib/commercial/payment-setup-types';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 
 type PortalData = {
   participantId: string;
@@ -39,7 +40,9 @@ export function ParticipantWorkspacePayoutPanel({ paymentSetupToken, onSubmitted
 
   React.useEffect(() => {
     if (!paymentSetupToken) return;
-    fetch(`/api/payment-setup/${encodeURIComponent(paymentSetupToken)}`)
+    fetch(`/api/payment-setup/${encodeURIComponent(paymentSetupToken)}`, {
+      credentials: 'include',
+    })
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? 'Failed to load payout form');
@@ -56,8 +59,9 @@ export function ParticipantWorkspacePayoutPanel({ paymentSetupToken, onSubmitted
     async (file: File): Promise<PaymentAttachment> => {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch(`/api/payment-setup/${paymentSetupToken}/upload`, {
+      const res = await csrfAwareFetch(`/api/payment-setup/${paymentSetupToken}/upload`, {
         method: 'POST',
+        credentials: 'include',
         body: formData,
       });
       const data = await res.json();
@@ -71,8 +75,9 @@ export function ParticipantWorkspacePayoutPanel({ paymentSetupToken, onSubmitted
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const res = await fetch(`/api/payment-setup/${paymentSetupToken}/submit`, {
+      const res = await csrfAwareFetch(`/api/payment-setup/${paymentSetupToken}/submit`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           payment: input.payment,

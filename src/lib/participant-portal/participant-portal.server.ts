@@ -1,8 +1,8 @@
 /**
  * Participant Portal — server utilities.
  *
- * Token-based authentication for the public participant commercial workspace.
- * Tokens live in participant_payload.participantPortalToken (no extra DB column).
+ * Workspace URLs identify an invitation. They are not bearer credentials.
+ * Authorization is the authenticated Supabase user bound to the invited participant.
  */
 import 'server-only';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,6 +26,8 @@ export async function findParticipantByPortalToken(token: string): Promise<{
   dealId: string;
   deal: ReturnType<typeof dealRowToRecentDeal>;
   dealUserId: string;
+  authenticatedUserId: string | null;
+  participantEmail: string | null;
 } | null> {
   const rows = await prisma.deal_network_pilot_participants.findMany({
     where: {
@@ -48,6 +50,8 @@ export async function findParticipantByPortalToken(token: string): Promise<{
     dealId: row.deal_id,
     deal: dealRowToRecentDeal(row.deal),
     dealUserId: row.deal.user_id,
+    authenticatedUserId: row.authenticated_user_id ?? null,
+    participantEmail: row.email?.trim() || participant.email?.trim() || null,
   };
 }
 

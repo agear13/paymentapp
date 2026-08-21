@@ -8,7 +8,7 @@ export const XERO_GUIDED_SETUP_CONFIG: GuidedSetupConfig = {
   id: 'xero',
   introTitle: 'Optional walkthrough',
   introSubtitle:
-    'We can highlight each section on this page. The checklist at the top shows what you still need to do.',
+    'We can highlight each section on this page. Invoice sync readiness is separate from payment holding accounts.',
   estimatedTime: '2–3 minutes',
   completion: {
     title: 'Walkthrough complete',

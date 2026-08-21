@@ -44,6 +44,8 @@ export async function findParticipantByPaymentSetupToken(token: string): Promise
   participantDbId: string;
   dealId: string;
   deal: { id: string; user_id: string; deal_payload: Prisma.JsonValue };
+  authenticatedUserId: string | null;
+  participantEmail: string | null;
 } | null> {
   const rows = await prisma.deal_network_pilot_participants.findMany({
     where: {
@@ -76,6 +78,8 @@ export async function findParticipantByPaymentSetupToken(token: string): Promise
     participantDbId: row.id,
     dealId: row.deal_id,
     deal: row.deal,
+    authenticatedUserId: row.authenticated_user_id ?? null,
+    participantEmail: row.email?.trim() || participant.email?.trim() || null,
   };
 }
 

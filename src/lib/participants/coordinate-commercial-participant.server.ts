@@ -335,15 +335,25 @@ async function activateReferral(input: {
 
   const percentage =
     input.participant.compensationProfile?.percentage ?? input.participant.commissionValue ?? 10;
+  const enabledServiceIds =
+    input.participant.compensationProfile?.commissionServiceIds ??
+    input.participant.referralCommerce?.enabledServiceIds ??
+    [];
+  const selectedMode = input.participant.compensationProfile?.commissionSourceMode === 'selected';
+  if (selectedMode && enabledServiceIds.length === 0) {
+    throw new CommercialCoordinationError(
+      'Service selection required before a referral destination can be generated.',
+      'INVALID_STATE',
+      422
+    );
+  }
+
   const referralCommerce = normalizeReferralCommerce({
     ...defaultReferralCommerce(),
     createReferralLink: true,
     commissionMode: kind === 'commission' ? 'referral_commerce' : 'project_revenue_share',
     commerceCommissionPct: percentage,
-    enabledServiceIds:
-      input.participant.compensationProfile?.commissionServiceIds ??
-      input.participant.referralCommerce?.enabledServiceIds ??
-      [],
+    enabledServiceIds,
   });
 
   const withCommerce: DemoParticipant = {

@@ -3,15 +3,16 @@ import { findParticipantByPaymentSetupToken } from '@/lib/commercial/payment-set
 import { recordPaymentPortalOpened } from '@/lib/commercial/payment-request.server';
 import { buildSupplierOnboardingInput } from '@/lib/commercial/build-supplier-onboarding-input';
 import { generateDraftInvoice } from '@/lib/commercial/supplier-onboarding';
+import {
+  authorizeParticipantRelationship,
+  getParticipantSessionUser,
+  participantAuthDeniedResponse,
+} from '@/lib/participant-portal/participant-session.server';
 
 /**
  * GET /api/payment-setup/[token]
  *
- * Public endpoint — no auth required.
- * Returns the participant and deal data needed to render the payment setup portal.
- *
- * Returns only the fields the supplier needs to see.
- * Never returns operator notes, internal IDs, or other participants' data.
+ * Requires an authenticated participant session that matches this payout invitation.
  */
 export async function GET(
   _request: NextRequest,
@@ -28,6 +29,25 @@ export async function GET(
       { error: 'This link has expired or is no longer valid. Please contact your organiser for a new link.' },
       { status: 404 }
     );
+  }
+
+  const user = await getParticipantSessionUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Authentication required', code: 'UNAUTHENTICATED' },
+      { status: 401 }
+    );
+  }
+  const access = await authorizeParticipantRelationship({
+    user,
+    participantId: result.participantDbId,
+    participantEmail: result.participantEmail,
+    authenticatedUserId: result.authenticatedUserId,
+    dealOwnerUserId: result.deal.user_id,
+    action: 'read',
+  });
+  if (access.status !== 'ok') {
+    return participantAuthDeniedResponse();
   }
 
   const { participant } = result;

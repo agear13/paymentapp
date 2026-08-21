@@ -12,8 +12,8 @@ export type AddPromoterInput = {
   phone?: string;
   role: 'Promoter' | 'Affiliate' | 'Partner' | 'Other';
   compensation:
-    | { kind: 'revenue_share'; percentage: number; serviceId: string }
-    | { kind: 'fixed'; amount: number; currency: string; serviceId: string };
+    | { kind: 'revenue_share'; percentage: number; serviceId?: string; serviceIds?: string[] }
+    | { kind: 'fixed'; amount: number; currency: string; serviceId?: string; serviceIds?: string[] };
   reuseExisting?: boolean;
 };
 
@@ -173,6 +173,40 @@ export function useReferralManagement(workflowId: string | null) {
     [workflowId]
   );
 
+  const updateEligibleServices = useCallback(
+    async (participantId: string, serviceIds: string[]) => {
+      if (!workflowId) return false;
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await csrfAwareFetch(
+          `/api/workflows/${workflowId}/referrals/promoters/${participantId}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ serviceIds }),
+          }
+        );
+        const payload = (await res.json().catch(() => null)) as
+          | { error?: string; context?: ReferralManagementContext }
+          | null;
+        if (!res.ok) {
+          setError(payload?.error ?? 'Could not update eligible services');
+          return false;
+        }
+        if (payload?.context) setContext(payload.context);
+        return true;
+      } catch {
+        setError('Could not update eligible services');
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [workflowId]
+  );
+
   return {
     context,
     loading,
@@ -182,5 +216,6 @@ export function useReferralManagement(workflowId: string | null) {
     addPromoter,
     extractReferralRelationships,
     coordinatePromoter,
+    updateEligibleServices,
   };
 }

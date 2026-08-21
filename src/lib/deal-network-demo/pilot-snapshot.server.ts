@@ -308,6 +308,7 @@ export async function updatePilotParticipantPayload(
   await prisma.deal_network_pilot_participants.update({
     where: { id: row.id },
     data: {
+      email: next.email?.trim() ? next.email.trim() : row.email,
       approval_status:
         next.approvalStatus === 'Approved' ? 'Approved' : row.approval_status,
       approved_at:

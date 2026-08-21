@@ -1362,11 +1362,14 @@ model deal_network_pilot_participants {
   created_at           DateTime @default(now()) @db.Timestamptz(6)
   updated_at           DateTime @updatedAt @db.Timestamptz(6)
   participant_payload  Json
+  /** Supabase auth.users.id bound after the invited email authenticates. */
+  authenticated_user_id String? @db.VarChar(255)
 
   deal         deal_network_pilot_deals          @relation(fields: [deal_id], references: [id], onDelete: Cascade)
   obligations  deal_network_pilot_obligations[]
 
   @@index([deal_id])
+  @@index([authenticated_user_id])
 }
 
 // ============================================================================

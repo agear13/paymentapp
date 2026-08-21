@@ -7,7 +7,6 @@ import {
   getPilotParticipantsForDeal,
   issueAndPersistParticipantAttribution,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
-import { shouldIssueAttributionForParticipant } from '@/lib/operations/truth/attribution-truth';
 import {
   isProjectWorkspaceParticipant,
   sanitizeParticipantForAgreementView,
@@ -23,6 +22,11 @@ import {
   isCatalogScopedCommission,
 } from '@/lib/operations/derivations/commission-scope';
 import { formatCurrency } from '@/lib/formatters/format-currency';
+import {
+  authorizeParticipantRelationship,
+  getParticipantSessionUser,
+  participantAuthDeniedResponse,
+} from '@/lib/participant-portal/participant-session.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +49,26 @@ export async function GET(
       );
     }
 
-    if (row.approval_status !== 'Approved') {
+    const user = await getParticipantSessionUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required', code: 'UNAUTHENTICATED' },
+        { status: 401 }
+      );
+    }
+    const access = await authorizeParticipantRelationship({
+      user,
+      participantId: row.id,
+      participantEmail: row.email?.trim() || participantRowToDemo(row).email,
+      authenticatedUserId: row.authenticated_user_id,
+      dealOwnerUserId: row.deal.user_id,
+      action: 'read',
+    });
+    if (access.status !== 'ok') {
+      return participantAuthDeniedResponse();
+    }
+
+    if (row.approval_status !== 'Approved' && access.role === 'participant') {
       await markParticipantInviteOpened(token);
     }
 

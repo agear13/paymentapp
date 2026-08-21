@@ -18,6 +18,7 @@ import {
 } from '@/lib/deal-network-demo/commission-structure';
 import { ParticipantAttributionAgreementSummary } from '@/components/projects/participant-attribution-agreement-summary';
 import { ReferralSharePanel } from '@/components/referrals/referral-share-panel';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { buildReferralQrApiPath } from '@/lib/referrals/referral-share-url';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import {
@@ -208,9 +209,10 @@ export function ProjectParticipantAgreementPanel({
 
   async function approve() {
     try {
-      const res = await fetch(`/api/deal-network-pilot/invites/${encodeURIComponent(token)}/approve`, {
+      const res = await csrfAwareFetch(`/api/deal-network-pilot/invites/${encodeURIComponent(token)}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ note: note.trim() || undefined }),
       });
       if (!res.ok) {

@@ -4,6 +4,7 @@ import {
   addReferralManagementPromoter,
   ReferralManagementError,
   runReferralManagementAction,
+  updateReferralManagementPromoterServices,
 } from '@/lib/workflows/referral-management/promoter.server';
 import { REFERRAL_MANAGEMENT_SLUG } from '@/lib/workflows/referral-management/constants';
 import { compensationKindOf } from '@/lib/workflows/agreement-intelligence/participant-coordination';
@@ -29,6 +30,8 @@ jest.mock('@/lib/server/prisma', () => ({
     },
     payment_links: {
       findMany: jest.fn().mockResolvedValue([]),
+      update: jest.fn(),
+      updateMany: jest.fn(),
     },
     commission_obligation_items: {
       findMany: jest.fn().mockResolvedValue([]),
@@ -86,6 +89,7 @@ const ORG = 'org-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const WF = 'wf-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const USER = 'user-1';
 const SERVICE = '11111111-1111-1111-1111-111111111111';
+const SERVICE_B = '22222222-2222-2222-2222-222222222222';
 
 function promoter(overrides: Partial<DemoParticipant> = {}): DemoParticipant {
   return {
@@ -125,7 +129,6 @@ describe('P4 — Referral Management workflow', () => {
       configuration: {},
     });
     prisma.organization_workflows.findUnique.mockResolvedValue(null);
-    prisma.organization_services.findFirst.mockResolvedValue({ id: SERVICE, name: 'Summer Launch Party' });
     prisma.organization_services.findMany.mockResolvedValue([{ id: SERVICE, name: 'Summer Launch Party' }]);
     getPilotSnapshotForUser.mockResolvedValue({ deals: [], participants: [] });
     createPilotParticipantForUser.mockImplementation((_userId: string, participant: DemoParticipant) =>
@@ -146,6 +149,8 @@ describe('P4 — Referral Management workflow', () => {
     expect(created.created).toBe(true);
     expect(created.participant.email).toBe('apex@example.com');
     expect(compensationKindOf(created.participant)).toBe('revenue_share');
+    expect(created.participant.compensationProfile?.commissionServiceIds).toEqual([SERVICE]);
+    expect(created.participant.referralCommerce?.enabledServiceIds).toEqual([SERVICE]);
     expect(JSON.stringify(created)).not.toMatch(/execute payment|release payout/i);
 
     getPilotSnapshotForUser.mockResolvedValue({
@@ -185,7 +190,7 @@ describe('P4 — Referral Management workflow', () => {
   });
 
   it('F: cannot configure a promoter against a service that is not in this organization', async () => {
-    prisma.organization_services.findFirst.mockResolvedValue(null);
+    prisma.organization_services.findMany.mockResolvedValue([]);
     await expect(
       addReferralManagementPromoter({
         organizationId: ORG,
@@ -201,7 +206,7 @@ describe('P4 — Referral Management workflow', () => {
         },
       })
     ).rejects.toMatchObject({ status: 422, name: 'ReferralManagementError' });
-    expect(prisma.organization_services.findFirst).toHaveBeenCalledWith(
+    expect(prisma.organization_services.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           organization_id: ORG,
@@ -213,7 +218,7 @@ describe('P4 — Referral Management workflow', () => {
   });
 
   it('refuses to fabricate a destination when the catalogue is empty', async () => {
-    prisma.organization_services.findFirst.mockResolvedValue(null);
+    prisma.organization_services.findMany.mockResolvedValue([]);
     await expect(
       addReferralManagementPromoter({
         organizationId: ORG,
@@ -225,6 +230,253 @@ describe('P4 — Referral Management workflow', () => {
         compensation: { kind: 'revenue_share', percentage: 20, serviceId: SERVICE },
       })
     ).rejects.toBeInstanceOf(ReferralManagementError);
+  });
+
+  it('scopes a promoter to multiple selected catalogue services', async () => {
+    prisma.organization_services.findMany.mockResolvedValue([
+      { id: SERVICE, name: 'Summer Launch Party' },
+      { id: SERVICE_B, name: 'Premium consultation' },
+    ]);
+    const created = await addReferralManagementPromoter({
+      organizationId: ORG,
+      workflowId: WF,
+      userId: USER,
+      name: 'Apex Promotions',
+      email: 'apex@example.com',
+      role: 'Promoter',
+      compensation: {
+        kind: 'revenue_share',
+        percentage: 20,
+        serviceIds: [SERVICE, SERVICE_B],
+      },
+    });
+    expect(created.created).toBe(true);
+    expect(created.participant.compensationProfile?.commissionServiceIds).toEqual([
+      SERVICE,
+      SERVICE_B,
+    ]);
+    expect(created.participant.referralCommerce?.enabledServiceIds).toEqual([
+      SERVICE,
+      SERVICE_B,
+    ]);
+  });
+
+  it('updates eligible services and refreshes an issued referral checkout config', async () => {
+    const existing = promoter({
+      approvalStatus: 'Approved',
+      referralCode: 'APEX20',
+      customerCommerceUrl: 'https://example.test/r/APEX20',
+    });
+    getPilotSnapshotForUser.mockResolvedValue({ deals: [], participants: [existing] });
+    prisma.organization_services.findMany.mockResolvedValue([
+      { id: SERVICE, name: 'Summer Launch Party' },
+      { id: SERVICE_B, name: 'Premium consultation' },
+    ]);
+    updatePilotParticipantPayload.mockImplementation(
+      (_id: string, _user: string, patch: DemoParticipant) => Promise.resolve({ ...existing, ...patch })
+    );
+    ensureReferralIssuance.mockResolvedValue({
+      created: false,
+      code: 'APEX20',
+      referralUrl: 'https://example.test/r/APEX20',
+    });
+
+    const result = await updateReferralManagementPromoterServices({
+      organizationId: ORG,
+      workflowId: WF,
+      userId: USER,
+      participantId: 'p-apex',
+      serviceIds: [SERVICE, SERVICE_B],
+    });
+
+    expect(updatePilotParticipantPayload).toHaveBeenCalled();
+    const firstPatch = updatePilotParticipantPayload.mock.calls[0][2] as DemoParticipant;
+    expect(firstPatch.compensationProfile?.commissionServiceIds).toEqual([SERVICE, SERVICE_B]);
+    expect(firstPatch.referralCommerce?.enabledServiceIds).toEqual([SERVICE, SERVICE_B]);
+    expect(ensureReferralIssuance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceParticipantId: 'p-apex',
+        referralCommerce: expect.objectContaining({
+          enabledServiceIds: [SERVICE, SERVICE_B],
+        }),
+      })
+    );
+    expect(result.context).toBeTruthy();
+  });
+
+  it('does not create a promoter when zero services are selected', async () => {
+    await expect(
+      addReferralManagementPromoter({
+        organizationId: ORG,
+        workflowId: WF,
+        userId: USER,
+        name: 'Apex Promotions',
+        email: 'apex@example.com',
+        role: 'Promoter',
+        compensation: { kind: 'revenue_share', percentage: 20, serviceIds: [] },
+      })
+    ).rejects.toMatchObject({ status: 422, name: 'ReferralManagementError' });
+    expect(createPilotParticipantForUser).not.toHaveBeenCalled();
+  });
+
+  it('does not issue a selected-mode referral when the promoter has zero services', async () => {
+    await expect(
+      executeCommercialParticipantAction({
+        participant: promoter({
+          approvalStatus: 'Approved',
+          compensationProfile: {
+            compensationType: 'REVENUE_SHARE',
+            percentage: 20,
+            configured: true,
+            configuredAt: '2026-08-20T00:00:00.000Z',
+            commissionSourceMode: 'selected',
+            commissionServiceIds: [],
+            customerAttributionEnabled: true,
+            revenueSources: [],
+          },
+          referralCommerce: {
+            commissionMode: 'project_revenue_share',
+            enabledServiceIds: [],
+          },
+        }),
+        userId: USER,
+        organizationId: ORG,
+        action: 'activate_referral',
+      })
+    ).rejects.toMatchObject({ status: 422 });
+    expect(ensureReferralIssuance).not.toHaveBeenCalled();
+  });
+
+  it('replacing eligible services drops removed ids from the issued checkout config', async () => {
+    const existing = promoter({
+      approvalStatus: 'Approved',
+      referralCode: 'APEX20',
+      customerCommerceUrl: 'https://example.test/r/APEX20',
+      compensationProfile: {
+        compensationType: 'REVENUE_SHARE',
+        percentage: 20,
+        configured: true,
+        configuredAt: '2026-08-20T00:00:00.000Z',
+        commissionServiceIds: [SERVICE, SERVICE_B],
+        commissionSourceMode: 'selected',
+        customerAttributionEnabled: true,
+        revenueSources: [],
+      },
+      referralCommerce: {
+        commissionMode: 'project_revenue_share',
+        enabledServiceIds: [SERVICE, SERVICE_B],
+        createReferralLink: true,
+      },
+    });
+    getPilotSnapshotForUser.mockResolvedValue({ deals: [], participants: [existing] });
+    prisma.organization_services.findMany.mockResolvedValue([{ id: SERVICE, name: 'Summer Launch Party' }]);
+    updatePilotParticipantPayload.mockImplementation(
+      (_id: string, _user: string, patch: DemoParticipant) => Promise.resolve({ ...existing, ...patch })
+    );
+    ensureReferralIssuance.mockResolvedValue({
+      created: false,
+      code: 'APEX20',
+      referralUrl: 'https://example.test/r/APEX20',
+    });
+
+    await updateReferralManagementPromoterServices({
+      organizationId: ORG,
+      workflowId: WF,
+      userId: USER,
+      participantId: 'p-apex',
+      serviceIds: [SERVICE],
+    });
+
+    const persisted = updatePilotParticipantPayload.mock.calls[0][2] as DemoParticipant;
+    expect(persisted.compensationProfile?.commissionServiceIds).toEqual([SERVICE]);
+    expect(persisted.referralCommerce?.enabledServiceIds).toEqual([SERVICE]);
+    expect(persisted.referralCommerce?.enabledServiceIds).not.toContain(SERVICE_B);
+    expect(ensureReferralIssuance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        referralCommerce: expect.objectContaining({
+          enabledServiceIds: [SERVICE],
+        }),
+      })
+    );
+    const issuedIds = ensureReferralIssuance.mock.calls[0][0].referralCommerce.enabledServiceIds;
+    expect(issuedIds).toEqual([SERVICE]);
+    expect(issuedIds).not.toContain(SERVICE_B);
+  });
+
+  it('rejects a failed serviceIds update without writing payload or checkout config', async () => {
+    const existing = promoter({
+      approvalStatus: 'Approved',
+      referralCode: 'APEX20',
+      customerCommerceUrl: 'https://example.test/r/APEX20',
+    });
+    getPilotSnapshotForUser.mockResolvedValue({ deals: [], participants: [existing] });
+    prisma.organization_services.findMany.mockResolvedValue([]);
+
+    await expect(
+      updateReferralManagementPromoterServices({
+        organizationId: ORG,
+        workflowId: WF,
+        userId: USER,
+        participantId: 'p-apex',
+        serviceIds: [],
+      })
+    ).rejects.toMatchObject({ status: 422, name: 'ReferralManagementError' });
+    expect(updatePilotParticipantPayload).not.toHaveBeenCalled();
+    expect(ensureReferralIssuance).not.toHaveBeenCalled();
+  });
+
+  it('cannot assign a service from another organization through the PATCH path', async () => {
+    const existing = promoter();
+    getPilotSnapshotForUser.mockResolvedValue({ deals: [], participants: [existing] });
+    prisma.organization_services.findMany.mockResolvedValue([]);
+
+    await expect(
+      updateReferralManagementPromoterServices({
+        organizationId: ORG,
+        workflowId: WF,
+        userId: USER,
+        participantId: 'p-apex',
+        serviceIds: ['99999999-9999-9999-9999-999999999999'],
+      })
+    ).rejects.toMatchObject({ status: 422, name: 'ReferralManagementError' });
+    expect(prisma.organization_services.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organization_id: ORG,
+          active: true,
+          id: { in: ['99999999-9999-9999-9999-999999999999'] },
+        }),
+      })
+    );
+    expect(updatePilotParticipantPayload).not.toHaveBeenCalled();
+    expect(ensureReferralIssuance).not.toHaveBeenCalled();
+  });
+
+  it('cannot newly assign an archived service, and does not touch historical invoices', async () => {
+    const existing = promoter();
+    getPilotSnapshotForUser.mockResolvedValue({ deals: [], participants: [existing] });
+    prisma.organization_services.findMany.mockResolvedValue([]);
+
+    await expect(
+      updateReferralManagementPromoterServices({
+        organizationId: ORG,
+        workflowId: WF,
+        userId: USER,
+        participantId: 'p-apex',
+        serviceIds: [SERVICE],
+      })
+    ).rejects.toMatchObject({ status: 422, name: 'ReferralManagementError' });
+    expect(prisma.organization_services.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organization_id: ORG,
+          active: true,
+        }),
+      })
+    );
+    expect(updatePilotParticipantPayload).not.toHaveBeenCalled();
+    expect(prisma.payment_links.update).not.toHaveBeenCalled();
+    expect(prisma.payment_links.updateMany).not.toHaveBeenCalled();
   });
 
   it('blocks mutations when the workflow is paused', async () => {

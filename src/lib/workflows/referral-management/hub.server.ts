@@ -84,7 +84,7 @@ export async function getReferralManagementContext(input: {
   const snapshot = await getPilotSnapshotForUser(input.userId);
   const catalogItems = await prisma.organization_services.findMany({
     where: { organization_id: input.organizationId, active: true },
-    select: { id: true, name: true },
+    select: { id: true, name: true, description: true, price: true, currency: true },
     orderBy: { name: 'asc' },
   });
   const promoters = snapshot.participants
@@ -236,7 +236,13 @@ export async function getReferralManagementContext(input: {
     performance,
     needsAttention,
     activity,
-    catalog: catalogItems,
+    catalog: catalogItems.map((item) => ({
+      id: item.id,
+      name: item.name,
+      description: item.description ?? '',
+      price: Number(item.price) || 0,
+      currency: item.currency,
+    })),
     handoff: {
       revenueSharingPreviewUrl: COMMERCIAL_OS_ROUTES.workflowDetail('revenue-sharing'),
       obligationsUrl: PAYOUTS_OBLIGATIONS_HREF,

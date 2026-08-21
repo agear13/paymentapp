@@ -8,6 +8,7 @@ import {
   Plus,
   Share2,
   AlertTriangle,
+  Package,
 } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
@@ -24,6 +25,8 @@ import type { ReferralImportPreview } from '@/lib/workflows/referral-management/
 import type { AddPromoterInput, AddPromoterResult } from '@/hooks/use-referral-management';
 import { AgreementIntelligenceParticipantDetail } from '@/components/journey/lovable/agreement-intelligence-participant-detail';
 import { ParticipantCoordinationSummary } from '@/components/journey/lovable/agreement-intelligence-participant-status';
+import { ReferralEligibleServicesPicker, PromoterEligibleServicesEditor } from '@/components/journey/lovable/referral-management-eligible-services';
+import { ReferralManagementServicesPanel } from '@/components/journey/lovable/referral-management-services-panel';
 import type { ReferralManagementContext } from '@/lib/workflows/referral-management/hub.server';
 
 function MetricCard({ label, value }: { label: string; value: React.ReactNode }) {
@@ -42,6 +45,7 @@ function AddPromoterForm({
   onSubmit,
   onExtract,
   onImported,
+  onManageServices,
 }: {
   catalog: ReferralManagementContext['catalog'];
   busy: boolean;
@@ -49,6 +53,7 @@ function AddPromoterForm({
   onSubmit: (body: AddPromoterInput) => Promise<AddPromoterResult>;
   onExtract: ReturnType<typeof useReferralManagement>['extractReferralRelationships'];
   onImported: (participantId?: string) => void;
+  onManageServices: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const [mode, setMode] = React.useState<'choose' | 'manual' | 'import'>('choose');
@@ -56,6 +61,15 @@ function AddPromoterForm({
   const [importOpen, setImportOpen] = React.useState(false);
   const [preview, setPreview] = React.useState<ReferralImportPreview | null>(null);
   const [importError, setImportError] = React.useState<string | null>(null);
+  const [serviceIds, setServiceIds] = React.useState<string[]>(() =>
+    catalog[0] ? [catalog[0].id] : []
+  );
+
+  React.useEffect(() => {
+    if (serviceIds.length === 0 && catalog[0]) {
+      setServiceIds([catalog[0].id]);
+    }
+  }, [catalog, serviceIds.length]);
 
   const reset = () => {
     setOpen(false);
@@ -175,10 +189,15 @@ function AddPromoterForm({
   if (catalog.length === 0) {
     return (
       <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-[13px] text-amber-900 dark:text-amber-200">
-        <p>Add an active catalogue service before creating a promoter. A checkout destination will not be fabricated.</p>
-        <Button type="button" variant="outline" onClick={reset}>
-          Back
-        </Button>
+        <p>Add an active service before creating a promoter. A checkout destination will not be fabricated.</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={onManageServices}>
+            Manage services
+          </Button>
+          <Button type="button" variant="outline" onClick={reset}>
+            Back
+          </Button>
+        </div>
       </div>
     );
   }
@@ -190,7 +209,10 @@ function AddPromoterForm({
         event.preventDefault();
         const form = event.currentTarget;
         const data = new FormData(form);
-        const serviceId = String(data.get('serviceId') ?? '');
+        if (serviceIds.length === 0) {
+          toast.error('Select at least one eligible service.');
+          return;
+        }
         const result = await onSubmit(
           kind === 'revenue_share'
             ? {
@@ -205,7 +227,7 @@ function AddPromoterForm({
                 compensation: {
                   kind: 'revenue_share',
                   percentage: Number(data.get('percentage')),
-                  serviceId,
+                  serviceIds,
                 },
               }
             : {
@@ -221,7 +243,7 @@ function AddPromoterForm({
                   kind: 'fixed',
                   amount: Number(data.get('amount')),
                   currency: 'AUD',
-                  serviceId,
+                  serviceIds,
                 },
               }
         );
@@ -247,17 +269,12 @@ function AddPromoterForm({
         <option>Partner</option>
         <option>Other</option>
       </select>
-      <select
-        name="serviceId"
-        required
-        className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-      >
-        {catalog.map((service) => (
-          <option key={service.id} value={service.id}>
-            {service.name}
-          </option>
-        ))}
-      </select>
+      <ReferralEligibleServicesPicker
+        catalog={catalog}
+        selectedIds={serviceIds}
+        onChange={setServiceIds}
+        disabled={busy}
+      />
       <div className="flex gap-2 text-[13px]">
         <button type="button" onClick={() => setKind('revenue_share')} className={kind === 'revenue_share' ? 'font-semibold' : 'text-ink-soft'}>
           Revenue share
@@ -288,23 +305,43 @@ export function ReferralManagementHubScreen() {
   const { getBySlug, loading: workflowsLoading, refresh: refreshWorkflows } = useDeployedWorkflows();
   const template = getWorkflowBySlug('referral-management');
   const installed = getBySlug('referral-management');
-  const { context, loading, error, busy, addPromoter, extractReferralRelationships, coordinatePromoter } =
+  const { context, loading, error, busy, addPromoter, extractReferralRelationships, coordinatePromoter, updateEligibleServices, refresh } =
     useReferralManagement(installed?.id ?? null);
   const [selectedParticipantId, setSelectedParticipantId] = React.useState<string | null>(null);
+  const [hubView, setHubView] = React.useState<'overview' | 'services'>('overview');
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    setSelectedParticipantId(new URLSearchParams(window.location.search).get('participant'));
+    const params = new URLSearchParams(window.location.search);
+    setSelectedParticipantId(params.get('participant'));
+    setHubView(params.get('view') === 'services' ? 'services' : 'overview');
+  }, []);
+
+  const syncUrl = React.useCallback((next: { participantId?: string | null; view?: 'overview' | 'services' }) => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (next.participantId) {
+      url.searchParams.set('participant', next.participantId);
+      url.searchParams.delete('view');
+    } else {
+      url.searchParams.delete('participant');
+      if (next.view === 'services') url.searchParams.set('view', 'services');
+      else url.searchParams.delete('view');
+    }
+    window.history.replaceState(null, '', `${url.pathname}${url.search}`);
   }, []);
 
   const selectParticipant = React.useCallback((participantId: string | null) => {
     setSelectedParticipantId(participantId);
-    if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
-    if (participantId) url.searchParams.set('participant', participantId);
-    else url.searchParams.delete('participant');
-    window.history.replaceState(null, '', `${url.pathname}${url.search}`);
-  }, []);
+    setHubView('overview');
+    syncUrl({ participantId, view: 'overview' });
+  }, [syncUrl]);
+
+  const selectView = React.useCallback((view: 'overview' | 'services') => {
+    setSelectedParticipantId(null);
+    setHubView(view);
+    syncUrl({ participantId: null, view });
+  }, [syncUrl]);
 
   const resume = React.useCallback(async () => {
     if (!installed?.id) return;
@@ -377,18 +414,27 @@ export function ReferralManagementHubScreen() {
             {template?.summary ?? 'Manage promoters, affiliates and referral revenue from one place.'}
           </p>
         </div>
-        {!context.paused ? (
-          <AddPromoterForm
-            catalog={context.catalog}
-            busy={busy}
-            error={error}
-            onSubmit={addPromoter}
-            onExtract={extractReferralRelationships}
-            onImported={(participantId) => {
-              if (participantId) selectParticipant(participantId);
-            }}
-          />
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {hubView !== 'services' ? (
+            <Button type="button" variant="outline" onClick={() => selectView('services')}>
+              <Package className="mr-2 h-4 w-4" />
+              Manage services
+            </Button>
+          ) : null}
+          {!context.paused ? (
+            <AddPromoterForm
+              catalog={context.catalog}
+              busy={busy}
+              error={error}
+              onSubmit={addPromoter}
+              onExtract={extractReferralRelationships}
+              onImported={(participantId) => {
+                if (participantId) selectParticipant(participantId);
+              }}
+              onManageServices={() => selectView('services')}
+            />
+          ) : null}
+        </div>
       </div>
 
       {context.paused ? (
@@ -404,124 +450,163 @@ export function ReferralManagementHubScreen() {
         <p className="text-[13px] text-destructive">{error}</p>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Revenue generated" value={context.metrics.revenueGeneratedLabel} />
-        <MetricCard label="Commission earned" value={context.metrics.commissionEarnedLabel} />
-        <MetricCard label="Active promoters" value={context.metrics.activePromoters} />
-        <MetricCard label="Pending payouts" value={context.metrics.pendingPayouts} />
-      </div>
-
-      {selected ? (
+      {hubView === 'services' ? (
         <div className="space-y-4">
-          <AgreementIntelligenceParticipantDetail
-            participant={selected}
-            activity={context.activity}
-            coordinationBlocked={context.paused}
-            busy={busy}
-            onBack={() => selectParticipant(null)}
-            onAction={(action, extra) => coordinatePromoter(selected.id!, action, extra)}
-            showReferralManagementHandoff={false}
-          />
-          {context.performance[selected.id ?? ''] ? (
-            <div className="rounded-xl border border-border bg-secondary/10 p-4">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">Performance</p>
-              <p className="mt-2 text-[14px]">
-                Revenue referred {context.performance[selected.id ?? ''].revenueLabel}
-              </p>
-              <p className="text-[14px]">
-                Commission earned {context.performance[selected.id ?? ''].commissionLabel}
-              </p>
-              <p className="text-[14px]">
-                Conversions {context.performance[selected.id ?? ''].conversions}
-              </p>
-            </div>
-          ) : null}
-          <Link
-            href={context.handoff.obligationsUrl}
-            className="inline-flex text-[13px] font-medium text-primary"
-          >
-            View in Revenue Sharing
-          </Link>
+          <Button type="button" variant="ghost" onClick={() => selectView('overview')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Referral Management
+          </Button>
+          <div>
+            <h2 className="text-xl font-semibold">Services</h2>
+            <p className="mt-1 text-[14px] text-ink-soft">
+              First create the services you want promoted, then assign them to promoters.
+            </p>
+          </div>
+          <ReferralManagementServicesPanel onChanged={() => void refresh()} />
         </div>
       ) : (
         <>
-          <section className="space-y-3">
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-soft">Needs attention</h2>
-            {context.needsAttention.length === 0 ? (
-              <p className="text-[13px] text-ink-soft">No promoter actions waiting.</p>
-            ) : (
-              <ul className="space-y-2">
-                {context.needsAttention.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => item.participantId && selectParticipant(item.participantId)}
-                      className="flex w-full items-start gap-2 rounded-xl border border-border bg-card px-4 py-3 text-left"
-                    >
-                      <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" />
-                      <span>
-                        <span className="block text-[14px] font-medium">{item.label}</span>
-                        <span className="text-[13px] text-ink-soft">{item.detail}</span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricCard label="Revenue generated" value={context.metrics.revenueGeneratedLabel} />
+            <MetricCard label="Commission earned" value={context.metrics.commissionEarnedLabel} />
+            <MetricCard label="Active promoters" value={context.metrics.activePromoters} />
+            <MetricCard label="Pending payouts" value={context.metrics.pendingPayouts} />
+          </div>
 
-          <section id="promoters" className="space-y-3">
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-soft">Promoters</h2>
-            {context.promoters.length === 0 ? (
+          {context.catalog.length === 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-secondary/20 p-4">
               <p className="text-[13px] text-ink-soft">
-                Add a promoter to start acquiring referral revenue. No agreement upload is required.
+                First create the services you want promoted, then assign them to promoters.
               </p>
-            ) : (
-              <ul className="space-y-3">
-                {context.promoters.map((promoter) => (
-                  <li
-                    key={promoter.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4"
-                  >
-                    <div>
-                      <p className="font-medium">{promoter.name}</p>
-                      <p className="text-[13px] text-ink-soft">
-                        {promoter.compensationLabel ?? 'Compensation not configured'}
-                        {promoter.referral?.destinationLabel
-                          ? ` · ${promoter.referral.destinationLabel}`
-                          : ''}
-                      </p>
-                      <p className="text-[13px] text-ink-soft">
-                        {context.performance[promoter.id ?? '']?.revenueLabel ?? '$0'} referred revenue
-                      </p>
-                      <div className="mt-2">
-                        <ParticipantCoordinationSummary participant={promoter} />
-                      </div>
-                    </div>
-                    <Button type="button" variant="outline" onClick={() => selectParticipant(promoter.id)}>
-                      Manage
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+              <Button type="button" variant="outline" onClick={() => selectView('services')}>
+                Manage services
+              </Button>
+            </div>
+          ) : null}
 
-          <section className="space-y-2">
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-soft">Activity</h2>
-            {context.activity.length === 0 ? (
-              <p className="text-[13px] text-ink-soft">No promoter activity yet.</p>
-            ) : (
-              <ul className="space-y-2">
-                {context.activity.slice(0, 12).map((item) => (
-                  <li key={item.id} className="text-[13px]">
-                    <span className="font-medium">{item.label}</span>
-                    {item.detail ? <span className="text-ink-soft"> — {item.detail}</span> : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          {selected ? (
+            <div className="space-y-4">
+              <AgreementIntelligenceParticipantDetail
+                participant={selected}
+                activity={context.activity}
+                coordinationBlocked={context.paused}
+                busy={busy}
+                onBack={() => selectParticipant(null)}
+                onAction={(action, extra) => coordinatePromoter(selected.id!, action, extra)}
+                showReferralManagementHandoff={false}
+              />
+              <PromoterEligibleServicesEditor
+                catalog={context.catalog}
+                selectedIds={selected.eligibleServiceIds}
+                busy={busy || context.paused}
+                onSave={async (nextIds) => {
+                  if (!selected.id) return;
+                  const ok = await updateEligibleServices(selected.id, nextIds);
+                  if (ok) toast.success('Eligible services updated');
+                }}
+              />
+              {context.performance[selected.id ?? ''] ? (
+                <div className="rounded-xl border border-border bg-secondary/10 p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">Performance</p>
+                  <p className="mt-2 text-[14px]">
+                    Revenue referred {context.performance[selected.id ?? ''].revenueLabel}
+                  </p>
+                  <p className="text-[14px]">
+                    Commission earned {context.performance[selected.id ?? ''].commissionLabel}
+                  </p>
+                  <p className="text-[14px]">
+                    Conversions {context.performance[selected.id ?? ''].conversions}
+                  </p>
+                </div>
+              ) : null}
+              <Link
+                href={context.handoff.obligationsUrl}
+                className="inline-flex text-[13px] font-medium text-primary"
+              >
+                View in Revenue Sharing
+              </Link>
+            </div>
+          ) : (
+            <>
+              <section className="space-y-3">
+                <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-soft">Needs attention</h2>
+                {context.needsAttention.length === 0 ? (
+                  <p className="text-[13px] text-ink-soft">No promoter actions waiting.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {context.needsAttention.map((item) => (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          onClick={() => item.participantId && selectParticipant(item.participantId)}
+                          className="flex w-full items-start gap-2 rounded-xl border border-border bg-card px-4 py-3 text-left"
+                        >
+                          <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" />
+                          <span>
+                            <span className="block text-[14px] font-medium">{item.label}</span>
+                            <span className="text-[13px] text-ink-soft">{item.detail}</span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section id="promoters" className="space-y-3">
+                <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-soft">Promoters</h2>
+                {context.promoters.length === 0 ? (
+                  <p className="text-[13px] text-ink-soft">
+                    Add a promoter to start acquiring referral revenue. No agreement upload is required.
+                  </p>
+                ) : (
+                  <ul className="space-y-3">
+                    {context.promoters.map((promoter) => (
+                      <li
+                        key={promoter.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4"
+                      >
+                        <div>
+                          <p className="font-medium">{promoter.name}</p>
+                          <p className="text-[13px] text-ink-soft">
+                            {promoter.compensationLabel ?? 'Compensation not configured'}
+                            {promoter.referral?.destinationLabel
+                              ? ` · ${promoter.referral.destinationLabel}`
+                              : ''}
+                          </p>
+                          <p className="text-[13px] text-ink-soft">
+                            {context.performance[promoter.id ?? '']?.revenueLabel ?? '$0'} referred revenue
+                          </p>
+                          <div className="mt-2">
+                            <ParticipantCoordinationSummary participant={promoter} />
+                          </div>
+                        </div>
+                        <Button type="button" variant="outline" onClick={() => selectParticipant(promoter.id)}>
+                          Manage
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className="space-y-2">
+                <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-soft">Activity</h2>
+                {context.activity.length === 0 ? (
+                  <p className="text-[13px] text-ink-soft">No promoter activity yet.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {context.activity.slice(0, 12).map((item) => (
+                      <li key={item.id} className="text-[13px]">
+                        <span className="font-medium">{item.label}</span>
+                        {item.detail ? <span className="text-ink-soft"> — {item.detail}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </>
+          )}
         </>
       )}
     </div>
