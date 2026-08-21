@@ -21,6 +21,7 @@ import {
 } from './token-set-trace';
 import { applyConnectionToXeroClient } from './apply-connection-token-set';
 import type { XeroOAuthTokenBundle } from './token-set-trace';
+import { xeroRefreshErrorFromUnknown } from './xero-refresh-errors';
 
 /**
  * Check if Xero OAuth credentials are present (client id/secret/redirect).
@@ -169,7 +170,7 @@ export async function refreshAccessToken(
     throw new Error('Refresh token is required but was not provided');
   }
 
-  loggers.xero.info('xero_refresh_token_start', { step: 'refresh_access_token' });
+  loggers.xero.info('xero_token_refresh_attempted', { step: 'refresh_access_token' });
 
   try {
     loggers.xero.debug('xero_refresh_construct_client', { step: 'construct_xero_client' });
@@ -186,6 +187,7 @@ export async function refreshAccessToken(
         refreshToken: previous.refreshToken,
         expiresAt: previous.expiresAt,
         connectedAt: new Date(),
+        tokenVersion: 0,
         idToken: previous.idToken,
         scope: previous.scope,
         tokenType: previous.tokenType,
@@ -200,28 +202,27 @@ export async function refreshAccessToken(
 
     const parsed = parseRefreshedTokenSet(tokenSet, previous);
 
-    loggers.xero.info('xero_refresh_token_success', {
+    loggers.xero.info('xero_token_refresh_succeeded', {
       step: 'refresh_access_token',
       expiresAt: parsed.expiresAt.toISOString(),
       rotatedRefreshToken: Boolean(tokenSet.refresh_token),
     });
+    if (tokenSet.refresh_token) {
+      loggers.xero.info('xero_refresh_token_rotated', {
+        step: 'refresh_access_token',
+        expiresAt: parsed.expiresAt.toISOString(),
+      });
+    }
 
     return parsed;
   } catch (error: unknown) {
-    const err = error as {
-      message?: string;
-      response?: { status?: number; statusText?: string; body?: unknown };
-    };
-    loggers.xero.error('xero_refresh_token_failed', error, {
+    const classified = xeroRefreshErrorFromUnknown(error);
+    loggers.xero.error('xero_token_refresh_failed', error, {
       step: 'refresh_access_token',
-      status: err.response?.status,
-      statusText: err.response?.statusText,
+      category: classified.category,
+      status: classified.statusCode,
     });
-
-    throw new Error(
-      `Failed to refresh Xero token: ${err.message ?? 'Unknown error'}. ` +
-        'This usually means the connection has expired and needs to be re-authorized.'
-    );
+    throw classified;
   }
 }
 
@@ -245,6 +246,7 @@ export async function getXeroTenants(tokens: XeroOAuthTokenBundle): Promise<Arra
         refreshToken: tokens.refreshToken,
         expiresAt: tokens.expiresAt,
         connectedAt: new Date(),
+        tokenVersion: 0,
         idToken: tokens.idToken,
         scope: tokens.scope,
         tokenType: tokens.tokenType,

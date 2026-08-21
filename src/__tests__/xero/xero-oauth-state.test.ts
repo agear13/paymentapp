@@ -46,7 +46,10 @@ describe('Xero OAuth state handling', () => {
     const url = await generateAuthUrl(oauthState);
 
     expect(XeroClient).toHaveBeenCalledWith(
-      expect.objectContaining({ state: oauthState })
+      expect.objectContaining({
+        state: oauthState,
+        scopes: expect.arrayContaining(['offline_access']),
+      })
     );
     expect(mockBuildConsentUrl).toHaveBeenCalled();
     expect(url).toContain('consent');

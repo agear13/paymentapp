@@ -57,6 +57,9 @@ interface XeroConnectionProps {
 interface ConnectionStatus {
   connected: boolean;
   stale?: boolean;
+  reauthorizationRequired?: boolean;
+  transientRefreshFailure?: boolean;
+  connectionState?: string;
   tenantId?: string;
   expiresAt?: string;
   connectedAt?: string;
@@ -295,30 +298,37 @@ export function XeroConnection({
 
   const isCommercial = variant === 'commercial';
   const uiMode = resolveXeroConnectionUiMode(status);
-  const isPersisted = uiMode === 'connected' || uiMode === 'needs_reauthorization';
+  const isPersisted =
+    uiMode === 'connected' ||
+    uiMode === 'needs_reauthorization' ||
+    uiMode === 'refresh_error';
   const needsReauthorization = uiMode === 'needs_reauthorization';
   const connectionIssue =
-    needsReauthorization
+    needsReauthorization || uiMode === 'refresh_error'
       ? null
       : formatXeroConnectionIssue(status?.operatorMessage);
 
   const heading =
     uiMode === 'needs_reauthorization'
       ? XERO_CONNECTION_COPY.needsAttentionHeading
-      : uiMode === 'connected'
-        ? XERO_CONNECTION_COPY.connectedHeading
-        : XERO_CONNECTION_COPY.disconnectedHeading;
+      : uiMode === 'refresh_error'
+        ? XERO_CONNECTION_COPY.refreshErrorHeading
+        : uiMode === 'connected'
+          ? XERO_CONNECTION_COPY.connectedHeading
+          : XERO_CONNECTION_COPY.disconnectedHeading;
 
   const helper =
     uiMode === 'needs_reauthorization'
       ? XERO_CONNECTION_COPY.needsAttentionHelper
-      : uiMode === 'connected'
-        ? isCommercial
-          ? XERO_CONNECTION_COPY.connectedHelper
-          : 'Your Xero account is connected. Invoices and payments will be automatically synced.'
-        : isCommercial
-          ? XERO_CONNECTION_COPY.disconnectedHelper
-          : 'Connect your Xero account to automatically sync invoices and payments.';
+      : uiMode === 'refresh_error'
+        ? XERO_CONNECTION_COPY.refreshErrorHelper
+        : uiMode === 'connected'
+          ? isCommercial
+            ? XERO_CONNECTION_COPY.connectedHelper
+            : 'Your Xero account is connected. Invoices and payments will be automatically synced.'
+          : isCommercial
+            ? XERO_CONNECTION_COPY.disconnectedHelper
+            : 'Connect your Xero account to automatically sync invoices and payments.';
 
   const disconnectButton = (
     <AlertDialog>
@@ -360,9 +370,16 @@ export function XeroConnection({
     <div id="xero-connection" className="space-y-4">
       {needsReauthorization ? (
         <Alert variant="destructive">
-          <AlertTitle>Xero needs attention</AlertTitle>
+          <AlertTitle>{XERO_CONNECTION_COPY.needsAttentionHeading}</AlertTitle>
           <AlertDescription>
             <p>{XERO_CONNECTION_COPY.needsAttentionHelper}</p>
+          </AlertDescription>
+        </Alert>
+      ) : uiMode === 'refresh_error' ? (
+        <Alert>
+          <AlertTitle>{XERO_CONNECTION_COPY.refreshErrorHeading}</AlertTitle>
+          <AlertDescription>
+            <p>{XERO_CONNECTION_COPY.refreshErrorHelper}</p>
           </AlertDescription>
         </Alert>
       ) : connectionIssue ? (
@@ -420,7 +437,12 @@ export function XeroConnection({
             ) : uiMode === 'needs_reauthorization' ? (
               <Badge variant="destructive" className="gap-1">
                 <XCircle className="h-3 w-3" />
-                Needs reconnect
+                Authorization expired
+              </Badge>
+            ) : uiMode === 'refresh_error' ? (
+              <Badge variant="secondary" className="gap-1">
+                <XCircle className="h-3 w-3" />
+                Temporarily unavailable
               </Badge>
             ) : (
               <Badge variant="secondary" className="gap-1">
@@ -497,7 +519,7 @@ export function XeroConnection({
         </div>
       ) : null}
 
-      {needsReauthorization ? null : (
+      {needsReauthorization || uiMode === 'refresh_error' ? null : (
         <p className="text-xs text-muted-foreground">{helper}</p>
       )}
     </div>

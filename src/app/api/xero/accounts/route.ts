@@ -49,11 +49,26 @@ export async function GET(request: NextRequest) {
         { status: 404 }
       );
     }
-    if (connectionResolved.stale || !connectionResolved.connection) {
+    if (connectionResolved.reauthorizationRequired || connectionResolved.stale) {
+      logger.warn('xero_api_unauthorized', {
+        organizationId,
+        category: 'invalid_grant',
+      });
       return NextResponse.json(
         {
           error: XERO_ACCOUNTS_STALE_MESSAGE,
           stale: true,
+          reauthorizationRequired: true,
+        },
+        { status: 503 }
+      );
+    }
+    if (!connectionResolved.connection) {
+      return NextResponse.json(
+        {
+          error: 'Provvy could not reach Xero just now. Try again shortly.',
+          stale: false,
+          transientRefreshFailure: Boolean(connectionResolved.transientRefreshFailure),
         },
         { status: 503 }
       );

@@ -578,6 +578,8 @@ model xero_connections {
   scope           String?       @db.VarChar(2048)
   expires_at      DateTime      @db.Timestamptz(6)
   connected_at    DateTime      @default(now()) @db.Timestamptz(6)
+  token_version   Int           @default(0)
+  last_refresh_at DateTime?     @db.Timestamptz(6)
   organizations   organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 

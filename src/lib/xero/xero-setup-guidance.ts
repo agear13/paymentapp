@@ -159,7 +159,7 @@ export const XERO_OAUTH_SUCCESS = {
 export const XERO_CONNECTION_COPY = {
   connectedHeading: 'Xero connection',
   disconnectedHeading: 'Connect Xero',
-  needsAttentionHeading: 'Xero needs attention',
+  needsAttentionHeading: 'Xero authorization expired',
   connectButton: 'Connect Xero',
   reconnectButton: 'Reconnect Xero',
   businessLabel: 'Which Xero business?',
@@ -168,7 +168,10 @@ export const XERO_CONNECTION_COPY = {
   connectedHelper:
     'Your Xero connection is active. Choose your business below if you have more than one.',
   needsAttentionHelper:
-    "Provvy couldn't refresh the Xero authorization. You can disconnect and reconnect Xero from Connected Systems.",
+    'Your Xero connection needs to be authorized again before Provvy can sync accounting data.',
+  refreshErrorHeading: 'Xero is temporarily unavailable',
+  refreshErrorHelper:
+    'Provvy could not reach Xero just now. Try again shortly — you do not need to reconnect yet.',
 } as const;
 
 export const XERO_SETUP_PROGRESS_COPY = {

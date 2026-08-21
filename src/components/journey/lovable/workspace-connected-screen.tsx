@@ -15,12 +15,20 @@ import { XeroOAuthSuccessBanner } from '@/components/xero/xero-oauth-success-ban
 import { formatXeroOAuthError } from '@/lib/xero/xero-customer-messages';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
 import { CommercialOsXeroReadinessBanner } from '@/components/journey/lovable/commercial-os-xero-readiness-banner';
+import {
+  computeXeroConnectionState,
+  presentXeroConnectionState,
+  type XeroConnectionState,
+} from '@/lib/xero/xero-connection-state';
 
 type ConnectedSystem = {
   name: string;
   detail: string;
   tag: string;
   manageHref?: string;
+  badge?: 'connected' | 'action_required';
+  badgeLabel?: string;
+  ctaLabel?: string;
 };
 
 type ComingSoonSystem = {
@@ -150,14 +158,36 @@ export function WorkspaceConnectedScreen() {
         }
 
         if (!cancelled && xeroRes.ok) {
-          const xeroStatus = (await xeroRes.json()) as { connected?: boolean };
-          xeroIsConnected = Boolean(xeroStatus.connected);
-          if (xeroIsConnected) {
+          const xeroStatus = (await xeroRes.json()) as {
+            connected?: boolean;
+            stale?: boolean;
+            reauthorizationRequired?: boolean;
+            transientRefreshFailure?: boolean;
+            tenantId?: string | null;
+            connectionState?: XeroConnectionState;
+          };
+          const connectionState =
+            readiness && !readiness.loading
+              ? readiness.connection.connectionState
+              : computeXeroConnectionState({
+                  connected: xeroStatus.connected,
+                  stale: xeroStatus.stale,
+                  reauthorizationRequired: xeroStatus.reauthorizationRequired,
+                  transientRefreshFailure: xeroStatus.transientRefreshFailure,
+                  tenantId: xeroStatus.tenantId,
+                  invoiceMappingsComplete: null,
+                });
+          xeroIsConnected = connectionState !== 'DISCONNECTED';
+          if (connectionState !== 'DISCONNECTED') {
+            const presentation = presentXeroConnectionState(connectionState);
             cards.push({
               name: 'Xero',
-              detail: 'Accounting · connected',
+              detail: presentation.detail,
               tag: 'Primary ledger',
               manageHref: COMMERCIAL_OS_ROUTES.connectedXero,
+              badge: presentation.badge,
+              badgeLabel: presentation.badgeLabel,
+              ctaLabel: presentation.ctaLabel,
             });
           }
         }
@@ -226,12 +256,33 @@ export function WorkspaceConnectedScreen() {
     };
   }, [organizationId, refreshKey]);
 
-  const showXeroAvailable = wantsXero && xeroConnected === false;
+  const displayedSystems = useMemo(() => {
+    if (!connectedSystems) return connectedSystems;
+    if (!readiness || readiness.loading) return connectedSystems;
+    const presentation = presentXeroConnectionState(readiness.connection.connectionState);
+    if (presentation.state === 'DISCONNECTED') {
+      return connectedSystems.filter((system) => system.name !== 'Xero');
+    }
+    const xeroCard: ConnectedSystem = {
+      name: 'Xero',
+      detail: presentation.detail,
+      tag: 'Primary ledger',
+      manageHref: COMMERCIAL_OS_ROUTES.connectedXero,
+      badge: presentation.badge,
+      badgeLabel: presentation.badgeLabel,
+      ctaLabel: presentation.ctaLabel,
+    };
+    const withoutXero = connectedSystems.filter((system) => system.name !== 'Xero');
+    return [xeroCard, ...withoutXero];
+  }, [connectedSystems, readiness]);
+
+  const xeroListed = Boolean(displayedSystems?.some((system) => system.name === 'Xero'));
+  const showXeroAvailable = wantsXero && !xeroListed && xeroConnected !== null && !systemsLoading;
 
   const comingSoonSystems = useMemo(() => {
-    const connectedNames = new Set((connectedSystems ?? []).map((system) => system.name));
+    const connectedNames = new Set((displayedSystems ?? []).map((system) => system.name));
     return COMING_SOON.filter((system) => !connectedNames.has(system.name));
-  }, [connectedSystems]);
+  }, [displayedSystems]);
 
   const beginXeroConnect = () => {
     if (!organizationId) {
@@ -306,20 +357,28 @@ export function WorkspaceConnectedScreen() {
         </section>
       ) : (
         <>
-          {connectedSystems && connectedSystems.length > 0 ? (
+          {displayedSystems && displayedSystems.length > 0 ? (
             <section>
               <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">Connected</div>
               <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {connectedSystems.map((system) => (
+                {displayedSystems.map((system) => {
+                  const actionRequired = system.badge === 'action_required';
+                  return (
                   <div key={system.name} className="rounded-2xl border border-border bg-card p-5 shadow-card">
                     <div className="flex items-center justify-between">
                       <div className="grid h-10 w-10 place-items-center rounded-xl bg-secondary text-[13px] font-semibold">
                         {system.name.slice(0, 2)}
                       </div>
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                        <Check className="h-3 w-3" />
-                        Connected
-                      </span>
+                      {actionRequired ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                          {system.badgeLabel ?? 'Action required'}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                          <Check className="h-3 w-3" />
+                          {system.badgeLabel ?? 'Connected'}
+                        </span>
+                      )}
                     </div>
                     <div className="mt-4 text-[14.5px] font-semibold">{system.name}</div>
                     <div className="text-[12px] text-ink-soft">{system.detail}</div>
@@ -333,12 +392,13 @@ export function WorkspaceConnectedScreen() {
                           className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-accent"
                         >
                           <Settings className="h-3.5 w-3.5" />
-                          Manage
+                          {system.ctaLabel ?? 'Manage'}
                         </Link>
                       ) : null}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           ) : null}
@@ -404,11 +464,15 @@ export function WorkspaceConnectedScreen() {
           Next
         </div>
         <div className="mt-2 text-[14px] text-foreground">
-          {xeroConnected
+          {readiness && !readiness.loading && readiness.connection.connectionState === 'AUTH_REAUTH_REQUIRED'
+            ? 'Reconnect Xero to restore accounting sync. Existing account mappings are kept.'
+            : readiness && !readiness.loading && readiness.connection.connectionState === 'READY'
+            ? 'Xero is ready to sync. Open Manage to review accounts or historical payments.'
+            : xeroListed
             ? 'Open accounting setup to choose accounts and check sync status.'
             : wantsXero
-              ? 'Connect accounting to sync invoices and payments automatically.'
-              : 'Continue into your Commercial Operating System.'}
+            ? 'Connect accounting to sync invoices and payments automatically.'
+            : 'Continue into your Commercial Operating System.'}
         </div>
         <Link
           href={COMMERCIAL_OS_ROUTES.workspace}

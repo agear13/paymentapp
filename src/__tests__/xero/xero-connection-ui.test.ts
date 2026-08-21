@@ -13,6 +13,16 @@ describe('resolveXeroConnectionUiMode', () => {
     );
   });
 
+  it('treats a transient refresh failure as refresh_error, not reconnect', () => {
+    expect(
+      resolveXeroConnectionUiMode({
+        connected: true,
+        transientRefreshFailure: true,
+        connectionState: 'ERROR',
+      })
+    ).toBe('refresh_error');
+  });
+
   it('treats a missing row as disconnected', () => {
     expect(resolveXeroConnectionUiMode({ connected: false })).toBe('disconnected');
     expect(resolveXeroConnectionUiMode(null)).toBe('disconnected');
@@ -23,7 +33,7 @@ describe('Xero customer copy', () => {
   it('does not send merchants to Integrations', () => {
     const issue = formatXeroConnectionIssue(XERO_REAUTHORIZATION_MESSAGE);
     expect(issue?.message.toLowerCase()).not.toContain('integrations');
-    expect(issue?.action.toLowerCase()).toContain('connected systems');
+    expect(issue?.action.toLowerCase()).toContain('reconnect');
 
     const mapping = formatMappingIssue(XERO_REAUTHORIZATION_MESSAGE);
     expect(mapping.message.toLowerCase()).not.toContain('integrations');

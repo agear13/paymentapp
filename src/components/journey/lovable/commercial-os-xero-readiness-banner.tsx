@@ -5,6 +5,7 @@ import { ArrowRight } from 'lucide-react';
 import { useCommercialReadiness } from '@/hooks/use-commercial-readiness';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
+import { presentXeroConnectionState } from '@/lib/xero/xero-connection-state';
 
 type CommercialOsXeroReadinessBannerProps = {
   /** connected-systems | xero-setup */
@@ -22,37 +23,29 @@ export function CommercialOsXeroReadinessBanner({
   if (surface === 'xero-setup') return null;
 
   if (surface === 'connected-systems') {
-    if (!readiness.connection.connected) return null;
+    const presentation = presentXeroConnectionState(readiness.connection.connectionState);
 
-    if (readiness.overallStatus === 'setup_incomplete') {
-      return (
-        <CommercialOsNextStepBanner
-          title="Accounting connected"
-          message="One more step. Choose which accounts Provvy should use before pushing invoices."
-          action={
-            <Link
-              href={COMMERCIAL_OS_ROUTES.connectedXero}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
-            >
-              Continue setup
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          }
-        />
-      );
-    }
+    if (presentation.state === 'DISCONNECTED') return null;
+
+    const href =
+      presentation.state === 'READY'
+        ? COMMERCIAL_OS_ROUTES.createInvoice
+        : COMMERCIAL_OS_ROUTES.connectedXero;
+
+    const ctaLabel =
+      presentation.state === 'READY' ? 'Create invoice' : presentation.ctaLabel;
 
     return (
       <CommercialOsNextStepBanner
-        title={readiness.statusLabel}
-        message={readiness.statusDetail}
-        tone="success"
+        title={presentation.bannerTitle}
+        message={presentation.bannerMessage}
+        tone={presentation.bannerTone === 'success' ? 'success' : 'default'}
         action={
           <Link
-            href={COMMERCIAL_OS_ROUTES.createInvoice}
+            href={href}
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
           >
-            Create invoice
+            {ctaLabel}
             <ArrowRight className="h-4 w-4" />
           </Link>
         }

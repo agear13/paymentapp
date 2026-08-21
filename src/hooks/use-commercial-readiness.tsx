@@ -149,6 +149,9 @@ async function fetchCommercialReadiness(
         tenantId?: string | null;
         connectedAt?: string | null;
         operatorMessage?: string | null;
+        stale?: boolean;
+        reauthorizationRequired?: boolean;
+        transientRefreshFailure?: boolean;
       })
     : { connected: false };
 

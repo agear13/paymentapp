@@ -24,6 +24,10 @@ import {
 import type { XeroMappingField } from '@/lib/accounting/recommended-accounting-config';
 import type { MerchantPaymentRails } from '@/lib/xero/xero-setup-guidance';
 import type { MerchantPaymentCapabilities } from '@/lib/accounting/merchant-payment-capabilities';
+import {
+  computeXeroConnectionState,
+  type XeroConnectionState,
+} from '@/lib/xero/xero-connection-state';
 
 export type XeroOverallStatus = 'setup_incomplete' | 'ready_to_invoice' | 'fully_set_up';
 
@@ -32,6 +36,10 @@ export type XeroReadinessConnection = {
   tenantSelected: boolean;
   connectedAt?: string | null;
   operatorMessage?: string | null;
+  stale?: boolean;
+  reauthorizationRequired?: boolean;
+  transientRefreshFailure?: boolean;
+  connectionState: XeroConnectionState;
 };
 
 export type XeroReadinessMappingField = 'revenue' | 'receivable' | 'stripeClearing' | 'processorFees';
@@ -120,6 +128,10 @@ export type XeroReadinessInput = {
     tenantId?: string | null;
     connectedAt?: string | Date | null;
     operatorMessage?: string | null;
+    stale?: boolean;
+    reauthorizationRequired?: boolean;
+    transientRefreshFailure?: boolean;
+    connectionState?: XeroConnectionState;
   };
   mappings: XeroReadinessMappingsPayload | null;
   chartAccountCodes: Set<string> | null;
@@ -168,13 +180,11 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
   const connected = Boolean(input.status.connected);
   const tenantSelected = connected && Boolean(input.status.tenantId?.trim());
   const connectedAt = normalizeConnectedAt(input.status.connectedAt ?? null);
-
-  const connection: XeroReadinessConnection = {
-    connected,
-    tenantSelected,
-    connectedAt,
-    operatorMessage: input.status.operatorMessage,
-  };
+  const reauthorizationRequired = Boolean(
+    input.status.reauthorizationRequired || (connected && input.status.stale)
+  );
+  const transientRefreshFailure = Boolean(input.status.transientRefreshFailure);
+  const oauthHealthy = connected && !reauthorizationRequired && !transientRefreshFailure;
 
   const invoiceMappings: XeroReadinessInvoiceMappings = {
     revenue: fieldState(
@@ -187,6 +197,33 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
       input.chartAccountCodes,
       input.chartLoaded
     ),
+  };
+
+  const invoiceMappingsComplete =
+    tenantSelected &&
+    invoiceMappings.revenue.saved &&
+    invoiceMappings.revenue.validInChart &&
+    invoiceMappings.receivable.saved &&
+    invoiceMappings.receivable.validInChart;
+
+  const connectionState = computeXeroConnectionState({
+    connected,
+    stale: input.status.stale,
+    reauthorizationRequired,
+    transientRefreshFailure,
+    tenantId: input.status.tenantId,
+    invoiceMappingsComplete: oauthHealthy ? invoiceMappingsComplete : null,
+  });
+
+  const connection: XeroReadinessConnection = {
+    connected,
+    tenantSelected,
+    connectedAt,
+    operatorMessage: input.status.operatorMessage,
+    stale: input.status.stale,
+    reauthorizationRequired,
+    transientRefreshFailure,
+    connectionState,
   };
 
   const paymentMappings: XeroReadinessPaymentMappings = {
@@ -216,7 +253,7 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
   const recommendations: string[] = [];
 
   const coreInvoiceAccountsReady =
-    connected &&
+    oauthHealthy &&
     tenantSelected &&
     invoiceMappings.revenue.saved &&
     invoiceMappings.revenue.validInChart &&
@@ -278,7 +315,11 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
   const statusDetail = heroSubline;
 
   let nextAction: XeroReadinessNextAction | null = null;
-  if (!connected) {
+  if (reauthorizationRequired) {
+    nextAction = { label: 'Reconnect Xero', sectionId: 'xero-connection' };
+  } else if (transientRefreshFailure) {
+    nextAction = { label: 'Try again', href: '/workspace/connected/xero' };
+  } else if (!connected) {
     nextAction = { label: 'Connect Accounting', sectionId: 'xero-connection' };
   } else if (!tenantSelected) {
     nextAction = { label: 'Choose accounting business', sectionId: 'xero-connection' };
@@ -345,7 +386,11 @@ function deriveEmptyPaymentCapabilities(): MerchantPaymentCapabilities {
 }
 
 export const EMPTY_XERO_READINESS: Omit<XeroReadinessResult, 'loading'> = {
-  connection: { connected: false, tenantSelected: false },
+  connection: {
+    connected: false,
+    tenantSelected: false,
+    connectionState: 'DISCONNECTED',
+  },
   invoiceMappings: {
     revenue: { saved: false, validInChart: false },
     receivable: { saved: false, validInChart: false },

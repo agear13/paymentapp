@@ -74,13 +74,15 @@ export function formatXeroConnectionIssue(
 
   if (
     lower.includes('needs to be reconnected') ||
+    lower.includes('needs to be authorized') ||
+    lower.includes('authorization expired') ||
     lower.includes('could not refresh') ||
     lower.includes("couldn't refresh") ||
     (lower.includes('refresh') && (lower.includes('authorization') || lower.includes('token')))
   ) {
     return {
-      message: "Provvy couldn't refresh the Xero authorization.",
-      action: 'Use Reconnect Xero above, or disconnect and reconnect from Connected Systems.',
+      message: 'Xero authorization expired.',
+      action: 'Use Reconnect Xero to restore accounting sync. Existing account mappings are kept.',
     };
   }
   if (lower.includes('no active xero connection') || /\bconnect xero\b/.test(lower)) {
@@ -123,13 +125,15 @@ export function formatMappingIssue(raw: string): CustomerMessage {
   }
   if (
     lower.includes('needs to be reconnected') ||
+    lower.includes('needs to be authorized') ||
+    lower.includes('authorization expired') ||
     lower.includes('could not refresh') ||
     lower.includes("couldn't refresh") ||
     (lower.includes('refresh') && (lower.includes('authorization') || lower.includes('token')))
   ) {
     return {
-      message: "Provvy couldn't refresh the Xero authorization.",
-      action: 'Use Reconnect Xero above, then choose accounts.',
+      message: 'Xero authorization expired.',
+      action: 'Use Reconnect Xero above. Existing account mappings are kept.',
     };
   }
   if (lower.includes('revenue account is required')) {

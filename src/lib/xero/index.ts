@@ -30,8 +30,10 @@ export {
   updateSelectedTenant,
   getConnectionStatus,
   getActiveConnection,
+  loadActiveXeroConnection,
   resolveXeroConnectionForApi,
   type XeroConnection,
+  type XeroConnectionStatus,
 } from './connection-service';
 
 export {

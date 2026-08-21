@@ -18,13 +18,31 @@ export async function POST(request: NextRequest) {
     const organizationId = access.organizationId;
 
     const connectionResolved = await resolveXeroConnectionForApi(organizationId);
-    if (!connectionResolved.persisted || connectionResolved.stale || !connectionResolved.connection) {
-      const reason = connectionResolved.stale
-        ? 'Your Xero session has expired. Reconnect Xero above, then try again.'
-        : 'Connect Xero above before creating clearing accounts.';
+    if (!connectionResolved.persisted) {
       return NextResponse.json(
-        { error: 'No active Xero connection found. Please connect to Xero first.', details: reason },
+        {
+          error: 'No active Xero connection found. Please connect to Xero first.',
+          details: 'Connect Xero above before creating clearing accounts.',
+        },
         { status: 404 }
+      );
+    }
+    if (connectionResolved.reauthorizationRequired || connectionResolved.stale) {
+      return NextResponse.json(
+        {
+          error: 'Xero authorization expired.',
+          details: 'Your Xero connection needs to be authorized again before Provvy can sync accounting data.',
+        },
+        { status: 503 }
+      );
+    }
+    if (!connectionResolved.connection) {
+      return NextResponse.json(
+        {
+          error: 'Xero is temporarily unavailable.',
+          details: 'Provvy could not reach Xero just now. Try again shortly.',
+        },
+        { status: 503 }
       );
     }
 

@@ -337,8 +337,8 @@ export function XeroAccountMapping({
       }
 
       setConnectionReady(true);
-      setConnectionStale(Boolean(status.stale));
-      if (status.stale) {
+      setConnectionStale(Boolean(status.stale || status.reauthorizationRequired));
+      if (status.stale || status.reauthorizationRequired) {
         setAccounts([]);
         setChartLoadedSuccessfully(false);
         setError(null);

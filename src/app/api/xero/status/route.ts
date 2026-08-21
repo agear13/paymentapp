@@ -60,12 +60,14 @@ export async function GET(request: NextRequest) {
 
     let tenants: Awaited<ReturnType<typeof getAvailableTenants>> = null;
 
-    if (status.connected && !status.stale) {
+    if (status.connected && !status.stale && !status.reauthorizationRequired) {
       try {
         tenants = await getAvailableTenants(organizationId);
       } catch (err) {
         loggers.xero.warn('xero_status_tenant_list_failed', {
           organizationId,
+          tenantId: status.tenantId,
+          connectionState: status.connectionState,
           err: err instanceof Error ? err.message : String(err),
         });
         tenants = [];
@@ -73,9 +75,18 @@ export async function GET(request: NextRequest) {
     }
 
     let operatorMessage: string | undefined;
-    if (status.stale || (!status.connected && status.tenantId)) {
+    if (status.reauthorizationRequired || status.stale || (!status.connected && status.tenantId)) {
       operatorMessage = XERO_REAUTHORIZATION_MESSAGE;
     }
+
+    loggers.xero.info('xero_connection_status', {
+      organizationId,
+      tenantId: status.tenantId,
+      connectionState: status.connectionState,
+      expiresAt: status.expiresAt?.toISOString(),
+      reauthorizationRequired: Boolean(status.reauthorizationRequired),
+      transientRefreshFailure: Boolean(status.transientRefreshFailure),
+    });
 
     return NextResponse.json({
       ...status,
