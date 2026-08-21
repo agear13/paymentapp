@@ -103,9 +103,12 @@ export async function signInViaMagicLink(
 export async function signInInvitedParticipant(
   page: Page,
   email: string,
-  returnPath?: string
+  returnPath?: string,
+  options?: { clearExistingSession?: boolean }
 ): Promise<void> {
-  await page.context().clearCookies();
+  if (options?.clearExistingSession !== false) {
+    await page.context().clearCookies();
+  }
   const ok = await signInViaMagicLink(page, email, returnPath);
   if (!ok) {
     throw new Error(

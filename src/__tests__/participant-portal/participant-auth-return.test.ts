@@ -3,6 +3,7 @@ import {
   isSafeParticipantReturnPath,
   PARTICIPANT_WORKSPACE_CHOOSER_PATH,
   participantAuthReturnCookieOptions,
+  participantTokenFromReturnPath,
   participantWorkspaceReturnPath,
   resolveAuthorizedParticipantDestination,
   uniqueAuthorizedParticipantReturnPath,
@@ -14,6 +15,9 @@ describe('participant auth return paths', () => {
   it('accepts the invitation workspace path', () => {
     expect(isSafeParticipantReturnPath(participantWorkspaceReturnPath(token))).toBe(true);
     expect(isSafeParticipantReturnPath(`/participant/${token}?step=payout`)).toBe(true);
+    expect(participantTokenFromReturnPath(participantWorkspaceReturnPath(token))).toBe(token);
+    expect(participantTokenFromReturnPath('/onboarding')).toBeNull();
+    expect(participantTokenFromReturnPath('/auth/login')).toBeNull();
   });
 
   it('rejects open redirects and unrelated routes', () => {

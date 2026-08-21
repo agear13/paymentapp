@@ -1,0 +1,41 @@
+'use client';
+
+import { createClient } from '@/lib/supabase/client';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
+import { participantWorkspaceReturnPath } from '@/lib/participant-portal/participant-auth-return';
+
+/**
+ * Sign out the current browser Supabase session and stay on the invitation URL.
+ * Does not redirect to /auth/login, /workspace, or /onboarding.
+ * Does not wipe localStorage (that would destroy an in-flight PKCE verifier).
+ */
+export async function signOutParticipantSession(): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const supabase = createClient();
+    await supabase.auth.signOut({ scope: 'local' });
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      await supabase.auth.signOut({ scope: 'local' });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to sign out';
+    return { ok: false, error: message };
+  }
+
+  try {
+    await csrfAwareFetch('/api/auth/sign-out', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch {
+    // Client cookies may already be gone; server route is belt-and-suspenders.
+  }
+
+  return { ok: true };
+}
+
+export function reloadParticipantInvitation(token: string, recoveredFromWrongAccount = false): void {
+  const path = participantWorkspaceReturnPath(token);
+  const url = recoveredFromWrongAccount ? `${path}?recover=1` : path;
+  window.location.replace(url);
+}

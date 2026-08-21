@@ -6,8 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ParticipantLogoutButton } from '@/components/participant-portal/participant-logout-button';
-import { createClient } from '@/lib/supabase/client';
-import { signOutClient } from '@/lib/auth/sign-out.client';
+import { signOutParticipantSession } from '@/lib/participant-portal/participant-sign-out.client';
 import type { ParticipantWorkspaceChoice } from '@/lib/participant-portal/participant-workspace-choice';
 
 export function ParticipantWorkspaceChooserPage() {
@@ -52,8 +51,7 @@ export function ParticipantWorkspaceChooserPage() {
   }, [workspaces, router]);
 
   const handleSignOut = React.useCallback(async () => {
-    const supabase = createClient();
-    await signOutClient({ supabase, confirm: false });
+    await signOutParticipantSession();
     setWorkspaces(null);
     setSignedInEmail(null);
     setUnauthenticated(true);

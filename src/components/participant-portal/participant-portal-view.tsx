@@ -26,6 +26,7 @@ type Props = {
   isRefreshing?: boolean;
   onboarding?: ParticipantWorkspaceOnboarding;
   signedInEmail?: string | null;
+  portalToken?: string;
   onSignOut?: () => void;
 };
 
@@ -134,6 +135,7 @@ export function ParticipantCommercialWorkspaceView({
   isRefreshing = false,
   onboarding,
   signedInEmail,
+  portalToken,
   onSignOut,
 }: Props) {
   return (
@@ -153,7 +155,9 @@ export function ParticipantCommercialWorkspaceView({
             {signedInEmail ? (
               <p className="text-xs text-muted-foreground truncate hidden md:block">{signedInEmail}</p>
             ) : null}
-            {onSignOut ? <ParticipantLogoutButton onSignedOut={onSignOut} /> : null}
+            {onSignOut || portalToken ? (
+              <ParticipantLogoutButton token={portalToken} onSignedOut={onSignOut} />
+            ) : null}
           </div>
         </div>
       </header>

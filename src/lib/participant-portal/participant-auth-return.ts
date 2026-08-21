@@ -14,6 +14,17 @@ export function participantWorkspaceReturnPath(token: string): string {
   return `/participant/${token.trim()}`;
 }
 
+export function participantTokenFromReturnPath(path: string | null | undefined): string | null {
+  if (!isSafeParticipantReturnPath(path)) return null;
+  try {
+    const parsed = new URL(path, 'https://provvy.invalid');
+    const token = parsed.pathname.replace(/^\/participant\//, '').trim();
+    return token || null;
+  } catch {
+    return null;
+  }
+}
+
 export function isSafeInternalRedirectPath(path: string | null | undefined): path is string {
   if (!path) return false;
   if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) return false;

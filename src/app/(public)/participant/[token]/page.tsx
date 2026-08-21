@@ -10,8 +10,10 @@ import {
   type ParticipantInvitationPreview,
 } from '@/components/participant-portal/participant-auth-gate';
 import { CsrfBootstrap } from '@/components/security/csrf-bootstrap';
-import { createClient } from '@/lib/supabase/client';
-import { signOutClient } from '@/lib/auth/sign-out.client';
+import {
+  reloadParticipantInvitation,
+  signOutParticipantSession,
+} from '@/lib/participant-portal/participant-sign-out.client';
 import type { ParticipantCommercialWorkspaceModel } from '@/lib/participant-portal/participant-portal-data';
 import type { ParticipantWorkspaceOnboarding } from '@/lib/participant-portal/participant-workspace-onboarding';
 
@@ -38,6 +40,7 @@ export default function ParticipantWorkspacePage() {
   const token = String(params?.token ?? '');
   const previewMode = searchParams?.get('mode') === 'preview';
   const urlStep = searchParams?.get('step');
+  const recoveredFromWrongAccount = searchParams?.get('recover') === '1';
 
   const [payload, setPayload] = React.useState<WorkspacePayload | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -98,13 +101,17 @@ export default function ParticipantWorkspacePage() {
     return () => window.clearInterval(id);
   }, [token, loadError, fetchWorkspace, payload?.auth?.status]);
 
+  const recoverInvitedSession = React.useCallback(async () => {
+    setLoading(true);
+    await signOutParticipantSession();
+    reloadParticipantInvitation(token, true);
+  }, [token]);
+
   const handleSignOut = React.useCallback(async () => {
-    const supabase = createClient();
-    await signOutClient({ supabase, confirm: false });
-    setPayload(null);
-    setDeniedEmail(null);
-    await fetchWorkspace();
-  }, [fetchWorkspace]);
+    setLoading(true);
+    await signOutParticipantSession();
+    reloadParticipantInvitation(token, false);
+  }, [token]);
 
   if (loading) {
     return (
@@ -115,13 +122,20 @@ export default function ParticipantWorkspacePage() {
   }
 
   if (payload?.auth?.status === 'unauthenticated' && payload.invitation) {
-    return <ParticipantAuthGate token={token} invitation={payload.invitation} />;
+    return (
+      <ParticipantAuthGate
+        token={token}
+        invitation={payload.invitation}
+        recoveredFromWrongAccount={recoveredFromWrongAccount}
+      />
+    );
   }
 
   if (payload?.auth?.status === 'denied') {
     return (
       <ParticipantAccessDenied
         signedInEmail={deniedEmail ?? payload.auth.signedInEmail}
+        onSignInWithInvitedAccount={() => void recoverInvitedSession()}
         onSignOut={() => void handleSignOut()}
       />
     );

@@ -51,11 +51,13 @@ async function fetchInvitePayload(inviteToken: string): Promise<InvitePayload | 
 function WorkspaceShell({
   projectName,
   signedInEmail,
+  portalToken,
   onSignOut,
   children,
 }: {
   projectName: string;
   signedInEmail?: string | null;
+  portalToken?: string;
   onSignOut?: () => void;
   children: React.ReactNode;
 }) {
@@ -74,7 +76,9 @@ function WorkspaceShell({
             {signedInEmail ? (
               <p className="text-xs text-muted-foreground truncate hidden md:block">{signedInEmail}</p>
             ) : null}
-            {onSignOut ? <ParticipantLogoutButton onSignedOut={onSignOut} /> : null}
+            {onSignOut || portalToken ? (
+              <ParticipantLogoutButton token={portalToken} onSignedOut={onSignOut} />
+            ) : null}
           </div>
         </div>
       </header>
@@ -89,14 +93,16 @@ function WorkspaceShell({
 function AwaitingAgreementSend({
   projectName,
   signedInEmail,
+  portalToken,
   onSignOut,
 }: {
   projectName: string;
   signedInEmail?: string | null;
+  portalToken?: string;
   onSignOut?: () => void;
 }) {
   return (
-    <WorkspaceShell projectName={projectName} signedInEmail={signedInEmail} onSignOut={onSignOut}>
+    <WorkspaceShell projectName={projectName} signedInEmail={signedInEmail} portalToken={portalToken} onSignOut={onSignOut}>
       <Card className="max-w-xl mx-auto">
         <CardHeader>
           <CardTitle>Your workspace is ready</CardTitle>
@@ -115,15 +121,17 @@ function PayoutSubmittedWaiting({
   projectName,
   participantName,
   signedInEmail,
+  portalToken,
   onSignOut,
 }: {
   projectName: string;
   participantName: string;
   signedInEmail?: string | null;
+  portalToken?: string;
   onSignOut?: () => void;
 }) {
   return (
-    <WorkspaceShell projectName={projectName} signedInEmail={signedInEmail} onSignOut={onSignOut}>
+    <WorkspaceShell projectName={projectName} signedInEmail={signedInEmail} portalToken={portalToken} onSignOut={onSignOut}>
       <ParticipantWorkspaceOnboardingProgress
         currentStep="payout_submitted"
         nextRequiredAction={null}
@@ -143,6 +151,7 @@ function PayoutSubmittedWaiting({
 }
 
 export function ParticipantWorkspaceGate({
+  portalToken,
   bootstrap,
   previewMode = false,
   signedInEmail,
@@ -193,6 +202,7 @@ export function ParticipantWorkspaceGate({
       <AwaitingAgreementSend
         projectName={projectName}
         signedInEmail={signedInEmail}
+        portalToken={portalToken}
         onSignOut={onSignOut}
       />
     );
@@ -201,7 +211,7 @@ export function ParticipantWorkspaceGate({
   if (showAgreementReview) {
     if (inviteLoading || !invitePayload) {
       return (
-        <WorkspaceShell projectName={projectName} signedInEmail={signedInEmail} onSignOut={onSignOut}>
+        <WorkspaceShell projectName={projectName} signedInEmail={signedInEmail} portalToken={portalToken} onSignOut={onSignOut}>
           <p className="text-sm text-muted-foreground text-center py-12">Loading your agreement…</p>
         </WorkspaceShell>
       );
@@ -211,6 +221,7 @@ export function ParticipantWorkspaceGate({
       <WorkspaceShell
         projectName={invitePayload.deal.dealName}
         signedInEmail={signedInEmail}
+        portalToken={portalToken}
         onSignOut={onSignOut}
       >
         <ParticipantWorkspaceOnboardingProgress
@@ -246,7 +257,7 @@ export function ParticipantWorkspaceGate({
   if (onboarding.step === 'payout_details') {
     if (!paymentSetupToken) {
       return (
-        <WorkspaceShell projectName={projectName} signedInEmail={signedInEmail} onSignOut={onSignOut}>
+        <WorkspaceShell projectName={projectName} signedInEmail={signedInEmail} portalToken={portalToken} onSignOut={onSignOut}>
           <p className="text-sm text-muted-foreground text-center py-12">
             Preparing your payout form…
           </p>
@@ -255,7 +266,7 @@ export function ParticipantWorkspaceGate({
     }
 
     return (
-      <WorkspaceShell projectName={projectName} signedInEmail={signedInEmail} onSignOut={onSignOut}>
+      <WorkspaceShell projectName={projectName} signedInEmail={signedInEmail} portalToken={portalToken} onSignOut={onSignOut}>
         <ParticipantWorkspaceOnboardingProgress
           currentStep="payout_details"
           nextRequiredAction={onboarding.nextRequiredAction}
@@ -275,6 +286,7 @@ export function ParticipantWorkspaceGate({
         projectName={projectName}
         participantName={invitePayload?.participant.name ?? 'there'}
         signedInEmail={signedInEmail}
+        portalToken={portalToken}
         onSignOut={onSignOut}
       />
     );
@@ -297,6 +309,7 @@ export function ParticipantWorkspaceGate({
       isRefreshing={isRefreshing}
       onboarding={onboarding}
       signedInEmail={signedInEmail}
+      portalToken={portalToken}
       onSignOut={onSignOut}
     />
   );

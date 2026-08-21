@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
+import { CsrfBootstrap } from '@/components/security/csrf-bootstrap';
 
 export type ParticipantInvitationPreview = {
   projectName: string;
@@ -15,9 +16,11 @@ export type ParticipantInvitationPreview = {
 export function ParticipantAuthGate({
   token,
   invitation,
+  recoveredFromWrongAccount = false,
 }: {
   token: string;
   invitation: ParticipantInvitationPreview;
+  recoveredFromWrongAccount?: boolean;
 }) {
   const [sending, setSending] = React.useState(false);
   const [sent, setSent] = React.useState(false);
@@ -45,6 +48,7 @@ export function ParticipantAuthGate({
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
+      <CsrfBootstrap />
       <Card className="w-full max-w-lg">
         <CardHeader>
           <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -61,17 +65,33 @@ export function ParticipantAuthGate({
         </CardHeader>
         <div className="space-y-4 px-6 pb-6">
           {invitation.invitedEmail ? (
-            <p className="rounded-lg bg-muted px-3 py-2 text-sm">
-              Continue as <span className="font-medium">{invitation.invitedEmail}</span>
-            </p>
+            <div className="rounded-lg bg-muted px-3 py-3 space-y-1">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Sign in to continue
+              </p>
+              <p className="text-sm font-medium" data-testid="invited-participant-email">
+                {invitation.invitedEmail}
+              </p>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">
               This invitation does not have an email address. Contact the organiser.
             </p>
           )}
+          {recoveredFromWrongAccount ? (
+            <p className="text-sm text-foreground">
+              You signed out of the previous account. We&apos;ll send a secure sign-in link to the
+              invited email address above.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              We&apos;ll email a secure sign-in link to this address. You are not signed in yet.
+            </p>
+          )}
           {sent ? (
             <p className="text-sm text-foreground">
-              A secure sign-in link has been sent. Open it from the invited email inbox to continue.
+              A secure sign-in link has been sent. Open the newest email from this inbox in this
+              browser to continue.
             </p>
           ) : (
             <Button
@@ -92,9 +112,11 @@ export function ParticipantAuthGate({
 
 export function ParticipantAccessDenied({
   signedInEmail,
+  onSignInWithInvitedAccount,
   onSignOut,
 }: {
   signedInEmail?: string | null;
+  onSignInWithInvitedAccount: () => void;
   onSignOut: () => void;
 }) {
   return (
@@ -108,7 +130,10 @@ export function ParticipantAccessDenied({
               : 'This participant workspace belongs to a different invited identity.'}
           </CardDescription>
         </CardHeader>
-        <div className="px-6 pb-6">
+        <div className="flex flex-wrap gap-2 px-6 pb-6">
+          <Button type="button" onClick={onSignInWithInvitedAccount}>
+            Sign in with the invited account
+          </Button>
           <Button type="button" variant="outline" onClick={onSignOut}>
             Log out
           </Button>

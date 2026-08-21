@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createRouteHandlerSupabaseClient } from '@/lib/supabase/route-handler-client';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { enforceCsrfForRequest } from '@/lib/security/csrf';
 import { findParticipantByPortalToken } from '@/lib/participant-portal/participant-portal.server';
-import { normalizeParticipantEmail } from '@/lib/participant-portal/participant-access';
+import {
+  isAuthorisedParticipantWorkspaceIdentity,
+  normalizeParticipantEmail,
+} from '@/lib/participant-portal/participant-access';
+import { getParticipantSessionUser } from '@/lib/participant-portal/participant-session.server';
 import { resolveCanonicalPublicOrigin } from '@/lib/runtime/customer-facing-url';
 import {
   PARTICIPANT_AUTH_RETURN_COOKIE,
@@ -40,11 +44,24 @@ export async function POST(
     );
   }
 
+  const supabase = await createRouteHandlerSupabaseClient();
+  const currentUser = await getParticipantSessionUser();
+  if (
+    currentUser &&
+    !isAuthorisedParticipantWorkspaceIdentity({
+      user: currentUser,
+      participantEmail: found.participantEmail,
+      authenticatedUserId: found.authenticatedUserId,
+      dealOwnerUserId: found.dealUserId,
+    })
+  ) {
+    await supabase.auth.signOut({ scope: 'local' });
+  }
+
   const returnPath = participantWorkspaceReturnPath(token);
   const origin = resolveCanonicalPublicOrigin(request);
   const redirectTo = `${origin}/auth/callback?redirectedFrom=${encodeURIComponent(returnPath)}`;
 
-  const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email: invitedEmail,
     options: {

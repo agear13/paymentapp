@@ -1,21 +1,63 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import type { User } from '@supabase/supabase-js';
 import { AuditEventType } from '@/lib/audit/audit-log';
 import { recordAuthAuditEvent } from '@/lib/audit/auth-audit.server';
 import { isEmailVerified } from '@/lib/auth/email-verification';
 import { recordSuccessfulLogin } from '@/lib/auth/login-tracking.server';
 import {
+  isParticipantInvitationReturn,
+  planParticipantCallbackSession,
+} from '@/lib/participant-portal/participant-auth-callback';
+import {
   isSafeInternalRedirectPath,
   isSafeParticipantReturnPath,
   PARTICIPANT_AUTH_RETURN_COOKIE,
   participantAuthReturnCookieOptions,
+  participantTokenFromReturnPath,
 } from '@/lib/participant-portal/participant-auth-return';
 import { resolveCanonicalPublicOrigin } from '@/lib/runtime/customer-facing-url';
+import { createRouteHandlerSupabaseClient } from '@/lib/supabase/route-handler-client';
 
 function canonicalRedirectBase(request: NextRequest): string {
   const origin = resolveCanonicalPublicOrigin(request);
   return origin || request.url;
+}
+
+function toSessionUser(user: User | null | undefined) {
+  if (!user?.id) return null;
+  return { id: user.id, email: user.email ?? null };
+}
+
+async function recordVerifiedLogin(input: {
+  user: User;
+  request: NextRequest;
+  type: string | null;
+}) {
+  const verified = isEmailVerified(input.user);
+  if (input.type === 'signup' || input.type === 'email' || verified) {
+    recordAuthAuditEvent({
+      eventType: AuditEventType.AUTH_EMAIL_VERIFIED,
+      userId: input.user.id,
+      email: input.user.email ?? undefined,
+      request: input.request,
+    });
+  }
+  if (!verified) return false;
+
+  await recordSuccessfulLogin({
+    userId: input.user.id,
+    email: input.user.email ?? undefined,
+    request: input.request,
+  });
+  recordAuthAuditEvent({
+    eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
+    userId: input.user.id,
+    email: input.user.email ?? undefined,
+    request: input.request,
+    metadata: { source: 'email_callback' },
+  });
+  return true;
 }
 
 export async function GET(request: NextRequest) {
@@ -31,63 +73,86 @@ export async function GET(request: NextRequest) {
     (isSafeInternalRedirectPath(redirectedFrom) && redirectedFrom) ||
     null;
 
-  let redirectPath = candidateReturn ?? '/onboarding';
+  let redirectPath = isParticipantInvitationReturn(candidateReturn)
+    ? candidateReturn
+    : candidateReturn ?? '/onboarding';
+
+  const supabase = await createRouteHandlerSupabaseClient();
 
   if (code) {
-    const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    const exchangeSucceeded = !error && Boolean(data.user);
 
-    if (!error && data.user) {
+    let getUserResult: User | null = null;
+    try {
       const { data: userData } = await supabase.auth.getUser();
-      const user = userData.user ?? data.user;
-      const verified = isEmailVerified(user);
+      getUserResult = userData.user ?? null;
+    } catch {
+      getUserResult = null;
+    }
 
-      if (type === 'signup' || type === 'email' || verified) {
-        recordAuthAuditEvent({
-          eventType: AuditEventType.AUTH_EMAIL_VERIFIED,
-          userId: user.id,
-          email: user.email ?? undefined,
-          request,
-        });
+    const callbackUser =
+      exchangeSucceeded && data.user
+        ? getUserResult?.id === data.user.id
+          ? getUserResult
+          : data.user
+        : getUserResult;
+
+    if (isParticipantInvitationReturn(candidateReturn)) {
+      const token = participantTokenFromReturnPath(candidateReturn);
+      const { findParticipantByPortalToken } = await import(
+        '@/lib/participant-portal/participant-portal.server'
+      );
+      const found = token ? await findParticipantByPortalToken(token) : null;
+      const plan = planParticipantCallbackSession({
+        candidateReturn,
+        exchangeSucceeded,
+        exchangedUser: toSessionUser(data.user),
+        getUserResult: toSessionUser(getUserResult),
+        participant: found
+          ? {
+              invitedEmail: found.participantEmail,
+              authenticatedUserId: found.authenticatedUserId,
+              dealOwnerUserId: found.dealUserId,
+            }
+          : null,
+      });
+
+      // Only leftover *failed* exchanges may sign out. A successful participant
+      // exchange must keep the cookies written by exchangeCodeForSession.
+      if (plan.signOutLeftoverSession) {
+        await supabase.auth.signOut({ scope: 'local' });
       }
+      redirectPath = plan.redirectPath;
 
-      if (verified) {
-        await recordSuccessfulLogin({
-          userId: user.id,
-          email: user.email ?? undefined,
-          request,
-        });
-
-        recordAuthAuditEvent({
-          eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
-          userId: user.id,
-          email: user.email ?? undefined,
-          request,
-          metadata: { source: 'email_callback' },
-        });
-
-        if (isSafeParticipantReturnPath(candidateReturn)) {
-          redirectPath = candidateReturn;
-        } else {
-          const { resolveParticipantAuthDestinationForUser } = await import(
-            '@/lib/participant-portal/participant-portal.server'
-          );
-          const restored = await resolveParticipantAuthDestinationForUser({
-            email: user.email,
-            id: user.id,
-          });
-          if (restored.kind === 'unique' || restored.kind === 'chooser') {
-            redirectPath = restored.path;
-          } else {
-            redirectPath = candidateReturn ?? '/onboarding';
-          }
-        }
-      } else {
+      if (exchangeSucceeded && callbackUser && !isEmailVerified(callbackUser)) {
+        const verify = new URL('/auth/verify-email', canonicalRedirectBase(request));
+        verify.searchParams.set('redirectedFrom', candidateReturn);
+        redirectPath = `${verify.pathname}${verify.search}`;
+      } else if (exchangeSucceeded && callbackUser) {
+        await recordVerifiedLogin({ user: callbackUser, request, type });
+      }
+    } else if (exchangeSucceeded && callbackUser) {
+      const verified = await recordVerifiedLogin({ user: callbackUser, request, type });
+      if (!verified) {
         const verify = new URL('/auth/verify-email', canonicalRedirectBase(request));
         if (candidateReturn) {
           verify.searchParams.set('redirectedFrom', candidateReturn);
         }
         redirectPath = `${verify.pathname}${verify.search}`;
+      } else {
+        const { resolveParticipantAuthDestinationForUser } = await import(
+          '@/lib/participant-portal/participant-portal.server'
+        );
+        const restored = await resolveParticipantAuthDestinationForUser({
+          email: callbackUser.email,
+          id: callbackUser.id,
+        });
+        if (restored.kind === 'unique' || restored.kind === 'chooser') {
+          redirectPath = restored.path;
+        } else {
+          redirectPath = candidateReturn ?? '/onboarding';
+        }
       }
     }
   }
