@@ -11,7 +11,7 @@ import {
   normalizeParticipantEmail,
 } from '@/lib/participant-portal/participant-access';
 import { getParticipantSessionUser } from '@/lib/participant-portal/participant-session.server';
-import { resolveCanonicalPublicOrigin } from '@/lib/runtime/customer-facing-url';
+import { resolveParticipantAuthOrigin } from '@/lib/runtime/customer-facing-url';
 import {
   PARTICIPANT_AUTH_RETURN_COOKIE,
   participantAuthReturnCookieOptions,
@@ -52,7 +52,7 @@ export async function POST(
     );
   }
 
-  const origin = resolveCanonicalPublicOrigin(request);
+  const origin = resolveParticipantAuthOrigin(request);
   const returnPath = participantWorkspaceReturnPath(token);
   const emailRedirectTo = buildParticipantMagicLinkRedirectTo(origin, token);
 
@@ -74,6 +74,9 @@ export async function POST(
   loggers.auth.info('participant_send_link_email_redirect_to', {
     emailRedirectTo,
     origin,
+    browserOrigin: request.headers.get('origin'),
+    forwardedHost: request.headers.get('x-forwarded-host'),
+    host: request.headers.get('host'),
     returnPath,
     invitedEmail,
     supabaseRedirectAllowlistMustInclude: supabaseAuthRedirectAllowlistHints(origin),

@@ -12,6 +12,7 @@ import {
   resolveCanonicalPublicOrigin,
   resolveConfiguredPublicOrigin,
   resolveCustomerFacingOrigin,
+  resolveParticipantAuthOrigin,
   resolveParticipantLinkOrigin,
   resolveRequestOrigin,
   validateCustomerFacingConfiguration,
@@ -336,5 +337,82 @@ describe('canonical public origin for participant links', () => {
 
     expect(resolveConfiguredPublicOrigin()).toBe('https://app.provvypay.com');
     expect(resolveParticipantLinkOrigin('https://localhost:10000')).toBe('https://app.provvypay.com');
+  });
+});
+
+describe('participant auth origin for PKCE', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.ALLOW_INFRASTRUCTURE_DOMAINS;
+    delete process.env.RENDER;
+    delete process.env.RENDER_EXTERNAL_URL;
+    delete process.env.RENDER_EXTERNAL_HOSTNAME;
+    delete process.env.VERCEL;
+    delete process.env.VERCEL_ENV;
+    delete process.env.VERCEL_URL;
+    delete process.env.TRUST_PROXY;
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  it('uses the browser Origin when the internal host is localhost:10000 and forwarded host is onrender', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.RENDER = 'true';
+    process.env.NEXT_PUBLIC_APP_URL = 'https://www.provvypay.com';
+
+    const origin = resolveParticipantAuthOrigin(
+      mockRequest({
+        origin: 'https://localhost:10000',
+        headers: {
+          host: 'localhost:10000',
+          origin: 'https://www.provvypay.com',
+          'x-forwarded-proto': 'https',
+          'x-forwarded-host': 'provvypay-api.onrender.com',
+        },
+      })
+    );
+
+    expect(origin).toBe('https://www.provvypay.com');
+    expect(origin).not.toMatch(/localhost/i);
+    expect(origin).not.toContain('onrender.com');
+  });
+
+  it('does not use an infrastructure forwarded host as the auth origin when a branded env is set', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.RENDER = 'true';
+    process.env.NEXT_PUBLIC_APP_URL = 'https://www.provvypay.com';
+
+    expect(
+      resolveParticipantAuthOrigin(
+        mockRequest({
+          origin: 'https://localhost:10000',
+          headers: {
+            host: 'localhost:10000',
+            'x-forwarded-proto': 'https',
+            'x-forwarded-host': 'provvypay-api.onrender.com',
+          },
+        })
+      )
+    ).toBe('https://www.provvypay.com');
+  });
+
+  it('never generates a production participant auth origin on localhost', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.RENDER = 'true';
+    process.env.NEXT_PUBLIC_APP_URL = 'https://www.provvypay.com';
+
+    const origin = resolveParticipantAuthOrigin(
+      mockRequest({
+        origin: 'https://localhost:10000',
+        headers: { host: 'localhost:10000' },
+      })
+    );
+
+    expect(origin).toBe('https://www.provvypay.com');
+    expect(origin).not.toMatch(/localhost/i);
   });
 });

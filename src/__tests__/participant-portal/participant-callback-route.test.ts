@@ -34,7 +34,9 @@ jest.mock('@/lib/auth/login-tracking.server', () => ({
 }));
 
 jest.mock('@/lib/runtime/customer-facing-url', () => ({
-  resolveCanonicalPublicOrigin: () => 'https://provvypay-api.onrender.com',
+  resolveCanonicalPublicOrigin: () => 'https://www.provvypay.com',
+  resolveParticipantAuthOrigin: () => 'https://www.provvypay.com',
+  toAuthAppPath: (path: string) => (path.startsWith('/') ? path : `/${path}`),
 }));
 
 jest.mock('@/lib/logger', () => ({
@@ -84,7 +86,7 @@ describe('participant recovery callback route', () => {
     expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe(
-      `https://provvypay-api.onrender.com/auth/callback/complete?next=${encodeURIComponent(RETURN_PATH)}`
+      `https://www.provvypay.com/auth/callback/complete?next=${encodeURIComponent(RETURN_PATH)}`
     );
   });
 
@@ -102,7 +104,7 @@ describe('participant recovery callback route', () => {
     expect(mockExchangeCodeForSession).toHaveBeenCalledWith('participant-otp-code');
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe(
-      `https://provvypay-api.onrender.com${RETURN_PATH}`
+      `https://www.provvypay.com${RETURN_PATH}`
     );
   });
 
@@ -117,7 +119,7 @@ describe('participant recovery callback route', () => {
     );
 
     expect(response.headers.get('location')).toBe(
-      `https://provvypay-api.onrender.com/auth/callback/complete?next=${encodeURIComponent(RETURN_PATH)}&error=exchange_failed`
+      `https://www.provvypay.com/auth/callback/complete?next=${encodeURIComponent(RETURN_PATH)}&error=exchange_failed`
     );
   });
 });

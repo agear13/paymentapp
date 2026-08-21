@@ -36,7 +36,7 @@ jest.mock('@/lib/participant-portal/participant-session.server', () => ({
 }));
 
 jest.mock('@/lib/runtime/customer-facing-url', () => ({
-  resolveCanonicalPublicOrigin: () => 'https://provvypay-api.onrender.com',
+  resolveParticipantAuthOrigin: () => 'https://www.provvypay.com',
 }));
 
 jest.mock('@/lib/logger', () => ({
@@ -86,12 +86,12 @@ describe('participant recovery send-link', () => {
       email: 'jaynealisha77@gmail.com',
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: `https://provvypay-api.onrender.com/auth/callback?next=${encodeURIComponent(`/participant/${TOKEN}`)}`,
+        emailRedirectTo: `https://www.provvypay.com/auth/callback?next=${encodeURIComponent(`/participant/${TOKEN}`)}`,
       },
     });
     const body = await response.json();
     expect(body.emailRedirectTo).toBe(
-      `https://provvypay-api.onrender.com/auth/callback?next=${encodeURIComponent(`/participant/${TOKEN}`)}`
+      `https://www.provvypay.com/auth/callback?next=${encodeURIComponent(`/participant/${TOKEN}`)}`
     );
     expect(response.status).toBe(200);
   });

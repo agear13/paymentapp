@@ -6,6 +6,7 @@ import { recordAuthAuditEvent } from '@/lib/audit/auth-audit.server';
 import { isEmailVerified } from '@/lib/auth/email-verification';
 import { recordSuccessfulLogin } from '@/lib/auth/login-tracking.server';
 import { loggers } from '@/lib/logger';
+import { hasPkceCodeVerifierCookie } from '@/lib/auth/auth-cookie-storage';
 import {
   isParticipantInvitationReturn,
   planParticipantCallbackSession,
@@ -20,15 +21,28 @@ import {
   PARTICIPANT_AUTH_CALLBACK_COMPLETE_PATH,
   safeCallbackNextPath,
 } from '@/lib/participant-portal/participant-magic-link';
-import { resolveCanonicalPublicOrigin } from '@/lib/runtime/customer-facing-url';
+import {
+  resolveParticipantAuthOrigin,
+  toAuthAppPath,
+} from '@/lib/runtime/customer-facing-url';
 import {
   createAuthCookieBuffer,
   createRequestBoundSupabaseClient,
 } from '@/lib/supabase/route-handler-client';
 
 function canonicalRedirectBase(request: NextRequest): string {
-  const origin = resolveCanonicalPublicOrigin(request);
-  return origin || request.url;
+  return resolveParticipantAuthOrigin(request);
+}
+
+function redirectResponse(path: string, origin: string) {
+  const appPath = toAuthAppPath(path);
+  if (origin && !/localhost|127\.0\.0\.1/i.test(origin)) {
+    return NextResponse.redirect(new URL(appPath, origin));
+  }
+  return new NextResponse(null, {
+    status: 307,
+    headers: { Location: appPath },
+  });
 }
 
 function toSessionUser(user: User | null | undefined) {
@@ -95,12 +109,18 @@ export async function GET(request: NextRequest) {
   const origin = canonicalRedirectBase(request);
   const cookieBuffer = createAuthCookieBuffer();
   const supabase = createRequestBoundSupabaseClient(request, cookieBuffer);
+  const incomingCookieNames = request.cookies.getAll().map((cookie) => cookie.name);
 
   const logBase = {
-    callbackUrl: `${requestUrl.origin}${requestUrl.pathname}`,
+    callbackUrl: `${origin}${requestUrl.pathname}`,
+    internalRequestOrigin: requestUrl.origin,
+    forwardedHost: request.headers.get('x-forwarded-host'),
+    host: request.headers.get('host'),
     hasCode: Boolean(code),
     codeLength: code?.length ?? 0,
     hasTokenHash: Boolean(tokenHash),
+    hasPkceVerifierCookie: hasPkceCodeVerifierCookie(request.cookies.getAll()),
+    incomingCookieNames,
     nextParam,
     redirectedFrom,
     candidateReturn,
@@ -109,7 +129,7 @@ export async function GET(request: NextRequest) {
   loggers.auth.info('participant_auth_callback_received', logBase);
 
   const redirectWithCookies = (path: string, extra?: Record<string, unknown>) => {
-    const response = NextResponse.redirect(new URL(path, origin));
+    const response = redirectResponse(path, origin);
     cookieBuffer.applyTo(response);
     if (request.cookies.get(PARTICIPANT_AUTH_RETURN_COOKIE)) {
       response.cookies.set(

@@ -552,28 +552,147 @@ export function resolveParticipantLinkOrigin(explicitOrigin?: string): string {
   return resolveConfiguredPublicOrigin();
 }
 
-export function resolveRequestOrigin(request: {
+export type PublicOriginRequest = {
   nextUrl: { origin: string; protocol: string };
   headers: { get(name: string): string | null };
-}): string | undefined {
-  const forwardedHost = firstHeaderValue(request.headers.get('x-forwarded-host'));
+};
+
+function originFromHostAndProto(host: string, proto: string): string | undefined {
+  if (!isSafeHostHeader(host)) return undefined;
+  const candidate = `${proto}://${host}`;
+  const hostname = hostnameFromOrigin(candidate);
+  if (!hostname) return undefined;
+  if (isProductionEnvironment() && isLoopbackHost(hostname)) return undefined;
+  return candidate;
+}
+
+function forwardedHeaderHost(request: PublicOriginRequest): string {
+  const rfcForwarded = firstHeaderValue(request.headers.get('forwarded'));
+  const rfcHost = rfcForwarded.match(/(?:^|;|\s)host=([^;]+)/i)?.[1]?.trim().replace(/^"|"$/g, '');
+  return firstHeaderValue(rfcHost) || firstHeaderValue(request.headers.get('x-forwarded-host'));
+}
+
+export function resolveRequestOrigin(request: PublicOriginRequest): string | undefined {
+  const forwardedHost = forwardedHeaderHost(request);
   const forwardedProto = stripProtocolColon(firstHeaderValue(request.headers.get('x-forwarded-proto')));
   const trustForwarded = isTrustedForwardedOriginEnvironment();
+  const fallbackProto =
+    stripProtocolColon(request.nextUrl.protocol) || (isProductionEnvironment() ? 'https' : 'http');
 
-  if (trustForwarded && forwardedHost && isSafeHostHeader(forwardedHost)) {
-    const proto = isAllowedForwardedProto(forwardedProto)
-      ? forwardedProto
-      : stripProtocolColon(request.nextUrl.protocol) || (isProductionEnvironment() ? 'https' : 'http');
-    return `${proto}://${forwardedHost}`;
+  if (trustForwarded && forwardedHost) {
+    const proto = isAllowedForwardedProto(forwardedProto) ? forwardedProto : fallbackProto;
+    const fromForwarded = originFromHostAndProto(forwardedHost, proto);
+    if (fromForwarded) return fromForwarded;
   }
 
   const host = firstHeaderValue(request.headers.get('host'));
-  if (host && isSafeHostHeader(host)) {
-    const proto = stripProtocolColon(request.nextUrl.protocol) || (isProductionEnvironment() ? 'https' : 'http');
-    return `${proto}://${host}`;
+  const fromHost = originFromHostAndProto(host, fallbackProto);
+  if (fromHost) return fromHost;
+
+  const nextOrigin = request.nextUrl.origin || undefined;
+  if (nextOrigin && isProductionEnvironment() && isLoopbackOriginValue(nextOrigin)) {
+    return undefined;
+  }
+  return nextOrigin;
+}
+
+function isLoopbackOriginValue(origin: string): boolean {
+  const hostname = hostnameFromOrigin(origin);
+  return Boolean(hostname && isLoopbackHost(hostname));
+}
+
+function registrableHost(hostname: string): string {
+  return hostname.replace(/^www\./i, '').toLowerCase();
+}
+
+function isSameRegistrableSite(originA: string, originB: string): boolean {
+  const a = hostnameFromOrigin(originA);
+  const b = hostnameFromOrigin(originB);
+  if (!a || !b) return false;
+  return registrableHost(a) === registrableHost(b);
+}
+
+function isCanonicalProvvypayHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === 'provvypay.com' || host === 'www.provvypay.com';
+}
+
+function readBrowserOriginHeader(request: PublicOriginRequest): string | null {
+  const origin = normalizeOrigin(request.headers.get('origin') ?? '');
+  if (!origin || isLoopbackOriginValue(origin)) return null;
+  return origin;
+}
+
+function isAllowedBrowserAuthOrigin(origin: string, request: PublicOriginRequest): boolean {
+  if (isLoopbackOriginValue(origin)) return false;
+  const hostname = hostnameFromOrigin(origin);
+  if (hostname && isCanonicalProvvypayHost(hostname)) return true;
+
+  const envOrigin = readConfiguredEnvOrigin();
+  if (envOrigin && (origin === envOrigin || isSameRegistrableSite(origin, envOrigin))) return true;
+
+  const platform = readPlatformPublicOrigin();
+  if (platform && origin === platform) return true;
+
+  const forwarded = resolveRequestOrigin(request);
+  const forwardedNormalized = forwarded ? normalizeOrigin(forwarded) : null;
+  return Boolean(forwardedNormalized && origin === forwardedNormalized);
+}
+
+/**
+ * Origin for PKCE magic-link `emailRedirectTo` and auth callback absolute URLs.
+ * Must match the browser-visible host that stores the code-verifier cookie.
+ * Never returns Render's internal localhost:10000 in production.
+ */
+export function resolveParticipantAuthOrigin(request: PublicOriginRequest): string {
+  const browserOrigin = readBrowserOriginHeader(request);
+  if (browserOrigin && isAllowedBrowserAuthOrigin(browserOrigin, request)) {
+    return browserOrigin;
   }
 
-  return request.nextUrl.origin || undefined;
+  const envOrigin = readConfiguredEnvOrigin();
+  const forwarded = resolveRequestOrigin(request);
+  const forwardedNormalized = forwarded ? normalizeOrigin(forwarded) : null;
+  const forwardedLoopback = Boolean(forwardedNormalized && isLoopbackOriginValue(forwardedNormalized));
+  const forwardedHostName = forwardedNormalized ? hostnameFromOrigin(forwardedNormalized) : null;
+  const forwardedInfra = Boolean(forwardedHostName && isInfrastructureHost(forwardedHostName));
+
+  if (envOrigin && (!forwardedNormalized || forwardedLoopback || forwardedInfra)) {
+    return envOrigin;
+  }
+
+  if (forwardedNormalized && !forwardedLoopback) {
+    const accepted = resolveFromCandidate(
+      forwardedNormalized,
+      'request',
+      'resolveParticipantAuthOrigin.forwarded',
+      { infrastructureOverride: isTrustedForwardedOriginEnvironment() }
+    );
+    if (accepted?.configured) return accepted.origin;
+  }
+
+  if (envOrigin) return envOrigin;
+
+  const configured = resolveConfiguredPublicOrigin();
+  if (configured && !isLoopbackOriginValue(configured)) return configured;
+
+  if (isDevelopmentEnvironment() && forwardedNormalized) return forwardedNormalized;
+  return configured;
+}
+
+export function publicOriginRequestFromUrl(request: Request): PublicOriginRequest {
+  const url = new URL(request.url);
+  return {
+    nextUrl: { origin: url.origin, protocol: url.protocol },
+    headers: request.headers,
+  };
+}
+
+/** Relative app path so the browser stays on the host it used to open the magic link. */
+export function toAuthAppPath(path: string): string {
+  if (!path.startsWith('/')) return `/${path}`;
+  if (path.startsWith('//')) return '/';
+  return path;
 }
 
 /** @deprecated Use evaluateCustomerFacingDomain / isInvalidCustomerHost. */

@@ -3,6 +3,11 @@ import 'server-only';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { NextRequest, NextResponse } from 'next/server';
+import { mergeAuthCookieLists, sanitizeAuthCookieOptions } from '@/lib/auth/auth-cookie-storage';
+import {
+  publicOriginRequestFromUrl,
+  resolveParticipantAuthOrigin,
+} from '@/lib/runtime/customer-facing-url';
 
 function requiredEnv(key: string): string {
   const value = process.env[key];
@@ -26,7 +31,7 @@ export async function createRouteHandlerSupabaseClient() {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
+            cookieStore.set(name, value, sanitizeAuthCookieOptions(options as Record<string, unknown>) as never);
           });
         },
       },
@@ -54,7 +59,11 @@ export function createAuthCookieBuffer() {
     },
     applyTo(response: NextResponse) {
       for (const cookie of cookiesToSet) {
-        response.cookies.set(cookie.name, cookie.value, cookie.options as never);
+        response.cookies.set(
+          cookie.name,
+          cookie.value,
+          sanitizeAuthCookieOptions(cookie.options) as never
+        );
       }
       return response;
     },
@@ -74,18 +83,15 @@ export function createRequestBoundSupabaseClient(
     {
       cookies: {
         getAll() {
-          const merged = new Map<string, { name: string; value: string }>();
-          for (const cookie of request.cookies.getAll()) {
-            merged.set(cookie.name, { name: cookie.name, value: cookie.value });
-          }
-          for (const cookie of buffer.cookies) {
-            merged.set(cookie.name, { name: cookie.name, value: cookie.value });
-          }
-          return [...merged.values()];
+          return mergeAuthCookieLists(request.cookies.getAll(), buffer.cookies);
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            buffer.cookies.push({ name, value, options: options as Record<string, unknown> });
+            buffer.cookies.push({
+              name,
+              value,
+              options: sanitizeAuthCookieOptions(options as Record<string, unknown>),
+            });
           });
         },
       },
@@ -94,9 +100,5 @@ export function createRequestBoundSupabaseClient(
 }
 
 export function resolveAuthRedirectOrigin(request: Request): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL;
-  if (configured) {
-    return configured.replace(/\/$/, '');
-  }
-  return new URL(request.url).origin;
+  return resolveParticipantAuthOrigin(publicOriginRequestFromUrl(request));
 }
