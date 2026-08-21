@@ -150,6 +150,8 @@ export type WorkflowNeedsAttentionItem = {
   detail: string;
   participantId?: string | null;
   href?: string | null;
+  /** Canonical issue discriminator. Do not group attention by display labels. */
+  kind?: string;
 };
 
 export type WorkflowActivityItem = {

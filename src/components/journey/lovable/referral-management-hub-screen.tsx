@@ -7,7 +7,6 @@ import {
   Loader2,
   Plus,
   Share2,
-  AlertTriangle,
   Package,
 } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
@@ -27,7 +26,13 @@ import { AgreementIntelligenceParticipantDetail } from '@/components/journey/lov
 import { ParticipantCoordinationSummary } from '@/components/journey/lovable/agreement-intelligence-participant-status';
 import { ReferralEligibleServicesPicker, PromoterEligibleServicesEditor } from '@/components/journey/lovable/referral-management-eligible-services';
 import { ReferralManagementServicesPanel } from '@/components/journey/lovable/referral-management-services-panel';
+import { ReferralAttentionSummary } from '@/components/journey/lovable/referral-management-attention';
 import type { ReferralManagementContext } from '@/lib/workflows/referral-management/hub.server';
+import {
+  filterCountsForPromoters,
+  promoterMatchesFilter,
+  type ReferralPromoterFilter,
+} from '@/lib/workflows/referral-management/attention';
 
 function MetricCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -309,6 +314,7 @@ export function ReferralManagementHubScreen() {
     useReferralManagement(installed?.id ?? null);
   const [selectedParticipantId, setSelectedParticipantId] = React.useState<string | null>(null);
   const [hubView, setHubView] = React.useState<'overview' | 'services'>('overview');
+  const [promoterFilter, setPromoterFilter] = React.useState<ReferralPromoterFilter>('all');
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -341,6 +347,16 @@ export function ReferralManagementHubScreen() {
     setSelectedParticipantId(null);
     setHubView(view);
     syncUrl({ participantId: null, view });
+  }, [syncUrl]);
+
+  const focusPromoterFilter = React.useCallback((filter: ReferralPromoterFilter) => {
+    setSelectedParticipantId(null);
+    setHubView('overview');
+    setPromoterFilter(filter);
+    syncUrl({ participantId: null, view: 'overview' });
+    window.requestAnimationFrame(() => {
+      document.getElementById('promoters')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }, [syncUrl]);
 
   const resume = React.useCallback(async () => {
@@ -392,6 +408,22 @@ export function ReferralManagementHubScreen() {
   }
 
   const selected = context.promoters.find((row) => row.id === selectedParticipantId) ?? null;
+  const promoterCounts = filterCountsForPromoters(context.promoters);
+  const visiblePromoters = context.promoters.filter((row) =>
+    promoterMatchesFilter(row, promoterFilter)
+  );
+  const attentionCount = promoterCounts.attention;
+
+  const filterChips: Array<{ id: ReferralPromoterFilter; label: string }> = [
+    { id: 'all', label: `All ${promoterCounts.all}` },
+    { id: 'attention', label: `Needs attention ${promoterCounts.attention}` },
+    { id: 'commission_review', label: `Ready for review ${promoterCounts.commission_review}` },
+    { id: 'approval_required', label: `Awaiting approval ${promoterCounts.approval_required}` },
+    { id: 'payout_details', label: `Payout details ${promoterCounts.payout_details}` },
+    { id: 'payout_flagged', label: `Payout updates ${promoterCounts.payout_flagged}` },
+    { id: 'ready', label: `Ready to activate ${promoterCounts.ready}` },
+    { id: 'active', label: `Active ${promoterCounts.active}` },
+  ].filter((chip) => chip.id === 'all' || chip.id === promoterFilter || promoterCounts[chip.id] > 0);
 
   return (
     <div className="animate-fade-up space-y-8 pb-16">
@@ -529,44 +561,52 @@ export function ReferralManagementHubScreen() {
           ) : (
             <>
               <section className="space-y-3">
-                <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-soft">Needs attention</h2>
-                {context.needsAttention.length === 0 ? (
-                  <p className="text-[13px] text-ink-soft">No promoter actions waiting.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {context.needsAttention.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => item.participantId && selectParticipant(item.participantId)}
-                          className="flex w-full items-start gap-2 rounded-xl border border-border bg-card px-4 py-3 text-left"
-                        >
-                          <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" />
-                          <span>
-                            <span className="block text-[14px] font-medium">{item.label}</span>
-                            <span className="text-[13px] text-ink-soft">{item.detail}</span>
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <ReferralAttentionSummary
+                  items={context.needsAttention}
+                  onReviewKind={focusPromoterFilter}
+                  onSelectParticipant={selectParticipant}
+                />
               </section>
 
-              <section id="promoters" className="space-y-3">
-                <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-soft">Promoters</h2>
+              <section id="promoters" className="space-y-3 scroll-mt-4">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-soft">Promoters</h2>
+                    <p className="text-[13px] text-ink-soft">
+                      {promoterCounts.all} total
+                      {attentionCount > 0 ? ` · ${attentionCount} need attention` : ''}
+                    </p>
+                  </div>
+                </div>
+                {context.promoters.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {filterChips.map((chip) => (
+                      <Button
+                        key={chip.id}
+                        type="button"
+                        size="sm"
+                        variant={promoterFilter === chip.id ? 'default' : 'outline'}
+                        onClick={() => setPromoterFilter(chip.id)}
+                      >
+                        {chip.label}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
                 {context.promoters.length === 0 ? (
                   <p className="text-[13px] text-ink-soft">
                     Add a promoter to start acquiring referral revenue. No agreement upload is required.
                   </p>
+                ) : visiblePromoters.length === 0 ? (
+                  <p className="text-[13px] text-ink-soft">No promoters match this filter.</p>
                 ) : (
                   <ul className="space-y-3">
-                    {context.promoters.map((promoter) => (
+                    {visiblePromoters.map((promoter) => (
                       <li
                         key={promoter.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4"
+                        className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border bg-card p-4"
                       >
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <p className="font-medium">{promoter.name}</p>
                           <p className="text-[13px] text-ink-soft">
                             {promoter.compensationLabel ?? 'Compensation not configured'}
@@ -577,9 +617,7 @@ export function ReferralManagementHubScreen() {
                           <p className="text-[13px] text-ink-soft">
                             {context.performance[promoter.id ?? '']?.revenueLabel ?? '$0'} referred revenue
                           </p>
-                          <div className="mt-2">
-                            <ParticipantCoordinationSummary participant={promoter} />
-                          </div>
+                          <ParticipantCoordinationSummary participant={promoter} />
                         </div>
                         <Button type="button" variant="outline" onClick={() => selectParticipant(promoter.id)}>
                           Manage

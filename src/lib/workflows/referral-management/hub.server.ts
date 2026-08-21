@@ -14,12 +14,12 @@ import {
 } from '@/lib/workflows/agreement-intelligence/participant-coordination';
 import type {
   WorkflowActivityItem,
-  WorkflowNeedsAttentionItem,
   WorkflowOperationalParticipant,
 } from '@/lib/workflows/agreement-intelligence/types';
 import { isOperationalCoordinationBlocked } from '@/lib/workflows/agreement-intelligence/operational-hub-coordination.server';
 import { REFERRAL_MANAGEMENT_SLUG } from '@/lib/workflows/referral-management/constants';
 import { ensureReferralManagementDeal } from '@/lib/workflows/referral-management/ensure-program-deal.server';
+import { buildReferralAttentionItems } from '@/lib/workflows/referral-management/attention';
 
 function money(amount: number, currency = 'AUD'): string {
   return new Intl.NumberFormat('en-AU', {
@@ -171,36 +171,7 @@ export async function getReferralManagementContext(input: {
     }
   >;
 
-  const needsAttention: WorkflowNeedsAttentionItem[] = [];
-  for (const promoter of promoters) {
-    if (promoter.payoutSetupStatus === 'required' || promoter.payoutSetupStatus === 'requested') {
-      needsAttention.push({
-        id: `payout-${promoter.id}`,
-        label: 'Promoter needs payout details',
-        detail: promoter.name,
-        participantId: promoter.id,
-        href: promoter.manageUrl,
-      });
-    }
-    if (promoter.agreementStatus !== 'approved') {
-      needsAttention.push({
-        id: `approval-${promoter.id}`,
-        label: 'Referral awaiting approval',
-        detail: promoter.name,
-        participantId: promoter.id,
-        href: promoter.manageUrl,
-      });
-    }
-    if (promoter.payoutSetupStatus === 'submitted') {
-      needsAttention.push({
-        id: `review-${promoter.id}`,
-        label: 'Commission ready for review',
-        detail: `${promoter.name} submitted payout details`,
-        participantId: promoter.id,
-        href: promoter.manageUrl,
-      });
-    }
-  }
+  const needsAttention = buildReferralAttentionItems(promoters);
 
   const audit = deriveAuditTimelineFromParticipants(snapshot.participants.filter(isReferralEligible));
   const activity: WorkflowActivityItem[] = audit
