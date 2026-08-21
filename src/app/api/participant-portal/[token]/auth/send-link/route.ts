@@ -4,7 +4,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { enforceCsrfForRequest } from '@/lib/security/csrf';
 import { findParticipantByPortalToken } from '@/lib/participant-portal/participant-portal.server';
 import { normalizeParticipantEmail } from '@/lib/participant-portal/participant-access';
-import { resolveRequestOrigin } from '@/lib/runtime/customer-facing-url';
+import { resolveCanonicalPublicOrigin } from '@/lib/runtime/customer-facing-url';
 import {
   PARTICIPANT_AUTH_RETURN_COOKIE,
   participantAuthReturnCookieOptions,
@@ -41,7 +41,7 @@ export async function POST(
   }
 
   const returnPath = participantWorkspaceReturnPath(token);
-  const origin = resolveRequestOrigin(request) || request.nextUrl.origin;
+  const origin = resolveCanonicalPublicOrigin(request);
   const redirectTo = `${origin}/auth/callback?redirectedFrom=${encodeURIComponent(returnPath)}`;
 
   const supabase = await createClient();

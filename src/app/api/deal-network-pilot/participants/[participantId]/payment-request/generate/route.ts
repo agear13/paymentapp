@@ -9,6 +9,7 @@ import {
   orchestrateOperationalMutation,
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+import { resolveCanonicalPublicOrigin } from '@/lib/runtime/customer-facing-url';
 
 const bodySchema = z.object({
   sendEmail: z.boolean().optional(),
@@ -44,7 +45,7 @@ export async function POST(
     const result = await generatePaymentRequestForParticipant(
       participantId,
       user.id,
-      { sendEmail: body.sendEmail ?? false }
+      { sendEmail: body.sendEmail ?? false, origin: resolveCanonicalPublicOrigin(request) }
     );
 
     if (!result) {

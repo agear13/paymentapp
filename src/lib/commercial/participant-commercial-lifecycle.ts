@@ -28,6 +28,7 @@ import {
 import { deriveParticipantWorkflows, deriveParticipantWorkflowBadges } from '@/lib/commercial/workflows/derive-participant-workflows';
 import { mapLegacyParticipantLifecycleStage } from '@/lib/commercial/workflows/map-legacy-lifecycle-stage';
 import { buildParticipantWorkspacePayoutUrl } from '@/lib/participant-portal/participant-portal-url';
+import { resolveParticipantLinkOrigin } from '@/lib/runtime/customer-facing-url';
 
 /* ─── Lifecycle stages ───────────────────────────────────────────────────── */
 
@@ -150,10 +151,7 @@ export function buildParticipantPaymentPortalUrl(
   }
   const token = participant.paymentSetup?.token;
   if (!token) return null;
-  const base =
-    origin ??
-    (typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL ?? '');
-  return `${base}/payment-setup/${token}`;
+  return `${resolveParticipantLinkOrigin(origin)}/payment-setup/${token}`;
 }
 
 /** Participant record and role are required before agreements. Delivery channels validate contact details separately. */

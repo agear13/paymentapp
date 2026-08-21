@@ -63,6 +63,9 @@ export function participantRowToDemo(row: {
   participant_payload: Prisma.JsonValue;
   approval_status?: string;
   approved_at?: Date | null;
+  name?: string;
+  email?: string | null;
+  authenticated_user_id?: string | null;
 }): DemoParticipant {
   const payload = row.participant_payload as unknown as DemoParticipant;
   const approvalStatus: DemoParticipant['approvalStatus'] =
@@ -74,6 +77,10 @@ export function participantRowToDemo(row: {
     id: row.id,
     dealId: row.deal_id,
     inviteToken: row.invite_token,
+    name: row.name?.trim() || payload.name,
+    email: row.email?.trim() || payload.email || '',
+    authenticatedUserId: row.authenticated_user_id?.trim() || null,
+    lastInvitationEmail: payload.lastInvitationEmail ?? null,
     approvalStatus,
     approvedAt: row.approved_at
       ? row.approved_at.toISOString()
@@ -304,10 +311,12 @@ export async function updatePilotParticipantPayload(
     dealId: row.deal_id,
     inviteToken: row.invite_token,
   };
+  const { authenticatedUserId: _boundId, ...payload } = next;
 
   await prisma.deal_network_pilot_participants.update({
     where: { id: row.id },
     data: {
+      name: next.name.trim() || row.name,
       email: next.email?.trim() ? next.email.trim() : row.email,
       approval_status:
         next.approvalStatus === 'Approved' ? 'Approved' : row.approval_status,
@@ -317,7 +326,7 @@ export async function updatePilotParticipantPayload(
             ? new Date(next.approvedAt)
             : row.approved_at ?? new Date()
           : row.approved_at,
-      participant_payload: next as unknown as Prisma.InputJsonValue,
+      participant_payload: payload as unknown as Prisma.InputJsonValue,
     },
   });
 

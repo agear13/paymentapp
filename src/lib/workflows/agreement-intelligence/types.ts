@@ -125,6 +125,8 @@ export type WorkflowOperationalParticipant = {
   eligibleServiceIds: string[];
   workspaceUrl: string | null;
   email: string | null;
+  identityBound: boolean;
+  lastInvitationEmail: string | null;
   payoutReview: {
     preferredMethod: string | null;
     abn: string | null;

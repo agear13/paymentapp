@@ -1,5 +1,7 @@
 /** Client-safe URL helpers for the Participant Workspace (single participant-facing destination). */
 
+import { resolveCanonicalPublicOrigin, resolveParticipantLinkOrigin } from '@/lib/runtime/customer-facing-url';
+
 export type ParticipantWorkspaceStep = 'payout';
 
 export function participantWorkspacePath(
@@ -16,14 +18,24 @@ export function buildParticipantWorkspaceUrl(
   origin?: string,
   step?: ParticipantWorkspaceStep
 ): string {
-  const base =
-    origin ??
-    (typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL ?? '');
+  const base = resolveParticipantLinkOrigin(origin);
   return `${base}${participantWorkspacePath(token, step)}`;
 }
 
 export function buildParticipantWorkspacePayoutUrl(token: string, origin?: string): string {
   return buildParticipantWorkspaceUrl(token, origin, 'payout');
+}
+
+/** Canonical `{public-origin}/participant/{token}` from the incoming request. */
+export function buildCanonicalParticipantWorkspaceUrl(
+  token: string,
+  request: {
+    nextUrl: { origin: string; protocol: string };
+    headers: { get(name: string): string | null };
+  },
+  step?: ParticipantWorkspaceStep
+): string {
+  return buildParticipantWorkspaceUrl(token, resolveCanonicalPublicOrigin(request), step);
 }
 
 /** @deprecated Use participantWorkspacePath */

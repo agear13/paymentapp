@@ -180,6 +180,13 @@ export interface DemoParticipant {
 
   /** UUID for the public participant commercial workspace (/participant/:token). */
   participantPortalToken?: string;
+  /**
+   * Bound Supabase user id after the invited email authenticates.
+   * Column `authenticated_user_id` is the source of truth; hydrated at read time.
+   */
+  authenticatedUserId?: string | null;
+  /** Email the last operator invitation was actually sent to, if any. */
+  lastInvitationEmail?: string | null;
   /** First time the participant opened their portal (analytics). */
   portalOpenedAt?: string;
   portalLastOpenedAt?: string;

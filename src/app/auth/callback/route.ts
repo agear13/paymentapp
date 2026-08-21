@@ -11,6 +11,12 @@ import {
   PARTICIPANT_AUTH_RETURN_COOKIE,
   participantAuthReturnCookieOptions,
 } from '@/lib/participant-portal/participant-auth-return';
+import { resolveCanonicalPublicOrigin } from '@/lib/runtime/customer-facing-url';
+
+function canonicalRedirectBase(request: NextRequest): string {
+  const origin = resolveCanonicalPublicOrigin(request);
+  return origin || request.url;
+}
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -77,7 +83,7 @@ export async function GET(request: NextRequest) {
           }
         }
       } else {
-        const verify = new URL('/auth/verify-email', request.url);
+        const verify = new URL('/auth/verify-email', canonicalRedirectBase(request));
         if (candidateReturn) {
           verify.searchParams.set('redirectedFrom', candidateReturn);
         }
@@ -86,7 +92,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.redirect(new URL(redirectPath, request.url));
+  const response = NextResponse.redirect(new URL(redirectPath, canonicalRedirectBase(request)));
   if (request.cookies.get(PARTICIPANT_AUTH_RETURN_COOKIE)) {
     response.cookies.set(PARTICIPANT_AUTH_RETURN_COOKIE, '', participantAuthReturnCookieOptions(true));
   }

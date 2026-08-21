@@ -344,6 +344,8 @@ export function AgreementIntelligenceHubScreen() {
                   busy={coordinating}
                   onBack={() => selectParticipant(null)}
                   onAction={runCoordination}
+                  onIdentityUpdated={() => void refresh()}
+                  onAddReplacement={() => selectParticipant(null)}
                 />
               ) : (
                 <>

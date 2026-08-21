@@ -1,14 +1,23 @@
 /**
  * Canonical customer-facing URL resolution for operational settlement flows.
  *
- * Priority:
+ * Branded payment-link origins (`resolveCustomerFacingOrigin` / `getBrandedAppOrigin`):
  * 1. NEXT_PUBLIC_APP_URL (branded production domain)
  * 2. Server request origin (API routes / SSR)
  * 3. Client runtime origin
  * 4. localhost — development only, never production
  *
- * Infrastructure domains (*.onrender.com) are blocked by default.
- * Set ALLOW_INFRASTRUCTURE_DOMAINS=true for temporary staging on Render.
+ * Current-deployment origins (`resolveCanonicalPublicOrigin`) for participant
+ * invitations, auth return URLs, and other same-app links:
+ * 1. Trusted public request origin (forwarded host only behind known proxies)
+ * 2. NEXT_PUBLIC_APP_URL when the request origin is loopback/invalid
+ * 3. Platform public URL (RENDER_EXTERNAL_URL / VERCEL_URL)
+ * 4. localhost — development only, never production
+ *
+ * Infrastructure domains (*.onrender.com) are blocked by default for branded
+ * customer links. Set ALLOW_INFRASTRUCTURE_DOMAINS=true for temporary staging
+ * on Render. Participant/current-deployment links may use the live request host
+ * (including onrender) so preview/staging do not emit the production domain.
  */
 
 import { logOperationalError } from '@/lib/operational/log-operational-error';
@@ -16,7 +25,7 @@ import { logOperationalError } from '@/lib/operational/log-operational-error';
 export const CUSTOMER_FACING_MISCONFIG_MESSAGE =
   'Customer-facing domain is not configured correctly.';
 
-export type CustomerFacingOriginSource = 'env' | 'request' | 'runtime' | 'development';
+export type CustomerFacingOriginSource = 'env' | 'request' | 'runtime' | 'development' | 'platform';
 
 export type CustomerFacingDomainEvaluation = {
   hostname: string | null;
@@ -409,23 +418,162 @@ export function validateCustomerFacingConfiguration(options?: CustomerFacingUrlO
   };
 }
 
+function firstHeaderValue(value: string | null | undefined): string {
+  return value?.split(',')[0]?.trim() ?? '';
+}
+
+function stripProtocolColon(protocol: string | undefined): string {
+  return (protocol ?? '').trim().replace(/:$/, '').toLowerCase();
+}
+
+function isAllowedForwardedProto(proto: string): proto is 'http' | 'https' {
+  return proto === 'http' || proto === 'https';
+}
+
+function isSafeHostHeader(host: string): boolean {
+  if (!host || /[\s/\\@]/.test(host) || host.includes('://')) return false;
+  try {
+    return Boolean(new URL(`https://${host}`).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Platforms that overwrite X-Forwarded-* at the edge. Do not trust client-supplied
+ * forwarded host/origin headers unless this is true (or TRUST_PROXY=true).
+ */
+export function isTrustedForwardedOriginEnvironment(): boolean {
+  return (
+    process.env.VERCEL === '1' ||
+    Boolean(process.env.VERCEL_ENV) ||
+    process.env.RENDER === 'true' ||
+    Boolean(process.env.RENDER_EXTERNAL_URL) ||
+    Boolean(process.env.RENDER_EXTERNAL_HOSTNAME) ||
+    process.env.TRUST_PROXY === 'true'
+  );
+}
+
+function readPlatformPublicOrigin(): string | null {
+  const renderUrl = process.env.RENDER_EXTERNAL_URL?.trim();
+  const fromRender = resolveFromCandidate(
+    renderUrl,
+    'platform',
+    'readPlatformPublicOrigin.RENDER_EXTERNAL_URL',
+    { infrastructureOverride: true }
+  );
+  if (fromRender?.configured) return fromRender.origin;
+
+  const vercelHost = process.env.VERCEL_URL?.trim();
+  if (!vercelHost) return null;
+  const vercelUrl = vercelHost.includes('://') ? vercelHost : `https://${vercelHost}`;
+  const fromVercel = resolveFromCandidate(
+    vercelUrl,
+    'platform',
+    'readPlatformPublicOrigin.VERCEL_URL',
+    { infrastructureOverride: true }
+  );
+  return fromVercel?.configured ? fromVercel.origin : null;
+}
+
+/**
+ * Public origin when no request is available (jobs, fallbacks).
+ * Never returns localhost in production.
+ */
+export function resolveConfiguredPublicOrigin(): string {
+  const envOrigin = readConfiguredEnvOrigin();
+  if (envOrigin) return envOrigin;
+
+  const platform = readPlatformPublicOrigin();
+  if (platform) return platform;
+
+  if (isDevelopmentEnvironment()) return 'http://localhost:3000';
+  return '';
+}
+
+/**
+ * Current public origin for this deployment. Prefers the live request host so
+ * preview/staging links stay on that environment instead of production env.
+ * Loopback (including Render's internal https://localhost:10000) is rejected
+ * in production.
+ */
+export function resolveCanonicalPublicOrigin(request: {
+  nextUrl: { origin: string; protocol: string };
+  headers: { get(name: string): string | null };
+}): string {
+  const requestOrigin = resolveRequestOrigin(request);
+  const fromRequest = resolveFromCandidate(
+    requestOrigin,
+    'request',
+    'resolveCanonicalPublicOrigin.requestOrigin',
+    { infrastructureOverride: isTrustedForwardedOriginEnvironment() }
+  );
+  if (fromRequest?.configured) return fromRequest.origin;
+
+  const configured = resolveConfiguredPublicOrigin();
+  if (configured) return configured;
+
+  if (isDevelopmentEnvironment() && requestOrigin) {
+    const normalized = normalizeOrigin(requestOrigin);
+    if (normalized) return normalized;
+  }
+
+  return getPublicAppUrl(requestOrigin);
+}
+
+/**
+ * Sanitize an explicit origin used when building participant/workspace links.
+ * Callers that still pass `request.nextUrl.origin` (localhost:10000 on Render)
+ * fall back to the configured public origin in production.
+ */
+export function resolveParticipantLinkOrigin(explicitOrigin?: string): string {
+  if (explicitOrigin?.trim()) {
+    const fromExplicit = resolveFromCandidate(
+      explicitOrigin,
+      'request',
+      'resolveParticipantLinkOrigin.explicit',
+      { infrastructureOverride: true }
+    );
+    if (fromExplicit?.configured) return fromExplicit.origin;
+  }
+
+  if (typeof window !== 'undefined') {
+    const runtimeOrigin = window.location.origin;
+    const fromRuntime = resolveFromCandidate(
+      runtimeOrigin,
+      'runtime',
+      'resolveParticipantLinkOrigin.runtime',
+      { infrastructureOverride: true }
+    );
+    if (fromRuntime?.configured) return fromRuntime.origin;
+    if (!isProductionEnvironment()) return runtimeOrigin;
+  }
+
+  return resolveConfiguredPublicOrigin();
+}
+
 export function resolveRequestOrigin(request: {
   nextUrl: { origin: string; protocol: string };
   headers: { get(name: string): string | null };
 }): string | undefined {
-  const forwardedProto = request.headers.get('x-forwarded-proto')?.trim();
-  const forwardedHost = request.headers.get('x-forwarded-host')?.trim();
-  if (forwardedProto && forwardedHost) {
-    return `${forwardedProto}://${forwardedHost}`;
+  const forwardedHost = firstHeaderValue(request.headers.get('x-forwarded-host'));
+  const forwardedProto = stripProtocolColon(firstHeaderValue(request.headers.get('x-forwarded-proto')));
+  const trustForwarded = isTrustedForwardedOriginEnvironment();
+
+  if (trustForwarded && forwardedHost && isSafeHostHeader(forwardedHost)) {
+    const proto = isAllowedForwardedProto(forwardedProto)
+      ? forwardedProto
+      : stripProtocolColon(request.nextUrl.protocol) || (isProductionEnvironment() ? 'https' : 'http');
+    return `${proto}://${forwardedHost}`;
   }
 
-  const host = request.headers.get('host')?.trim();
-  if (host) {
-    const protocol = request.nextUrl.protocol || 'https:';
-    return `${protocol}//${host}`;
+  const host = firstHeaderValue(request.headers.get('host'));
+  if (host && isSafeHostHeader(host)) {
+    const proto = stripProtocolColon(request.nextUrl.protocol) || (isProductionEnvironment() ? 'https' : 'http');
+    return `${proto}://${host}`;
   }
 
-  return request.nextUrl.origin;
+  return request.nextUrl.origin || undefined;
 }
 
 /** @deprecated Use evaluateCustomerFacingDomain / isInvalidCustomerHost. */

@@ -8,6 +8,7 @@ import {
   runReferralManagementAction,
   updateReferralManagementPromoterServices,
 } from '@/lib/workflows/referral-management/promoter.server';
+import { resolveCanonicalPublicOrigin } from '@/lib/runtime/customer-facing-url';
 
 const bodySchema = z.object({
   action: z.enum([
@@ -49,7 +50,7 @@ export async function POST(
       userId: access.userId,
       participantId,
       action: body.action,
-      origin: request.nextUrl.origin,
+      origin: resolveCanonicalPublicOrigin(request),
       missingFields: body.missingFields,
       requestedChanges: body.requestedChanges,
       sendInvitationEmail: body.sendInvitationEmail,

@@ -13,20 +13,19 @@ import {
   buildParticipantWorkspacePayoutUrl,
   participantWorkspacePath,
 } from '@/lib/participant-portal/participant-portal-url';
+import { resolveConfiguredPublicOrigin } from '@/lib/runtime/customer-facing-url';
 
 export function appBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://app.provvypay.com')
-  );
+  return resolveConfiguredPublicOrigin();
 }
 
 export async function buildParticipantWorkspacePayoutUrlForParticipant(
-  participantId: string
+  participantId: string,
+  origin?: string
 ): Promise<string | null> {
   const portalToken = await ensurePortalTokenOnParticipantRow(participantId);
   if (!portalToken) return null;
-  return buildParticipantWorkspacePayoutUrl(portalToken, appBaseUrl());
+  return buildParticipantWorkspacePayoutUrl(portalToken, origin?.trim() || appBaseUrl());
 }
 
 export async function ensurePortalTokenOnParticipantRow(

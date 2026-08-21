@@ -4,6 +4,7 @@ import { effectiveOnboardingStatus } from '@/lib/deal-network-demo/participant-o
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { participantWorkspacePathFromParticipant } from '@/lib/projects/participant-entitlement';
 import { buildReferralQrApiPath } from '@/lib/referrals/referral-share-url';
+import { isParticipantIdentityBound } from '@/lib/participants/participant-identity';
 import type {
   WorkflowCoordinationAgreementStatus,
   WorkflowCoordinationCompensationKind,
@@ -42,6 +43,8 @@ export type ParticipantCoordinationView = {
   eligibleServiceIds: string[];
   workspaceUrl: string | null;
   email: string | null;
+  identityBound: boolean;
+  lastInvitationEmail: string | null;
   payoutReview: {
     preferredMethod: string | null;
     abn: string | null;
@@ -86,7 +89,7 @@ export function compensationLabelOf(participant: DemoParticipant): string | null
     return `${profile.percentage}% commission`;
   }
   if (profile?.compensationType === 'FIXED_FEE' && (profile.fixedAmount ?? 0) > 0) {
-    return `$${profile.fixedAmount.toLocaleString()} fixed payment`;
+    return `$${Number(profile.fixedAmount).toLocaleString()} fixed payment`;
   }
   if (participant.commissionKind === 'pct_deal_value' && (participant.commissionValue ?? 0) > 0) {
     return `${participant.commissionValue}% revenue share`;
@@ -314,6 +317,8 @@ export function buildParticipantCoordinationView(
       [],
     workspaceUrl: participantWorkspacePathFromParticipant(participant),
     email: participant.email?.trim() || null,
+    identityBound: isParticipantIdentityBound(participant),
+    lastInvitationEmail: participant.lastInvitationEmail?.trim() || null,
     payoutReview:
       payoutSetupStatus === 'not_applicable'
         ? null
@@ -347,6 +352,8 @@ export function emptyContractualCoordination(): {
   eligibleServiceIds: [];
   workspaceUrl: null;
   email: null;
+  identityBound: false;
+  lastInvitationEmail: null;
   payoutReview: null;
 } {
   return {
@@ -363,6 +370,8 @@ export function emptyContractualCoordination(): {
     eligibleServiceIds: [],
     workspaceUrl: null,
     email: null,
+    identityBound: false,
+    lastInvitationEmail: null,
     payoutReview: null,
   };
 }

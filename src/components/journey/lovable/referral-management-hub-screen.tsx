@@ -525,6 +525,8 @@ export function ReferralManagementHubScreen() {
                 busy={busy}
                 onBack={() => selectParticipant(null)}
                 onAction={(action, extra) => coordinatePromoter(selected.id!, action, extra)}
+                onIdentityUpdated={() => void refresh()}
+                onAddReplacement={() => selectParticipant(null)}
                 showReferralManagementHandoff={false}
               />
               <PromoterEligibleServicesEditor

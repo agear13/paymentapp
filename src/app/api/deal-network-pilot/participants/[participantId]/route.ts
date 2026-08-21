@@ -25,6 +25,10 @@ import { ATTRIBUTION_ALL_ACTIVE_WITHOUT_SERVICES } from '@/lib/operations/mercha
 import { assertOperationalInvariants } from '@/lib/operations/dev/operational-invariants';
 import { logParticipantEarningsPersistenceDiagnostic } from '@/lib/operations/dev/participant-earnings-persistence-diagnostic';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import {
+  ParticipantIdentityError,
+  updateParticipantIdentity,
+} from '@/lib/participants/update-participant-identity.server';
 
 const compensationProfileSchema = z.object({
   compensationType: z.enum(PARTICIPANT_COMPENSATION_TYPES),
@@ -96,6 +100,26 @@ export async function PATCH(
     }
 
     let working = existing;
+    let invitationResendRequired = false;
+    const identityEmail = body.email?.trim() ? body.email.trim() : undefined;
+    if (body.name != null || identityEmail != null) {
+      try {
+        const identity = await updateParticipantIdentity({
+          participantId,
+          operatorUserId: user.id,
+          name: body.name,
+          email: identityEmail,
+        });
+        working = identity.participant;
+        invitationResendRequired = identity.invitationResendRequired;
+      } catch (error) {
+        if (error instanceof ParticipantIdentityError) {
+          return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+        }
+        throw error;
+      }
+    }
+
     if (body.payoutVerificationConfirmed != null) {
       working = applyPayoutVerificationConfirmed(working, body.payoutVerificationConfirmed);
     }
@@ -108,8 +132,6 @@ export async function PATCH(
       payloadPatch.payoutOnboardingPhase = working.payoutOnboardingPhase;
       payloadPatch.payoutBlocked = working.payoutBlocked;
     }
-    if (body.name != null) payloadPatch.name = body.name.trim();
-    if (body.email != null) payloadPatch.email = body.email.trim();
     if (body.role != null) payloadPatch.role = body.role;
     if (body.roleDetails != null) payloadPatch.roleDetails = body.roleDetails;
     if (body.agreementNotes != null) payloadPatch.agreementNotes = body.agreementNotes;
@@ -162,7 +184,10 @@ export async function PATCH(
       payloadPatch.commissionValue = merged.commissionValue;
     }
 
-    const persisted = await updatePilotParticipantPayload(participantId, user.id, payloadPatch);
+    const persisted =
+      Object.keys(payloadPatch).length > 0
+        ? await updatePilotParticipantPayload(participantId, user.id, payloadPatch)
+        : working;
 
     if (!persisted) {
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
@@ -205,6 +230,10 @@ export async function PATCH(
 
     return NextResponse.json({
       participant: persisted,
+      invitationResendRequired,
+      message: invitationResendRequired
+        ? 'Participant email updated. Send a new invitation to the updated email address.'
+        : undefined,
       ...operationalSyncJson(operationalSync),
     });
   } catch (e: unknown) {

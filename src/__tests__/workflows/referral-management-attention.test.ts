@@ -40,6 +40,8 @@ function promoter(
     eligibleServiceIds: ['svc-1'],
     workspaceUrl: null,
     email: 'agency@example.com',
+    identityBound: false,
+    lastInvitationEmail: null,
     payoutReview: null,
     ...overrides,
   };

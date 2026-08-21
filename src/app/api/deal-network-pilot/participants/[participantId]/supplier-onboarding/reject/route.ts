@@ -18,6 +18,7 @@ import { sendEmail } from '@/lib/email/client';
 import { buildPaymentSetupInviteEmail } from '@/lib/email/templates/payment-setup-invite';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { buildParticipantWorkspacePayoutUrlForParticipant } from '@/lib/participant-portal/participant-workspace-redirect.server';
+import { resolveCanonicalPublicOrigin } from '@/lib/runtime/customer-facing-url';
 import { log } from '@/lib/logger';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -48,6 +49,7 @@ export async function POST(
     const user = await requireAuth(request);
     const { participantId } = await context.params;
     const body = rejectBodySchema.parse(await request.json());
+    const origin = resolveCanonicalPublicOrigin(request);
 
     const snapshot = await getPilotSnapshotForUser(user.id);
     const existing = snapshot.participants.find((p) => p.id === participantId);
@@ -120,8 +122,8 @@ export async function POST(
           const org = await getOrganizationForAuthenticatedUser(user.id);
           const dealName = snapshot.deals[0]?.dealName ?? 'Your project';
           const portalUrl =
-            (await buildParticipantWorkspacePayoutUrlForParticipant(participantId)) ??
-            `${process.env.NEXT_PUBLIC_APP_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://app.provvypay.com')}/payment-setup/${tokenData.token}`;
+            (await buildParticipantWorkspacePayoutUrlForParticipant(participantId, origin)) ??
+            `${origin}/payment-setup/${tokenData.token}`;
           newPortalUrl = portalUrl;
           const invoiceTotal = existing.paymentSetup?.draftInvoice
             ? new Intl.NumberFormat('en-AU', { style: 'currency', currency: existing.paymentSetup.draftInvoice.currency }).format(existing.paymentSetup.draftInvoice.total)

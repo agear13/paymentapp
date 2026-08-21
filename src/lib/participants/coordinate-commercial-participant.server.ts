@@ -150,6 +150,12 @@ async function requestApproval(input: {
       userId: input.userId,
       workspaceUrl,
     });
+    if (invitationEmailSent) {
+      const persistedInvite = await updatePilotParticipantPayload(input.participant.id, input.userId, {
+        lastInvitationEmail: next.email.trim() || null,
+      });
+      next = persistedInvite ?? { ...next, lastInvitationEmail: next.email.trim() || null };
+    }
   }
 
   return {

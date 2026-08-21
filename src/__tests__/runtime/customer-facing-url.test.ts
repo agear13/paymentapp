@@ -8,7 +8,12 @@ import {
   getPaymentLinkUrl,
   isInfrastructureDomainAllowed,
   isInvalidCustomerHost,
+  isTrustedForwardedOriginEnvironment,
+  resolveCanonicalPublicOrigin,
+  resolveConfiguredPublicOrigin,
   resolveCustomerFacingOrigin,
+  resolveParticipantLinkOrigin,
+  resolveRequestOrigin,
   validateCustomerFacingConfiguration,
 } from '@/lib/runtime/customer-facing-url';
 
@@ -18,6 +23,13 @@ describe('customer-facing URL resolver', () => {
   beforeEach(() => {
     process.env = { ...originalEnv };
     delete process.env.ALLOW_INFRASTRUCTURE_DOMAINS;
+    delete process.env.RENDER;
+    delete process.env.RENDER_EXTERNAL_URL;
+    delete process.env.RENDER_EXTERNAL_HOSTNAME;
+    delete process.env.VERCEL;
+    delete process.env.VERCEL_ENV;
+    delete process.env.VERCEL_URL;
+    delete process.env.TRUST_PROXY;
   });
 
   afterAll(() => {
@@ -173,5 +185,156 @@ describe('customer-facing URL resolver', () => {
     expect(isInfrastructureDomainAllowed()).toBe(true);
     process.env.ALLOW_INFRASTRUCTURE_DOMAINS = '1';
     expect(isInfrastructureDomainAllowed()).toBe(false);
+  });
+});
+
+function mockRequest(input: {
+  origin: string;
+  protocol?: string;
+  headers?: Record<string, string>;
+}) {
+  const headers = Object.fromEntries(
+    Object.entries(input.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value])
+  );
+  return {
+    nextUrl: { origin: input.origin, protocol: input.protocol ?? 'https:' },
+    headers: {
+      get: (name: string) => headers[name.toLowerCase()] ?? null,
+    },
+  };
+}
+
+describe('canonical public origin for participant links', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.ALLOW_INFRASTRUCTURE_DOMAINS;
+    delete process.env.RENDER;
+    delete process.env.RENDER_EXTERNAL_URL;
+    delete process.env.RENDER_EXTERNAL_HOSTNAME;
+    delete process.env.VERCEL;
+    delete process.env.VERCEL_ENV;
+    delete process.env.VERCEL_URL;
+    delete process.env.TRUST_PROXY;
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  it('uses the trusted forwarded host on Render instead of localhost:10000', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.RENDER = 'true';
+    process.env.NEXT_PUBLIC_APP_URL = 'https://app.provvypay.com';
+
+    const origin = resolveCanonicalPublicOrigin(
+      mockRequest({
+        origin: 'https://localhost:10000',
+        headers: {
+          host: 'localhost:10000',
+          'x-forwarded-proto': 'https',
+          'x-forwarded-host': 'app.provvypay.com',
+        },
+      })
+    );
+
+    expect(origin).toBe('https://app.provvypay.com');
+    expect(origin).not.toMatch(/localhost/i);
+  });
+
+  it('prefers the current preview origin over production NEXT_PUBLIC_APP_URL', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.RENDER = 'true';
+    process.env.NEXT_PUBLIC_APP_URL = 'https://app.provvypay.com';
+
+    expect(
+      resolveCanonicalPublicOrigin(
+        mockRequest({
+          origin: 'https://localhost:10000',
+          headers: {
+            host: 'localhost:10000',
+            'x-forwarded-proto': 'https',
+            'x-forwarded-host': 'staging.provvypay.com',
+          },
+        })
+      )
+    ).toBe('https://staging.provvypay.com');
+  });
+
+  it('falls back to NEXT_PUBLIC_APP_URL when the request origin is Render loopback', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.RENDER = 'true';
+    process.env.NEXT_PUBLIC_APP_URL = 'https://app.provvypay.com';
+
+    expect(
+      resolveCanonicalPublicOrigin(
+        mockRequest({
+          origin: 'https://localhost:10000',
+          headers: { host: 'localhost:10000' },
+        })
+      )
+    ).toBe('https://app.provvypay.com');
+  });
+
+  it('ignores spoofed forwarded-host headers outside a trusted proxy', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.NEXT_PUBLIC_APP_URL = 'https://app.provvypay.com';
+    delete process.env.RENDER;
+    delete process.env.VERCEL;
+
+    expect(isTrustedForwardedOriginEnvironment()).toBe(false);
+    expect(
+      resolveRequestOrigin(
+        mockRequest({
+          origin: 'https://app.provvypay.com',
+          headers: {
+            host: 'app.provvypay.com',
+            'x-forwarded-proto': 'https',
+            'x-forwarded-host': 'evil.example',
+          },
+        })
+      )
+    ).toBe('https://app.provvypay.com');
+  });
+
+  it('uses the local request origin in development, including port 10000', () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.NEXT_PUBLIC_APP_URL;
+
+    expect(
+      resolveCanonicalPublicOrigin(
+        mockRequest({
+          origin: 'http://localhost:10000',
+          protocol: 'http:',
+          headers: { host: 'localhost:10000' },
+        })
+      )
+    ).toBe('http://localhost:10000');
+  });
+
+  it('uses RENDER_EXTERNAL_URL when request origin is loopback and env is missing', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.RENDER = 'true';
+    process.env.RENDER_EXTERNAL_URL = 'https://provvy-preview.onrender.com';
+    delete process.env.NEXT_PUBLIC_APP_URL;
+
+    expect(
+      resolveCanonicalPublicOrigin(
+        mockRequest({
+          origin: 'https://localhost:10000',
+          headers: { host: 'localhost:10000' },
+        })
+      )
+    ).toBe('https://provvy-preview.onrender.com');
+  });
+
+  it('never returns localhost from configured origin in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.NEXT_PUBLIC_APP_URL = 'https://localhost:10000';
+    process.env.RENDER_EXTERNAL_URL = 'https://app.provvypay.com';
+
+    expect(resolveConfiguredPublicOrigin()).toBe('https://app.provvypay.com');
+    expect(resolveParticipantLinkOrigin('https://localhost:10000')).toBe('https://app.provvypay.com');
   });
 });

@@ -7,6 +7,7 @@ import {
   runParticipantCoordinationAction,
 } from '@/lib/workflows/agreement-intelligence/participant-coordination.server';
 import type { ParticipantCoordinationAction } from '@/lib/workflows/agreement-intelligence/participant-coordination';
+import { resolveCanonicalPublicOrigin } from '@/lib/runtime/customer-facing-url';
 
 const bodySchema = z.object({
   action: z.enum([
@@ -44,7 +45,7 @@ export async function POST(
       userId: access.userId,
       participantId,
       action: body.action as ParticipantCoordinationAction,
-      origin: request.nextUrl.origin,
+      origin: resolveCanonicalPublicOrigin(request),
       missingFields: body.missingFields,
       requestedChanges: body.requestedChanges,
       sendInvitationEmail: body.sendInvitationEmail,

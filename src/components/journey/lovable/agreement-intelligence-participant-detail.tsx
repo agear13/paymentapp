@@ -6,12 +6,13 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
-  AgreementStatusLine,
   PayoutStatusLine,
   ReferralStatusLine,
 } from '@/components/journey/lovable/agreement-intelligence-participant-status';
 import { ParticipantApprovalInviteDialog } from '@/components/journey/lovable/participant-approval-invite-dialog';
+import { ParticipantIdentityEditDialog } from '@/components/journey/lovable/participant-identity-edit-dialog';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import { participantInvitationCopy } from '@/lib/participants/participant-identity';
 import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
 import type { WorkflowActivityItem, WorkflowOperationalParticipant } from '@/lib/workflows/agreement-intelligence/types';
 import type { ParticipantCoordinationAction } from '@/lib/workflows/agreement-intelligence/participant-coordination';
@@ -27,6 +28,8 @@ type Props = {
     action: ParticipantCoordinationAction,
     extra?: { missingFields?: string[]; requestedChanges?: string; sendInvitationEmail?: boolean }
   ) => Promise<{ ok: boolean; invitationEmailSent?: boolean } | boolean>;
+  onIdentityUpdated?: () => void | Promise<void>;
+  onAddReplacement?: () => void;
 };
 
 function copyText(value: string, success: string) {
@@ -44,6 +47,8 @@ export function AgreementIntelligenceParticipantDetail({
   showReferralManagementHandoff = true,
   onBack,
   onAction,
+  onIdentityUpdated,
+  onAddReplacement,
 }: Props) {
   const participantActivity = activity.filter((entry) =>
     entry.id.includes(participant.id ?? '___never___')
@@ -58,8 +63,14 @@ export function AgreementIntelligenceParticipantDetail({
     participant.partyKind === 'compensated_participant' &&
     participant.compensationKind !== 'fixed';
   const [inviteOpen, setInviteOpen] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
   const invitationSent =
     participant.agreementStatus === 'requested' || participant.agreementStatus === 'viewed';
+  const invitation = participantInvitationCopy({
+    email: participant.email,
+    lastInvitationEmail: participant.lastInvitationEmail,
+    agreementStatus: participant.agreementStatus,
+  });
   const agreementApproved = participant.agreementStatus === 'approved';
   const payoutLocked = !agreementApproved;
   const workspaceReady =
@@ -87,11 +98,47 @@ export function AgreementIntelligenceParticipantDetail({
       <div>
         <h2 className="text-lg font-semibold">{participant.name}</h2>
         <p className="mt-1 text-[13px] text-ink-soft">
-          {participant.commercialRole ?? 'Role not captured'}
-          {participant.operationalRole ? ` · ${participant.operationalRole}` : ''}
+          {participant.partyKind === 'compensated_participant' ? 'Referral participant' : 'Participant'}
+          {participant.operationalRole ? ` · ${participant.operationalRole}` : participant.commercialRole ? ` · ${participant.commercialRole}` : ''}
         </p>
+      </div>
+
+      <div className="rounded-xl border border-border bg-secondary/10 p-4 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+            Participant details
+          </p>
+          {participant.id && participant.partyKind === 'compensated_participant' ? (
+            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setEditOpen(true)}>
+              Edit details
+            </Button>
+          ) : null}
+        </div>
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <dt className="text-[12px] font-medium uppercase tracking-wide text-ink-soft">Name</dt>
+            <dd className="mt-1 text-[14px] font-medium">{participant.name}</dd>
+          </div>
+          <div>
+            <dt className="text-[12px] font-medium uppercase tracking-wide text-ink-soft">Email</dt>
+            <dd className="mt-1 text-[14px] font-medium" data-testid="participant-identity-email">
+              {participant.email?.trim() || 'No email on file'}
+            </dd>
+            {participant.identityBound ? (
+              <p className="mt-1 text-[12px] text-ink-soft">Verified participant identity</p>
+            ) : null}
+          </div>
+        </dl>
         {participant.compensationLabel ? (
-          <p className="mt-2 text-[14px] font-medium">{participant.compensationLabel}</p>
+          <p className="text-[14px] font-medium">{participant.compensationLabel}</p>
+        ) : null}
+        {participant.identityBound && onAddReplacement ? (
+          <p className="text-[13px] text-ink-soft">
+            Email cannot be changed after the participant signs in.{' '}
+            <button type="button" className="font-medium text-primary" onClick={onAddReplacement}>
+              Add a new participant instead
+            </button>
+          </p>
         ) : null}
       </div>
 
@@ -109,14 +156,25 @@ export function AgreementIntelligenceParticipantDetail({
             <div className="space-y-3">
               <div>
                 <p className="text-[13px] font-medium">1. Agreement</p>
-                <div className="mt-1">
-                  <AgreementStatusLine participant={participant} />
+                <div className="mt-1 space-y-1">
+                  <p className="text-[13px] font-medium">{invitation.headline}</p>
+                  {invitation.destinationEmail ? (
+                    <p className="text-[14px] font-medium" data-testid="invitation-destination-email">
+                      {invitation.destinationEmail}
+                    </p>
+                  ) : null}
+                  <p className="text-[13px] text-ink-soft">{invitation.statusLine}</p>
+                  {invitation.previousDestinationEmail ? (
+                    <p className="text-[13px] text-ink-soft">
+                      Previous invitation was sent to {invitation.previousDestinationEmail}.
+                    </p>
+                  ) : null}
                 </div>
               </div>
               {canAct && !agreementApproved ? (
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" disabled={busy} onClick={() => setInviteOpen(true)}>
-                    {invitationSent ? 'Resend invitation' : 'Send approval request'}
+                    {invitation.stale || invitationSent ? 'Resend invitation' : 'Send invitation'}
                   </Button>
                   <Button type="button" variant="outline" disabled={busy} onClick={copyApprovalLink}>
                     <Copy className="mr-2 h-3.5 w-3.5" />
@@ -326,6 +384,17 @@ export function AgreementIntelligenceParticipantDetail({
           participantEmail={participant.email}
           busy={busy}
           onAction={onAction}
+        />
+      ) : null}
+      {participant.id ? (
+        <ParticipantIdentityEditDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          participantId={participant.id}
+          name={participant.name}
+          email={participant.email}
+          identityBound={participant.identityBound}
+          onSaved={() => onIdentityUpdated?.()}
         />
       ) : null}
     </div>

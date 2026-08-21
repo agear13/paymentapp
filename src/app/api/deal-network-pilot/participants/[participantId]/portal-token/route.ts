@@ -5,7 +5,7 @@ import {
   ensureParticipantPortalToken,
   regenerateParticipantPortalToken,
 } from '@/lib/participant-portal/participant-portal.server';
-import { buildParticipantWorkspaceUrl } from '@/lib/participant-portal/participant-portal-url';
+import { buildCanonicalParticipantWorkspaceUrl } from '@/lib/participant-portal/participant-portal-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,8 +21,7 @@ export async function GET(
     const user = await requireAuth(request);
     const { participantId } = await context.params;
     const result = await ensureParticipantPortalToken(participantId, user.id);
-    const origin = request.nextUrl.origin;
-    const workspaceUrl = buildParticipantWorkspaceUrl(result.token, origin);
+    const workspaceUrl = buildCanonicalParticipantWorkspaceUrl(result.token, request);
     return NextResponse.json({
       token: result.token,
       workspaceUrl,
@@ -55,10 +54,9 @@ export async function POST(
     const { participantId } = await context.params;
     const body = bodySchema.parse(await request.json().catch(() => ({})));
 
-    const origin = request.nextUrl.origin;
     if (body.regenerate) {
       const result = await regenerateParticipantPortalToken(participantId, user.id);
-      const workspaceUrl = buildParticipantWorkspaceUrl(result.token, origin);
+      const workspaceUrl = buildCanonicalParticipantWorkspaceUrl(result.token, request);
       return NextResponse.json({
         token: result.token,
         workspaceUrl,
@@ -69,7 +67,7 @@ export async function POST(
     }
 
     const result = await ensureParticipantPortalToken(participantId, user.id);
-    const workspaceUrl = buildParticipantWorkspaceUrl(result.token, origin);
+    const workspaceUrl = buildCanonicalParticipantWorkspaceUrl(result.token, request);
     return NextResponse.json({
       token: result.token,
       workspaceUrl,
