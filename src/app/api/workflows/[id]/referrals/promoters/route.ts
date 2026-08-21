@@ -84,16 +84,22 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const scoped = await requirePromoterAccess(request);
-  if (!scoped.ok) return scoped.response;
+  const access = await requireWorkflowOrganizationAccess(request);
+  if (!access.ok) return access.response;
+  const entitlement = await requireReferralManagementEntitlement({
+    organizationId: access.organizationId,
+    userId: access.userId,
+    userEmail: access.userEmail,
+  });
+  if (entitlement) return entitlement;
 
   const { id } = await context.params;
   try {
     const body = bodySchema.parse(await request.json());
     const result = await addReferralManagementPromoter({
-      organizationId: scoped.access.organizationId,
+      organizationId: access.organizationId,
       workflowId: id,
-      userId: scoped.access.userId,
+      userId: access.userId,
       ...body,
     });
     return apiResponse(result);
